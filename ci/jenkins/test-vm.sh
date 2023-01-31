@@ -202,7 +202,7 @@ function create_kubeconfig_files {
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_KUBECONFIG} use-context antrea-agent@kubernetes
 
     # Kubeconfig to access AntreaController
-    ANTREA_API_SERVER_IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}')
+    ANTREA_API_SERVER_IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
     ANTREA_API_SERVER="https://${ANTREA_API_SERVER_IP}:32767"
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-cluster antrea --server=$ANTREA_API_SERVER --insecure-skip-tls-verify=true
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-credentials antrea-agent --token=$TOKEN
@@ -294,8 +294,12 @@ function deliver_antrea_vm {
     export GOROOT=/usr/local/go
     export GOCACHE=${WORKSPACE}/../gocache
     export PATH=${GOROOT}/bin:$PATH
+    TEMP_ANTREA_TAR="antrea-image.tar"
 
     make docker-bin
+    docker save antrea/antrea-ubuntu:latest -o $TEMP_ANTREA_TAR
+    ctr -n k8s.io image import $TEMP_ANTREA_TAR
+    rm $TEMP_ANTREA_TAR
     make docker-windows-bin
 
     cp ./build/yamls/externalnode/conf/antrea-agent.conf ${WORKDIR}/antrea-agent.conf

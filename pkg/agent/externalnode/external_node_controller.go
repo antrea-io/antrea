@@ -63,8 +63,12 @@ const (
 )
 
 var (
-	keyFunc      = cache.MetaNamespaceKeyFunc
-	splitKeyFunc = cache.SplitMetaNamespaceKey
+	keyFunc              = cache.MetaNamespaceKeyFunc
+	splitKeyFunc         = cache.SplitMetaNamespaceKey
+	renameInterface      = util.RenameInterface
+	getInterfaceConfig   = util.GetInterfaceConfig
+	getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
+	hostInterfaceExists  = util.HostInterfaceExists
 )
 
 type ExternalNodeController struct {
@@ -388,7 +392,7 @@ func (c *ExternalNodeController) deleteInterface(interfaceConfig *interfacestore
 }
 
 func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, eeNamespace, eeName string, ips []string) (*interfacestore.InterfaceConfig, error) {
-	iface, addrs, routes, err := util.GetInterfaceConfig(hostIFName)
+	iface, addrs, routes, err := getInterfaceConfig(hostIFName)
 	if err != nil {
 		return nil, err
 	}
@@ -400,13 +404,13 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 		Routes: routes,
 		MTU:    iface.MTU,
 	}
-	if err = util.RenameInterface(hostIFName, uplinkName); err != nil {
+	if err = renameInterface(hostIFName, uplinkName); err != nil {
 		return nil, err
 	}
 	success := false
 	defer func() {
 		if !success {
-			if err = util.RenameInterface(uplinkName, hostIFName); err != nil {
+			if err = renameInterface(uplinkName, hostIFName); err != nil {
 				klog.ErrorS(err, "Failed to restore uplink name back to host interface name. Manual cleanup is required", "uplinkName", uplinkName, "hostIFName", hostIFName)
 			}
 		}
@@ -555,7 +559,7 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 	hostIFName := interfaceConfig.InterfaceName
 	uplinkIfName := util.GenerateUplinkInterfaceName(portName)
 	uplinkPortID := interfaceConfig.UplinkPort.PortUUID
-	iface, addrs, routes, err := util.GetInterfaceConfig(hostIFName)
+	iface, addrs, routes, err := getInterfaceConfig(hostIFName)
 	if err != nil {
 		return err
 	}
@@ -586,12 +590,12 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 
 	// Wait until the host interface created by OVS is removed.
 	if err = wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (bool, error) {
-		return !util.HostInterfaceExists(hostIFName), nil
+		return !hostInterfaceExists(hostIFName), nil
 	}); err != nil {
 		return fmt.Errorf("failed to wait for host interface %s deletion in 2s, err %v", hostIFName, err)
 	}
 	// Recover the uplink interface's name.
-	if err = util.RenameInterface(uplinkIfName, hostIFName); err != nil {
+	if err = renameInterface(uplinkIfName, hostIFName); err != nil {
 		return err
 	}
 	klog.InfoS("Recovered uplink name to the host interface name", "uplinkIfName", uplinkIfName, "hostInterface", hostIFName)
@@ -614,7 +618,7 @@ func getHostInterfaceName(iface v1alpha1.NetworkInterface) (string, []string, er
 		} else {
 			ipFilter = &ip.DualStackIPs{IPv6: ifIP}
 		}
-		_, _, link, err := util.GetIPNetDeviceFromIP(ipFilter, sets.NewString())
+		_, _, link, err := getIPNetDeviceFromIP(ipFilter, sets.NewString())
 		if err == nil {
 			klog.InfoS("Using the interface", "linkName", link.Name, "IP", ipStr)
 			ips.Insert(ipStr)
@@ -631,12 +635,10 @@ func getHostInterfaceName(iface v1alpha1.NetworkInterface) (string, []string, er
 		return "", ips.List(), fmt.Errorf("cannot find interface via IPs %v", iface.IPs)
 	}
 	return ifName, ips.List(), nil
-
 }
 
 func ParseHostInterfaceConfig(ovsBridgeClient ovsconfig.OVSBridgeClient, portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) (*interfacestore.InterfaceConfig, error) {
-	var interfaceConfig *interfacestore.InterfaceConfig
-	interfaceConfig = &interfacestore.InterfaceConfig{
+	interfaceConfig := &interfacestore.InterfaceConfig{
 		InterfaceName: portData.Name,
 		Type:          interfacestore.ExternalEntityInterface,
 		OVSPortConfig: portConfig,
