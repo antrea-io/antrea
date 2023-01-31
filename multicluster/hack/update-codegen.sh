@@ -18,7 +18,7 @@ set -o errexit
 set -o pipefail
 
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../" && pwd )"
-IMAGE_NAME="antrea/codegen:kubernetes-1.24.0-build.1"
+IMAGE_NAME="antrea/codegen:kubernetes-1.24.0-build.2"
 
 function docker_run() {
   docker pull ${IMAGE_NAME}
@@ -30,4 +30,4 @@ function docker_run() {
 		"${IMAGE_NAME}" "$@"
 }
 
-docker_run multicluster/hack/update-codegen-dockerized.sh
+docker_run multicluster/hack/update-codegen-dockerized.sh $@
