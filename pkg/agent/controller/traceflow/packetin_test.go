@@ -261,7 +261,7 @@ func TestParsePacketIn(t *testing.T) {
 		expectedNodeResult *crdv1alpha1.NodeResult
 	}{
 		{
-			name: "packet at source node for local Egress",
+			name: "packet at source Node for local Egress",
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: 0,
 			},
@@ -272,7 +272,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			tfState: &traceflowState{
-				name:     "dummy-traceflow-pod-to-ipv4",
+				name:     "traceflow-pod-to-ipv4",
 				tag:      1,
 				isSender: true,
 			},
@@ -285,7 +285,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "dummy-traceflow-pod-to-ipv4",
+					Name: "traceflow-pod-to-ipv4",
 				},
 				Spec: crdv1alpha1.TraceflowSpec{
 					Source: crdv1alpha1.Source{
@@ -322,7 +322,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 		},
 		{
-			name: "packet at source node for remote Egress",
+			name: "packet at source Node for remote Egress",
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: 0,
 			},
@@ -333,7 +333,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			tfState: &traceflowState{
-				name:     "dummy-traceflow-pod-to-ipv4",
+				name:     "traceflow-pod-to-ipv4",
 				tag:      1,
 				isSender: true,
 			},
@@ -346,7 +346,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "dummy-traceflow-pod-to-ipv4",
+					Name: "traceflow-pod-to-ipv4",
 				},
 				Spec: crdv1alpha1.TraceflowSpec{
 					Source: crdv1alpha1.Source{
@@ -384,7 +384,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 		},
 		{
-			name: "packet at remote node for remote Egress",
+			name: "packet at remote Node for remote Egress",
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: 0,
 			},
@@ -395,7 +395,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			tfState: &traceflowState{
-				name: "dummy-traceflow-pod-to-ipv4",
+				name: "traceflow-pod-to-ipv4",
 				tag:  1,
 			},
 			pktIn: &ofctrl.PacketIn{
@@ -407,7 +407,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "dummy-traceflow-pod-to-ipv4",
+					Name: "traceflow-pod-to-ipv4",
 				},
 				Spec: crdv1alpha1.TraceflowSpec{
 					Source: crdv1alpha1.Source{
@@ -472,7 +472,7 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 		},
 	}
 	tfState := &traceflowState{
-		name:           "dummy-traceflow-pod-to-ipv4",
+		name:           "traceflow-pod-to-ipv4",
 		tag:            1,
 		isSender:       true,
 		liveTraffic:    true,
