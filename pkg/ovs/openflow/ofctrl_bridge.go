@@ -224,14 +224,11 @@ func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupTyp
 	return g
 }
 
+// DeleteGroup deletes a specified group in groupDb.
 func (b *OFBridge) DeleteGroup(id GroupIDType) error {
 	ofctrlGroup := b.ofSwitch.GetGroup(uint32(id))
 	if ofctrlGroup == nil {
 		return nil
-	}
-	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
-	if err := g.Delete(); err != nil {
-		return fmt.Errorf("failed to delete the group: %w", err)
 	}
 	return b.ofSwitch.DeleteGroup(uint32(id))
 }

@@ -22,6 +22,7 @@ import (
 
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	"github.com/stretchr/testify/assert"
 
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
@@ -84,4 +85,35 @@ func TestOFBridgeIsConnected(t *testing.T) {
 		b.IsConnected()
 	}()
 	wg.Wait()
+}
+
+func TestDeleteGroup(t *testing.T) {
+	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
+
+	for _, m := range []struct {
+		name            string
+		existingGroupID GroupIDType
+		deleteGroupID   GroupIDType
+		err             error
+	}{
+		{
+			name:            "delete existing group without flow",
+			existingGroupID: 20,
+			deleteGroupID:   20,
+			err:             nil,
+		},
+		{
+			name:            "delete non-existing group",
+			existingGroupID: 20,
+			deleteGroupID:   30,
+			err:             nil,
+		},
+	} {
+		t.Run(m.name, func(t *testing.T) {
+			b.ofSwitch = newFakeOFSwitch(b)
+			b.CreateGroup(m.existingGroupID)
+			err := b.DeleteGroup(m.deleteGroupID)
+			assert.Equal(t, m.err, err)
+		})
+	}
 }
