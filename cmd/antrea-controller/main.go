@@ -23,6 +23,8 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/cmd/antrea-controller/app"
+	"antrea.io/antrea/cmd/antrea-controller/app/options"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/version"
 )
@@ -35,7 +37,7 @@ func main() {
 }
 
 func newControllerCommand() *cobra.Command {
-	opts := newOptions()
+	opts := options.NewOptions()
 
 	cmd := &cobra.Command{
 		Use:  "antrea-controller",
@@ -43,13 +45,13 @@ func newControllerCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogs(cmd.Flags())
 			defer log.FlushLogs()
-			if err := opts.complete(); err != nil {
+			if err := opts.Complete(); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
-			if err := opts.validate(args); err != nil {
+			if err := opts.Validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			if err := runAntreaControllerFunc(opts); err != nil {
+			if err := app.RunAntreaControllerFunc(opts); err != nil {
 				klog.Fatalf("Error running controller: %v", err)
 			}
 		},
@@ -57,7 +59,7 @@ func newControllerCommand() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	opts.addFlags(flags)
+	opts.AddFlags(flags)
 	log.AddFlags(flags)
 	return cmd
 }

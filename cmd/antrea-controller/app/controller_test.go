@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package app
 
 import (
 	"os"
@@ -30,7 +30,8 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	fakeaggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
-	mockgenericoptions "antrea.io/antrea/cmd/antrea-controller/testing"
+	"antrea.io/antrea/cmd/antrea-controller/app/options"
+	mockgenericoptions "antrea.io/antrea/cmd/antrea-controller/app/testing"
 	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	mcfake "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/apiserver"
@@ -67,9 +68,8 @@ func TestRunController(t *testing.T) {
 		_ = os.RemoveAll(tokenPath.Name())
 	}()
 
-	opts := newOptions()
-	opts.configFile = "./testing/testdata/controller_conf.yml"
-	if err := opts.complete(); err != nil {
+	opts := options.NewOptions()
+	if err := opts.Complete(); err != nil {
 		t.Errorf("Complete antrea controller config error: %v", err)
 	}
 

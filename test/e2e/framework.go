@@ -52,10 +52,10 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	utilnet "k8s.io/utils/net"
 
+	controllerconfig "antrea.io/antrea/cmd/antrea-controller/app/config"
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/test/e2e/providers"
@@ -2298,7 +2298,7 @@ func (data *TestData) mutateAntreaConfigMap(
 		}
 		configMap.Data["antrea-controller.conf"] = string(b)
 	}
-	//getAgentConf should be able to process both windows and linux configmap.
+	// getAgentConf should be able to process both windows and linux configmap.
 	getAgentConf := func(cm *corev1.ConfigMap) (*agentconfig.AgentConfig, error) {
 		var agentConf agentconfig.AgentConfig
 		if err := yaml.Unmarshal([]byte(cm.Data["antrea-agent.conf"]), &agentConf); err != nil {

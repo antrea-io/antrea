@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package options
 
 import (
 	"errors"
@@ -25,8 +25,8 @@ import (
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
+	controllerconfig "antrea.io/antrea/cmd/antrea-controller/app/config"
 	"antrea.io/antrea/pkg/apis"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -43,49 +43,49 @@ type Options struct {
 	// The path of configuration file.
 	configFile string
 	// The configuration object
-	config *controllerconfig.ControllerConfig
+	Config *controllerconfig.ControllerConfig
 }
 
-func newOptions() *Options {
+func NewOptions() *Options {
 	return &Options{
-		config: &controllerconfig.ControllerConfig{},
+		Config: &controllerconfig.ControllerConfig{},
 	}
 }
 
-// addFlags adds flags to fs and binds them to options.
-func (o *Options) addFlags(fs *pflag.FlagSet) {
+// AddFlags adds flags to fs and binds them to options.
+func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.configFile, "config", o.configFile, "The path to the configuration file")
 }
 
 // complete completes all the required options.
-func (o *Options) complete() error {
+func (o *Options) Complete() error {
 	if len(o.configFile) > 0 {
 		if err := o.loadConfigFromFile(); err != nil {
 			return err
 		}
 	}
 	o.setDefaults()
-	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+	return features.DefaultMutableFeatureGate.SetFromMap(o.Config.FeatureGates)
 }
 
 // validate validates all the required options.
-func (o *Options) validate(args []string) error {
+func (o *Options) Validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no positional arguments are supported")
 	}
 
-	if o.config.NodeIPAM.EnableNodeIPAM {
+	if o.Config.NodeIPAM.EnableNodeIPAM {
 		err := o.validateNodeIPAMControllerOptions()
 		if err != nil {
 			return err
 		}
 	}
 
-	if o.config.LegacyCRDMirroring != nil {
+	if o.Config.LegacyCRDMirroring != nil {
 		klog.InfoS("The legacyCRDMirroring config option is deprecated and will be ignored (no CRD mirroring)")
 	}
 
-	if !features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy {
+	if !features.DefaultFeatureGate.Enabled(features.Multicluster) && o.Config.Multicluster.EnableStretchedNetworkPolicy {
 		klog.InfoS("Multicluster feature gate is disabled. Multicluster.EnableStretchedNetworkPolicy is ignored")
 	}
 
@@ -94,9 +94,9 @@ func (o *Options) validate(args []string) error {
 
 func (o *Options) validateNodeIPAMControllerOptions() error {
 	// Validate ClusterCIDRs
-	cidrs, err := netutils.ParseCIDRs(o.config.NodeIPAM.ClusterCIDRs)
+	cidrs, err := netutils.ParseCIDRs(o.Config.NodeIPAM.ClusterCIDRs)
 	if err != nil {
-		return fmt.Errorf("cluster CIDRs %v is invalid", o.config.NodeIPAM.ClusterCIDRs)
+		return fmt.Errorf("cluster CIDRs %v is invalid", o.Config.NodeIPAM.ClusterCIDRs)
 	}
 
 	if len(cidrs) == 0 {
@@ -123,16 +123,16 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 	}
 
 	if hasIP4 {
-		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 < ipamIPv4MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 > ipamIPv4MaskHi {
+		if o.Config.NodeIPAM.NodeCIDRMaskSizeIPv4 < ipamIPv4MaskLo || o.Config.NodeIPAM.NodeCIDRMaskSizeIPv4 > ipamIPv4MaskHi {
 			return fmt.Errorf("node IPv4 CIDR mask size %d is invalid, should be between %d and %d",
-				o.config.NodeIPAM.NodeCIDRMaskSizeIPv4, ipamIPv4MaskLo, ipamIPv4MaskHi)
+				o.Config.NodeIPAM.NodeCIDRMaskSizeIPv4, ipamIPv4MaskLo, ipamIPv4MaskHi)
 		}
 	}
 
 	if hasIP6 {
-		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 < ipamIPv6MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 > ipamIPv6MaskHi {
+		if o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6 < ipamIPv6MaskLo || o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6 > ipamIPv6MaskHi {
 			return fmt.Errorf("node IPv6 CIDR mask size %d is invalid, should be between %d and %d",
-				o.config.NodeIPAM.NodeCIDRMaskSizeIPv6, ipamIPv6MaskLo, ipamIPv6MaskHi)
+				o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6, ipamIPv6MaskLo, ipamIPv6MaskHi)
 		}
 		// The subnet mask size cannot be greater than 16 more than the cluster mask size
 		// clusterSubnetMaxDiff limited to 16 due to the uncompressed bitmap
@@ -140,22 +140,22 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 		// as default mask size for IPv6 is 64.
 		//	clusterSubnetMaxDiff = 16
 		// see also: third_party/ipam/nodeipam/ipam/cidrset/cidr_set.go:84, https://github.com/kubernetes/kubernetes/issues/44918
-		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6-ipv6Mask > 16 {
+		if o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6-ipv6Mask > 16 {
 			return fmt.Errorf("the node IPv6 CIDR size is too big, the cluster CIDR mask size cannot be greater than 16 more than the Node IPv6 CIDR mask size")
 		}
 	}
 
 	// Validate ServiceCIDR and ServiceCIDRv6. Service CIDRs can be empty when there is no overlap with ClusterCIDR
-	if o.config.NodeIPAM.ServiceCIDR != "" {
-		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
+	if o.Config.NodeIPAM.ServiceCIDR != "" {
+		_, _, err = net.ParseCIDR(o.Config.NodeIPAM.ServiceCIDR)
 		if err != nil {
-			return fmt.Errorf("service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDR)
+			return fmt.Errorf("service CIDR %s is invalid", o.Config.NodeIPAM.ServiceCIDR)
 		}
 	}
-	if o.config.NodeIPAM.ServiceCIDRv6 != "" {
-		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDRv6)
+	if o.Config.NodeIPAM.ServiceCIDRv6 != "" {
+		_, _, err = net.ParseCIDR(o.Config.NodeIPAM.ServiceCIDRv6)
 		if err != nil {
-			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDRv6)
+			return fmt.Errorf("secondary service CIDR %s is invalid", o.Config.NodeIPAM.ServiceCIDRv6)
 		}
 	}
 
@@ -168,31 +168,31 @@ func (o *Options) loadConfigFromFile() error {
 		return err
 	}
 
-	return yaml.UnmarshalStrict(data, &o.config)
+	return yaml.UnmarshalStrict(data, &o.Config)
 }
 
 func (o *Options) setDefaults() {
-	if o.config.APIPort == 0 {
-		o.config.APIPort = apis.AntreaControllerAPIPort
+	if o.Config.APIPort == 0 {
+		o.Config.APIPort = apis.AntreaControllerAPIPort
 	}
-	if o.config.EnablePrometheusMetrics == nil {
-		o.config.EnablePrometheusMetrics = ptrBool(true)
+	if o.Config.EnablePrometheusMetrics == nil {
+		o.Config.EnablePrometheusMetrics = ptrBool(true)
 	}
-	if o.config.SelfSignedCert == nil {
-		o.config.SelfSignedCert = ptrBool(true)
+	if o.Config.SelfSignedCert == nil {
+		o.Config.SelfSignedCert = ptrBool(true)
 	}
-	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 == 0 {
-		o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 = ipamIPv4MaskDefault
+	if o.Config.NodeIPAM.NodeCIDRMaskSizeIPv4 == 0 {
+		o.Config.NodeIPAM.NodeCIDRMaskSizeIPv4 = ipamIPv4MaskDefault
 	}
 
-	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 == 0 {
-		o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 = ipamIPv6MaskDefault
+	if o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6 == 0 {
+		o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6 = ipamIPv6MaskDefault
 	}
-	if o.config.IPsecCSRSignerConfig.SelfSignedCA == nil {
-		o.config.IPsecCSRSignerConfig.SelfSignedCA = ptrBool(true)
+	if o.Config.IPsecCSRSignerConfig.SelfSignedCA == nil {
+		o.Config.IPsecCSRSignerConfig.SelfSignedCA = ptrBool(true)
 	}
-	if o.config.IPsecCSRSignerConfig.AutoApprove == nil {
-		o.config.IPsecCSRSignerConfig.AutoApprove = ptrBool(true)
+	if o.Config.IPsecCSRSignerConfig.AutoApprove == nil {
+		o.Config.IPsecCSRSignerConfig.AutoApprove = ptrBool(true)
 	}
 }
 

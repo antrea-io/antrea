@@ -17,10 +17,13 @@ package main
 import (
 	"os"
 	"testing"
+
+	"antrea.io/antrea/cmd/antrea-controller/app"
+	"antrea.io/antrea/cmd/antrea-controller/app/options"
 )
 
 func TestNewControllerCommand(t *testing.T) {
-	runAntreaControllerFunc = func(o *Options) error {
+	app.RunAntreaControllerFunc = func(o *options.Options) error {
 		t.Log("fake AntreaController running")
 		return nil
 	}

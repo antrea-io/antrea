@@ -37,6 +37,7 @@ ANTREA_PKG="antrea.io/antrea"
 ANTREA_PROTO_PKG="antrea_io.antrea"
 
 MOCKGEN_TARGETS=(
+  "cmd/antrea-controller/app Authorization,Authentication testing mock_genericoptions.go"
   "pkg/agent/cniserver/ipam IPAMDriver testing"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
   "pkg/agent/interfacestore InterfaceStore testing"

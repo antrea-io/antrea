@@ -22,9 +22,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	controllerconfig "antrea.io/antrea/cmd/antrea-controller/app/config"
 	"antrea.io/antrea/pkg/agent/util"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
 )
 

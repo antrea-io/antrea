@@ -23,9 +23,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	controllerconfig "antrea.io/antrea/cmd/antrea-controller/app/config"
 	"antrea.io/antrea/pkg/apis"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 const (

@@ -28,9 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	certutil "k8s.io/client-go/util/cert"
 
+	controllerconfig "antrea.io/antrea/cmd/antrea-controller/app/config"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 const (

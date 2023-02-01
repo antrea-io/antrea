@@ -33,7 +33,7 @@ import (
 )
 
 // #nosec G101: false positive triggered by variable name which includes "token"
-var TokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+var tokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
 // AntreaClientProvider provides a method to get Antrea client.
 type AntreaClientProvider interface {
@@ -148,7 +148,7 @@ func inClusterConfig(caBundle []byte) (*rest.Config, error) {
 		return nil, fmt.Errorf("unable to load in-cluster configuration, ANTREA_SERVICE_HOST and ANTREA_SERVICE_PORT must be defined")
 	}
 
-	token, err := os.ReadFile(TokenFile)
+	token, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +162,6 @@ func inClusterConfig(caBundle []byte) (*rest.Config, error) {
 		Host:            "https://" + net.JoinHostPort(host, port),
 		TLSClientConfig: tlsClientConfig,
 		BearerToken:     string(token),
-		BearerTokenFile: TokenFile,
+		BearerTokenFile: tokenFile,
 	}, nil
 }

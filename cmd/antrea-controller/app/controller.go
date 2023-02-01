@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package app
 
 import (
 	"context"
@@ -38,6 +38,7 @@ import (
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	netutils "k8s.io/utils/net"
 
+	"antrea.io/antrea/cmd/antrea-controller/app/options"
 	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	antreaapis "antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apiserver"
@@ -97,7 +98,7 @@ const (
 var (
 	newNodeIpamController   = nodeipam.NewNodeIpamController
 	createK8sClient         = k8s.CreateClients
-	runAntreaControllerFunc = run
+	RunAntreaControllerFunc = run
 )
 
 var allowedPaths = []string{
@@ -120,12 +121,12 @@ var allowedPaths = []string{
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
-func run(o *Options) error {
+func run(o *options.Options) error {
 	klog.Infof("Starting Antrea Controller (version %s)", version.GetFullVersion())
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, err := createK8sClient(o.config.ClientConnection, "")
+	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, err := createK8sClient(o.Config.ClientConnection, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -153,7 +154,7 @@ func run(o *Options) error {
 		client,
 	)
 
-	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
+	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.Config.Multicluster.EnableStretchedNetworkPolicy
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -202,7 +203,7 @@ func run(o *Options) error {
 
 	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
 
-	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
+	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.Config.APIPort)
 
 	externalNodeEnabled := features.DefaultFeatureGate.Enabled(features.ExternalNode)
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
@@ -226,10 +227,10 @@ func run(o *Options) error {
 		})
 		csrLister = csrlisters.NewCertificateSigningRequestLister(csrInformer.GetIndexer())
 
-		if *o.config.IPsecCSRSignerConfig.AutoApprove {
+		if *o.Config.IPsecCSRSignerConfig.AutoApprove {
 			csrApprovingController = certificatesigningrequest.NewCSRApprovingController(client, csrInformer, csrLister)
 		}
-		csrSigningController = certificatesigningrequest.NewIPsecCSRSigningController(client, csrInformer, csrLister, *o.config.IPsecCSRSignerConfig.SelfSignedCA)
+		csrSigningController = certificatesigningrequest.NewIPsecCSRSigningController(client, csrInformer, csrLister, *o.Config.IPsecCSRSignerConfig.SelfSignedCA)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
@@ -252,7 +253,7 @@ func run(o *Options) error {
 		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
 	}
 
-	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
+	cipherSuites, err := cipher.GenerateCipherSuitesList(o.Config.TLSCipherSuites)
 	if err != nil {
 		return fmt.Errorf("error generating Cipher Suite list: %v", err)
 	}
@@ -264,12 +265,12 @@ func run(o *Options) error {
 			crdInformerFactory)
 	}
 
-	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
+	apiServerConfig, err := createAPIServerConfig(o.Config.ClientConnection.Kubeconfig,
 		client,
 		aggregatorClient,
 		apiExtensionClient,
-		*o.config.SelfSignedCert,
-		o.config.APIPort,
+		*o.Config.SelfSignedCert,
+		o.Config.APIPort,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
@@ -283,9 +284,9 @@ func run(o *Options) error {
 		egressController,
 		statsAggregator,
 		bundleCollectionController,
-		*o.config.EnablePrometheusMetrics,
+		*o.Config.EnablePrometheusMetrics,
 		cipherSuites,
-		cipher.TLSVersionMap[o.config.TLSMinVersion])
+		cipher.TLSVersionMap[o.Config.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -338,7 +339,7 @@ func run(o *Options) error {
 
 	go func() {
 		if err := apiServer.Run(ctx); err != nil {
-			klog.ErrorS(err, "start APIServer error")
+			klog.ErrorS(err, "Failed to start APIServer")
 		}
 	}()
 
@@ -346,7 +347,7 @@ func run(o *Options) error {
 		go statsAggregator.Run(stopCh)
 	}
 
-	if *o.config.EnablePrometheusMetrics {
+	if *o.Config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
 
@@ -357,18 +358,18 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		go networkPolicyStatusController.Run(stopCh)
 	}
-	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.config.NodeIPAM.EnableNodeIPAM {
-		clusterCIDRs, _ := netutils.ParseCIDRs(o.config.NodeIPAM.ClusterCIDRs)
-		_, serviceCIDR, _ := net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
-		_, serviceCIDRv6, _ := net.ParseCIDR(o.config.NodeIPAM.ServiceCIDRv6)
+	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.Config.NodeIPAM.EnableNodeIPAM {
+		clusterCIDRs, _ := netutils.ParseCIDRs(o.Config.NodeIPAM.ClusterCIDRs)
+		_, serviceCIDR, _ := net.ParseCIDR(o.Config.NodeIPAM.ServiceCIDR)
+		_, serviceCIDRv6, _ := net.ParseCIDR(o.Config.NodeIPAM.ServiceCIDRv6)
 		err = startNodeIPAM(
 			client,
 			informerFactory,
 			clusterCIDRs,
 			serviceCIDR,
 			serviceCIDRv6,
-			o.config.NodeIPAM.NodeCIDRMaskSizeIPv4,
-			o.config.NodeIPAM.NodeCIDRMaskSizeIPv6,
+			o.Config.NodeIPAM.NodeCIDRMaskSizeIPv4,
+			o.Config.NodeIPAM.NodeCIDRMaskSizeIPv6,
 			stopCh)
 		if err != nil {
 			return fmt.Errorf("failed to initialize node IPAM controller: %v", err)
@@ -401,7 +402,7 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
 		go csrInformer.Run(stopCh)
-		if *o.config.IPsecCSRSignerConfig.AutoApprove {
+		if *o.Config.IPsecCSRSignerConfig.AutoApprove {
 			go csrApprovingController.Run(stopCh)
 		}
 		go csrSigningController.Run(stopCh)
@@ -456,8 +457,7 @@ type Authentication interface {
 }
 
 type DelegatingAuthenticationOptionsWarp struct {
-	RemoteKubeConfigFile string
-	// AuthenticationOptions *genericoptions.DelegatingAuthenticationOptions
+	RemoteKubeConfigFile  string
 	AuthenticationOptions Authentication
 }
 
