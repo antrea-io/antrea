@@ -271,6 +271,10 @@ type MulticastConfig struct {
 
 type EgressConfig struct {
 	ExceptCIDRs []string `yaml:"exceptCIDRs,omitempty"`
+	// The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
+	// the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
+	// Defaults to 255.
+	MaxEgressIPsPerNode int `yaml:"maxEgressIPsPerNode,omitempty"`
 }
 
 type IPsecConfig struct {

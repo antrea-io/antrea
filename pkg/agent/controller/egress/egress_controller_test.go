@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/ipassigner"
 	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
+	"antrea.io/antrea/pkg/agent/memberlist"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
 	"antrea.io/antrea/pkg/agent/types"
@@ -86,6 +87,43 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 	return g.clientset, nil
 }
 
+type fakeSingleNodeCluster struct {
+	node string
+}
+
+func (c *fakeSingleNodeCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
+	selectedNode, err := c.SelectNodeForIP(ip, pool, filters...)
+	if err != nil {
+		return false, err
+	}
+	return selectedNode == c.node, nil
+}
+
+func (c *fakeSingleNodeCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
+	for _, filter := range filters {
+		if !filter(c.node) {
+			return "", nil
+		}
+	}
+	return c.node, nil
+}
+
+func (c *fakeSingleNodeCluster) AliveNodes() sets.String {
+	return sets.NewString(c.node)
+}
+
+func (c *fakeSingleNodeCluster) AddClusterEventHandler(handler memberlist.ClusterNodeEventHandler) {}
+
+func mockNewIPAssigner(ipAssigner ipassigner.IPAssigner) func() {
+	originalNewIPAssigner := newIPAssigner
+	newIPAssigner = func(_, _ string) (ipassigner.IPAssigner, error) {
+		return ipAssigner, nil
+	}
+	return func() {
+		newIPAssigner = originalNewIPAssigner
+	}
+}
+
 type fakeController struct {
 	*EgressController
 	mockController     *gomock.Controller
@@ -103,13 +141,14 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockRouteClient := routetest.NewMockInterface(controller)
 	mockIPAssigner := ipassignertest.NewMockIPAssigner(controller)
+	defer mockNewIPAssigner(mockIPAssigner)()
+	mockCluster := &fakeSingleNodeCluster{fakeNode}
 
 	clientset := &fakeversioned.Clientset{}
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	localIPDetector := &fakeLocalIPDetector{localIPs: sets.NewString(fakeLocalEgressIP1, fakeLocalEgressIP2)}
-	idAllocator := newIDAllocator(minEgressMark, maxEgressMark)
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, "ns1", "pod1", 1)
@@ -119,26 +158,19 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 
-	egressController := &EgressController{
-		ofClient:             mockOFClient,
-		routeClient:          mockRouteClient,
-		crdClient:            crdClient,
-		antreaClientProvider: &antreaClientGetter{clientset},
-		egressInformer:       egressInformer.Informer(),
-		egressLister:         egressInformer.Lister(),
-		egressListerSynced:   egressInformer.Informer().HasSynced,
-		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egressgroup"),
-		localIPDetector:      localIPDetector,
-		ifaceStore:           ifaceStore,
-		nodeName:             fakeNode,
-		idAllocator:          idAllocator,
-		egressGroups:         map[string]sets.String{},
-		egressBindings:       map[string]*egressBinding{},
-		egressStates:         map[string]*egressState{},
-		egressIPStates:       map[string]*egressIPState{},
-		ipAssigner:           mockIPAssigner,
-	}
-	podUpdateChannel.Subscribe(egressController.processPodUpdate)
+	egressController, _ := NewEgressController(mockOFClient,
+		&antreaClientGetter{clientset},
+		crdClient,
+		ifaceStore,
+		mockRouteClient,
+		fakeNode,
+		"eth0",
+		mockCluster,
+		egressInformer,
+		podUpdateChannel,
+		255,
+	)
+	egressController.localIPDetector = localIPDetector
 	return &fakeController{
 		EgressController:   egressController,
 		mockController:     controller,
@@ -154,6 +186,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 func TestSyncEgress(t *testing.T) {
 	tests := []struct {
 		name                string
+		maxEgressIPsPerNode int
 		existingEgress      *crdv1a2.Egress
 		newEgress           *crdv1a2.Egress
 		existingEgressGroup *cpv1b2.EgressGroup
@@ -504,11 +537,110 @@ func TestSyncEgress(t *testing.T) {
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Times(3)
 			},
 		},
+		{
+			name:                "Not exceed maxEgressIPsPerNode",
+			maxEgressIPsPerNode: 1,
+			// It's on this Node but doesn't occupy the quota as it's not allocated from an ExternalIPPool.
+			existingEgress: &crdv1a2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1},
+			},
+			newEgress: &crdv1a2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+				Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: "external-ip-pool"},
+			},
+			existingEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				GroupMembers: []cpv1b2.GroupMember{
+					{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+					{Pod: &cpv1b2.PodReference{Name: "pod2", Namespace: "ns2"}},
+				},
+			},
+			newEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+				GroupMembers: []cpv1b2.GroupMember{
+					{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
+				},
+			},
+			expectedEgresses: []*crdv1a2.Egress{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+					Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1},
+					Status:     crdv1a2.EgressStatus{EgressNode: fakeNode},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+					Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: "external-ip-pool"},
+					Status:     crdv1a2.EgressStatus{EgressNode: fakeNode},
+				},
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
+				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2).Times(2)
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP2), uint32(2))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeLocalEgressIP2), uint32(2))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP2), uint32(2))
+			},
+		},
+		{
+			name:                "Exceed maxEgressIPsPerNode",
+			maxEgressIPsPerNode: 1,
+			existingEgress: &crdv1a2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: "external-ip-pool"},
+			},
+			newEgress: &crdv1a2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+				Spec:       crdv1a2.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
+			},
+			existingEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				GroupMembers: []cpv1b2.GroupMember{
+					{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+					{Pod: &cpv1b2.PodReference{Name: "pod2", Namespace: "ns2"}},
+				},
+			},
+			newEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+				GroupMembers: []cpv1b2.GroupMember{
+					{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
+				},
+			},
+			expectedEgresses: []*crdv1a2.Egress{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+					Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: "external-ip-pool"},
+					Status:     crdv1a2.EgressStatus{EgressNode: fakeNode},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+					Spec:       crdv1a2.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
+					Status:     crdv1a2.EgressStatus{EgressNode: ""},
+				},
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
+				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1)
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Times(2)
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, []runtime.Object{tt.existingEgress})
 			defer c.mockController.Finish()
+
+			if tt.maxEgressIPsPerNode > 0 {
+				c.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
+			}
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -642,14 +774,7 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	c.addEgressGroup(egressGroup1)
 	c.addEgressGroup(egressGroup2)
 	c.addEgressGroup(egressGroup3)
-	require.Equal(t, 3, c.queue.Len())
-	// Drain the queue.
-	item, _ := c.queue.Get()
-	c.queue.Done(item)
-	item, _ = c.queue.Get()
-	c.queue.Done(item)
-	item, _ = c.queue.Get()
-	c.queue.Done(item)
+	checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name, egress3.Name)
 
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
@@ -671,6 +796,9 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)
 
+	// egress1 and egress3 are expected to be triggered for resync because their status is updated.
+	checkQueueItemExistence(t, c.queue, egress1.Name, egress3.Name)
+
 	// After deleting egress1, pod1 and pod2 no longer enforces egress1. The Egress IP shouldn't be released as egress3
 	// is still referring to it.
 	// egress2 and egress3 are expected to be triggered for resync.
@@ -681,18 +809,11 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress1.Name)
 		return err != nil, nil
 	}))
+	checkQueueItemExistence(t, c.queue, egress1.Name)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err = c.syncEgress(egress1.Name)
 	assert.NoError(t, err)
-	require.Equal(t, 2, c.queue.Len())
-	var pendingItems []string
-	item, _ = c.queue.Get()
-	c.queue.Done(item)
-	pendingItems = append(pendingItems, item.(string))
-	item, _ = c.queue.Get()
-	c.queue.Done(item)
-	pendingItems = append(pendingItems, item.(string))
-	assert.ElementsMatch(t, []string{egress2.Name, egress3.Name}, pendingItems)
+	checkQueueItemExistence(t, c.queue, egress2.Name, egress3.Name)
 
 	// pod1 is expected to enforce egress2.
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
@@ -715,6 +836,7 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress2.Name)
 		return err != nil, nil
 	}))
+	checkQueueItemExistence(t, c.queue, egress2.Name)
 	err = c.syncEgress(egress2.Name)
 	assert.NoError(t, err)
 	require.Equal(t, 0, c.queue.Len())
@@ -730,6 +852,7 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress3.Name)
 		return err != nil, nil
 	}))
+	checkQueueItemExistence(t, c.queue, egress3.Name)
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)
 	require.Equal(t, 0, c.queue.Len())
@@ -949,4 +1072,19 @@ func TestGetEgressIPByMark(t *testing.T) {
 			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
 		})
 	}
+}
+
+func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface, items ...string) {
+	t.Logf("queue len %d", queue.Len())
+	require.Eventually(t, func() bool {
+		return len(items) == queue.Len()
+	}, time.Second, 10*time.Millisecond, "Didn't find enough items in the queue")
+	expectedItems := sets.NewString(items...)
+	actualItems := sets.NewString()
+	for i := 0; i < len(expectedItems); i++ {
+		key, _ := queue.Get()
+		actualItems.Insert(key.(string))
+		queue.Done(key)
+	}
+	assert.Equal(t, expectedItems, actualItems)
 }

@@ -14,32 +14,8 @@
 
 package ipassigner
 
-import (
-	"k8s.io/apimachinery/pkg/util/sets"
-)
+import "errors"
 
-type ipAssigner struct {
-}
-
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAssigner, error) {
-	return nil, nil
-}
-
-func (a *ipAssigner) AssignIP(ip string) error {
-	return nil
-}
-
-func (a *ipAssigner) UnassignIP(ip string) error {
-	return nil
-}
-
-func (a *ipAssigner) AssignedIPs() sets.String {
-	return nil
-}
-
-func (a *ipAssigner) InitIPs(ips sets.String) error {
-	return nil
-}
-
-func (a *ipAssigner) Run(ch <-chan struct{}) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAssigner, error) {
+	return nil, errors.New("IPAssigner is not implemented on Windows")
 }

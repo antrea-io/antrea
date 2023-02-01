@@ -51,7 +51,7 @@ type ipAssigner struct {
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAssigner, error) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAssigner, error) {
 	ipv4, ipv6, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from name %s error: %+v", nodeTransportInterface, err)

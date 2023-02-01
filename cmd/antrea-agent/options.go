@@ -55,6 +55,7 @@ const (
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
 	defaultNodeType                = config.K8sNode
+	defaultMaxEgressIPsPerNode     = 255
 )
 
 type Options struct {
@@ -409,6 +410,12 @@ func (o *Options) setK8sNodeDefaultOptions() {
 		// Multicluster.EnableGateway.
 		o.config.Multicluster.EnableGateway = true
 	}
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		if o.config.Egress.MaxEgressIPsPerNode == 0 {
+			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
+		}
+	}
 }
 
 func (o *Options) validateK8sNodeOptions() error {
@@ -506,6 +513,12 @@ func (o *Options) validateK8sNodeOptions() error {
 			return fmt.Errorf("dnsServerOverride %s is invalid: %v", o.config.DNSServerOverride, err)
 		}
 		o.dnsServerOverride = hostPort
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		if o.config.Egress.MaxEgressIPsPerNode > defaultMaxEgressIPsPerNode {
+			return fmt.Errorf("maxEgressIPsPerNode cannot be greater than %d", defaultMaxEgressIPsPerNode)
+		}
 	}
 	return nil
 }

@@ -83,6 +83,7 @@ var mapNodeEventType = map[memberlist.NodeEventType]nodeEventType{
 type ClusterNodeEventHandler func(objName string)
 
 type Interface interface {
+	ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error)
 	SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error)
 	AliveNodes() sets.String
 	AddClusterEventHandler(handler ClusterNodeEventHandler)
@@ -517,9 +518,6 @@ func (c *Cluster) ShouldSelectIP(ip, externalIPPool string, filters ...func(stri
 		return false, fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", externalIPPool)
 	}
 	node := consistentHash.GetWithFilters(ip, filters...)
-	if node == "" && len(filters) > 0 {
-		return false, ErrNoNodeAvailable
-	}
 	return node == c.nodeName, nil
 }
 
