@@ -96,7 +96,7 @@ type Bridge interface {
 	DeleteTable(id uint8) bool
 	CreateGroupTypeAll(id GroupIDType) Group
 	CreateGroup(id GroupIDType) Group
-	DeleteGroup(id GroupIDType) bool
+	DeleteGroup(id GroupIDType) error
 	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	DeleteMeter(id MeterIDType) bool
 	DeleteMeterAll() error

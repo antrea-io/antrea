@@ -191,10 +191,10 @@ func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 interface{}) *g
 }
 
 // DeleteGroup mocks base method
-func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) bool {
+func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteGroup", arg0)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 

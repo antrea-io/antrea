@@ -633,10 +633,16 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	if !c.bridge.DeleteGroup(groupID) {
-		return fmt.Errorf("group %d delete failed", groupID)
+	gCache, ok := c.featureService.groupCache.Load(groupID)
+	if ok {
+		if err := c.ofEntryOperations.DeleteOFEntries([]binding.OFEntry{gCache.(binding.Group)}); err != nil {
+			return fmt.Errorf("error when deleting Openflow entries for Service Endpoints Group %d: %w", groupID, err)
+		}
+		if err := c.bridge.DeleteGroup(groupID); err != nil {
+			return fmt.Errorf("error when deleting OFSwitch groupDb Cache for Service Endpoints Group %d: %w", groupID, err)
+		}
+		c.featureService.groupCache.Delete(groupID)
 	}
-	c.featureService.groupCache.Delete(groupID)
 	return nil
 }
 
@@ -1329,10 +1335,16 @@ func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceive
 func (c *client) UninstallMulticastGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	if !c.bridge.DeleteGroup(groupID) {
-		return fmt.Errorf("group %d delete failed", groupID)
+	gCache, ok := c.featureMulticast.groupCache.Load(groupID)
+	if ok {
+		if err := c.ofEntryOperations.DeleteOFEntries([]binding.OFEntry{gCache.(binding.Group)}); err != nil {
+			return fmt.Errorf("error when deleting Openflow entries for Multicast receiver Group %d: %w", groupID, err)
+		}
+		if err := c.bridge.DeleteGroup(groupID); err != nil {
+			return fmt.Errorf("error when deleting OFSwitch groupDb Cache for Multicast receiver Group %d: %w", groupID, err)
+		}
+		c.featureMulticast.groupCache.Delete(groupID)
 	}
-	c.featureMulticast.groupCache.Delete(groupID)
 	return nil
 }
 

@@ -1,0 +1,110 @@
+// Copyright 2022 Antrea Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package openflow
+
+import (
+	"net"
+	"sync"
+	"testing"
+	"time"
+
+	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/util"
+	"antrea.io/ofnet/ofctrl"
+	"github.com/stretchr/testify/assert"
+
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+)
+
+type fakeConn struct{}
+
+func (f *fakeConn) Close() error {
+	return nil
+}
+
+func (f *fakeConn) Read(b []byte) (int, error) {
+	return len(b), nil
+}
+
+func (f *fakeConn) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
+func (f *fakeConn) LocalAddr() net.Addr {
+	return nil
+}
+
+func (f *fakeConn) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (f *fakeConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (f *fakeConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (f *fakeConn) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+func newFakeOFSwitch(app ofctrl.AppInterface) *ofctrl.OFSwitch {
+	stream := util.NewMessageStream(&fakeConn{}, nil)
+	dpid, _ := net.ParseMAC("01:02:03:04:05:06:07:08")
+	connCh := make(chan int)
+	sw := ofctrl.NewSwitch(stream, dpid, app, connCh, 100)
+	return sw
+}
+
+func TestDeleteGroup(t *testing.T) {
+	for _, m := range []struct {
+		name            string
+		existingGroupID GroupIDType
+		deleteGroupID   GroupIDType
+		err             error
+	}{
+		{
+			name:            "delete existing group without flow",
+			existingGroupID: 20,
+			deleteGroupID:   20,
+			err:             nil,
+		},
+		{
+			name:            "delete non-existing group",
+			existingGroupID: 20,
+			deleteGroupID:   30,
+			err:             nil,
+		},
+	} {
+		t.Run(m.name, func(t *testing.T) {
+			b := &OFBridge{
+				bridgeName:           "test-br",
+				mgmtAddr:             GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"),
+				tableCache:           make(map[uint8]*ofTable),
+				retryInterval:        1 * time.Second,
+				pktConsumers:         sync.Map{},
+				multipartReplyChs:    make(map[uint32]chan *openflow15.MultipartReply),
+				tunMetadataLengthMap: make(map[uint16]uint8),
+			}
+			b.controller = ofctrl.NewController(b)
+			b.ofSwitch = newFakeOFSwitch(b)
+			b.CreateGroup(m.existingGroupID)
+			err := b.DeleteGroup(m.deleteGroupID)
+			assert.Equal(t, m.err, err)
+		})
+	}
+}
