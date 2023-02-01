@@ -846,10 +846,11 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 	groupID := binding.GroupIDType(100)
 
 	testCases := []struct {
-		name                string
-		withSessionAffinity bool
-		endpoints           []proxy.Endpoint
-		expectedGroup       string
+		name                 string
+		withSessionAffinity  bool
+		endpoints            []proxy.Endpoint
+		expectedGroup        string
+		deleteOFEntriesError error
 	}{
 		{
 			name: "IPv4 Endpoints",
@@ -893,6 +894,17 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 				"bucket=bucket_id:0,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
 		},
+		{
+			name: "delete group failed for IPv4 Endpoints",
+			endpoints: []proxy.Endpoint{
+				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
+			},
+			expectedGroup: "group_id=100,type=select," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
+			deleteOFEntriesError: fmt.Errorf("error when deleting Openflow entries for Service Endpoints Group 100"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -905,17 +917,22 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			defer resetPipelines()
 
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
-			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(nil).Times(1)
-
+			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
 			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.endpoints))
 			gCacheI, ok := fc.featureService.groupCache.Load(groupID)
 			require.True(t, ok)
 			group := getGroupFromCache(gCacheI.(binding.Group))
 			assert.Equal(t, tc.expectedGroup, group)
 
-			assert.NoError(t, fc.UninstallServiceGroup(groupID))
-			_, ok = fc.featureService.groupCache.Load(groupID)
-			require.False(t, ok)
+			if tc.deleteOFEntriesError == nil {
+				assert.NoError(t, fc.UninstallServiceGroup(groupID))
+				_, ok = fc.featureService.groupCache.Load(groupID)
+				require.False(t, ok)
+			} else {
+				assert.Error(t, fc.UninstallServiceGroup(groupID))
+				_, ok = fc.featureService.groupCache.Load(groupID)
+				require.True(t, ok)
+			}
 		})
 	}
 }
@@ -1977,10 +1994,11 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 	localReceivers := []uint32{50, 100}
 	remoteNodeReceivers := []net.IP{net.ParseIP("192.168.77.101"), net.ParseIP("192.168.77.102")}
 	testCases := []struct {
-		name                string
-		localReceivers      []uint32
-		remoteNodeReceivers []net.IP
-		expectedGroup       string
+		name                 string
+		localReceivers       []uint32
+		remoteNodeReceivers  []net.IP
+		expectedGroup        string
+		deleteOFEntriesError error
 	}{
 		{
 			name:           "Local Receivers",
@@ -2006,6 +2024,14 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 				"bucket=bucket_id:2,actions=set_field:0x100/0x100->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
 				"bucket=bucket_id:3,actions=set_field:0x100/0x100->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
 		},
+		{
+			name:           "DeleteOFEntries Failed",
+			localReceivers: localReceivers,
+			expectedGroup: "group_id=101,type=all," +
+				"bucket=bucket_id:0,actions=set_field:0x100/0x100->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
+				"bucket=bucket_id:1,actions=set_field:0x100/0x100->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule",
+			deleteOFEntriesError: fmt.Errorf("error when deleting Openflow entries for Multicast receiver Group 101"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2017,7 +2043,7 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 			defer resetPipelines()
 
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
-			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(nil).Times(1)
+			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
 
 			assert.NoError(t, fc.InstallMulticastGroup(groupID, tc.localReceivers, tc.remoteNodeReceivers))
 			gCacheI, ok := fc.featureMulticast.groupCache.Load(groupID)
@@ -2025,9 +2051,15 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 			group := getGroupFromCache(gCacheI.(binding.Group))
 			assert.Equal(t, tc.expectedGroup, group)
 
-			assert.NoError(t, fc.UninstallMulticastGroup(groupID))
-			_, ok = fc.featureMulticast.groupCache.Load(groupID)
-			require.False(t, ok)
+			if tc.deleteOFEntriesError == nil {
+				assert.NoError(t, fc.UninstallMulticastGroup(groupID))
+				_, ok = fc.featureMulticast.groupCache.Load(groupID)
+				require.False(t, ok)
+			} else {
+				assert.Error(t, fc.UninstallMulticastGroup(groupID))
+				_, ok = fc.featureMulticast.groupCache.Load(groupID)
+				require.True(t, ok)
+			}
 		})
 	}
 }
