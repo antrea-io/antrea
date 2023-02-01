@@ -43,7 +43,6 @@ func skipIfNotUpgradeTest(t *testing.T) {
 func TestUpgrade(t *testing.T) {
 	skipIfNotUpgradeTest(t)
 	skipIfNumNodesLessThan(t, 2)
-	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -51,11 +50,15 @@ func TestUpgrade(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	nodeName := nodeName(0)
+	nodename := nodeName(0)
+	if len(clusterInfo.windowsNodes) != 0 {
+		nodeIdx := clusterInfo.windowsNodes[0]
+		nodename = nodeName(nodeIdx)
+	}
 	podName := randName("test-pod-")
 
-	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
-	if err := data.createBusyboxPodOnNode(podName, data.testNamespace, nodeName, false); err != nil {
+	t.Logf("Creating a busybox test Pod on '%s'", nodename)
+	if err := data.createAgnhostPodOnNode(podName, data.testNamespace, nodename, false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, podName, data.testNamespace); err != nil {
@@ -114,5 +117,5 @@ func TestUpgrade(t *testing.T) {
 		t.Errorf("Namespace deletion failed: %v", err)
 	}
 
-	data.testDeletePod(t, podName, nodeName, data.testNamespace, false)
+	data.testDeletePod(t, podName, nodename, data.testNamespace, false)
 }

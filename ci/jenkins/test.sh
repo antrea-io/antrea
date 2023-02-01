@@ -30,6 +30,7 @@ MODE="report"
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
 TESTBED_TYPE="legacy"
 GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
+RELEASE_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/release-version")
 IMAGE_PULL_POLICY="Always"
 PROXY_ALL=false
 DEFAULT_IP_MODE="ipv4"
@@ -239,11 +240,18 @@ function wait_for_antrea_windows_pods_ready {
     if [[ "${PROXY_ALL}" == false ]]; then
         kubectl apply -f "${WORKDIR}/kube-proxy-${WINDOWS_YAML_SUFFIX}.yml"
     fi
-    kubectl apply -f "${WORKDIR}/antrea-${WINDOWS_YAML_SUFFIX}.yml"
+    kubectl apply -f https://github.com/antrea-io/antrea/releases/download/${RELEASE_VERSION}/antrea-${WINDOWS_YAML_SUFFIX}.yml
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status deployment/coredns -n kube-system
     kubectl rollout status deployment.apps/antrea-controller -n kube-system
     kubectl rollout status daemonset/antrea-agent -n kube-system
+    kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
+
+    echo "=== Antrea Windows Upgrade Test ==="
+    mkdir -p `pwd`/antrea-test-logs
+    go test -v -run=TestUpgrade antrea.io/antrea/test/e2e --provider remote -upgrade.toYML=antrea-${WINDOWS_YAML_SUFFIX}.yml --logs-export-dir `pwd`/antrea-test-logs
+
+    kubectl apply -f "${WORKDIR}/antrea-${WINDOWS_YAML_SUFFIX}.yml"
     kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
     if [[ "${PROXY_ALL}" == false ]]; then
         kubectl rollout status daemonset/kube-proxy-windows -n kube-system
