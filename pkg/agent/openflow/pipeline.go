@@ -2058,7 +2058,6 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 	for _, eachMatchPair := range matchPairs {
 		fb = f.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
 	}
-	fb = fb.Action().Drop()
 
 	var customReason int
 	if f.enableDenyTracking {
@@ -2069,11 +2068,15 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 	}
 
 	if enableLogging || f.enableDenyTracking {
-		fb = fb.Action().LoadRegMark(DispositionDropRegMark).
+		return fb.Action().LoadRegMark(DispositionDropRegMark).
 			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
-			Action().SendToController(uint8(PacketInReasonNP))
+			Action().SendToController(uint8(PacketInReasonNP)).
+			Cookie(cookieID).
+			Done()
 	}
-	return fb.Cookie(cookieID).Done()
+	return fb.Action().Drop().
+		Cookie(cookieID).
+		Done()
 }
 
 // dnsPacketInFlow generates the flow to send dns response packets of fqdn policy selected Pods to the fqdnController for
