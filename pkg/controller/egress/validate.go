@@ -47,6 +47,12 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 	}
 
 	shouldAllow := func(oldEgress, newEgress *crdv1alpha2.Egress) (bool, string) {
+		if len(newEgress.Spec.EgressIPs) > 0 {
+			return false, "spec.egressIPs is not supported yet"
+		}
+		if len(newEgress.Spec.ExternalIPPools) > 0 {
+			return false, "spec.externalIPPools is not supported yet"
+		}
 		// Allow it if EgressIP and ExternalIPPool don't change.
 		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {
 			return true, ""
