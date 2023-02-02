@@ -208,7 +208,7 @@ spec:
    NAMESPACE="vm-ns"
    KUBECONFIG="antrea-agent.kubeconfig"
    APISERVER=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$CLUSTER_NAME\")].cluster.server}")
-   TOKEN=$(kubectl -n $NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
+   TOKEN=$(kubectl -n $NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.name=='${SERVICE_ACCOUNT}-service-account-token')].data.token}"|base64 --decode)
    kubectl config --kubeconfig=$KUBECONFIG set-cluster $CLUSTER_NAME --server=$APISERVER --insecure-skip-tls-verify=true
    kubectl config --kubeconfig=$KUBECONFIG set-credentials antrea-agent --token=$TOKEN
    kubectl config --kubeconfig=$KUBECONFIG set-context antrea-agent@$CLUSTER_NAME --cluster=$CLUSTER_NAME --user=antrea-agent
@@ -226,7 +226,7 @@ spec:
    ANTREA_CLUSTER_NAME="antrea"
    NAMESPACE="vm-ns"
    KUBECONFIG="antrea-agent.antrea.kubeconfig"
-   TOKEN=$(kubectl -n $NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
+   TOKEN=$(kubectl -n $NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.name=='${SERVICE_ACCOUNT}-service-account-token')].data.token}"|base64 --decode)
    kubectl config --kubeconfig=$KUBECONFIG set-cluster $ANTREA_CLUSTER_NAME --server=$ANTREA_API_SERVER --insecure-skip-tls-verify=true
    kubectl config --kubeconfig=$KUBECONFIG set-credentials antrea-agent --token=$TOKEN
    kubectl config --kubeconfig=$KUBECONFIG set-context antrea-agent@$ANTREA_CLUSTER_NAME --cluster=$ANTREA_CLUSTER_NAME --user=antrea-agent

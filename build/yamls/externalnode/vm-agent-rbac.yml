@@ -5,6 +5,15 @@ metadata:
   name: vm-agent
   namespace: vm-ns # Change the Namespace to where vm-agent is expected to run.
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vm-agent-service-account-token
+  namespace: vm-ns  # Change the Namespace to where vm-agent is expected to run.
+  annotations:
+    kubernetes.io/service-account.name: vm-agent
+type: kubernetes.io/service-account-token
+---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
