@@ -193,8 +193,9 @@ function create_kubeconfig_files {
     echo "Creating files ${ANTREA_AGENT_KUBECONFIG} and ${ANTREA_AGENT_ANTREA_KUBECONFIG}"
     # Kubeconfig to access K8S API
 
+    SECRET_NAME="${SERVICE_ACCOUNT}-service-account-token"
     APISERVER=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$CLUSTER_NAME\")].cluster.server}")
-    TOKEN=$(kubectl -n $TEST_NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
+    TOKEN=$(kubectl -n $TEST_NAMESPACE get secrets ${SECRET_NAME} -o json | jq -r .data.token | base64 --decode)
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_KUBECONFIG} set-cluster kubernetes --server=$APISERVER --insecure-skip-tls-verify=true
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_KUBECONFIG} set-credentials antrea-agent --token=$TOKEN
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_KUBECONFIG} set-context antrea-agent@kubernetes --cluster=kubernetes --user=antrea-agent
@@ -203,7 +204,6 @@ function create_kubeconfig_files {
     # Kubeconfig to access AntreaController
     ANTREA_API_SERVER_IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}')
     ANTREA_API_SERVER="https://${ANTREA_API_SERVER_IP}:32767"
-    TOKEN=$(kubectl -n $TEST_NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-cluster antrea --server=$ANTREA_API_SERVER --insecure-skip-tls-verify=true
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-credentials antrea-agent --token=$TOKEN
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-context antrea-agent@antrea --cluster=antrea --user=antrea-agent
