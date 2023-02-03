@@ -86,7 +86,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	//   If one day Containerd runtime changes the behavior and container interface can be created when attaching
 	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
 	//   way to create OVS port.
-	if util.HostInterfaceExists(hostIfAlias) {
+	if hostInterfaceExistsFunc(hostIfAlias) {
 		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 	}
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)

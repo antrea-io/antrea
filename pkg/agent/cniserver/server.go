@@ -389,9 +389,16 @@ func (s *CNIServer) GetPodConfigurator() *podConfigurator {
 	return s.podConfigurator
 }
 
+// Declared variables for testing
+var (
+	ipamSecondaryNetworkAdd   = ipam.SecondaryNetworkAdd
+	ipamSecondaryNetworkDel   = ipam.SecondaryNetworkDel
+	ipamSecondaryNetworkCheck = ipam.SecondaryNetworkCheck
+)
+
 // Antrea IPAM for secondary network.
 func (s *CNIServer) ipamAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	ipamResult, err := ipam.SecondaryNetworkAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig)
+	ipamResult, err := ipamSecondaryNetworkAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig)
 	if err != nil {
 		return s.ipamFailureResponse(err), nil
 	}
@@ -400,14 +407,14 @@ func (s *CNIServer) ipamAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error)
 }
 
 func (s *CNIServer) ipamDel(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	if err := ipam.SecondaryNetworkDel(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig); err != nil {
+	if err := ipamSecondaryNetworkDel(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig); err != nil {
 		return s.ipamFailureResponse(err), nil
 	}
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
 func (s *CNIServer) ipamCheck(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	if err := ipam.SecondaryNetworkCheck(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig); err != nil {
+	if err := ipamSecondaryNetworkCheck(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig); err != nil {
 		return s.ipamFailureResponse(err), nil
 	}
 	// CNI CHECK is not implemented for secondary network IPAM, and so the func will always
@@ -473,7 +480,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	var ipamResult *ipam.IPAMResult
 	var err error
 	// Only allocate IP when handling CNI request from infra container.
-	// On windows platform, CNI plugin is called for all containers in a Pod.
+	// On Windows platform, CNI plugin is called for all containers in a Pod.
 	if !isInfraContainer {
 		if ipamResult, _ = ipam.GetIPFromCache(infraContainer); ipamResult == nil {
 			return nil, fmt.Errorf("allocated IP address not found")

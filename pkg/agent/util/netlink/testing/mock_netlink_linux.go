@@ -106,6 +106,48 @@ func (mr *MockInterfaceMockRecorder) LinkByName(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkByName", reflect.TypeOf((*MockInterface)(nil).LinkByName), arg0)
 }
 
+// LinkSetMTU mocks base method
+func (m *MockInterface) LinkSetMTU(arg0 netlink.Link, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetMTU", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetMTU indicates an expected call of LinkSetMTU
+func (mr *MockInterfaceMockRecorder) LinkSetMTU(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetMTU", reflect.TypeOf((*MockInterface)(nil).LinkSetMTU), arg0, arg1)
+}
+
+// LinkSetNsFd mocks base method
+func (m *MockInterface) LinkSetNsFd(arg0 netlink.Link, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetNsFd", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetNsFd indicates an expected call of LinkSetNsFd
+func (mr *MockInterfaceMockRecorder) LinkSetNsFd(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetNsFd", reflect.TypeOf((*MockInterface)(nil).LinkSetNsFd), arg0, arg1)
+}
+
+// LinkSetUp mocks base method
+func (m *MockInterface) LinkSetUp(arg0 netlink.Link) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetUp", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetUp indicates an expected call of LinkSetUp
+func (mr *MockInterfaceMockRecorder) LinkSetUp(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetUp", reflect.TypeOf((*MockInterface)(nil).LinkSetUp), arg0)
+}
+
 // NeighDel mocks base method
 func (m *MockInterface) NeighDel(arg0 *netlink.Neigh) error {
 	m.ctrl.T.Helper()
