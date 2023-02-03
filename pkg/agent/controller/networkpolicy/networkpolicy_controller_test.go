@@ -47,6 +47,15 @@ import (
 
 const testNamespace = "ns1"
 
+var mockOFTables = map[*openflow.Table]uint8{
+	openflow.AntreaPolicyEgressRuleTable:  uint8(5),
+	openflow.EgressRuleTable:              uint8(6),
+	openflow.EgressDefaultTable:           uint8(7),
+	openflow.AntreaPolicyIngressRuleTable: uint8(12),
+	openflow.IngressRuleTable:             uint8(13),
+	openflow.IngressDefaultTable:          uint8(14),
+}
+
 type antreaClientGetter struct {
 	clientset versioned.Interface
 }
@@ -203,15 +212,7 @@ func newNetworkPolicyWithMultipleRules(name string, uid types.UID, from, to, app
 }
 
 func prepareMockTables() {
-	openflow.InitMockTables(
-		map[*openflow.Table]uint8{
-			openflow.AntreaPolicyEgressRuleTable:  uint8(5),
-			openflow.EgressRuleTable:              uint8(6),
-			openflow.EgressDefaultTable:           uint8(7),
-			openflow.AntreaPolicyIngressRuleTable: uint8(12),
-			openflow.IngressRuleTable:             uint8(13),
-			openflow.IngressDefaultTable:          uint8(14),
-		})
+	openflow.InitMockTables(mockOFTables)
 }
 
 func TestAddSingleGroupRule(t *testing.T) {
