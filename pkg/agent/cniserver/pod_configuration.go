@@ -58,13 +58,17 @@ const (
 	internalOVSInterfaceType
 )
 
+var (
+	getNSPath = util.GetNSPath
+)
+
 type podConfigurator struct {
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	ofClient        openflow.Client
 	routeClient     route.Interface
 	ifaceStore      interfacestore.InterfaceStore
 	gatewayMAC      net.HardwareAddr
-	ifConfigurator  *ifConfigurator
+	ifConfigurator  podInterfaceConfigurator
 	// podUpdateNotifier is used for notifying updates of local Pods to other components which may benefit from this
 	// information, i.e. NetworkPolicyController, EgressController.
 	podUpdateNotifier channel.Notifier
@@ -157,9 +161,7 @@ func getContainerIPsString(ips []net.IP) string {
 // external_ids, initializes and returns an InterfaceConfig struct.
 // nill will be returned, if the OVS port does not have external IDs or it is
 // not created for a Pod interface.
-// If "checkMac" param is set as true the ovsExternalIDMAC of portData should be
-// a valid MAC string, otherwise it will print error.
-func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig, checkMac bool) *interfacestore.InterfaceConfig {
+func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
 	if portData.ExternalIDs == nil {
 		klog.V(2).Infof("OVS port %s has no external_ids", portData.Name)
 		return nil
@@ -177,7 +179,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 	}
 
 	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
-	if err != nil && checkMac {
+	if err != nil {
 		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
 			portData.ExternalIDs[ovsExternalIDMAC], err)
 	}
@@ -244,7 +246,6 @@ func (pc *podConfigurator) configureInterfaces(
 	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface, containerIface, result.IPs, result.VLANID, containerAccess); err != nil {
 		return fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
 	}
-	success = true
 	defer func() {
 		if !success {
 			_ = pc.disconnectInterfaceFromOVS(containerConfig)
@@ -269,7 +270,7 @@ func (pc *podConfigurator) configureInterfaces(
 func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}, vlanID uint16) (string, error) {
 	var portUUID string
 	var err error
-	switch pc.ifConfigurator.getOVSInterfaceType(ovsPortName) {
+	switch getOVSInterfaceType(ovsPortName) {
 	case internalOVSInterfaceType:
 		portUUID, err = pc.ovsBridgeClient.CreateInternalPort(ovsPortName, 0, "", ovsAttachInfo)
 	default:
@@ -487,12 +488,13 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 	}()
 
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
-	ofPort, err := pc.ovsBridgeClient.GetOFPort(ovsPortName, false)
+	var ofPort int32
+	ofPort, err = pc.ovsBridgeClient.GetOFPort(ovsPortName, false)
 	if err != nil {
 		return fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
 	}
 	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-	if err := pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), containerConfig.VLANID, nil); err != nil {
+	if err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), containerConfig.VLANID, nil); err != nil {
 		return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 	}
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
@@ -549,7 +551,7 @@ func (pc *podConfigurator) connectInterceptedInterface(
 	containerIPs []*current.IPConfig,
 	containerAccess *containerAccessArbitrator,
 ) error {
-	sandbox, err := util.GetNSPath(containerNetNS)
+	sandbox, err := getNSPath(containerNetNS)
 	if err != nil {
 		return err
 	}

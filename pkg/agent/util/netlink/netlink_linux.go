@@ -39,4 +39,10 @@ type Interface interface {
 	NeighDel(neigh *netlink.Neigh) error
 
 	LinkByName(name string) (netlink.Link, error)
+
+	LinkSetNsFd(link netlink.Link, fd int) error
+
+	LinkSetMTU(link netlink.Link, mtu int) error
+
+	LinkSetUp(link netlink.Link) error
 }
