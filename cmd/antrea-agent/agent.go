@@ -342,6 +342,7 @@ func run(o *Options) error {
 			nodeConfig,
 			mcNamespace,
 			o.config.Multicluster.EnableStretchedNetworkPolicy,
+			o.config.Multicluster.EnablePodToPodConnectivity,
 		)
 	}
 	if enableMulticlusterNP {

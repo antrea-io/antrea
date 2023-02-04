@@ -336,6 +336,8 @@ multicluster:
   # -- Enable Multi-cluster NetworkPolicy.
   # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
   enableStretchedNetworkPolicy: false
+  # -- Enable Multi-cluster Pod to Pod connectivity.
+  enablePodToPodConnectivity: false
 
 testing:
   ## -- enable code coverage measurement (used when testing Antrea only).
