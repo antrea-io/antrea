@@ -1099,6 +1099,7 @@ func TestReconcilerUpdate(t *testing.T) {
 		expectedDeletedFrom []types.Address
 		expectedDeletedTo   []types.Address
 		expectUninstall     bool
+		isMCNPRule          bool
 		wantErr             bool
 	}{
 		{
@@ -1117,6 +1118,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			ofPortsToOFAddresses(sets.NewInt32(2)),
 			ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			ofPortsToOFAddresses(sets.NewInt32(1)),
+			false,
 			false,
 			false,
 		},
@@ -1138,6 +1140,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			false,
 			false,
+			false,
 		},
 		{
 			"updating-ingress-rule-with-missing-ofport",
@@ -1157,6 +1160,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			ofPortsToOFAddresses(sets.NewInt32(1)),
 			false,
 			false,
+			false,
 		},
 		{
 			"updating-egress-rule-with-missing-ip",
@@ -1174,6 +1178,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			ipsToOFAddresses(sets.NewString("2.2.2.2")),
 			ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			false,
 			false,
 			false,
 		},
@@ -1207,6 +1212,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			ipsToOFAddresses(sets.NewString("1.1.1.2", "1.1.1.3")),
 			false,
 			false,
+			false,
 		},
 		{
 			"updating-egress-rule-deny-all",
@@ -1224,6 +1230,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			[]types.Address{},
 			ipsToOFAddresses(sets.NewString("2.2.2.2")),
 			[]types.Address{},
+			false,
 			false,
 			false,
 		},
@@ -1245,6 +1252,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			ofPortsToOFAddresses(sets.NewInt32(1)),
 			false,
 			false,
+			false,
 		},
 		{
 			"updating-cnp-ingress-rule-uninstall",
@@ -1264,6 +1272,25 @@ func TestReconcilerUpdate(t *testing.T) {
 			[]types.Address{},
 			true,
 			false,
+			false,
+		},
+		{
+			"updating-mcnp-ingress",
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, From: v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}}, SourceRef: &cnp1, EnableLogging: false},
+				TargetMembers: appliedToGroup1,
+			},
+			&CompletedRule{
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, From: v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}}, SourceRef: &cnp1, EnableLogging: false},
+				TargetMembers: appliedToGroup2,
+			},
+			[]types.Address{},
+			ofPortsToOFAddresses(sets.NewInt32(2)),
+			[]types.Address{},
+			ofPortsToOFAddresses(sets.NewInt32(1)),
+			false,
+			true,
+			false,
 		},
 	}
 	for _, tt := range tests {
@@ -1280,10 +1307,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any())
 			}
 			if len(tt.expectedAddedFrom) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority, false)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority, false, tt.isMCNPRule)
 			}
 			if len(tt.expectedAddedTo) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedAddedTo), priority, false)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedAddedTo), priority, false, tt.isMCNPRule)
 			}
 			if len(tt.expectedDeletedFrom) > 0 {
 				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedDeletedFrom), priority)
