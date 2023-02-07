@@ -223,6 +223,7 @@ type mockAgentDumper struct {
 	dumpNetworkPolicyResourcesErr error
 	dumpHeapPprofErr              error
 	dumpOVSPortsErr               error
+	dumpMemberlistErr             error
 }
 
 func (d *mockAgentDumper) DumpLog(basedir string) error {
@@ -251,4 +252,8 @@ func (d *mockAgentDumper) DumpHeapPprof(basedir string) error {
 
 func (d *mockAgentDumper) DumpOVSPorts(basedir string) error {
 	return d.dumpOVSPortsErr
+}
+
+func (d *mockAgentDumper) DumpMemberlist(basedir string) error {
+	return d.dumpMemberlistErr
 }

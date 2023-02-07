@@ -61,6 +61,9 @@ type AgentDumper interface {
 
 	// DumpOVSPorts should create file that contains OF port descriptions under the basedir.
 	DumpOVSPorts(basedir string) error
+	// DumpMemberlist should create a file that contains state of Memberlist
+	// cluster of the agent Pod under the basedir.
+	DumpMemberlist(basedir string) error
 }
 
 // ControllerDumper is the interface for dumping runtime information of the
@@ -287,6 +290,10 @@ func (d *agentDumper) DumpAgentInfo(basedir string) error {
 	ai := new(clusterinformationv1beta1.AntreaAgentInfo)
 	d.aq.GetAgentInfo(ai, false)
 	return writeYAMLFile(d.fs, filepath.Join(basedir, "agentinfo"), "agentinfo", ai)
+}
+
+func (d *agentDumper) DumpMemberlist(basedir string) error {
+	return dumpAntctlGet(d.fs, d.executor, "memberlist", basedir)
 }
 
 func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {

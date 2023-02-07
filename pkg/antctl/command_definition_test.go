@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/antctl/output"
 	"antrea.io/antrea/pkg/antctl/runtime"
@@ -315,6 +316,25 @@ GroupName <NONE>
 			expected: `NAMESPACE NAME                   INTERFACE-NAME IP        MAC               PORT-UUID OF-PORT CONTAINER-ID
 default   nginx-32b489d4b7-vgv7v Interface2     127.0.0.2 07-16-76-00-02-87 portuuid1 35572   uci2ucsd6dx 
 default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 portuuid0 80      dve7a2d6c22 
+`,
+		},
+		{
+			name: "StructuredData-Memberlist-State",
+			rawResponseData: []memberlist.Response{
+				{
+					NodeName: "node1",
+					IP:       "192.168.1.2",
+					Status:   "Alive",
+				},
+				{
+					NodeName: "node2",
+					IP:       "192.168.1.3",
+					Status:   "Dead",
+				},
+			},
+			expected: `NODE  IP          STATUS
+node1 192.168.1.2 Alive 
+node2 192.168.1.3 Dead  
 `,
 		},
 	} {
