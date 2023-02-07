@@ -1237,8 +1237,15 @@ func (i *Initializer) initNodeLocalConfig() error {
 			return err
 		}
 
-		i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-		i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		i.networkConfig.IPv4Enabled, err = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		if err != nil {
+			return err
+		}
+		i.networkConfig.IPv6Enabled, err = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}
 	if err := i.initVMLocalConfig(nodeName); err != nil {
