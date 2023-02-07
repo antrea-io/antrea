@@ -259,14 +259,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newNetworkPolicyStatus("cnp1", "node2", 5, "agent crash"),
 			},
 			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+				Phase:                crdv1alpha1.NetworkPolicyFailed,
 				ObservedGeneration:   4,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
 				Conditions:           generateRealizationFailureConditions(1, `"node1":"agent failure"`),
 			},
 			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+				Phase:                crdv1alpha1.NetworkPolicyFailed,
 				ObservedGeneration:   5,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,

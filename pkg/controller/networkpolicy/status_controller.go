@@ -336,6 +336,8 @@ func (c *StatusController) syncHandler(key string) error {
 	phase := crdv1alpha1.NetworkPolicyRealizing
 	if currentNodes == desiredNodes {
 		phase = crdv1alpha1.NetworkPolicyRealized
+	} else if currentNodes+len(failedNodes) == desiredNodes {
+		phase = crdv1alpha1.NetworkPolicyFailed
 	}
 
 	return updateStatus(phase, currentNodes, desiredNodes, conditions)
