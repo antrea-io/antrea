@@ -160,7 +160,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 
   |  K8s Version |    Node Type    |  Node AMI Family |  Status  |
   | :----------: | :-------------: | :--------------: | :------: |
-  |     1.21     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
+  |     1.24     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
 
 * [GKE conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)
   community tests on GKE cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
@@ -168,7 +168,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 
   |  K8s Version   |     Node OS     | VPC Native Mode (on by default) |  Status  |
   | :------------: | :-------------: | :-----------------------------: |:-------: |
-  |    1.21.6      |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
+  |    1.25.5      |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
 
 * [AKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
   community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
@@ -176,7 +176,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 
   |  K8s Version   |  Node Type          |  Node OS        |  Status  |
   | :------------: | :-----------------: | :-------------: | :------: |
-  |    1.21.7      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
+  |    1.24.9      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
 * [matrix-test [weekly]](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/):
   runs Antrea e2e, K8s Conformance and NetworkPolicy tests, using different combinations of various operating systems and K8s releases.
