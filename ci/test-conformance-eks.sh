@@ -22,7 +22,7 @@ function echoerr {
 
 CLUSTER=""
 REGION="us-west-2"
-K8S_VERSION="1.21"
+K8S_VERSION="1.24"
 AWS_NODE_TYPE="t3.medium"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
@@ -46,7 +46,7 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
 
         --cluster-name                The cluster name to be used for the generated EKS cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig                  Path to save kubeconfig of generated EKS cluster.
-        --k8s-version                 GKE K8s cluster version. Defaults to 1.17.
+        --k8s-version                 EKS K8s cluster version. Defaults to 1.24.
         --aws-access-key              AWS Acess Key for logging in to awscli.
         --aws-secret-key              AWS Secret Key for logging in to awscli.
         --aws-service-user-role-arn   AWS Service User Role ARN for logging in to awscli.
