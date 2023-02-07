@@ -681,7 +681,6 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 	rule2 := toRule(networkPolicyRule2, networkPolicy2, k8sNPMaxPriority)
 	rule3 := toRule(networkPolicyRule3, networkPolicy3, 0)
 	rule4 := toRule(networkPolicyRule4, networkPolicy4, 0)
-	rule4Sec := toStretchedNetworkPolicySecurityRule(networkPolicyRule4, networkPolicy4, 0)
 	tests := []struct {
 		name               string
 		args               *v1beta2.NetworkPolicy
@@ -709,8 +708,8 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		{
 			"rule-with-label-identity",
 			networkPolicy4,
-			[]*rule{rule4, rule4Sec},
-			sets.NewString(rule4.ID, rule4Sec.ID),
+			[]*rule{rule4},
+			sets.NewString(rule4.ID),
 		},
 	}
 	for _, tt := range tests {

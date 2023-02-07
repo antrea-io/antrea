@@ -30,7 +30,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
-	"antrea.io/antrea/pkg/agent/openflow"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -695,38 +694,6 @@ func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriori
 	return rule
 }
 
-// toStretchedNetworkPolicySecurityRule converts v1beta.NetworkPolicyRule to *rule
-// which is used to drop all traffic initiated from Pods with UnknownLabelIdentity.
-// Pods may have UnknownLabelIdentity when their Labels are completely new Labels
-// among the whole ClusterSet. Before the new allocated LabelIdentity is imported
-// in the Cluster, those Pods will have UnknownLabelIdentity.
-func toStretchedNetworkPolicySecurityRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriority int32) *rule {
-	appliedToGroups := policy.AppliedToGroups
-	if len(r.AppliedToGroups) != 0 {
-		appliedToGroups = r.AppliedToGroups
-	}
-	snpSecDropAction := crdv1alpha1.RuleActionDrop
-	rule := &rule{
-		Direction:       r.Direction,
-		From:            v1beta.NetworkPolicyPeer{LabelIdentities: []uint32{openflow.UnknownLabelIdentity}},
-		To:              r.To,
-		Services:        r.Services,
-		Action:          &snpSecDropAction,
-		Priority:        r.Priority,
-		PolicyPriority:  policy.Priority,
-		TierPriority:    policy.TierPriority,
-		AppliedToGroups: appliedToGroups,
-		Name:            r.Name + "-security",
-		PolicyUID:       policy.UID,
-		SourceRef:       policy.SourceRef,
-		EnableLogging:   r.EnableLogging,
-	}
-	rule.ID = hashRule(rule)
-	rule.PolicyName = policy.Name
-	rule.MaxPriority = maxPriority
-	return rule
-}
-
 // getMaxPriority returns the highest rule priority for v1beta.NetworkPolicy that is created
 // by Antrea-native policies. For K8s NetworkPolicies, it always returns -1.
 func getMaxPriority(policy *v1beta.NetworkPolicy) int32 {
@@ -808,31 +775,23 @@ func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) bool
 	anyRuleUpdate := false
 	maxPriority := getMaxPriority(policy)
 	for i := range policy.Rules {
-		rules := []*rule{toRule(&policy.Rules[i], policy, maxPriority)}
-		if len(policy.Rules[i].From.LabelIdentities) > 0 {
-			// If the rule is a StretchedNetworkPolicy rule, we also need to add a security rule.
-			// The security rule is used to drop all traffic initiated from Pods with
-			// UnknownLabelIdentity to make sure those traffic won't sneak around the Policy.
-			rules = append(rules, toStretchedNetworkPolicySecurityRule(&policy.Rules[i], policy, maxPriority))
-		}
-		for _, r := range rules {
-			if _, exists := ruleByID[r.ID]; exists {
-				// If rule already exists, remove it from the map so the ones left are orphaned,
-				// which means those rules need to be handled by dirtyRuleHandler.
-				klog.V(2).InfoS("Rule was not changed", "id", r.ID)
-				delete(ruleByID, r.ID)
+		r := toRule(&policy.Rules[i], policy, maxPriority)
+		if _, exists := ruleByID[r.ID]; exists {
+			// If rule already exists, remove it from the map so the ones left are orphaned,
+			// which means those rules need to be handled by dirtyRuleHandler.
+			klog.V(2).InfoS("Rule was not changed", "id", r.ID)
+			delete(ruleByID, r.ID)
+		} else {
+			// If rule doesn't exist, add it to cache and mark it as dirty.
+			c.rules.Add(r)
+			// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
+			if r.Direction == v1beta.DirectionIn {
+				metrics.IngressNetworkPolicyRuleCount.Inc()
 			} else {
-				// If rule doesn't exist, add it to cache and mark it as dirty.
-				c.rules.Add(r)
-				// Count up antrea_agent_ingress_networkpolicy_rule_count or antrea_agent_egress_networkpolicy_rule_count
-				if r.Direction == v1beta.DirectionIn {
-					metrics.IngressNetworkPolicyRuleCount.Inc()
-				} else {
-					metrics.EgressNetworkPolicyRuleCount.Inc()
-				}
-				c.dirtyRuleHandler(r.ID)
-				anyRuleUpdate = true
+				metrics.EgressNetworkPolicyRuleCount.Inc()
 			}
+			c.dirtyRuleHandler(r.ID)
+			anyRuleUpdate = true
 		}
 	}
 

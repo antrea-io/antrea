@@ -2079,6 +2079,17 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 		Done()
 }
 
+// multiClusterNetworkPolicySecurityDropFlow generates the security drop flows for MultiClusterNetworkPolicy.
+func (f *featureNetworkPolicy) multiClusterNetworkPolicySecurityDropFlow(table binding.Table, matchPairs []matchPair) binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	fb := table.BuildFlow(priorityNormal)
+	fb = f.addFlowMatch(fb, MatchLabelID, UnknownLabelIdentity)
+	for _, eachMatchPair := range matchPairs {
+		fb = f.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
+	}
+	return fb.Cookie(cookieID).Action().Drop().Done()
+}
+
 // dnsPacketInFlow generates the flow to send dns response packets of fqdn policy selected Pods to the fqdnController for
 // processing.
 func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flow {
