@@ -360,6 +360,9 @@ function deliver_multicluster_controller {
         cluster=${kubeconfig##*/}
         if [[ ${KIND} == "true" ]]; then
             docker cp ./multicluster/test/yamls/test-${cluster}-serviceexport.yml ${cluster}-control-plane:/root/serviceexport.yml
+            if [[ ${cluster} == "west" ]]; then
+                docker cp ./multicluster/test/yamls/test-local-serviceexport.yml ${cluster}-control-plane:/root/local-serviceexport.yml
+            fi
         else
             ip=$(kubectl get nodes -o wide --no-headers=true ${kubeconfig} | awk -v role1="master" -v role2="control-plane" '($3 ~ role1 || $3 ~ role2) {print $6}')
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-${cluster}-serviceexport.yml jenkins@["${ip}"]:"${WORKDIR}"/serviceexport.yml

@@ -33,7 +33,9 @@ import (
 
 func initializeForServiceExportsTest(t *testing.T, data *MCTestData) {
 	data.setupServerPodAndService(t)
+	data.setupServerPodAndService1(t)
 	data.setUpServiceExport(t)
+	data.setUpServiceExport1(t)
 	data.setUpClientPodInCluster(t)
 }
 
@@ -58,10 +60,25 @@ func (data *MCTestData) setupServerPodAndService(t *testing.T) {
 	createPodAndService(eastCluster, eastClusterTestService)
 }
 
+func (data *MCTestData) setupServerPodAndService1(t *testing.T) {
+	createPodAndService := func(clusterName, clusterServiceName string) {
+		if err := createPodWrapper(t, data, clusterName, multiClusterTestNamespace, "test-nginx-pod-local", "", nginxImage, "nginx-local", nil, nil, nil, nil, false, nil); err != nil {
+			t.Fatalf("Error when creating nginx Pod in cluster %s: %v", clusterName, err)
+		}
+		if _, err := data.createService(clusterName, clusterServiceName, multiClusterTestNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx-local"}, false,
+			false, corev1.ServiceTypeClusterIP, nil, nil); err != nil {
+			t.Fatalf("Error when creating Service %s in cluster %s: %v", clusterServiceName, clusterName, err)
+		}
+	}
+	createPodAndService(westCluster, "west-nginx-local")
+}
+
 func (data *MCTestData) tearDownServerPodAndService(t *testing.T) {
 	deleteServiceWrapper(t, testData, westCluster, multiClusterTestNamespace, westClusterTestService)
+	deleteServiceWrapper(t, testData, westCluster, multiClusterTestNamespace, "west-nginx-local")
 	deleteServiceWrapper(t, testData, eastCluster, multiClusterTestNamespace, eastClusterTestService)
 	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, testServerPod)
+	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, "test-nginx-pod-local")
 	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, testServerPod)
 }
 
@@ -76,9 +93,19 @@ func (data *MCTestData) setUpServiceExport(t *testing.T) {
 	time.Sleep(importServiceDelay)
 }
 
+// Deploy ServiceExports in east and west clusters
+func (data *MCTestData) setUpServiceExport1(t *testing.T) {
+	if err := data.deployServiceExport1(westCluster); err != nil {
+		t.Fatalf("Error when deploy ServiceExport in west cluster: %v", err)
+	}
+
+	time.Sleep(importServiceDelay)
+}
+
 func (data *MCTestData) tearDownServiceExport() {
 	data.deleteServiceExport(westCluster)
 	data.deleteServiceExport(eastCluster)
+	data.deleteServiceExportLocal(westCluster)
 }
 
 func (data *MCTestData) setUpClientPodInCluster(t *testing.T) {
@@ -140,6 +167,7 @@ func testStretchedNetworkPolicyUpdatePolicy(t *testing.T, data *MCTestData) {
 func (data *MCTestData) testMCServiceConnectivity(t *testing.T) {
 	data.probeMCServiceFromCluster(t, eastCluster, westClusterTestService)
 	data.probeMCServiceFromCluster(t, westCluster, eastClusterTestService)
+	data.probeMCServiceFromCluster(t, westCluster, "west-nginx-local")
 }
 
 func (data *MCTestData) probeMCServiceFromCluster(t *testing.T, clusterName string, serviceName string) {
@@ -378,8 +406,25 @@ func (data *MCTestData) deployServiceExport(clusterName string) error {
 	return nil
 }
 
+func (data *MCTestData) deployServiceExport1(clusterName string) error {
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl apply -f %s", "local-serviceexport.yml"))
+	if err != nil || rc != 0 || stderr != "" {
+		return fmt.Errorf("error when deploying the ServiceExport: %v, stderr: %s", err, stderr)
+	}
+	return nil
+}
+
 func (data *MCTestData) deleteServiceExport(clusterName string) error {
 	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl delete -f %s", serviceExportYML))
+	if err != nil || rc != 0 || stderr != "" {
+		return fmt.Errorf("error when deleting the ServiceExport: %v, stderr: %s", err, stderr)
+	}
+
+	return nil
+}
+
+func (data *MCTestData) deleteServiceExportLocal(clusterName string) error {
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl delete -f %s", "local-serviceexport.yml"))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when deleting the ServiceExport: %v, stderr: %s", err, stderr)
 	}

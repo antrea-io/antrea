@@ -1,0 +1,1229 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: clusterclaims.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: ClusterClaim
+    listKind: ClusterClaimList
+    plural: clusterclaims
+    singular: clusterclaim
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Value of the ClusterClaim
+      jsonPath: .value
+      name: Value
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        description: ClusterClaim is the Schema for the clusterclaims API.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          value:
+            description: Value of the ClusterClaim.
+            type: string
+        required:
+        - value
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: clusterinfoimports.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: ClusterInfoImport
+    listKind: ClusterInfoImportList
+    plural: clusterinfoimports
+    singular: clusterinfoimport
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Member Cluster ID
+      jsonPath: .spec.clusterID
+      name: Cluster ID
+      type: string
+    - description: Service CIDR of the cluster
+      jsonPath: .spec.serviceCIDR
+      name: Service CIDR
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              clusterID:
+                description: ClusterID of the member cluster.
+                type: string
+              gatewayInfos:
+                description: GatewayInfos has information of Gateways
+                items:
+                  description: GatewayInfo includes information of a Gateway.
+                  properties:
+                    gatewayIP:
+                      type: string
+                  type: object
+                type: array
+              podCIDRs:
+                description: PodCIDRs is the Pod IP address CIDRs.
+                items:
+                  type: string
+                type: array
+              serviceCIDR:
+                description: ServiceCIDR is the IP ranges used by Service ClusterIP.
+                type: string
+            type: object
+          status:
+            description: ClusterInfoImportStatus defines the observed state of ClusterInfoImport.
+            properties:
+              conditions:
+                items:
+                  description: ResourceCondition indicates the readiness condition
+                    of a Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transited from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition.
+                      type: string
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type is the type of the condition.
+                      type: string
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: clustersets.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: ClusterSet
+    listKind: ClusterSetList
+    plural: clustersets
+    singular: clusterset
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: The leader cluster Namespace for the ClusterSet
+      jsonPath: .spec.namespace
+      name: Leader Cluster Namespace
+      type: string
+    - description: Total number of clusters in the ClusterSet
+      jsonPath: .status.totalClusters
+      name: Total Clusters
+      type: string
+    - description: Number of ready clusters in the ClusterSet
+      jsonPath: .status.readyClusters
+      name: Ready Clusters
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ClusterSet represents a ClusterSet.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterSetSpec defines the desired state of ClusterSet.
+            properties:
+              leaders:
+                description: Leaders include leader clusters known to the member clusters.
+                items:
+                  description: MemberCluster defines member cluster information.
+                  properties:
+                    clusterID:
+                      description: Identify member cluster in ClusterSet.
+                      type: string
+                    secret:
+                      description: Secret name to access API server of the member
+                        from the leader cluster.
+                      type: string
+                    server:
+                      description: API server of the destination cluster.
+                      type: string
+                    serviceAccount:
+                      description: ServiceAccount used by the member cluster to access
+                        into leader cluster.
+                      type: string
+                  type: object
+                maxItems: 1
+                minItems: 1
+                type: array
+              members:
+                description: Members include member clusters known to the leader clusters.
+                  Used in leader cluster.
+                items:
+                  description: MemberCluster defines member cluster information.
+                  properties:
+                    clusterID:
+                      description: Identify member cluster in ClusterSet.
+                      type: string
+                    secret:
+                      description: Secret name to access API server of the member
+                        from the leader cluster.
+                      type: string
+                    server:
+                      description: API server of the destination cluster.
+                      type: string
+                    serviceAccount:
+                      description: ServiceAccount used by the member cluster to access
+                        into leader cluster.
+                      type: string
+                  type: object
+                type: array
+              namespace:
+                description: The leader cluster Namespace in which the ClusterSet
+                  is defined. Used in member cluster.
+                type: string
+            required:
+            - leaders
+            type: object
+          status:
+            description: ClusterSetStatus defines the observed state of ClusterSet.
+            properties:
+              clusterStatuses:
+                description: The status of individual member clusters.
+                items:
+                  properties:
+                    clusterID:
+                      description: ClusterID is the unique identifier of this cluster.
+                      type: string
+                    conditions:
+                      items:
+                        description: ClusterCondition indicates the readiness condition
+                          of a cluster.
+                        properties:
+                          lastTransitionTime:
+                            description: Last time the condition transited from one
+                              status to another.
+                            format: date-time
+                            type: string
+                          message:
+                            description: A human readable message indicating details
+                              about the transition.
+                            type: string
+                          reason:
+                            description: Unique, one-word, CamelCase reason for the
+                              condition's last transition.
+                            type: string
+                          status:
+                            description: Status of the condition, one of True, False,
+                              Unknown.
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              conditions:
+                description: The overall condition of the cluster set.
+                items:
+                  description: ClusterSetCondition indicates the readiness condition
+                    of the clusterSet.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transited from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition.
+                      type: string
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              observedGeneration:
+                description: The generation observed by the controller.
+                format: int64
+                type: integer
+              readyClusters:
+                description: Total number of clusters ready and connected.
+                format: int32
+                type: integer
+              totalClusters:
+                description: Total number of member clusters configured in the ClusterSet.
+                format: int32
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: gateways.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: Gateway
+    listKind: GatewayList
+    plural: gateways
+    singular: gateway
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Cross-cluster tunnel IP
+      jsonPath: .gatewayIP
+      name: Gateway IP
+      type: string
+    - description: In-cluster tunnel IP
+      jsonPath: .internalIP
+      name: Internal IP
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Gateway includes information of a Multi-cluster Gateway.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          gatewayIP:
+            description: Cross-cluster tunnel IP of the Gateway.
+            type: string
+          internalIP:
+            description: In-cluster tunnel IP of the Gateway.
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.0
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: labelidentities.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: LabelIdentity
+    listKind: LabelIdentityList
+    plural: labelidentities
+    singular: labelidentity
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - description: Normalized string of a label identity
+      jsonPath: .spec.label
+      name: Label
+      type: string
+    - description: ID allocated for the label identity by the leader cluster
+      jsonPath: .spec.id
+      name: ID
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: LabelIdentity is an imported label identity from the ClusterSet.
+          For each unique label identity, a LabelIdentity will be created in the member
+          cluster.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              id:
+                description: ID is the ID allocated for the label identity by the
+                  leader cluster.
+                format: int32
+                type: integer
+              label:
+                description: Label is the normalized string of a label identity. The
+                  format of normalized label identity is `ns:(?P<nslabels>(.)*)&pod:(?P<podlabels>(.)*)`
+                  E.g., `ns:kubernetes.io/metadata.name=kube-system&pod:app=db`
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: serviceexports.multicluster.x-k8s.io
+spec:
+  group: multicluster.x-k8s.io
+  names:
+    kind: ServiceExport
+    plural: serviceexports
+    shortNames:
+    - svcex
+    singular: serviceexport
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ServiceExport declares that the Service with the same name and
+          namespace as this export should be consumable from other clusters.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          status:
+            description: status describes the current state of an exported service.
+              Service configuration comes from the Service that had the same name
+              and namespace as this ServiceExport. Populated by the multi-cluster
+              service implementation's controller.
+            properties:
+              conditions:
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource. --- This struct is intended for direct
+                    use as an array at the field path .status.conditions.  For example,
+                    type FooStatus struct{     // Represents the observations of a
+                    foo's current state.     // Known .status.conditions.type are:
+                    \"Available\", \"Progressing\", and \"Degraded\"     // +patchMergeKey=type
+                    \    // +patchStrategy=merge     // +listType=map     // +listMapKey=type
+                    \    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`
+                    \n     // other fields }"
+                  properties:
+                    lastTransitionTime:
+                      description: lastTransitionTime is the last time the condition
+                        transitioned from one status to another. This should be when
+                        the underlying condition changed.  If that is not known, then
+                        using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: message is a human readable message indicating
+                        details about the transition. This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: observedGeneration represents the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.conditions[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: reason contains a programmatic identifier indicating
+                        the reason for the condition's last transition. Producers
+                        of specific condition types may define expected values and
+                        meanings for this field, and whether the values are considered
+                        a guaranteed API. The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        --- Many .condition.type values are consistent across resources
+                        like Available, but because arbitrary conditions can be useful
+                        (see .node.status.conditions), the ability to deconflict is
+                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: serviceimports.multicluster.x-k8s.io
+spec:
+  group: multicluster.x-k8s.io
+  names:
+    kind: ServiceImport
+    plural: serviceimports
+    shortNames:
+    - svcim
+    singular: serviceimport
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: The type of this ServiceImport
+      jsonPath: .spec.type
+      name: Type
+      type: string
+    - description: The VIP for this ServiceImport
+      jsonPath: .spec.ips
+      name: IP
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ServiceImport describes a service imported from clusters in a
+          ClusterSet.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the behavior of a ServiceImport.
+            properties:
+              ips:
+                description: ip will be used as the VIP for this service when type
+                  is ClusterSetIP.
+                items:
+                  type: string
+                maxItems: 1
+                type: array
+              ports:
+                items:
+                  description: ServicePort represents the port on which the service
+                    is exposed
+                  properties:
+                    appProtocol:
+                      description: The application protocol for this port. This field
+                        follows standard Kubernetes label syntax. Un-prefixed names
+                        are reserved for IANA standard service names (as per RFC-6335
+                        and http://www.iana.org/assignments/service-names). Non-standard
+                        protocols should use prefixed names such as mycompany.com/my-custom-protocol.
+                        Field can be enabled with ServiceAppProtocol feature gate.
+                      type: string
+                    name:
+                      description: The name of this port within the service. This
+                        must be a DNS_LABEL. All ports within a ServiceSpec must have
+                        unique names. When considering the endpoints for a Service,
+                        this must match the 'name' field in the EndpointPort. Optional
+                        if only one ServicePort is defined on this service.
+                      type: string
+                    port:
+                      description: The port that will be exposed by this service.
+                      format: int32
+                      type: integer
+                    protocol:
+                      description: The IP protocol for this port. Supports "TCP",
+                        "UDP", and "SCTP". Default is TCP.
+                      type: string
+                  required:
+                  - port
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              sessionAffinity:
+                description: 'Supports "ClientIP" and "None". Used to maintain session
+                  affinity. Enable client IP based session affinity. Must be ClientIP
+                  or None. Defaults to None. Ignored when type is Headless More info:
+                  https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies'
+                type: string
+              sessionAffinityConfig:
+                description: sessionAffinityConfig contains session affinity configuration.
+                properties:
+                  clientIP:
+                    description: clientIP contains the configurations of Client IP
+                      based session affinity.
+                    properties:
+                      timeoutSeconds:
+                        description: timeoutSeconds specifies the seconds of ClientIP
+                          type session sticky time. The value must be >0 && <=86400(for
+                          1 day) if ServiceAffinity == "ClientIP". Default value is
+                          10800(for 3 hours).
+                        format: int32
+                        type: integer
+                    type: object
+                type: object
+              type:
+                description: type defines the type of this service. Must be ClusterSetIP
+                  or Headless.
+                enum:
+                - ClusterSetIP
+                - Headless
+                type: string
+            required:
+            - ports
+            - type
+            type: object
+          status:
+            description: status contains information about the exported services that
+              form the multi-cluster service referenced by this ServiceImport.
+            properties:
+              clusters:
+                description: clusters is the list of exporting clusters from which
+                  this service was derived.
+                items:
+                  description: ClusterStatus contains service configuration mapped
+                    to a specific source cluster
+                  properties:
+                    cluster:
+                      description: cluster is the name of the exporting cluster. Must
+                        be a valid RFC-1123 DNS label.
+                      type: string
+                  required:
+                  - cluster
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - cluster
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: antrea-mc-controller-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - antrea-mc-mutating-webhook-configuration
+  - antrea-mc-validating-webhook-configuration
+  resources:
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - clusternetworkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - tiers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterclaims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterclaims/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clustersets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clustersets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clustersets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceimports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceimports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - labelidentities
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-controller-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-mc-controller-role
+subjects:
+- kind: ServiceAccount
+  name: antrea-mc-controller
+  namespace: kube-system
+---
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |
+    apiVersion: multicluster.crd.antrea.io/v1alpha1
+    kind: MultiClusterConfig
+    health:
+      healthProbeBindAddress: :8080
+    metrics:
+      bindAddress: "0"
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: false
+    serviceCIDR: ""
+    podCIDRs:
+      - ""
+    gatewayIPPrecedence: "private"
+    endpointIPType: "ClusterIP"
+    enableStretchedNetworkPolicy: true
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-controller-config
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-webhook-service
+  namespace: kube-system
+spec:
+  ports:
+  - port: 443
+    targetPort: 9443
+  selector:
+    app: antrea
+    component: antrea-mc-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: antrea
+    component: antrea-mc-controller
+  name: antrea-mc-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-mc-controller
+  template:
+    metadata:
+      annotations:
+        checksum/config: checksum-placeholder
+      labels:
+        app: antrea
+        component: antrea-mc-controller
+    spec:
+      containers:
+      - args:
+        - --config=/controller_manager_config.yaml
+        command:
+        - /antrea-mc-controller
+        - member
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: antrea/antrea-mc-controller:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: antrea-mc-controller
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 200m
+        securityContext:
+          allowPrivilegeEscalation: false
+        volumeMounts:
+        - mountPath: /controller_manager_config.yaml
+          name: antrea-mc-controller-config
+          subPath: controller_manager_config.yaml
+      hostNetwork: true
+      serviceAccountName: antrea-mc-controller
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - configMap:
+          name: antrea-mc-controller-config
+        name: antrea-mc-controller-config
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-mutating-webhook-configuration
+webhooks: []
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea-mc-webhook-service
+      namespace: kube-system
+      path: /validate-multicluster-crd-antrea-io-v1alpha2-clusterclaim
+  failurePolicy: Fail
+  name: vclusterclaim.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - clusterclaims
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea-mc-webhook-service
+      namespace: kube-system
+      path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterset
+  failurePolicy: Fail
+  name: vclusterset.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clustersets
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea-mc-webhook-service
+      namespace: kube-system
+      path: /validate-multicluster-crd-antrea-io-v1alpha1-gateway
+  failurePolicy: Fail
+  name: vgateway.kb.io
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - gateways
+  sideEffects: None
