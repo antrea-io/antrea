@@ -215,12 +215,12 @@ type flowVisibilityTestOptions struct {
 
 var testOptions TestOptions
 
-// podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
-type podInfo struct {
-	name      string
-	os        string
-	nodeName  string
-	namespace string
+// PodInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
+type PodInfo struct {
+	Name      string
+	OS        string
+	NodeName  string
+	Namespace string
 }
 
 // TestData stores the state required for each test case.
@@ -238,9 +238,9 @@ type TestData struct {
 var testData *TestData
 
 type PodIPs struct {
-	ipv4      *net.IP
-	ipv6      *net.IP
-	ipStrings []string
+	IPv4      *net.IP
+	IPv6      *net.IP
+	IPStrings []string
 }
 
 type deployAntreaOptions int
@@ -278,23 +278,23 @@ var (
 
 func (p PodIPs) String() string {
 	res := ""
-	if p.ipv4 != nil {
-		res += fmt.Sprintf("IPv4(%s),", p.ipv4.String())
+	if p.IPv4 != nil {
+		res += fmt.Sprintf("IPv4(%s),", p.IPv4.String())
 	}
-	if p.ipv6 != nil {
-		res += fmt.Sprintf("IPv6(%s),", p.ipv6.String())
+	if p.IPv6 != nil {
+		res += fmt.Sprintf("IPv6(%s),", p.IPv6.String())
 	}
-	return fmt.Sprintf("%sIPstrings(%s)", res, strings.Join(p.ipStrings, ","))
+	return fmt.Sprintf("%sIPstrings(%s)", res, strings.Join(p.IPStrings, ","))
 }
 
 func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
-	if len(p.ipStrings) == 0 && len(p1.ipStrings) == 0 {
+	if len(p.IPStrings) == 0 && len(p1.IPStrings) == 0 {
 		return true
 	}
-	if p.ipv4 != nil && p1.ipv4 != nil && p.ipv4.Equal(*(p1.ipv4)) {
+	if p.IPv4 != nil && p1.IPv4 != nil && p.IPv4.Equal(*(p1.IPv4)) {
 		return true
 	}
-	if p.ipv6 != nil && p1.ipv6 != nil && p.ipv6.Equal(*(p1.ipv6)) {
+	if p.IPv6 != nil && p1.IPv6 != nil && p.IPv6.Equal(*(p1.IPv6)) {
 		return true
 	}
 	return false
@@ -1628,10 +1628,10 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	}
 
 	if !pod.Spec.HostNetwork {
-		if clusterInfo.podV4NetworkCIDR != "" && ips.ipv4 == nil {
+		if clusterInfo.podV4NetworkCIDR != "" && ips.IPv4 == nil {
 			return nil, fmt.Errorf("no IPv4 address is assigned while cluster was configured with IPv4 Pod CIDR %s", clusterInfo.podV4NetworkCIDR)
 		}
-		if clusterInfo.podV6NetworkCIDR != "" && ips.ipv6 == nil {
+		if clusterInfo.podV6NetworkCIDR != "" && ips.IPv6 == nil {
 			return nil, fmt.Errorf("no IPv6 address is assigned while cluster was configured with IPv6 Pod CIDR %s", clusterInfo.podV6NetworkCIDR)
 		}
 	}
@@ -1644,24 +1644,24 @@ func parsePodIPs(podIPStrings sets.Set[string]) (*PodIPs, error) {
 		ipStr := sets.List(podIPStrings)[idx]
 		ip := net.ParseIP(ipStr)
 		if ip.To4() != nil {
-			if ips.ipv4 != nil && ipStr != ips.ipv4.String() {
-				return nil, fmt.Errorf("Pod is assigned multiple IPv4 addresses: %s and %s", ips.ipv4.String(), ipStr)
+			if ips.IPv4 != nil && ipStr != ips.IPv4.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv4 addresses: %s and %s", ips.IPv4.String(), ipStr)
 			}
-			if ips.ipv4 == nil {
-				ips.ipv4 = &ip
-				ips.ipStrings = append(ips.ipStrings, ipStr)
+			if ips.IPv4 == nil {
+				ips.IPv4 = &ip
+				ips.IPStrings = append(ips.IPStrings, ipStr)
 			}
 		} else {
-			if ips.ipv6 != nil && ipStr != ips.ipv6.String() {
-				return nil, fmt.Errorf("Pod is assigned multiple IPv6 addresses: %s and %s", ips.ipv6.String(), ipStr)
+			if ips.IPv6 != nil && ipStr != ips.IPv6.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv6 addresses: %s and %s", ips.IPv6.String(), ipStr)
 			}
-			if ips.ipv6 == nil {
-				ips.ipv6 = &ip
-				ips.ipStrings = append(ips.ipStrings, ipStr)
+			if ips.IPv6 == nil {
+				ips.IPv6 = &ip
+				ips.IPStrings = append(ips.IPStrings, ipStr)
 			}
 		}
 	}
-	if len(ips.ipStrings) == 0 {
+	if len(ips.IPStrings) == 0 {
 		return nil, fmt.Errorf("pod is running but has no assigned IP, which should never happen")
 	}
 	return ips, nil
@@ -2067,6 +2067,10 @@ func (data *TestData) deleteNetworkpolicy(policy *networkingv1.NetworkPolicy) er
 	return nil
 }
 
+func RandName(prefix string) string {
+	return prefix + randSeq(nameSuffixLength)
+}
+
 // A DNS-1123 subdomain must consist of lower case alphanumeric characters
 var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
@@ -2174,19 +2178,19 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
-	if podInfo.os != "windows" && podInfo.os != "linux" {
-		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.name)
+func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
+	if podInfo.OS != "windows" && podInfo.OS != "linux" {
+		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.Name)
 	}
-	if targetPodIPs.ipv4 != nil {
-		cmdV4 := getPingCommand(count, size, podInfo.os, targetPodIPs.ipv4)
-		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.name, ctrName, cmdV4); err != nil {
+	if targetPodIPs.IPv4 != nil {
+		cmdV4 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv4)
+		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV4); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
-	if targetPodIPs.ipv6 != nil {
-		cmdV6 := getPingCommand(count, size, podInfo.os, targetPodIPs.ipv6)
-		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.name, ctrName, cmdV6); err != nil {
+	if targetPodIPs.IPv6 != nil {
+		cmdV6 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv6)
+		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV6); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
 	}

@@ -123,12 +123,12 @@ func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, test
 			}
 
 			testPodIP, err = parsePodIPs(podIPStrings)
-			if err != nil || testPodIP.ipv4 == nil {
+			if err != nil || testPodIP.IPv4 == nil {
 				return false, nil
 			}
 
 			ann := pod.GetAnnotations()
-			t.Logf("Got annotations %v for Pod with IP %v", ann, testPodIP.ipv4.String())
+			t.Logf("Got annotations %v for Pod with IP %v", ann, testPodIP.IPv4.String())
 			nplAnn, found := ann[types.NPLAnnotationKey]
 			if !found {
 				return false, nil
@@ -150,7 +150,7 @@ func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, test
 		time.Sleep(time.Millisecond * 100)
 	}
 	r.NoError(err, "Poll for Pod check failed")
-	return nplAnnotations, testPodIP.ipv4.String()
+	return nplAnnotations, testPodIP.IPv4.String()
 }
 
 func checkNPLRules(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod, podIP string, nodeName string, present bool) {

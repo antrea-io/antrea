@@ -162,7 +162,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 	defer data.DeletePodAndWait(defaultTimeout, clientName, clientNamespace)
 	podIPs, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace)
 	require.NoError(t, err)
-	t.Logf("Created client Pod IPs %v", podIPs.ipStrings)
+	t.Logf("Created client Pod IPs %v", podIPs.IPStrings)
 
 	nodeIP := clusterInfo.nodes[0].ip()
 	nodePort := int(svc.Spec.Ports[0].NodePort)
@@ -189,8 +189,8 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 	}).Create(data))
 	podIPs, err := data.podWaitForIPs(defaultTimeout, name, namespace)
 	require.NoError(t, err)
-	t.Logf("Created service Pod IPs %v", podIPs.ipStrings)
-	if podIPs.ipv4 == nil {
+	t.Logf("Created service Pod IPs %v", podIPs.IPStrings)
+	if podIPs.IPv4 == nil {
 		// "IPv4" is invalid in IPv6 only cluster with K8s>=1.21
 		// error: Service "s1" is invalid: spec.ipFamilies[0]: Invalid value: "IPv4": not configured on this cluster
 		ipProtocol = corev1.IPv6Protocol

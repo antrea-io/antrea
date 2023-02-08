@@ -136,11 +136,11 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	}
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, tag)
 	defer deletePods()
-	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].nodeName, podInfos[1].nodeName)
+	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].NodeName, podInfos[1].NodeName)
 	data.runPingMesh(t, podInfos[:2], agnhostContainerName)
 
 	// Check that there is at least one 'up' Security Association on the Node
-	nodeName := podInfos[0].nodeName
+	nodeName := podInfos[0].NodeName
 	if up, _, isCertAuth, err := data.readSecurityAssociationsStatus(nodeName); err != nil {
 		t.Errorf("Error when reading Security Associations: %v", err)
 	} else if up == 0 {

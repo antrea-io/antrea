@@ -281,9 +281,9 @@ func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs,
 		}
 	}()
 	if !isIPv6 {
-		checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false)
+		checkRecordsForFlows(t, data, podAIPs.IPv4.String(), podBIPs.IPv4.String(), isIPv6, true, false, true, false)
 	} else {
-		checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false)
+		checkRecordsForFlows(t, data, podAIPs.IPv6.String(), podBIPs.IPv6.String(), isIPv6, true, false, true, false)
 	}
 }
 
@@ -330,10 +330,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-d",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podBIPs.ipv4.String(), podAIPs.ipv4.String(), podDIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podBIPs.ipv6.String(), podAIPs.ipv6.String(), podDIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		}
 	})
@@ -365,10 +365,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-d",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podBIPs.ipv4.String(), podAIPs.ipv4.String(), podDIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podBIPs.ipv6.String(), podAIPs.ipv6.String(), podDIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		}
 	})
@@ -400,10 +400,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-a",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podBIPs.ipv4.String(), podDIPs.ipv4.String(), podAIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podDIPs.IPv4.String(), podAIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, false)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podBIPs.ipv6.String(), podDIPs.ipv6.String(), podAIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podDIPs.IPv6.String(), podAIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, false)
 		}
 	})
@@ -440,10 +440,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podBIPs.ipv4.String(), podAIPs.ipv4.String(), podDIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podBIPs.ipv6.String(), podAIPs.ipv6.String(), podDIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
 		}
 	})
@@ -480,11 +480,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podBIPs.ipv4.String(), podAIPs.ipv4.String(), podDIPs.ipv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podDIPs.IPv4.String(), podAIPs.IPv4.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, true)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podBIPs.ipv6.String(), podAIPs.ipv6.String(), podDIPs.ipv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podDIPs.IPv6.String(), podAIPs.IPv6.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, true)
 		}
 	})
 
@@ -503,9 +503,9 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, false, true)
+			checkRecordsForFlows(t, data, podAIPs.IPv4.String(), podCIPs.IPv4.String(), isIPv6, false, false, false, true)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, false, true)
+			checkRecordsForFlows(t, data, podAIPs.IPv6.String(), podCIPs.IPv6.String(), isIPv6, false, false, false, true)
 		}
 	})
 
@@ -536,10 +536,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-e",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podCIPs.ipv4.String(), podAIPs.ipv4.String(), podEIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podCIPs.ipv6.String(), podAIPs.ipv6.String(), podEIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		}
 	})
@@ -571,10 +571,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-e",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podCIPs.ipv4.String(), podAIPs.ipv4.String(), podEIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podCIPs.ipv6.String(), podAIPs.ipv6.String(), podEIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		}
 	})
@@ -606,10 +606,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-e",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podCIPs.ipv4.String(), podBIPs.ipv4.String(), podEIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podBIPs.IPv4.String(), podEIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false, false)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podCIPs.ipv6.String(), podBIPs.ipv6.String(), podEIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podBIPs.IPv6.String(), podEIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false, false)
 		}
 	})
@@ -651,10 +651,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podCIPs.ipv4.String(), podAIPs.ipv4.String(), podEIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podCIPs.ipv6.String(), podAIPs.ipv6.String(), podEIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
 		}
 	})
@@ -691,10 +691,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv4.String(), podCIPs.ipv4.String(), podAIPs.ipv4.String(), podEIPs.ipv4.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
 		} else {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.ipv6.String(), podCIPs.ipv6.String(), podAIPs.ipv6.String(), podEIPs.ipv6.String()
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
 		}
 	})
@@ -732,12 +732,12 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 		if !isIPv6 {
-			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
 			}
 		} else {
-			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			if clientIPs.IPv6 != nil && serverIPs.IPv6 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
 			}
 		}
 	})
@@ -772,12 +772,12 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 		if !isIPv6 {
-			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
 			}
 		} else {
-			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			if clientIPs.IPv6 != nil && serverIPs.IPv6 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
 			}
 		}
 	})
@@ -790,12 +790,12 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		defer clientCleanupFunc()
 
 		if !isIPv6 {
-			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, "", "")
+			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, "", "")
 			}
 		} else {
-			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6, "", "")
+			if clientIPs.IPv6 != nil && serverIPs.IPv6 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, "", "")
 			}
 		}
 	})
@@ -808,9 +808,9 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
 		isServiceIPv6 := net.ParseIP(svcB.Spec.ClusterIP).To4() == nil
 		if isServiceIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.IPv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.IPv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false)
 		}
 	})
 
@@ -822,9 +822,9 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
 		isServiceIPv6 := net.ParseIP(svcC.Spec.ClusterIP).To4() == nil
 		if isServiceIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.IPv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.IPv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false)
 		}
 	})
 
@@ -864,12 +864,12 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 	var cmdStr, srcIP, dstIP string
 	// trigger a flow with iperf
 	if !isIPv6 {
-		srcIP = podAIPs.ipv4.String()
-		dstIP = podBIPs.ipv4.String()
+		srcIP = podAIPs.IPv4.String()
+		dstIP = podBIPs.IPv4.String()
 		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSecShort)
 	} else {
-		srcIP = podAIPs.ipv6.String()
-		dstIP = podBIPs.ipv6.String()
+		srcIP = podAIPs.IPv6.String()
+		dstIP = podBIPs.IPv6.String()
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSecShort)
 	}
 	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", []string{"bash", "-c", cmdStr})

@@ -2251,13 +2251,13 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(clientNamespace + "/agnhost-client"),
-				server0IP.ipv4.String(),
+				server0IP.IPv4.String(),
 				80,
 				Rejected,
 			},
 			{
 				Pod(clientNamespace + "/agnhost-client"),
-				server1IP.ipv4.String(),
+				server1IP.IPv4.String(),
 				80,
 				Rejected,
 			},
@@ -2267,13 +2267,13 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(clientNamespace + "/agnhost-client"),
-				server0IP.ipv6.String(),
+				server0IP.IPv6.String(),
 				80,
 				Rejected,
 			},
 			{
 				Pod(clientNamespace + "/agnhost-client"),
-				server1IP.ipv6.String(),
+				server1IP.IPv6.String(),
 				80,
 				Rejected,
 			},
@@ -2726,7 +2726,7 @@ func testAuditLoggingK8sService(t *testing.T, data *TestData) {
 	// generate some traffic that wget the nginx service
 	var wg sync.WaitGroup
 	oneProbe := func(ns, pod string, matcher *auditLogMatcher) {
-		for _, ip := range serverIP.ipStrings {
+		for _, ip := range serverIP.IPStrings {
 			ip := ip
 			matcher.AddProbeAddr(appliedToRef, ns, pod, ip, serverPort)
 			wg.Add(1)
@@ -3505,13 +3505,13 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 		ipv4Testcases := []podToAddrTestStep{
 			{
 				Pod(namespaces["x"] + "/" + client0Name),
-				serverIP.ipv4.String(),
+				serverIP.IPv4.String(),
 				80,
 				Dropped,
 			},
 			{
 				Pod(namespaces["x"] + "/" + client1Name),
-				serverIP.ipv4.String(),
+				serverIP.IPv4.String(),
 				80,
 				Connected,
 			},
@@ -3523,13 +3523,13 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 		ipv6Testcases := []podToAddrTestStep{
 			{
 				Pod(namespaces["x"] + "/" + client0Name),
-				serverIP.ipv6.String(),
+				serverIP.IPv6.String(),
 				80,
 				Dropped,
 			},
 			{
 				Pod(namespaces["x"] + "/" + client1Name),
-				serverIP.ipv6.String(),
+				serverIP.IPv6.String(),
 				80,
 				Connected,
 			},
@@ -3640,13 +3640,13 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 		ipv4TestCases := []podToAddrTestStep{
 			{
 				Pod(namespaces["z"] + "/" + clientName),
-				serverIP0.ipv4.String(),
+				serverIP0.IPv4.String(),
 				80,
 				Dropped,
 			},
 			{
 				Pod(namespaces["z"] + "/" + clientName),
-				serverIP1.ipv4.String(),
+				serverIP1.IPv4.String(),
 				80,
 				Connected,
 			},
@@ -3657,13 +3657,13 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 		ipv6TestCases := []podToAddrTestStep{
 			{
 				Pod(namespaces["z"] + "/" + clientName),
-				serverIP0.ipv6.String(),
+				serverIP0.IPv6.String(),
 				80,
 				Dropped,
 			},
 			{
 				Pod(namespaces["z"] + "/" + clientName),
-				serverIP1.ipv6.String(),
+				serverIP1.IPv6.String(),
 				80,
 				Connected,
 			},
@@ -3714,13 +3714,13 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
-				server0IP.ipv4.String(),
+				server0IP.IPv4.String(),
 				-1,
 				Rejected,
 			},
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
-				server1IP.ipv4.String(),
+				server1IP.IPv4.String(),
 				-1,
 				Dropped,
 			},
@@ -3730,13 +3730,13 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 		testcases = append(testcases, []podToAddrTestStep{
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
-				server0IP.ipv6.String(),
+				server0IP.IPv6.String(),
 				-1,
 				Rejected,
 			},
 			{
 				Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
-				server1IP.ipv6.String(),
+				server1IP.IPv6.String(),
 				-1,
 				Dropped,
 			},
@@ -4692,11 +4692,11 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
 	// So we need to  "warm-up" the tunnel.
 	if clusterInfo.podV4NetworkCIDR != "" {
-		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv4.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 	}
 	var annp = &crdv1beta1.NetworkPolicy{
@@ -4753,14 +4753,14 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
-				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv4.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv4.String())}
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.IPv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.IPv4.String())}
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
-				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv6.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv6.String())}
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.IPv6.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.IPv6.String())}
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
 			}
@@ -4827,11 +4827,11 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
 	// So we need to  "warm-up" the tunnel.
 	if clusterInfo.podV4NetworkCIDR != "" {
-		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv4.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 	}
 	var acnp = &crdv1beta1.ClusterNetworkPolicy{
@@ -4888,14 +4888,14 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
-				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.ipv4.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv4.String())}
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.IPv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.IPv4.String())}
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
-				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.ipv6.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv6.String())}
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.IPv6.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.IPv6.String())}
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
 			}
