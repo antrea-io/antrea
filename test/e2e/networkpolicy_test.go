@@ -104,11 +104,11 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
 	// So we need to  "warm-up" the tunnel.
 	if clusterInfo.podV4NetworkCIDR != "" {
-		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv4.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
 		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 	}
 
@@ -164,11 +164,11 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
-				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv4.String())}
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
-				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
 				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
 			}
 			wg.Done()
@@ -267,11 +267,11 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	}
 	// Precondition check: client is able to access server with the given IP address.
 	if clusterInfo.podV4NetworkCIDR != "" {
-		preCheckFunc(server0IPs.ipv4.String(), server1IPs.ipv4.String())
+		preCheckFunc(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 	}
 
 	if clusterInfo.podV6NetworkCIDR != "" {
-		preCheckFunc(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		preCheckFunc(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 	}
 
 	// Create NetworkPolicy rule.
@@ -330,11 +330,11 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	checkFn = func() {
 		// NetworkPolicy check.
 		if clusterInfo.podV4NetworkCIDR != "" {
-			npCheck(server0IPs.ipv4.String(), server1IPs.ipv4.String())
+			npCheck(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 		}
 
 		if clusterInfo.podV6NetworkCIDR != "" {
-			npCheck(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+			npCheck(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 		}
 	}
 	success = true
@@ -390,17 +390,17 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 
 	// Locally generated traffic can always access the Pods regardless of NetworkPolicy configuration.
 	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(client1Name, serverIPs.ipv4.String(), serverPort, false)
+		npCheck(client1Name, serverIPs.IPv4.String(), serverPort, false)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(client1Name, serverIPs.ipv6.String(), serverPort, false)
+		npCheck(client1Name, serverIPs.IPv6.String(), serverPort, false)
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(client2Name, serverIPs.ipv4.String(), serverPort, true)
+		npCheck(client2Name, serverIPs.IPv4.String(), serverPort, true)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(client2Name, serverIPs.ipv6.String(), serverPort, true)
+		npCheck(client2Name, serverIPs.IPv6.String(), serverPort, true)
 	}
 	npCheck(client2Name, serverNodeIP, service.Spec.Ports[0].NodePort, true)
 }
@@ -419,10 +419,10 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 		}
 	}
 	if clusterInfo.podV4NetworkCIDR != "" {
-		preCheckFunc(serverIPs.ipv4.String())
+		preCheckFunc(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		preCheckFunc(serverIPs.ipv6.String())
+		preCheckFunc(serverIPs.IPv6.String())
 	}
 
 	spec := &networkingv1.NetworkPolicySpec{
@@ -447,10 +447,10 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(serverIPs.ipv4.String())
+		npCheck(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(serverIPs.ipv6.String())
+		npCheck(serverIPs.IPv6.String())
 	}
 }
 
@@ -470,12 +470,12 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 	defer cleanupFunc()
 	var serverCIDR string
 	var serverAIP, serverBIP string
-	if serverAIPs.ipv6 == nil {
+	if serverAIPs.IPv6 == nil {
 		t.Fatal("server IPv6 address is empty")
 	}
-	serverCIDR = fmt.Sprintf("%s/128", serverAIPs.ipv6.String())
-	serverAIP = serverAIPs.ipv6.String()
-	serverBIP = serverBIPs.ipv6.String()
+	serverCIDR = fmt.Sprintf("%s/128", serverAIPs.IPv6.String())
+	serverAIP = serverAIPs.IPv6.String()
+	serverBIP = serverBIPs.IPv6.String()
 
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
@@ -536,16 +536,16 @@ func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 	var serverAAllowCIDR string
 	var serverAExceptList []string
 	var serverAIP string
-	if serverAIPs.ipv6 == nil {
+	if serverAIPs.IPv6 == nil {
 		t.Fatal("server IPv6 address is empty")
 	}
-	_, serverAAllowSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", serverAIPs.ipv6.String(), 64))
+	_, serverAAllowSubnet, err := net.ParseCIDR(fmt.Sprintf("%s/%d", serverAIPs.IPv6.String(), 64))
 	if err != nil {
 		t.Fatalf("could not parse allow subnet")
 	}
 	serverAAllowCIDR = serverAAllowSubnet.String()
-	serverAExceptList = []string{fmt.Sprintf("%s/%d", serverAIPs.ipv6.String(), 128)}
-	serverAIP = serverAIPs.ipv6.String()
+	serverAExceptList = []string{fmt.Sprintf("%s/%d", serverAIPs.IPv6.String(), 128)}
+	serverAIP = serverAIPs.IPv6.String()
 
 	if err := data.runNetcatCommandFromTestPod(clientA, data.testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
@@ -635,10 +635,10 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 		}
 	}
 	if clusterInfo.podV4NetworkCIDR != "" {
-		preCheckFunc(server0IPs.ipv4.String(), server1IPs.ipv4.String())
+		preCheckFunc(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		preCheckFunc(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		preCheckFunc(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 	}
 
 	scaleFunc := func(replicas int32) {
@@ -692,10 +692,10 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(server0IPs.ipv4.String(), server1IPs.ipv4.String())
+		npCheck(server0IPs.IPv4.String(), server1IPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		npCheck(server0IPs.IPv6.String(), server1IPs.IPv6.String())
 	}
 }
 
@@ -720,10 +720,10 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		preCheckFunc(serverIPs.ipv4.String())
+		preCheckFunc(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		preCheckFunc(serverIPs.ipv6.String())
+		preCheckFunc(serverIPs.IPv6.String())
 	}
 
 	protocol := corev1.ProtocolTCP
@@ -770,10 +770,10 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(serverIPs.ipv4.String())
+		npCheck(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(serverIPs.ipv6.String())
+		npCheck(serverIPs.IPv6.String())
 	}
 }
 
@@ -860,10 +860,10 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		preCheck(serverIPs.ipv4.String())
+		preCheck(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		preCheck(serverIPs.ipv6.String())
+		preCheck(serverIPs.IPv6.String())
 	}
 
 	protocol := corev1.ProtocolTCP
@@ -922,10 +922,10 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(serverIPs.ipv4.String())
+		npCheck(serverIPs.IPv4.String())
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(serverIPs.ipv6.String())
+		npCheck(serverIPs.IPv6.String())
 	}
 }
 

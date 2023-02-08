@@ -212,7 +212,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	nginxPodIP, _ := setupTestPods(data, b)
 
 	// performance_test only runs in IPv4 cluster, so here only check the IPv4 address of nginx server Pod.
-	nginxPodIPStr := nginxPodIP.ipv4.String()
+	nginxPodIPStr := nginxPodIP.IPv4.String()
 
 	err := setupTestPodsConnection(data) // enable Pods connectivity policy first
 	if err != nil {

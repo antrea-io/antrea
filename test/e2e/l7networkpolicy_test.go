@@ -206,11 +206,11 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, serverPodName, data.testNamespace))
 	var serverIPs []*net.IP
-	if podIPs.ipv4 != nil {
-		serverIPs = append(serverIPs, podIPs.ipv4)
+	if podIPs.IPv4 != nil {
+		serverIPs = append(serverIPs, podIPs.IPv4)
 	}
-	if podIPs.ipv6 != nil {
-		serverIPs = append(serverIPs, podIPs.ipv6)
+	if podIPs.IPv6 != nil {
+		serverIPs = append(serverIPs, podIPs.IPv6)
 	}
 
 	l7ProtocolAllowsPathHostname := []crdv1beta1.L7Protocol{
