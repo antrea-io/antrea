@@ -107,6 +107,9 @@ ipsec:
 egress:
   # -- CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
   exceptCIDRs: []
+  # -- The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
+  # the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
+  maxEgressIPsPerNode: 255
 
 nodePortLocal:
   # -- Enable the NodePortLocal feature.
