@@ -40,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/wireguard"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/runtime"
@@ -65,6 +66,7 @@ type Controller struct {
 	kubeClient       clientset.Interface
 	ovsBridgeClient  ovsconfig.OVSBridgeClient
 	ofClient         openflow.Client
+	ovsCtlClient     ovsctl.OVSCtlClient
 	routeClient      route.Interface
 	interfaceStore   interfacestore.InterfaceStore
 	networkConfig    *config.NetworkConfig
@@ -92,6 +94,7 @@ func NewNodeRouteController(
 	kubeClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	client openflow.Client,
+	ovsCtlClient ovsctl.OVSCtlClient,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	routeClient route.Interface,
 	interfaceStore interfacestore.InterfaceStore,
@@ -107,6 +110,7 @@ func NewNodeRouteController(
 		kubeClient:              kubeClient,
 		ovsBridgeClient:         ovsBridgeClient,
 		ofClient:                client,
+		ovsCtlClient:            ovsCtlClient,
 		routeClient:             routeClient,
 		interfaceStore:          interfaceStore,
 		networkConfig:           networkConfig,
@@ -671,11 +675,6 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			}
 			c.interfaceStore.DeleteInterface(interfaceConfig)
 			exists = false
-		} else {
-			if interfaceConfig.OFPort != 0 {
-				klog.V(2).InfoS("Found cached IPsec tunnel interface", "node", nodeName, "interface", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort)
-				return interfaceConfig.OFPort, nil
-			}
 		}
 	}
 	if !exists {
@@ -715,6 +714,11 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 		// Let NodeRouteController retry at errors.
 		return 0, fmt.Errorf("failed to get of_port of IPsec tunnel port for Node %s", nodeName)
 	}
+	// Set the port with no-flood to reject ARP flood packets.
+	if err := c.ovsCtlClient.SetPortNoFlood(int(ofPort)); err != nil {
+		return 0, fmt.Errorf("failed to set port %s with no-flood config: %w", portName, err)
+	}
+
 	interfaceConfig.OFPort = ofPort
 	return ofPort, nil
 }
