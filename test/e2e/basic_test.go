@@ -78,13 +78,13 @@ func testPodAssignIP(t *testing.T, data *TestData, namespace string, podV4Networ
 			podV4NetworkCIDR = clusterInfo.podV4NetworkCIDR
 		}
 		if podV4NetworkCIDR != "" {
-			checkPodIP(t, podV4NetworkCIDR, podIPs.ipv4)
+			checkPodIP(t, podV4NetworkCIDR, podIPs.IPv4)
 		}
 		if podV6NetworkCIDR == "" {
 			podV6NetworkCIDR = clusterInfo.podV6NetworkCIDR
 		}
 		if podV6NetworkCIDR != "" {
-			checkPodIP(t, podV6NetworkCIDR, podIPs.ipv6)
+			checkPodIP(t, podV6NetworkCIDR, podIPs.IPv6)
 		}
 	}
 }
@@ -849,7 +849,7 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	// be sent 100ms after processing CNI ADD request.
 	time.Sleep(100 * time.Millisecond)
 
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=ARPSpoofGuard,arp,arp_spa=%s", podIP.ipv4.String())}
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=ARPSpoofGuard,arp,arp_spa=%s", podIP.IPv4.String())}
 	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 	if err != nil {
 		t.Fatalf("Error when querying openflow: %v", err)

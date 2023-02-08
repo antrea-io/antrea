@@ -319,17 +319,17 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
 	time.Sleep(time.Second * 1)
 	var pod0IPv4Str, pod1IPv4Str, dstPodIPv4Str, dstPodIPv6Str string
-	if node1IPs[0].ipv4 != nil {
-		pod0IPv4Str = node1IPs[0].ipv4.String()
+	if node1IPs[0].IPv4 != nil {
+		pod0IPv4Str = node1IPs[0].IPv4.String()
 	}
-	if node1IPs[1].ipv4 != nil {
-		pod1IPv4Str = node1IPs[1].ipv4.String()
+	if node1IPs[1].IPv4 != nil {
+		pod1IPv4Str = node1IPs[1].IPv4.String()
 	}
-	if node1IPs[2].ipv4 != nil {
-		dstPodIPv4Str = node1IPs[2].ipv4.String()
+	if node1IPs[2].IPv4 != nil {
+		dstPodIPv4Str = node1IPs[2].IPv4.String()
 	}
-	if node1IPs[2].ipv6 != nil {
-		dstPodIPv6Str = node1IPs[2].ipv6.String()
+	if node1IPs[2].IPv6 != nil {
+		dstPodIPv6Str = node1IPs[2].IPv6.String()
 	}
 	gwIPv4Str, gwIPv6Str := nodeGatewayIPs(nodeIdx)
 
@@ -1105,11 +1105,11 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	defer node1CleanupFn()
 	defer node2CleanupFn()
 	var dstPodIPv4Str, dstPodIPv6Str string
-	if node2IPs[0].ipv4 != nil {
-		dstPodIPv4Str = node2IPs[0].ipv4.String()
+	if node2IPs[0].IPv4 != nil {
+		dstPodIPv4Str = node2IPs[0].IPv4.String()
 	}
-	if node2IPs[0].ipv6 != nil {
-		dstPodIPv6Str = node2IPs[0].ipv6.String()
+	if node2IPs[0].IPv6 != nil {
+		dstPodIPv6Str = node2IPs[0].IPv6.String()
 	}
 
 	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
@@ -1120,15 +1120,15 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	require.NoError(t, err)
 
 	var agnhostIPv4Str, agnhostIPv6Str, svcIPv4Name, svcIPv6Name string
-	if agnhostIP.ipv4 != nil {
-		agnhostIPv4Str = agnhostIP.ipv4.String()
+	if agnhostIP.IPv4 != nil {
+		agnhostIPv4Str = agnhostIP.IPv4.String()
 		ipv4Protocol := corev1.IPv4Protocol
 		svcIPv4, err := data.CreateService("agnhost-ipv4", data.testNamespace, 80, 8080, map[string]string{"app": "agnhost-server"}, false, false, corev1.ServiceTypeClusterIP, &ipv4Protocol)
 		require.NoError(t, err)
 		svcIPv4Name = svcIPv4.Name
 	}
-	if agnhostIP.ipv6 != nil {
-		agnhostIPv6Str = agnhostIP.ipv6.String()
+	if agnhostIP.IPv6 != nil {
+		agnhostIPv6Str = agnhostIP.IPv6.String()
 		ipv6Protocol := corev1.IPv6Protocol
 		svcIPv6, err := data.CreateService("agnhost-ipv6", data.testNamespace, 80, 8080, map[string]string{"app": "agnhost-server"}, false, false, corev1.ServiceTypeClusterIP, &ipv6Protocol)
 		require.NoError(t, err)
@@ -1140,13 +1140,13 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	// dropped on tunnel because the ARP entry doesn't exist in host cache.
 	isWindows := len(clusterInfo.windowsNodes) != 0
 	if isWindows {
-		podInfos := make([]podInfo, 2)
-		podInfos[0].name = node1Pods[0]
-		podInfos[0].namespace = data.testNamespace
-		podInfos[0].os = "windows"
-		podInfos[1].name = node2Pods[2]
-		podInfos[1].namespace = data.testNamespace
-		podInfos[1].os = "windows"
+		podInfos := make([]PodInfo, 2)
+		podInfos[0].Name = node1Pods[0]
+		podInfos[0].Namespace = data.testNamespace
+		podInfos[0].OS = "windows"
+		podInfos[1].Name = node2Pods[2]
+		podInfos[1].Namespace = data.testNamespace
+		podInfos[1].OS = "windows"
 		data.runPingMesh(t, podInfos, agnhostContainerName)
 	}
 
@@ -2458,19 +2458,19 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		if dstIP := tc.tf.Spec.Destination.IP; dstIP != "" {
 			ip := net.ParseIP(dstIP)
 			if ip.To4() != nil {
-				dstPodIPs = &PodIPs{ipv4: &ip}
+				dstPodIPs = &PodIPs{IPv4: &ip}
 			} else {
-				dstPodIPs = &PodIPs{ipv6: &ip}
+				dstPodIPs = &PodIPs{IPv6: &ip}
 			}
 		} else {
 			dstPod := tc.tf.Spec.Destination.Pod
-			podIPs := waitForPodIPs(t, data, []podInfo{{dstPod, osString, "", ""}})
+			podIPs := waitForPodIPs(t, data, []PodInfo{{dstPod, osString, "", ""}})
 			dstPodIPs = podIPs[dstPod]
 		}
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.runPingCommandFromTestPod(podInfo{srcPod, osString, "", ""}, data.testNamespace, dstPodIPs, agnhostContainerName, 2, 0); err != nil {
+		if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, osString, "", ""}, data.testNamespace, dstPodIPs, agnhostContainerName, 2, 0); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}

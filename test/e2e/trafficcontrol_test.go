@@ -89,11 +89,11 @@ func createTrafficControlTestPod(t *testing.T, data *TestData, podName string) {
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
 
-	if ips.ipv4 != nil {
-		tcTestConfig.podIPs[corev1.IPv4Protocol] = ips.ipv4.String()
+	if ips.IPv4 != nil {
+		tcTestConfig.podIPs[corev1.IPv4Protocol] = ips.IPv4.String()
 	}
-	if ips.ipv6 != nil {
-		tcTestConfig.podIPs[corev1.IPv6Protocol] = ips.ipv6.String()
+	if ips.IPv6 != nil {
+		tcTestConfig.podIPs[corev1.IPv6Protocol] = ips.IPv6.String()
 	}
 }
 
@@ -105,11 +105,11 @@ func createTrafficControlPacketsCollectorPod(t *testing.T, data *TestData, podNa
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
 
-	if ips.ipv4 != nil {
-		tcTestConfig.collectorPodIPs[corev1.IPv4Protocol] = ips.ipv4.String()
+	if ips.IPv4 != nil {
+		tcTestConfig.collectorPodIPs[corev1.IPv4Protocol] = ips.IPv4.String()
 	}
-	if ips.ipv6 != nil {
-		tcTestConfig.collectorPodIPs[corev1.IPv6Protocol] = ips.ipv6.String()
+	if ips.IPv6 != nil {
+		tcTestConfig.collectorPodIPs[corev1.IPv6Protocol] = ips.IPv6.String()
 	}
 }
 
