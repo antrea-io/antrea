@@ -101,6 +101,10 @@ func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	return selectNode, nil
 }
 
+func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
+	return false, nil
+}
+
 type fakeController struct {
 	*ServiceExternalIPController
 	mockController        *gomock.Controller
