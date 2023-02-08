@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -304,4 +305,85 @@ func TestLookupIPFallback(t *testing.T) {
 	// DNS names, but we don't expect this to be an actual problem.
 	err := f.lookupIP(ctx, "www.google.com")
 	require.NoError(t, err, "Error when resolving name")
+}
+
+func TestString(t *testing.T) {
+	tests := []struct {
+		name           string
+		selectorItem   *fqdnSelectorItem
+		expectedOutput string
+	}{
+		{
+			name: "matching the regex",
+			selectorItem: &fqdnSelectorItem{
+				matchRegex: "^.*antrea[.]io$",
+			},
+			expectedOutput: "matchRegex:^.*antrea[.]io$",
+		},
+		{
+			name: "matching the name",
+			selectorItem: &fqdnSelectorItem{
+				matchName: "test.antrea.io",
+			},
+			expectedOutput: "matchName:test.antrea.io",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotOutput := tc.selectorItem.String()
+			assert.Equal(t, tc.expectedOutput, gotOutput)
+		})
+	}
+}
+
+func TestGetIPsForFQDNSelectors(t *testing.T) {
+	selectorItem := fqdnSelectorItem{
+		matchName: "test.antrea.io",
+	}
+	tests := []struct {
+		name                       string
+		fqdns                      []string
+		existingSelectorItemToFQDN map[fqdnSelectorItem]sets.String
+		existingDNSCache           map[string]dnsMeta
+		expectedMatchedIPs         []net.IP
+	}{
+		{
+			name:  "matched ip found",
+			fqdns: []string{"test.antrea.io"},
+			existingSelectorItemToFQDN: map[fqdnSelectorItem]sets.String{
+				selectorItem: sets.NewString("test.antrea.io"),
+			},
+			existingDNSCache: map[string]dnsMeta{
+				"test.antrea.io": {
+					responseIPs: map[string]net.IP{
+						"127.0.0.1":    net.ParseIP("127.0.0.1"),
+						"192.155.12.1": net.ParseIP("192.155.12.1"),
+						"192.158.1.38": net.ParseIP("192.158.1.38"),
+					},
+				},
+			},
+			expectedMatchedIPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("192.155.12.1"), net.ParseIP("192.158.1.38")},
+		},
+		{
+			name:               "no matched ip",
+			fqdns:              []string{"^.*antrea[.]io$"},
+			expectedMatchedIPs: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			f, _ := newMockFQDNController(t, controller, nil)
+			if tc.existingSelectorItemToFQDN != nil {
+				f.selectorItemToFQDN = tc.existingSelectorItemToFQDN
+			}
+			if tc.existingDNSCache != nil {
+				f.dnsEntryCache = tc.existingDNSCache
+			}
+			gotOutput := f.getIPsForFQDNSelectors(tc.fqdns)
+			assert.ElementsMatch(t, tc.expectedMatchedIPs, gotOutput)
+		})
+	}
 }
