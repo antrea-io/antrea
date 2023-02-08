@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
@@ -58,6 +59,7 @@ type fakeController struct {
 	ovsClient       *ovsconfigtest.MockOVSBridgeClient
 	routeClient     *routetest.MockInterface
 	interfaceStore  interfacestore.InterfaceStore
+	ovsCtlClient    *ovsctltest.MockOVSCtlClient
 }
 
 type fakeIPsecCertificateManager struct{}
@@ -75,7 +77,9 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeCont
 	routeClient := routetest.NewMockInterface(ctrl)
 	interfaceStore := interfacestore.NewInterfaceStore()
 	ipsecCertificateManager := &fakeIPsecCertificateManager{}
-	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
+	ovsCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+
+	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsCtlClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
 		IPv4: nil,
 		MAC:  gatewayMAC,
 	}}, nil, false, ipsecCertificateManager)
@@ -86,6 +90,7 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeCont
 		ofClient:        ofClient,
 		ovsClient:       ovsClient,
 		routeClient:     routeClient,
+		ovsCtlClient:    ovsCtlClient,
 		interfaceStore:  interfaceStore,
 	}, ctrl.Finish
 }
@@ -339,6 +344,7 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 
 	node1PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1")
 	node2PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-2")
+	node3PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-3")
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP1.String(), "", "changeme", nil,
@@ -348,7 +354,11 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 		false, "", nodeIP2.String(), "", "changeme", nil,
 		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2"}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
+	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
 	c.ovsClient.EXPECT().GetOFPort(node2PortName, false).Return(int32(2), nil)
+	c.ovsCtlClient.EXPECT().SetPortNoFlood(2)
+	c.ovsClient.EXPECT().GetOFPort(node3PortName, false).Return(int32(5), nil)
+	c.ovsCtlClient.EXPECT().SetPortNoFlood(5)
 	c.ovsClient.EXPECT().DeletePort("123").Times(1)
 
 	tests := []struct {
@@ -407,6 +417,7 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 		false, "", nodeIP1.String(), "xyz-k8s-0-1", "", nil,
 		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
+	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
 
 	tests := []struct {
 		name       string
