@@ -58,11 +58,11 @@ require (
 	golang.org/x/crypto v0.4.0
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6
 	golang.org/x/mod v0.7.0
-	golang.org/x/net v0.4.0
-	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys v0.3.0
+	golang.org/x/net v0.5.0
+	golang.org/x/sync v0.1.0
+	golang.org/x/sys v0.4.0
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
-	golang.org/x/tools v0.2.0
+	golang.org/x/tools v0.5.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
@@ -198,8 +198,8 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b // indirect
-	golang.org/x/term v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/term v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20210427022245-097af6e1351b // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
