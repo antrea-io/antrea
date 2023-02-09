@@ -44,11 +44,6 @@ if [[ ! " ${binaries[*]} " =~ " bandwidth " ]]; then
   install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
 fi
 
-# Install whereabouts IPAM binary file. Required for global IPAM support specific to CNF use cases.
-if [[ ! " ${binaries[*]} " =~ " whereabouts " ]]; then
-  install -m 755 /opt/cni/bin/whereabouts /host/opt/cni/bin/whereabouts
-fi
-
 # Install Antrea configuration file.
 # Note that it needs to be executed after installing the above binaries because container runtimes such as cri-o may
 # watch the conf directory and try to validate the config and binaries immediately once there is a change.
