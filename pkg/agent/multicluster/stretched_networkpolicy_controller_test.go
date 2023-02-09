@@ -17,6 +17,7 @@ package multicluster
 import (
 	"context"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -159,10 +160,10 @@ func TestEnqueueAllPods(t *testing.T) {
 	c.mcInformerFactory.WaitForCacheSync(stopCh)
 	go c.podInformer.Run(stopCh)
 	if err := waitForPodRealized(c, pod); err != nil {
-		t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod.Namespace, pod.Name, err)
+		t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 	}
 	if err := waitForLabelIdentityRealized(c, labelIdentity); err != nil {
-		t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity.Name, err)
+		t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity.Name, err)
 	}
 	c.enqueueAllPods()
 
@@ -242,13 +243,13 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		defer close(finishCh)
 		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 		if err := waitForNSRealized(c, ns); err != nil {
-			t.Errorf("error when waiting for Namespace '%s' to be realized: %v", ns.Name, err)
+			t.Errorf("Error when waiting for Namespace '%s' to be realized, err: %v", ns.Name, err)
 		}
 
 		// Create a Pod whose LabelIdentity doesn't exist.
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod); err != nil {
-			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod.Namespace, pod.Name, err)
+			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&unknownLabelIdentity)).Times(1)
@@ -263,12 +264,12 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		// Create a Pod whose LabelIdentity already exist.
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity1, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity1); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity1.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity1.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod); err != nil {
-			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod.Namespace, pod.Name, err)
+			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&labelIdentity1.Spec.ID)).Times(1)
 		c.podUpdateChannel.Notify(toPodAddEvent(pod))
@@ -279,11 +280,14 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		// Update Pod label.
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity2, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity2); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity2.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity2.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		pod.Labels["foo"] = "bar2"
 		c.clientset.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{})
+		if err := waitForPodLabelUpdate(c, pod); err != nil {
+			t.Errorf("Error when waiting for Pod '%s/%s' to be updated, err: %v", pod.Namespace, pod.Name, err)
+		}
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&labelIdentity2.Spec.ID)).Times(1)
 		c.processNextWorkItem()
 		assert.Equal(t, map[types.NamespacedName]string{{Name: pod.Name, Namespace: pod.Namespace}: labelIdentity2.Spec.Label}, c.podToLabel)
@@ -387,33 +391,33 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity1, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity1); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity1.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity1.Name, err)
 		}
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity2, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity2); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity2.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity2.Name, err)
 		}
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity3, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity3); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity3.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity3.Name, err)
 		}
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity4, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity4); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity4.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity4.Name, err)
 		}
 
 		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 		if err := waitForNSRealized(c, ns); err != nil {
-			t.Errorf("error when waiting for Namespace '%s' to be realized: %v", ns.Name, err)
+			t.Errorf("Error when waiting for Namespace '%s' to be realized, err: %v", ns.Name, err)
 		}
 
 		c.clientset.CoreV1().Pods(pod1.Namespace).Create(context.TODO(), pod1, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod1); err != nil {
-			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod1.Namespace, pod1.Name, err)
+			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod1.Namespace, pod1.Name, err)
 		}
 		c.clientset.CoreV1().Pods(pod2.Namespace).Create(context.TODO(), pod2, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod2); err != nil {
-			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod2.Namespace, pod2.Name, err)
+			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod2.Namespace, pod2.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod1.Name, pod1.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod2.Name, pod2.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
@@ -499,12 +503,12 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		defer close(finishCh)
 		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 		if err := waitForNSRealized(c, ns); err != nil {
-			t.Errorf("error when waiting for Namespace '%s' to be realized: %v", ns.Name, err)
+			t.Errorf("Error when waiting for Namespace '%s' to be realized, err: %v", ns.Name, err)
 		}
 
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod); err != nil {
-			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod.Namespace, pod.Name, err)
+			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&unknownLabelIdentity)).Times(1)
@@ -516,7 +520,7 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		// Create LabelIdentity
 		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity, metav1.CreateOptions{})
 		if err := waitForLabelIdentityRealized(c, labelIdentity); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity.Name, err)
+			t.Errorf("Error when waiting for LabelIdentity '%s' to be realized, err: %v", labelIdentity.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&labelIdentity.Spec.ID)).Times(1)
@@ -560,6 +564,16 @@ func waitForPodRealized(c *fakeStretchedNetworkPolicyController, pod *corev1.Pod
 	return wait.Poll(interval, timeout, func() (bool, error) {
 		_, err := c.podLister.Pods(pod.Namespace).Get(pod.Name)
 		if err != nil {
+			return false, nil
+		}
+		return true, err
+	})
+}
+
+func waitForPodLabelUpdate(c *fakeStretchedNetworkPolicyController, pod *corev1.Pod) error {
+	return wait.Poll(interval, timeout, func() (bool, error) {
+		getPod, err := c.podLister.Pods(pod.Namespace).Get(pod.Name)
+		if err != nil || !reflect.DeepEqual(pod.Labels, getPod.Labels) {
 			return false, nil
 		}
 		return true, err
