@@ -7,32 +7,6 @@ codecov:
   require_ci_to_pass: no
 
 comment: false
-#  # Customize comment layout by choosing the order and types of components to include.
-#  # `Reach` is a coverage graph embedded into the comment.
-#  # `Diff` is the Coverage Diff of the pull request.
-#  # `Flags` are a list of user defined Flags, and the impact on their coverage. refs: https://docs.codecov.com/docs/flags
-#  # `Files` or Tree are a list of files that are impacted by the pull request (coverage changes, file is new or removed).
-#  # `Header` is the top of the comment showing the two commits being merged, the change in coverage, and the diff coverage.
-#  # `Footer` is the bottom of a comment that contains the legend, last updated commits, and docs link.
-#  layout: "reach,diff,flags,tree,header,footer"
-#  # The way Codecov submits comments in your pull requests.`default` means update if exists.Otherwise, post new.
-#  behavior: default
-#  # If `require_changes` set true, comments will now only post when coverage changes.
-#  # Furthermore, if a comment already exists, and a newer commit results in no coverage
-#  # change for the entire pull, the comment will be deleted.
-#  require_changes: no
-#  # Force comments to post on pull requests even if Codecov doesn't
-#  # have coverage reports for either the base or head commit.
-#  require_base: no
-#  require_head: no
-#  # Codecov does not comment until at least 5 builds have been uploaded from the CI pipeline.
-#  # By default, codecov will post and/or update the pull request comment after it processes
-#  # each report uploaded for a particular pull request commit.
-#  # As the Antrea CI process uploads many reports to codecov, this can be confusing for
-#  # team members viewing the pull request as reports are processing.
-#  after_n_builds: 5
-#  # Carryforward Flags are designed for projects that do not upload total coverage for every commit.
-#  show_carryforward_flags: false
 
 github_checks:
   # Specify whether to use GitHub Checks annotations or normal statuses.
