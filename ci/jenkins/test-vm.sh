@@ -137,7 +137,7 @@ function apply_antrea {
         fi
     fi
     echo "====== Applying Antrea yaml ======"
-    ./hack/generate-manifest.sh --feature-gates ExternalNode=true --extra-helm-values "controller.apiNodePort=32767" > ${WORKDIR}/antrea.yml
+    ./hack/generate-manifest.sh --feature-gates ExternalNode=true,SupportBundleCollection=true --extra-helm-values "controller.apiNodePort=32767" > ${WORKDIR}/antrea.yml
     kubectl apply -f ${WORKDIR}/antrea.yml
 }
 
@@ -162,6 +162,10 @@ function configure_vm_agent {
     cp ./build/yamls/externalnode/vm-agent-rbac.yml ${WORKDIR}/vm-agent-rbac.yml
     echo "Applying vm-agent rbac yaml"
     kubectl apply -f ${WORKDIR}/vm-agent-rbac.yml
+    cp ./build/yamls/externalnode/support-bundle-collection-rbac.yml ${WORKDIR}/support-bundle-collection-rbac.yml
+    echo "Applying support-bundle-collection rbac yaml"
+    kubectl apply -f ${WORKDIR}/support-bundle-collection-rbac.yml -n $TEST_NAMESPACE
+    cp ./hack/externalnode/sftp-deployment.yml ${WORKDIR}/sftp-deployment.yml
     cp ./hack/externalnode/install-vm.sh ${WORKDIR}/install-vm.sh
     cp ./hack/externalnode/install-vm.ps1 ${WORKDIR}/install-vm.ps1
     create_kubeconfig_files
@@ -202,7 +206,7 @@ function create_kubeconfig_files {
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_KUBECONFIG} use-context antrea-agent@kubernetes
 
     # Kubeconfig to access AntreaController
-    ANTREA_API_SERVER_IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}')
+    ANTREA_API_SERVER_IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
     ANTREA_API_SERVER="https://${ANTREA_API_SERVER_IP}:32767"
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-cluster antrea --server=$ANTREA_API_SERVER --insecure-skip-tls-verify=true
     kubectl config --kubeconfig=${WORKDIR}/${ANTREA_AGENT_ANTREA_KUBECONFIG} set-credentials antrea-agent --token=$TOKEN
@@ -294,8 +298,12 @@ function deliver_antrea_vm {
     export GOROOT=/usr/local/go
     export GOCACHE=${WORKSPACE}/../gocache
     export PATH=${GOROOT}/bin:$PATH
+    TEMP_ANTREA_TAR="antrea-image.tar"
 
     make docker-bin
+    docker save antrea/antrea-ubuntu:latest -o $TEMP_ANTREA_TAR
+    ctr -n k8s.io image import $TEMP_ANTREA_TAR
+    rm $TEMP_ANTREA_TAR
     make docker-windows-bin
 
     cp ./build/yamls/externalnode/conf/antrea-agent.conf ${WORKDIR}/antrea-agent.conf

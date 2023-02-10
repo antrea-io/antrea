@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sftp
+  labels:
+    app: sftp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sftp
+  template:
+    metadata:
+      labels:
+        app: sftp
+    spec:
+      containers:
+      - name: sftp
+        image: atmoz/sftp
+        imagePullPolicy: IfNotPresent
+        args: ["foo:pass:::upload"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftp
+spec:
+  type: NodePort
+  selector:
+    app: sftp
+  ports:
+    - port: 22
+      targetPort: 22
+      nodePort: 30010
