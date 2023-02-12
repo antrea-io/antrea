@@ -60,7 +60,23 @@ func (s *Socket) AddMrouteEntry(src net.IP, group net.IP, iif uint16, oifVIFs []
 	return multicastsyscall.SetsockoptMfcctl(s.GetFD(), syscall.IPPROTO_IP, multicastsyscall.MRT_ADD_MFC, mc)
 }
 
-func (s *Socket) DelMrouteEntry(src net.IP, group net.IP, iif uint16) (err error) {
+// GetMroutePacketCount returns the number of routed packets by the multicast route entry.
+// The current implementation only supports IPv4 multicast routes.
+func (s *Socket) GetMroutePacketCount(src net.IP, group net.IP) (uint32, error) {
+	srcIP := src.To4()
+	groupIP := group.To4()
+	siocSgReq := multicastsyscall.SiocSgReq{
+		Src: [4]byte{srcIP[0], srcIP[1], srcIP[2], srcIP[3]},
+		Grp: [4]byte{groupIP[0], groupIP[1], groupIP[2], groupIP[3]},
+	}
+	err := multicastsyscall.IoctlGetSiocSgReq(s.GetFD(), &siocSgReq)
+	if err != nil {
+		return 0, err
+	}
+	return siocSgReq.Pktcnt, nil
+}
+
+func (s *Socket) DelMrouteEntry(src net.IP, group net.IP, iif uint16) error {
 	mc := &multicastsyscall.Mfcctl{}
 	origin := src.To4()
 	mc.Origin = [4]byte{origin[0], origin[1], origin[2], origin[3]}

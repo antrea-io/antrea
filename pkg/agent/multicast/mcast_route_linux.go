@@ -21,10 +21,16 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/util/runtime"
+)
+
+const (
+	mRouteTimeout = time.Minute * 10
 )
 
 // parseIGMPMsg parses the kernel version into parsedIGMPMsg. Note we need to consider the change
@@ -78,10 +84,72 @@ func (c *MRouteClient) run(stopCh <-chan struct{}) {
 		}
 	}()
 
+	// Check packet count difference every minute for each multicast route and
+	// remove ones that do not route any packets in past mRouteTimeout.
+	// The remaining multicast routes' statistics are getting updated by
+	// this process as well.
+	go wait.NonSlidingUntil(c.updateMrouteStats, time.Minute, stopCh)
+
 	for i := 0; i < int(workerCount); i++ {
 		go c.worker(stopCh)
 	}
 	<-stopCh
 	c.socket.FlushMRoute()
 	syscall.Close(c.socket.GetFD())
+}
+
+func (c *MRouteClient) updateMulticastRouteStatsEntry(entry multicastRouteEntry) (isStale bool, newEntry *multicastRouteEntry) {
+	packetCount, err := c.socket.GetMroutePacketCount(net.ParseIP(entry.src), net.ParseIP(entry.group))
+	if err != nil {
+		klog.ErrorS(err, "Failed to get packet count for multicast route", "route", entry)
+		return false, nil
+	}
+	packetCountDiff := packetCount - entry.pktCount
+	klog.V(4).Infof("Multicast route %v routes %d packets in last %s", entry, packetCountDiff, time.Minute)
+	now := time.Now()
+	if packetCountDiff == uint32(0) {
+		return now.Sub(entry.updatedTime) > mRouteTimeout, nil
+	}
+	newEntry = &multicastRouteEntry{group: entry.group, src: entry.src, pktCount: packetCount, updatedTime: now}
+	return false, newEntry
+}
+
+func (c *MRouteClient) updateInboundMrouteStats() {
+	for _, obj := range c.inboundRouteCache.List() {
+		entry := obj.(*inboundMulticastRouteEntry)
+		isStale, newEntry := c.updateMulticastRouteStatsEntry(entry.multicastRouteEntry)
+		if isStale {
+			klog.V(2).InfoS("Deleting stale inbound multicast route", "group", entry.group, "source", entry.src, "VIF", entry.vif)
+			err := c.deleteInboundMRoute(entry)
+			if err != nil {
+				klog.ErrorS(err, "Failed to delete inbound multicast route", "group", entry.group, "source", entry.src, "VIF", entry.vif)
+			}
+		} else if newEntry != nil {
+			newInboundEntry := inboundMulticastRouteEntry{*newEntry, entry.vif}
+			c.inboundRouteCache.Update(&newInboundEntry)
+		}
+	}
+}
+
+func (c *MRouteClient) updateOutboundMrouteStats() {
+	for _, obj := range c.outboundRouteCache.List() {
+		entry := obj.(*outboundMulticastRouteEntry)
+		isStale, newEntry := c.updateMulticastRouteStatsEntry(entry.multicastRouteEntry)
+		if isStale {
+			klog.V(2).InfoS("Deleting stale outbound multicast route", "group", entry.group, "source", entry.src)
+			err := c.deleteOutboundMRoute(entry)
+			if err != nil {
+				klog.ErrorS(err, "Failed to delete outbound multicast route", "group", entry.group, "source", entry.src)
+			}
+		} else if newEntry != nil {
+			newOutboundEntry := outboundMulticastRouteEntry{*newEntry}
+			c.outboundRouteCache.Update(&newOutboundEntry)
+		}
+	}
+}
+
+func (c *MRouteClient) updateMrouteStats() {
+	klog.V(2).InfoS("Updating multicast route statistics and removing stale multicast routes")
+	c.updateInboundMrouteStats()
+	c.updateOutboundMrouteStats()
 }
