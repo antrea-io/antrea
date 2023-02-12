@@ -122,6 +122,21 @@ func (mr *MockRouteInterfaceMockRecorder) GetFD() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFD", reflect.TypeOf((*MockRouteInterface)(nil).GetFD))
 }
 
+// GetMroutePacketCount mocks base method.
+func (m *MockRouteInterface) GetMroutePacketCount(arg0, arg1 net.IP) (uint32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMroutePacketCount", arg0, arg1)
+	ret0, _ := ret[0].(uint32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMroutePacketCount indicates an expected call of GetMroutePacketCount.
+func (mr *MockRouteInterfaceMockRecorder) GetMroutePacketCount(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMroutePacketCount", reflect.TypeOf((*MockRouteInterface)(nil).GetMroutePacketCount), arg0, arg1)
+}
+
 // MulticastInterfaceJoinMgroup mocks base method.
 func (m *MockRouteInterface) MulticastInterfaceJoinMgroup(arg0, arg1 net.IP, arg2 string) error {
 	m.ctrl.T.Helper()

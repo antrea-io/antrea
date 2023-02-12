@@ -27,11 +27,15 @@ const (
 	SizeofIgmpmsg  = 0
 )
 
-func (s *Socket) AddMrouteEntry(src net.IP, group net.IP, iif uint16, oifVIFs []uint16) (err error) {
+func (s *Socket) AddMrouteEntry(src net.IP, group net.IP, iif uint16, oifVIFs []uint16) error {
 	return nil
 }
 
-func (s *Socket) DelMrouteEntry(src net.IP, group net.IP, iif uint16) (err error) {
+func (s *Socket) GetMroutePacketCount(src net.IP, group net.IP) (uint32, error) {
+	return 0, nil
+}
+
+func (s *Socket) DelMrouteEntry(src net.IP, group net.IP, iif uint16) error {
 	return nil
 }
 

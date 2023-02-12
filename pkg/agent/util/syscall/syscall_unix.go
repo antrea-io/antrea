@@ -34,7 +34,13 @@ func setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) 
 	return
 }
 
-// Please add your wrapped syscall functions below
+func ioctlPtr(fd int, req uint, arg unsafe.Pointer) (err error) {
+	_, _, e1 := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(arg))
+	if e1 != 0 {
+		return e1
+	}
+	return
+}
 
 func SetsockoptMfcctl(fd, level, opt int, mfcctl *Mfcctl) error {
 	return setsockopt(fd, level, opt, unsafe.Pointer(mfcctl), SizeofMfcctl)
@@ -42,4 +48,8 @@ func SetsockoptMfcctl(fd, level, opt int, mfcctl *Mfcctl) error {
 
 func SetsockoptVifctl(fd, level, opt int, vifctl *Vifctl) error {
 	return setsockopt(fd, level, opt, unsafe.Pointer(vifctl), SizeofVifctl)
+}
+
+func IoctlGetSiocSgReq(fd int, siocsgreq *SiocSgReq) error {
+	return ioctlPtr(fd, SIOCGETSGCNT, unsafe.Pointer(siocsgreq))
 }
