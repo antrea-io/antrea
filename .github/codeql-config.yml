@@ -1,0 +1,9 @@
+query-filters:
+  - exclude:
+      id: go/incorrect-integer-conversion
+  - exclude:
+      id: go/reflected-xss
+  - exclude:
+      id: go/allocation-size-overflow
+  - exclude:
+      id: go/log-injection
