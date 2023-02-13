@@ -390,7 +390,7 @@ func NewIPNet(ip net.IP) *net.IPNet {
 
 func PortToUint16(port int) uint16 {
 	if port > 0 && port <= math.MaxUint16 {
-		return uint16(port) // lgtm[go/incorrect-integer-conversion]
+		return uint16(port)
 	}
 	klog.Errorf("Port value %d out-of-bounds", port)
 	return 0
