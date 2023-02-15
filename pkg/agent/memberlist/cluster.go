@@ -452,7 +452,7 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 				aliveAndMatchedNodes = append(aliveAndMatchedNodes, nodeName)
 			}
 		}
-		consistentHashMap := newNodeConsistentHashMap()
+		consistentHashMap := NewNodeConsistentHashMap()
 		consistentHashMap.Add(aliveAndMatchedNodes...)
 		c.consistentHashRWMutex.Lock()
 		defer c.consistentHashRWMutex.Unlock()
@@ -467,7 +467,7 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 	return nil
 }
 
-func newNodeConsistentHashMap() *consistenthash.Map {
+func NewNodeConsistentHashMap() *consistenthash.Map {
 	return consistenthash.New(defaultVirtualNodeReplicas, defaultHashFn)
 }
 
