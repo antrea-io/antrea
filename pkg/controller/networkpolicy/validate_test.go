@@ -30,15 +30,21 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
-func TestValidateAntreaPolicy(t *testing.T) {
-	allowAction := crdv1alpha1.RuleActionAllow
-	passAction := crdv1alpha1.RuleActionPass
-	int32For80 := int32(80)
+var (
+	query       = crdv1alpha1.IGMPQuery
+	report      = crdv1alpha1.IGMPReportV1
+	allowAction = crdv1alpha1.RuleActionAllow
+	passAction  = crdv1alpha1.RuleActionPass
+	int32For80  = int32(80)
+)
 
+func TestValidateAntreaPolicy(t *testing.T) {
 	tests := []struct {
 		name           string
 		featureGates   map[featuregate.Feature]bool
 		policy         *crdv1alpha1.ClusterNetworkPolicy
+		oldPolicy      *crdv1alpha1.ClusterNetworkPolicy
+		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
@@ -58,6 +64,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Tier: "non-existent-tier",
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "tier non-existent-tier does not exist",
 		},
 		{
@@ -77,6 +84,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Tier: "NetworkOps",
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -108,6 +116,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`Pass` action should not be set for Baseline Tier policy rules",
 		},
 		{
@@ -139,6 +148,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`Pass` action should not be set for Baseline Tier policy rules",
 		},
 		{
@@ -170,6 +180,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -212,6 +223,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "rules names must be unique within the policy",
 		},
 		{
@@ -249,6 +261,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "appliedTo should not be set in both spec and rules",
 		},
 		{
@@ -272,6 +285,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "appliedTo needs to be set in either spec or rules",
 		},
 		{
@@ -314,6 +328,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "appliedTo field should either be set in all rules or in none of them",
 		},
 		{
@@ -363,6 +378,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -382,6 +398,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in appliedTo",
 		},
 		{
@@ -401,6 +418,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in appliedTo",
 		},
 		{
@@ -429,6 +447,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -460,6 +479,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -491,6 +511,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -522,6 +543,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -553,6 +575,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -582,6 +605,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -613,6 +637,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -641,6 +666,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -674,6 +700,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer",
 		},
 		{
@@ -710,6 +737,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
@@ -744,6 +772,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
@@ -778,6 +807,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
@@ -807,6 +837,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -835,6 +866,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "invalid characters in egress rule fqdn field: foo!bar",
 		},
 		{
@@ -863,6 +895,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -891,6 +924,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "if `endPort` is specified `port` must be specified",
 		},
 		{
@@ -920,6 +954,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`endPort` should be greater than or equal to `port`",
 		},
 		{
@@ -949,6 +984,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "if `port` is a string `endPort` cannot be specified",
 		},
 		{
@@ -978,6 +1014,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -996,6 +1033,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
@@ -1026,6 +1064,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label value: bar=: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')",
 		},
 		{
@@ -1056,6 +1095,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
@@ -1078,6 +1118,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "service cannot be set with other peers in appliedTo",
 		},
 		{
@@ -1102,6 +1143,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "a rule/policy cannot be applied to Services and other peers at the same time",
 		},
 		{
@@ -1133,6 +1175,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "egress rule cannot be applied to Services",
 		},
 		{
@@ -1164,6 +1207,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "egress rule cannot be applied to Services",
 		},
 		{
@@ -1195,6 +1239,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "a rule/policy that is applied to Services can only use ipBlock to select workloads",
 		},
 		{
@@ -1226,6 +1271,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -1260,6 +1306,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -1293,6 +1340,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "layer 7 protocols only support Allow",
 		},
 		{
@@ -1331,6 +1379,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "HTTP protocol can only be used when layer 4 protocol is TCP or unset",
 		},
 		{
@@ -1369,6 +1418,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "HTTP protocol can not be used with protocol IGMP or ICMP",
 		},
 		{
@@ -1407,6 +1457,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "layer 7 protocols can not be used with toServices",
 		},
 		{
@@ -1434,18 +1485,53 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "layer 7 protocols can only be used when L7NetworkPolicy is enabled",
 		},
+		{
+			name: "update-tier",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-existent-tier",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+					Tier: "NetworkOps",
+				},
+			},
+			oldPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-existent-tier",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+					Tier: "non-existent-tier",
+				},
+			},
+			operation: admv1.Update,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for feature, value := range tt.featureGates {
 				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
 			}
-
-			_, c := newController()
-			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
-			actualReason, allowed := v.validateAntreaPolicy(tt.policy, nil, admv1.Create, authenticationv1.UserInfo{})
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, tt.oldPolicy, tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -1493,9 +1579,9 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
-			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
-			actualReason, allowed := v.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -1509,12 +1595,14 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 func TestValidateAntreaGroup(t *testing.T) {
 	tests := []struct {
 		name           string
-		group          *crdv1alpha3.Group
+		currGroup      *crdv1alpha3.Group
+		oldGroup       *crdv1alpha3.Group
+		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
 			name: "anp-group-set-with-podselector-and-ipblock",
-			group: &crdv1alpha3.Group{
+			currGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "anp-group-set-with-podselector-and-ipblock",
 					Namespace: "x",
@@ -1528,14 +1616,220 @@ func TestValidateAntreaGroup(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
+		},
+		{
+			name: "anp-group-set-with-podselector-specified-to-update",
+			currGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-specified-to-update",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+				},
+			},
+			oldGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-and-ipblock",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			operation: admv1.Update,
+		},
+		{
+			name: "to-delete",
+			oldGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-specified-to-update",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+				},
+			},
+			operation: admv1.Delete,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
-			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
-			actualReason, allowed := v.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaGroup(tt.currGroup, tt.oldGroup, tt.operation, authenticationv1.UserInfo{})
+			assert.Equal(t, tt.expectedReason, actualReason)
+			if tt.expectedReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateTier(t *testing.T) {
+	tests := []struct {
+		name      string
+		currTier  *crdv1alpha1.Tier
+		oldTier   *crdv1alpha1.Tier
+		operation admv1.Operation
+	}{
+		{
+			name: "create-validate-tier",
+			currTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "tier-priority-3",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "delete-tier",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "tier-priority-3",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			operation: admv1.Delete,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateTier(tt.currTier, tt.oldTier, tt.operation, authenticationv1.UserInfo{})
+			if actualReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateMulticastIGMP(t *testing.T) {
+	tests := []struct {
+		name           string
+		ingressRules   []crdv1alpha1.Rule
+		egressRules    []crdv1alpha1.Rule
+		expectedReason string
+	}{
+		{
+			name: "igmp-icmp-both-specified",
+			ingressRules: []crdv1alpha1.Rule{
+				{
+					Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+						{
+							ICMP: &crdv1alpha1.ICMPProtocol{
+								ICMPType: &icmpType8,
+								ICMPCode: &icmpCode0,
+							},
+							IGMP: &crdv1alpha1.IGMPProtocol{
+								IGMPType:     &query,
+								GroupAddress: "224.0.0.1",
+							},
+						},
+					},
+					Action: &allowAction,
+				},
+			},
+			egressRules: []crdv1alpha1.Rule{
+				{
+					Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+						{
+							ICMP: &crdv1alpha1.ICMPProtocol{},
+							IGMP: &crdv1alpha1.IGMPProtocol{
+								IGMPType:     &report,
+								GroupAddress: "225.1.2.3",
+							},
+						},
+					},
+					Action: &allowAction,
+				},
+			},
+			expectedReason: "protocol IGMP can not be used with other protocols or other properties like from, to",
+		},
+		{
+			name: "only-icmp-specified",
+			ingressRules: []crdv1alpha1.Rule{
+				{
+					Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+						{
+							ICMP: &crdv1alpha1.ICMPProtocol{
+								ICMPType: &icmpType8,
+								ICMPCode: &icmpCode0,
+							},
+						},
+					},
+				},
+			},
+			egressRules: []crdv1alpha1.Rule{
+				{
+					Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+						{
+							ICMP: &crdv1alpha1.ICMPProtocol{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "icmp-specified-and-action-set-to-pass",
+			ingressRules: []crdv1alpha1.Rule{
+				{
+					Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+						{
+							IGMP: &crdv1alpha1.IGMPProtocol{
+								IGMPType:     &query,
+								GroupAddress: "224.0.0.1",
+							},
+						},
+					},
+					Action: &passAction,
+				},
+			},
+			egressRules: []crdv1alpha1.Rule{
+				{
+					Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+						{
+							IGMP: &crdv1alpha1.IGMPProtocol{
+								IGMPType:     &report,
+								GroupAddress: "225.1.2.3",
+							},
+						},
+					},
+					Action: &passAction,
+				},
+			},
+			expectedReason: "protocol IGMP does not support Pass or Reject",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var validator *antreaPolicyValidator
+			actualReason, allowed := validator.validateMulticastIGMP(tt.ingressRules, tt.egressRules)
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
