@@ -250,7 +250,7 @@ jobs:
     - name: Build Multi-cluster binaries
       run: |
         cd multicluster
-        make build
+        make bin
 
   windows-bin:
     needs: check-changes
