@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/klog/v2"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antreae2e "antrea.io/antrea/test/e2e"
@@ -99,6 +100,7 @@ func (data *MCTestData) tearDownClientPodInCluster(t *testing.T) {
 // If we get status code 200, it means that the resources are exported by the east
 // cluster and imported by the west cluster.
 func testMCServiceConnectivity(t *testing.T, data *MCTestData) {
+	// Test Service connectivity for both local and remote Endpoints
 	data.testMCServiceConnectivity(t)
 }
 
@@ -138,8 +140,12 @@ func testStretchedNetworkPolicyUpdatePolicy(t *testing.T, data *MCTestData) {
 }
 
 func (data *MCTestData) testMCServiceConnectivity(t *testing.T) {
+	// Connectivity to remote Endpoints which is the exported Service's ClusterIP from another member cluster.
 	data.probeMCServiceFromCluster(t, eastCluster, westClusterTestService)
 	data.probeMCServiceFromCluster(t, westCluster, eastClusterTestService)
+	// Connectivity to local Endpoints which is the exported Service's ClusterIP from its own cluster.
+	data.probeMCServiceFromCluster(t, eastCluster, eastClusterTestService)
+	data.probeMCServiceFromCluster(t, westCluster, westClusterTestService)
 }
 
 func (data *MCTestData) probeMCServiceFromCluster(t *testing.T, clusterName string, serviceName string) {
@@ -216,12 +222,16 @@ func (data *MCTestData) testANPToServices(t *testing.T) {
 
 func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 	westExpSvc, err := data.getService(eastCluster, multiClusterTestNamespace, mcWestClusterTestService)
+	klog.Info("zbangqi", "westExpSvc", westExpSvc)
 	if err != nil {
 		t.Fatalf("Error when getting the imported Service %s: %v", mcWestClusterTestService, err)
 	}
 	westExpSvcIP := westExpSvc.Spec.ClusterIP
+	klog.Info("zbangqi", "westExpSvcIP", westExpSvcIP)
 	eastGwClientName := getClusterGatewayClientPodName(eastCluster)
+	klog.Info("zbangqi", "westExpSvcIP", westExpSvcIP)
 	eastRegularClientName := getClusterRegularClientPodName(eastCluster)
+	klog.Info("zbangqi", "eastRegularClientName", eastRegularClientName)
 
 	// Verify that Stretched NetworkPolicy works fine with podSelect or podSelect+nsSelector.
 	acnpBuilder1 := &e2euttils.ClusterNetworkPolicySpecBuilder{}
