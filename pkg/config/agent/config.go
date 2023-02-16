@@ -296,6 +296,10 @@ type MulticlusterConfig struct {
 	// Enable Multi-cluster NetworkPolicy which allows Antrea-native policy ingress rules to select peers
 	// from all clusters in a ClusterSet.
 	EnableStretchedNetworkPolicy bool `yaml:"enableStretchedNetworkPolicy,omitempty"`
+	// Enable Multi-cluster Pod to Pod connectivity which allows one Pod access to another Pod in other member
+	// clusters directly. This feature also requires Pod CIDRs to be provided in the Multi-cluster Controller
+	// configuration.
+	EnablePodToPodConnectivity bool `yaml:"enablePodToPodConnectivity,omitempty"`
 }
 
 type ExternalNodeConfig struct {

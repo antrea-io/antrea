@@ -3240,6 +3240,8 @@ data:
     # Enable Multi-cluster NetworkPolicy (ingress rules).
     # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
       enableStretchedNetworkPolicy: false
+    # Enable Pod to Pod connectivity.
+      enablePodToPodConnectivity: false
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -4297,7 +4299,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: aff837005adc6d91f4b5ace3a87c08cfa49e26c60e284ebd234eea34ce5de91f
+        checksum/config: fca1f2d4967020380202ef0c2394b560055830ee2770e41f791af76b42559659
       labels:
         app: antrea
         component: antrea-agent
@@ -4536,7 +4538,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: aff837005adc6d91f4b5ace3a87c08cfa49e26c60e284ebd234eea34ce5de91f
+        checksum/config: fca1f2d4967020380202ef0c2394b560055830ee2770e41f791af76b42559659
       labels:
         app: antrea
         component: antrea-controller

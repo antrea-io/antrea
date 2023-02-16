@@ -511,9 +511,11 @@ for more information.
 
 Since Antrea v1.9.0, Multi-cluster supports routing Pod traffic across clusters
 through Multi-cluster Gateways. Pod IPs can be reached in all member clusters
-within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set in
-ConfigMap `antrea-mc-controller-config` of each member cluster like the example
-below. Note, **Pod CIDRs must not overlap among clusters to enable cross-cluster
+within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set
+in ConfigMap `antrea-mc-controller-config` of each member cluster and
+`multicluster.enablePodToPodConnectivity` must be set to `true` in the `antrea-agent`
+configuration.
+Note, **Pod CIDRs must not overlap among clusters to enable cross-cluster
 Pod-to-Pod connectivity**.
 
 ```yaml
@@ -531,6 +533,16 @@ metadata:
     app: antrea
   name: antrea-mc-controller-config
   namespace: kube-system
+```
+
+```yaml
+antrea-controller.conf: |
+  featureGates:
+...
+    Multicluster: true
+...
+  multicluster:
+    enablePodToPodConnectivity: true
 ```
 
 You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml),
