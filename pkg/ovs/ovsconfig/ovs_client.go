@@ -63,7 +63,7 @@ const (
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
-// specified by address.
+// or named pipe (on Windows) specified by address, never using any SSL connection option.
 // If address is set to "", the default UNIX domain socket path
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
