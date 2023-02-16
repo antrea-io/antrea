@@ -61,6 +61,7 @@ func newMCRouteController(t *testing.T, nodeConfig *config.NodeConfig) (*fakeRou
 		nodeConfig,
 		"default",
 		true,
+		true,
 	)
 	return &fakeRouteController{
 		MCRouteController: c,

@@ -86,6 +86,7 @@ Kubernetes: `>= 1.16.0-0`
 | multicast.igmpQueryInterval | string | `"125s"` | The interval at which the antrea-agent sends IGMP queries to Pods. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | multicast.multicastInterfaces | list | `[]` | Names of the interfaces on Nodes that are used to forward multicast traffic. |
 | multicluster.enableGateway | bool | `false` | Enable Antrea Multi-cluster Gateway to support cross-cluster traffic. This feature is supported only with encap mode. |
+| multicluster.enablePodToPodConnectivity | bool | `false` | Enable Multi-cluster Pod to Pod connectivity. |
 | multicluster.enableStretchedNetworkPolicy | bool | `false` | Enable Multi-cluster NetworkPolicy. Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy. |
 | multicluster.namespace | string | `""` | The Namespace where Antrea Multi-cluster Controller is running. The default is antrea-agent's Namespace. |
 | noSNAT | bool | `false` | Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network. |

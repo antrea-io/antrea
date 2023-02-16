@@ -77,6 +77,7 @@ type MCRouteController struct {
 	// The Namespace where Antrea Multi-cluster Controller is running.
 	namespace                    string
 	enableStretchedNetworkPolicy bool
+	enablePodToPodConnectivity   bool
 }
 
 func NewMCRouteController(
@@ -89,6 +90,7 @@ func NewMCRouteController(
 	nodeConfig *config.NodeConfig,
 	namespace string,
 	enableStretchedNetworkPolicy bool,
+	enablePodToPodConnectivity bool,
 ) *MCRouteController {
 	controller := &MCRouteController{
 		mcClient:                     mcClient,
@@ -106,6 +108,7 @@ func NewMCRouteController(
 		installedCIImports:           make(map[string]*mcv1alpha1.ClusterInfoImport),
 		namespace:                    namespace,
 		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
+		enablePodToPodConnectivity:   enablePodToPodConnectivity,
 	}
 	controller.gwInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -351,8 +354,10 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 	var ciImportNoChange bool
 	if installedCIImp != nil {
 		oldTunnelPeerIPToRemoteGW := getPeerGatewayIP(installedCIImp.Spec)
-		ciImportNoChange = oldTunnelPeerIPToRemoteGW.Equal(tunnelPeerIPToRemoteGW) && installedCIImp.Spec.ServiceCIDR == ciImport.Spec.ServiceCIDR &&
-			sets.NewString(installedCIImp.Spec.PodCIDRs...).Equal(sets.NewString(ciImport.Spec.PodCIDRs...))
+		ciImportNoChange = oldTunnelPeerIPToRemoteGW.Equal(tunnelPeerIPToRemoteGW) && installedCIImp.Spec.ServiceCIDR == ciImport.Spec.ServiceCIDR
+		if c.enablePodToPodConnectivity {
+			ciImportNoChange = ciImportNoChange && sets.NewString(installedCIImp.Spec.PodCIDRs...).Equal(sets.NewString(ciImport.Spec.PodCIDRs...))
+		}
 	}
 
 	if ciImportNoChange && !activeGWChanged {
@@ -362,7 +367,10 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 
 	klog.InfoS("Adding/updating remote Gateway Node flows for Multi-cluster", "gateway", klog.KObj(activeGW),
 		"node", c.nodeConfig.Name, "peer", tunnelPeerIPToRemoteGW)
-	allCIDRs := append([]string{ciImport.Spec.ServiceCIDR}, ciImport.Spec.PodCIDRs...)
+	allCIDRs := []string{ciImport.Spec.ServiceCIDR}
+	if c.enablePodToPodConnectivity {
+		allCIDRs = append(allCIDRs, ciImport.Spec.PodCIDRs...)
+	}
 	peerConfigs, err := generatePeerConfigs(allCIDRs, tunnelPeerIPToRemoteGW)
 	if err != nil {
 		klog.ErrorS(err, "Parse error for serviceCIDR from remote cluster", "clusterinfoimport", ciImport.Name, "gateway", activeGW.Name)
