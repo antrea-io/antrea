@@ -53,6 +53,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/ipassigner IPAssigner testing"
   "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator testing"
   "pkg/agent/secondarynetwork/ipam IPAMDelegator testing"
+  "pkg/agent/servicecidr Interface testing"
   "pkg/agent/util/ipset Interface testing"
   "pkg/agent/util/iptables Interface testing mock_iptables_linux.go" # Must specify linux.go suffix, otherwise compilation would fail on windows platform as source file has linux build tag.
   "pkg/agent/util/netlink Interface testing mock_netlink_linux.go"
@@ -80,7 +81,7 @@ fi
 function generate_antrea_client_code {
   # Generate protobuf code for CNI gRPC service with protoc.
   protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
-  
+
   # Generate clientset and apis code with K8s codegen tools.
   $GOPATH/bin/client-gen \
     --clientset-name versioned \
@@ -98,7 +99,7 @@ function generate_antrea_client_code {
     --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
     --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
     --go-header-file hack/boilerplate/license_header.go.txt
-  
+
   # Generate listers with K8s codegen tools.
   $GOPATH/bin/lister-gen \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
@@ -107,7 +108,7 @@ function generate_antrea_client_code {
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
     --output-package "${ANTREA_PKG}/pkg/client/listers" \
     --go-header-file hack/boilerplate/license_header.go.txt
-  
+
   # Generate informers with K8s codegen tools.
   $GOPATH/bin/informer-gen \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
@@ -118,7 +119,7 @@ function generate_antrea_client_code {
     --listers-package "${ANTREA_PKG}/pkg/client/listers" \
     --output-package "${ANTREA_PKG}/pkg/client/informers" \
     --go-header-file hack/boilerplate/license_header.go.txt
-  
+
   $GOPATH/bin/deepcopy-gen \
     --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
@@ -131,13 +132,13 @@ function generate_antrea_client_code {
     --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
     -O zz_generated.deepcopy \
     --go-header-file hack/boilerplate/license_header.go.txt
-  
+
   $GOPATH/bin/conversion-gen  \
     --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/stats/" \
     -O zz_generated.conversion \
     --go-header-file hack/boilerplate/license_header.go.txt
-  
+
   $GOPATH/bin/openapi-gen  \
     --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \

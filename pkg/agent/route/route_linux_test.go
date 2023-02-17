@@ -25,6 +25,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"antrea.io/antrea/pkg/agent/config"
+	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util/ipset"
 	ipsettest "antrea.io/antrea/pkg/agent/util/ipset/testing"
@@ -561,11 +562,14 @@ func TestInitServiceIPRoutes(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			mockServiceCIDRProvider := servicecidrtest.NewMockInterface(ctrl)
 			c := &Client{netlink: mockNetlink,
-				networkConfig: tt.networkConfig,
-				nodeConfig:    tt.nodeConfig,
+				networkConfig:       tt.networkConfig,
+				nodeConfig:          tt.nodeConfig,
+				serviceCIDRProvider: mockServiceCIDRProvider,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
+			mockServiceCIDRProvider.EXPECT().AddEventHandler(gomock.Any())
 			assert.NoError(t, c.initServiceIPRoutes())
 		})
 	}
@@ -1242,19 +1246,27 @@ func TestDeleteNodePort(t *testing.T) {
 	}
 }
 
-func TestAddClusterIPRoute(t *testing.T) {
+func TestAddServiceCIDRRoute(t *testing.T) {
+	_, serviceIPv4CIDR1, _ := net.ParseCIDR("10.96.0.1/32")
+	_, serviceIPv4CIDR2, _ := net.ParseCIDR("10.96.0.0/28")
+	_, serviceIPv6CIDR1, _ := net.ParseCIDR("fd00:1234:5678:dead:beaf::1/128")
+	_, serviceIPv6CIDR2, _ := net.ParseCIDR("fd00:1234:5678:dead:beaf::/124")
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
-		name          string
-		clusterIPs    []string
-		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		name               string
+		curServiceIPv4CIDR *net.IPNet
+		curServiceIPv6CIDR *net.IPNet
+		newServiceIPv4CIDR *net.IPNet
+		newServiceIPv6CIDR *net.IPNet
+		expectedCalls      func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:       "IPv4",
-			clusterIPs: []string{"10.96.0.1", "10.96.0.10"},
+			name:               "Add route for Service IPv4 CIDR",
+			curServiceIPv4CIDR: nil,
+			newServiceIPv4CIDR: serviceIPv4CIDR1,
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{
-					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1"), Mask: net.CIDRMask(32, 32)},
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
 					Gw:        config.VirtualServiceIPv4,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					LinkIndex: 10,
@@ -1266,6 +1278,13 @@ func TestAddClusterIPRoute(t *testing.T) {
 				mockNetlink.RouteDel(&netlink.Route{
 					Dst: ip.MustParseCIDR("10.96.0.0/24"), Gw: config.VirtualServiceIPv4,
 				})
+			},
+		},
+		{
+			name:               "Update route for Service IPv4 CIDR",
+			curServiceIPv4CIDR: serviceIPv4CIDR1,
+			newServiceIPv4CIDR: serviceIPv4CIDR2,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{
 					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.0").To4(), Mask: net.CIDRMask(28, 32)},
 					Gw:        config.VirtualServiceIPv4,
@@ -1273,7 +1292,7 @@ func TestAddClusterIPRoute(t *testing.T) {
 					LinkIndex: 10,
 				})
 				mockNetlink.RouteDel(&netlink.Route{
-					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1"), Mask: net.CIDRMask(32, 32)},
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
 					Gw:        config.VirtualServiceIPv4,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					LinkIndex: 10,
@@ -1281,8 +1300,9 @@ func TestAddClusterIPRoute(t *testing.T) {
 			},
 		},
 		{
-			name:       "IPv6",
-			clusterIPs: []string{"fd00:1234:5678:dead:beaf::1", "fd00:1234:5678:dead:beaf::a"},
+			name:               "Add route for Service IPv6 CIDR",
+			curServiceIPv6CIDR: nil,
+			newServiceIPv6CIDR: serviceIPv6CIDR1,
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{
 					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
@@ -1297,6 +1317,13 @@ func TestAddClusterIPRoute(t *testing.T) {
 				mockNetlink.RouteDel(&netlink.Route{
 					Dst: ip.MustParseCIDR("fd00:1234:5678:dead:beaf::/80"), Gw: config.VirtualServiceIPv6,
 				})
+			},
+		},
+		{
+			name:               "Update route for Service IPv6 CIDR",
+			curServiceIPv6CIDR: serviceIPv6CIDR1,
+			newServiceIPv6CIDR: serviceIPv6CIDR2,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{
 					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::"), Mask: net.CIDRMask(124, 128)},
 					Gw:        config.VirtualServiceIPv6,
@@ -1318,13 +1345,18 @@ func TestAddClusterIPRoute(t *testing.T) {
 			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
-				netlink:    mockNetlink,
-				nodeConfig: nodeConfig,
+				netlink:         mockNetlink,
+				nodeConfig:      nodeConfig,
+				serviceIPv4CIDR: tt.curServiceIPv4CIDR,
+				serviceIPv6CIDR: tt.curServiceIPv6CIDR,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			for _, clusterIP := range tt.clusterIPs {
-				assert.NoError(t, c.AddClusterIPRoute(net.ParseIP(clusterIP)))
+			if tt.newServiceIPv4CIDR != nil {
+				assert.NoError(t, c.addServiceCIDRRoute(tt.newServiceIPv4CIDR))
+			}
+			if tt.newServiceIPv6CIDR != nil {
+				assert.NoError(t, c.addServiceCIDRRoute(tt.newServiceIPv6CIDR))
 			}
 		})
 	}

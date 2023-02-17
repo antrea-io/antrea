@@ -59,6 +59,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
+	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/stats"
 	support "antrea.io/antrea/pkg/agent/supportbundlecollection"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
@@ -167,6 +168,7 @@ func run(o *Options) error {
 	if o.config.ServiceCIDRv6 != "" {
 		_, serviceCIDRNetv6, _ = net.ParseCIDR(o.config.ServiceCIDRv6)
 	}
+	serviceCIDRProvider := servicecidr.NewServiceCIDRDiscoverer(serviceInformer)
 
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
@@ -199,7 +201,7 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
-	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge, multicastEnabled)
+	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge, multicastEnabled, serviceCIDRProvider)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
