@@ -67,6 +67,7 @@ jobs:
         file: .coverage/coverage-unit.txt
         flags: unit-tests
         name: codecov-unit-test
+        fail_ci_if_error: true
 
   test-unit-windows:
     needs: check-changes
@@ -103,6 +104,7 @@ jobs:
           file: .coverage/coverage-unit.txt
           flags: unit-tests
           name: codecov-unit-test
+          fail_ci_if_error: true
 
   test-integration:
     needs: check-changes
@@ -145,6 +147,7 @@ jobs:
           files: .coverage/coverage-integration.txt,multicluster/.coverage/coverage-integration.txt
           flags: integration-tests
           name: codecov-integration-test
+          fail_ci_if_error: true
 
   # golangci-lint-ubuntu and golangci-lint-macos are intentionally not merged into one job with os matrix, otherwise the
   # job wouldn't be expanded if it's skipped and the report of the required check would be missing.
