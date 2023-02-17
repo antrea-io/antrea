@@ -22,5 +22,5 @@ MANIFESTS=$(ls $YAMLS_DIR)
 checksum=$(cat "${WORK_DIR}"/../config/default/configmap/controller_manager_config.yaml | sha256sum | cut -d " " -f 1)
 
 for file in ${MANIFESTS[@]}; do
-    sed -i "s/checksum-placeholder/${checksum}/g" ${YAMLS_DIR}/$file
+    sed -i.bak "s/checksum-placeholder/${checksum}/g" ${YAMLS_DIR}/$file
 done
