@@ -51,6 +51,8 @@ import (
 // Provider is the interface provided by proxier implementations.
 type Provider interface {
 	config.EndpointsHandler
+	config.EndpointSliceHandler
+	config.NodeHandler
 	config.ServiceHandler
 
 	// SyncLoop runs periodic work.
