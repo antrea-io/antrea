@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	openflowtypes "antrea.io/antrea/pkg/agent/openflow/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -198,6 +199,9 @@ var (
 	// NonIPTable is used when Antrea Agent is running on an external Node. It forwards the non-IP packet
 	// between the uplink and its pair port directly.
 	NonIPTable = newTable("NonIP", stageClassifier, pipelineNonIP, defaultDrop)
+
+	// Default bucket weight in an Openflow Group
+	defaultGroupBucketWeight = uint16(100)
 
 	// Flow priority level
 	priorityHigh            = uint16(210)
@@ -2442,7 +2446,9 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 // serviceEndpointGroup creates/modifies the group/buckets of Endpoints. If the withSessionAffinity is true, then buckets
 // will resubmit packets back to ServiceLBTable to trigger the learn flow, the learn flow will then send packets to
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
-func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
+// When mcsLocalService is not nil, the Service is a Multi-cluster Service with a member Service in the local cluster,
+// in which case the packets should go to the local Service's group, the action will go to the group of the exported Service.
+func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, mcsLocalService *openflowtypes.ServiceGroupInfo, endpoints ...proxy.Endpoint) binding.Group {
 	group := f.bridge.CreateGroup(groupID).ResetBuckets()
 	var resubmitTableID uint8
 	if withSessionAffinity {
@@ -2458,19 +2464,24 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 
 		if ipProtocol == binding.ProtocolIP {
 			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
-			group = group.Bucket().Weight(100).
+			group = group.Bucket().Weight(defaultGroupBucketWeight).
 				LoadToRegField(EndpointIPField, ipVal).
 				LoadToRegField(EndpointPortField, uint32(portVal)).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		} else if ipProtocol == binding.ProtocolIPv6 {
 			ipVal := []byte(endpointIP)
-			group = group.Bucket().Weight(100).
+			group = group.Bucket().Weight(defaultGroupBucketWeight).
 				LoadXXReg(EndpointIP6Field.GetRegID(), ipVal).
 				LoadToRegField(EndpointPortField, uint32(portVal)).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		}
+	}
+	if mcsLocalService != nil {
+		group = group.Bucket().Weight(defaultGroupBucketWeight).
+			Group(uint32(mcsLocalService.GroupID)).
+			Done()
 	}
 	return group
 }

@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/openflow/types"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
@@ -844,12 +845,17 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 
 func Test_client_InstallServiceGroup(t *testing.T) {
 	groupID := binding.GroupIDType(100)
+	mcsLocalService := &types.ServiceGroupInfo{
+		GroupID:  binding.GroupIDType(2),
+		Endpoint: proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
+	}
 
 	testCases := []struct {
 		name                string
 		withSessionAffinity bool
 		endpoints           []proxy.Endpoint
 		expectedGroup       string
+		mcsLocalService     *types.ServiceGroupInfo
 	}{
 		{
 			name: "IPv4 Endpoints",
@@ -860,6 +866,16 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
+		},
+		{
+			name: "IPv4 Endpoints with multi-cluster enabled",
+			endpoints: []proxy.Endpoint{
+				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
+			},
+			mcsLocalService: mcsLocalService,
+			expectedGroup: "group_id=100,type=select," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:1,weight:100,actions=group:2",
 		},
 		{
 			name: "IPv6 Endpoints",
@@ -906,8 +922,7 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(nil).Times(1)
-
-			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.endpoints))
+			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.mcsLocalService, tc.endpoints))
 			gCacheI, ok := fc.featureService.groupCache.Load(groupID)
 			require.True(t, ok)
 			group := getGroupFromCache(gCacheI.(binding.Group))
