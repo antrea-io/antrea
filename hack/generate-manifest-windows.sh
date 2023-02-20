@@ -109,18 +109,15 @@ TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
 
 pushd $TMP_DIR > /dev/null
 
-BASE=../../base
+BASE=../../default
+if [ "$RUNTIME" == "containerd" ]; then
+    BASE=../../containerd
+fi
 
 mkdir $MODE && cd $MODE
 touch kustomization.yml
 # ../../patches/$MODE may be empty so we use find and not simply cp
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
-
-if [ "$RUNTIME" == "containerd" ]; then
-    sed -i.bak "s/agent.yml/agent-containerd.yml/g" $BASE/kustomization.yml
-    sed -i.bak "s/Run-AntreaAgent.ps1/Run-AntreaAgent-Containerd.ps1/g" $BASE/kustomization.yml
-    sed -i.bak "/name: antrea-agent-windows/i\  - conf/Install-WindowsCNI-Containerd.ps1" $BASE/kustomization.yml
-fi
 
 $KUSTOMIZE edit add base $BASE
 
@@ -134,11 +131,6 @@ if [ "$MODE" == "release" ]; then
 fi
 
 $KUSTOMIZE build
-
-if [ "$RUNTIME" == "containerd" ]; then
-    rm $BASE/kustomization.yml
-    mv $BASE/kustomization.yml.bak $BASE/kustomization.yml
-fi
 
 popd > /dev/null
 
