@@ -57,10 +57,13 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
 5. Make the release on Github **with the release branch as the target** and copy
    the relevant section of the CHANGELOG as the release description (make sure
    all the markdown links work). You typically should **not** be checking the
-   `pre-release` box. This would only be necessary for a release candidate
-   (e.g., `<TAG>` is `1.4.0-rc.1`), which we do not have at the moment. There is
-   no need to upload any assets as this will be done automatically by a Github
-   workflow, after you create the release.
+   `Set as a pre-release` box. This would only be necessary for a release
+   candidate (e.g., `<TAG>` is `1.4.0-rc.1`), which we do not have at the
+   moment. There is no need to upload any assets as this will be done
+   automatically by a Github workflow, after you create the release.
+   - the `Set as the latest release` box is checked by default. **If you are
+     creating a patch release for an older minor version of Antrea, you should
+     uncheck the box.**
 
 6. After a while (time for the relevant Github workflows to complete), check that:
    - the Docker image has been pushed to
