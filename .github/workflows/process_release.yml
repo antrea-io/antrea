@@ -37,7 +37,7 @@ jobs:
         TAG: ${{ github.ref }}
       run: |
         version=${TAG:10}
-        echo "::set-output name=version::$version"
+        echo "version=$version" >> $GITHUB_OUTPUT
     - name: Update website source
       uses: benc-uk/workflow-dispatch@v1
       with:
