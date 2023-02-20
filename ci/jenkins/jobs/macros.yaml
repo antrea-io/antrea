@@ -293,3 +293,11 @@
           set -e
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --testbed-type jumper
+
+- builder:
+     name: builder-stop-all
+     builders:
+       - shell: |-
+           #!/bin/bash
+           set -e
+           ./ci/jenkins/stop-stale-jobs.sh --pull-request "${ghprbPullId}" --jenkins "${JENKINS_URL}"
