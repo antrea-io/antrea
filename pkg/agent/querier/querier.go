@@ -18,10 +18,12 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -42,6 +44,8 @@ type AgentQuerier interface {
 	GetOVSCtlClient() ovsctl.OVSCtlClient
 	GetProxier() proxy.Proxier
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
+	GetMemberlistCluster() memberlist.Interface
+	GetNodeLister() corelisters.NodeLister
 }
 
 type agentQuerier struct {
@@ -55,6 +59,8 @@ type agentQuerier struct {
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
 	apiPort                  int
 	nplRange                 string
+	memberlistCluster        memberlist.Interface
+	nodeLister               corelisters.NodeLister
 }
 
 func NewAgentQuerier(
@@ -68,6 +74,8 @@ func NewAgentQuerier(
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
 	apiPort int,
 	nplRange string,
+	memberlistCluster memberlist.Interface,
+	nodeLister corelisters.NodeLister,
 ) *agentQuerier {
 	return &agentQuerier{
 		nodeConfig:               nodeConfig,
@@ -80,7 +88,19 @@ func NewAgentQuerier(
 		networkPolicyInfoQuerier: networkPolicyInfoQuerier,
 		apiPort:                  apiPort,
 		nplRange:                 nplRange,
+		memberlistCluster:        memberlistCluster,
+		nodeLister:               nodeLister,
 	}
+}
+
+// GetNodeLister returns NodeLister.
+func (aq agentQuerier) GetNodeLister() corelisters.NodeLister {
+	return aq.nodeLister
+}
+
+// GetMemberlistCluster returns MemberlistCluster Interface.
+func (aq agentQuerier) GetMemberlistCluster() memberlist.Interface {
+	return aq.memberlistCluster
 }
 
 // GetNodeConfig returns NodeConfig.

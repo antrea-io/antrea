@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ package testing
 import (
 	config "antrea.io/antrea/pkg/agent/config"
 	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
+	memberlist "antrea.io/antrea/pkg/agent/memberlist"
 	openflow "antrea.io/antrea/pkg/agent/openflow"
 	proxy "antrea.io/antrea/pkg/agent/proxy"
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -29,6 +30,7 @@ import (
 	querier "antrea.io/antrea/pkg/querier"
 	gomock "github.com/golang/mock/gomock"
 	kubernetes "k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/listers/core/v1"
 	reflect "reflect"
 )
 
@@ -95,6 +97,20 @@ func (mr *MockAgentQuerierMockRecorder) GetK8sClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetK8sClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetK8sClient))
 }
 
+// GetMemberlistCluster mocks base method
+func (m *MockAgentQuerier) GetMemberlistCluster() memberlist.Interface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMemberlistCluster")
+	ret0, _ := ret[0].(memberlist.Interface)
+	return ret0
+}
+
+// GetMemberlistCluster indicates an expected call of GetMemberlistCluster
+func (mr *MockAgentQuerierMockRecorder) GetMemberlistCluster() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemberlistCluster", reflect.TypeOf((*MockAgentQuerier)(nil).GetMemberlistCluster))
+}
+
 // GetNetworkConfig mocks base method
 func (m *MockAgentQuerier) GetNetworkConfig() *config.NetworkConfig {
 	m.ctrl.T.Helper()
@@ -135,6 +151,20 @@ func (m *MockAgentQuerier) GetNodeConfig() *config.NodeConfig {
 func (mr *MockAgentQuerierMockRecorder) GetNodeConfig() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeConfig", reflect.TypeOf((*MockAgentQuerier)(nil).GetNodeConfig))
+}
+
+// GetNodeLister mocks base method
+func (m *MockAgentQuerier) GetNodeLister() v1.NodeLister {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNodeLister")
+	ret0, _ := ret[0].(v1.NodeLister)
+	return ret0
+}
+
+// GetNodeLister indicates an expected call of GetNodeLister
+func (mr *MockAgentQuerierMockRecorder) GetNodeLister() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeLister", reflect.TypeOf((*MockAgentQuerier)(nil).GetNodeLister))
 }
 
 // GetOVSCtlClient mocks base method

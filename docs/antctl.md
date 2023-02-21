@@ -35,6 +35,7 @@ running in three different modes:
     - [Record metrics](#record-metrics)
   - [Multi-cluster commands](#multi-cluster-commands)
   - [Multicast commands](#multicast-commands)
+  - [Showing memberlist state](#showing-memberlist-state)
 <!-- /toc -->
 
 ## Installation
@@ -651,4 +652,17 @@ $ antctl get podmulticaststats
 NAMESPACE              NAME                         INBOUND OUTBOUND
 testmulticast-vw7gx5b9 test3-receiver-2             30      0
 testmulticast-vw7gx5b9 test3-sender-1               0       10
+```
+
+### Showing memberlist state
+
+`antctl` agent command `get memberlist` (or `get ml`) print the state of memberlist cluster of Antrea Agent.
+
+```bash
+$ antctl get memberlist
+
+NODE    IP         STATUS
+worker1 172.18.0.4 Alive 
+worker2 172.18.0.3 Alive 
+worker3 172.18.0.2 Dead
 ```

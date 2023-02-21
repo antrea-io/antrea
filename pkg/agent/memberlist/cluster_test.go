@@ -34,7 +34,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/consistenthash"
-	memberlisttest "antrea.io/antrea/pkg/agent/memberlist/testing"
 	"antrea.io/antrea/pkg/apis"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
@@ -148,7 +147,7 @@ func TestCluster_Run(t *testing.T) {
 				Name:         localNodeName,
 				NodeIPv4Addr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 255)},
 			}
-			mockMemberlist := memberlisttest.NewMockMemberlist(controller)
+			mockMemberlist := NewMockMemberlist(controller)
 			fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist)
 			if err != nil {
 				t.Fatalf("New fake memberlist server error: %v", err)
@@ -204,7 +203,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress1", UID: "fakeUID1"},
 		Spec:       crdv1a2.EgressSpec{ExternalIPPool: fakeEIP1.Name, EgressIP: "1.1.1.2"},
 	}
-	mockMemberlist := memberlisttest.NewMockMemberlist(controller)
+	mockMemberlist := NewMockMemberlist(controller)
 	fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist)
 	if err != nil {
 		t.Fatalf("New fake memberlist server error: %v", err)
@@ -662,7 +661,7 @@ func TestCluster_RejoinNodes(t *testing.T) {
 	defer close(stopCh)
 	controller := gomock.NewController(t)
 	defer controller.Finish()
-	mockMemberlist := memberlisttest.NewMockMemberlist(controller)
+	mockMemberlist := NewMockMemberlist(controller)
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.2"})
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.3"})
 	fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3)
