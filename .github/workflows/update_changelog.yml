@@ -22,7 +22,7 @@ jobs:
           echo "$version is a release candidate or a pre-release"
           exit 0
         fi
-        echo "::set-output name=version::$version"
+        echo "version=$version" >> $GITHUB_OUTPUT
 
   pr-update-changelog:
     runs-on: [ubuntu-latest]
