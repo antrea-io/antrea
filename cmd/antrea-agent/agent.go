@@ -781,6 +781,8 @@ func run(o *Options) error {
 		networkPolicyController,
 		o.config.APIPort,
 		o.config.NodePortLocal.PortRange,
+		memberlistCluster,
+		nodeInformer.Lister(),
 	)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)

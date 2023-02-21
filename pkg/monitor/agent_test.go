@@ -147,7 +147,7 @@ func newAgentMonitor(crdClient *fakeclientset.Clientset, t *testing.T) *agentMon
 	networkPolicyInfoQuerier.EXPECT().GetAddressGroupNum().Return(30).AnyTimes()
 	networkPolicyInfoQuerier.EXPECT().GetControllerConnectionStatus().Return(true).AnyTimes()
 
-	querier := querier.NewAgentQuerier(nodeConfig, nil, interfaceStore, client, ofClient, ovsBridgeClient, nil, networkPolicyInfoQuerier, 10349, "")
+	querier := querier.NewAgentQuerier(nodeConfig, nil, interfaceStore, client, ofClient, ovsBridgeClient, nil, networkPolicyInfoQuerier, 10349, "", nil, nil)
 
 	return NewAgentMonitor(crdClient, querier)
 }

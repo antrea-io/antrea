@@ -19,6 +19,7 @@ import (
 	"reflect"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
@@ -567,6 +568,20 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 			transformedResponse: reflect.TypeOf(serviceexternalip.Response{}),
+		},
+		{
+			use:          "memberlist",
+			aliases:      []string{"ml"},
+			short:        "Print state of memberlist cluster",
+			long:         "Print state of memberlist cluster of Antrea agent",
+			commandGroup: get,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/memberlist",
+					outputType: multiple,
+				},
+			},
+			transformedResponse: reflect.TypeOf(memberlist.Response{}),
 		},
 	},
 	rawCommands: []rawCommand{
