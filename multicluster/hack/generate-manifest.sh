@@ -118,6 +118,8 @@ then
     mkdir config && cd config
     cp $KUSTOMIZATION_DIR/overlays/leader-ns/prefix_transformer.yaml .
     sed -ie "s/antrea-multicluster/$NAMESPACE/g" prefix_transformer.yaml
+    cp $KUSTOMIZATION_DIR/overlays/leader-ns/webhook_patch.yaml .
+    sed -ie "s/antrea-multicluster/$NAMESPACE/g" webhook_patch.yaml
 
     cat << EOF > kustomization.yaml
 namespace: $NAMESPACE

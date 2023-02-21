@@ -4,6 +4,7 @@ metadata:
   name: v1beta2.controlplane.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: controlplane.antrea.io
   groupPriorityMinimum: 100
@@ -19,6 +20,7 @@ metadata:
   name: v1beta1.system.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: system.antrea.io
   groupPriorityMinimum: 100
@@ -34,6 +36,7 @@ metadata:
   name: v1alpha1.stats.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: stats.antrea.io
   groupPriorityMinimum: 100

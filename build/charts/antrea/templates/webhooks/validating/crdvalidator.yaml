@@ -4,6 +4,7 @@ metadata:
   name: "crdvalidator.antrea.io"
   labels:
     app: antrea
+    served-by: antrea-controller
 webhooks:
   - name: "tiervalidator.antrea.io"
     clientConfig:

@@ -111,6 +111,7 @@ metadata:
   name: clustergroups.crd.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: crd.antrea.io
   versions:

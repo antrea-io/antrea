@@ -251,14 +251,11 @@ metadata:
 rules:
 - apiGroups:
   - admissionregistration.k8s.io
-  resourceNames:
-  - antrea-multicluster-antrea-mc-mutating-webhook-configuration
-  - antrea-multicluster-antrea-mc-validating-webhook-configuration
   resources:
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
   verbs:
-  - get
+  - list
   - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -421,9 +418,11 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   labels:
     app: antrea
+    role: leader
+    served-by: antrea-mc-controller
+    served-in: antrea-multicluster
   name: antrea-multicluster-antrea-mc-mutating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
@@ -456,6 +455,9 @@ kind: ValidatingWebhookConfiguration
 metadata:
   labels:
     app: antrea
+    role: leader
+    served-by: antrea-mc-controller
+    served-in: antrea-multicluster
   name: antrea-multicluster-antrea-mc-validating-webhook-configuration
 webhooks:
 - admissionReviewVersions:

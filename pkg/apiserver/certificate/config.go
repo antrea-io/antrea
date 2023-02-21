@@ -14,7 +14,11 @@
 
 package certificate
 
-import "time"
+import (
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 const (
 	AntreaCAConfigMapName = "antrea-ca"
@@ -26,20 +30,19 @@ type CAConfig struct {
 	// certificate of antrea-controller.
 	CAConfigMapName string
 
-	// APIServiceNames contains all the APIServices backed by antrea-controller.
-	APIServiceNames []string
+	// APIServiceSelector provides the label to select APIServices backed by antrea-controller. Using labels as a filter
+	// to select APIServices is more flexible than maintaining a list of APIService names, e.g., cluster admin can remove
+	// unneeded APIServices in a setup without Antrea code changes.
+	APIServiceSelector *metav1.LabelSelector
 
-	// ValidatingWebhooks contains all the ValidatingWebhookConfigurations backed by antrea-controller.
-	ValidatingWebhooks []string
+	// ValidatingWebhookSelector provides the label to select ValidatingWebhookConfigurations backed by antrea-controller.
+	ValidatingWebhookSelector *metav1.LabelSelector
 
-	// MutationWebhooks contains all the MutationWebhooks backed by antrea-controller.
-	MutationWebhooks []string
+	// MutationWebhookSelector provides the label to select MutatingWebhookConfigurations backed by antrea-controller.
+	MutationWebhookSelector *metav1.LabelSelector
 
-	// OptionalMutationWebhooks contains all the OptionalMutationWebhooks backed by antrea-controller.
-	OptionalMutationWebhooks []string
-
-	// CRDsWithConversionWebhooks contains all the ConversionWebhooks backed by antrea-controller.
-	CRDsWithConversionWebhooks []string
+	// CRDConversionWebhookSelector provides the label to select the ConversionWebhooks backed by antrea-controller.
+	CRDConversionWebhookSelector *metav1.LabelSelector
 
 	// CertDir is the directory that the TLS Secret should be mounted to. Declaring it as a variable for testing.
 	CertDir string

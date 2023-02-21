@@ -51,7 +51,7 @@ func newMemberCommand() *cobra.Command {
 }
 
 func runMember(o *Options) error {
-	mgr, err := setupManagerAndCertControllerFunc(o)
+	mgr, err := setupManagerAndCertControllerFunc(false, o)
 	if err != nil {
 		return err
 	}

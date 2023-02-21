@@ -5,6 +5,7 @@ metadata:
   name: "labelsmutator.antrea.io"
   labels:
     app: antrea
+    served-by: antrea-controller
 webhooks:
   - name: "namelabelmutator.antrea.io"
     clientConfig:

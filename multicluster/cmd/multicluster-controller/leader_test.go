@@ -78,7 +78,7 @@ func TestRunLeader(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
 		mockLeaderManager := mocks.NewMockManager(mockCtrl)
 		initMockManager(mockLeaderManager)
-		setupManagerAndCertControllerFunc = func(o *Options) (ctrl.Manager, error) {
+		setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
 			return mockLeaderManager, nil
 		}
 		ctrl.SetupSignalHandler = mockSetupSignalHandler

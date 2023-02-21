@@ -89,7 +89,7 @@ func TestRunMember(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
 		mockMemberManager := mocks.NewMockManager(mockCtrl)
 		initMockManager(mockMemberManager)
-		setupManagerAndCertControllerFunc = func(o *Options) (ctrl.Manager, error) {
+		setupManagerAndCertControllerFunc = func(isLeader bool, o *Options) (ctrl.Manager, error) {
 			return mockMemberManager, nil
 		}
 		member.ServiceCIDRDiscoverFn = func(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
