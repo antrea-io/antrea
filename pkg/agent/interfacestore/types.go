@@ -35,6 +35,8 @@ const (
 	HostInterface
 	// TrafficControlInterface is used to mark current interface is for traffic control port
 	TrafficControlInterface
+	// IPSecTunnelInterface is used to mark current interface is for IPSec tunnel port
+	IPSecTunnelInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -43,6 +45,7 @@ const (
 	AntreaUplink           = "uplink"
 	AntreaHost             = "host"
 	AntreaTrafficControl   = "traffic-control"
+	AntreaIPsecTunnel      = "ipsec-tunnel"
 	AntreaUnset            = ""
 )
 
@@ -100,6 +103,7 @@ type InterfaceConfig struct {
 type InterfaceStore interface {
 	Initialize(interfaces []*InterfaceConfig)
 	AddInterface(interfaceConfig *InterfaceConfig)
+	ListInterfaces() []*InterfaceConfig
 	DeleteInterface(interfaceConfig *InterfaceConfig)
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
 	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
@@ -154,7 +158,7 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, loca
 // Node.
 func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk, remoteName string) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk, RemoteName: remoteName}
-	return &InterfaceConfig{InterfaceName: interfaceName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
+	return &InterfaceConfig{InterfaceName: interfaceName, Type: IPSecTunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
 // NewUplinkInterface creates InterfaceConfig for the uplink interface.
