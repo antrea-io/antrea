@@ -86,8 +86,8 @@ func getInterfaceKey(obj interface{}) (string, error) {
 	var key string
 	if interfaceConfig.Type == ContainerInterface {
 		key = util.GenerateContainerInterfaceKey(interfaceConfig.ContainerID)
-	} else if interfaceConfig.Type == TunnelInterface && interfaceConfig.NodeName != "" {
-		// Tunnel interface for a Node.
+	} else if interfaceConfig.Type == IPSecTunnelInterface {
+		// IPsec tunnel interface for a Node.
 		key = util.GenerateNodeTunnelInterfaceKey(interfaceConfig.NodeName)
 	} else {
 		// Use the interface name as the key by default.
@@ -121,6 +121,15 @@ func (c *interfaceCache) GetInterface(interfaceKey string) (*InterfaceConfig, bo
 		return nil, false
 	}
 	return iface.(*InterfaceConfig), found
+}
+
+// ListInterfacesByType lists all interfaces from local cache.
+func (c *interfaceCache) ListInterfaces() []*InterfaceConfig {
+	interfaceConfigs := make([]*InterfaceConfig, 0)
+	for _, iface := range c.cache.List() {
+		interfaceConfigs = append(interfaceConfigs, iface.(*InterfaceConfig))
+	}
+	return interfaceConfigs
 }
 
 // GetInterfaceByName retrieves interface from local cache given the interface
