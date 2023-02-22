@@ -21,69 +21,79 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 func TestCheckUnsupportedFeatures(t *testing.T) {
 	testCases := []struct {
 		desc   string
-		config agentconfig.AgentConfig
+		config string
 		pass   bool
 	}{
 		{
 			"default",
-			agentconfig.AgentConfig{},
+			"",
 			true,
 		},
 		{
 			"feature gates",
-			agentconfig.AgentConfig{
-				FeatureGates: map[string]bool{
-					"AntreaProxy":        false,
-					"AntreaPolicy":       true,
-					"Traceflow":          false,
-					"FlowExporter":       true,
-					"NetworkPolicyStats": true,
-				},
-			},
+			`
+featureGates:
+  AntreaProxy: false
+  AntreaPolicy: true
+  Traceflow: false
+  FlowExporter: true
+  NetworkPolicyStats: true
+`,
 			true,
 		},
 		{
 			"noEncap mode",
-			agentconfig.AgentConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap.String()},
+			`
+trafficEncapMode: noEncap
+`,
 			true,
 		},
 		{
 			"GRE tunnel",
-			agentconfig.AgentConfig{TunnelType: ovsconfig.GRETunnel},
+			`
+tunnelType: gre
+`,
 			false,
 		},
 		{
 			"IPsec encryption",
-			agentconfig.AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeIPSec.String()},
+			`
+trafficEncryptionMode: ipsec
+`,
 			false,
 		},
 		{
 			"WireGuard encryption",
-			agentconfig.AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard.String()},
+			`
+trafficEncryptionMode: wireguard
+`,
 			false,
 		},
 		{
 			"hybrid mode and GRE tunnel",
-			agentconfig.AgentConfig{TrafficEncapMode: config.TrafficEncapModeHybrid.String(), TunnelType: ovsconfig.GRETunnel},
+			`
+trafficEncapMode: hybrid
+tunnelType: gre
+`,
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			o := &Options{config: &tc.config}
+			configFile, cleanup := createTempConfig(t, tc.config)
+			defer cleanup()
+
+			o := newOptions()
+			o.configFile = configFile
 			err := o.complete(nil)
 			assert.Nil(t, err, tc.desc)
-			err = o.checkUnsupportedFeatures()
+			err = o.validate(nil)
 			if tc.pass {
 				assert.Nil(t, err)
 			} else {

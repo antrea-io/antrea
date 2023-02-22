@@ -28,7 +28,7 @@ type featureEgress struct {
 
 	cachedFlows *flowCategoryCache
 
-	exceptCIDRs map[binding.Protocol][]net.IPNet
+	exceptCIDRs map[binding.Protocol][]*net.IPNet
 	nodeIPs     map[binding.Protocol]net.IP
 	gatewayMAC  net.HardwareAddr
 
@@ -43,7 +43,7 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
 	egressConfig *config.EgressConfig) *featureEgress {
-	exceptCIDRs := make(map[binding.Protocol][]net.IPNet)
+	exceptCIDRs := make(map[binding.Protocol][]*net.IPNet)
 	for _, cidr := range egressConfig.ExceptCIDRs {
 		if cidr.IP.To4() == nil {
 			exceptCIDRs[binding.ProtocolIPv6] = append(exceptCIDRs[binding.ProtocolIPv6], cidr)

@@ -25,7 +25,7 @@ import (
 
 var getAllNodeAddresses = util.GetAllNodeAddresses
 
-func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
+func getAvailableNodePortAddresses(nodePortAddressesFromConfig []*net.IPNet, excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Get all IP addresses of Node
 	nodeAddressesIPv4, nodeAddressesIPv6, err := getAllNodeAddresses(excludeDevices)
 	if err != nil {
@@ -36,14 +36,8 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 		return nodeAddressesIPv4, nodeAddressesIPv6, nil
 	}
 
-	var nodePortIPNets []*net.IPNet
-	for _, nodePortIP := range nodePortAddressesFromConfig {
-		_, ipNet, _ := net.ParseCIDR(nodePortIP)
-		nodePortIPNets = append(nodePortIPNets, ipNet)
-	}
-
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
-	for _, nodePortIPNet := range nodePortIPNets {
+	for _, nodePortIPNet := range nodePortAddressesFromConfig {
 		for i := range nodeAddressesIPv4 {
 			if nodePortIPNet.Contains(nodeAddressesIPv4[i]) {
 				nodePortAddressesIPv4 = append(nodePortAddressesIPv4, nodeAddressesIPv4[i])

@@ -19,49 +19,100 @@ package main
 
 import (
 	"fmt"
-	"strings"
-
-	"k8s.io/component-base/featuregate"
-	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
-func (o *Options) checkUnsupportedFeatures() error {
-	var unsupported []string
+func (o *Options) validateNodeType() error {
+	// Only K8s NodeType is supported on Windows.
+	if o.config.NodeType == config.K8sNode.String() {
+		o.nodeType = config.K8sNode
+	} else {
+		return fmt.Errorf("unsupported nodeType %s", o.config.NodeType)
+	}
+	return nil
+}
 
-	// First check feature gates.
-	for f, enabled := range o.config.FeatureGates {
-		if enabled && !features.SupportedOnWindows(featuregate.Feature(f)) {
-			unsupported = append(unsupported, f)
-		}
+func (o *Options) validateTrafficModes() error {
+	// GRE tunnel is not supported on Windows.
+	switch o.config.TunnelType {
+	case ovsconfig.VXLANTunnel:
+		fallthrough
+	case ovsconfig.GeneveTunnel:
+		fallthrough
+	case ovsconfig.STTTunnel:
+		o.tunnelType = ovsconfig.TunnelType(o.config.TunnelType)
+	default:
+		return fmt.Errorf("TunnelType %s is not supported", o.config.TunnelType)
 	}
 
-	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
-		unsupported = append(unsupported, "OVSDatapathType: "+o.config.OVSDatapathType)
+	var ok bool
+	ok, o.trafficEncryptionMode = config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
+	if !ok {
+		return fmt.Errorf("TrafficEncryptionMode %s is unknown", o.config.TrafficEncryptionMode)
 	}
-	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
-		unsupported = append(unsupported, "TrafficEncapMode: "+encapMode.String())
+	if o.trafficEncryptionMode != config.TrafficEncryptionModeNone {
+		return fmt.Errorf("TrafficEncryptionMode %s is not supported", o.config.TrafficEncryptionMode)
 	}
-	if o.config.TunnelType == ovsconfig.GRETunnel {
-		unsupported = append(unsupported, "TunnelType: "+o.config.TunnelType)
+
+	ok, o.trafficEncapMode = config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	if !ok {
+		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
 	}
-	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
-	if encryptionMode != config.TrafficEncryptionModeNone {
-		unsupported = append(unsupported, "TrafficEncryptionMode: "+encryptionMode.String())
+	if o.trafficEncapMode == config.TrafficEncapModeNetworkPolicyOnly {
+		return fmt.Errorf("TrafficEncapMode %s is not supported", o.config.TrafficEncapMode)
 	}
+
+	if o.config.NoSNAT && o.trafficEncapMode != config.TrafficEncapModeNoEncap {
+		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
+	}
+	return nil
+}
+
+func (o *Options) validateMulticastConfig() error {
+	// Multicast is not supported on Windows.
+	o.enableMulticast = false
+	return nil
+}
+
+func (o *Options) validateMulticlusterConfig() error {
+	// Multicluster is not supported on Windows.
+	if o.config.Multicluster.EnableGateway || o.config.Multicluster.EnableStretchedNetworkPolicy || o.config.Multicluster.EnablePodToPodConnectivity {
+		return fmt.Errorf("Multicluster is not supported on Windows")
+	}
+	return nil
+}
+
+func (o *Options) validateAntreaIPAMConfig() error {
+	// AntreaIPAM and related features are supported on Windows.
 	if o.config.EnableBridgingMode {
-		unsupported = append(unsupported, "EnableBridgingMode")
+		return fmt.Errorf("bridging mode is not supported on Windows")
 	}
-	if unsupported != nil {
-		return fmt.Errorf("unsupported features on Windows: {%s}", strings.Join(unsupported, ", "))
-	}
+	o.enableSecondaryNetwork = false
+	o.enableAntreaIPAM = false
+	return nil
+}
 
-	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		klog.Warning("AntreaProxy is not enabled. NetworkPolicies might not be enforced correctly for Service traffic!")
-	}
+func (o *Options) validateL7NetworkPolicyConfig() error {
+	// L7NetworkPolicy is supported on Windows.
+	o.enableL7NetworkPolicy = false
+	return nil
+}
+
+func (o *Options) validateEgressConfig() error {
+	// Egress is not supported in Windows.
+	o.enableEgress = false
+	return nil
+}
+
+func (o *Options) validateServiceExternalIP() error {
+	// ServiceExternalIP is not supported in Windows.
+	o.enableServiceExternalIP = false
+	return nil
+}
+
+func (o *Options) validatePolicyBypassRulesConfig() error {
+	// PolicyBypassRules is specific to External NodeType, which is not applicable to Windows.
 	return nil
 }

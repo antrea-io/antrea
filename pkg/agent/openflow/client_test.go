@@ -371,7 +371,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.enableMulticluster)
 	client := cli.(*client)
 
-	var egressExceptCIDRs []net.IPNet
+	var egressExceptCIDRs []*net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
 	var ipProtocols []binding.Protocol
@@ -380,7 +380,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	if enableIPv4 {
 		fakeNodeIPv4Addr.IP = fakeNodeIPv4
 		if o.enableEgress {
-			egressExceptCIDRs = append(egressExceptCIDRs, *fakeEgressExceptIPv4CIDR)
+			egressExceptCIDRs = append(egressExceptCIDRs, fakeEgressExceptIPv4CIDR)
 		}
 		if !o.enableProxy {
 			serviceIPv4CIDR = fakeServiceIPv4CIDR
@@ -393,7 +393,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	if enableIPv6 {
 		fakeNodeIPv6Addr.IP = fakeNodeIPv6
 		if o.enableEgress {
-			egressExceptCIDRs = append(egressExceptCIDRs, *fakeEgressExceptIPv6CIDR)
+			egressExceptCIDRs = append(egressExceptCIDRs, fakeEgressExceptIPv6CIDR)
 		}
 		if !o.enableProxy {
 			serviceIPv6CIDR = fakeServiceIPv6CIDR

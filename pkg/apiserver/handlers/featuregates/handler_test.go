@@ -19,8 +19,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,12 +27,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/util/runtime"
-)
-
-var (
-	egressStatus string
-	nplStatus    string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -53,13 +45,13 @@ func Test_getGatesResponse(t *testing.T) {
 			want: []Response{
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
+				{Component: "agent", Name: "Egress", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "NodePortLocal", Status: nplStatus, Version: "BETA"},
+				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "Multicast", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
@@ -69,15 +61,7 @@ func Test_getGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getAgentGatesResponse(tt.cfg)
-			sort.SliceStable(got, func(i, j int) bool {
-				return got[i].Name < got[j].Name
-			})
-			sort.SliceStable(tt.want, func(i, j int) bool {
-				return tt.want[i].Name < tt.want[j].Name
-			})
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getAgentGatesResponse() = %v, want %v", got, tt.want)
-			}
+			assert.ElementsMatch(t, tt.want, got)
 		})
 	}
 }
@@ -180,7 +164,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 			name: "good path",
 			want: []Response{
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
+				{Component: "controller", Name: "Egress", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
@@ -192,23 +176,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getControllerGatesResponse()
-			sort.SliceStable(got, func(i, j int) bool {
-				return got[i].Name < got[j].Name
-			})
-			sort.SliceStable(tt.want, func(i, j int) bool {
-				return tt.want[i].Name < tt.want[j].Name
-			})
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getControllerGatesResponse() = %v, want %v", got, tt.want)
-			}
+			assert.ElementsMatch(t, tt.want, got)
 		})
-	}
-}
-
-func init() {
-	egressStatus = "Enabled"
-	nplStatus = "Enabled"
-	if runtime.IsWindowsPlatform() {
-		egressStatus = "Disabled"
 	}
 }

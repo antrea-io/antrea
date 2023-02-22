@@ -178,7 +178,8 @@ func TestInitNodeLocalConfig(t *testing.T) {
 		HardwareAddr: macAddr,
 	}
 	podCIDRStr := "172.16.10.0/24"
-	transportCIDRs := []string{"172.16.100.7/24", "2002:1a23:fb46::11:3/32"}
+	transportIPs := []string{"172.16.100.7/24", "2002:1a23:fb46::11:3/32"}
+	var transportCIDRs []*net.IPNet
 	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
 	transportIfaceMAC, _ := net.ParseMAC("00:0c:29:f5:e2:ce")
 	type testTransInterface struct {
@@ -194,8 +195,9 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			HardwareAddr: transportIfaceMAC,
 		},
 	}
-	for _, cidr := range transportCIDRs {
+	for _, cidr := range transportIPs {
 		parsedIP, parsedIPNet, _ := net.ParseCIDR(cidr)
+		transportCIDRs = append(transportCIDRs, parsedIPNet)
 		parsedIPNet.IP = parsedIP
 		if parsedIP.To4() != nil {
 			testTransportIface.ipV4Net = parsedIPNet
@@ -208,7 +210,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 		name                      string
 		trafficEncapMode          config.TrafficEncapModeType
 		transportIfName           string
-		transportIfCIDRs          []string
+		transportIfCIDRs          []*net.IPNet
 		transportInterface        *testTransInterface
 		tunnelType                ovsconfig.TunnelType
 		mtu                       int
@@ -447,7 +449,7 @@ func mockGetTransportIPNetDeviceByName(ipV4Net, ipV6Net *net.IPNet, ipDevice *ne
 
 func mockGetIPNetDeviceByCIDRs(ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) func() {
 	prevGetIPNetDeviceByCIDRs := getIPNetDeviceByCIDRs
-	getIPNetDeviceByCIDRs = func(cidr []string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+	getIPNetDeviceByCIDRs = func(cidr []*net.IPNet) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 		return ipV4Net, ipV6Net, ipDevice, nil
 	}
 	return func() { getIPNetDeviceByCIDRs = prevGetIPNetDeviceByCIDRs }

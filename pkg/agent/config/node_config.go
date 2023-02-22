@@ -128,7 +128,7 @@ type WireGuardConfig struct {
 }
 
 type EgressConfig struct {
-	ExceptCIDRs []net.IPNet
+	ExceptCIDRs []*net.IPNet
 }
 
 // Local Node configurations retrieved from K8s API or host networking state.
@@ -201,7 +201,7 @@ type NetworkConfig struct {
 	TrafficEncryptionMode TrafficEncryptionModeType
 	IPsecConfig           IPsecConfig
 	TransportIface        string
-	TransportIfaceCIDRs   []string
+	TransportIfaceCIDRs   []*net.IPNet
 	IPv4Enabled           bool
 	IPv6Enabled           bool
 }

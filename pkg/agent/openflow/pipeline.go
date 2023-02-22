@@ -2557,7 +2557,7 @@ func (f *featureEgress) externalFlows() []binding.Flow {
 			flows = append(flows, EgressMarkTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
-				MatchDstIPNet(cidr).
+				MatchDstIPNet(*cidr).
 				Action().LoadRegMark(ToGatewayRegMark).
 				Action().GotoStage(stageSwitching).
 				Done())

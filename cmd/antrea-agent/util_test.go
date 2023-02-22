@@ -22,24 +22,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 func TestGetAvailableNodePortAddresses(t *testing.T) {
 	testCases := []struct {
 		name                        string
-		nodePortAddressesFromConfig []string
+		nodePortAddressesFromConfig []*net.IPNet
 		expectedIPv4                []net.IP
 		expectedIPv6                []net.IP
 	}{
 		{
 			name:                        "empty nodePortAddresses",
-			nodePortAddressesFromConfig: []string{},
+			nodePortAddressesFromConfig: []*net.IPNet{},
 			expectedIPv4:                []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("192.168.225.234"), net.ParseIP("10.104.73.43")},
 			expectedIPv6:                []net.IP{net.ParseIP("::1"), net.ParseIP("2409:4071:4d11:f5d2:71:e53f:7d28:668e"), net.ParseIP("2409:4071:4d11:f5d2:75ab:a5b6:ff05:b31e")},
 		},
 		{
 			name:                        "non-empty nodePortAddresses",
-			nodePortAddressesFromConfig: []string{"192.168.225.0/24"},
+			nodePortAddressesFromConfig: []*net.IPNet{ip.MustParseCIDR("192.168.225.0/24")},
 			expectedIPv4:                []net.IP{net.ParseIP("192.168.225.234")},
 			expectedIPv6:                nil,
 		},

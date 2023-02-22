@@ -17,8 +17,6 @@ package features
 import (
 	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/component-base/featuregate"
-
-	"antrea.io/antrea/pkg/util/runtime"
 )
 
 // When editing this file, make sure you edit the documentation as well to keep
@@ -156,72 +154,15 @@ var (
 		SupportBundleCollection: {Default: false, PreRelease: featuregate.Alpha},
 		L7NetworkPolicy:         {Default: false, PreRelease: featuregate.Alpha},
 	}
-
-	// UnsupportedFeaturesOnWindows records the features not supported on
-	// a Windows Node. Antrea Agent on a Windows Node checks the enabled
-	// features, and fails the startup if an unsupported feature is enabled.
-	// We do not define a separate defaultAntreaFeatureGates map for
-	// Windows, because Agent code assumes all features are registered (
-	// FeatureGate.Enabled(feature) will panic if the feature is not added
-	// to the FeatureGate).
-	// In future, if a feature is supported on both Linux and Windows, but
-	// can have different FeatureSpecs between Linux and Windows, we should
-	// still define a separate defaultAntreaFeatureGates map for Windows.
-	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		Egress:            {},
-		AntreaIPAM:        {},
-		Multicast:         {},
-		SecondaryNetwork:  {},
-		ServiceExternalIP: {},
-		IPsecCertAuth:     {},
-		// Multicluster feature is not validated on Windows yet. This can removed
-		// in the future if it's fully tested on Windows.
-		Multicluster:    {},
-		L7NetworkPolicy: {},
-	}
-	// supportedFeaturesOnExternalNode records the features supported on an external
-	// Node. Antrea Agent checks the enabled features if it is running on an
-	// unmanaged VM/BM, and fails the startup if an unsupported feature is enabled.
-	supportedFeaturesOnExternalNode = map[featuregate.Feature]struct{}{
-		ExternalNode:            {},
-		AntreaPolicy:            {},
-		NetworkPolicyStats:      {},
-		SupportBundleCollection: {},
-		L7NetworkPolicy:         {},
-	}
 )
 
+// ResetFeatureGates creates a new feature gate and replace the global one. It's used in unit tests to avoid side effect.
+func ResetFeatureGates() {
+	DefaultMutableFeatureGate = featuregate.NewFeatureGate()
+	DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates)
+	DefaultFeatureGate = DefaultMutableFeatureGate
+}
+
 func init() {
-	if runtime.IsWindowsPlatform() {
-		for f := range unsupportedFeaturesOnWindows {
-			// A feature which is enabled by default on Linux might not be supported on
-			// Windows. So, override the default value here.
-			fg := DefaultAntreaFeatureGates[f]
-			if fg.Default {
-				fg.Default = false
-				DefaultAntreaFeatureGates[f] = fg
-			}
-		}
-	}
 	k8sruntime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
-}
-
-// SupportedOnWindows checks whether a feature is supported on a Windows Node.
-func SupportedOnWindows(feature featuregate.Feature) bool {
-	_, exists := DefaultAntreaFeatureGates[feature]
-	if !exists {
-		return false
-	}
-	_, exists = unsupportedFeaturesOnWindows[feature]
-	return !exists
-}
-
-// SupportedOnExternalNode checks whether a feature is supported on an external Node.
-func SupportedOnExternalNode(feature featuregate.Feature) bool {
-	_, exists := DefaultAntreaFeatureGates[feature]
-	if !exists {
-		return false
-	}
-	_, exists = supportedFeaturesOnExternalNode[feature]
-	return exists
 }

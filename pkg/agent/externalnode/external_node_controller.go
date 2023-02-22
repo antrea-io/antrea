@@ -31,12 +31,11 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	enlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	agentConfig "antrea.io/antrea/pkg/config/agent"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/channel"
@@ -81,11 +80,11 @@ type ExternalNodeController struct {
 	externalEntityUpdateNotifier channel.Notifier
 	nodeName                     string
 	externalNodeNamespace        string
-	policyBypassRules            []agentConfig.PolicyBypassRule
+	policyBypassRules            []*types.PolicyBypassRule
 }
 
 func NewExternalNodeController(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openflow.Client, externalNodeInformer cache.SharedIndexInformer,
-	ifaceStore interfacestore.InterfaceStore, externalEntityUpdateNotifier channel.Notifier, externalNodeNamespace string, policyBypassRules []agentConfig.PolicyBypassRule) (*ExternalNodeController, error) {
+	ifaceStore interfacestore.InterfaceStore, externalEntityUpdateNotifier channel.Notifier, externalNodeNamespace string, policyBypassRules []*types.PolicyBypassRule) (*ExternalNodeController, error) {
 	c := &ExternalNodeController{
 		ovsBridgeClient:              ovsBridgeClient,
 		ovsctlClient:                 ovsctl.NewClient(ovsBridgeClient.GetBridgeName()),
@@ -194,10 +193,8 @@ func (c *ExternalNodeController) reconcileHostUplinkFlows() error {
 
 func (c *ExternalNodeController) reconcilePolicyBypassFlows() error {
 	for _, rule := range c.policyBypassRules {
-		klog.V(2).InfoS("Installing policy bypass flows", "protocol", rule.Protocol, "CIDR", rule.CIDR, "port", rule.Port, "direction", rule.Direction)
-		protocol := parseProtocol(rule.Protocol)
-		_, ipNet, _ := net.ParseCIDR(rule.CIDR)
-		if err := c.ofClient.InstallPolicyBypassFlows(protocol, ipNet, uint16(rule.Port), rule.Direction == "ingress"); err != nil {
+		klog.V(2).InfoS("Installing policy bypass flows", "protocol", rule.Protocol, "CIDR", rule.CIDR, "port", rule.Port, "ingress", rule.Ingress)
+		if err := c.ofClient.InstallPolicyBypassFlows(rule.Protocol, rule.CIDR, rule.Port, rule.Ingress); err != nil {
 			return err
 		}
 	}
@@ -666,19 +663,4 @@ func ParseHostInterfaceConfig(ovsBridgeClient ovsconfig.OVSBridgeClient, portDat
 	}
 	interfaceConfig.EntityInterfaceConfig = hostUplinkConfig
 	return interfaceConfig, nil
-}
-
-func parseProtocol(protocol string) binding.Protocol {
-	var proto binding.Protocol
-	switch protocol {
-	case "tcp":
-		proto = binding.ProtocolTCP
-	case "udp":
-		proto = binding.ProtocolUDP
-	case "icmp":
-		proto = binding.ProtocolICMP
-	case "ip":
-		proto = binding.ProtocolIP
-	}
-	return proto
 }

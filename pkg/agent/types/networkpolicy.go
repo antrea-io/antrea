@@ -15,6 +15,8 @@
 package types
 
 import (
+	"net"
+
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -153,4 +155,15 @@ func (m *RuleMetric) Merge(m1 *RuleMetric) {
 type BitRange struct {
 	Value uint16
 	Mask  *uint16
+}
+
+type PolicyBypassRule struct {
+	// The direction of the rule. True for Ingress and False for Egress.
+	Ingress bool
+	// The protocol which traffic must match.
+	Protocol binding.Protocol
+	// The source CIDR for Ingress or the destination CIDR for Egress.
+	CIDR *net.IPNet
+	// The destination port of the given protocol.
+	Port uint16
 }

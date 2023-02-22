@@ -21,9 +21,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"antrea.io/antrea/pkg/agent/config"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
 )
 
 func TestMulticlusterOptions(t *testing.T) {
@@ -77,7 +78,7 @@ func TestMulticlusterOptions(t *testing.T) {
 				EnableStretchedNetworkPolicy: true,
 			},
 			featureGate: true,
-			expectedErr: "Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy",
+			expectedErr: "Multicluster Gateway must be enabled to enable StretchedNetworkPolicy",
 		},
 		{
 			name: "NoEncap",
@@ -105,20 +106,81 @@ func TestMulticlusterOptions(t *testing.T) {
 				Multicluster:     tt.mcConfig,
 			}
 			o := &Options{config: config}
-			features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
-			o.setDefaults()
+			require.NoError(t, o.complete(nil))
+			err := o.validate(nil)
+			if tt.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			}
 			if tt.mcConfig.Enable && tt.featureGate {
 				assert.True(t, o.config.Multicluster.EnableGateway)
 			}
 			if !tt.mcConfig.Enable && !tt.mcConfig.EnableGateway {
 				assert.False(t, o.config.Multicluster.EnableGateway)
 			}
+		})
+	}
+}
 
+func TestValidateNodeType(t *testing.T) {
+	testCases := []struct {
+		name             string
+		config           string
+		expectedNodeType config.NodeType
+		expectedErr      string
+	}{
+		{
+			name:             "default",
+			config:           "",
+			expectedNodeType: config.K8sNode,
+		},
+		{
+			name: "k8s node",
+			config: `
+nodeType: k8sNode
+`,
+			expectedNodeType: config.K8sNode,
+		},
+		{
+			name: "external node with feature disabled",
+			config: `
+nodeType: externalNode
+`,
+			expectedErr: "nodeType externalNode requires feature gate ExternalNode to be enabled",
+		},
+		{
+			name: "external node with feature enabled",
+			config: `
+featureGates:
+  ExternalNode: true
+nodeType: externalNode
+`,
+			expectedNodeType: config.ExternalNode,
+		},
+		{
+			name: "external node",
+			config: `
+nodeType: invalidNode
+`,
+			expectedErr: "unsupported nodeType invalidNode",
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			configFile, cleanup := createTempConfig(t, tt.config)
+			defer cleanup()
+
+			o := newOptions()
+			o.configFile = configFile
+			require.NoError(t, o.complete(nil))
 			err := o.validate(nil)
-			if tt.expectedErr == "" {
-				assert.NoError(t, err)
-			} else {
+			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedNodeType, o.nodeType)
 			}
 		})
 	}

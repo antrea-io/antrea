@@ -193,12 +193,7 @@ func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IP
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 
-func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
-	cidrs, err := utilnet.ParseCIDRs(cidrsList)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+func GetIPNetDeviceByCIDRs(cidrs []*net.IPNet) (v4IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
 	dualStack, err := utilnet.IsDualStackCIDRs(cidrs)
 	if err != nil {
 		return nil, nil, nil, err
