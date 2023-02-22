@@ -259,7 +259,7 @@ func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticatio
 func TestRemoveStaleTunnelPorts(t *testing.T) {
 	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
 		{
-			Type:          interfacestore.TunnelInterface,
+			Type:          interfacestore.IPSecTunnelInterface,
 			InterfaceName: util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1"),
 			TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
 				NodeName: "xyz-k8s-0-1",
@@ -307,7 +307,7 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
 		{
-			Type:          interfacestore.TunnelInterface,
+			Type:          interfacestore.IPSecTunnelInterface,
 			InterfaceName: "mismatchedname",
 			TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
 				NodeName: "xyz-k8s-0-2",
@@ -320,7 +320,7 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 			},
 		},
 		{
-			Type:          interfacestore.TunnelInterface,
+			Type:          interfacestore.IPSecTunnelInterface,
 			InterfaceName: util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-3"),
 			TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
 				NodeName: "xyz-k8s-0-3",
@@ -348,11 +348,15 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP1.String(), "", "changeme", nil,
-		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
+		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1",
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
+		}).Times(1)
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node2PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP2.String(), "", "changeme", nil,
-		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2"}).Times(1)
+		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2",
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
+		}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
 	c.ovsClient.EXPECT().GetOFPort(node2PortName, false).Return(int32(2), nil)
@@ -415,7 +419,9 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP1.String(), "xyz-k8s-0-1", "", nil,
-		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
+		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1",
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
+		}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
 
