@@ -279,7 +279,6 @@ func (i *Initializer) initInterfaceStore() error {
 		return intf
 	}
 	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
-	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 	for index := range ovsPorts {
 		port := &ovsPorts[index]
 		ovsPort := &interfacestore.OVSPortConfig{
@@ -297,6 +296,8 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaUplink:
 				intf = parseUplinkInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaTunnel:
+				fallthrough
+			case interfacestore.AntreaIPsecTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaHost:
 				if port.Name == i.ovsBridge {
@@ -314,9 +315,6 @@ func (i *Initializer) initInterfaceStore() error {
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
 			case interfacestore.AntreaTrafficControl:
 				intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
-				if err := ovsCtlClient.SetPortNoFlood(int(ovsPort.OFPort)); err != nil {
-					klog.ErrorS(err, "Failed to set port with no-flood config", "PortName", port.Name)
-				}
 			default:
 				klog.InfoS("Unknown Antrea interface type", "type", interfaceType)
 			}
@@ -340,7 +338,11 @@ func (i *Initializer) initInterfaceStore() error {
 				fallthrough
 			case port.IFType == ovsconfig.STTTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
-				antreaIFType = interfacestore.AntreaTunnel
+				if intf.Type == interfacestore.IPSecTunnelInterface {
+					antreaIFType = interfacestore.AntreaIPsecTunnel
+				} else {
+					antreaIFType = interfacestore.AntreaTunnel
+				}
 			case port.Name == i.ovsBridge:
 				intf = nil
 				antreaIFType = interfacestore.AntreaHost
@@ -368,6 +370,23 @@ func (i *Initializer) initInterfaceStore() error {
 	return nil
 }
 
+func (i *Initializer) restorePortConfigs() error {
+	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
+	interfaces := i.ifaceStore.ListInterfaces()
+	for _, intf := range interfaces {
+		switch intf.Type {
+		case interfacestore.IPSecTunnelInterface:
+			fallthrough
+		case interfacestore.TrafficControlInterface:
+			if err := ovsCtlClient.SetPortNoFlood(int(intf.OFPort)); err != nil {
+				return fmt.Errorf("failed to set port %s with no-flood: %w", intf.InterfaceName, err)
+			}
+			klog.InfoS("Set port no-flood successfully", "PortName", intf.InterfaceName)
+		}
+	}
+	return nil
+}
+
 // Initialize sets up agent initial configurations.
 func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
@@ -383,6 +402,10 @@ func (i *Initializer) Initialize() error {
 	}
 
 	if err := i.setupOVSBridge(); err != nil {
+		return err
+	}
+
+	if err := i.restorePortConfigs(); err != nil {
 		return err
 	}
 
@@ -487,14 +510,15 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 // Every time the agent is (re)started, we go through the following sequence:
-//   1. agent determines the new round number (this is done by incrementing the round number
-//   persisted in OVSDB, or if it's not available by picking round 1).
-//   2. any existing flow for which the round number matches the round number obtained from step 1
-//   is deleted.
-//   3. all required flows are installed, using the round number obtained from step 1.
-//   4. after convergence, all existing flows for which the round number matches the previous round
-//   number (i.e. the round number which was persisted in OVSDB, if any) are deleted.
-//   5. the new round number obtained from step 1 is persisted to OVSDB.
+//  1. agent determines the new round number (this is done by incrementing the round number
+//     persisted in OVSDB, or if it's not available by picking round 1).
+//  2. any existing flow for which the round number matches the round number obtained from step 1
+//     is deleted.
+//  3. all required flows are installed, using the round number obtained from step 1.
+//  4. after convergence, all existing flows for which the round number matches the previous round
+//     number (i.e. the round number which was persisted in OVSDB, if any) are deleted.
+//  5. the new round number obtained from step 1 is persisted to OVSDB.
+//
 // The rationale for not persisting the new round number until after all previous flows have been
 // deleted is to avoid a situation in which some stale flows are never deleted because of successive
 // agent restarts (with the agent crashing before step 4 can be completed). With the sequence
@@ -552,6 +576,13 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			i.ofClient.ReplayFlows()
 			klog.Info("Flow replay completed")
 
+			klog.InfoS("Restoring OF port configs to OVS bridge")
+			if err := i.restorePortConfigs(); err != nil {
+				klog.ErrorS(err, "Failed to restore OF port configs")
+			} else {
+				klog.InfoS("Port configs restoration completed")
+			}
+
 			if i.ovsBridgeClient.GetOVSDatapathType() == ovsconfig.OVSDatapathNetdev {
 				// we don't set flow-restore-wait when using the OVS netdev datapath
 				return
@@ -561,7 +592,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
 			// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
 			// to ensure the flag can be removed successfully.
-			err := wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (done bool, err error) {
+			err = wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (done bool, err error) {
 				if err := i.FlowRestoreComplete(); err != nil {
 					return false, nil
 				}
