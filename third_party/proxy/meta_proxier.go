@@ -41,6 +41,7 @@ import (
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 )
@@ -151,6 +152,80 @@ func (proxier *metaProxier) OnEndpointsDelete(endpoints *v1.Endpoints) {
 func (proxier *metaProxier) OnEndpointsSynced() {
 	proxier.ipv4Proxier.OnEndpointsSynced()
 	proxier.ipv6Proxier.OnEndpointsSynced()
+}
+
+// OnEndpointSliceAdd is called whenever creation of a new endpoint slice object
+// is observed.
+func (proxier *metaProxier) OnEndpointSliceAdd(endpointSlice *discovery.EndpointSlice) {
+	switch endpointSlice.AddressType {
+	case discovery.AddressTypeIPv4:
+		proxier.ipv4Proxier.OnEndpointSliceAdd(endpointSlice)
+	case discovery.AddressTypeIPv6:
+		proxier.ipv6Proxier.OnEndpointSliceAdd(endpointSlice)
+	default:
+		klog.ErrorS(nil, "EndpointSlice address type not supported", "addressType", endpointSlice.AddressType)
+	}
+}
+
+// OnEndpointSliceUpdate is called whenever modification of an existing endpoint
+// slice object is observed.
+func (proxier *metaProxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *discovery.EndpointSlice) {
+	switch newEndpointSlice.AddressType {
+	case discovery.AddressTypeIPv4:
+		proxier.ipv4Proxier.OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice)
+	case discovery.AddressTypeIPv6:
+		proxier.ipv6Proxier.OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice)
+	default:
+		klog.ErrorS(nil, "EndpointSlice address type not supported", "addressType", newEndpointSlice.AddressType)
+	}
+}
+
+// OnEndpointSliceDelete is called whenever deletion of an existing endpoint slice
+// object is observed.
+func (proxier *metaProxier) OnEndpointSliceDelete(endpointSlice *discovery.EndpointSlice) {
+	switch endpointSlice.AddressType {
+	case discovery.AddressTypeIPv4:
+		proxier.ipv4Proxier.OnEndpointSliceDelete(endpointSlice)
+	case discovery.AddressTypeIPv6:
+		proxier.ipv6Proxier.OnEndpointSliceDelete(endpointSlice)
+	default:
+		klog.ErrorS(nil, "EndpointSlice address type not supported", "addressType", endpointSlice.AddressType)
+	}
+}
+
+// OnEndpointSlicesSynced is called once all the initial event handlers were
+// called and the state is fully propagated to local cache.
+func (proxier *metaProxier) OnEndpointSlicesSynced() {
+	proxier.ipv4Proxier.OnEndpointSlicesSynced()
+	proxier.ipv6Proxier.OnEndpointSlicesSynced()
+}
+
+// OnNodeAdd is called whenever creation of new node object is observed.
+func (proxier *metaProxier) OnNodeAdd(node *v1.Node) {
+	proxier.ipv4Proxier.OnNodeAdd(node)
+	proxier.ipv6Proxier.OnNodeAdd(node)
+}
+
+// OnNodeUpdate is called whenever modification of an existing
+// node object is observed.
+func (proxier *metaProxier) OnNodeUpdate(oldNode, node *v1.Node) {
+	proxier.ipv4Proxier.OnNodeUpdate(oldNode, node)
+	proxier.ipv6Proxier.OnNodeUpdate(oldNode, node)
+}
+
+// OnNodeDelete is called whenever deletion of an existing node
+// object is observed.
+func (proxier *metaProxier) OnNodeDelete(node *v1.Node) {
+	proxier.ipv4Proxier.OnNodeDelete(node)
+	proxier.ipv6Proxier.OnNodeDelete(node)
+
+}
+
+// OnNodeSynced is called once all the initial event handlers were
+// called and the state is fully propagated to local cache.
+func (proxier *metaProxier) OnNodeSynced() {
+	proxier.ipv4Proxier.OnNodeSynced()
+	proxier.ipv6Proxier.OnNodeSynced()
 }
 
 func (proxier *metaProxier) Run(stopCh <-chan struct{}) {
