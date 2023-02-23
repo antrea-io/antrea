@@ -133,6 +133,11 @@ const (
 	// alpha: v1.13
 	// Allow users to specify the load balancer mode as DSR (Direct Server Return).
 	LoadBalancerModeDSR featuregate.Feature = "LoadBalancerModeDSR"
+
+	// alpha: v1.13
+	// Enable the AdminNetworkPolicy APIs
+	// https://github.com/kubernetes-sigs/network-policy-api
+	AdminNetworkPolicy featuregate.Feature = "AdminNetworkPolicy"
 )
 
 var (
@@ -169,6 +174,7 @@ var (
 		SupportBundleCollection:     {Default: false, PreRelease: featuregate.Alpha},
 		L7NetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
 		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
+		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -204,6 +210,7 @@ var (
 		NetworkPolicyStats:      {},
 		SupportBundleCollection: {},
 		L7NetworkPolicy:         {},
+		AdminNetworkPolicy:      {},
 	}
 )
 

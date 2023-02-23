@@ -38,3 +38,7 @@ func (r *GroupReference) ToTypedString() string {
 	}
 	return fmt.Sprintf("Group:%s/%s", r.Namespace, r.Name)
 }
+
+func IsSourceAntreaNativePolicy(npRef *NetworkPolicyReference) bool {
+	return npRef.Type == AntreaClusterNetworkPolicy || npRef.Type == AntreaNetworkPolicy
+}

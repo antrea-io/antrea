@@ -38,6 +38,7 @@ import (
 
 var (
 	baselineTierPriority int32 = 253
+	banpTierPriority     int32 = 254
 )
 
 type ruleType int
@@ -345,7 +346,7 @@ func (r *reconciler) getRuleType(rule *CompletedRule) ruleType {
 	return unicast
 }
 
-// getOFRuleTable retreives the OpenFlow table to install the CompletedRule.
+// getOFRuleTable retrieves the OpenFlow table to install the CompletedRule.
 // The decision is made based on whether the rule is created for an ACNP/ANNP, and
 // the Tier of that NetworkPolicy.
 func (r *reconciler) getOFRuleTable(rule *CompletedRule) uint8 {
@@ -365,7 +366,7 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) uint8 {
 		} else {
 			ruleTables = openflow.GetAntreaPolicyEgressTables()
 		}
-		if *rule.TierPriority != baselineTierPriority {
+		if *rule.TierPriority != baselineTierPriority && *rule.TierPriority != banpTierPriority {
 			return ruleTables[0].GetID()
 		}
 		tableID = ruleTables[1].GetID()
@@ -1285,7 +1286,11 @@ func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1be
 		return service
 	}
 	for _, port := range member.Ports {
-		if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
+		// For K8s NetworkPolicy and Antrea-native policies, the Service.Protocol field will never be nil since TCP
+		// will be filled as default. However, for AdminNetworkPolicy and BaselineAdminNetworkPolicy, the Protocol
+		// field will be nil for ports written as named ports. In that case, the member port will match as long
+		// as the port name is matched.
+		if port.Name == service.Port.StrVal && (service.Protocol == nil || port.Protocol == *service.Protocol) {
 			resolvedPort := intstr.FromInt(int(port.Port))
 			return &v1beta2.Service{Protocol: service.Protocol, Port: &resolvedPort}
 		}

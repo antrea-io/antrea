@@ -223,7 +223,7 @@ func (c *StatusController) watchInternalNetworkPolicy() {
 				continue
 			}
 			np := event.Object.(*controlplane.NetworkPolicy)
-			if np.SourceRef.Type == controlplane.K8sNetworkPolicy {
+			if !controlplane.IsSourceAntreaNativePolicy(np.SourceRef) {
 				continue
 			}
 			c.queue.Add(np.Name)

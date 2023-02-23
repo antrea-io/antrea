@@ -37,6 +37,7 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	netutils "k8s.io/utils/net"
+	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
 	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	antreaapis "antrea.io/antrea/pkg/apis"
@@ -107,6 +108,7 @@ var allowedPaths = []string{
 	"/validate/acnp",
 	"/validate/annp",
 	"/validate/anp",
+	"/validate/banp",
 	"/validate/clustergroup",
 	"/validate/externalippool",
 	"/validate/egress",
@@ -122,13 +124,14 @@ func run(o *Options) error {
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
+	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, policyClient, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	k8s.OverrideKubeAPIServer(o.config.KubeAPIServerOverride)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	policyInformerFactory := policyv1a1informers.NewSharedInformerFactory(policyClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	serviceInformer := informerFactory.Core().V1().Services()
@@ -144,6 +147,8 @@ func run(o *Options) error {
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
+	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
+	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
 
 	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
 	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
@@ -180,6 +185,8 @@ func run(o *Options) error {
 		nodeInformer,
 		acnpInformer,
 		annpInformer,
+		adminNPInformer,
+		banpInformer,
 		tierInformer,
 		cgInformer,
 		grpInformer,
@@ -321,6 +328,13 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
+	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
+		// TODO(yang): When the AdminNetworkPolicy graduates to Beta, we need a better mechanism in Antrea controller
+		//  so that 1. the policyInformerFactory is only started if the AdminNetworkPolicy CRD types are installed in
+		//  the cluster 2. It retries periodically so that when the CRDs are installed, the policyInformerFactory starts
+		//  watching and handles policy events.
+		policyInformerFactory.Start(stopCh)
+	}
 
 	go clusterIdentityAllocator.Run(stopCh)
 

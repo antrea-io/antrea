@@ -24,3 +24,7 @@ func (r *NetworkPolicyReference) ToString() string {
 	}
 	return fmt.Sprintf("%s:%s/%s", r.Type, r.Namespace, r.Name)
 }
+
+func IsSourceAntreaNativePolicy(npRef *NetworkPolicyReference) bool {
+	return npRef.Type == AntreaClusterNetworkPolicy || npRef.Type == AntreaNetworkPolicy
+}

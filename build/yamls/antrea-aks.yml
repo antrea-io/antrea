@@ -5451,7 +5451,7 @@ data:
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
-    # feature that supports priorities, rule actions and externalEntities in the future.
+    # feature that supports priorities, ExternalEntities, FQDN rules and more.
     #  AntreaPolicy: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
@@ -5489,6 +5489,10 @@ data:
     # Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
     # into account application context.
     #  L7NetworkPolicy: false
+
+    # Enable the use of Network Policy APIs (https://network-policy-api.sigs.k8s.io/api-overview) which helps administrators
+    # set security postures for their clusters.
+    #  AdminNetworkPolicy: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -6207,6 +6211,15 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - policy.networking.k8s.io
+    resources:
+      - adminnetworkpolicies
+      - baselineadminnetworkpolicies
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: antrea/templates/crds-rbac/clusterroles.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -6384,7 +6397,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e3208d24eb3232bd1fa2936e6b7a265c2ff3b462b5091828467c88f9df0e0b42
+        checksum/config: 07b3b1a7e87c45fa8e85c8cd5aea680835560c857761b708f01afbe4649648b1
       labels:
         app: antrea
         component: antrea-agent
@@ -6625,7 +6638,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e3208d24eb3232bd1fa2936e6b7a265c2ff3b462b5091828467c88f9df0e0b42
+        checksum/config: 07b3b1a7e87c45fa8e85c8cd5aea680835560c857761b708f01afbe4649648b1
       labels:
         app: antrea
         component: antrea-controller
@@ -6868,6 +6881,34 @@ webhooks:
         apiVersions: ["v1beta1"]
         resources: ["networkpolicies"]
         scope: "Namespaced"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "anpvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: kube-system
+        path: "/validate/anp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["policy.networking.k8s.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["adminnetworkpolicies"]
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "banpvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: kube-system
+        path: "/validate/banp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["policy.networking.k8s.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["baselineadminnetworkpolicies"]
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5

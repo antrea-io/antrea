@@ -180,8 +180,8 @@ antctl get agentinfo
 
 Both Antrea Controller and Agent support querying the NetworkPolicy objects in the Antrea
 control plane API. The source of a control plane NetworkPolicy is the original policy resource
-(K8s NetworkPolicy or Antrea-native Policy) from which the control plane NetworkPolicy was
-derived.
+(K8s NetworkPolicy, Antrea-native Policy or AdminNetworkPolicy) from which the control plane
+NetworkPolicy was derived.
 
 - `antctl` `get networkpolicy` (or `get netpol`) command can print all
 NetworkPolicies, a specified NetworkPolicy, or NetworkPolicies in a specified
