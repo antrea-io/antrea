@@ -263,3 +263,11 @@
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           chmod +x ./ci/jenkins/test-rancher.sh
           ./ci/jenkins/test-rancher.sh --cluster-name rancher-test --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}}
+- builder:
+    name: builder-multicluster-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e 
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-mc.sh --testcase e2e --registry ${DOCKER_REGISTRY} --mc-gateway --codecov-token "${CODECOV_TOKEN}" --coverage --kind
