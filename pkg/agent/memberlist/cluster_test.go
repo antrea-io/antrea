@@ -410,7 +410,7 @@ func genLocalNodeCluster(localNodeNme, eipName string, nodes []string) *Cluster 
 		nodeName:          localNodeNme,
 		consistentHashMap: make(map[string]*consistenthash.Map),
 	}
-	cluster.consistentHashMap[eipName] = newNodeConsistentHashMap()
+	cluster.consistentHashMap[eipName] = NewNodeConsistentHashMap()
 	cluster.consistentHashMap[eipName].Add(nodes...)
 	return cluster
 }
@@ -520,7 +520,7 @@ func TestCluster_ShouldSelectEgress(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress"},
 				Spec:       crdv1a2.EgressSpec{ExternalIPPool: fakeEIPName, EgressIP: tCase.egressIP},
 			}
-			consistentHashMap := newNodeConsistentHashMap()
+			consistentHashMap := NewNodeConsistentHashMap()
 			consistentHashMap.Add(genNodes(tCase.nodeNum)...)
 
 			fakeCluster := &Cluster{
@@ -585,7 +585,7 @@ func TestCluster_SelectNodeForIP(t *testing.T) {
 	for _, tCase := range testCases {
 		t.Run(tCase.name, func(t *testing.T) {
 			fakeEIPName := "fakeExternalIPPool"
-			consistentHashMap := newNodeConsistentHashMap()
+			consistentHashMap := NewNodeConsistentHashMap()
 			consistentHashMap.Add(genNodes(tCase.nodeNum)...)
 
 			fakeCluster := &Cluster{

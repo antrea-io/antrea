@@ -30,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/util/workqueue"
 
@@ -131,6 +133,7 @@ type fakeController struct {
 	mockRouteClient    *routetest.MockInterface
 	crdClient          *fakeversioned.Clientset
 	crdInformerFactory crdinformers.SharedInformerFactory
+	informerFactory    informers.SharedInformerFactory
 	mockIPAssigner     *ipassignertest.MockIPAssigner
 	podUpdateChannel   *channel.SubscribableChannel
 }
@@ -148,6 +151,9 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	k8sClient := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	nodeInformer := informerFactory.Core().V1().Nodes()
 	localIPDetector := &fakeLocalIPDetector{localIPs: sets.NewString(fakeLocalEgressIP1, fakeLocalEgressIP2)}
 
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -167,6 +173,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		"eth0",
 		mockCluster,
 		egressInformer,
+		nodeInformer,
 		podUpdateChannel,
 		255,
 	)
@@ -178,6 +185,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		mockRouteClient:    mockRouteClient,
 		crdClient:          crdClient,
 		crdInformerFactory: crdInformerFactory,
+		informerFactory:    informerFactory,
 		mockIPAssigner:     mockIPAssigner,
 		podUpdateChannel:   podUpdateChannel,
 	}
@@ -639,16 +647,19 @@ func TestSyncEgress(t *testing.T) {
 			defer c.mockController.Finish()
 
 			if tt.maxEgressIPsPerNode > 0 {
-				c.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
+				c.egressIPScheduler.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
 			}
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.crdInformerFactory.Start(stopCh)
+			c.informerFactory.Start(stopCh)
 			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
 			c.addEgressGroup(tt.existingEgressGroup)
 
 			tt.expectedCalls(c.mockOFClient, c.mockRouteClient, c.mockIPAssigner)
+			c.egressIPScheduler.schedule()
 			err := c.syncEgress(tt.existingEgress.Name)
 			assert.NoError(t, err)
 
@@ -666,6 +677,7 @@ func TestSyncEgress(t *testing.T) {
 				egress, _ := c.egressLister.Get(tt.newEgress.Name)
 				return reflect.DeepEqual(egress, tt.newEgress), nil
 			}))
+			c.egressIPScheduler.schedule()
 			err = c.syncEgress(tt.newEgress.Name)
 			assert.NoError(t, err)
 			// Call it one more time to ensure it's idempotent, no extra datapath calls are supposed to be made.
@@ -698,7 +710,9 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 	defer close(stopCh)
 	go c.podUpdateChannel.Run(stopCh)
 	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
 
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
@@ -770,7 +784,9 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
 	c.addEgressGroup(egressGroup1)
 	c.addEgressGroup(egressGroup2)
 	c.addEgressGroup(egressGroup3)
@@ -795,9 +811,6 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)
-
-	// egress1 and egress3 are expected to be triggered for resync because their status is updated.
-	checkQueueItemExistence(t, c.queue, egress1.Name, egress3.Name)
 
 	// After deleting egress1, pod1 and pod2 no longer enforces egress1. The Egress IP shouldn't be released as egress3
 	// is still referring to it.
@@ -976,7 +989,9 @@ func TestGetEgress(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
 	c.addEgressGroup(egressGroup)
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
@@ -1037,7 +1052,9 @@ func TestGetEgressIPByMark(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
 	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
