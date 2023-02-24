@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -66,9 +67,7 @@ const (
 	// maxEgressMark is the maximum mark of Egress IPs can be configured on a Node.
 	maxEgressMark = 255
 
-	egressIPIndex       = "egressIP"
-	externalIPPoolIndex = "externalIPPool"
-	egressNodeIndex     = "egressNode"
+	egressIPIndex = "egressIP"
 
 	// egressDummyDevice is the dummy device that holds the Egress IPs configured to the system by antrea-agent.
 	egressDummyDevice = "antrea-egress0"
@@ -147,7 +146,7 @@ type EgressController struct {
 	cluster    memberlist.Interface
 	ipAssigner ipassigner.IPAssigner
 
-	maxEgressIPsPerNode int
+	egressIPScheduler *egressIPScheduler
 }
 
 func NewEgressController(
@@ -160,6 +159,7 @@ func NewEgressController(
 	nodeTransportInterface string,
 	cluster memberlist.Interface,
 	egressInformer crdinformers.EgressInformer,
+	nodeInformers coreinformers.NodeInformer,
 	podUpdateSubscriber channel.Subscriber,
 	maxEgressIPsPerNode int,
 ) (*EgressController, error) {
@@ -181,13 +181,14 @@ func NewEgressController(
 		localIPDetector:      ipassigner.NewLocalIPDetector(),
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 		cluster:              cluster,
-		maxEgressIPsPerNode:  maxEgressIPsPerNode,
 	}
 	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
 	c.ipAssigner = ipAssigner
+
+	c.egressIPScheduler = NewEgressIPScheduler(cluster, egressInformer, nodeInformers, maxEgressIPsPerNode)
 
 	c.egressInformer.AddIndexers(
 		cache.Indexers{
@@ -198,28 +199,6 @@ func NewEgressController(
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
 				return []string{egress.Spec.EgressIP}, nil
-			},
-			// externalIPPoolIndex will be used to get all Egresses associated with a given ExternalIPPool.
-			externalIPPoolIndex: func(obj interface{}) (strings []string, e error) {
-				egress, ok := obj.(*crdv1a2.Egress)
-				if !ok {
-					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
-				}
-				if egress.Spec.ExternalIPPool == "" {
-					return nil, nil
-				}
-				return []string{egress.Spec.ExternalIPPool}, nil
-			},
-			// egressNodeIndex will be used to get all Egresses assigned to a given Node.
-			egressNodeIndex: func(obj interface{}) ([]string, error) {
-				egress, ok := obj.(*crdv1a2.Egress)
-				if !ok {
-					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
-				}
-				if egress.Status.EgressNode == "" {
-					return nil, nil
-				}
-				return []string{egress.Status.EgressNode}, nil
 			},
 		})
 	c.egressInformer.AddEventHandlerWithResyncPeriod(
@@ -234,8 +213,13 @@ func NewEgressController(
 	// reported to kube-apiserver and processed by antrea-controller.
 	podUpdateSubscriber.Subscribe(c.processPodUpdate)
 	c.localIPDetector.AddEventHandler(c.onLocalIPUpdate)
-	c.cluster.AddClusterEventHandler(c.enqueueEgressesByExternalIPPool)
+	c.egressIPScheduler.AddEventHandler(c.onEgressIPSchedule)
 	return c, nil
+}
+
+// onEgressIPSchedule will be called when EgressIPScheduler reschedules an Egress's IP.
+func (c *EgressController) onEgressIPSchedule(egress string) {
+	c.queue.Add(egress)
 }
 
 // processPodUpdate will be called when CNIServer publishes a Pod update event.
@@ -263,11 +247,13 @@ func (c *EgressController) addEgress(obj interface{}) {
 }
 
 // updateEgress processes Egress UPDATE events.
-func (c *EgressController) updateEgress(_, cur interface{}) {
+func (c *EgressController) updateEgress(old, cur interface{}) {
+	oldEgress := old.(*crdv1a2.Egress)
 	curEgress := cur.(*crdv1a2.Egress)
-	// We need to sync the Egress once even if its spec doesn't change as a Node's EgressIP capacity may be exceeded
-	// when multiple Egresses were processed in parallel and were assigned to the same Node.
-	// Re-sync after status change could correct the assignment eventually.
+	// Ignore handling the Egress Status change if Egress IP already has been assigned on current node.
+	if curEgress.Status.EgressNode == c.nodeName && oldEgress.GetGeneration() == curEgress.GetGeneration() {
+		return
+	}
 	c.queue.Add(curEgress.Name)
 	klog.V(2).InfoS("Processed Egress UPDATE event", "egress", klog.KObj(curEgress))
 }
@@ -307,18 +293,6 @@ func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
 	}
 }
 
-// enqueueEgressesByExternalIPPool enqueues all Egresses that refer to the provided ExternalIPPool,
-// the ExternalIPPool is affected by a Node update/create/delete event or
-// Node leaves/join cluster event or ExternalIPPool changed.
-func (c *EgressController) enqueueEgressesByExternalIPPool(eipName string) {
-	objects, _ := c.egressInformer.GetIndexer().ByIndex(externalIPPoolIndex, eipName)
-	for _, object := range objects {
-		egress := object.(*crdv1a2.Egress)
-		c.queue.Add(egress.Name)
-	}
-	klog.InfoS("Detected ExternalIPPool event", "ExternalIPPool", eipName, "enqueueEgressNum", len(objects))
-}
-
 // Run will create defaultWorkers workers (go routines) which will process the Egress events from the
 // workqueue.
 func (c *EgressController) Run(stopCh <-chan struct{}) {
@@ -328,9 +302,9 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	defer klog.Infof("Shutting down %s", controllerName)
 
 	go c.localIPDetector.Run(stopCh)
-
+	go c.egressIPScheduler.Run(stopCh)
 	go c.ipAssigner.Run(stopCh)
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.localIPDetector.HasSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.localIPDetector.HasSynced, c.egressIPScheduler.HasScheduled) {
 		return
 	}
 
@@ -353,8 +327,11 @@ func (c *EgressController) replaceEgressIPs() error {
 	desiredLocalEgressIPs := sets.NewString()
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, egress := range egresses {
-		if egress.Spec.EgressIP != "" && egress.Spec.ExternalIPPool != "" && egress.Status.EgressNode == c.nodeName {
+		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName {
 			desiredLocalEgressIPs.Insert(egress.Spec.EgressIP)
+			// Record the Egress's state as we assign their IPs to this Node in the following call. It makes sure these
+			// Egress IPs will be unassigned when the Egresses are deleted.
+			c.newEgressState(egress.Name, egress.Spec.EgressIP)
 		}
 	}
 	if err := c.ipAssigner.InitIPs(desiredLocalEgressIPs); err != nil {
@@ -632,61 +609,53 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 
+	var desiredEgressIP string
+	var desiredNode string
+	// Only check whether the Egress IP should be assigned to this Node when the Egress is schedulable.
+	// Otherwise, users are responsible for assigning the Egress IP to Nodes.
+	if isEgressSchedulable(egress) {
+		egressIP, egressNode, scheduled := c.egressIPScheduler.GetEgressIPAndNode(egressName)
+		if scheduled {
+			desiredEgressIP = egressIP
+			desiredNode = egressNode
+		}
+	} else {
+		desiredEgressIP = egress.Spec.EgressIP
+	}
+
 	eState, exist := c.getEgressState(egressName)
 	// If the EgressIP changes, uninstalls this Egress first.
-	if exist && eState.egressIP != egress.Spec.EgressIP {
+	if exist && eState.egressIP != desiredEgressIP {
 		if err := c.uninstallEgress(egressName, eState); err != nil {
 			return err
 		}
 		exist = false
 	}
 	// Do not proceed if EgressIP is empty.
-	if egress.Spec.EgressIP == "" {
+	if desiredEgressIP == "" {
+		if err := c.updateEgressStatus(egress, false); err != nil {
+			return fmt.Errorf("update Egress %s status error: %v", egressName, err)
+		}
 		return nil
 	}
 	if !exist {
-		eState = c.newEgressState(egressName, egress.Spec.EgressIP)
+		eState = c.newEgressState(egressName, desiredEgressIP)
 	}
 
-	localNodeSelected := false
-	// Only check whether the Egress IP should be assigned to this Node when ExternalIPPool is set.
-	// If ExternalIPPool is empty, users are responsible for assigning the Egress IPs to Nodes.
-	if egress.Spec.ExternalIPPool != "" {
-		maxEgressIPsFilter := func(node string) bool {
-			// Assuming this Egress IP is assigned to this Node.
-			egressIPsOnNode := sets.NewString(egress.Spec.EgressIP)
-			// Add the Egress IPs that are already assigned to this Node.
-			egressesOnNode, _ := c.egressInformer.GetIndexer().ByIndex(egressNodeIndex, node)
-			for _, obj := range egressesOnNode {
-				egressOnNode := obj.(*crdv1a2.Egress)
-				// We don't count manually managed Egress IPs.
-				if egressOnNode.Spec.ExternalIPPool == "" {
-					continue
-				}
-				egressIPsOnNode.Insert(egressOnNode.Spec.EgressIP)
-			}
-			// Check if this Node can accommodate all Egress IPs.
-			return egressIPsOnNode.Len() <= c.maxEgressIPsPerNode
-		}
-		localNodeSelected, err = c.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool, maxEgressIPsFilter)
-		if err != nil {
-			return err
-		}
-	}
-	if localNodeSelected {
+	if desiredNode == c.nodeName {
 		// Ensure the Egress IP is assigned to the system.
-		if err := c.ipAssigner.AssignIP(egress.Spec.EgressIP); err != nil {
+		if err := c.ipAssigner.AssignIP(desiredEgressIP); err != nil {
 			return err
 		}
 	} else {
 		// Unassign the Egress IP from the local Node if it was assigned by the agent.
-		if err := c.ipAssigner.UnassignIP(egress.Spec.EgressIP); err != nil {
+		if err := c.ipAssigner.UnassignIP(desiredEgressIP); err != nil {
 			return err
 		}
 	}
 
 	// Realize the latest EgressIP and get the desired mark.
-	mark, err := c.realizeEgressIP(egressName, egress.Spec.EgressIP)
+	mark, err := c.realizeEgressIP(egressName, desiredEgressIP)
 	if err != nil {
 		return err
 	}
@@ -701,7 +670,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		eState.mark = mark
 	}
 
-	if err := c.updateEgressStatus(egress, c.localIPDetector.IsLocalIP(egress.Spec.EgressIP)); err != nil {
+	if err := c.updateEgressStatus(egress, c.localIPDetector.IsLocalIP(desiredEgressIP)); err != nil {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
@@ -969,4 +938,9 @@ func (c *EgressController) GetEgress(ns, podName string) (string, error) {
 		return "", fmt.Errorf("no Egress applied to Pod %v", pod)
 	}
 	return binding.effectiveEgress, nil
+}
+
+// An Egress is schedulable if its Egress IP is allocated from ExternalIPPool.
+func isEgressSchedulable(egress *crdv1a2.Egress) bool {
+	return egress.Spec.EgressIP != "" && egress.Spec.ExternalIPPool != ""
 }
