@@ -139,10 +139,10 @@ func testStretchedNetworkPolicyUpdatePolicy(t *testing.T, data *MCTestData) {
 }
 
 func (data *MCTestData) testMCServiceConnectivity(t *testing.T) {
-	// Connectivity to remote Endpoints which is the exported Service's ClusterIP from another member cluster.
+	// Connectivity to remote Endpoint which is the exported Service's ClusterIP from another member cluster.
 	data.probeMCServiceFromCluster(t, eastCluster, westClusterTestService)
 	data.probeMCServiceFromCluster(t, westCluster, eastClusterTestService)
-	// Connectivity to local Endpoints which is the exported Service's ClusterIP from its own cluster.
+	// Connectivity to local Endpoint which is the exported Service's ClusterIP from its own cluster.
 	data.probeMCServiceFromCluster(t, eastCluster, eastClusterTestService)
 	data.probeMCServiceFromCluster(t, westCluster, westClusterTestService)
 }
