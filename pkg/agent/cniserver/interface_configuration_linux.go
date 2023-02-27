@@ -23,7 +23,7 @@ import (
 	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -37,7 +37,6 @@ import (
 	netlinkutil "antrea.io/antrea/pkg/agent/util/netlink"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	cniip "antrea.io/antrea/third_party/containernetworking/ip"
 )
 
 // NetDeviceType type Enum
@@ -48,7 +47,7 @@ const (
 
 // Declared variables for test
 var (
-	ipSetupVethWithName            = cniip.SetupVethWithName
+	ipSetupVethWithName            = ip.SetupVethWithName
 	ipamConfigureIface             = ipam.ConfigureIface
 	ethtoolTXHWCsumOff             = ethtool.EthtoolTXHWCsumOff
 	renameInterface                = util.RenameInterface
@@ -304,9 +303,9 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 		}
 		var targetIPv4, targetIPv6 net.IP
 		for _, ipc := range result.IPs {
-			if ipc.Version == "4" {
+			if ipc.Address.IP.To4() != nil {
 				targetIPv4 = ipc.Address.IP
-			} else if ipc.Version == "6" {
+			} else {
 				targetIPv6 = ipc.Address.IP
 			}
 		}

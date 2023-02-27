@@ -23,6 +23,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +52,7 @@ var (
 	testNoAnnotation   = "empty"
 	testJunkAnnotation = "junk"
 
-	testCNIVersion = "0.4.0"
+	testCNIVersion = current.ImplementedSpecVersion
 )
 
 func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {

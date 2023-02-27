@@ -29,7 +29,7 @@ import (
 	"text/template"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -66,6 +66,7 @@ const (
 	testPod               = "test-1"
 	testPodNamespace      = "t1"
 	testPodInfraContainer = "test-111111"
+	cniVersion            = "0.4.0"
 )
 
 const (
@@ -118,7 +119,6 @@ const (
   "ips":
    [
      {
-       "version":"4",
        "address":"{{.Subnet}}",
        "gateway":"{{.Gateway}}"}
    ],
@@ -394,10 +394,8 @@ func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current
 	})
 	testRequire.Nil(err)
 
-	r, err := current.NewResult(response.CniResult)
-	testRequire.Nil(err)
-
-	result, err := current.GetResult(r)
+	result := &current.Result{}
+	err = json.Unmarshal(response.CniResult, result)
 	testRequire.Nil(err)
 
 	testRequire.Len(result.Interfaces, 2)
@@ -584,7 +582,7 @@ func newTester() *cmdAddDelTester {
 func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	testRequire := require.New(tc.t)
 
-	testRequire.Equal("0.4.0", tc.CNIVersion)
+	testRequire.Equal(cniVersion, tc.CNIVersion)
 
 	// Get a Add/Del tester based on test case version
 	tester := newTester()
@@ -600,7 +598,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	}()
 	tester.setNS(testNS, targetNS)
 
-	ipamResult := &ipam.IPAMResult{Result: *ipamtest.GenerateIPAMResult("0.4.0", tc.addresses, tc.Routes, tc.DNS)}
+	ipamResult := &ipam.IPAMResult{Result: *ipamtest.GenerateIPAMResult(tc.addresses, tc.Routes, tc.DNS)}
 	ipamMock.EXPECT().Add(mock.Any(), mock.Any(), mock.Any()).Return(true, ipamResult, nil).AnyTimes()
 
 	// Mock ovs output while get ovs port external configuration
@@ -687,8 +685,8 @@ func TestAntreaServerFunc(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:       "ADD/DEL/CHECK for 0.4.0 config",
-			CNIVersion: "0.4.0",
+			name:       fmt.Sprintf("ADD/DEL/CHECK for %s config", cniVersion),
+			CNIVersion: cniVersion,
 			// IPv4 only
 			ranges: []rangeInfo{{
 				subnet: "10.1.2.0/24",
@@ -698,8 +696,8 @@ func TestAntreaServerFunc(t *testing.T) {
 			Routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
 		},
 		{
-			name:       "Prometheus metrics test with ADD/DEL/CHECK for 0.4.0 config",
-			CNIVersion: "0.4.0",
+			name:       fmt.Sprintf("Prometheus metrics test with ADD/DEL/CHECK for %s config", cniVersion),
+			CNIVersion: cniVersion,
 			// IPv4 only
 			ranges: []rangeInfo{{
 				subnet: "10.1.2.0/24",
@@ -744,7 +742,7 @@ func setupChainTest(
 	}
 
 	err = netNS.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err = ip.SetupVethWithName(IFName, "", 1500, hostNS)
+		hostVeth, containerVeth, err = ip.SetupVethWithName(IFName, "", 1500, "", hostNS)
 		return err
 	})
 	if err != nil {
@@ -777,7 +775,7 @@ func TestCNIServerChaining(t *testing.T) {
 
 	tc := testCase{
 		name:       "CNI chaining ",
-		CNIVersion: "0.4.0",
+		CNIVersion: cniVersion,
 		Subnet:     "10.10.10.2/24",
 		Gateway:    "10.10.10.1",
 		Routes:     []string{"10.0.0.0/8"},

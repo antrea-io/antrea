@@ -21,7 +21,7 @@ package testing
 
 import (
 	invoke "github.com/containernetworking/cni/pkg/invoke"
-	current "github.com/containernetworking/cni/pkg/types/current"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -64,10 +64,10 @@ func (mr *MockIPAMDelegatorMockRecorder) DelIPAMSubnetAddress(arg0, arg1 interfa
 }
 
 // GetIPAMSubnetAddress mocks base method
-func (m *MockIPAMDelegator) GetIPAMSubnetAddress(arg0 []byte, arg1 *invoke.Args) (*current.Result, error) {
+func (m *MockIPAMDelegator) GetIPAMSubnetAddress(arg0 []byte, arg1 *invoke.Args) (*types100.Result, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetIPAMSubnetAddress", arg0, arg1)
-	ret0, _ := ret[0].(*current.Result)
+	ret0, _ := ret[0].(*types100.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

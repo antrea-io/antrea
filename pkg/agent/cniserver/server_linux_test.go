@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -50,12 +50,12 @@ import (
 
 func TestValidatePrevResult(t *testing.T) {
 	cniServer := newCNIServer(t)
-	cniVersion := "0.4.0"
+	cniVersion := supportedCNIVersion
 	networkCfg := generateNetworkConfiguration("", cniVersion, "", testIpamType)
 	k8sPodArgs := &types.K8sArgs{}
 	cnitypes.LoadArgs(args, k8sPodArgs)
 	networkCfg.PrevResult = nil
-	ipamResult := ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)
+	ipamResult := ipamtest.GenerateIPAMResult(ips, routes, dns)
 	networkCfg.RawPrevResult, _ = translateRawPrevResult(ipamResult, cniVersion)
 
 	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
@@ -233,6 +233,9 @@ func TestCmdAdd(t *testing.T) {
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ctx := context.TODO()
 
+	versionedIPAMResult, err := ipamResult.GetAsVersion(supportedCNIVersion)
+	assert.NoError(t, err)
+
 	for _, tc := range []struct {
 		name                       string
 		podName                    string
@@ -258,7 +261,7 @@ func TestCmdAdd(t *testing.T) {
 			enableSecondaryNetworkIPAM: true,
 			isChaining:                 false,
 			ipamAdd:                    true,
-			response:                   resultToResponse(ipamResult),
+			response:                   resultToResponse(versionedIPAMResult),
 		}, {
 			name:                       "secondary-IPAM-failure",
 			podName:                    "pod1",
@@ -376,7 +379,9 @@ func TestCmdAdd(t *testing.T) {
 					{Name: hostInterfaceName, Mac: hostIfaceMAC, Sandbox: ""},
 					{Name: "eth0", Mac: containerMAC, Sandbox: cniserver.hostNetNsPath(requestMsg.CniArgs.Netns)},
 				}
-				successResponse := resultToResponse(&cniResult)
+				versionedResult, err := cniResult.GetAsVersion(supportedCNIVersion)
+				assert.NoError(t, err)
+				successResponse := resultToResponse(versionedResult)
 				assert.Equal(t, successResponse, resp)
 			}
 			if tc.secondaryNetworkEnabled {

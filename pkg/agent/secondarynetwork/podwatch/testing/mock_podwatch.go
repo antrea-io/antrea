@@ -20,7 +20,7 @@
 package testing
 
 import (
-	current "github.com/containernetworking/cni/pkg/types/current"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -49,7 +49,7 @@ func (m *MockInterfaceConfigurator) EXPECT() *MockInterfaceConfiguratorMockRecor
 }
 
 // ConfigureSriovSecondaryInterface mocks base method
-func (m *MockInterfaceConfigurator) ConfigureSriovSecondaryInterface(arg0, arg1, arg2, arg3, arg4 string, arg5 int, arg6 string, arg7 *current.Result) error {
+func (m *MockInterfaceConfigurator) ConfigureSriovSecondaryInterface(arg0, arg1, arg2, arg3, arg4 string, arg5 int, arg6 string, arg7 *types100.Result) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ConfigureSriovSecondaryInterface", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 	ret0, _ := ret[0].(error)
