@@ -99,6 +99,7 @@ func (data *MCTestData) tearDownClientPodInCluster(t *testing.T) {
 // If we get status code 200, it means that the resources are exported by the east
 // cluster and imported by the west cluster.
 func testMCServiceConnectivity(t *testing.T, data *MCTestData) {
+	// Test Service connectivity for both local and remote Endpoints.
 	data.testMCServiceConnectivity(t)
 }
 
@@ -138,8 +139,12 @@ func testStretchedNetworkPolicyUpdatePolicy(t *testing.T, data *MCTestData) {
 }
 
 func (data *MCTestData) testMCServiceConnectivity(t *testing.T) {
+	// Connectivity to remote Endpoint which is the exported Service's ClusterIP from another member cluster.
 	data.probeMCServiceFromCluster(t, eastCluster, westClusterTestService)
 	data.probeMCServiceFromCluster(t, westCluster, eastClusterTestService)
+	// Connectivity to local Endpoint which is the exported Service's ClusterIP from its own cluster.
+	data.probeMCServiceFromCluster(t, eastCluster, eastClusterTestService)
+	data.probeMCServiceFromCluster(t, westCluster, westClusterTestService)
 }
 
 func (data *MCTestData) probeMCServiceFromCluster(t *testing.T, clusterName string, serviceName string) {
