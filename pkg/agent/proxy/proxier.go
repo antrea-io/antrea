@@ -847,6 +847,9 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 		go p.serviceConfig.Run(stopCh)
 		if p.endpointSliceEnabled {
 			go p.endpointSliceConfig.Run(stopCh)
+			if p.topologyAwareHintsEnabled {
+				go p.nodeConfig.Run(stopCh)
+			}
 		} else {
 			go p.endpointsConfig.Run(stopCh)
 		}
