@@ -16,7 +16,7 @@ package cniserver
 
 import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 )
 
 type postInterfaceCreateHook func() error

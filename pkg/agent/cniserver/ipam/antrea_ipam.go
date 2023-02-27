@@ -22,7 +22,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
@@ -81,7 +81,6 @@ func getAllocationOwner(args *invoke.Args, k8sArgs *types.K8sArgs, reservedOwner
 
 // Helper to generate IP config and default route, taking IP version into account
 func generateIPConfig(ip net.IP, prefixLength int, gwIP net.IP) (*current.IPConfig, *cnitypes.Route) {
-	ipVersion := "4"
 	ipAddrBits := 32
 	dstNet := net.IPNet{
 		IP:   net.ParseIP("0.0.0.0"),
@@ -89,7 +88,6 @@ func generateIPConfig(ip net.IP, prefixLength int, gwIP net.IP) (*current.IPConf
 	}
 
 	if ip.To4() == nil {
-		ipVersion = "6"
 		ipAddrBits = 128
 
 		dstNet = net.IPNet{
@@ -103,7 +101,6 @@ func generateIPConfig(ip net.IP, prefixLength int, gwIP net.IP) (*current.IPConf
 		GW:  gwIP,
 	}
 	ipConfig := current.IPConfig{
-		Version: ipVersion,
 		Address: net.IPNet{IP: ip, Mask: net.CIDRMask(int(prefixLength), ipAddrBits)},
 		Gateway: gwIP,
 	}
@@ -266,8 +263,7 @@ func (d *AntreaIPAM) secondaryNetworkAdd(args *invoke.Args, k8sArgs *types.K8sAr
 	for _, a := range ipamConf.Addresses {
 		result.IPs = append(result.IPs, &current.IPConfig{
 			Address: a.IPNet,
-			Gateway: a.Gateway,
-			Version: a.Version})
+			Gateway: a.Gateway})
 	}
 
 	// Copy routes and DNS from the input IPAM configuration.

@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -62,7 +62,7 @@ var (
 	routes         = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns            = []string{"192.168.100.1"}
 	ips            = []string{"10.1.2.100/24,10.1.2.1,4"}
-	ipamResult     = ipamtest.GenerateIPAMResult(supportedCNIVersion, []string{"10.1.2.100/24,10.1.2.1,4"}, []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}, []string{"192.168.100.1"})
+	ipamResult     = ipamtest.GenerateIPAMResult([]string{"10.1.2.100/24,10.1.2.1,4"}, []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}, []string{"192.168.100.1"})
 	args           = cniservertest.GenerateCNIArgs(testPodNameA, testPodNamespace, testPodInfraContainerID)
 	testNodeConfig *config.NodeConfig
 	gwIPv4         net.IP
@@ -152,7 +152,7 @@ func TestIPAMService(t *testing.T) {
 
 	// Test IPAM_Failure cases
 	cxt := context.Background()
-	networkCfg := generateNetworkConfiguration("", "0.4.0", "", testIpamType)
+	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType)
 	requestMsg, _ := newRequest(args, networkCfg, "", t)
 
 	t.Run("Error on ADD", func(t *testing.T) {
@@ -243,18 +243,17 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 
 	// Test IPAM_Failure cases
 	cxt := context.Background()
-	networkCfg := generateNetworkConfiguration("", "0.4.0", "", testIpamType2)
+	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType2)
 
 	argsPodA := cniservertest.GenerateCNIArgs(testPodNameA, testPodNamespace, testPodInfraContainerID)
 	argsPodB := cniservertest.GenerateCNIArgs(testPodNameB, testPodNamespace, testPodInfraContainerID)
 	requestMsgA, _ := newRequest(argsPodA, networkCfg, "", t)
 	requestMsgB, _ := newRequest(argsPodB, networkCfg, "", t)
 
-	cniVersion := "0.4.0"
 	ips := []string{"10.1.2.100/24,10.1.2.1,4"}
 	routes := []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns := []string{"192.168.100.1"}
-	ipamResult := &ipam.IPAMResult{Result: *ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)}
+	ipamResult := &ipam.IPAMResult{Result: *ipamtest.GenerateIPAMResult(ips, routes, dns)}
 
 	t.Run("Error on ADD for first registered driver", func(t *testing.T) {
 		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
@@ -454,7 +453,7 @@ func TestParsePrevResultFromRequest(t *testing.T) {
 
 	t.Run("Correct prevResult", func(t *testing.T) {
 		networkCfg := getNetworkCfg(supportedCNIVersion)
-		prevResult := ipamtest.GenerateIPAMResult(supportedCNIVersion, ips, routes, dns)
+		prevResult := ipamtest.GenerateIPAMResult(ips, routes, dns)
 		var err error
 		networkCfg.RawPrevResult, err = translateRawPrevResult(prevResult, supportedCNIVersion)
 		require.Nil(t, err, "Cannot generate RawPrevResult for test")
@@ -471,7 +470,7 @@ func TestParsePrevResultFromRequest(t *testing.T) {
 
 	t.Run("Unsupported CNI version", func(t *testing.T) {
 		networkCfg := getNetworkCfg(unsupportedCNIVersion)
-		prevResult := ipamtest.GenerateIPAMResult(supportedCNIVersion, ips, routes, dns)
+		prevResult := ipamtest.GenerateIPAMResult(ips, routes, dns)
 		var err error
 		networkCfg.RawPrevResult, err = translateRawPrevResult(prevResult, supportedCNIVersion)
 		require.Nil(t, err, "Cannot generate RawPrevResult for test")
@@ -491,7 +490,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 	t.Run("Gateways updated", func(t *testing.T) {
 		assert := assert.New(t)
 
-		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, routes, dns)
+		result := ipamtest.GenerateIPAMResult(testIps, routes, dns)
 		updateResultIfaceConfig(result, gwIPv4, gwIPv6)
 
 		assert.Len(result.IPs, 2, "Failed to construct result")
@@ -509,7 +508,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 
 	t.Run("Default route added", func(t *testing.T) {
 		emptyRoutes := []string{}
-		result := ipamtest.GenerateIPAMResult(supportedCNIVersion, testIps, emptyRoutes, dns)
+		result := ipamtest.GenerateIPAMResult(testIps, emptyRoutes, dns)
 		updateResultIfaceConfig(result, gwIPv4, gwIPv6)
 		require.NotEmpty(t, result.Routes)
 		require.Equal(2, len(result.Routes))
@@ -534,7 +533,7 @@ func TestValidateOVSInterface(t *testing.T) {
 	containerID := uuid.New().String()
 	containerMACStr := "11:22:33:44:55:66"
 	containerIP := []string{"10.1.2.100/24,10.1.2.1,4"}
-	result := ipamtest.GenerateIPAMResult(supportedCNIVersion, containerIP, routes, dns)
+	result := ipamtest.GenerateIPAMResult(containerIP, routes, dns)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMACStr}
 	hostIfaceName := util.GenerateContainerInterfaceName(testPodNameA, testPodNamespace, containerID)
 	hostIface := &current.Interface{Name: hostIfaceName}
@@ -597,9 +596,13 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 }
 
 func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[string]interface{}, error) {
+	prevVersionedResult, err := prevResult.GetAsVersion(cniVersion)
+	if err != nil {
+		return nil, err
+	}
 	config := map[string]interface{}{
 		"cniVersion": cniVersion,
-		"prevResult": prevResult,
+		"prevResult": prevVersionedResult,
 	}
 
 	newBytes, err := json.Marshal(config)

@@ -100,6 +100,7 @@ var (
 }`
 
 	testOutput1 = `{
+    "cniVersion": "0.3.0",
     "ips": [
         {
             "version": "4",
@@ -146,6 +147,7 @@ var (
 }`
 
 	testOutput2 = `{
+    "cniVersion": "0.3.0",
     "ips": [
         {
             "version": "4",

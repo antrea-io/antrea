@@ -25,7 +25,7 @@ import (
 	"unsafe"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -300,28 +300,22 @@ func TestAdvertiseContainerAddr(t *testing.T) {
 			name:    "interface-not-found",
 			runInNS: true,
 			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "4", Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
-				{Version: "6", Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
+				{Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
+				{Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
 			}},
 			netInterfaceError: fmt.Errorf("unable to find interface"),
-		}, {
-			name:    "invalid-ipam-result",
-			runInNS: true,
-			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "5", Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
-			}},
 		}, {
 			name:    "advertise-ipv4-only",
 			runInNS: true,
 			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "4", Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
+				{Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
 			}},
 			advertiseIPv4: true,
 		}, {
 			name:    "advertise-ipv4-failure",
 			runInNS: true,
 			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "4", Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
+				{Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
 			}},
 			ipv4ArpingErr: fmt.Errorf("failed to send GARP on interface"),
 			advertiseIPv4: true,
@@ -329,14 +323,14 @@ func TestAdvertiseContainerAddr(t *testing.T) {
 			name:    "advertise-ipv6-only",
 			runInNS: true,
 			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "6", Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
+				{Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
 			}},
 			advertiseIPv6: true,
 		}, {
 			name:    "advertise-ipv6-failure",
 			runInNS: true,
 			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "6", Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
+				{Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
 			}},
 			advertiseIPv6: true,
 			ipv6NDPErr:    fmt.Errorf("failed to send IPv6 NDP on interface"),
@@ -344,8 +338,8 @@ func TestAdvertiseContainerAddr(t *testing.T) {
 			name:    "advertise-dualstack",
 			runInNS: true,
 			result: &current.Result{IPs: []*current.IPConfig{
-				{Version: "4", Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
-				{Version: "6", Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
+				{Interface: &interfaceID, Address: ipv4CIDR, Gateway: ipv4Gateway},
+				{Interface: &interfaceID, Address: ipv6CIDR, Gateway: ipv6Gateway},
 			}},
 			advertiseIPv4: true,
 			advertiseIPv6: true,

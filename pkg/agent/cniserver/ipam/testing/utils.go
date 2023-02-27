@@ -19,16 +19,11 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 )
 
-func GenerateIPAMResult(cniVersion string, ipConfig []string, routeConfig []string, dnsConfig []string) *current.Result {
-	ipamResult := &current.Result{}
-	if cniVersion != "" {
-		ipamResult.CNIVersion = cniVersion
-	} else {
-		ipamResult.CNIVersion = "0.3.1"
-	}
+func GenerateIPAMResult(ipConfig []string, routeConfig []string, dnsConfig []string) *current.Result {
+	ipamResult := &current.Result{CNIVersion: current.ImplementedSpecVersion}
 	ipamResult.IPs = parseIPs(ipConfig)
 	ipamResult.Routes = parseRoute(routeConfig)
 	ipamResult.DNS = types.DNS{Nameservers: dnsConfig}
@@ -65,7 +60,7 @@ func parseIPs(ips []string) []*current.IPConfig {
 func parseIPConfig(ipAddress string, gw string, version string) *current.IPConfig {
 	ip, ipv4Net, _ := net.ParseCIDR(ipAddress)
 	ipv4Net.IP = ip
-	ipConfig := &current.IPConfig{Version: version, Address: *ipv4Net}
+	ipConfig := &current.IPConfig{Address: *ipv4Net}
 	if gw != "" {
 		gateway := net.ParseIP(gw)
 		ipConfig.Gateway = gateway

@@ -25,7 +25,7 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -521,9 +521,8 @@ func TestCmdAdd(t *testing.T) {
 				assert.Equal(t, tc.errResponse, resp)
 			} else if tc.expectedErr == nil {
 				cniResult := &current.Result{
-					CNIVersion: supportedCNIVersion,
-					IPs:        oriIPAMResult.IPs,
-					Routes:     oriIPAMResult.Routes,
+					IPs:    oriIPAMResult.IPs,
+					Routes: oriIPAMResult.Routes,
 					DNS: cnitypes.DNS{
 						Nameservers: dns,
 						Search:      dnsSearches,
@@ -533,7 +532,9 @@ func TestCmdAdd(t *testing.T) {
 						{Name: "eth0", Mac: containerMACStr, Sandbox: tc.netns},
 					},
 				}
-				successResponse := resultToResponse(cniResult)
+				versionedResult, err := cniResult.GetAsVersion(supportedCNIVersion)
+				assert.NoError(t, err)
+				successResponse := resultToResponse(versionedResult)
 				assert.Equal(t, successResponse, resp)
 			}
 			containerID := requestMsg.CniArgs.ContainerId
