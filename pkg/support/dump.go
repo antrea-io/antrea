@@ -292,10 +292,6 @@ func (d *agentDumper) DumpAgentInfo(basedir string) error {
 	return writeYAMLFile(d.fs, filepath.Join(basedir, "agentinfo"), "agentinfo", ai)
 }
 
-func (d *agentDumper) DumpMemberlist(basedir string) error {
-	return dumpAntctlGet(d.fs, d.executor, "memberlist", basedir)
-}
-
 func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {
 	dump := func(o interface{}, name string) error {
 		return writeYAMLFile(d.fs, filepath.Join(basedir, name), name, o)

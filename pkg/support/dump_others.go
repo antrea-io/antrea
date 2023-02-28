@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/util/logdir"
@@ -72,4 +73,12 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 		}
 	}
 	return nil
+}
+
+func (d *agentDumper) DumpMemberlist(basedir string) error {
+	output, err := d.executor.Command("antctl", "-oyaml", "get", "memberlist").CombinedOutput()
+	if err != nil && !strings.Contains(string(output), "memberlist is not running") {
+		return fmt.Errorf("error when dumping memberlist: %w", err)
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "memberlist"), "memberlist", output)
 }
