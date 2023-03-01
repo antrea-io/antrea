@@ -257,3 +257,17 @@ func (mr *MockInterfaceStoreMockRecorder) Len() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Len", reflect.TypeOf((*MockInterfaceStore)(nil).Len))
 }
+
+// ListInterfaces mocks base method
+func (m *MockInterfaceStore) ListInterfaces() []*interfacestore.InterfaceConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListInterfaces")
+	ret0, _ := ret[0].([]*interfacestore.InterfaceConfig)
+	return ret0
+}
+
+// ListInterfaces indicates an expected call of ListInterfaces
+func (mr *MockInterfaceStoreMockRecorder) ListInterfaces() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListInterfaces", reflect.TypeOf((*MockInterfaceStore)(nil).ListInterfaces))
+}
