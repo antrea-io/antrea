@@ -258,6 +258,7 @@ func run(o *Options) error {
 	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
+		o.config.ClientCAFile,
 		client,
 		aggregatorClient,
 		apiExtensionClient,
@@ -441,6 +442,7 @@ func startNodeIPAM(client clientset.Interface,
 }
 
 func createAPIServerConfig(kubeconfig string,
+	clientCAFile string,
 	client clientset.Interface,
 	aggregatorClient aggregatorclientset.Interface,
 	apiExtensionClient apiextensionclientset.Interface,
@@ -477,6 +479,9 @@ func createAPIServerConfig(kubeconfig string,
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig
 		authorization.RemoteKubeConfigFile = kubeconfig
+	}
+	if len(clientCAFile) > 0 {
+		authentication.ClientCert.ClientCA = clientCAFile
 	}
 
 	serverConfig := genericapiserver.NewConfig(apiserver.Codecs)
