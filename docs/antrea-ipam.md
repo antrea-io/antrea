@@ -66,8 +66,8 @@ changes in the Antrea deployment YAML:
 
 Antrea supports flexible control over Pod IP addressing since version 1.4. Pod
 IP addresses can be allocated from an `IPPool`. When a Pod's IP is allocated
-from an IPPool, the traffic from the Pod to Pods on another Node or to external
-network will be sent to the underlay network through the Node's transport
+from an IPPool, the traffic from the Pod to Pods on another Node or from Pod to
+external network will be sent to the underlay network through the Node's transport
 network interface, and will be forwarded/routed by the underlay network. We also
 call this forwarding mode `bridging mode`.
 
@@ -88,8 +88,10 @@ IPPool annotation, or when the `AntreaIPAM` feature is disabled.
 
 To enable flexible IPAM, you need to enable the `AntreaIPAM` feature gate for
 both `antrea-controller` and `antrea-agent`, and set the `enableBridgingMode`
-configuration parameter of `antrea-agent` to `true`. The needed changes in the
-Antrea deployment YAML are:
+configuration parameter of `antrea-agent` to `true`.
+
+When if Antrea is installed from YAML: the needed changes in the Antrea
+configmap `antrea-config` YAML are as below:
 
 ```yaml
   antrea-controller.conf: |
@@ -105,6 +107,15 @@ Antrea deployment YAML are:
     enableBridgingMode: true
     ...
 ```
+
+Alternatively, when if Antrea is installed by helm, you can use the following
+helm installation command to configure the above options:
+
+ ```bash
+ helm install antrea antrea/antrea --namespace kube-system --set
+enableBridgingMode=true,featureGates.AntreaIPAM=true,trafficEncapMode=noEncap,noSNAT=true
+ ```
+
 
 #### Create IPPool CR
 
