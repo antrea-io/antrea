@@ -248,7 +248,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	// will not include it in the set.
 	desiredInterfaces := make(map[string]bool)
 	// knownInterfaces is the list of interfaces currently in the local cache.
-	knownInterfaces := c.interfaceStore.GetInterfaceKeysByType(interfacestore.TunnelInterface)
+	knownInterfaces := c.interfaceStore.GetInterfaceKeysByType(interfacestore.IPSecTunnelInterface)
 
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		for _, node := range nodes {
@@ -677,8 +677,12 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			exists = false
 		}
 	}
+
 	if !exists {
-		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
+		ovsExternalIDs := map[string]interface{}{
+			ovsExternalIDNodeName:                 nodeName,
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
+		}
 		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
 			portName,
 			c.networkConfig.TunnelType,
@@ -714,6 +718,7 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 		// Let NodeRouteController retry at errors.
 		return 0, fmt.Errorf("failed to get of_port of IPsec tunnel port for Node %s", nodeName)
 	}
+
 	// Set the port with no-flood to reject ARP flood packets.
 	if err := c.ovsCtlClient.SetPortNoFlood(int(ofPort)); err != nil {
 		return 0, fmt.Errorf("failed to set port %s with no-flood config: %w", portName, err)
