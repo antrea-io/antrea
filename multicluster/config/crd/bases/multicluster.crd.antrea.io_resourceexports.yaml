@@ -801,8 +801,8 @@ spec:
                             properties:
                               endPort:
                                 description: EndPort defines the end of the port range,
-                                  being the end included within the range. It can
-                                  only be specified when a numerical `port` is specified.
+                                  inclusive. It can only be specified when a numerical
+                                  `port` is specified.
                                 format: int32
                                 type: integer
                               port:
@@ -820,6 +820,18 @@ spec:
                                   traffic must match. If not specified, this field
                                   defaults to TCP.
                                 type: string
+                              sourceEndPort:
+                                description: SourceEndPort defines the end of the
+                                  source port range, inclusive. It can only be specified
+                                  when `sourcePort` is specified.
+                                format: int32
+                                type: integer
+                              sourcePort:
+                                description: The source port on the given protocol.
+                                  This can only be a numerical port. If this field
+                                  is not provided, rule matches all source ports.
+                                format: int32
+                                type: integer
                             type: object
                           type: array
                         protocols:
@@ -1689,8 +1701,8 @@ spec:
                             properties:
                               endPort:
                                 description: EndPort defines the end of the port range,
-                                  being the end included within the range. It can
-                                  only be specified when a numerical `port` is specified.
+                                  inclusive. It can only be specified when a numerical
+                                  `port` is specified.
                                 format: int32
                                 type: integer
                               port:
@@ -1708,6 +1720,18 @@ spec:
                                   traffic must match. If not specified, this field
                                   defaults to TCP.
                                 type: string
+                              sourceEndPort:
+                                description: SourceEndPort defines the end of the
+                                  source port range, inclusive. It can only be specified
+                                  when `sourcePort` is specified.
+                                format: int32
+                                type: integer
+                              sourcePort:
+                                description: The source port on the given protocol.
+                                  This can only be a numerical port. If this field
+                                  is not provided, rule matches all source ports.
+                                format: int32
+                                type: integer
                             type: object
                           type: array
                         protocols:

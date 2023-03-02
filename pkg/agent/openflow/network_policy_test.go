@@ -65,6 +65,7 @@ var (
 	actionAllow  = crdv1alpha1.RuleActionAllow
 	actionDrop   = crdv1alpha1.RuleActionDrop
 	port8080     = intstr.FromInt(8080)
+	port32800    = int32(32800)
 	protocolICMP = v1beta2.ProtocolICMP
 	priority100  = uint16(100)
 	priority200  = uint16(200)
@@ -466,6 +467,22 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						UID:       "id4",
 					},
 				},
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      parseAddresses([]string{"192.168.1.51"}),
+					Action:    &actionDrop,
+					Priority:  &priority100,
+					To:        []types.Address{NewOFPortAddress(2)},
+					Service:   []v1beta2.Service{{Protocol: &protocolTCP, SrcPort: &port32800}},
+					FlowID:    uint32(14),
+					TableID:   AntreaPolicyIngressRuleTable.GetID(),
+					PolicyRef: &v1beta2.NetworkPolicyReference{
+						Type:      v1beta2.AntreaNetworkPolicy,
+						Namespace: "ns1",
+						Name:      "np5",
+						UID:       "id5",
+					},
+				},
 			},
 			expectedFlowsFn: func(c *client) []binding.Flow {
 				cookiePolicy := c.cookieAllocator.Request(cookie.NetworkPolicy).Raw()
@@ -490,6 +507,11 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().LoadRegMark(APDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
+						MatchConjID(14).
+						Action().LoadToRegField(APConjIDField, 14).
+						Action().LoadRegMark(APDenyRegMark).
+						Action().GotoTable(IngressMetricTable.GetID()).Done(),
+					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(10, 1, 2).
 						Action().Conjunction(11, 1, 3).Done(),
@@ -501,7 +523,8 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().Conjunction(10, 1, 2).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
-						Action().Conjunction(11, 1, 3).Done(),
+						Action().Conjunction(11, 1, 3).
+						Action().Conjunction(14, 1, 3).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority201).Cookie(cookiePolicy).
 						MatchTunnelID(1).
 						Action().Conjunction(13, 1, 3).Done(),
@@ -517,7 +540,8 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().Conjunction(12, 2, 3).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(2)).
-						Action().Conjunction(10, 2, 2).Done(),
+						Action().Conjunction(10, 2, 2).
+						Action().Conjunction(14, 2, 3).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(3)).
 						Action().Conjunction(11, 2, 3).Done(),
@@ -530,6 +554,9 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(11, 3, 3).Done(),
+					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
+						MatchProtocol(binding.ProtocolTCP).MatchSrcPort(32800, nil).
+						Action().Conjunction(14, 3, 3).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(12, 3, 3).Done(),
@@ -550,6 +577,9 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().Drop().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchRegMark(APDenyRegMark).MatchRegFieldWithValue(APConjIDField, 13).
+						Action().Drop().Done(),
+					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						MatchRegMark(APDenyRegMark).MatchRegFieldWithValue(APConjIDField, 14).
 						Action().Drop().Done(),
 					IngressDefaultTable.ofTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchTunnelID(uint64(UnknownLabelIdentity)).

@@ -289,10 +289,16 @@ type Service struct {
 	// and the Protocol is TCP, UDP, or SCTP, this matches all port numbers.
 	// +optional
 	Port *intstr.IntOrString
-	// EndPort defines the end of the port range, being the end included within the range.
+	// EndPort defines the end of the port range, inclusive.
 	// It can only be specified when a numerical `port` is specified.
 	// +optional
 	EndPort *int32
+	// SrcPort and SrcEndPort can only be specified, when the Protocol is TCP, UDP, or SCTP.
+	// It restricts the source port of the traffic.
+	// +optional
+	SrcPort *int32
+	// +optional
+	SrcEndPort *int32
 	// ICMPType and ICMPCode can only be specified, when the Protocol is ICMP. If they
 	// both are not specified and the Protocol is ICMP, this matches all ICMP traffic.
 	ICMPType *int32

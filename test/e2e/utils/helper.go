@@ -46,7 +46,7 @@ func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.
 	}
 }
 
-func GenPortsOrProtocols(protoc AntreaPolicyProtocol, port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32, groupAddress *string) ([]crdv1alpha1.NetworkPolicyPort, []crdv1alpha1.NetworkPolicyProtocol) {
+func GenPortsOrProtocols(protoc AntreaPolicyProtocol, port *int32, portName *string, endPort, srcPort, srcEndPort, icmpType, icmpCode, igmpType *int32, groupAddress *string) ([]crdv1alpha1.NetworkPolicyPort, []crdv1alpha1.NetworkPolicyProtocol) {
 	if protoc == ProtocolICMP {
 		return nil, []crdv1alpha1.NetworkPolicyProtocol{
 			{
@@ -80,16 +80,18 @@ func GenPortsOrProtocols(protoc AntreaPolicyProtocol, port *int32, portName *str
 			},
 		}
 	}
-	if port != nil || endPort != nil {
+	if port != nil || endPort != nil || srcPort != nil || srcEndPort != nil {
 		var pVal *intstr.IntOrString
 		if port != nil {
 			pVal = &intstr.IntOrString{IntVal: *port}
 		}
 		ports = []crdv1alpha1.NetworkPolicyPort{
 			{
-				Port:     pVal,
-				EndPort:  endPort,
-				Protocol: &k8sProtocol,
+				Port:          pVal,
+				EndPort:       endPort,
+				SourcePort:    srcPort,
+				SourceEndPort: srcEndPort,
+				Protocol:      &k8sProtocol,
 			},
 		}
 	}

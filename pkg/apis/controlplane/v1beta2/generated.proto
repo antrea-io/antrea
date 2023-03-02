@@ -459,6 +459,13 @@ message Service {
   optional int32 igmpType = 6;
 
   optional string groupAddress = 7;
+
+  // SrcPort and SrcEndPort can only be specified, when the Protocol is TCP, UDP, or SCTP.
+  // It restricts the source port of the traffic.
+  // +optional
+  optional int32 srcPort = 8;
+
+  optional int32 srcEndPort = 9;
 }
 
 // ServiceReference represents reference to a v1.Service.

@@ -568,6 +568,77 @@ func testACNPAllowXBtoA(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testACNPSourcePort tests ACNP source port filtering. The agnhost image used in E2E tests uses
+// ephemeral ports to initiate TCP connections, which should be 32768–60999 by default
+// (https://en.wikipedia.org/wiki/Ephemeral_port). This test retrieves the port range from
+// the client Pod and uses it in sourcePort and sourceEndPort of an ACNP rule to verify that
+// packets can be matched by source port.
+func testACNPSourcePort(t *testing.T) {
+	portStart, portEnd, err := k8sUtils.getTCPv4SourcePortRangeFromPod(namespaces["x"], "a")
+	failOnError(err, t)
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-source-port").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngressForSrcPort(ProtocolTCP, nil, nil, &portStart, &portEnd, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
+		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", "", nil)
+
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("acnp-source-port").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder2.AddIngressForSrcPort(ProtocolTCP, &p80, nil, &portStart, &portEnd, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
+		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", "", nil)
+
+	builder3 := &ClusterNetworkPolicySpecBuilder{}
+	builder3 = builder3.SetName("acnp-source-port").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder3.AddIngressForSrcPort(ProtocolTCP, &p80, &p81, &portStart, &portEnd, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
+		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", "", nil)
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["x"]+"/a"), Dropped)
+	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
+	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["z"]+"/a"), Dropped)
+	// After adding the dst port constraint of port 80, traffic on port 81 should not be affected.
+	updatedReachability := NewReachability(allPods, Connected)
+
+	testSteps := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			[]int32{80},
+			ProtocolTCP,
+			0,
+			nil,
+		},
+		{
+			"Port 81",
+			updatedReachability,
+			[]metav1.Object{builder2.Get()},
+			[]int32{81},
+			ProtocolTCP,
+			0,
+			nil,
+		},
+		{
+			"Port range 80-81",
+			reachability,
+			[]metav1.Object{builder3.Get()},
+			[]int32{80, 81},
+			ProtocolTCP,
+			0,
+			nil,
+		},
+	}
+	testCase := []*TestCase{
+		{"ACNP Drop X/B to A based on source port", testSteps},
+	}
+	executeTests(t, testCase)
+}
+
 // testACNPAllowXBtoYA tests traffic from X/B to Y/A on named port 81, after applying the default deny
 // k8s NetworkPolicies in all namespaces and ACNP to allow X/B to Y/A.
 func testACNPAllowXBtoYA(t *testing.T) {
@@ -4325,6 +4396,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, ProtocolSCTP) })
 		t.Run("Case=ACNPDropIngressInNamespace", func(t *testing.T) { testACNPDropIngressInSelectedNamespace(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
+		t.Run("Case=ACNPSourcePort", func(t *testing.T) { testACNPSourcePort(t) })
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, ProtocolTCP) })
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, ProtocolUDP) })
