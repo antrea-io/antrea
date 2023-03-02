@@ -112,7 +112,7 @@ jobs:
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap
         directory: test-e2e-encap-coverage
-        fail_ci_if_error: true
+        fail_ci_if_error: ${{ github.event_name == 'push' }}
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -171,7 +171,7 @@ jobs:
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap-no-proxy
         directory: test-e2e-encap-no-proxy-coverage
-        fail_ci_if_error: true
+        fail_ci_if_error: ${{ github.event_name == 'push' }}
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -231,7 +231,7 @@ jobs:
           flags: kind-e2e-tests
           name: codecov-test-e2e-encap-all-features-enabled
           directory: test-e2e-encap-all-features-enabled-coverage
-          fail_ci_if_error: true
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
       - name: Tar log files
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
@@ -290,7 +290,7 @@ jobs:
         flags: kind-e2e-tests
         name: codecov-test-e2e-noencap
         directory: test-e2e-noencap-coverage
-        fail_ci_if_error: true
+        fail_ci_if_error: ${{ github.event_name == 'push' }}
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -349,7 +349,7 @@ jobs:
         flags: kind-e2e-tests
         name: codecov-test-e2e-hybrid
         directory: test-e2e-hybrid-coverage
-        fail_ci_if_error: true
+        fail_ci_if_error: ${{ github.event_name == 'push' }}
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -415,7 +415,7 @@ jobs:
           flags: kind-e2e-tests
           name: codecov-test-e2e-fa
           directory: test-e2e-fa-coverage
-          fail_ci_if_error: true
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
       - name: Tar log files
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
