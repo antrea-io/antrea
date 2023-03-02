@@ -197,7 +197,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	reqURL := fmt.Sprintf("https://%s/readyz", certificate.GetAntreaServerNames(certificate.AntreaServiceName)[0])
 	cmd := []string{"curl", "--cacert", caFile, "-s", reqURL}
 	require.NoError(t, NewPodBuilder(clientName, data.testNamespace, agnhostImage).WithContainerName(getImageName(agnhostImage)).MountConfigMap(configMapCopy.Name, "/etc/config/", "config-volume").WithHostNetwork(false).Create(data))
-	defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace))
 	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, cmd)

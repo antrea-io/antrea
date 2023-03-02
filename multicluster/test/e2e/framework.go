@@ -141,6 +141,15 @@ func (data *MCTestData) deletePod(clusterName, namespace, name string) error {
 	return nil
 }
 
+func (data *MCTestData) deletePodAndWait(clusterName, namespace, name string) error {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		if err := d.DeletePodAndWait(defaultTimeout, namespace, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (data *MCTestData) deleteService(clusterName, namespace, name string) error {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
 		if err := d.DeleteService(namespace, name); err != nil {
