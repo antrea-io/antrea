@@ -142,7 +142,7 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 
 	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.
 	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, busyboxImage).OnNode(clientPodNode).WithCommand([]string{"sleep", "3600"}).InHostNetwork().Create(data))
-	defer data.deletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
+	defer data.DeletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
 
 	err := data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, svc.Spec.ClusterIP, 80)

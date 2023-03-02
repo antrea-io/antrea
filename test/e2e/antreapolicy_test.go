@@ -2219,7 +2219,7 @@ func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
 func testRejectServiceTraffic(t *testing.T, data *TestData) {
 	clientName := "agnhost-client"
 	require.NoError(t, data.createAgnhostPodOnNode(clientName, data.testNamespace, nodeName(0), false))
-	defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
 	_, err := data.podWaitForIPs(defaultTimeout, clientName, data.testNamespace)
 	require.NoError(t, err)
 
@@ -2301,7 +2301,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 func testRejectNoInfiniteLoop(t *testing.T, data *TestData) {
 	clientName := "agnhost-client"
 	require.NoError(t, data.createAgnhostPodOnNode(clientName, data.testNamespace, nodeName(0), false))
-	defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
 	_, err := data.podWaitForIPs(defaultTimeout, clientName, data.testNamespace)
 	require.NoError(t, err)
 
@@ -3549,7 +3549,7 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 
 	clientName := "agnhost-client"
 	require.NoError(t, data.createAgnhostPodOnNode(clientName, namespaces["z"], controlPlaneNodeName(), true))
-	defer data.deletePodAndWait(defaultTimeout, clientName, namespaces["z"])
+	defer data.DeletePodAndWait(defaultTimeout, clientName, namespaces["z"])
 	_, err := data.podWaitForIPs(defaultTimeout, clientName, namespaces["z"])
 	require.NoError(t, err)
 
@@ -3726,7 +3726,7 @@ sleep 3600
 		if err := NewPodBuilder(clientName, data.testNamespace, agnhostImage).OnNode(nodeName(idx)).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 			t.Fatalf("Failed to create client Pod: %v", err)
 		}
-		defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+		defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
 		err = data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 		failOnError(err, t)
 	}
