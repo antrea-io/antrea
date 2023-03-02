@@ -175,8 +175,8 @@ func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 	return uplinkConfig
 }
 
-func NewTrafficControlInterface(interfaceName string) *InterfaceConfig {
-	trafficControlConfig := &InterfaceConfig{InterfaceName: interfaceName, Type: TrafficControlInterface}
+func NewTrafficControlInterface(interfaceName string, ovsPortConfig *OVSPortConfig) *InterfaceConfig {
+	trafficControlConfig := &InterfaceConfig{InterfaceName: interfaceName, Type: TrafficControlInterface, OVSPortConfig: ovsPortConfig}
 	return trafficControlConfig
 }
 

@@ -762,8 +762,7 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 			return 0, err
 		}
 	}
-	itf := interfacestore.NewTrafficControlInterface(portName)
-	itf.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
+	itf := interfacestore.NewTrafficControlInterface(portName, &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort})
 	c.interfaceStore.AddInterface(itf)
 	// Create binding for the newly created port.
 	c.portToTCBindings[portName] = &portToTCBinding{
