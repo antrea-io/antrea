@@ -32,6 +32,9 @@ Modifies:
 - Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/pkg/agent/proxy/upstream/util"
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and related invokes
 - Remove check for feature gate ServiceInternalTrafficPolicy
+
+Adds:
+- Add NewBaseServiceInfo for testing
 */
 
 package proxy
@@ -67,8 +70,8 @@ type BaseServiceInfo struct {
 	externalIPs              []string
 	loadBalancerSourceRanges []string
 	healthCheckNodePort      int
-	nodeLocalExternal        bool
-	nodeLocalInternal        bool
+	externalPolicyLocal      bool
+	internalPolicyLocal      bool
 	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
 	hintsAnnotation          string
 }
@@ -134,14 +137,14 @@ func (info *BaseServiceInfo) LoadBalancerIPStrings() []string {
 	return ips
 }
 
-// NodeLocalExternal is part of ServicePort interface.
-func (info *BaseServiceInfo) NodeLocalExternal() bool {
-	return info.nodeLocalExternal
+// ExternalPolicyLocal is part of ServicePort interface.
+func (info *BaseServiceInfo) ExternalPolicyLocal() bool {
+	return info.externalPolicyLocal
 }
 
-// NodeLocalInternal is part of ServicePort interface
-func (info *BaseServiceInfo) NodeLocalInternal() bool {
-	return info.nodeLocalInternal
+// InternalPolicyLocal is part of ServicePort interface
+func (info *BaseServiceInfo) InternalPolicyLocal() bool {
+	return info.internalPolicyLocal
 }
 
 // InternalTrafficPolicy is part of ServicePort interface
@@ -154,12 +157,61 @@ func (info *BaseServiceInfo) HintsAnnotation() string {
 	return info.hintsAnnotation
 }
 
-func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, service *v1.Service) *BaseServiceInfo {
-	nodeLocalExternal := false
-	if utilproxy.RequestsOnlyLocalTraffic(service) {
-		nodeLocalExternal = true
+// ExternallyAccessible is part of ServicePort interface.
+func (info *BaseServiceInfo) ExternallyAccessible() bool {
+	return info.nodePort != 0 || len(info.loadBalancerStatus.Ingress) != 0 || len(info.externalIPs) != 0
+}
+
+// UsesClusterEndpoints is part of ServicePort interface.
+func (info *BaseServiceInfo) UsesClusterEndpoints() bool {
+	// TODO(hongliang): support short-circuit. Refer to this link https://github.com/kubernetes/kubernetes/issues/108526
+	// for more details.
+	// The service port uses Cluster endpoints if the internal or external traffic policy is "Cluster".
+	return !info.internalPolicyLocal || (!info.externalPolicyLocal && info.ExternallyAccessible())
+}
+
+// UsesLocalEndpoints is part of ServicePort interface.
+func (info *BaseServiceInfo) UsesLocalEndpoints() bool {
+	return info.internalPolicyLocal || (info.externalPolicyLocal && info.ExternallyAccessible())
+}
+
+// NewBaseServiceInfo is for testing purposes only.
+func NewBaseServiceInfo(clusterIP net.IP,
+	port int,
+	protocol v1.Protocol,
+	nodePort int,
+	loadBalancerStatus v1.LoadBalancerStatus,
+	sessionAffinityType v1.ServiceAffinity,
+	stickyMaxAgeSeconds int,
+	externalIPs []string,
+	loadBalancerSourceRanges []string,
+	healthCheckNodePort int,
+	externalPolicyLocal bool,
+	internalPolicyLocal bool,
+	internalTrafficPolicy *v1.ServiceInternalTrafficPolicyType,
+	hintsAnnotation string) *BaseServiceInfo {
+	return &BaseServiceInfo{
+		clusterIP:                clusterIP,
+		port:                     port,
+		protocol:                 protocol,
+		nodePort:                 nodePort,
+		loadBalancerStatus:       loadBalancerStatus,
+		sessionAffinityType:      sessionAffinityType,
+		stickyMaxAgeSeconds:      stickyMaxAgeSeconds,
+		externalIPs:              externalIPs,
+		loadBalancerSourceRanges: loadBalancerSourceRanges,
+		healthCheckNodePort:      healthCheckNodePort,
+		externalPolicyLocal:      externalPolicyLocal,
+		internalPolicyLocal:      internalPolicyLocal,
+		internalTrafficPolicy:    internalTrafficPolicy,
+		hintsAnnotation:          hintsAnnotation,
 	}
-	nodeLocalInternal := utilproxy.RequestsOnlyLocalTrafficForInternal(service)
+}
+
+func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, service *v1.Service) *BaseServiceInfo {
+	externalPolicyLocal := utilproxy.ExternalPolicyLocal(service)
+	internalPolicyLocal := utilproxy.InternalPolicyLocal(service)
+
 	var stickyMaxAgeSeconds int
 	if service.Spec.SessionAffinity == v1.ServiceAffinityClientIP {
 		// Kube-apiserver side guarantees SessionAffinityConfig won't be nil when session affinity type is ClientIP
@@ -174,8 +226,8 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 		nodePort:              int(port.NodePort),
 		sessionAffinityType:   service.Spec.SessionAffinity,
 		stickyMaxAgeSeconds:   stickyMaxAgeSeconds,
-		nodeLocalExternal:     nodeLocalExternal,
-		nodeLocalInternal:     nodeLocalInternal,
+		externalPolicyLocal:   externalPolicyLocal,
+		internalPolicyLocal:   internalPolicyLocal,
 		internalTrafficPolicy: service.Spec.InternalTrafficPolicy,
 		hintsAnnotation:       service.Annotations[v1.AnnotationTopologyAwareHints],
 	}
