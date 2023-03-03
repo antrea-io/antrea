@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -516,5 +517,80 @@ func mockConfigureLinkAddress(returnedErr error) func() {
 	}
 	return func() {
 		configureLinkAddresses = originalConfigureLinkAddresses
+	}
+}
+
+func TestRestorePortConfigs(t *testing.T) {
+	ipsecTunnelInterface := interfacestore.NewIPSecTunnelInterface("antrea-ipsec1",
+		ovsconfig.GeneveTunnel,
+		"node1",
+		net.ParseIP("1.1.1.1"),
+		"abcdefg",
+		"node1")
+	ipsecTunnelInterface.OVSPortConfig = &interfacestore.OVSPortConfig{OFPort: 11, PortUUID: "uuid1"}
+	tunnelInterface := interfacestore.NewTunnelInterface(defaultTunInterfaceName,
+		ovsconfig.GeneveTunnel,
+		0,
+		net.ParseIP("1.1.1.10"),
+		true)
+	tunnelInterface.OVSPortConfig = &interfacestore.OVSPortConfig{OFPort: 12}
+	trafficControlInterface1 := interfacestore.NewTrafficControlInterface("antrea-tap1")
+	trafficControlInterface1.OVSPortConfig = &interfacestore.OVSPortConfig{OFPort: 13, PortUUID: "uuid3"}
+	trafficControlInterface2 := interfacestore.NewTrafficControlInterface("antrea-tap2")
+	trafficControlInterface2.OVSPortConfig = &interfacestore.OVSPortConfig{OFPort: -1, PortUUID: "uuid3"}
+
+	tests := []struct {
+		name                string
+		existingInterfaces  []*interfacestore.InterfaceConfig
+		expectedOVSCtlCalls func(client *ovsctltest.MockOVSCtlClientMockRecorder)
+		expectedErr         string
+	}{
+		{
+			name: "success",
+			existingInterfaces: []*interfacestore.InterfaceConfig{
+				ipsecTunnelInterface,
+				tunnelInterface,
+				trafficControlInterface1,
+				trafficControlInterface2,
+			},
+			expectedOVSCtlCalls: func(client *ovsctltest.MockOVSCtlClientMockRecorder) {
+				client.SetPortNoFlood(11).Return(nil)
+				client.SetPortNoFlood(13).Return(nil)
+			},
+		},
+		{
+			name: "fail",
+			existingInterfaces: []*interfacestore.InterfaceConfig{
+				{
+					InterfaceName: "antrea-tap1",
+					Type:          interfacestore.TrafficControlInterface,
+					OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 10, PortUUID: "uuid3"},
+				},
+			},
+			expectedOVSCtlCalls: func(client *ovsctltest.MockOVSCtlClientMockRecorder) {
+				client.SetPortNoFlood(10).Return(fmt.Errorf("server unavailable"))
+			},
+			expectedErr: "failed to set no-flood for port antrea-tap1: server unavailable",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := mock.NewController(t)
+			defer controller.Finish()
+			mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
+			ifaceStore := interfacestore.NewInterfaceStore()
+			initializer := &Initializer{
+				ifaceStore:   ifaceStore,
+				ovsCtlClient: mockOVSCtlClient,
+			}
+			ifaceStore.Initialize(tt.existingInterfaces)
+			tt.expectedOVSCtlCalls(mockOVSCtlClient.EXPECT())
+			err := initializer.restorePortConfigs()
+			if tt.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
 	}
 }
