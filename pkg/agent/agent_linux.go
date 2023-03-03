@@ -348,8 +348,7 @@ func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
 			return err
 		}
 
-		itf := interfacestore.NewTrafficControlInterface(portName)
-		itf.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
+		itf := interfacestore.NewTrafficControlInterface(portName, &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort})
 		i.ifaceStore.AddInterface(itf)
 	}
 
