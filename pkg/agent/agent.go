@@ -379,17 +379,20 @@ func (i *Initializer) initInterfaceStore() error {
 }
 
 func (i *Initializer) restorePortConfigs() error {
-	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 	interfaces := i.ifaceStore.ListInterfaces()
 	for _, intf := range interfaces {
 		switch intf.Type {
 		case interfacestore.IPSecTunnelInterface:
 			fallthrough
 		case interfacestore.TrafficControlInterface:
-			if err := ovsCtlClient.SetPortNoFlood(int(intf.OFPort)); err != nil {
-				return fmt.Errorf("failed to set port %s with no-flood: %w", intf.InterfaceName, err)
+			if intf.OFPort < 0 {
+				klog.InfoS("Skipped setting no-flood for port due to invalid ofPort", "port", intf.InterfaceName, "ofport", intf.OFPort)
+				continue
 			}
-			klog.InfoS("Set port no-flood successfully", "PortName", intf.InterfaceName)
+			if err := i.ovsCtlClient.SetPortNoFlood(int(intf.OFPort)); err != nil {
+				return fmt.Errorf("failed to set no-flood for port %s: %w", intf.InterfaceName, err)
+			}
+			klog.InfoS("Set no-flood for port", "port", intf.InterfaceName)
 		}
 	}
 	return nil
