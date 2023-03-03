@@ -40,7 +40,6 @@ func TestNewInterfaceStore(t *testing.T) {
 	t.Run("testGatewayInterface", testGatewayInterface)
 	t.Run("testTunnelInterface", testTunnelInterface)
 	t.Run("testUplinkInterface", testUplinkInterface)
-	t.Run("testTrafficControlInterface", testTrafficControlInterface)
 	t.Run("testExternalEntityInterface", testEntityInterface)
 }
 
@@ -162,16 +161,6 @@ func testUplinkInterface(t *testing.T) {
 		PortUUID: "1234567890",
 	}
 	testGeneralInterface(t, uplinkInterface, UplinkInterface)
-}
-
-func testTrafficControlInterface(t *testing.T) {
-	tcInterface := NewTrafficControlInterface("tc0")
-	tcInterface.IPs = []net.IP{hostIP}
-	tcInterface.OVSPortConfig = &OVSPortConfig{
-		OFPort:   17,
-		PortUUID: "1234567890",
-	}
-	testGeneralInterface(t, tcInterface, TrafficControlInterface)
 }
 
 func testEntityInterface(t *testing.T) {
