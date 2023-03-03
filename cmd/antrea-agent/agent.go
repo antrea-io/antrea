@@ -222,6 +222,7 @@ func run(o *Options) error {
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
 		ovsBridgeClient,
+		ovsctl.NewClient(o.config.OVSBridge),
 		ofClient,
 		routeClient,
 		ifaceStore,

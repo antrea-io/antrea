@@ -166,12 +166,11 @@ func testUplinkInterface(t *testing.T) {
 }
 
 func testTrafficControlInterface(t *testing.T) {
-	tcInterface := NewTrafficControlInterface("tc0")
-	tcInterface.IPs = []net.IP{hostIP}
-	tcInterface.OVSPortConfig = &OVSPortConfig{
+	tcInterface := NewTrafficControlInterface("tc0", &OVSPortConfig{
 		OFPort:   17,
 		PortUUID: "1234567890",
-	}
+	})
+	tcInterface.IPs = []net.IP{hostIP}
 	testGeneralInterface(t, tcInterface, TrafficControlInterface)
 }
 
