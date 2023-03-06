@@ -616,17 +616,11 @@ func run(o *Options) error {
 		go externalNodeController.Run(stopCh)
 	}
 
-	if networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
-		networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+	if ipsecCertController != nil {
 		go ipsecCertController.Run(stopCh)
 	}
 
 	go antreaClientProvider.Run(ctx)
-
-	if networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
-		networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
-		go ipsecCertController.Run(stopCh)
-	}
 
 	go networkPolicyController.Run(stopCh)
 	// Initialize the NPL agent.
