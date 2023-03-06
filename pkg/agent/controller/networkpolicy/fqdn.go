@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"net"
@@ -822,9 +823,13 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 			proto := ipPkt.Protocol
 			switch proto {
 			case protocol.Type_UDP:
+				udpPkt := ipPkt.Data.(*protocol.UDP)
+				klog.Infof("======= ipv4 udp data: %s", hex.EncodeToString(udpPkt.Data))
 				handleUDP(ipPkt.Data.(*protocol.UDP))
 			case protocol.Type_TCP:
 				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
+				tcpHex, _ := tcpPkt.MarshalBinary()
+				klog.Infof("======= ipv4 tcp pkt: %s", hex.EncodeToString(tcpHex))
 				if err != nil {
 					// Can't parse the packet. Forward it to the Pod.
 					waitCh <- nil
@@ -836,9 +841,13 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 			proto := ipPkt.NextHeader
 			switch proto {
 			case protocol.Type_UDP:
+				udpPkt := ipPkt.Data.(*protocol.UDP)
+				klog.Infof("======= ipv6 udp data: %s", hex.EncodeToString(udpPkt.Data))
 				handleUDP(ipPkt.Data.(*protocol.UDP))
 			case protocol.Type_TCP:
 				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
+				tcpHex, _ := tcpPkt.MarshalBinary()
+				klog.Infof("======= ipv6 tcp pkt: %s", hex.EncodeToString(tcpHex))
 				if err != nil {
 					// Can't parse the packet. Forward it to the Pod.
 					waitCh <- nil
@@ -879,5 +888,8 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 	mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
 	}
+	byteData, _ := pktIn.Data.MarshalBinary()
+	klog.Infof("============== packetOut data: %s", hex.EncodeToString(byteData))
+
 	return f.ofClient.SendEthPacketOut(inPort, 0, ethernetPkt, mutatePacketOut)
 }
