@@ -19,10 +19,14 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/openflow"
+	openflowtypes "antrea.io/antrea/pkg/agent/openflow/types"
+	"antrea.io/antrea/pkg/agent/proxy/types"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
@@ -45,14 +49,16 @@ func checkExpectedEndpoints(expected sets.String, actual []k8sproxy.Endpoint) er
 
 func TestCategorizeEndpoints(t *testing.T) {
 	testCases := []struct {
-		name             string
-		hintsEnabled     bool
-		nodeLabels       map[string]string
-		serviceInfo      k8sproxy.ServicePort
-		endpoints        map[string]k8sproxy.Endpoint
-		clusterEndpoints sets.String
-		localEndpoints   sets.String
-		allEndpoints     sets.String
+		name              string
+		hintsEnabled      bool
+		nodeLabels        map[string]string
+		serviceInfo       k8sproxy.ServicePort
+		endpoints         map[string]k8sproxy.Endpoint
+		clusterEndpoints  sets.String
+		localEndpoints    sets.String
+		allEndpoints      sets.String
+		mcServicePortName k8sproxy.ServicePortName
+		mcsLocalService   *openflowtypes.ServiceGroupInfo
 	}{
 		{
 			name:         "hints enabled, hints annotation == auto",
@@ -473,14 +479,39 @@ func TestCategorizeEndpoints(t *testing.T) {
 			localEndpoints:   sets.NewString("10.0.0.1:80"),
 			allEndpoints:     sets.NewString("10.0.0.1:80"),
 		},
+		{
+			name:              "multicluster endpoints with local exported service",
+			serviceInfo:       k8sproxy.NewBaseServiceInfo(net.ParseIP("10.96.0.1"), 80, v1.ProtocolTCP, 0, v1.LoadBalancerStatus{}, "", 0, nil, nil, 0, false, false, nil, ""),
+			mcServicePortName: makeSvcPortName("ns", "antrea-mc-svc", "80", v1.ProtocolTCP),
+			endpoints: map[string]k8sproxy.Endpoint{
+				"10.96.0.3:80": &k8sproxy.BaseEndpointInfo{Endpoint: "10.96.0.3:80", Ready: true, IsLocal: false},
+				"10.0.0.1:80":  &k8sproxy.BaseEndpointInfo{Endpoint: "10.0.0.1:80", Ready: true, IsLocal: true},
+			},
+			clusterEndpoints: sets.NewString("10.0.0.1:80"),
+			localEndpoints:   nil,
+			allEndpoints:     sets.NewString("10.0.0.1:80"),
+			mcsLocalService: &openflowtypes.ServiceGroupInfo{
+				Endpoint: k8sproxy.NewBaseEndpointInfo("10.96.0.3", "", "", svcPort, false, true, false, false, nil),
+			},
+		},
 	}
+	_, serviceCIDRIPv4, _ := net.ParseCIDR("10.96.0.0/24")
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fp := &proxier{nodeLabels: tc.nodeLabels,
+			fp := &proxier{
+				nodeLabels:                tc.nodeLabels,
 				endpointSliceEnabled:      true,
-				topologyAwareHintsEnabled: tc.hintsEnabled}
+				topologyAwareHintsEnabled: tc.hintsEnabled,
+				multiclusterEnabled:       true,
+				groupCounter:              types.NewGroupCounter(openflow.NewGroupAllocator(false), make(chan string, 100)),
+				serviceMap:                k8sproxy.ServiceMap{},
+			}
 
-			clusterEndpoints, localEndpoints, allEndpoints := fp.categorizeEndpoints(tc.endpoints, tc.serviceInfo)
+			if tc.mcsLocalService != nil {
+				tc.mcsLocalService.GroupID = fp.groupCounter.AllocateIfNotExist(svcPortName, false)
+				fp.serviceMap[svcPortName] = nil
+			}
+			clusterEndpoints, localEndpoints, allEndpoints, mcsLocalService := fp.categorizeEndpoints(tc.endpoints, tc.serviceInfo, tc.mcServicePortName, serviceCIDRIPv4)
 
 			if tc.clusterEndpoints == nil && clusterEndpoints != nil {
 				t.Errorf("expected no cluster endpoints but got %v", clusterEndpoints)
@@ -512,7 +543,7 @@ func TestCategorizeEndpoints(t *testing.T) {
 			if err != nil {
 				t.Errorf("error with allEndpoints: %v", err)
 			}
-
+			assert.Equal(t, tc.mcsLocalService, mcsLocalService)
 		})
 	}
 }
