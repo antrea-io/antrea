@@ -188,6 +188,12 @@ func (b *bucketBuilder) Weight(val uint16) BucketBuilder {
 	return b
 }
 
+func (b *bucketBuilder) Group(groupID uint32) BucketBuilder {
+	groupAction := openflow15.NewActionGroup(groupID)
+	b.bucket.AddAction(groupAction)
+	return b
+}
+
 func (b *bucketBuilder) Done() Group {
 	b.group.ofctrl.Buckets = append(b.group.ofctrl.Buckets, b.bucket)
 	return b.group

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2339,6 +2339,20 @@ func (m *MockBucketBuilder) Done() openflow.Group {
 func (mr *MockBucketBuilderMockRecorder) Done() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Done", reflect.TypeOf((*MockBucketBuilder)(nil).Done))
+}
+
+// Group mocks base method
+func (m *MockBucketBuilder) Group(arg0 uint32) openflow.BucketBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Group", arg0)
+	ret0, _ := ret[0].(openflow.BucketBuilder)
+	return ret0
+}
+
+// Group indicates an expected call of Group
+func (mr *MockBucketBuilderMockRecorder) Group(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Group", reflect.TypeOf((*MockBucketBuilder)(nil).Group), arg0)
 }
 
 // LoadReg mocks base method

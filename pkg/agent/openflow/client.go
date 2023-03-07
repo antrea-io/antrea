@@ -27,6 +27,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	openflowtypes "antrea.io/antrea/pkg/agent/openflow/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -84,7 +85,7 @@ type Client interface {
 
 	// InstallServiceGroup installs a group for Service LB. Each endpoint
 	// is a bucket of the group. For now, each bucket has the same weight.
-	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
+	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, mcsLocalService *openflowtypes.ServiceGroupInfo, endpoints []proxy.Endpoint) error
 	// UninstallServiceGroup removes the group and its buckets that are
 	// installed by InstallServiceGroup.
 	UninstallServiceGroup(groupID binding.GroupIDType) error
@@ -618,11 +619,11 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return c.getFlowKeysFromCache(c.featurePodConnectivity.podCachedFlows, interfaceName)
 }
 
-func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
+func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, mcsLocalService *openflowtypes.ServiceGroupInfo, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
+	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, mcsLocalService, endpoints...)
 	_, installed := c.featureService.groupCache.Load(groupID)
 	if !installed {
 		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
