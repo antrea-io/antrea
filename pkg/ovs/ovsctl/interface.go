@@ -15,25 +15,20 @@ package ovsctl
 
 import (
 	"fmt"
-	"net"
 	"os/exec"
 )
 
-// TracingRequest defines tracing request parameters.
-type TracingRequest struct {
-	InPort string // Input port.
-	SrcIP  net.IP
-	DstIP  net.IP
-	SrcMAC net.HardwareAddr
-	DstMAC net.HardwareAddr
-	Flow   string
-	// Whether in_port field in Flow can override InPort.
-	AllowOverrideInPort bool
+type OVSAppctlRunner interface {
+	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
 }
 
-// OVSCtlClient is an interface for executing OVS "ovs-ofctl" and "ovs-appctl"
-// commands.
+type OVSOfctlRunner interface {
+	RunOfctlCmd(cmd string, args ...string) ([]byte, error)
+}
+
 type OVSCtlClient interface {
+	OVSOfctlRunner
+	OVSAppctlRunner
 	// DumpFlows returns flows of the bridge.
 	DumpFlows(args ...string) ([]string, error)
 	// DumpFlowsWithoutTableNames returns flows of the bridge, and the table is shown as uint8 value in the result.
@@ -49,15 +44,10 @@ type OVSCtlClient interface {
 	DumpGroups() ([]string, error)
 	// DumpPortsDesc returns OpenFlow ports descriptions of the bridge.
 	DumpPortsDesc() ([][]string, error)
-	// RunOfctlCmd executes "ovs-ofctl" command and returns the outputs.
-	RunOfctlCmd(cmd string, args ...string) ([]byte, error)
 	// SetPortNoFlood sets the given port with config "no-flood". This configuration must work with OpenFlow10.
 	SetPortNoFlood(ofport int) error
 	// Trace executes "ovs-appctl ofproto/trace" to perform OVS packet tracing.
 	Trace(req *TracingRequest) (string, error)
-	// RunAppctlCmd executes "ovs-appctl" command and returns the outputs.
-	// Some commands are bridge specific and some are not. Passing a bool to distinguish that.
-	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
 	// GetDPFeatures executes "ovs-appctl dpif/show-dp-features" to check supported DP features.
 	GetDPFeatures() (map[DPFeature]bool, error)
 	// DeleteDPInterface executes "ovs-appctl dpctl/del-if ovs-system $name" to delete OVS datapath interface.
