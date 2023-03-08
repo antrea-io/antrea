@@ -756,7 +756,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 		f.onDNSResponseMsg(&dnsMsg, time.Now(), waitCh)
 	}
 	go func() {
-		ethernetPkt, err := getEthernetPacket(pktIn)
+		ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
 		if err != nil {
 			// Can't parse the packet. Forward it to the Pod.
 			waitCh <- nil
@@ -821,7 +821,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 // sendDNSPacketout forwards the DNS response packet to the original requesting client.
 func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
-	ethernetPkt, err := getEthernetPacket(pktIn)
+	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
 	if err != nil {
 		return err
 	}

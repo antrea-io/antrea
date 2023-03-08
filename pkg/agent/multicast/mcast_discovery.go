@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -33,15 +32,11 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 const (
 	IGMPProtocolNumber = 2
-)
-
-const (
-	openflowKeyTunnelSrc = "NXM_NX_TUN_IPV4_SRC"
-	openflowKeyInPort    = "OXM_OF_IN_PORT"
 )
 
 var (
@@ -79,7 +74,7 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if match == nil {
 		return fmt.Errorf("error getting match from IGMP marks in CustomField")
 	}
-	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
+	customReasons, err := openflow.GetInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
 	if err != nil {
 		klog.ErrorS(err, "Received error while unloading customReason from OVS reg")
 		return err
@@ -90,20 +85,9 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	return nil
 }
 
-func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
-	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
-	if !ok {
-		return 0, errors.New("register value cannot be retrieved")
-	}
-	if rng != nil {
-		return ofctrl.GetUint32ValueWithRange(regValue.Data, rng), nil
-	}
-	return regValue.Data, nil
-}
-
 func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore.InterfaceConfig, error) {
 	matches := pktIn.GetMatches()
-	ofPortField := matches.GetMatchByName(openflowKeyInPort)
+	ofPortField := matches.GetMatchByName(binding.OxmFieldInPort)
 	if ofPortField == nil {
 		return nil, errors.New("in_port field not found")
 	}
@@ -327,7 +311,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 
 func (s *IGMPSnooper) parseSrcNode(pktIn *ofctrl.PacketIn) (net.IP, error) {
 	matches := pktIn.GetMatches()
-	tunSrcField := matches.GetMatchByName(openflowKeyTunnelSrc)
+	tunSrcField := matches.GetMatchByName(binding.NxmFieldTunIPv4Src)
 	if tunSrcField == nil {
 		return nil, errors.New("in_port field not found")
 	}

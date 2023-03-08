@@ -358,9 +358,10 @@ const (
 	// that the corresponding connection has been dropped or rejected. It can be consumed
 	// by the Flow Exporter to export flow records for connections denied by network
 	// policy rules.
-	CustomReasonDeny = 0b100
-	CustomReasonDNS  = 0b1000
-	CustomReasonIGMP = 0b10000
+	CustomReasonDeny          = 0b100
+	CustomReasonDNS           = 0b1000
+	CustomReasonIGMP          = 0b10000
+	CustomReasonRejectSvcNoEp = 0b100000
 	// DispositionL7NPRedirect is used when sending packet-in to controller for
 	// logging layer 7 NetworkPolicy indicating that this packet is redirected to
 	// l7 engine to determine the disposition.
@@ -2480,6 +2481,14 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
 func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
 	group := f.bridge.CreateGroup(groupID).ResetBuckets()
+
+	if len(endpoints) == 0 {
+		return group.Bucket().Weight(100).
+			LoadToRegField(CustomReasonField, CustomReasonRejectSvcNoEp).
+			ResubmitToTable(EndpointDNATTable.GetID()).
+			Done()
+	}
+
 	var resubmitTableID uint8
 	if withSessionAffinity {
 		resubmitTableID = ServiceLBTable.GetID()

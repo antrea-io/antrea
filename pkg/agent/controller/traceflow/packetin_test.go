@@ -226,8 +226,8 @@ func getTestPacketBytes() []byte {
 
 func TestParsePacketIn(t *testing.T) {
 	xreg0 := make([]byte, 8)
-	binary.BigEndian.PutUint32(xreg0[0:4], 262144) // RemoteSNATRegMark in 32bit reg0
-	binary.BigEndian.PutUint32(xreg0[4:8], 2)      // outputPort in 32bit reg1
+	binary.BigEndian.PutUint32(xreg0[0:4], openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset()) // RemoteSNATRegMark in 32bit reg0
+	binary.BigEndian.PutUint32(xreg0[4:8], 2)                                                                                                // outputPort in 32bit reg1
 	matchOutPort := &openflow15.MatchField{
 		Class: openflow15.OXM_CLASS_PACKET_REGS,
 		Field: openflow15.NXM_NX_REG0,
