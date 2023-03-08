@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	// Provide enough time for policies to be enforced & deleted by the CNI plugin.
-	networkPolicyDelay                 = 2 * time.Second
+	// Provide enough time for policies to be imported and enforced by the CNI plugin.
+	policyRealizedTimeout              = 6 * time.Second
 	acnpIsolationResourceExport        = "test-acnp-copy-span-ns-isolation.yml"
 	acnpIsolationName                  = "antrea-mc-strict-namespace-isolation"
 	acnpCrossClusterIsolationResExport = "test-acnp-cross-cluster-ns-isolation.yml"
@@ -93,8 +93,6 @@ func testAntreaPolicyCopySpanNSIsolation(t *testing.T, data *MCTestData) {
 	setup := func() {
 		err := data.deployACNPResourceExport(t, acnpIsolationResourceExport)
 		failOnError(err, t)
-		// Sleep 5s to wait resource export/import process to finish resource exchange.
-		time.Sleep(5 * time.Second)
 	}
 	teardown := func() {
 		err := data.deleteACNPResourceExport(acnpIsolationResourceExport)
@@ -121,8 +119,6 @@ func testAntreaPolicyCrossClusterNSIsolation(t *testing.T, data *MCTestData) {
 	setup := func() {
 		err := data.deployACNPResourceExport(t, acnpCrossClusterIsolationResExport)
 		failOnError(err, t)
-		// Sleep 5s to wait resource export/import process to finish resource exchange.
-		time.Sleep(5 * time.Second)
 	}
 	teardown := func() {
 		err := data.deleteACNPResourceExport(acnpCrossClusterIsolationResExport)
@@ -147,7 +143,6 @@ func testAntreaPolicyCrossClusterNSIsolation(t *testing.T, data *MCTestData) {
 
 func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCase, acnpName string, setup, teardown func(), testCrossCluster bool) {
 	setup()
-	time.Sleep(networkPolicyDelay)
 	for _, testCase := range testList {
 		t.Logf("Running test case %s", testCase.Name)
 		for _, step := range testCase.Steps {
@@ -155,11 +150,12 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 			reachability := step.Reachability
 			for clusterName, k8sUtils := range clusterK8sUtilsMap {
 				if clusterName == leaderCluster {
-					// skip traffic test for the leader cluster
+					// skip verification for the leader cluster
 					continue
 				}
-				if _, err := k8sUtils.GetACNP(acnpName); err != nil {
+				if err := k8sUtils.WaitForACNPCreatiionAndRealization(t, acnpName, policyRealizedTimeout); err != nil {
 					t.Errorf("Failed to get ACNP to be replicated in cluster %s", clusterName)
+					failOnError(err, t)
 				}
 				start := time.Now()
 				k8sUtils.Validate(allPodsPerCluster, reachability, step.Ports, step.Protocol)

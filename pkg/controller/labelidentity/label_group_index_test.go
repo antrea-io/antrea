@@ -340,7 +340,7 @@ func TestSetPolicySelectors(t *testing.T) {
 				labelIDs = append(labelIDs, i.AddSelector(sel, tt.policyKey)...)
 			}
 			i.RemoveStalePolicySelectors(tt.selectors, tt.policyKey)
-			assert.ElementsMatch(t, tt.expIDs, DedupLabelIdentites(labelIDs))
+			assert.ElementsMatch(t, tt.expIDs, dedupLabelIdentites(labelIDs))
 			assert.Equalf(t, len(tt.expSelectorItems), len(i.selectorItems.List()), "Unexpected number of cached selectorItems")
 			for selKey, expSelItem := range tt.expSelectorItems {
 				s, exists, _ := i.selectorItems.GetByKey(selKey)
@@ -353,6 +353,20 @@ func TestSetPolicySelectors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Dedup LabelIdentity IDs in-place.
+func dedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
+	seen := map[uint32]struct{}{}
+	idx := 0
+	for _, id := range labelIdentityIDs {
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			labelIdentityIDs[idx] = id
+			idx++
+		}
+	}
+	return labelIdentityIDs[:idx]
 }
 
 func TestAddLabelIdentity(t *testing.T) {

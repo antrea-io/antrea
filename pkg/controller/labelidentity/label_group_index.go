@@ -270,20 +270,6 @@ func (i *LabelIdentityIndex) AddSelector(selector *types.GroupSelector, policyKe
 	return i.getMatchedLabelIdentityIDs(sItem)
 }
 
-// Dedup LabelIdentity IDs in-place.
-func DedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
-	seen := map[uint32]struct{}{}
-	idx := 0
-	for _, id := range labelIdentityIDs {
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			labelIdentityIDs[idx] = id
-			idx++
-		}
-	}
-	return labelIdentityIDs[:idx]
-}
-
 // DeleteSelector removes a selectorItem from referring to the policy being deleted.
 func (i *LabelIdentityIndex) DeleteSelector(selectorKey string, policyKey string) {
 	i.lock.Lock()

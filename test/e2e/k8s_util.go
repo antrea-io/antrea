@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,7 @@ import (
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -976,6 +978,20 @@ func (data *TestData) CleanANPs(namespaces []string) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (data *TestData) WaitForACNPCreatiionAndRealization(t *testing.T, name string, timeout time.Duration) error {
+	t.Logf("Waiting for ACNP '%s' to be created and realized", name)
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		acnp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return acnp.Status.ObservedGeneration == acnp.Generation && acnp.Status.Phase == crdv1alpha1.NetworkPolicyRealized, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
 	}
 	return nil
 }
