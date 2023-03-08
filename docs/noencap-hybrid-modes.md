@@ -86,7 +86,7 @@ The Kubernetes Cloud Providers that implement Route Controller can add routes
 to the cloud network routers for the Pod CIDRs of Nodes, and then the cloud
 network is able to route Pod traffic between Nodes. This Route Controller
 functionality is supported by the Cloud Provider implementations of the major
-clouds, including: [AWS](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/aws),
+clouds, including: [AWS](https://github.com/kubernetes/cloud-provider-aws),
 [Azure](https://github.com/kubernetes-sigs/cloud-provider-azure),
 [GCE](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/gce),
 and [vSphere (with NSX-T)](https://github.com/kubernetes/cloud-provider-vsphere).
