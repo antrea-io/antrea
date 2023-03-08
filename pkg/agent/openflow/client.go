@@ -95,7 +95,7 @@ type Client interface {
 	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
 	// UninstallEndpointFlows removes flows of the Endpoint installed by
 	// InstallEndpointFlows.
-	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
+	UninstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
 
 	// InstallServiceFlows installs flows for accessing Service NodePort, LoadBalancer and ClusterIP. It installs the
 	// flow that uses the group/bucket to do service LB. If the affinityTimeout is not zero, it also installs the flow
@@ -452,21 +452,36 @@ func (c *client) modifyFlows(cache *flowCategoryCache, flowCacheKey string, flow
 
 // deleteFlows deletes all the flows in the flow cache indexed by the provided flowCacheKey.
 func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) error {
-	fCacheI, ok := cache.Load(flowCacheKey)
-	if !ok {
-		// no matching flows found in the cache
+	return c.deleteFlowsWithMultipleKeys(cache, []string{flowCacheKey})
+}
+
+// deleteFlowsWithMultipleKeys uninstalls the flows with different flowCache keys and remove them from the cache on success.
+// It will skip the keys which are not in the cache. All flows will be uninstalled via a bundle.
+func (c *client) deleteFlowsWithMultipleKeys(cache *flowCategoryCache, keys []string) error {
+	// allFlows keeps the flows we will delete via a bundle.
+	var allFlows []binding.Flow
+	for _, key := range keys {
+		flows, ok := cache.Load(key)
+		// If a flow cache entry of the key does not exist, skip it.
+		if !ok {
+			klog.V(2).InfoS("Cached flow with provided key was not found", "key", key)
+			continue
+		}
+		for _, flow := range flows.(flowCache) {
+			allFlows = append(allFlows, flow)
+		}
+	}
+	if len(allFlows) == 0 {
 		return nil
 	}
-	fCache := fCacheI.(flowCache)
-	// Delete flows from OVS.
-	delFlows := make([]binding.Flow, 0, len(fCache))
-	for _, flow := range fCache {
-		delFlows = append(delFlows, flow)
-	}
-	if err := c.ofEntryOperations.DeleteAll(delFlows); err != nil {
+	err := c.ofEntryOperations.DeleteAll(allFlows)
+	if err != nil {
 		return err
 	}
-	cache.Delete(flowCacheKey)
+	// Delete the keys and corresponding flows from the flow cache.
+	for _, key := range keys {
+		cache.Delete(key)
+	}
 	return nil
 }
 
@@ -684,16 +699,22 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 	return c.addFlowsWithMultipleKeys(c.featureService.cachedFlows, keyToFlows)
 }
 
-func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error {
+func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	port, err := endpoint.Port()
-	if err != nil {
-		return fmt.Errorf("error when getting port: %w", err)
+	// keyToFlows is a map from the flows' cache key to the flows.
+	flowCacheKeys := make([]string, 0, len(endpoints))
+
+	for _, endpoint := range endpoints {
+		port, err := endpoint.Port()
+		if err != nil {
+			return fmt.Errorf("error when getting port: %w", err)
+		}
+		flowCacheKeys = append(flowCacheKeys, generateEndpointFlowCacheKey(endpoint.IP(), port, protocol))
 	}
-	cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), port, protocol)
-	return c.deleteFlows(c.featureService.cachedFlows, cacheKey)
+
+	return c.deleteFlowsWithMultipleKeys(c.featureService.cachedFlows, flowCacheKeys)
 }
 
 func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error {
