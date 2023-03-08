@@ -66,6 +66,7 @@ MOCKGEN_TARGETS=(
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder,PacketOutBuilder testing"
   "pkg/ovs/ovsconfig OVSBridgeClient testing"
   "pkg/ovs/ovsctl OVSCtlClient testing"
+  "pkg/ovs/ovsctl OVSOfctlRunner,OVSAppctlRunner ."
   "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier testing"
   "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
   "third_party/proxy Provider testing"
