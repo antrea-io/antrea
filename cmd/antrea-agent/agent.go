@@ -75,7 +75,6 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
 )
@@ -177,6 +176,7 @@ func run(o *Options) error {
 		encryptionMode = config.TrafficEncryptionModeIPSec
 	}
 	_, ipsecAuthenticationMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
+
 	networkConfig := &config.NetworkConfig{
 		TunnelType:            ovsconfig.TunnelType(o.config.TunnelType),
 		TunnelPort:            o.config.TunnelPort,
@@ -188,6 +188,7 @@ func run(o *Options) error {
 		IPsecConfig: config.IPsecConfig{
 			AuthenticationMode: ipsecAuthenticationMode,
 		},
+		EnableMulticlusterGW: enableMulticlusterGW,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{
@@ -323,31 +324,43 @@ func run(o *Options) error {
 		)
 	}
 
-	var mcRouteController *mcroute.MCRouteController
+	var mcDefaultRouteController *mcroute.MCDefaultRouteController
 	var mcStrechedNetworkPolicyController *mcroute.StretchedNetworkPolicyController
+	var mcPodRouteController *mcroute.MCPodRouteController
 	var mcInformerFactory mcinformers.SharedInformerFactory
+	var mcInformerFactoryWithNamespaceOption mcinformers.SharedInformerFactory
+
 	if enableMulticlusterGW {
-		mcNamespace := env.GetPodNamespace()
-		if o.config.Multicluster.Namespace != "" {
-			mcNamespace = o.config.Multicluster.Namespace
+		if !networkConfig.IPv4Enabled {
+			return fmt.Errorf("Antrea Mutli-cluster doesn't not support IPv6 only cluster")
 		}
-		mcInformerFactory = mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
-		gwInformer := mcInformerFactory.Multicluster().V1alpha1().Gateways()
-		ciImportInformer := mcInformerFactory.Multicluster().V1alpha1().ClusterInfoImports()
-		mcRouteController = mcroute.NewMCRouteController(
+
+		mcInformerFactoryWithNamespaceOption = mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
+			informerDefaultResync,
+			mcinformers.WithNamespace(o.config.Multicluster.Namespace),
+		)
+		gwInformer := mcInformerFactoryWithNamespaceOption.Multicluster().V1alpha1().Gateways()
+		ciImportInformer := mcInformerFactoryWithNamespaceOption.Multicluster().V1alpha1().ClusterInfoImports()
+		mcDefaultRouteController = mcroute.NewMCDefaultRouteController(
 			mcClient,
 			gwInformer,
 			ciImportInformer,
 			ofClient,
-			ovsBridgeClient,
-			ifaceStore,
 			nodeConfig,
-			mcNamespace,
 			o.config.Multicluster.EnableStretchedNetworkPolicy,
 			o.config.Multicluster.EnablePodToPodConnectivity,
 		)
+		if networkConfig.TrafficEncapMode != config.TrafficEncapModeEncap {
+			mcPodRouteController = mcroute.NewMCPodRouteController(
+				k8sClient,
+				gwInformer,
+				ofClient,
+				nodeConfig,
+			)
+		}
 	}
 	if enableMulticlusterNP {
+		mcInformerFactory = mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
 		labelIDInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
 		mcStrechedNetworkPolicyController = mcroute.NewMCAgentStretchedNetworkPolicyController(
 			ofClient,
@@ -491,11 +504,9 @@ func run(o *Options) error {
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
 	var externalNodeController *externalnode.ExternalNodeController
 	var localExternalNodeInformer cache.SharedIndexInformer
+
 	if o.nodeType == config.K8sNode {
-		isChaining := false
-		if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-			isChaining = true
-		}
+		isChaining := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
 		cniServer = cniserver.New(
 			o.config.CNISocket,
 			o.config.HostProcPathPrefix,
@@ -506,6 +517,7 @@ func run(o *Options) error {
 			enableBridgingMode,
 			enableAntreaIPAM,
 			o.config.DisableTXChecksumOffload,
+			networkConfig,
 			networkReadyCh)
 
 		if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
@@ -752,10 +764,15 @@ func run(o *Options) error {
 	}
 
 	if enableMulticlusterGW {
-		mcInformerFactory.Start(stopCh)
-		go mcRouteController.Run(stopCh)
+		mcInformerFactoryWithNamespaceOption.Start(stopCh)
+		go mcDefaultRouteController.Run(stopCh)
+		if mcPodRouteController != nil {
+			go mcPodRouteController.Run(stopCh)
+		}
 	}
+
 	if enableMulticlusterNP {
+		mcInformerFactory.Start(stopCh)
 		go mcStrechedNetworkPolicyController.Run(stopCh)
 	}
 

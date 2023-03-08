@@ -564,14 +564,13 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
-	testNodeConfig.NodeMTU = 1450
 	tester.networkReadyCh = make(chan struct{})
 	tester.server = cniserver.New(testSock,
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		routeMock,
-		false, false, false, false,
+		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
 		tester.networkReadyCh)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	ctx := context.Background()
@@ -735,7 +734,7 @@ func setupChainTest(
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			routeMock,
-			true, false, false, false,
+			true, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
 			networkReadyCh)
 	} else {
 		server = inServer
@@ -859,7 +858,6 @@ func init() {
 	gwMAC, _ = net.ParseMAC("11:11:11:11:11:11")
 	nodeGateway := &config.GatewayConfig{IPv4: gwIP, MAC: gwMAC, Name: ""}
 	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
-	nodeMTU := 1500
 
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDR, NodeMTU: nodeMTU, GatewayConfig: nodeGateway}
+	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDR, GatewayConfig: nodeGateway}
 }

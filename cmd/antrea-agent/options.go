@@ -307,7 +307,7 @@ func (o *Options) validateAntreaIPAMConfig() error {
 	return nil
 }
 
-func (o *Options) validateMulticlusterConfig(encapMode config.TrafficEncapModeType) error {
+func (o *Options) validateMulticlusterConfig(encapMode config.TrafficEncapModeType, encryptionMode config.TrafficEncryptionModeType) error {
 	if !o.config.Multicluster.EnableGateway && !o.config.Multicluster.EnableStretchedNetworkPolicy {
 		return nil
 	}
@@ -321,9 +321,8 @@ func (o *Options) validateMulticlusterConfig(encapMode config.TrafficEncapModeTy
 		return fmt.Errorf("Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy")
 	}
 
-	if encapMode != config.TrafficEncapModeEncap {
-		// Only Encap mode is supported for Multi-cluster Gateway.
-		return fmt.Errorf("Multicluster is only applicable to the %s mode", config.TrafficEncapModeEncap)
+	if encapMode.SupportsEncap() && encryptionMode == config.TrafficEncryptionModeWireGuard {
+		return fmt.Errorf("Multi-cluster Gateway doesn't support in-cluster WireGuard encryption")
 	}
 	return nil
 }
@@ -404,11 +403,17 @@ func (o *Options) setK8sNodeDefaultOptions() {
 		}
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
-		// Multicluster.Enable is deprecated but it may be set by an earlier version
-		// deployment manifest. If it is set to true, pass the value to
-		// Multicluster.EnableGateway.
-		o.config.Multicluster.EnableGateway = true
+	if features.DefaultFeatureGate.Enabled(features.Multicluster) {
+		if o.config.Multicluster.Enable {
+			// Multicluster.Enable is deprecated but it may be set by an earlier version
+			// deployment manifest. If it is set to true, pass the value to
+			// Multicluster.EnableGateway.
+			o.config.Multicluster.EnableGateway = true
+		}
+
+		if o.config.Multicluster.EnableGateway && o.config.Multicluster.Namespace == "" {
+			o.config.Multicluster.Namespace = env.GetPodNamespace()
+		}
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
@@ -488,7 +493,7 @@ func (o *Options) validateK8sNodeOptions() error {
 			}
 		}
 	}
-	if err := o.validateMulticlusterConfig(encapMode); err != nil {
+	if err := o.validateMulticlusterConfig(encapMode, encryptionMode); err != nil {
 		return err
 	}
 

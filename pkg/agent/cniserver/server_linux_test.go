@@ -211,6 +211,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	if secondaryNetworkEnabled {
 		cniServer.podConfigurator.podInfoStore = cnipodcache.NewCNIPodInfoStore()
 	}
+	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
 

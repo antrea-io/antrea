@@ -628,6 +628,7 @@ func newCNIServer(t *testing.T) *CNIServer {
 	}
 	close(networkReadyCh)
 	cniServer.supportedCNIVersions = buildVersionSet()
+	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
 

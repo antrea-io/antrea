@@ -342,9 +342,17 @@ type Client interface {
 	// InstallMulticlusterClassifierFlows installs flows to classify cross-cluster packets.
 	InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGateway bool) error
 
-	// UninstallMulticlusterFlows removes cross-cluster flows matching the given clusterID on
+	// InstallMulticlusterPodFlows installs flows to handle cross-cluster packets from Multi-cluster Gateway to
+	// regular Nodes.
+	InstallMulticlusterPodFlows(podIP net.IP, tunnelPeerIP net.IP) error
+
+	// UninstallMulticlusterFlows removes cross-cluster flows matching the given cache key on
 	// a regular Node or a Gateway.
 	UninstallMulticlusterFlows(clusterID string) error
+
+	// UninstallMulticlusterPodFlows removes Pod flows matching the given cache key on
+	// a Gateway. When the podIP is empty, all Pod flows will be removed.
+	UninstallMulticlusterPodFlows(podIP string) error
 
 	// InstallVMUplinkFlows installs flows to forward packet between uplinkPort and hostPort. On a VM, the
 	// uplink and host internal port are paired directly, and no layer 2/3 forwarding flow is installed.
@@ -467,6 +475,29 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 		return err
 	}
 	cache.Delete(flowCacheKey)
+	return nil
+}
+
+func (c *client) deleteAllFlows(cache *flowCategoryCache) error {
+	var delAllFlows []binding.Flow
+	cache.Range(func(key, value any) bool {
+		fCache := value.(flowCache)
+		delFlows := make([]binding.Flow, 0, len(fCache))
+		for _, flow := range fCache {
+			delFlows = append(delFlows, flow)
+		}
+		delAllFlows = append(delAllFlows, delFlows...)
+		return true
+	})
+	if delAllFlows != nil {
+		if err := c.ofEntryOperations.DeleteAll(delAllFlows); err != nil {
+			return err
+		}
+		cache.Range(func(key, value any) bool {
+			cache.Delete(key)
+			return true
+		})
+	}
 	return nil
 }
 
@@ -1402,6 +1433,7 @@ func (c *client) InstallMulticlusterGatewayFlows(clusterID string,
 // InstallMulticlusterClassifierFlows adds the following flows:
 //   - One flow in L2ForwardingCalcTable for the global virtual multicluster MAC 'aa:bb:cc:dd:ee:f0'
 //     to set its target output port as 'antrea-tun0'. This flow will be on both Gateway and regular Node.
+//   - One flow in ClassifierTable for the tunnel traffic if it's not Encap mode.
 //   - One flow to match MC virtual MAC 'aa:bb:cc:dd:ee:f0' in ClassifierTable for Gateway only.
 //   - One flow in L2ForwardingOutTable to allow multicluster hairpin traffic for Gateway only.
 func (c *client) InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGateway bool) error {
@@ -1410,6 +1442,10 @@ func (c *client) InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGatew
 
 	flows := []binding.Flow{
 		c.featurePodConnectivity.l2ForwardCalcFlow(GlobalVirtualMACForMulticluster, tunnelOFPort),
+	}
+
+	if c.networkConfig.TrafficEncapMode != config.TrafficEncapModeEncap {
+		flows = append(flows, c.featurePodConnectivity.tunnelClassifierFlow(tunnelOFPort))
 	}
 
 	if isGateway {
@@ -1421,9 +1457,31 @@ func (c *client) InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGatew
 	return c.modifyFlows(c.featureMulticluster.cachedFlows, "multicluster-classifier", flows)
 }
 
+func (c *client) InstallMulticlusterPodFlows(podIP net.IP, tunnelPeerIP net.IP) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
+	flows := []binding.Flow{c.featureMulticluster.l3FwdFlowToPodViaTun(localGatewayMAC, podIP, tunnelPeerIP)}
+	return c.modifyFlows(c.featureMulticluster.cachedPodFlows, podIP.String(), flows)
+}
+
 func (c *client) UninstallMulticlusterFlows(clusterID string) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("cluster_%s", clusterID)
 	return c.deleteFlows(c.featureMulticluster.cachedFlows, cacheKey)
+}
+
+func (c *client) UninstallMulticlusterPodFlows(podIP string) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	if podIP == "" {
+		// Clean up all flows.
+		err := c.deleteAllFlows(c.featureMulticluster.cachedPodFlows)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return c.deleteFlows(c.featureMulticluster.cachedPodFlows, podIP)
 }
