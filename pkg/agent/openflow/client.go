@@ -103,7 +103,8 @@ type Client interface {
 	// otherwise the installation will fail.
 	// nodeLocalExternal represents if the externalTrafficPolicy is Local or not. This field is meaningful only when
 	// the svcType is NodePort or LoadBalancer.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error
+	// nested represents if the Service has the Endpoints which is other Service's ClusterIP.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
@@ -695,13 +696,16 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 	return c.deleteFlows(c.featureService.cachedFlows, cacheKey)
 }
 
-func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error {
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, nodeLocalExternal, svcType))
+	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, nodeLocalExternal, svcType, nested))
 	if affinityTimeout != 0 {
 		flows = append(flows, c.featureService.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, svcType))
+	}
+	if svcType == v1.ServiceTypeClusterIP && !nested {
+		flows = append(flows, c.featureService.endpointRedirectFlowForServiceIP(svcIP, svcPort, protocol, groupID))
 	}
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.featureService.cachedFlows, cacheKey, flows)

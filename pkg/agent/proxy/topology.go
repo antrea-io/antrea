@@ -152,7 +152,7 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 		}
 	}
 
-	if !hasEndpointForZone == true {
+	if !hasEndpointForZone {
 		klog.InfoS("Skipping topology aware Endpoint filtering since no hints were provided for zone", "zone", zone)
 		return false
 	}

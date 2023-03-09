@@ -2364,7 +2364,8 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 	protocol binding.Protocol,
 	withSessionAffinity,
 	nodeLocalExternal bool,
-	serviceType v1.ServiceType) binding.Flow {
+	serviceType v1.ServiceType,
+	nested bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var lbResultMark *binding.RegMark
 	if withSessionAffinity {
@@ -2406,7 +2407,33 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 	if f.enableAntreaPolicy {
 		flowBuilder = flowBuilder.Action().LoadToRegField(ServiceGroupIDField, uint32(groupID))
 	}
+	if nested {
+		flowBuilder = flowBuilder.Action().LoadRegMark(NestedServiceRegMark)
+	}
 	return flowBuilder.Action().Group(groupID).Done()
+}
+
+// endpointRedirectFlowForServiceIP generates the flow which uses the specific group for a Service's ClusterIP
+// to do final Endpoint selection.
+func (f *featureService) endpointRedirectFlowForServiceIP(clusterIP net.IP, svcPort uint16, protocol binding.Protocol, groupID binding.GroupIDType) binding.Flow {
+	unionVal := (EpSelectedRegMark.GetValue() << EndpointPortField.GetRange().Length()) + uint32(svcPort)
+	flowBuilder := EndpointDNATTable.ofTable.BuildFlow(priorityHigh).
+		MatchProtocol(protocol).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchRegFieldWithValue(EpUnionField, unionVal).
+		MatchRegMark(NestedServiceRegMark)
+	ipProtocol := getIPProtocol(clusterIP)
+
+	if ipProtocol == binding.ProtocolIP {
+		ipVal := binary.BigEndian.Uint32(clusterIP.To4())
+		flowBuilder = flowBuilder.MatchRegFieldWithValue(EndpointIPField, ipVal)
+	} else {
+		ipVal := []byte(clusterIP)
+		flowBuilder = flowBuilder.MatchXXReg(EndpointIP6Field.GetRegID(), ipVal)
+	}
+	return flowBuilder.Action().
+		Group(groupID).
+		Done()
 }
 
 // endpointDNATFlow generates the flow which transforms the Service Cluster IP to the Endpoint IP according to the Endpoint

@@ -48,7 +48,7 @@ const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
 	// SessionAffinity timeout is implemented using a hard_timeout in OVS. hard_timeout is
-	// represented by a uint16 in the OpenFlow protocol,
+	// represented by a uint16 in the OpenFlow protocol.
 	maxSupportedAffinityTimeout = math.MaxUint16
 )
 
@@ -119,6 +119,7 @@ type proxier struct {
 	endpointSliceEnabled      bool
 	proxyLoadBalancerIPs      bool
 	topologyAwareHintsEnabled bool
+	supportNestedService      bool
 }
 
 func (p *proxier) SyncedOnce() bool {
@@ -288,7 +289,7 @@ func (p *proxier) installNodePortService(groupID binding.GroupIDType, svcPort ui
 	if p.isIPv6 {
 		svcIP = agentconfig.VirtualNodePortDNATIPv6
 	}
-	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeNodePort); err != nil {
+	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeNodePort, false); err != nil {
 		return fmt.Errorf("failed to install Service NodePort load balancing flows: %w", err)
 	}
 	if err := p.routeClient.AddNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
@@ -314,7 +315,7 @@ func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Prot
 func (p *proxier) installLoadBalancerService(groupID binding.GroupIDType, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
-			if err := p.ofClient.InstallServiceFlows(groupID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeLoadBalancer); err != nil {
+			if err := p.ofClient.InstallServiceFlows(groupID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, false); err != nil {
 				return fmt.Errorf("failed to install Service LoadBalancer load balancing flows: %w", err)
 			}
 		}
@@ -533,9 +534,16 @@ func (p *proxier) installServices() {
 				}
 			}
 
+			var isNestedService bool
+			if p.supportNestedService {
+				// Check the `IsNested` field only when Proxy is enabled with `supportNestedService`.
+				// It is true only when the Service is an Antrea Multi-cluster Service for now.
+				isNestedService = svcInfo.IsNested
+			}
+
 			// Install ClusterIP flows for the Service.
 			groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalPolicyLocal)
-			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), externalPolicyLocal, corev1.ServiceTypeClusterIP); err != nil {
+			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), externalPolicyLocal, corev1.ServiceTypeClusterIP, isNestedService); err != nil {
 				klog.Errorf("Error when installing Service flows: %v", err)
 				continue
 			}
@@ -898,7 +906,8 @@ func NewProxier(
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
-	groupCounter types.GroupCounter) *proxier {
+	groupCounter types.GroupCounter,
+	supportNestedService bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -945,6 +954,7 @@ func NewProxier(
 		hostname:                  hostname,
 		serviceHealthServer:       serviceHealthServer,
 		numLocalEndpoints:         map[apimachinerytypes.NamespacedName]int{},
+		supportNestedService:      supportNestedService,
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
@@ -1003,13 +1013,14 @@ func NewDualStackProxier(
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
 	v4groupCounter types.GroupCounter,
-	v6groupCounter types.GroupCounter) *metaProxierWrapper {
+	v6groupCounter types.GroupCounter,
+	nestedServiceSupport bool) *metaProxierWrapper {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter, nestedServiceSupport)
 
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter, nestedServiceSupport)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
