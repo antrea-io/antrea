@@ -153,7 +153,7 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 					// skip verification for the leader cluster
 					continue
 				}
-				if err := k8sUtils.WaitForACNPCreatiionAndRealization(t, acnpName, policyRealizedTimeout); err != nil {
+				if err := k8sUtils.WaitForACNPCreationAndRealization(t, acnpName, policyRealizedTimeout); err != nil {
 					t.Errorf("Failed to get ACNP to be replicated in cluster %s", clusterName)
 					failOnError(err, t)
 				}

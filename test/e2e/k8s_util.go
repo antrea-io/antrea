@@ -982,7 +982,7 @@ func (data *TestData) CleanANPs(namespaces []string) error {
 	return nil
 }
 
-func (data *TestData) WaitForACNPCreatiionAndRealization(t *testing.T, name string, timeout time.Duration) error {
+func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be created and realized", name)
 	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
 		acnp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
