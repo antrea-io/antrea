@@ -17,6 +17,7 @@ package memberlist
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -48,9 +49,14 @@ func generateResponse(node *v1.Node, aliveNodes sets.String) Response {
 // HandleFunc returns the function which can handle queries issued by the memberlist command.
 func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		memberlistCluster := aq.GetMemberlistCluster()
+		if reflect.ValueOf(memberlistCluster).IsNil() {
+			http.Error(w, "memberlist is not running", http.StatusServiceUnavailable)
+			return
+		}
 		var memberlist []Response
 		allNodes, _ := aq.GetNodeLister().List(labels.Everything())
-		aliveNodes := aq.GetMemberlistCluster().AliveNodes()
+		aliveNodes := memberlistCluster.AliveNodes()
 		for _, node := range allNodes {
 			memberlist = append(memberlist, generateResponse(node, aliveNodes))
 		}
