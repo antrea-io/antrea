@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@ package testing
 
 import (
 	config "antrea.io/antrea/pkg/agent/config"
-	types "antrea.io/antrea/pkg/agent/openflow/types"
-	types0 "antrea.io/antrea/pkg/agent/types"
+	types "antrea.io/antrea/pkg/agent/types"
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
@@ -58,7 +57,7 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // AddAddressToDNSConjunction mocks base method
-func (m *MockClient) AddAddressToDNSConjunction(arg0 uint32, arg1 []types0.Address) error {
+func (m *MockClient) AddAddressToDNSConjunction(arg0 uint32, arg1 []types.Address) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddAddressToDNSConjunction", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -72,7 +71,7 @@ func (mr *MockClientMockRecorder) AddAddressToDNSConjunction(arg0, arg1 interfac
 }
 
 // AddPolicyRuleAddress mocks base method
-func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types0.AddressType, arg2 []types0.Address, arg3 *uint16, arg4, arg5 bool) error {
+func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16, arg4, arg5 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
@@ -86,7 +85,7 @@ func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2, arg3, a
 }
 
 // BatchInstallPolicyRuleFlows mocks base method
-func (m *MockClient) BatchInstallPolicyRuleFlows(arg0 []*types0.PolicyRule) error {
+func (m *MockClient) BatchInstallPolicyRuleFlows(arg0 []*types.PolicyRule) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BatchInstallPolicyRuleFlows", arg0)
 	ret0, _ := ret[0].(error)
@@ -100,7 +99,7 @@ func (mr *MockClientMockRecorder) BatchInstallPolicyRuleFlows(arg0 interface{}) 
 }
 
 // DeleteAddressFromDNSConjunction mocks base method
-func (m *MockClient) DeleteAddressFromDNSConjunction(arg0 uint32, arg1 []types0.Address) error {
+func (m *MockClient) DeleteAddressFromDNSConjunction(arg0 uint32, arg1 []types.Address) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteAddressFromDNSConjunction", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -114,7 +113,7 @@ func (mr *MockClientMockRecorder) DeleteAddressFromDNSConjunction(arg0, arg1 int
 }
 
 // DeletePolicyRuleAddress mocks base method
-func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 types0.AddressType, arg2 []types0.Address, arg3 *uint16) error {
+func (m *MockClient) DeletePolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeletePolicyRuleAddress", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -256,7 +255,7 @@ func (mr *MockClientMockRecorder) InitialTLVMap() *gomock.Call {
 }
 
 // Initialize mocks base method
-func (m *MockClient) Initialize(arg0 types0.RoundInfo, arg1 *config.NodeConfig, arg2 *config.NetworkConfig, arg3 *config.EgressConfig, arg4 *config.ServiceConfig, arg5 *config.L7NetworkPolicyConfig) (<-chan struct{}, error) {
+func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 *config.NetworkConfig, arg3 *config.EgressConfig, arg4 *config.ServiceConfig, arg5 *config.L7NetworkPolicyConfig) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Initialize", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(<-chan struct{})
@@ -425,7 +424,7 @@ func (mr *MockClientMockRecorder) InstallPolicyBypassFlows(arg0, arg1, arg2, arg
 }
 
 // InstallPolicyRuleFlows mocks base method
-func (m *MockClient) InstallPolicyRuleFlows(arg0 *types0.PolicyRule) error {
+func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallPolicyRuleFlows", arg0)
 	ret0, _ := ret[0].(error)
@@ -467,17 +466,17 @@ func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2, arg3, ar
 }
 
 // InstallServiceGroup mocks base method
-func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 *types.ServiceGroupInfo, arg3 []proxy.Endpoint) error {
+func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallServiceGroup indicates an expected call of InstallServiceGroup
-func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceGroup", reflect.TypeOf((*MockClient)(nil).InstallServiceGroup), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceGroup", reflect.TypeOf((*MockClient)(nil).InstallServiceGroup), arg0, arg1, arg2)
 }
 
 // InstallTraceflowFlows mocks base method
@@ -551,10 +550,10 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 }
 
 // MulticastEgressPodMetrics mocks base method
-func (m *MockClient) MulticastEgressPodMetrics() map[string]*types0.RuleMetric {
+func (m *MockClient) MulticastEgressPodMetrics() map[string]*types.RuleMetric {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MulticastEgressPodMetrics")
-	ret0, _ := ret[0].(map[string]*types0.RuleMetric)
+	ret0, _ := ret[0].(map[string]*types.RuleMetric)
 	return ret0
 }
 
@@ -565,10 +564,10 @@ func (mr *MockClientMockRecorder) MulticastEgressPodMetrics() *gomock.Call {
 }
 
 // MulticastEgressPodMetricsByIP mocks base method
-func (m *MockClient) MulticastEgressPodMetricsByIP(arg0 net.IP) *types0.RuleMetric {
+func (m *MockClient) MulticastEgressPodMetricsByIP(arg0 net.IP) *types.RuleMetric {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MulticastEgressPodMetricsByIP", arg0)
-	ret0, _ := ret[0].(*types0.RuleMetric)
+	ret0, _ := ret[0].(*types.RuleMetric)
 	return ret0
 }
 
@@ -579,10 +578,10 @@ func (mr *MockClientMockRecorder) MulticastEgressPodMetricsByIP(arg0 interface{}
 }
 
 // MulticastIngressPodMetrics mocks base method
-func (m *MockClient) MulticastIngressPodMetrics() map[uint32]*types0.RuleMetric {
+func (m *MockClient) MulticastIngressPodMetrics() map[uint32]*types.RuleMetric {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MulticastIngressPodMetrics")
-	ret0, _ := ret[0].(map[uint32]*types0.RuleMetric)
+	ret0, _ := ret[0].(map[uint32]*types.RuleMetric)
 	return ret0
 }
 
@@ -593,10 +592,10 @@ func (mr *MockClientMockRecorder) MulticastIngressPodMetrics() *gomock.Call {
 }
 
 // MulticastIngressPodMetricsByOFPort mocks base method
-func (m *MockClient) MulticastIngressPodMetricsByOFPort(arg0 int32) *types0.RuleMetric {
+func (m *MockClient) MulticastIngressPodMetricsByOFPort(arg0 int32) *types.RuleMetric {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MulticastIngressPodMetricsByOFPort", arg0)
-	ret0, _ := ret[0].(*types0.RuleMetric)
+	ret0, _ := ret[0].(*types.RuleMetric)
 	return ret0
 }
 
@@ -607,10 +606,10 @@ func (mr *MockClientMockRecorder) MulticastIngressPodMetricsByOFPort(arg0 interf
 }
 
 // NetworkPolicyMetrics mocks base method
-func (m *MockClient) NetworkPolicyMetrics() map[uint32]*types0.RuleMetric {
+func (m *MockClient) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NetworkPolicyMetrics")
-	ret0, _ := ret[0].(map[uint32]*types0.RuleMetric)
+	ret0, _ := ret[0].(map[uint32]*types.RuleMetric)
 	return ret0
 }
 

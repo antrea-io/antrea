@@ -34,11 +34,9 @@ import (
 
 	agentconfig "antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
-	openflowtypes "antrea.io/antrea/pkg/agent/openflow/types"
 	"antrea.io/antrea/pkg/agent/proxy/metrics"
 	"antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/route"
-	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
@@ -50,10 +48,8 @@ const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
 	// SessionAffinity timeout is implemented using a hard_timeout in OVS. hard_timeout is
-	// represented by a uint16 in the OpenFlow protocol.
+	// represented by a uint16 in the OpenFlow protocol,
 	maxSupportedAffinityTimeout = math.MaxUint16
-	// The prefix of multi-cluster Service name.
-	mcServiceNamePrefix = "antrea-mc-"
 )
 
 // Proxier wraps proxy.Provider and adds extra methods. It is introduced for
@@ -123,8 +119,6 @@ type proxier struct {
 	endpointSliceEnabled      bool
 	proxyLoadBalancerIPs      bool
 	topologyAwareHintsEnabled bool
-	multiclusterEnabled       bool
-	serviceCIDRProvider       servicecidr.Interface
 }
 
 func (p *proxier) SyncedOnce() bool {
@@ -352,11 +346,6 @@ func (p *proxier) uninstallLoadBalancerService(loadBalancerIPStrings []string, s
 }
 
 func (p *proxier) installServices() {
-	var serviceCIDRIPv4 *net.IPNet
-	if p.multiclusterEnabled {
-		// serviceCIDRIPv4 is required only for Multi-cluster Services.
-		serviceCIDRIPv4, _ = p.serviceCIDRProvider.GetServiceCIDR(false)
-	}
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
 		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
@@ -414,17 +403,13 @@ func (p *proxier) installServices() {
 			externalPolicyLocal = true
 		}
 
-		var mcsLocalService *openflowtypes.ServiceGroupInfo
-		clusterEndpoints, localEndpoints, allReachableEndpoints, mcsLocalService := p.categorizeEndpoints(endpointsToInstall, svcInfo, svcPortName, serviceCIDRIPv4)
+		clusterEndpoints, localEndpoints, allReachableEndpoints := p.categorizeEndpoints(endpointsToInstall, svcInfo)
 		// If there are new Endpoints, Endpoints installed should be updated.
 		for _, endpoint := range allReachableEndpoints {
 			if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
 				needUpdateEndpoints = true
 				break
 			}
-		}
-		if mcsLocalService != nil {
-			needUpdateEndpoints = true
 		}
 		// If there are expired Endpoints, Endpoints installed should be updated.
 		if len(allReachableEndpoints) < len(endpointsInstalled) {
@@ -470,21 +455,19 @@ func (p *proxier) installServices() {
 					// of the Service are different, install two groups. One group has cluster Endpoints, the other has
 					// local Endpoints.
 					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, true)
-					// The Multi-cluster Service supports ClusterIP type of Service only, so always set mcsLocalService to nil when
-					// the type of the Service is not ClusterIP.
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, nil, localEndpoints); err != nil {
+					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, localEndpoints); err != nil {
 						klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
 						continue
 					}
 					groupID = p.groupCounter.AllocateIfNotExist(svcPortName, false)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, nil, clusterEndpoints); err != nil {
+					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, clusterEndpoints); err != nil {
 						klog.ErrorS(err, "Error when installing Group of all Endpoints for Service", "Service", svcPortName)
 						continue
 					}
 				} else {
 					// If the type of the Service is ClusterIP, install a group according to internalTrafficPolicy.
 					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalPolicyLocal)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, mcsLocalService, allReachableEndpoints); err != nil {
+					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allReachableEndpoints); err != nil {
 						klog.ErrorS(err, "Error when installing Group of Endpoints for Service", "Service", svcPortName)
 						continue
 					}
@@ -500,7 +483,7 @@ func (p *proxier) installServices() {
 				// internalPolicyLocal.
 				bothPolicyLocal := internalPolicyLocal
 				groupID := p.groupCounter.AllocateIfNotExist(svcPortName, bothPolicyLocal)
-				if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, mcsLocalService, allReachableEndpoints); err != nil {
+				if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allReachableEndpoints); err != nil {
 					klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
 					continue
 				}
@@ -513,21 +496,13 @@ func (p *proxier) installServices() {
 				}
 			}
 
-			updateInstalledEndpointsMap := func(endpoint k8sproxy.Endpoint) {
-				// If the Endpoint is newly installed, add a reference.
-				if _, ok := endpointsInstalled[endpoint.String()]; !ok {
-					key := endpointKey(endpoint, svcInfo.OFProtocol)
-					p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
-					endpointsInstalled[endpoint.String()] = endpoint
-				}
-			}
 			for _, e := range allReachableEndpoints {
-				updateInstalledEndpointsMap(e)
-			}
-			// When mcsLocalService is not nil, add its ClusterIP info into the endpointsInstalled map
-			// since the corresponding Endpoint in Multi-cluster Service is not in the endpointUpdateList.
-			if mcsLocalService != nil {
-				updateInstalledEndpointsMap(mcsLocalService.Endpoint)
+				// If the Endpoint is newly installed, add a reference.
+				if _, ok := endpointsInstalled[e.String()]; !ok {
+					key := endpointKey(e, svcInfo.OFProtocol)
+					p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
+					endpointsInstalled[e.String()] = e
+				}
 			}
 		}
 
@@ -923,9 +898,7 @@ func NewProxier(
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
-	groupCounter types.GroupCounter,
-	multiclusterEnabled bool,
-	serviceCIDRProvider servicecidr.Interface) *proxier {
+	groupCounter types.GroupCounter) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -972,8 +945,6 @@ func NewProxier(
 		hostname:                  hostname,
 		serviceHealthServer:       serviceHealthServer,
 		numLocalEndpoints:         map[apimachinerytypes.NamespacedName]int{},
-		multiclusterEnabled:       multiclusterEnabled,
-		serviceCIDRProvider:       serviceCIDRProvider,
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
@@ -1032,15 +1003,13 @@ func NewDualStackProxier(
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
 	v4groupCounter types.GroupCounter,
-	v6groupCounter types.GroupCounter,
-	multiclusterEnabled bool,
-	serviceCIDRProvider servicecidr.Interface) *metaProxierWrapper {
+	v6groupCounter types.GroupCounter) *metaProxierWrapper {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter, multiclusterEnabled, serviceCIDRProvider)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter)
 
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter, multiclusterEnabled, serviceCIDRProvider)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
