@@ -28,7 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	corelisters "k8s.io/client-go/listers/core/v1"
 
+	"antrea.io/antrea/pkg/agent/memberlist"
 	memberlisttest "antrea.io/antrea/pkg/agent/memberlist/testing"
 	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
 )
@@ -68,35 +70,69 @@ func TestMemberlistQuery(t *testing.T) {
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
 
-	ctrl := gomock.NewController(t)
-	q := queriertest.NewMockAgentQuerier(ctrl)
-	memberlistInterface := memberlisttest.NewMockInterface(ctrl)
-	q.EXPECT().GetNodeLister().Return(nodeLister)
-	q.EXPECT().GetMemberlistCluster().Return(memberlistInterface)
-	memberlistInterface.EXPECT().AliveNodes().Return(sets.NewString("node1"))
-	handler := HandleFunc(q)
-
-	req, err := http.NewRequest(http.MethodGet, "", nil)
-	require.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, req)
-	assert.Equal(t, http.StatusOK, recorder.Code)
-
-	expectedResponse := []Response{
+	tests := []struct {
+		name                string
+		memberlistInterface func(*gomock.Controller) memberlist.Interface
+		nodeLister          corelisters.NodeLister
+		expectedStatus      int
+		expectedResponse    []Response
+	}{
 		{
-			NodeName: "node1",
-			IP:       "172.16.0.11",
-			Status:   "Alive",
+			name: "memberlist not running",
+			memberlistInterface: func(c *gomock.Controller) memberlist.Interface {
+				var cluster *memberlist.Cluster
+				var m memberlist.Interface = cluster
+				return m
+			},
+			expectedStatus: http.StatusServiceUnavailable,
 		},
 		{
-			NodeName: "node2",
-			IP:       "172.16.0.12",
-			Status:   "Dead",
+			name: "get memberlist",
+			memberlistInterface: func(c *gomock.Controller) memberlist.Interface {
+				m := memberlisttest.NewMockInterface(c)
+				m.EXPECT().AliveNodes().Return(sets.NewString("node1"))
+				return m
+			},
+			nodeLister:     nodeLister,
+			expectedStatus: http.StatusOK,
+			expectedResponse: []Response{
+				{
+					NodeName: "node1",
+					IP:       "172.16.0.11",
+					Status:   "Alive",
+				},
+				{
+					NodeName: "node2",
+					IP:       "172.16.0.12",
+					Status:   "Dead",
+				},
+			},
 		},
 	}
-	var received []Response
-	err = json.Unmarshal(recorder.Body.Bytes(), &received)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, expectedResponse, received)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			q := queriertest.NewMockAgentQuerier(ctrl)
+			q.EXPECT().GetMemberlistCluster().Return(tt.memberlistInterface(ctrl))
+			if tt.nodeLister != nil {
+				q.EXPECT().GetNodeLister().Return(tt.nodeLister)
+			}
+			handler := HandleFunc(q)
+
+			req, err := http.NewRequest(http.MethodGet, "", nil)
+			require.NoError(t, err)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+			assert.Equal(t, tt.expectedStatus, recorder.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				var received []Response
+				err = json.Unmarshal(recorder.Body.Bytes(), &received)
+				require.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedResponse, received)
+			}
+		})
+	}
 }

@@ -101,3 +101,8 @@ func (d *agentDumper) dumpHNSResources(basedir string) error {
 	}
 	return nil
 }
+
+func (d *agentDumper) DumpMemberlist(basedir string) error {
+	// memberlist never runs on windows.
+	return nil
+}
