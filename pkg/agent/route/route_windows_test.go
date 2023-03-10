@@ -89,14 +89,20 @@ func TestRouteOperation(t *testing.T) {
 	route3, err := util.GetNetRoutes(gwLink, svcIPNet1)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(route3))
+	obj, found := client.hostRoutes.Load(svcIPNet1.String())
+	assert.True(t, found)
+	assert.EqualValues(t, route3[0], *obj.(*util.Route))
 
 	err = client.AddClusterIPRoute(svcIP2)
 	require.Nil(t, err)
 	route4, err := util.GetNetRoutes(gwLink, svcIPNet2)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(route4))
+	obj, found = client.hostRoutes.Load(svcIPNet2.String())
+	assert.True(t, found)
+	assert.EqualValues(t, route4[0], *obj.(*util.Route))
 
-	err = client.Reconcile([]string{dest2}, map[string]bool{svcIPNet1.String(): true})
+	err = client.Reconcile([]string{dest2})
 	require.Nil(t, err)
 
 	routes5, err := util.GetNetRoutes(gwLink, destCIDR1)
@@ -105,7 +111,7 @@ func TestRouteOperation(t *testing.T) {
 
 	routes6, err := util.GetNetRoutes(gwLink, svcIPNet2)
 	require.Nil(t, err)
-	assert.Equal(t, 0, len(routes6))
+	assert.Equal(t, 1, len(routes6))
 
 	err = client.DeleteRoutes(destCIDR2)
 	require.Nil(t, err)
@@ -118,4 +124,6 @@ func TestRouteOperation(t *testing.T) {
 	routes8, err := util.GetNetRoutes(gwLink, svcIPNet1)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes8))
+	_, found = client.hostRoutes.Load(svcIPNet1.String())
+	assert.False(t, found)
 }
