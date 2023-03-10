@@ -194,8 +194,9 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 		ipProtocol = corev1.IPv6Protocol
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, namespace))
-	svc, err := data.CreateService(name, namespace, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipProtocol)
+	svc, err := data.CreateService(name, namespace, 80, 80, map[string]string{"app": "agnhost", "antrea-e2e": name}, false, false, svcType, &ipProtocol)
 	require.NoError(t, err)
+	t.Logf("Created service Cluster IP %v", svc.Spec.ClusterIP)
 
 	cleanup := func() {
 		data.DeletePodAndWait(defaultTimeout, name, namespace)

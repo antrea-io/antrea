@@ -70,7 +70,7 @@ func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 		d := data.clusterTestDataMap[clusterName]
 		k8sUtils, err := antreae2e.NewKubernetesUtils(&d)
 		failOnError(err, t)
-		_, err = k8sUtils.Bootstrap(perClusterNamespaces, perNamespacePods)
+		_, err = k8sUtils.Bootstrap(perClusterNamespaces, perNamespacePods, true)
 		failOnError(err, t)
 		clusterK8sUtilsMap[clusterName] = k8sUtils
 	}

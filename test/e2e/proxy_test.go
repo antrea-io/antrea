@@ -431,7 +431,7 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 	nodePortIP := controlPlaneNodeIPv4()
 	ipProtocol := corev1.IPv4Protocol
 	var portStr string
-	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", true, false, &ipProtocol)
+	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", data.testNamespace, true, false, &ipProtocol)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
