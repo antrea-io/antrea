@@ -191,6 +191,11 @@ func (data *MCTestData) testANPToServices(t *testing.T) {
 	if _, err := data.createOrUpdateANP(eastCluster, anpBuilder1.Get()); err != nil {
 		t.Fatalf("Error creating ANP %s: %v", anpBuilder1.Name, err)
 	}
+	eastClusterData := data.clusterTestDataMap[eastCluster]
+	if err := eastClusterData.WaitForANPCreationAndRealization(t, anpBuilder1.Namespace, anpBuilder1.Name, policyRealizedTimeout); err != nil {
+		t.Errorf("Failed to wait for ANP %s/%s to be realized in cluster %s", anpBuilder1.Namespace, anpBuilder1.Name, eastCluster)
+		failOnError(err, t)
+	}
 
 	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", eastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, "Failure -- wrong result from probing exported Service from gateway clientPod after applying toServices AntreaNetworkPolicy")
@@ -212,6 +217,10 @@ func (data *MCTestData) testANPToServices(t *testing.T) {
 		}}, "", nil, crdv1alpha1.RuleActionDrop)
 	if _, err := data.createOrUpdateANP(eastCluster, anpBuilder2.Get()); err != nil {
 		t.Fatalf("Error creating ANP %s: %v", anpBuilder2.Name, err)
+	}
+	if err := eastClusterData.WaitForANPCreationAndRealization(t, anpBuilder2.Namespace, anpBuilder2.Name, policyRealizedTimeout); err != nil {
+		t.Errorf("Failed to wait for ANP %s/%s to be realized in cluster %s", anpBuilder2.Namespace, anpBuilder2.Name, eastCluster)
+		failOnError(err, t)
 	}
 	defer data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder2.Name)
 
@@ -242,6 +251,11 @@ func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder1.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder1.Name, err)
 	}
+	westClusterData := data.clusterTestDataMap[westCluster]
+	if err := westClusterData.WaitForACNPCreationAndRealization(t, acnpBuilder1.Name, policyRealizedTimeout); err != nil {
+		t.Errorf("Failed to wait for ACNP %s to be realized in cluster %s", acnpBuilder1.Name, westCluster)
+		failOnError(err, t)
+	}
 
 	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
@@ -261,6 +275,10 @@ func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder2.Name, err)
 	}
 	defer data.deleteACNP(westCluster, acnpBuilder2.Name)
+	if err := westClusterData.WaitForACNPCreationAndRealization(t, acnpBuilder2.Name, policyRealizedTimeout); err != nil {
+		t.Errorf("Failed to wait for ACNP %s to be realized in cluster %s", acnpBuilder2.Name, westCluster)
+		failOnError(err, t)
+	}
 
 	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
@@ -286,6 +304,11 @@ func (data *MCTestData) testStretchedNetworkPolicyReject(t *testing.T) {
 		AddStretchedIngressRule(map[string]string{"app": "client"}, nil, "", nil, crdv1alpha1.RuleActionReject)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder.Name, err)
+	}
+	westClusterData := data.clusterTestDataMap[westCluster]
+	if err := westClusterData.WaitForACNPCreationAndRealization(t, acnpBuilder.Name, policyRealizedTimeout); err != nil {
+		t.Errorf("Failed to wait for ACNP %s to be realized in cluster %s", acnpBuilder.Name, westCluster)
+		failOnError(err, t)
 	}
 	defer data.deleteACNP(westCluster, acnpBuilder.Name)
 

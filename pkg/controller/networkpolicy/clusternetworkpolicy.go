@@ -402,7 +402,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 					addRule(n.svcRefToPeerForCRD(cnpRule.ToServices, ""), nil, direction, ruleATGs)
 				} else {
 					peer, ags, selKeys := n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists)
-					clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+					if selKeys != nil {
+						clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+					}
 					addRule(peer, ags, direction, ruleATGs)
 				}
 			}

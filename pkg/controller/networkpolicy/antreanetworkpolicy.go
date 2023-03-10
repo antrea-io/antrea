@@ -102,7 +102,9 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		atgs := n.processAppliedTo(np.Namespace, ingressRule.AppliedTo)
 		appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
 		peer, ags, selKeys := n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists)
-		clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+		if selKeys != nil {
+			clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+		}
 		addressGroups = mergeAddressGroups(addressGroups, ags...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
@@ -131,7 +133,9 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			var selKeys sets.String
 			peer, ags, selKeys = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
-			clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+			if selKeys != nil {
+				clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+			}
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,

@@ -982,6 +982,20 @@ func (data *TestData) CleanANPs(namespaces []string) error {
 	return nil
 }
 
+func (data *TestData) WaitForANPCreationAndRealization(t *testing.T, namespace string, name string, timeout time.Duration) error {
+	t.Logf("Waiting for ANP '%s/%s' to be realized", namespace, name)
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		anp, err := data.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return anp.Status.ObservedGeneration == anp.Generation && anp.Status.Phase == crdv1alpha1.NetworkPolicyRealized, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for ANP '%s/%s' to be realized: %v", namespace, name, err)
+	}
+	return nil
+}
+
 func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be created and realized", name)
 	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {

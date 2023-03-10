@@ -155,13 +155,13 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
 		// of handling member updates of the AddressGroup.
 		if dir == controlplane.DirectionIn || !namedPortExists {
-			return &matchAllPeer, nil, sets.NewString()
+			return &matchAllPeer, nil, nil
 		}
 		allPodsGroup := n.createAddressGroup("", matchAllPodsPeerCrd.PodSelector, matchAllPodsPeerCrd.NamespaceSelector, nil, nil)
 		addressGroups = append(addressGroups, allPodsGroup)
 		podsPeer := matchAllPeer
 		podsPeer.AddressGroups = append(podsPeer.AddressGroups, allPodsGroup.Name)
-		return &podsPeer, addressGroups, sets.NewString()
+		return &podsPeer, addressGroups, nil
 	}
 	var ipBlocks []controlplane.IPBlock
 	var fqdns []string
