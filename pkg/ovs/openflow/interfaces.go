@@ -78,6 +78,7 @@ const (
 	NxmFieldDstIPv6     = "NXM_NX_IPV6_DST"
 
 	OxmFieldVLANVID = "OXM_OF_VLAN_VID"
+	OxmFieldInPort  = "OXM_OF_IN_PORT"
 )
 
 const (

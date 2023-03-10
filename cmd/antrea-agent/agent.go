@@ -433,6 +433,7 @@ func run(o *Options) error {
 		v6Enabled,
 		gwPort,
 		tunPort,
+		nodeConfig,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)

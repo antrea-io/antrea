@@ -111,6 +111,10 @@ var (
 	}
 )
 
+var (
+	antreaIPAMNamespaces = []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12}
+)
+
 func TestAntreaIPAM(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
 
@@ -122,7 +126,7 @@ func TestAntreaIPAM(t *testing.T) {
 
 	// Create AntreaIPAM IPPool and test Namespace
 	var ipPools []string
-	for _, namespace := range []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
+	for _, namespace := range antreaIPAMNamespaces {
 		ipPool, err := createIPPool(t, data, namespace)
 		if err != nil {
 			t.Fatalf("Creating IPPool failed, err=%+v", err)
@@ -518,10 +522,15 @@ func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPStrin
 
 func deleteIPPoolWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting IPPool '%s'", name)
-	if err := data.crdClient.CrdV1alpha2().IPPools().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
-		ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
-		ipPoolJson, _ := json.Marshal(ipPool)
-		tb.Logf("Error when deleting IPPool, err: %v, data: %s", err, ipPoolJson)
+	for i := 0; i < 10; i++ {
+		if err := data.crdClient.CrdV1alpha2().IPPools().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+			ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
+			ipPoolJson, _ := json.Marshal(ipPool)
+			tb.Logf("Error when deleting IPPool, err: %v, data: %s", err, ipPoolJson)
+			time.Sleep(defaultInterval)
+		} else {
+			break
+		}
 	}
 }
 

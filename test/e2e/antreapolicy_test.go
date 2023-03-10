@@ -140,7 +140,7 @@ func initialize(t *testing.T, data *TestData) {
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods)
+	ips, err := k8sUtils.Bootstrap(namespaces, pods, true)
 	failOnError(err, t)
 	podIPs = *ips
 }
@@ -2216,28 +2216,28 @@ func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
 	executeTests(t, testCase)
 }
 
-func testRejectServiceTraffic(t *testing.T, data *TestData) {
+func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, serverNamespace string) {
 	clientName := "agnhost-client"
-	require.NoError(t, data.createAgnhostPodOnNode(clientName, data.testNamespace, nodeName(0), false))
-	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
-	_, err := data.podWaitForIPs(defaultTimeout, clientName, data.testNamespace)
+	require.NoError(t, data.createAgnhostPodOnNode(clientName, clientNamespace, nodeName(0), false))
+	defer data.DeletePodAndWait(defaultTimeout, clientName, clientNamespace)
+	_, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace)
 	require.NoError(t, err)
 
-	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "s1", data.testNamespace, nodeName(0), v1.ServiceTypeClusterIP)
+	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "s1", serverNamespace, nodeName(0), v1.ServiceTypeClusterIP)
 	defer cleanup1()
 
-	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "s2", data.testNamespace, nodeName(1), v1.ServiceTypeClusterIP)
+	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "s2", serverNamespace, nodeName(1), v1.ServiceTypeClusterIP)
 	defer cleanup2()
 
 	testcases := []podToAddrTestStep{
 		{
-			Pod(data.testNamespace + "/agnhost-client"),
+			Pod(clientNamespace + "/agnhost-client"),
 			svc1.Spec.ClusterIP,
 			80,
 			Rejected,
 		},
 		{
-			Pod(data.testNamespace + "/agnhost-client"),
+			Pod(clientNamespace + "/agnhost-client"),
 			svc2.Spec.ClusterIP,
 			80,
 			Rejected,
@@ -2298,30 +2298,30 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 }
 
 // RejectNoInfiniteLoop tests that a reject action in both traffic directions won't cause an infinite rejection loop.
-func testRejectNoInfiniteLoop(t *testing.T, data *TestData) {
+func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, serverNamespace string) {
 	clientName := "agnhost-client"
-	require.NoError(t, data.createAgnhostPodOnNode(clientName, data.testNamespace, nodeName(0), false))
-	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
-	_, err := data.podWaitForIPs(defaultTimeout, clientName, data.testNamespace)
+	require.NoError(t, data.createAgnhostPodOnNode(clientName, clientNamespace, nodeName(0), false))
+	defer data.DeletePodAndWait(defaultTimeout, clientName, clientNamespace)
+	_, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace)
 	require.NoError(t, err)
 
-	_, server0IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server", nodeName(0), data.testNamespace, false)
+	_, server0IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server", nodeName(0), serverNamespace, false)
 	defer cleanupFunc()
 
-	_, server1IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server", nodeName(1), data.testNamespace, false)
+	_, server1IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server", nodeName(1), serverNamespace, false)
 	defer cleanupFunc()
 
 	var testcases []podToAddrTestStep
 	if clusterInfo.podV4NetworkCIDR != "" {
 		testcases = append(testcases, []podToAddrTestStep{
 			{
-				Pod(data.testNamespace + "/agnhost-client"),
+				Pod(clientNamespace + "/agnhost-client"),
 				server0IP.ipv4.String(),
 				80,
 				Rejected,
 			},
 			{
-				Pod(data.testNamespace + "/agnhost-client"),
+				Pod(clientNamespace + "/agnhost-client"),
 				server1IP.ipv4.String(),
 				80,
 				Rejected,
@@ -2331,13 +2331,13 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		testcases = append(testcases, []podToAddrTestStep{
 			{
-				Pod(data.testNamespace + "/agnhost-client"),
+				Pod(clientNamespace + "/agnhost-client"),
 				server0IP.ipv6.String(),
 				80,
 				Rejected,
 			},
 			{
-				Pod(data.testNamespace + "/agnhost-client"),
+				Pod(clientNamespace + "/agnhost-client"),
 				server1IP.ipv6.String(),
 				80,
 				Rejected,
@@ -3687,13 +3687,13 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 }
 
-func testACNPNodePortServiceSupport(t *testing.T, data *TestData) {
+func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespace string) {
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a NodePort Service.
 	ipProtocol := v1.IPv4Protocol
 	var nodePort int32
-	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", false, false, &ipProtocol)
+	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", serverNamespace, false, false, &ipProtocol)
 	failOnError(err, t)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -3703,11 +3703,11 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData) {
 	}
 
 	backendPodName := "test-nodeport-backend-pod"
-	require.NoError(t, data.createNginxPodOnNode(backendPodName, data.testNamespace, nodeName(0), false))
-	if err := data.podWaitForRunning(defaultTimeout, backendPodName, data.testNamespace); err != nil {
+	require.NoError(t, data.createNginxPodOnNode(backendPodName, serverNamespace, nodeName(0), false))
+	if err := data.podWaitForRunning(defaultTimeout, backendPodName, serverNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", backendPodName)
 	}
-	defer deletePodWrapper(t, data, data.testNamespace, backendPodName)
+	defer deletePodWrapper(t, data, serverNamespace, backendPodName)
 
 	// Create another netns to fake an external network on the host network Pod.
 	testNetns := "test-ns"
@@ -4245,8 +4245,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, ProtocolTCP) })
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, ProtocolUDP) })
-		t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data) })
-		t.Run("Case=RejectNoInfiniteLoop", func(t *testing.T) { testRejectNoInfiniteLoop(t, data) })
+		t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data, data.testNamespace, data.testNamespace) })
+		t.Run("Case=RejectNoInfiniteLoop", func(t *testing.T) { testRejectNoInfiniteLoop(t, data, data.testNamespace, data.testNamespace) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
@@ -4292,7 +4292,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })
 		t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })
 		t.Run("Case=ACNPICMPSupport", func(t *testing.T) { testACNPICMPSupport(t, data) })
-		t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data) })
+		t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, data.testNamespace) })
 	})
 	// print results for reachability tests
 	printResults()

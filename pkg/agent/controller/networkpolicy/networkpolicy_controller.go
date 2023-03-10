@@ -125,6 +125,7 @@ type Controller struct {
 	denyConnStore *connections.DenyConnectionStore
 	gwPort        uint32
 	tunPort       uint32
+	nodeConfig    *config.NodeConfig
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -147,7 +148,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	nodeType config.NodeType,
 	v4Enabled bool,
 	v6Enabled bool,
-	gwPort, tunPort uint32) (*Controller, error) {
+	gwPort, tunPort uint32,
+	nodeConfig *config.NodeConfig) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider:   antreaClientGetter,
@@ -162,6 +164,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		loggingEnabled:         loggingEnabled,
 		gwPort:                 gwPort,
 		tunPort:                tunPort,
+		nodeConfig:             nodeConfig,
 	}
 
 	if l7NetworkPolicyEnabled {
