@@ -123,7 +123,7 @@ func (c *Client) initServiceIPRoutes() error {
 
 // Reconcile removes the orphaned routes and related configuration based on the desired podCIDRs and Service IPs. Only
 // the route entries on the host gateway interface are stored in the cache.
-func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
+func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 	routes, err := c.listRoutes()
 	if err != nil {
@@ -134,8 +134,8 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 			c.hostRoutes.Store(dst, rt)
 			continue
 		}
-		if _, ok := svcIPs[dst]; ok {
-			c.hostRoutes.Store(dst, rt)
+		// Don't delete the routes which are added by AntreaProxy.
+		if c.isServiceRoute(rt) {
 			continue
 		}
 		err := util.RemoveNetRoute(rt)
@@ -261,8 +261,8 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 
 // TODO: Follow the code style in Linux that maintains one Service CIDR.
 func (c *Client) addServiceRoute(svcIP net.IP) error {
-	obj, found := c.hostRoutes.Load(svcIP.String())
 	svcIPNet := util.NewIPNet(svcIP)
+	obj, found := c.hostRoutes.Load(svcIPNet.String())
 
 	// Route: Service IP -> VirtualServiceIPv4 (169.254.0.253)
 	route := &util.Route{
@@ -289,7 +289,7 @@ func (c *Client) addServiceRoute(svcIP net.IP) error {
 		return err
 	}
 
-	c.hostRoutes.Store(route.DestinationSubnet.String(), route)
+	c.hostRoutes.Store(svcIPNet.String(), route)
 	klog.V(2).InfoS("Added Service route", "ServiceIP", route.DestinationSubnet, "GatewayIP", route.GatewayAddress)
 	return nil
 }
@@ -306,7 +306,7 @@ func (c *Client) deleteServiceRoute(svcIP net.IP) error {
 	if err := util.RemoveNetRoute(rt); err != nil {
 		return err
 	}
-	c.hostRoutes.Delete(svcIP.String())
+	c.hostRoutes.Delete(svcIPNet.String())
 	klog.V(2).InfoS("Deleted Service route from host gateway", "DestinationIP", svcIP)
 	return nil
 }
@@ -331,6 +331,15 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 
 // Run is not supported on Windows and returns immediately.
 func (c *Client) Run(stopCh <-chan struct{}) {
+}
+
+func (c *Client) isServiceRoute(route *util.Route) bool {
+	// If the destination IP or gateway IP is the virtual Service IP, then it is the Service route added by AntreaProxy.
+	if route.DestinationSubnet != nil && route.DestinationSubnet.IP.Equal(config.VirtualServiceIPv4) ||
+		route.GatewayAddress != nil && route.GatewayAddress.Equal(config.VirtualServiceIPv4) {
+		return true
+	}
+	return false
 }
 
 func (c *Client) listRoutes() (map[string]*util.Route, error) {
