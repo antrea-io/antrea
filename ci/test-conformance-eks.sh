@@ -163,6 +163,7 @@ managedNodeGroups:
     instanceType: ${AWS_NODE_TYPE}
     desiredCapacity: 2
     ami: ${AMI_ID}
+    amiFamily: AmazonLinux2
     ssh:
       allow: true
       publicKeyPath: ${SSH_KEY_PATH}
