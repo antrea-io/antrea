@@ -125,7 +125,9 @@ var (
 	// externalTrafficPolicy is Cluster.
 	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21)
 	// reg4[22..23]: Field to store the action of a traffic control rule. Marks in this field include:
-	TrafficControlActionField     = binding.NewRegField(4, 22, 23)
+	TrafficControlActionField = binding.NewRegField(4, 22, 23)
+	// reg4[24]: Mark to indicate whether the Endpoints of a Service includes another Service's ClusterIP.
+	NestedServiceRegMark          = binding.NewOneBitRegMark(4, 24)
 	TrafficControlMirrorRegMark   = binding.NewRegMark(TrafficControlActionField, 0b01)
 	TrafficControlRedirectRegMark = binding.NewRegMark(TrafficControlActionField, 0b10)
 

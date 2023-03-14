@@ -149,7 +149,7 @@ func (f *featureMulticluster) snatConntrackFlows(serviceCIDR net.IPNet, localGat
 	ipProtocol := getIPProtocol(localGatewayIP)
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows = append(flows,
-		// This generates the flow to match the first packet of multicluster Service connection, and commit them into
+		// This generates the flow to match the first packet of multi-cluster Service connection, and commit them into
 		// DNAT zone to make sure DNAT is performed before SNAT for any remote cluster traffic.
 		SNATMarkTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).

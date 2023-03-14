@@ -783,9 +783,9 @@ func installServiceFlows(t *testing.T, gid uint32, svc svcConfig, endpointList [
 	groupID := ofconfig.GroupIDType(gid)
 	err := c.InstallEndpointFlows(svc.protocol, endpointList)
 	assert.NoError(t, err, "no error should return when installing flows for Endpoints")
-	err = c.InstallServiceGroup(groupID, svc.withSessionAffinity, nil, endpointList)
+	err = c.InstallServiceGroup(groupID, svc.withSessionAffinity, endpointList)
 	assert.NoError(t, err, "no error should return when installing groups for Service")
-	err = c.InstallServiceFlows(groupID, svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds, false, v1.ServiceTypeClusterIP)
+	err = c.InstallServiceFlows(groupID, svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds, false, v1.ServiceTypeClusterIP, false)
 	assert.NoError(t, err, "no error should return when installing flows for Service")
 }
 

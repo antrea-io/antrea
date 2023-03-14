@@ -27,7 +27,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	openflowtypes "antrea.io/antrea/pkg/agent/openflow/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -85,7 +84,7 @@ type Client interface {
 
 	// InstallServiceGroup installs a group for Service LB. Each endpoint
 	// is a bucket of the group. For now, each bucket has the same weight.
-	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, mcsLocalService *openflowtypes.ServiceGroupInfo, endpoints []proxy.Endpoint) error
+	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
 	// UninstallServiceGroup removes the group and its buckets that are
 	// installed by InstallServiceGroup.
 	UninstallServiceGroup(groupID binding.GroupIDType) error
@@ -104,7 +103,8 @@ type Client interface {
 	// otherwise the installation will fail.
 	// nodeLocalExternal represents if the externalTrafficPolicy is Local or not. This field is meaningful only when
 	// the svcType is NodePort or LoadBalancer.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error
+	// nested represents if the Service has the Endpoints which is other Service's ClusterIP.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
@@ -619,11 +619,11 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return c.getFlowKeysFromCache(c.featurePodConnectivity.podCachedFlows, interfaceName)
 }
 
-func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, mcsLocalService *openflowtypes.ServiceGroupInfo, endpoints []proxy.Endpoint) error {
+func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, mcsLocalService, endpoints...)
+	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
 	_, installed := c.featureService.groupCache.Load(groupID)
 	if !installed {
 		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
@@ -696,13 +696,16 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 	return c.deleteFlows(c.featureService.cachedFlows, cacheKey)
 }
 
-func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error {
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, nodeLocalExternal, svcType))
+	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, nodeLocalExternal, svcType, nested))
 	if affinityTimeout != 0 {
 		flows = append(flows, c.featureService.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, svcType))
+	}
+	if svcType == v1.ServiceTypeClusterIP && !nested {
+		flows = append(flows, c.featureService.endpointRedirectFlowForServiceIP(svcIP, svcPort, protocol, groupID))
 	}
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.featureService.cachedFlows, cacheKey, flows)

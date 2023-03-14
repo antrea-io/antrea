@@ -15,28 +15,15 @@
 package proxy
 
 import (
-	"net"
-	"strings"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
-	openflowtypes "antrea.io/antrea/pkg/agent/openflow/types"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
-// When Antrea Multi-cluster is enabled, the Endpoint from a local exported Service will be
-// represented as a ServiceGroupInfo instead of an element in the returned Endpoint slices.
-func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint,
-	svcInfo k8sproxy.ServicePort,
-	servicePortName k8sproxy.ServicePortName,
-	serviceCIDRIPv4 *net.IPNet) ([]k8sproxy.Endpoint,
-	[]k8sproxy.Endpoint,
-	[]k8sproxy.Endpoint,
-	*openflowtypes.ServiceGroupInfo) {
+func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint, svcInfo k8sproxy.ServicePort) ([]k8sproxy.Endpoint, []k8sproxy.Endpoint, []k8sproxy.Endpoint) {
 	var useTopology, useServingTerminatingEndpoints bool
 	var clusterEndpoints, localEndpoints, allReachableEndpoints []k8sproxy.Endpoint
-	var mcsLocalService *openflowtypes.ServiceGroupInfo
 
 	// If cluster Endpoints is to be used for the Service, generate a list of cluster Endpoints.
 	if svcInfo.UsesClusterEndpoints() {
@@ -44,13 +31,6 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint,
 		clusterEndpoints = filterEndpoints(endpoints, func(ep k8sproxy.Endpoint) bool {
 			if !ep.IsReady() {
 				return false
-			}
-			if p.multiclusterEnabled {
-				tempLocalService := p.getMCSExportedServiceInfo(serviceCIDRIPv4, ep, servicePortName)
-				if tempLocalService != nil {
-					mcsLocalService = tempLocalService
-					return false
-				}
 			}
 			if useTopology && !availableForTopology(ep, p.nodeLabels) {
 				return false
@@ -75,7 +55,7 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint,
 	// and allReachableEndpoints.
 	if !svcInfo.UsesLocalEndpoints() {
 		allReachableEndpoints = clusterEndpoints
-		return clusterEndpoints, nil, allReachableEndpoints, mcsLocalService
+		return clusterEndpoints, nil, allReachableEndpoints
 	}
 
 	localEndpoints = filterEndpoints(endpoints, func(ep k8sproxy.Endpoint) bool {
@@ -105,14 +85,14 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint,
 	// and allReachableEndpoints.
 	if !svcInfo.UsesClusterEndpoints() {
 		allReachableEndpoints = localEndpoints
-		return nil, localEndpoints, allReachableEndpoints, mcsLocalService
+		return nil, localEndpoints, allReachableEndpoints
 	}
 
 	if !useTopology && !useServingTerminatingEndpoints {
 		// !useServingTerminatingEndpoints means that localEndpoints contains only Ready Endpoints. !useTopology means
 		// that clusterEndpoints contains *every* Ready Endpoint. So clusterEndpoints must be a superset of localEndpoints.
 		allReachableEndpoints = clusterEndpoints
-		return clusterEndpoints, localEndpoints, allReachableEndpoints, mcsLocalService
+		return clusterEndpoints, localEndpoints, allReachableEndpoints
 	}
 
 	// clusterEndpoints may contain remote Endpoints that aren't in localEndpoints, while localEndpoints may contain
@@ -130,7 +110,7 @@ func (p *proxier) categorizeEndpoints(endpoints map[string]k8sproxy.Endpoint,
 		allReachableEndpoints = append(allReachableEndpoints, ep)
 	}
 
-	return clusterEndpoints, localEndpoints, allReachableEndpoints, mcsLocalService
+	return clusterEndpoints, localEndpoints, allReachableEndpoints
 }
 
 // canUseTopology returns true if topology aware routing is enabled and properly configured in this cluster. That is,
@@ -178,28 +158,6 @@ func (p *proxier) canUseTopology(endpoints map[string]k8sproxy.Endpoint, svcInfo
 	}
 
 	return true
-}
-
-func (p *proxier) getMCSExportedServiceInfo(serviceCIDRIPv4 *net.IPNet, endpoint k8sproxy.Endpoint, svcPortName k8sproxy.ServicePortName) *openflowtypes.ServiceGroupInfo {
-	var mcsLocalService *openflowtypes.ServiceGroupInfo
-	// When the Endpoint is a local Service's ClusterIP, it means the corresponding local Service is
-	// a member of the Multi-cluster Service.
-	if serviceCIDRIPv4 != nil && serviceCIDRIPv4.Contains(net.ParseIP(endpoint.IP())) {
-		mcsLocalService = &openflowtypes.ServiceGroupInfo{
-			Endpoint: endpoint,
-		}
-	}
-	// For any Multi-cluster Service, its name will be a combination with prefix `antrea-mc-` and
-	// exported Service's name. So we need to remove the prefix to look up the exported Service.
-	if mcsLocalService != nil && strings.HasPrefix(svcPortName.Name, mcServiceNamePrefix) {
-		exportedSvcPortName := svcPortName
-		exportedSvcPortName.Name = strings.TrimPrefix(svcPortName.Name, mcServiceNamePrefix)
-		if _, ok := p.serviceMap[exportedSvcPortName]; ok {
-			mcsLocalService.GroupID = p.groupCounter.AllocateIfNotExist(exportedSvcPortName, false)
-			return mcsLocalService
-		}
-	}
-	return nil
 }
 
 // availableForTopology checks if this endpoint is available for use on this node, given

@@ -104,3 +104,7 @@ func HashLabelIdentity(l string) string {
 	hashValue := hex.EncodeToString(hash.Sum(nil))
 	return hashValue[:labelIdentityHashLength]
 }
+
+func IsMulticlusterService(service *corev1.Service) bool {
+	return service.Annotations[AntreaMCServiceAnnotation] == "true"
+}
