@@ -35,7 +35,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/agent/openflow/types"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
@@ -845,17 +844,12 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 
 func Test_client_InstallServiceGroup(t *testing.T) {
 	groupID := binding.GroupIDType(100)
-	mcsLocalService := &types.ServiceGroupInfo{
-		GroupID:  binding.GroupIDType(2),
-		Endpoint: proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
-	}
 
 	testCases := []struct {
 		name                 string
 		withSessionAffinity  bool
 		endpoints            []proxy.Endpoint
 		expectedGroup        string
-		mcsLocalService      *types.ServiceGroupInfo
 		deleteOFEntriesError error
 	}{
 		{
@@ -867,16 +861,6 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
-		},
-		{
-			name: "IPv4 Endpoints with multi-cluster enabled",
-			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
-			},
-			mcsLocalService: mcsLocalService,
-			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
-				"bucket=bucket_id:1,weight:100,actions=group:2",
 		},
 		{
 			name: "IPv6 Endpoints",
@@ -934,7 +918,7 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
-			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.mcsLocalService, tc.endpoints))
+			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.endpoints))
 			gCacheI, ok := fc.featureService.groupCache.Load(groupID)
 			require.True(t, ok)
 			group := getGroupFromCache(gCacheI.(binding.Group))
@@ -1091,6 +1075,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		nodeLocalExternal bool
 		svcType           corev1.ServiceType
 		expectedFlows     []string
+		nested            bool
 	}{
 		{
 			name:     "Service ClusterIP",
@@ -1098,8 +1083,19 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			svcIP:    svcIPv4,
 			svcType:  corev1.ServiceTypeClusterIP,
 			expectedFlows: []string{
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x20000/0x70000->reg4,set_field:0x200/0x200->reg0,set_field:0x64->reg7,group:100",
 			},
+		},
+		{
+			name:     "Service ClusterIP, nested",
+			protocol: binding.ProtocolTCP,
+			svcIP:    svcIPv4,
+			svcType:  corev1.ServiceTypeClusterIP,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x20000/0x70000->reg4,set_field:0x200/0x200->reg0,set_field:0x64->reg7,set_field:0x1000000/0x1000000->reg4,group:100",
+			},
+			nested: true,
 		},
 		{
 			name:            "Service ClusterIP,SessionAffinity",
@@ -1108,6 +1104,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			affinityTimeout: uint16(100),
 			svcType:         corev1.ServiceTypeClusterIP,
 			expectedFlows: []string{
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x30000/0x70000->reg4,set_field:0x200/0x200->reg0,set_field:0x64->reg7,group:100",
 				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,load:0x800->NXM_OF_ETH_TYPE[],load:0x6->NXM_OF_IP_PROTO[],load:OXM_OF_TCP_DST[]->OXM_OF_TCP_DST[],load:NXM_OF_IP_DST[]->NXM_OF_IP_DST[],load:NXM_OF_IP_SRC[]->NXM_OF_IP_SRC[],NXM_NX_REG3[],NXM_NX_REG4[0..15],reg4=0x2,reg0=0x1),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
@@ -1119,6 +1116,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			affinityTimeout: uint16(100),
 			svcType:         corev1.ServiceTypeClusterIP,
 			expectedFlows: []string{
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp6,reg4=0x1020050/0x107ffff actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x30000/0x70000->reg4,set_field:0x200/0x200->reg0,set_field:0x64->reg7,group:100",
 				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,load:0x86dd->NXM_OF_ETH_TYPE[],load:0x6->NXM_OF_IP_PROTO[],load:OXM_OF_TCP_DST[]->OXM_OF_TCP_DST[],load:NXM_NX_IPV6_DST[]->NXM_NX_IPV6_DST[],load:NXM_NX_IPV6_SRC[]->NXM_NX_IPV6_SRC[],NXM_NX_XXREG3[],NXM_NX_REG4[0..15],reg4=0x2,reg0=0x1),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
@@ -1182,7 +1180,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 
 			cacheKey := generateServicePortFlowCacheKey(tc.svcIP, port, tc.protocol)
 
-			assert.NoError(t, fc.InstallServiceFlows(groupID, tc.svcIP, port, tc.protocol, tc.affinityTimeout, tc.nodeLocalExternal, tc.svcType))
+			assert.NoError(t, fc.InstallServiceFlows(groupID, tc.svcIP, port, tc.protocol, tc.affinityTimeout, tc.nodeLocalExternal, tc.svcType, tc.nested))
 			fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -1212,7 +1210,7 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 		proxy.NewBaseEndpointInfo("10.10.0.12", "", "", 80, true, true, false, false, nil),
 	}
 
-	assert.NoError(t, fc.InstallServiceFlows(groupID, svcIP, svcPort, bindingProtocol, 100, true, corev1.ServiceTypeLoadBalancer))
+	assert.NoError(t, fc.InstallServiceFlows(groupID, svcIP, svcPort, bindingProtocol, 100, true, corev1.ServiceTypeLoadBalancer, false))
 	assert.NoError(t, fc.InstallEndpointFlows(bindingProtocol, endpoints))
 	flowKeys := fc.GetServiceFlowKeys(svcIP, svcPort, bindingProtocol, endpoints)
 	expectedFlowKeys := []string{

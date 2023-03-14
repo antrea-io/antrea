@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilnet "k8s.io/utils/net"
 
+	mccommon "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
@@ -27,11 +28,16 @@ type ServiceInfo struct {
 	*k8sproxy.BaseServiceInfo
 	// cache for performance
 	OFProtocol openflow.Protocol
+	// IsNested means the Service's Endpoints could be another Service's ClusterIP.
+	// Currently it's true for Antrea Multi-cluster Service, determined by whether
+	// there is an Antrea Multi-cluster specific annotation.
+	IsNested bool
 }
 
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServiceInfo: baseInfo}
+	info.IsNested = mccommon.IsMulticlusterService(service)
 	if utilnet.IsIPv6(baseInfo.ClusterIP()) {
 		info.OFProtocol = openflow.ProtocolTCPv6
 		if port.Protocol == corev1.ProtocolUDP {
