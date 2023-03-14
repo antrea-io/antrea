@@ -325,8 +325,8 @@ func (b *ofPacketOutBuilder) SetL4Packet(packet util.Message) PacketOutBuilder {
 	return b
 }
 
-func (b *ofPacketOutBuilder) SetEthPacket(packet util.Message) PacketOutBuilder {
-	b.pktOut.EthernetPacket = &packet
+func (b *ofPacketOutBuilder) SetEthPacket(packet *protocol.Ethernet) PacketOutBuilder {
+	b.pktOut.EthernetPacket = packet
 	return b
 }
 

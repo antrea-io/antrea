@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	antrea.io/libOpenflow v0.9.2
-	antrea.io/ofnet v0.6.5
+	antrea.io/ofnet v0.6.9
 	github.com/ClickHouse/clickhouse-go v1.5.4
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Mellanox/sriovnet v1.1.0
@@ -210,5 +210,3 @@ require (
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
-
-replace antrea.io/ofnet => github.com/graysonwu/ofnet v0.0.0-20230307193942-e7cecbbf5fc7

@@ -26,6 +26,7 @@ import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
+	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
 	gomock "github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -672,7 +673,7 @@ func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 }
 
 // SendEthPacketOut mocks base method
-func (m *MockClient) SendEthPacketOut(arg0, arg1 uint32, arg2 util.Message, arg3 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
+func (m *MockClient) SendEthPacketOut(arg0, arg1 uint32, arg2 *protocol.Ethernet, arg3 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendEthPacketOut", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)

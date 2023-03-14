@@ -1,5 +1,7 @@
 antrea.io/libOpenflow v0.9.2 h1:9W++nzaxxwY4NxyHHow/4bfum2UPIBJKmEOVTAG+x3o=
 antrea.io/libOpenflow v0.9.2/go.mod h1:IM9mUfHh5hUNciRRcWYIaWZTlv1TI6QBEHlml7ALdS4=
+antrea.io/ofnet v0.6.9 h1:ACoDhFhSHfNtuBKffvptspZDwKe+EQ5i35PuDUZ8svk=
+antrea.io/ofnet v0.6.9/go.mod h1:CB/Pkt+U0Yi1sM7DZ7iS215xGL+dhRRAM0EV0LTDLnY=
 bazil.org/fuse v0.0.0-20160811212531-371fbbdaa898/go.mod h1:Xbm+BRKSBEpa4q4hTSxohYNQpsxXPbPry4JJWOB3LB8=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
@@ -637,8 +639,6 @@ github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
-github.com/graysonwu/ofnet v0.0.0-20230307193942-e7cecbbf5fc7 h1:iiavyk5AfEZO16zNUvRwy3KXOS0zo7hAmcgikzEV+hg=
-github.com/graysonwu/ofnet v0.0.0-20230307193942-e7cecbbf5fc7/go.mod h1:CB/Pkt+U0Yi1sM7DZ7iS215xGL+dhRRAM0EV0LTDLnY=
 github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7/go.mod h1:FecbI9+v66THATjSRHfNgh1IVFe/9kFxbXtjV0ctIMA=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=

@@ -18,6 +18,7 @@ import (
 	"net"
 	"time"
 
+	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 )
@@ -422,7 +423,7 @@ type PacketOutBuilder interface {
 	AddLoadRegMark(mark *RegMark) PacketOutBuilder
 	AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder
 	SetL4Packet(packet util.Message) PacketOutBuilder
-	SetEthPacket(packet util.Message) PacketOutBuilder
+	SetEthPacket(packet *protocol.Ethernet) PacketOutBuilder
 	Done() *ofctrl.PacketOut
 }
 

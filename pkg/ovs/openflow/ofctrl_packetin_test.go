@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -228,9 +229,10 @@ func TestParsePacketIn(t *testing.T) {
 	}
 }
 
-func TestGetTCPDataWithoutOptions(t *testing.T) {
+func TestGetTCPDNSData(t *testing.T) {
 	type args struct {
 		tcp        protocol.TCP
+		expectErr  error
 		expectData []byte
 	}
 	tests := []struct {
@@ -238,12 +240,35 @@ func TestGetTCPDataWithoutOptions(t *testing.T) {
 		args args
 	}{
 		{
-			name: "GetTCPDNSData",
+			name: "GetTCPDNSDataNoDNS",
 			args: args{
 				tcp: protocol.TCP{
 					HdrLen: 6,
-					Data:   []byte{1, 2, 3, 4, 0, 0, 5},
+					Data:   []byte{1, 2, 3, 4, 0},
 				},
+				expectErr:  fmt.Errorf("no DNS data in TCP data"),
+				expectData: nil,
+			},
+		},
+		{
+			name: "GetTCPDNSDataFragmented",
+			args: args{
+				tcp: protocol.TCP{
+					HdrLen: 6,
+					Data:   []byte{1, 2, 3, 4, 0, 2, 5},
+				},
+				expectErr:  fmt.Errorf("DNS response has been fragmented"),
+				expectData: nil,
+			},
+		},
+		{
+			name: "GetTCPDNSDataSuccess",
+			args: args{
+				tcp: protocol.TCP{
+					HdrLen: 6,
+					Data:   []byte{1, 2, 3, 4, 0, 1, 5},
+				},
+				expectErr:  nil,
 				expectData: []byte{5},
 			},
 		},
@@ -252,7 +277,7 @@ func TestGetTCPDataWithoutOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tcp := tt.args.tcp
 			tcpData, err := GetTCPDNSData(&tcp)
-			require.NoError(t, err, "GetTCPDNSData() returned an error")
+			assert.Equal(t, tt.args.expectErr, err)
 			assert.Equal(t, tt.args.expectData, tcpData)
 		})
 	}

@@ -277,7 +277,7 @@ type Client interface {
 		udpData []byte,
 		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendEthPacketOut sends ethernet packet as a packet-out to OVS.
-	SendEthPacketOut(inPort, outPort uint32, ethPkt ofutil.Message, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
+	SendEthPacketOut(inPort, outPort uint32, ethPkt *protocol.Ethernet, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// NewDNSPacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
 	NewDNSPacketInConjunction(id uint32) error
 	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
@@ -1246,7 +1246,7 @@ func (c *client) SendUDPPacketOut(
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) SendEthPacketOut(inPort, outPort uint32, ethPkt ofutil.Message, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
+func (c *client) SendEthPacketOut(inPort, outPort uint32, ethPkt *protocol.Ethernet, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	packetOutBuilder := c.bridge.BuildPacketOut()
 	packetOutBuilder = packetOutBuilder.SetInport(inPort)
 	if outPort != 0 {

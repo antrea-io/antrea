@@ -21,6 +21,7 @@ package testing
 
 import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
+	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
 	ofctrl "antrea.io/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
@@ -2561,7 +2562,7 @@ func (mr *MockPacketOutBuilderMockRecorder) SetDstMAC(arg0 interface{}) *gomock.
 }
 
 // SetEthPacket mocks base method
-func (m *MockPacketOutBuilder) SetEthPacket(arg0 util.Message) openflow.PacketOutBuilder {
+func (m *MockPacketOutBuilder) SetEthPacket(arg0 *protocol.Ethernet) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetEthPacket", arg0)
 	ret0, _ := ret[0].(openflow.PacketOutBuilder)

@@ -811,6 +811,10 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 // sendDNSPacketout forwards the DNS response packet to the original requesting client.
 func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
+	ethernetPkt, err := getEthernetPacket(pktIn)
+	if err != nil {
+		return err
+	}
 	inPort := f.gwPort
 	if inPort == 0 {
 		// Use the original in_port number in the packetIn message to avoid an invalid input port number. Note that,
@@ -824,5 +828,5 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 	mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
 	}
-	return f.ofClient.SendEthPacketOut(inPort, 0, pktIn.Data, mutatePacketOut)
+	return f.ofClient.SendEthPacketOut(inPort, 0, ethernetPkt, mutatePacketOut)
 }
