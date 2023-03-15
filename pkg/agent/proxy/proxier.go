@@ -26,7 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/discovery/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	k8sapitypes "k8s.io/apimachinery/pkg/types"
+	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
@@ -105,6 +105,13 @@ type proxier struct {
 	// oversizeServiceSet records the Services that have more than 800 Endpoints.
 	oversizeServiceSet sets.String
 
+	// serviceIPRouteReferences tracks the references of Service IP routes. The key is the Service IP and the value is
+	// the set of ServiceInfo strings. Because a Service could have multiple ports and each port will generate a
+	// ServicePort (which is the unit of the processing), a Service IP route may be required by several ServicePorts.
+	// With the references, we install a route exactly once as long as it's used by any ServicePorts and uninstall it
+	// exactly once when it's no longer used by any ServicePorts.
+	// It applies to ClusterIP and LoadBalancerIP.
+	serviceIPRouteReferences map[string]sets.String
 	// syncedOnce returns true if the proxier has synced rules at least once.
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
@@ -114,7 +121,6 @@ type proxier struct {
 	ofClient             openflow.Client
 	routeClient          route.Interface
 	nodePortAddresses    []net.IP
-	hostGateWay          string
 	isIPv6               bool
 	proxyAll             bool
 	endpointSliceEnabled bool
@@ -145,28 +151,35 @@ func (p *proxier) removeStaleServices() {
 			continue
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
-		klog.V(2).Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
+		svcInfoStr := svcInfo.String()
+		klog.V(2).InfoS("Removing stale Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 		if p.oversizeServiceSet.Has(svcPortName.String()) {
 			p.oversizeServiceSet.Delete(svcPortName.String())
 		}
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
-			klog.ErrorS(err, "Failed to remove flows of Service", "Service", svcPortName)
+			klog.ErrorS(err, "Error when uninstalling ClusterIP flows for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 			continue
 		}
 
+		// Remove NodePort and ClusterIP flows and configurations.
 		if p.proxyAll {
-			// Remove NodePort flows and configurations.
 			if svcInfo.NodePort() > 0 {
 				if err := p.uninstallNodePortService(uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
-					klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
+					klog.ErrorS(err, "Error when uninstalling NodePort flows and configurations for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
+					continue
+				}
+			}
+			if svcInfo.ClusterIP() != nil {
+				if err := p.deleteRouteForServiceIP(svcInfoStr, svcInfo.ClusterIP(), p.routeClient.DeleteClusterIPRoute); err != nil {
+					klog.ErrorS(err, "Failed to remove ClusterIP Service routes", "Service", svcPortName)
 					continue
 				}
 			}
 		}
 		// Remove LoadBalancer flows and configurations.
 		if p.proxyLoadBalancerIPs && len(svcInfo.LoadBalancerIPStrings()) > 0 {
-			if err := p.uninstallLoadBalancerService(svcInfo.LoadBalancerIPStrings(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
-				klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
+			if err := p.uninstallLoadBalancerService(svcInfoStr, svcInfo.LoadBalancerIPStrings(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+				klog.ErrorS(err, "Error when uninstalling LoadBalancer flows and configurations for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 				continue
 			}
 		}
@@ -314,43 +327,80 @@ func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Prot
 	return nil
 }
 
-func (p *proxier) installLoadBalancerService(groupID binding.GroupIDType, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
+func (p *proxier) installLoadBalancerService(svcInfoStr string, groupID binding.GroupIDType, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
-			if err := p.ofClient.InstallServiceFlows(groupID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeLoadBalancer); err != nil {
-				return fmt.Errorf("failed to install Service LoadBalancer load balancing flows: %w", err)
+			ip := net.ParseIP(ingress)
+			if err := p.ofClient.InstallServiceFlows(groupID, ip, svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeLoadBalancer); err != nil {
+				return fmt.Errorf("failed to install LoadBalancer load balancing flows: %w", err)
+			}
+			if p.proxyAll {
+				if err := p.addRouteForServiceIP(svcInfoStr, ip, p.routeClient.AddLoadBalancer); err != nil {
+					return fmt.Errorf("failed to install LoadBalancer traffic redirecting routes: %w", err)
+				}
 			}
 		}
 	}
-	if p.proxyAll {
-		if err := p.routeClient.AddLoadBalancer(loadBalancerIPStrings); err != nil {
-			return fmt.Errorf("failed to install Service LoadBalancer traffic redirecting flows: %w", err)
-		}
-	}
-
 	return nil
 }
 
-func (p *proxier) uninstallLoadBalancerService(loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol) error {
+func (p *proxier) addRouteForServiceIP(svcInfoStr string, ip net.IP, addRouteFn func(net.IP) error) error {
+	ipStr := ip.String()
+	references, exists := p.serviceIPRouteReferences[ipStr]
+	// If the IP was not referenced by any Service port, install a route for it.
+	// Otherwise, just reference it.
+	if !exists {
+		if err := addRouteFn(ip); err != nil {
+			return err
+		}
+		references = sets.NewString(svcInfoStr)
+		p.serviceIPRouteReferences[ipStr] = references
+	} else {
+		references.Insert(svcInfoStr)
+	}
+	return nil
+}
+
+func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol) error {
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
-			if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove Service LoadBalancer load balancing flows: %w", err)
+			ip := net.ParseIP(ingress)
+			if err := p.ofClient.UninstallServiceFlows(ip, svcPort, protocol); err != nil {
+				return fmt.Errorf("failed to remove LoadBalancer load balancing flows: %w", err)
+			}
+			if p.proxyAll {
+				if err := p.deleteRouteForServiceIP(svcInfoStr, ip, p.routeClient.DeleteLoadBalancer); err != nil {
+					return fmt.Errorf("failed to remove LoadBalancer traffic redirecting routes: %w", err)
+				}
 			}
 		}
 	}
-	if p.proxyAll {
-		if err := p.routeClient.DeleteLoadBalancer(loadBalancerIPStrings); err != nil {
-			return fmt.Errorf("failed to remove Service LoadBalancer traffic redirecting flows: %w", err)
+	return nil
+}
+
+func (p *proxier) deleteRouteForServiceIP(svcInfoStr string, ip net.IP, deleteRouteFn func(net.IP) error) error {
+	ipStr := ip.String()
+	references, exists := p.serviceIPRouteReferences[ipStr]
+	// If the IP was not referenced by this Service port, skip it.
+	if exists && references.Has(svcInfoStr) {
+		// Delete the IP only if this Service port is the last one referencing it.
+		// Otherwise, just dereference it.
+		if references.Len() == 1 {
+			if err := deleteRouteFn(ip); err != nil {
+				return err
+			}
+			delete(p.serviceIPRouteReferences, ipStr)
+		} else {
+			references.Delete(svcInfoStr)
 		}
 	}
-
 	return nil
 }
 
 func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
+		svcInfoStr := svcInfo.String()
 		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
 		if !ok {
 			endpointsInstalled = map[string]k8sproxy.Endpoint{}
@@ -591,9 +641,9 @@ func (p *proxier) installServices() {
 						}
 					}
 					// If previous Service which has ClusterIP should be removed, remove ClusterIP routes.
-					if svcInfo.ClusterIP() != nil {
-						if err := p.routeClient.DeleteClusterIPRoute(pSvcInfo.ClusterIP()); err != nil {
-							klog.ErrorS(err, "Failed to remove ClusterIP Service routes", "Service", svcPortName)
+					if pSvcInfo.ClusterIP() != nil {
+						if err := p.deleteRouteForServiceIP(pSvcInfo.String(), pSvcInfo.ClusterIP(), p.routeClient.DeleteClusterIPRoute); err != nil {
+							klog.ErrorS(err, "Error when uninstalling ClusterIP route for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 							continue
 						}
 					}
@@ -613,8 +663,8 @@ func (p *proxier) installServices() {
 				// is created, the routing target IP block will be recalculated for expansion to be able to route the new
 				// created ClusterIP. Deleting a ClusterIP will not shrink the target routing IP block. The Service CIDR
 				// can be finally calculated after creating enough ClusterIPs.
-				if err := p.routeClient.AddClusterIPRoute(svcInfo.ClusterIP()); err != nil {
-					klog.ErrorS(err, "Failed to install ClusterIP route of Service", "Service", svcPortName)
+				if err := p.addRouteForServiceIP(svcInfo.String(), svcInfo.ClusterIP(), p.routeClient.AddClusterIPRoute); err != nil {
+					klog.ErrorS(err, "Error when installing ClusterIP route for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 					continue
 				}
 
@@ -641,14 +691,14 @@ func (p *proxier) installServices() {
 				}
 				// Remove LoadBalancer flows and configurations.
 				if len(toDelete) > 0 {
-					if err := p.uninstallLoadBalancerService(toDelete, uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
-						klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
+					if err := p.uninstallLoadBalancerService(pSvcInfo.String(), toDelete, uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
+						klog.ErrorS(err, "Error when uninstalling LoadBalancer flows and configurations for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 						continue
 					}
 				}
 				// Install LoadBalancer flows and configurations.
 				if len(toAdd) > 0 {
-					if err := p.installLoadBalancerService(nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalExternal()); err != nil {
+					if err := p.installLoadBalancerService(svcInfo.String(), nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalExternal()); err != nil {
 						klog.ErrorS(err, "Failed to install LoadBalancer flows and configurations of Service", "Service", svcPortName)
 						continue
 					}
@@ -838,7 +888,7 @@ func (p *proxier) GetProxyProvider() k8sproxy.Provider {
 }
 
 func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
-	namespacedName := k8sapitypes.NamespacedName{Namespace: namespace, Name: serviceName}
+	namespacedName := apimachinerytypes.NamespacedName{Namespace: namespace, Name: serviceName}
 	p.serviceEndpointsMapsMutex.Lock()
 	defer p.serviceEndpointsMapsMutex.Unlock()
 
@@ -914,6 +964,7 @@ func NewProxier(
 		endpointsInstalledMap:    types.EndpointsMap{},
 		endpointsMap:             types.EndpointsMap{},
 		endpointReferenceCounter: map[string]int{},
+		serviceIPRouteReferences: map[string]sets.String{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		oversizeServiceSet:       sets.NewString(),
 		groupCounter:             groupCounter,

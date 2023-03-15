@@ -65,11 +65,11 @@ type Interface interface {
 	// ClusterIP Service traffic from host network.
 	DeleteClusterIPRoute(svcIP net.IP) error
 
-	// AddLoadBalancer adds configurations when a LoadBalancer Service is created.
-	AddLoadBalancer(externalIPs []string) error
+	// AddLoadBalancer adds configurations when a LoadBalancer IP is added.
+	AddLoadBalancer(externalIP net.IP) error
 
-	// DeleteLoadBalancer deletes related configurations when a LoadBalancer Service is deleted.
-	DeleteLoadBalancer(externalIPs []string) error
+	// DeleteLoadBalancer deletes related configurations when a LoadBalancer IP is deleted.
+	DeleteLoadBalancer(externalIP net.IP) error
 
 	// Run starts the sync loop.
 	Run(stopCh <-chan struct{})
