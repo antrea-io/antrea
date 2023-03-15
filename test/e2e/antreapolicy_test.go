@@ -3334,7 +3334,6 @@ func testFQDNPolicyTCP(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
 	builder.AddFQDNRule("github.com", ProtocolTCP, nil, nil, nil, "", nil, crdv1alpha1.RuleActionDrop)
-
 	testcases := []podToAddrTestStep{
 		{
 			Pod(namespaces["y"] + "/a"),

@@ -79,8 +79,8 @@ func GetTCPDNSData(tcpPkt *protocol.TCP) (data []byte, err error) {
 	dnsDataLen := binary.BigEndian.Uint16(tcpPkt.Data[tcpOptionsLen : tcpOptionsLen+2])
 	dnsData := tcpPkt.Data[tcpOptionsLen+2:]
 	if int(dnsDataLen) > len(dnsData) {
-		klog.Info("DNS response has been fragmented")
-		return nil, fmt.Errorf("DNS response has been fragmented")
+		klog.Info("There is a non-DNS response or a fragmented DNS response in TCP payload")
+		return nil, fmt.Errorf("there is a non-DNS response or a fragmented DNS response in TCP payload")
 	}
 	return dnsData, nil
 }

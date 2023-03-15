@@ -257,7 +257,7 @@ func TestGetTCPDNSData(t *testing.T) {
 					HdrLen: 6,
 					Data:   []byte{1, 2, 3, 4, 0, 2, 5},
 				},
-				expectErr:  fmt.Errorf("DNS response has been fragmented"),
+				expectErr:  fmt.Errorf("there is a non-DNS response or a fragmented DNS response in TCP payload"),
 				expectData: nil,
 			},
 		},

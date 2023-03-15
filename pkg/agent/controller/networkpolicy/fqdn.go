@@ -749,7 +749,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 	handleDNSData := func(dnsData []byte) {
 		dnsMsg := dns.Msg{}
 		if err := dnsMsg.Unpack(dnsData); err != nil {
-			// A non-DNS response packet is received. Forward it to the Pod.
+			// A non-DNS response packet or a fragmented DNS response is received. Forward it to the Pod.
 			waitCh <- nil
 			return
 		}
@@ -758,6 +758,8 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 	go func() {
 		ethernetPkt, err := getEthernetPacket(pktIn)
 		if err != nil {
+			// Can't parse the packet. Forward it to the Pod.
+			waitCh <- nil
 			return
 		}
 		switch ipPkt := ethernetPkt.Data.(type) {
@@ -770,10 +772,14 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 			case protocol.Type_TCP:
 				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
 				if err != nil {
+					// Can't parse the packet. Forward it to the Pod.
+					waitCh <- nil
 					return
 				}
 				dnsData, err := binding.GetTCPDNSData(tcpPkt)
 				if err != nil {
+					// A non-DNS response packet is received or a fragmented DNS response is received. Forward it to the Pod.
+					waitCh <- nil
 					return
 				}
 				handleDNSData(dnsData)
@@ -787,10 +793,14 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 			case protocol.Type_TCP:
 				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
 				if err != nil {
+					// Can't parse the packet. Forward it to the Pod.
+					waitCh <- nil
 					return
 				}
 				dnsData, err := binding.GetTCPDNSData(tcpPkt)
 				if err != nil {
+					// A non-DNS response packet is received or a fragmented DNS response is received. Forward it to the Pod.
+					waitCh <- nil
 					return
 				}
 				handleDNSData(dnsData)
@@ -804,7 +814,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if err != nil {
 			return fmt.Errorf("error when syncing up rules for DNS reply, dropping packet: %v", err)
 		}
-		klog.V(2).InfoS("Rule sync is successful or not needed or a non-DNS response packet was received, forwarding the packet to Pod")
+		klog.V(2).InfoS("Rule sync is successful or not needed or a non-DNS response packet or a fragmented DNS response was received, forwarding the packet to Pod")
 		return f.sendDNSPacketout(pktIn)
 	}
 }
