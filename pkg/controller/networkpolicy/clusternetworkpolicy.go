@@ -339,6 +339,11 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	var clusterAppliedToAffectedNS []string
 	// atgForNamespace is the appliedToGroups split by Namespaces.
 	var atgForNamespace []*antreatypes.AppliedToGroup
+	// clusterSetScopeSelectorKeys keeps track of all the ClusterSet-scoped selector keys of the policy.
+	// During policy peer processing, any ClusterSet-scoped selector will be registered with the
+	// labelIdentityInterface and added to this set. By the end of the function, this set will
+	// be used to remove any stale selector from the policy in the labelIdentityInterface.
+	var clusterSetScopeSelectorKeys sets.String
 	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
 		for _, at := range cnp.Spec.AppliedTo {
 			if at.ServiceAccount != nil {
@@ -396,7 +401,10 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				if cnpRule.ToServices != nil {
 					addRule(n.svcRefToPeerForCRD(cnpRule.ToServices, ""), nil, direction, ruleATGs)
 				} else {
-					peer, ags := n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists)
+					peer, ags, selKeys := n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists)
+					if selKeys != nil {
+						clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+					}
 					addRule(peer, ags, direction, ruleATGs)
 				}
 			}
@@ -405,7 +413,8 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 					// Create a rule for each affected Namespace of appliedTo at spec level
 					for i := range clusterAppliedToAffectedNS {
 						klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", clusterAppliedToAffectedNS[i], idx, cnp.Name)
-						peer, ags := n.toNamespacedPeerForCRD(perNSPeers, clusterAppliedToAffectedNS[i])
+						peer, ags, selKeys := n.toNamespacedPeerForCRD(perNSPeers, cnp, clusterAppliedToAffectedNS[i])
+						clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
 						addRule(peer, ags, direction, []*antreatypes.AppliedToGroup{atgForNamespace[i]})
 					}
 				} else {
@@ -414,14 +423,16 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 						if at.ServiceAccount != nil {
 							atg := n.createAppliedToGroup(at.ServiceAccount.Namespace, serviceAccountNameToPodSelector(at.ServiceAccount.Name), nil, nil)
 							klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
-							peer, ags := n.toNamespacedPeerForCRD(perNSPeers, at.ServiceAccount.Namespace)
+							peer, ags, selKeys := n.toNamespacedPeerForCRD(perNSPeers, cnp, at.ServiceAccount.Namespace)
+							clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
 							addRule(peer, ags, direction, []*antreatypes.AppliedToGroup{atg})
 						} else {
 							affectedNS := n.getAffectedNamespacesForAppliedTo(at)
 							for _, ns := range affectedNS {
 								atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
 								klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
-								peer, ags := n.toNamespacedPeerForCRD(perNSPeers, ns)
+								peer, ags, selKeys := n.toNamespacedPeerForCRD(perNSPeers, cnp, ns)
+								clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
 								addRule(peer, ags, direction, []*antreatypes.AppliedToGroup{atg})
 							}
 						}
@@ -453,6 +464,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 		Priority:         &cnp.Spec.Priority,
 		TierPriority:     &tierPriority,
 		AppliedToPerRule: appliedToPerRule,
+	}
+	if n.stretchNPEnabled {
+		n.labelIdentityInterface.RemoveStalePolicySelectors(clusterSetScopeSelectorKeys, internalNetworkPolicyKeyFunc(cnp))
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }

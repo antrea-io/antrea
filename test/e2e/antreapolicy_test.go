@@ -2577,7 +2577,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP)
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil)
 		}()
 	}
 	oneProbe(namespaces["x"], "a", namespaces["z"], "a")
@@ -2669,7 +2669,7 @@ func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP)
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil)
 		}()
 	}
 	oneProbe(namespaces["x"], "b", namespaces["x"], "a")
@@ -4014,7 +4014,7 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol AntreaPolicy
 	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
 	defer dstPodCleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol)
+	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol, nil)
 	if err != nil {
 		t.Errorf("failure -- could not complete probe: %v", err)
 	}

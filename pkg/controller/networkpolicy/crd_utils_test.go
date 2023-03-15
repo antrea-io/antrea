@@ -475,7 +475,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 				npc.labelIdentityInterface.AddLabelIdentity(labelIdentityA, 1)
 				npc.labelIdentityInterface.AddLabelIdentity(labelIdentityB, 2)
 			}
-			actualPeer, _ := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
+			actualPeer, _, _ := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, actualPeer.AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, actualPeer.AddressGroups)
 			}
