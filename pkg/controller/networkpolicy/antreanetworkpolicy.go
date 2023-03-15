@@ -86,6 +86,11 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
+	// clusterSetScopeSelectorKeys keeps track of all the ClusterSet-scoped selector keys of the policy.
+	// During policy peer processing, any ClusterSet-scoped selector will be registered with the
+	// labelIdentityInterface and added to this set. By the end of the function, this set will
+	// be used to remove any stale selector from the policy in the labelIdentityInterface.
+	var clusterSetScopeSelectorKeys sets.String
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
 	atgs := n.processAppliedTo(np.Namespace, np.Spec.AppliedTo)
 	appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
@@ -96,7 +101,10 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		atgs := n.processAppliedTo(np.Namespace, ingressRule.AppliedTo)
 		appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
-		peer, ags := n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists)
+		peer, ags, selKeys := n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists)
+		if selKeys != nil {
+			clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+		}
 		addressGroups = mergeAddressGroups(addressGroups, ags...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
@@ -122,8 +130,12 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			peer = n.svcRefToPeerForCRD(egressRule.ToServices, np.Namespace)
 		} else {
 			var ags []*antreatypes.AddressGroup
-			peer, ags = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists)
+			var selKeys sets.String
+			peer, ags, selKeys = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
+			if selKeys != nil {
+				clusterSetScopeSelectorKeys = clusterSetScopeSelectorKeys.Union(selKeys)
+			}
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
@@ -153,6 +165,9 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		Priority:         &np.Spec.Priority,
 		TierPriority:     &tierPriority,
 		AppliedToPerRule: appliedToPerRule,
+	}
+	if n.stretchNPEnabled {
+		n.labelIdentityInterface.RemoveStalePolicySelectors(clusterSetScopeSelectorKeys, internalNetworkPolicyKeyFunc(np))
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }

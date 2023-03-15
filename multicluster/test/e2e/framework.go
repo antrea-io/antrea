@@ -89,7 +89,7 @@ func (data *MCTestData) createClients() error {
 	}
 	data.clusterTestDataMap = map[string]antreae2e.TestData{}
 	for i, cluster := range data.clusters {
-		testData := antreae2e.TestData{}
+		testData := antreae2e.TestData{ClusterName: cluster}
 		if err := testData.CreateClient(kubeConfigPaths[i]); err != nil {
 			return fmt.Errorf("error initializing clients for cluster %s: %v", cluster, err)
 		}

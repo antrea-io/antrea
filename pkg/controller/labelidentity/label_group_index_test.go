@@ -331,10 +331,18 @@ func TestSetPolicySelectors(t *testing.T) {
 			i.AddLabelIdentity(labelB, 2)
 			i.AddLabelIdentity(labelC, 3)
 			if tt.prevPolicyAdded != "" {
-				i.SetPolicySelectors(tt.prevSelAdded, tt.prevPolicyAdded)
+				for _, sel := range tt.prevSelAdded {
+					i.AddSelector(sel, tt.prevPolicyAdded)
+				}
 			}
-			matchedIDs := i.SetPolicySelectors(tt.selectors, tt.policyKey)
-			assert.ElementsMatch(t, tt.expIDs, matchedIDs)
+			var labelIDs []uint32
+			selectorKeys := sets.NewString()
+			for _, sel := range tt.selectors {
+				labelIDs = append(labelIDs, i.AddSelector(sel, tt.policyKey)...)
+				selectorKeys.Insert(sel.NormalizedName)
+			}
+			i.RemoveStalePolicySelectors(selectorKeys, tt.policyKey)
+			assert.ElementsMatch(t, tt.expIDs, dedupLabelIdentites(labelIDs))
 			assert.Equalf(t, len(tt.expSelectorItems), len(i.selectorItems.List()), "Unexpected number of cached selectorItems")
 			for selKey, expSelItem := range tt.expSelectorItems {
 				s, exists, _ := i.selectorItems.GetByKey(selKey)
@@ -347,6 +355,20 @@ func TestSetPolicySelectors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Dedup LabelIdentity IDs in-place.
+func dedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
+	seen := map[uint32]struct{}{}
+	idx := 0
+	for _, id := range labelIdentityIDs {
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			labelIdentityIDs[idx] = id
+			idx++
+		}
+	}
+	return labelIdentityIDs[:idx]
 }
 
 func TestAddLabelIdentity(t *testing.T) {
@@ -412,10 +434,12 @@ func TestAddLabelIdentity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			i := NewLabelIdentityIndex()
-			i.SetPolicySelectors([]*types.GroupSelector{selectorA, selectorC}, "policyA")
-			i.SetPolicySelectors([]*types.GroupSelector{selectorB, selectorC}, "policyB")
-			i.SetPolicySelectors([]*types.GroupSelector{selectorD}, "policyD")
-			i.SetPolicySelectors([]*types.GroupSelector{selectorE}, "policyE")
+			i.AddSelector(selectorA, "policyA")
+			i.AddSelector(selectorC, "policyA")
+			i.AddSelector(selectorB, "policyB")
+			i.AddSelector(selectorC, "policyB")
+			i.AddSelector(selectorD, "policyD")
+			i.AddSelector(selectorE, "policyE")
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
@@ -504,10 +528,12 @@ func TestDeleteLabelIdentity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			i := NewLabelIdentityIndex()
-			i.SetPolicySelectors([]*types.GroupSelector{selectorA, selectorC}, "policyA")
-			i.SetPolicySelectors([]*types.GroupSelector{selectorB, selectorC}, "policyB")
-			i.SetPolicySelectors([]*types.GroupSelector{selectorD}, "policyD")
-			i.SetPolicySelectors([]*types.GroupSelector{selectorE}, "policyE")
+			i.AddSelector(selectorA, "policyA")
+			i.AddSelector(selectorC, "policyA")
+			i.AddSelector(selectorB, "policyB")
+			i.AddSelector(selectorC, "policyB")
+			i.AddSelector(selectorD, "policyD")
+			i.AddSelector(selectorE, "policyE")
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
