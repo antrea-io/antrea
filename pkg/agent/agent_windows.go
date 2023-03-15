@@ -440,7 +440,7 @@ func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string
 		} else {
 			ipFilter = &utilip.DualStackIPs{IPv6: epIP}
 		}
-		_, _, uplinkInterface, err = util.GetIPNetDeviceFromIP(ipFilter, nil)
+		_, _, uplinkInterface, err = getIPNetDeviceFromIP(ipFilter, nil)
 		if err != nil {
 			klog.InfoS("Unable to get net device by IP", "IP", addr)
 		} else {

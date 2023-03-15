@@ -21,22 +21,29 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
+	clockutils "k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/ip"
@@ -162,7 +169,7 @@ func TestGetRoundInfo(t *testing.T) {
 	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
 }
 
-func TestInitNodeLocalConfig(t *testing.T) {
+func TestInitK8sNodeLocalConfig(t *testing.T) {
 	nodeName := "node1"
 	ovsBridge := "br-int"
 	nodeIPStr := "192.168.10.10"
@@ -704,6 +711,274 @@ func TestRestorePortConfigs(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				assert.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestSetOVSDatapath(t *testing.T) {
+	tests := []struct {
+		name          string
+		expectedCalls func(m *ovsconfigtest.MockOVSBridgeClient)
+		expectedErr   string
+	}{
+		{
+			name: "fail to read OVS bridge other_config",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("failed to read OVS bridge other_config"), true))
+			},
+			expectedErr: "failed to read OVS bridge other_config",
+		},
+		{
+			name: "fail to set OVS bridge datapath_id",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil)
+				m.EXPECT().SetDatapathID(mock.Any()).Return(ovsconfig.NewTransactionError(fmt.Errorf("failed to set OVS bridge datapath_id"), true))
+			},
+			expectedErr: "failed to set OVS bridge datapath_id",
+		},
+		{
+			name: "datapath-id exists in other_config on OVS bridge",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{
+					ovsconfig.OVSOtherConfigDatapathIDKey: "datapathId",
+				}, nil)
+			},
+		},
+		{
+			name: "generate and set datapath ID for OVS bridge",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil)
+				m.EXPECT().SetDatapathID(mock.Any())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := mock.NewController(t)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+			initializer := newAgentInitializer(mockOVSBridgeClient, nil)
+			tt.expectedCalls(mockOVSBridgeClient)
+
+			err := initializer.setOVSDatapath()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func mockIPsecPSKEnv(name string) func() {
+	os.Setenv(ipsecPSKEnvKey, name)
+	return func() { os.Unsetenv(ipsecPSKEnvKey) }
+}
+
+func TestReadIPSecPSK(t *testing.T) {
+	tests := []struct {
+		name        string
+		isIPsecPSK  bool
+		expectedErr string
+	}{
+		{
+			name:        "IPsec PSK env variable not set",
+			expectedErr: "IPsec PSK environment variable 'ANTREA_IPSEC_PSK' is not set or is empty",
+		},
+		{
+			name:       "IPsec PSK env variable set",
+			isIPsecPSK: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initializer := &Initializer{
+				networkConfig: &config.NetworkConfig{
+					IPsecConfig: config.IPsecConfig{},
+				},
+			}
+			if tt.isIPsecPSK {
+				defer mockIPsecPSKEnv("key")()
+			}
+
+			err := initializer.readIPSecPSK()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWaitForIPSecMonitorDaemon(t *testing.T) {
+	tests := []struct {
+		name                  string
+		isIPsecMonitorRunning bool
+		expectedErr           string
+	}{
+		{
+			name:        "IPsec monitor is not running",
+			expectedErr: "IPsec was requested, but the OVS IPsec monitor does not seem to be running",
+		},
+		{
+			name:                  "IPsec monitor running",
+			isIPsecMonitorRunning: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initializer := &Initializer{}
+			if tt.isIPsecMonitorRunning {
+				appFS := afero.NewMemMapFs()
+				err := appFS.MkdirAll("/var/run/openvswitch", 0777)
+				require.NoError(t, err)
+				_, err = appFS.Create("/var/run/openvswitch/ovs-monitor-ipsec.pid")
+				require.NoError(t, err)
+				defaultFs = appFS
+				defer func() {
+					defaultFs = afero.NewOsFs()
+				}()
+			} else {
+				fakeClock := clocktesting.NewFakeClock(time.Now())
+				clock = fakeClock
+				defer func() {
+					clock = clockutils.RealClock{}
+				}()
+				go func() {
+					require.Eventually(t, func() bool {
+						return fakeClock.HasWaiters()
+					}, 1*time.Second, 10*time.Millisecond)
+					fakeClock.Step(10 * time.Second)
+				}()
+			}
+
+			err := initializer.waitForIPsecMonitorDaemon()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestInitVMLocalConfig(t *testing.T) {
+	ipDevice := &net.Interface{
+		Name: "fakeUplinkInterface",
+	}
+	testNode := &crdv1alpha1.ExternalNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "testNode", Namespace: "external"},
+		Spec: crdv1alpha1.ExternalNodeSpec{
+			Interfaces: []crdv1alpha1.NetworkInterface{
+				{
+					IPs: []string{"192.168.1.2"},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		nodeName    string
+		crdClient   *fakeversioned.Clientset
+		expectedErr string
+	}{
+		{
+			name:      "Finished VM config initialization",
+			nodeName:  "testNode",
+			crdClient: fakeversioned.NewSimpleClientset(testNode),
+		},
+		{
+			name:        "provided external Node unavailable",
+			nodeName:    "testNode",
+			crdClient:   fakeversioned.NewSimpleClientset(),
+			expectedErr: "timed out waiting for the condition",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			initializer := &Initializer{
+				crdClient:             tt.crdClient,
+				ovsBridge:             "br-int",
+				stopCh:                stopCh,
+				networkConfig:         &config.NetworkConfig{},
+				nodeType:              config.ExternalNode,
+				externalNodeNamespace: "external",
+			}
+			close(stopCh)
+			defer mockGetIPNetDeviceFromIP(nil, ipDevice)()
+			err := initializer.initVMLocalConfig(tt.nodeName)
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateSupportedDPFeatures(t *testing.T) {
+	tests := []struct {
+		name          string
+		expectedCalls func(m *ovsctltest.MockOVSCtlClient)
+		expectedErr   string
+	}{
+		{
+			name: "error listing DP features",
+			expectedCalls: func(m *ovsctltest.MockOVSCtlClient) {
+				m.EXPECT().GetDPFeatures().Return(map[ovsctl.DPFeature]bool{}, fmt.Errorf("error listing DP features"))
+			},
+			expectedErr: "error listing DP features",
+		},
+		{
+			name: "required feature is unknown",
+			expectedCalls: func(m *ovsctltest.MockOVSCtlClient) {
+				m.EXPECT().GetDPFeatures().Return(map[ovsctl.DPFeature]bool{}, nil)
+			},
+			expectedErr: "the required OVS DP feature 'CT state' support is unknown",
+		},
+		{
+			name: "required feature is not supported",
+			expectedCalls: func(m *ovsctltest.MockOVSCtlClient) {
+				m.EXPECT().GetDPFeatures().Return(map[ovsctl.DPFeature]bool{
+					ovsctl.CTStateFeature: false,
+				}, nil)
+			},
+			expectedErr: "the required OVS DP feature 'CT state' is not supported",
+		},
+		{
+			name: "required features supported",
+			expectedCalls: func(m *ovsctltest.MockOVSCtlClient) {
+				m.EXPECT().GetDPFeatures().Return(map[ovsctl.DPFeature]bool{
+					ovsctl.CTStateFeature:    true,
+					ovsctl.CTZoneFeature:     true,
+					ovsctl.CTMarkFeature:     true,
+					ovsctl.CTLabelFeature:    true,
+					ovsctl.CTStateNATFeature: true,
+				}, nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := mock.NewController(t)
+			mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
+			tt.expectedCalls(mockOVSCtlClient)
+			initializer := &Initializer{
+				ovsCtlClient: mockOVSCtlClient,
+			}
+			err := initializer.validateSupportedDPFeatures()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
