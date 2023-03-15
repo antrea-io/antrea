@@ -223,3 +223,20 @@
           set -e
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test-vm.sh  --registry ${DOCKER_REGISTRY} --kubeconfig /var/lib/jenkins/.kube/config
+          
+- builder:
+    name: builder-conformance-kind
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/kind/kind-setup.sh --antrea-cni create "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+          kind export kubeconfig -n "${{JOB_NAME}}-${{BUILD_NUMBER}}" --kubeconfig ${{PWD}}/.kube/config
+          set +ex
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+          return_code=$?
+          set -ex
+          kind delete cluster --name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+          exit $return_code
+

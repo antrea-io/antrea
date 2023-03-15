@@ -20,6 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
+KIND_CLUSTER=""
 DEFAULT_WORKDIR="/var/lib/jenkins"
 DEFAULT_KUBECONFIG_PATH=$DEFAULT_WORKDIR/kube.conf
 WORKDIR=$DEFAULT_WORKDIR
@@ -63,7 +64,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --proxyall               Enable proxyAll to test AntreaProxy.
         --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
-        --win-jumper             Name of the windows jumper node in containerd cluster. Images are built by docker on this node." 
+        --win-jumper             Name of the windows jumper node in containerd cluster. Images are built by docker on this node.
+        --kind-cluster-name      Name of the kind Cluster." 
 
 function print_usage {
     echoerr "$_usage"
@@ -78,6 +80,10 @@ do
 key="$1"
 
 case $key in
+    --kind-cluster-name)
+    KIND_CLUSTER="$2"
+    shift 2
+    ;;
     --kubeconfig)
     KUBECONFIG_PATH="$2"
     shift 2
@@ -621,6 +627,9 @@ function deliver_antrea {
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
+    elif [[ $TESTBED_TYPE == "kind" ]]; then
+            kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
+            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@${IP}:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
