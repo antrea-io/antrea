@@ -1411,11 +1411,10 @@ func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
 	return nil
 }
 
-// addLoadBalancerIngressIPRoute is used to add routing entry which is used to route LoadBalancer ingress IP to Antrea
+// AddLoadBalancer is used to add routing entry which is used to route LoadBalancer ingress IP to Antrea
 // gateway on host.
-func (c *Client) addLoadBalancerIngressIPRoute(svcIPStr string) error {
+func (c *Client) AddLoadBalancer(svcIP net.IP) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
-	svcIP := net.ParseIP(svcIPStr)
 	isIPv6 := utilnet.IsIPv6(svcIP)
 	var gw net.IP
 	var mask int
@@ -1437,11 +1436,10 @@ func (c *Client) addLoadBalancerIngressIPRoute(svcIPStr string) error {
 	return nil
 }
 
-// deleteLoadBalancerIngressIPRoute is used to delete routing entry which is used to route LoadBalancer ingress IP to Antrea
+// DeleteLoadBalancer is used to delete routing entry which is used to route LoadBalancer ingress IP to Antrea
 // gateway on host.
-func (c *Client) deleteLoadBalancerIngressIPRoute(svcIPStr string) error {
+func (c *Client) DeleteLoadBalancer(svcIP net.IP) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
-	svcIP := net.ParseIP(svcIPStr)
 	isIPv6 := utilnet.IsIPv6(svcIP)
 	var gw net.IP
 	var mask int
@@ -1463,28 +1461,6 @@ func (c *Client) deleteLoadBalancerIngressIPRoute(svcIPStr string) error {
 	}
 	klog.V(4).InfoS("Deleted LoadBalancer ingress IP route", "route", route)
 	c.serviceRoutes.Delete(svcIP.String())
-
-	return nil
-}
-
-// AddLoadBalancer is used to add routing entries when a LoadBalancer Service is added.
-func (c *Client) AddLoadBalancer(externalIPs []string) error {
-	for _, svcIPStr := range externalIPs {
-		if err := c.addLoadBalancerIngressIPRoute(svcIPStr); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// DeleteLoadBalancer is used to delete routing entries when a LoadBalancer Service is deleted.
-func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
-	for _, svcIPStr := range externalIPs {
-		if err := c.deleteLoadBalancerIngressIPRoute(svcIPStr); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
