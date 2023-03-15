@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ func (mr *MockInterfaceMockRecorder) AddClusterIPRoute(arg0 interface{}) *gomock
 }
 
 // AddLoadBalancer mocks base method
-func (m *MockInterface) AddLoadBalancer(arg0 []string) error {
+func (m *MockInterface) AddLoadBalancer(arg0 net.IP) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddLoadBalancer", arg0)
 	ret0, _ := ret[0].(error)
@@ -149,7 +149,7 @@ func (mr *MockInterfaceMockRecorder) DeleteClusterIPRoute(arg0 interface{}) *gom
 }
 
 // DeleteLoadBalancer mocks base method
-func (m *MockInterface) DeleteLoadBalancer(arg0 []string) error {
+func (m *MockInterface) DeleteLoadBalancer(arg0 net.IP) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteLoadBalancer", arg0)
 	ret0, _ := ret[0].(error)
