@@ -1038,12 +1038,12 @@ func TestAddLoadBalancer(t *testing.T) {
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
 		name          string
-		externalIPs   []string
+		externalIP    string
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:        "IPv4",
-			externalIPs: []string{"1.1.1.1", "1.1.1.2"},
+			name:       "IPv4",
+			externalIP: "1.1.1.1",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{
 					Dst: &net.IPNet{
@@ -1054,29 +1054,14 @@ func TestAddLoadBalancer(t *testing.T) {
 					Scope:     netlink.SCOPE_UNIVERSE,
 					LinkIndex: 10,
 				})
-				mockNetlink.RouteReplace(&netlink.Route{
-					Dst: &net.IPNet{
-						IP:   net.ParseIP("1.1.1.2"),
-						Mask: net.CIDRMask(32, 32),
-					},
-					Gw:        config.VirtualServiceIPv4,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
 			},
 		},
 		{
-			name:        "IPv6",
-			externalIPs: []string{"fd00:1234:5678:dead:beaf::1", "fd00:1234:5678:dead:beaf::a"},
+			name:       "IPv6",
+			externalIP: "fd00:1234:5678:dead:beaf::1",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(&netlink.Route{
 					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
-					Gw:        config.VirtualServiceIPv6,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
-				mockNetlink.RouteReplace(&netlink.Route{
-					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::a"), Mask: net.CIDRMask(128, 128)},
 					Gw:        config.VirtualServiceIPv6,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					LinkIndex: 10,
@@ -1095,7 +1080,7 @@ func TestAddLoadBalancer(t *testing.T) {
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			assert.NoError(t, c.AddLoadBalancer(tt.externalIPs))
+			assert.NoError(t, c.AddLoadBalancer(net.ParseIP(tt.externalIP)))
 		})
 	}
 }
@@ -1104,12 +1089,12 @@ func TestDeleteLoadBalancer(t *testing.T) {
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
 		name          string
-		externalIPs   []string
+		externalIP    string
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:        "IPv4",
-			externalIPs: []string{"1.1.1.1", "1.1.1.2"},
+			name:       "IPv4",
+			externalIP: "1.1.1.1",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteDel(&netlink.Route{
 					Dst: &net.IPNet{
@@ -1120,29 +1105,14 @@ func TestDeleteLoadBalancer(t *testing.T) {
 					Scope:     netlink.SCOPE_UNIVERSE,
 					LinkIndex: 10,
 				})
-				mockNetlink.RouteDel(&netlink.Route{
-					Dst: &net.IPNet{
-						IP:   net.ParseIP("1.1.1.2"),
-						Mask: net.CIDRMask(32, 32),
-					},
-					Gw:        config.VirtualServiceIPv4,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
 			},
 		},
 		{
-			name:        "IPv6",
-			externalIPs: []string{"fd00:1234:5678:dead:beaf::1", "fd00:1234:5678:dead:beaf::a"},
+			name:       "IPv6",
+			externalIP: "fd00:1234:5678:dead:beaf::1",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteDel(&netlink.Route{
 					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
-					Gw:        config.VirtualServiceIPv6,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
-				mockNetlink.RouteDel(&netlink.Route{
-					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::a"), Mask: net.CIDRMask(128, 128)},
 					Gw:        config.VirtualServiceIPv6,
 					Scope:     netlink.SCOPE_UNIVERSE,
 					LinkIndex: 10,
@@ -1161,7 +1131,7 @@ func TestDeleteLoadBalancer(t *testing.T) {
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			assert.NoError(t, c.DeleteLoadBalancer(tt.externalIPs))
+			assert.NoError(t, c.DeleteLoadBalancer(net.ParseIP(tt.externalIP)))
 		})
 	}
 }
