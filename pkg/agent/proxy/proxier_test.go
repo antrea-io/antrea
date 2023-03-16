@@ -918,9 +918,15 @@ func testClusterIPRemove(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(1)
 	fp.syncProxyRules()
 
+	_, ok := fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+
 	fp.serviceChanges.OnServiceUpdate(svc, nil)
 	fp.endpointsChanges.OnEndpointUpdate(ep, nil)
 	fp.syncProxyRules()
+
+	_, ok = fp.endpointsInstalledMap[svcPortName]
+	assert.False(t, ok)
 }
 
 func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, epIP net.IP, isIPv6 bool) {
@@ -962,16 +968,22 @@ func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, 
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 
-	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, expectedEp).Times(1)
+	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, expectedAllEps).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(2)
 	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	fp.syncProxyRules()
 
+	_, ok := fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+
 	fp.serviceChanges.OnServiceUpdate(svc, nil)
 	fp.endpointsChanges.OnEndpointUpdate(ep, nil)
 	fp.syncProxyRules()
+
+	_, ok = fp.endpointsInstalledMap[svcPortName]
+	assert.False(t, ok)
 }
 
 func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, epIP net.IP, loadBalancerIP net.IP, isIPv6 bool) {
@@ -1020,7 +1032,7 @@ func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	mockRouteClient.EXPECT().AddLoadBalancer([]string{loadBalancerIP.String()}).Times(1)
 
-	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, expectedEp).Times(1)
+	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, expectedAllEps).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol).Times(1)
@@ -1029,9 +1041,15 @@ func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	mockRouteClient.EXPECT().DeleteLoadBalancer([]string{loadBalancerIP.String()}).Times(1)
 	fp.syncProxyRules()
 
+	_, ok := fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+
 	fp.serviceChanges.OnServiceUpdate(svc, nil)
 	fp.endpointsChanges.OnEndpointUpdate(ep, nil)
 	fp.syncProxyRules()
+
+	_, ok = fp.endpointsInstalledMap[svcPortName]
+	assert.False(t, ok)
 }
 
 func TestClusterIPRemove(t *testing.T) {
@@ -1161,8 +1179,15 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
 	fp.syncProxyRules()
 
+	_, ok := fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+
 	fp.endpointsChanges.OnEndpointUpdate(ep, nil)
 	fp.syncProxyRules()
+
+	endpointsMap, ok := fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+	assert.Equal(t, 0, len(endpointsMap))
 }
 
 func TestClusterIPRemoveEndpoints(t *testing.T) {
@@ -1705,7 +1730,8 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	makeEndpointsMap(fp, eps)
 
 	expectedLocalEps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep2IP.String(), "", "", svcPort, true, true, false, false, nil)}
-	expectedAllEps := append(expectedLocalEps, k8sproxy.NewBaseEndpointInfo(ep1IP.String(), "", "", svcPort, false, true, false, false, nil))
+	expectedRemoteEps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IP.String(), "", "", svcPort, false, true, false, false, nil)}
+	expectedAllEps := append(expectedLocalEps, expectedRemoteEps...)
 
 	bindingProtocol := binding.ProtocolTCP
 	if isIPv6 {
@@ -1719,12 +1745,29 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	fp.syncProxyRules()
 
+	assertEndpoints := func(t *testing.T, expectedEndpoints []k8sproxy.Endpoint, gotEndpoints map[string]k8sproxy.Endpoint) {
+		var endpoints []k8sproxy.Endpoint
+		for _, e := range gotEndpoints {
+			endpoints = append(endpoints, e)
+		}
+		assert.ElementsMatch(t, expectedEndpoints, endpoints)
+	}
+
+	svcEndpointsMap, ok := fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+	assertEndpoints(t, expectedAllEps, svcEndpointsMap)
+
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	groupIDLocal := fp.groupCounter.AllocateIfNotExist(svcPortName, true)
 
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedLocalEps)).Times(1)
+	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, expectedRemoteEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, expectedLocalEps).Times(1)
 	fp.syncProxyRules()
+
+	svcEndpointsMap, ok = fp.endpointsInstalledMap[svcPortName]
+	assert.True(t, ok)
+	assertEndpoints(t, expectedLocalEps, svcEndpointsMap)
 }
 
 func TestServiceInternalTrafficPolicyUpdate(t *testing.T) {

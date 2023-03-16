@@ -1037,7 +1037,7 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			defer resetPipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
-			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(len(tc.endpoints))
+			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
 
 			assert.NoError(t, fc.InstallEndpointFlows(tc.protocol, tc.endpoints))
 			var flows []string
@@ -1050,8 +1050,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			}
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
 
+			assert.NoError(t, fc.UninstallEndpointFlows(tc.protocol, tc.endpoints))
 			for _, ep := range tc.endpoints {
-				assert.NoError(t, fc.UninstallEndpointFlows(tc.protocol, ep))
 				endpointPort, _ := ep.Port()
 				cacheKey := generateEndpointFlowCacheKey(ep.IP(), endpointPort, tc.protocol)
 				_, ok := fc.featureService.cachedFlows.Load(cacheKey)

@@ -795,10 +795,7 @@ func uninstallServiceFlowsFunc(t *testing.T, gid uint32, svc svcConfig, endpoint
 	assert.Nil(t, err)
 	err = c.UninstallServiceGroup(groupID)
 	assert.Nil(t, err)
-	for _, ep := range endpointList {
-		err := c.UninstallEndpointFlows(svc.protocol, ep)
-		assert.Nil(t, err)
-	}
+	assert.NoError(t, c.UninstallEndpointFlows(svc.protocol, endpointList))
 }
 
 func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyAge uint16, antreaPolicyEnabled bool) (tableFlows []expectTableFlows, groupBuckets []string) {
