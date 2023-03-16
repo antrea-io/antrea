@@ -34,11 +34,16 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
+var skipTraceflowUpdateErr = errors.New("Skip Traceflow Update")
+
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if !c.traceflowListerSynced() {
-		return errors.New("traceflow controller is not started")
+		return errors.New("Traceflow controller is not started")
 	}
 	oldTf, nodeResult, packet, err := c.parsePacketIn(pktIn)
+	if err == skipTraceflowUpdateErr {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("parsePacketIn error: %v", err)
 	}
@@ -47,8 +52,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		tf, err := c.traceflowInformer.Lister().Get(oldTf.Name)
 		if err != nil {
-			klog.Warningf("Get traceflow failed: %+v", err)
-			return err
+			return fmt.Errorf("Get Traceflow failed: %w", err)
 		}
 		update := tf.DeepCopy()
 		update.Status.Results = append(update.Status.Results, *nodeResult)
@@ -57,14 +61,13 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		}
 		_, err = c.traceflowClient.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
-			klog.Warningf("Update traceflow failed: %+v", err)
-			return err
+			return fmt.Errorf("Update Traceflow failed: %w", err)
 		}
-		klog.Infof("Updated traceflow %s: %+v", tf.Name, update.Status)
+		klog.InfoS("Updated Traceflow", "tf", klog.KObj(tf), "status", update.Status)
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("update traceflow error: %v", err)
+		return fmt.Errorf("Traceflow update error: %w", err)
 	}
 	return nil
 }
@@ -130,7 +133,19 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	var capturedPacket *crdv1alpha1.Packet
-	if tfState.liveTraffic && firstPacket {
+	if tfState.liveTraffic {
+		// Live Traceflow only considers the first packet of each
+		// connection. However, it is possible for 2 connections to
+		// match the Live Traceflow flows in OVS (before the flows can
+		// be uninstalled below), leading to 2 Packet In messages being
+		// processed. If we don't ignore all additional Packet Ins, we
+		// can end up with duplicate Node observations in the Traceflow
+		// Status. This situation is more likely when the Live TraceFlow
+		// request does not specify source / destination ports.
+		if !firstPacket {
+			klog.InfoS("An additional Traceflow packet was received unexpectedly for Live Traceflow, ignoring it")
+			return nil, nil, nil, skipTraceflowUpdateErr
+		}
 		// Uninstall the OVS flows after receiving the first packet, to
 		// avoid capturing too many matched packets.
 		c.ofClient.UninstallTraceflowFlows(tag)
