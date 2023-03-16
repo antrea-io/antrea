@@ -51,6 +51,8 @@ const (
 	memberYAML           = "antrea-multicluster-member.yml"
 )
 
+var httpGet = http.Get
+
 func generateManifests(role string, version string) ([]string, error) {
 	var manifests []string
 	switch role {
@@ -162,7 +164,7 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 		}
 		for _, manifest := range manifests {
 			// #nosec G107
-			resp, err := http.Get(manifest)
+			resp, err := httpGet(manifest)
 			if err != nil {
 				return err
 			}

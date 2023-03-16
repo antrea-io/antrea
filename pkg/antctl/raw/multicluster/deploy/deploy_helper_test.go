@@ -15,10 +15,14 @@
 package deploy
 
 import (
+	"errors"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -131,10 +135,38 @@ kind: Config`)
 	kubeconfig := ""
 	cmd := &cobra.Command{}
 	cmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", fakeKubeconfig.Name(), "path of kubeconfig")
-	err = deploy(cmd, "leader", "latest", "kube-system", "")
-	if err != nil {
-		assert.Contains(t, err.Error(), "refused")
-	} else {
-		t.Error("Expected to get error but nil")
+	tests := []struct {
+		name        string
+		body        string
+		err         error
+		expectedErr string
+	}{
+		{
+			name:        "error when getting manifests",
+			err:         errors.New("wrong link"),
+			expectedErr: "wrong link",
+		}, {
+			name:        "error with wrong manifests",
+			body:        "fakebody",
+			expectedErr: "json: cannot unmarshal string into Go value",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			httpGet = func(url string) (resp *http.Response, err error) {
+				return &http.Response{Body: io.NopCloser(strings.NewReader(tt.body))}, tt.err
+			}
+			defer func() {
+				httpGet = http.Get
+			}()
+			gotErr := deploy(cmd, "leader", "latest", "kube-system", "")
+			if tt.expectedErr != "" {
+				if gotErr != nil {
+					assert.Contains(t, gotErr.Error(), tt.expectedErr)
+				} else {
+					t.Error("Expected to get error but got nil")
+				}
+			}
+		})
 	}
 }
