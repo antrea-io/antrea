@@ -374,6 +374,9 @@ func (p *proxier) installServices() {
 				pSvcInfo.InternalPolicyLocal() != svcInfo.InternalPolicyLocal()
 		} else { // Need to install.
 			needUpdateService = true
+			// We need to ensure a group is created for a new Service even if there is no available Endpoints,
+			// otherwise it would fail to install Service flows because the group doesn't exist.
+			needUpdateEndpoints = true
 		}
 
 		affinityTimeout := svcInfo.StickyMaxAgeSeconds()
@@ -446,12 +449,15 @@ func (p *proxier) installServices() {
 			klog.V(2).InfoS("Installing Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 		}
 
+		var err error
 		if needUpdateEndpoints {
 			// Install Endpoints.
-			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, allReachableEndpoints)
-			if err != nil {
-				klog.ErrorS(err, "Error when installing Endpoints flows for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
-				continue
+			if len(allReachableEndpoints) > 0 {
+				err = p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, allReachableEndpoints)
+				if err != nil {
+					klog.ErrorS(err, "Error when installing Endpoints flows for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
+					continue
+				}
 			}
 			if internalPolicyLocal != externalPolicyLocal {
 				if svcInfo.ExternallyAccessible() {
@@ -595,11 +601,6 @@ func (p *proxier) installServices() {
 			}
 
 			if p.proxyLoadBalancerIPs {
-				groupID, exists = p.groupCounter.Get(svcPortName, externalPolicyLocal)
-				if !exists {
-					klog.ErrorS(nil, "Group for Service externalTrafficPolicy is not installed", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr, svcPortName, "externalTrafficPolicy", externalPolicyLocal)
-					continue
-				}
 				// Service LoadBalancer flows can be partially updated.
 				var toDelete, toAdd []string
 				if needRemoval {
@@ -618,6 +619,11 @@ func (p *proxier) installServices() {
 				}
 				// Install LoadBalancer flows and configurations.
 				if len(toAdd) > 0 {
+					groupID, exists = p.groupCounter.Get(svcPortName, externalPolicyLocal)
+					if !exists {
+						klog.ErrorS(nil, "Group for Service externalTrafficPolicy was not installed", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr, "externalTrafficPolicy", externalPolicyLocal)
+						continue
+					}
 					if err := p.installLoadBalancerService(groupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.ExternalPolicyLocal()); err != nil {
 						klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
 						continue
