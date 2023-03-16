@@ -22,6 +22,8 @@ CLUSTER_NAME=""
 ANTREA_IMAGE="antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
 ANTREA_CNI=false
+ACTION=""
+UNTIL_TIME_IN_MINS=""
 POD_CIDR=""
 SERVICE_CIDR=""
 IP_FAMILY="ipv4"
@@ -32,6 +34,8 @@ PROXY=true
 KUBE_PROXY_MODE="iptables"
 PROMETHEUS=false
 K8S_VERSION=""
+positional_args=()
+options=()
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -59,7 +63,9 @@ where:
   --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
     Node connected to default docker bridge network created by Kind.
   --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY.
-  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
+  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty
+  --all: delete all kind clusters
+  --until: delete kind clusters that have been created before the specified duration.
 "
 
 function print_usage {
@@ -76,6 +82,12 @@ function get_encap_mode {
     return
   fi
   echo "--encap-mode $ENCAP_MODE"
+}
+
+function add_option {
+  local option="$1"
+  local action="$2"
+  options+=("$option $action")
 }
 
 function configure_networks {
@@ -328,12 +340,38 @@ EOF
 }
 
 function destroy {
-  if [[ -z $CLUSTER_NAME ]]; then
-    echoerr "cluster-name not provided"
-    exit 1
+  if [[ $UNTIL_TIME_IN_MINS != "" ]]; then
+      clean_kind
+  else
+      kind delete cluster --name $CLUSTER_NAME
+      delete_networks
   fi
-  kind delete cluster --name $CLUSTER_NAME
-  delete_networks
+}
+
+function printUnixTimestamp {
+    runtimeOS="$(uname)"
+    if [[ "$runtimeOS" == "Darwin" ]]; then
+        echo $(date -ju -f "%Y-%m-%dT%H:%M:%SZ" "$1" "+%s")
+    else
+        echo $(date -d "$1" '+%s')
+    fi
+}
+
+function clean_kind {
+    echo "=== Cleaning up stale Kind clusters ==="
+    read -a all_kind_clusters <<< $(kind get clusters)
+    for kind_cluster_name in "${all_kind_clusters[@]}"; do
+        creationTimestamp=$(kubectl get nodes --context kind-$kind_cluster_name -o json -l node-role.kubernetes.io/control-plane | \
+        jq -r '.items[0].metadata.creationTimestamp')
+        creation=$(printUnixTimestamp "$creationTimestamp")
+        now=$(date -u '+%s')
+        diff=$((now-creation))
+        timeout=$(($UNTIL_TIME_IN_MINS*60))
+        if [[ $diff -gt $timeout ]]; then
+           echo "=== Kind ${kind_cluster_name} present from more than $UNTIL_TIME_IN_MINS minutes ==="
+           kind delete cluster --name $kind_cluster_name
+        fi
+    done
 }
 
 if ! command -v kind &> /dev/null
@@ -348,72 +386,131 @@ while [[ $# -gt 0 ]]
 
   case $key in
     create)
-      CLUSTER_NAME="$2"
-      shift 2
+      ACTION="create"
+      shift
       ;;
     destroy)
-      CLUSTER_NAME="$2"
-      destroy
-      exit 0
+      ACTION="destroy"
+      shift
       ;;
     --pod-cidr)
+      add_option "--pod-cidr" "create"
       POD_CIDR="$2"
       shift 2
       ;;
     --service-cidr)
+      add_option "--service-cidr" "create"
       SERVICE_CIDR="$2"
       shift 2
       ;;
     --ip-family)
+      add_option "--ip-family" "create"
       IP_FAMILY="$2"
       shift 2
       ;;
     --encap-mode)
+      add_option "--encap-mode" "create"
       ENCAP_MODE="$2"
       shift 2
       ;;
     --no-proxy)
+      add_option "--no-proxy" "create"
       PROXY=false
       shift
       ;;
     --no-kube-proxy)
+      add_option "--no-kube-proxy" "create"
       KUBE_PROXY_MODE="none"
       shift
       ;;
     --prometheus)
+      add_option "--prometheus" "create"
       PROMETHEUS=true
       shift
       ;;
     --subnets)
+      add_option "--subnets" "create"
       SUBNETS="$2"
       shift 2
       ;;
     --images)
+      add_option "--image" "create"
       IMAGES="$2"
       shift 2
       ;;
     --antrea-cni)
+      add_option "--antrea-cni" "create"
       ANTREA_CNI=true
       shift
       ;;
     --num-workers)
+     add_option "--num-workers" "create"
       NUM_WORKERS="$2"
       shift 2
       ;;
     --k8s-version)
+      add_option "--k8s-version" "create"
       K8S_VERSION="$2"
+      shift 2
+      ;;
+    --all)
+      add_option "--all" "destroy"
+      CLUSTER_NAME="*"
+      shift
+      ;;
+    --until)
+      add_option "--until" "destroy"
+      UNTIL_TIME_IN_MINS="$2"
       shift 2
       ;;
     help)
       print_usage
       exit 0
       ;;
-    *)    # unknown option
+    -*)    # unknown option
       echoerr "Unknown option $1"
       exit 1
       ;;
+    *)    # positional arg
+      positional_args+=("$1")
+      shift
+      ;;
  esac
  done
+
+for option in "${options[@]}"; do
+    args=($option)
+    name="${args[0]}"
+    action="${args[1]}"
+    if [[ "$action" != "$ACTION" ]]; then
+        echoerr "Option '$name' cannot be used for '$ACTION'"
+        exit 1
+    fi
+  done
+
+if (( ${#positional_args[@]} > 1 )); then
+    echoerr "Too many positional arguments, only expected one (cluster name)"
+    exit 1
+fi
+
+if (( ${#positional_args[@]} == 1 )) && [[ "$CLUSTER_NAME" == "*" ]]; then
+    echoerr "Cannot specify cluster name when using --all"
+    exit 1
+fi
+
+if (( ${#positional_args[@]} == 1 )); then
+    CLUSTER_NAME=${positional_args[0]}
+fi
+
+if [[ -z "$CLUSTER_NAME" ]]; then
+    echoerr "Missing cluster name"
+    exit 1
+fi
+
+if [[ $ACTION == "destroy" ]]; then
+      destroy
+      exit 0
+fi
 
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'
@@ -426,4 +523,6 @@ if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; th
     exit 1
 fi
 
-create
+if [[ $ACTION == "create" ]]; then
+      create
+fi
