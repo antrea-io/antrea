@@ -782,7 +782,7 @@ func (mr *MockClientMockRecorder) SubscribePacketIn(arg0, arg1 interface{}) *gom
 }
 
 // UninstallEndpointFlows mocks base method
-func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 proxy.Endpoint) error {
+func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UninstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
