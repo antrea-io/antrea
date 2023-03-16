@@ -496,6 +496,12 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 		fmt.Println(strings.Join(flows1, "\n"))
 		fmt.Println("Flows after replay:")
 		fmt.Println(strings.Join(flows2, "\n"))
+	} else {
+		// For test.
+		fmt.Println("Flows before replay:")
+		fmt.Println(strings.Join(flows1, "\n"))
+		fmt.Println("Flows after replay:")
+		fmt.Println(strings.Join(flows2, "\n"))
 	}
 	if !assert.Equal(t, numGroups1, numGroups2, "Mismatch in OVS group count after flow replay") {
 		fmt.Println("Groups before replay:")
