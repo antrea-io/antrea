@@ -369,9 +369,10 @@ func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicyS
 	return b
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddEgressLogging() *ClusterNetworkPolicySpecBuilder {
+func (b *ClusterNetworkPolicySpecBuilder) AddEgressLogging(logLabel string) *ClusterNetworkPolicySpecBuilder {
 	for i, e := range b.Spec.Egress {
 		e.EnableLogging = true
+		e.LogLabel = logLabel
 		b.Spec.Egress[i] = e
 	}
 	return b

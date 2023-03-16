@@ -1482,6 +1482,7 @@ func autoConvert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Name = in.Name
 	out.L7Protocols = *(*[]controlplane.L7Protocol)(unsafe.Pointer(&in.L7Protocols))
+	out.LogLabel = in.LogLabel
 	return nil
 }
 
@@ -1515,6 +1516,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(in 
 	out.EnableLogging = in.EnableLogging
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.L7Protocols = *(*[]L7Protocol)(unsafe.Pointer(&in.L7Protocols))
+	out.LogLabel = in.LogLabel
 	return nil
 }
 

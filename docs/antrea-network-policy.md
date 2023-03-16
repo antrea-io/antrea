@@ -20,6 +20,7 @@
     - [ACNP for IGMP traffic](#acnp-for-igmp-traffic)
     - [ACNP for multicast egress traffic](#acnp-for-multicast-egress-traffic)
     - [ACNP for HTTP traffic](#acnp-for-http-traffic)
+    - [ACNP with log settings](#acnp-with-log-settings)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
   - [<em>kubectl</em> commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
@@ -243,7 +244,6 @@ spec:
         - protocol: TCP
           port: 6379
       name: AllowFromFrontend
-      enableLogging: false
   egress:
     - action: Drop
       to:
@@ -253,7 +253,6 @@ spec:
         - protocol: TCP
           port: 5978
       name: DropToThirdParty
-      enableLogging: true
 ```
 
 #### ACNP with ClusterGroup reference
@@ -279,7 +278,6 @@ spec:
         - protocol: TCP
           port: 6379
       name: AllowFromFrontend
-      enableLogging: false
   egress:
     - action: Drop
       to:
@@ -288,7 +286,6 @@ spec:
         - protocol: TCP
           port: 5978
       name: DropToThirdParty
-      enableLogging: true
 ```
 
 #### ACNP for complete Pod isolation in selected Namespaces
@@ -308,11 +305,9 @@ spec:
   ingress:
     - action: Drop              # For all Pods in those Namespaces, drop and log all ingress traffic from anywhere
       name: drop-all-ingress
-      enableLogging: true
   egress:
     - action: Drop              # For all Pods in those Namespaces, drop and log all egress traffic towards anywhere
       name: drop-all-egress
-      enableLogging: true
 ```
 
 #### ACNP for strict Namespace isolation
@@ -335,24 +330,20 @@ spec:
         - namespaces:
             match: Self           # Skip ACNP evaluation for traffic from Pods in the same Namespace
       name: PassFromSameNS
-      enableLogging: false
     - action: Drop
       from:
         - namespaceSelector: {}   # Drop from Pods from all other Namespaces
       name: DropFromAllOtherNS
-      enableLogging: true
   egress:
     - action: Pass
       to:
         - namespaces:
             match: Self           # Skip ACNP evaluation for traffic to Pods in the same Namespace
       name: PassToSameNS
-      enableLogging: false
     - action: Drop
       to:
         - namespaceSelector: {}   # Drop to Pods from all other Namespaces
       name: DropToAllOtherNS
-      enableLogging: true
 ```
 
 #### ACNP for default zero-trust cluster security posture
@@ -396,7 +387,6 @@ spec:
         - name: svcName
           namespace: svcNamespace
       name: DropToServices
-      enableLogging: true
 ```
 
 #### ACNP for ICMP traffic
@@ -423,7 +413,6 @@ spec:
               icmpType: 8
               icmpCode: 0
         name: DropPingRequest
-        enableLogging: true
 ```
 
 #### ACNP for IGMP traffic
@@ -536,6 +525,37 @@ spec:
 ```
 
 Please refer to [Antrea Layer 7 NetworkPolicy](antrea-l7-network-policy.md) for extra information.
+
+#### ACNP with log settings
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-with-log-setting
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          role: db
+    - namespaceSelector:
+        matchLabels:
+          env: prod
+  ingress:
+    - action: Allow
+      from:
+        - podSelector:
+            matchLabels:
+              role: frontend
+          namespaceSelector:
+            matchLabels:
+              role: db
+      name: AllowFromFrontend
+      enableLogging: true
+      logLabel: "frontend-allowed"
+```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
 define a cluster-wide security policy.
@@ -696,30 +716,33 @@ to select Pods. More details can be found in the [ServiceAccountSelector](#servi
 **Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
-**enableLogging**: Antrea-native policy ingress or egress rules can be
-audited by enabling its logging field. When `enableLogging` field is set to
-true, the first packet of any connection that matches this rule will be logged
-to a separate file (`/var/log/antrea/networkpolicy/np.log`) on the Node on
-which the rule is applied. These log files can then be retrieved for further
-analysis. By default, rules are not logged. The example policy logs all
-traffic that matches the "DropToThirdParty" egress rule, while the rule
-"AllowFromFrontend" is not logged. Specifically for drop and reject rules,
-deduplication is applied to reduce duplicated logs, and duplication buffer
-length is set to 1 second. If a rule name is not provided, an identifiable
-name will be generated for the rule and displayed in the log. For rules in layer
-7 NetworkPolicy, packets are logged with action `Redirect` prior to analysis by
-the layer 7 engine, more details are available in the corresponding engine logs.
+**enableLogging** and **logLabel**: Antrea-native policy ingress or egress rules
+can be audited by setting its logging fields. When the `enableLogging` field is set
+to `true`, the first packet of any connection that matches this rule will be
+logged to a file (`/var/log/antrea/networkpolicy/np.log`) on the Node on which the
+rule is enforced. The log files can then be used for further analysis. If `logLabel`
+is provided, the label will be added in the log. For example, in the
+[ACNP with log settings](#acnp-with-log-settings), traffic that hits the
+"AllowFromFrontend" rule will be logged with log label "frontend-allowed".
+
+For drop and reject rules, deduplication is applied to reduce duplicated
+log messages, and the duplication buffer length is set to 1 second. When a rule
+does not have a name, an identifiable name will be generated for the rule and
+added to the log. For rules in layer 7 NetworkPolicy, packets are logged with
+action `Redirect` prior to analysis by the layer 7 engine, and the layer 7 engine
+can log more information in its own logs.
+
 The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
     Deduplication:
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp test-rule Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60
-    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp test-rule Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 [3 packets in 1.011379442s]
-    2022/09/20 02:21:25.879364 AntreaPolicyIngressRule AntreaNetworkPolicy:default/test-anp ingress-drop-1cffec1 Drop 44900 10.10.1.14 <nil> 10.10.1.15 <nil> ICMP 84
+    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp test-rule Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label
+    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp test-rule Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label [3 packets in 1.011379442s]
+    2023/03/29 02:21:25.879364 AntreaPolicyIngressRule AntreaNetworkPolicy:default/test-anp AllowFromFrontend Allow 44900 10.10.1.14 <nil> 10.10.1.15 <nil> ICMP 84 frontend-allowed
 ```
 
 Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
@@ -733,13 +756,13 @@ using Antrea logging for Kubernetes NetworkPolicies, the rule name field is not
 set and defaults to `<nil>` value. The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
+    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
     Default dropped traffic:
-    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> Drop <nil> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> Drop <nil> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log <nil> Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60
-    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy <nil> Drop <nil> 10.10.1.83 38608 10.10.1.84 80 TCP 60
+    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log <nil> Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60 <nil>
+    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy <nil> Drop <nil> 10.10.1.83 38608 10.10.1.84 80 TCP 60 <nil>
 ```
 
 Fluentd can be used to assist with collecting and analyzing the logs. Refer to the
@@ -910,7 +933,6 @@ spec:
           port: 8080
           endPort: 9000
       name: AllowFromFrontend
-      enableLogging: false
   egress:
     - action: Drop
       to:
@@ -920,7 +942,6 @@ spec:
         - protocol: TCP
           port: 5978
       name: DropToThirdParty
-      enableLogging: true
 ```
 
 ### Key differences from Antrea ClusterNetworkPolicy
@@ -972,7 +993,6 @@ spec:
           port: 8080
           endPort: 9000
       name: AllowFromFrontend
-      enableLogging: false
   egress:
     - action: Drop
       to:
@@ -981,7 +1001,6 @@ spec:
         - protocol: TCP
           port: 5978
       name: DropToThirdParty
-      enableLogging: true
 ```
 
 ### *kubectl* commands for Antrea NetworkPolicy
@@ -1421,7 +1440,6 @@ spec:
               name: sa-2
               namespace: ns-2
         name: ServiceAccountEgressRule
-        enableLogging: false
 ```
 
 In this example, the policy will be applied to all Pods whose ServiceAccount is `sa-1` of `ns-1`.

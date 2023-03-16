@@ -673,6 +673,69 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
 		},
+		{
+			name: "with-log-label",
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns9", Name: "npI", UID: "uidI"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector:       &selectorB,
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action:        &allowAction,
+							EnableLogging: true,
+							LogLabel:      "test-log-label",
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidI",
+				Name: "uidI",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns9",
+					Name:      "npI",
+					UID:       "uidI",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority:      0,
+						Action:        &allowAction,
+						EnableLogging: true,
+						LogLabel:      "test-log-label",
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("ns9", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

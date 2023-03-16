@@ -131,6 +131,7 @@ func newLogInfo(disposition string) (*logInfo, string) {
 		tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
 		npRef:       "AntreaNetworkPolicy:default/test",
 		ruleName:    "test-rule",
+		logLabel:    "test-label",
 		ofPriority:  "0",
 		disposition: disposition,
 		srcIP:       "0.0.0.0",
@@ -140,9 +141,9 @@ func newLogInfo(disposition string) (*logInfo, string) {
 		protocolStr: "TCP",
 		pktLength:   60,
 	}
-	expected := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d", testLogInfo.tableName, testLogInfo.npRef, testLogInfo.ruleName,
+	expected := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d %s", testLogInfo.tableName, testLogInfo.npRef, testLogInfo.ruleName,
 		testLogInfo.disposition, testLogInfo.ofPriority, testLogInfo.srcIP, testLogInfo.srcPort, testLogInfo.destIP, testLogInfo.destPort,
-		testLogInfo.protocolStr, testLogInfo.pktLength)
+		testLogInfo.protocolStr, testLogInfo.pktLength, testLogInfo.logLabel)
 	return testLogInfo, expected
 }
 
@@ -258,7 +259,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	}
 	testANPRef := "AntreaNetworkPolicy:default/test-anp"
 	testK8sRef := "K8sNetworkPolicy:default/test-anp"
-	testPriority, testRule := "61800", "test-rule"
+	testPriority, testRule, testLogLabel, defaultLog := "61800", "test-rule", "test-log-label", "<nil>"
 	allowDispositionData := []byte{0x11, 0x00, 0x00, 0x11}
 	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
 	dropK8sDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
@@ -278,7 +279,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testANPRef, testPriority, testRule)
+					testANPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: allowDispositionData,
 			wantOb: &logInfo{
@@ -287,6 +288,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				npRef:       testANPRef,
 				ofPriority:  testPriority,
 				ruleName:    testRule,
+				logLabel:    testLogLabel,
 			},
 		},
 		{
@@ -294,7 +296,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.IngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testK8sRef, testPriority, "")
+					testK8sRef, testPriority, "", "")
 			},
 			dispositionData: allowDispositionData,
 			wantOb: &logInfo{
@@ -302,7 +304,8 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				disposition: actionAllow,
 				npRef:       testK8sRef,
 				ofPriority:  testPriority,
-				ruleName:    "<nil>",
+				ruleName:    defaultLog,
+				logLabel:    defaultLog,
 			},
 		},
 		{
@@ -310,7 +313,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testANPRef, testPriority, testRule)
+					testANPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: dropCNPDispositionData,
 			wantOb: &logInfo{
@@ -319,6 +322,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				npRef:       testANPRef,
 				ofPriority:  testPriority,
 				ruleName:    testRule,
+				logLabel:    testLogLabel,
 			},
 		},
 		{
@@ -329,8 +333,9 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				tableName:   openflow.IngressDefaultTable.GetName(),
 				disposition: actionDrop,
 				npRef:       "K8sNetworkPolicy",
-				ofPriority:  "<nil>",
-				ruleName:    "<nil>",
+				ofPriority:  defaultLog,
+				ruleName:    defaultLog,
+				logLabel:    defaultLog,
 			},
 		},
 		{
@@ -338,7 +343,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testANPRef, testPriority, testRule)
+					testANPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: redirectDispositionData,
 			wantOb: &logInfo{
@@ -347,6 +352,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				npRef:       testANPRef,
 				ofPriority:  testPriority,
 				ruleName:    testRule,
+				logLabel:    testLogLabel,
 			},
 		},
 	}
