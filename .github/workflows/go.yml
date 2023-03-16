@@ -41,7 +41,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - uses: actions/cache@v3
@@ -78,7 +78,7 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - uses: actions/cache@v3
@@ -115,7 +115,7 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - uses: actions/cache@v3
@@ -161,7 +161,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - uses: actions/cache@v3
@@ -193,7 +193,7 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - uses: actions/cache@v3
@@ -225,7 +225,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - uses: actions/cache@v3
@@ -264,7 +264,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - uses: actions/cache@v3
@@ -293,7 +293,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -313,7 +313,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Run verify scripts
@@ -349,7 +349,7 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Run Go benchmark test

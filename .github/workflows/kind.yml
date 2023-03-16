@@ -76,7 +76,7 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v3
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
@@ -135,7 +135,7 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v3
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
@@ -194,7 +194,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
@@ -254,7 +254,7 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v3
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
@@ -313,7 +313,7 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v3
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
@@ -372,7 +372,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
@@ -438,7 +438,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
@@ -480,7 +480,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
@@ -522,7 +522,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
@@ -564,7 +564,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
@@ -606,7 +606,7 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v3
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
@@ -640,7 +640,7 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job

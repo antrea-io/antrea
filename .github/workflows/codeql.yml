@@ -35,7 +35,7 @@ jobs:
         config-file: ./.github/codeql-config.yml
 
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
 
@@ -89,7 +89,7 @@ jobs:
         config-file: ./.github/codeql-config.yml
 
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
 
