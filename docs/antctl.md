@@ -656,7 +656,7 @@ testmulticast-vw7gx5b9 test3-sender-1               0       10
 
 ### Showing memberlist state
 
-`antctl` agent command `get memberlist` (or `get ml`) print the state of memberlist cluster of Antrea Agent.
+`antctl` agent command `get memberlist` (or `get ml`) prints the state of memberlist cluster of Antrea Agent.
 
 ```bash
 $ antctl get memberlist

@@ -91,7 +91,7 @@ you can deploy Antrea as follows:
     ```
 
     To deploy the latest version of Antrea (built from the main branch), use the
-checked-in [deployment yaml](/build/yamls/antrea-gke.yml):
+checked-in [deployment yaml](../build/yamls/antrea-gke.yml):
 
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea-gke.yml
