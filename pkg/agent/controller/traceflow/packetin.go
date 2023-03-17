@@ -34,7 +34,7 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-var skipTraceflowUpdateErr = errors.New("Skip Traceflow Update")
+var skipTraceflowUpdateErr = errors.New("skip Traceflow update")
 
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if !c.traceflowListerSynced() {
@@ -52,7 +52,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		tf, err := c.traceflowInformer.Lister().Get(oldTf.Name)
 		if err != nil {
-			return fmt.Errorf("Get Traceflow failed: %w", err)
+			return fmt.Errorf("get Traceflow failed: %w", err)
 		}
 		update := tf.DeepCopy()
 		update.Status.Results = append(update.Status.Results, *nodeResult)
@@ -61,7 +61,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		}
 		_, err = c.traceflowClient.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
-			return fmt.Errorf("Update Traceflow failed: %w", err)
+			return fmt.Errorf("update Traceflow failed: %w", err)
 		}
 		klog.InfoS("Updated Traceflow", "tf", klog.KObj(tf), "status", update.Status)
 		return nil
