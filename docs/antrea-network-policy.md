@@ -706,7 +706,9 @@ traffic that matches the "DropToThirdParty" egress rule, while the rule
 "AllowFromFrontend" is not logged. Specifically for drop and reject rules,
 deduplication is applied to reduce duplicated logs, and duplication buffer
 length is set to 1 second. If a rule name is not provided, an identifiable
-name will be generated for the rule and displayed in the log.
+name will be generated for the rule and displayed in the log. For rules in layer
+7 NetworkPolicy, packets are logged with action `Redirect` prior to analysis by
+the layer 7 engine, more details are available in the corresponding engine logs.
 The rules are logged in the following format:
 
 ```text

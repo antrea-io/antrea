@@ -195,6 +195,17 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	}
 	ob.disposition = openflow.DispositionToString[disposition]
 
+	// Get layer 7 NetworkPolicy redirect action, if traffic is redirected, disposition log should be overwritten.
+	if match = getMatchRegField(matchers, openflow.L7NPRegField); match != nil {
+		l7NPRegVal, err := getInfoInReg(match, openflow.L7NPRegField.GetRange().ToNXRange())
+		if err != nil {
+			return fmt.Errorf("received error while unloading l7 NP redirect value from reg: %v", err)
+		}
+		if l7NPRegVal == openflow.DispositionL7NPRedirect {
+			ob.disposition = "Redirect"
+		}
+	}
+
 	// Set match to corresponding ingress/egress reg according to disposition.
 	match = getMatch(matchers, tableID, disposition)
 

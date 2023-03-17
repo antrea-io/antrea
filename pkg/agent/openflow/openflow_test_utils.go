@@ -25,6 +25,13 @@ func InitMockTables(tableMap map[*Table]uint8) {
 	}
 }
 
+// InitOFTableCache is used to update ofTableCache in tests.
+func InitOFTableCache(tableMap map[*Table]uint8) {
+	for ft := range tableMap {
+		tableCache.Update(ft)
+	}
+}
+
 // ResetOFTable is used for integration tests.
 func ResetOFTable() {
 	binding.ResetTableID()
