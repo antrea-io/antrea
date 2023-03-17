@@ -8,6 +8,7 @@
 - [Usage](#usage)
   - [HTTP](#http)
     - [More examples](#more-examples)
+  - [Logs](#logs)
 - [Limitations](#limitations)
 <!-- /toc -->
 
@@ -198,6 +199,80 @@ spec:
       action: Allow      # As the rule's "from" and "ports" are empty, which means it selects traffic from any network
       l7Protocols:       # peer to any port of the Pods this policy applies to, all inbound non-HTTP requests will be
         - http: {}       # automatically dropped, and subsequent rules will not be considered.
+```
+
+### Logs
+
+Layer 7 traffic that matches the NetworkPolicy will be logged in an event
+triggered log file (`/var/log/antrea/networkpolicy/l7engine/eve-YEAR-MONTH-DAY.json`).
+The event type for this log is `alert`. If `enableLogging` is set for the rule,
+packets that match the rule will also be logged in addition to the event with
+event type `packet`. Below is an example of the two event types.
+
+Deny ingress from client (10.10.1.5) to web (10.10.1.4/admin)
+
+```json
+{
+  "timestamp": "2023-03-09T20:00:28.210821+0000",
+  "flow_id": 627175734391745,
+  "in_iface": "antrea-l7-tap0",
+  "event_type": "alert",
+  "vlan": [
+    1
+  ],
+  "src_ip": "10.10.1.5",
+  "src_port": 43352,
+  "dest_ip": "10.10.1.4",
+  "dest_port": 80,
+  "proto": "TCP",
+  "alert": {
+    "action": "blocked",
+    "gid": 1,
+    "signature_id": 1,
+    "rev": 0,
+    "signature": "Reject by AntreaClusterNetworkPolicy:test-l7-ingress",
+    "category": "",
+    "severity": 3,
+    "tenant_id": 1
+  },
+  "http": {
+    "hostname": "10.10.1.4",
+    "url": "/admin",
+    "http_user_agent": "curl/7.74.0",
+    "http_method": "GET",
+    "protocol": "HTTP/1.1",
+    "length": 0
+  },
+  "app_proto": "http",
+  "flow": {
+    "pkts_toserver": 3,
+    "pkts_toclient": 1,
+    "bytes_toserver": 284,
+    "bytes_toclient": 74,
+    "start": "2023-03-09T20:00:28.209857+0000"
+  }
+}
+```
+
+```json
+{
+  "timestamp": "2023-03-09T20:00:28.225016+0000",
+  "flow_id": 627175734391745,
+  "in_iface": "antrea-l7-tap0",
+  "event_type": "packet",
+  "vlan": [
+    1
+  ],
+  "src_ip": "10.10.1.4",
+  "src_port": 80,
+  "dest_ip": "10.10.1.5",
+  "dest_port": 43352,
+  "proto": "TCP",
+  "packet": "/lhtPRglzmQvxnJoCABFAAAoUGYAAEAGFE4KCgEECgoBBQBQqVhIGzbi/odenlAUAfsR7QAA",
+  "packet_info": {
+    "linktype": 1
+  }
+}
 ```
 
 ## Limitations

@@ -27,18 +27,24 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
 )
 
 const (
 	testBufferLength time.Duration = 100 * time.Millisecond
+)
+
+var (
+	actionAllow    = openflow.DispositionToString[openflow.DispositionAllow]
+	actionDrop     = openflow.DispositionToString[openflow.DispositionDrop]
+	actionRedirect = "Redirect"
 )
 
 // mockLogger implements io.Writer.
@@ -122,7 +128,7 @@ func newTestAntreaPolicyLogger(bufferLength time.Duration, clock Clock) (*Antrea
 
 func newLogInfo(disposition string) (*logInfo, string) {
 	testLogInfo := &logInfo{
-		tableName:   "AntreaPolicyIngressRule",
+		tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
 		npRef:       "AntreaNetworkPolicy:default/test",
 		ruleName:    "test-rule",
 		ofPriority:  "0",
@@ -146,7 +152,7 @@ func expectedLogWithCount(msg string, count int) string {
 
 func TestAllowPacketLog(t *testing.T) {
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
-	ob, expected := newLogInfo("Allow")
+	ob, expected := newLogInfo(actionAllow)
 
 	antreaLogger.LogDedupPacket(ob)
 	actual := <-mockAnpLogger.logged
@@ -155,7 +161,7 @@ func TestAllowPacketLog(t *testing.T) {
 
 func TestDropPacketLog(t *testing.T) {
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
-	ob, expected := newLogInfo("Drop")
+	ob, expected := newLogInfo(actionDrop)
 
 	antreaLogger.LogDedupPacket(ob)
 	actual := <-mockAnpLogger.logged
@@ -166,7 +172,7 @@ func TestDropPacketDedupLog(t *testing.T) {
 	clock := NewVirtualClock(time.Now())
 	defer clock.Stop()
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
-	ob, expected := newLogInfo("Drop")
+	ob, expected := newLogInfo(actionDrop)
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
@@ -187,7 +193,7 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	clock := NewVirtualClock(time.Now())
 	defer clock.Stop()
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
-	ob, expected := newLogInfo("Drop")
+	ob, expected := newLogInfo(actionDrop)
 
 	consumeLog := func() (int, error) {
 		select {
@@ -231,33 +237,148 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	assert.Equal(t, 1, c2)
 }
 
-func TestGetNetworkPolicyInfo(t *testing.T) {
-	openflow.InitMockTables(
-		map[*openflow.Table]uint8{
-			openflow.AntreaPolicyEgressRuleTable:  uint8(5),
-			openflow.EgressRuleTable:              uint8(6),
-			openflow.EgressDefaultTable:           uint8(7),
-			openflow.AntreaPolicyIngressRuleTable: uint8(12),
-			openflow.IngressRuleTable:             uint8(13),
-			openflow.IngressDefaultTable:          uint8(14),
-		})
-	c := &Controller{ofClient: &openflowtest.MockClient{}}
-	ob := new(logInfo)
-	regID := openflow.APDispositionField.GetRegID()
-	dispositionMatch := openflow15.MatchField{
-		Class:   openflow15.OXM_CLASS_PACKET_REGS,
-		Field:   uint8(regID / 2),
-		HasMask: false,
-		Value:   &openflow15.ByteArrayField{Data: []byte{1, 1, 1, 1}},
-	}
-	matchers := []openflow15.MatchField{dispositionMatch}
-	pktIn := &ofctrl.PacketIn{TableId: 17, Match: openflow15.Match{Fields: matchers}}
+func TestRedirectPacketLog(t *testing.T) {
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
+	ob, expected := newLogInfo(actionRedirect)
 
-	err := getNetworkPolicyInfo(pktIn, c, ob)
-	assert.Equal(t, string(v1beta2.K8sNetworkPolicy), ob.npRef)
-	assert.Equal(t, "<nil>", ob.ofPriority)
-	assert.Equal(t, "<nil>", ob.ruleName)
-	require.NoError(t, err)
+	antreaLogger.LogDedupPacket(ob)
+	actual := <-mockAnpLogger.logged
+	assert.Contains(t, actual, expected)
+}
+
+func TestGetNetworkPolicyInfo(t *testing.T) {
+	prepareMockOFTablesWithCache()
+	generateMatch := func(regID int, data []byte) openflow15.MatchField {
+		return openflow15.MatchField{
+			Class:   openflow15.OXM_CLASS_PACKET_REGS,
+			Field:   uint8(regID / 2),
+			HasMask: false,
+			Value:   &openflow15.ByteArrayField{Data: data},
+		}
+	}
+	testANPRef := "AntreaNetworkPolicy:default/test-anp"
+	testK8sRef := "K8sNetworkPolicy:default/test-anp"
+	testPriority, testRule := "61800", "test-rule"
+	allowDispositionData := []byte{0x11, 0x00, 0x00, 0x11}
+	dropDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
+	redirectDispositionData := []byte{0x11, 0x08, 0x00, 0x11}
+	ingressData := []byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}
+	tests := []struct {
+		name            string
+		tableID         uint8
+		expectedCalls   func(mockClient *openflowtest.MockClientMockRecorder)
+		dispositionData []byte
+		ob              *logInfo
+		wantOb          *logInfo
+		wantErr         error
+	}{
+		{
+			name:    "ANP Allow",
+			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
+			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					testANPRef, testPriority, testRule)
+			},
+			dispositionData: allowDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition: actionAllow,
+				npRef:       testANPRef,
+				ofPriority:  testPriority,
+				ruleName:    testRule,
+			},
+		},
+		{
+			name:    "K8s Allow",
+			tableID: openflow.IngressRuleTable.GetID(),
+			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					testK8sRef, testPriority, "")
+			},
+			dispositionData: allowDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.IngressRuleTable.GetName(),
+				disposition: actionAllow,
+				npRef:       testK8sRef,
+				ofPriority:  testPriority,
+				ruleName:    "<nil>",
+			},
+		},
+		{
+			name:    "ANP Drop",
+			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
+			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					testANPRef, testPriority, testRule)
+			},
+			dispositionData: dropDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition: actionDrop,
+				npRef:       testANPRef,
+				ofPriority:  testPriority,
+				ruleName:    testRule,
+			},
+		},
+		{
+			name:            "K8s Drop",
+			tableID:         openflow.IngressDefaultTable.GetID(),
+			dispositionData: dropDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.IngressDefaultTable.GetName(),
+				disposition: actionDrop,
+				npRef:       "K8sNetworkPolicy",
+				ofPriority:  "<nil>",
+				ruleName:    "<nil>",
+			},
+		},
+		{
+			name:    "ANP Redirect",
+			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
+			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					testANPRef, testPriority, testRule)
+			},
+			dispositionData: redirectDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition: actionRedirect,
+				npRef:       testANPRef,
+				ofPriority:  testPriority,
+				ruleName:    testRule,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Inject disposition and redirect match.
+			dispositionMatch := generateMatch(openflow.APDispositionField.GetRegID(), tc.dispositionData)
+			matchers := []openflow15.MatchField{dispositionMatch}
+			// Inject ingress/egress match when case is not K8s default drop.
+			if tc.expectedCalls != nil {
+				regID := openflow.TFIngressConjIDField.GetRegID()
+				if tc.wantOb.disposition == actionDrop {
+					regID = openflow.CNPConjIDField.GetRegID()
+				}
+				ingressMatch := generateMatch(regID, ingressData)
+				matchers = append(matchers, ingressMatch)
+			}
+			pktIn := &ofctrl.PacketIn{TableId: tc.tableID, Match: openflow15.Match{Fields: matchers}}
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			testClientInterface := openflowtest.NewMockClient(ctrl)
+			if tc.expectedCalls != nil {
+				tc.expectedCalls(testClientInterface.EXPECT())
+			}
+			c := &Controller{ofClient: testClientInterface}
+			tc.ob = new(logInfo)
+			gotErr := getNetworkPolicyInfo(pktIn, c, tc.ob)
+			assert.Equal(t, tc.wantOb, tc.ob)
+			assert.Equal(t, tc.wantErr, gotErr)
+		})
+	}
 }
 
 func TestGetPacketInfo(t *testing.T) {
@@ -277,7 +398,6 @@ func TestGetPacketInfo(t *testing.T) {
 				SourcePort:      35402,
 				DestinationPort: 80,
 			},
-			ob: new(logInfo),
 			wantOb: &logInfo{
 				srcIP:       "0.0.0.0",
 				srcPort:     "35402",
@@ -295,7 +415,6 @@ func TestGetPacketInfo(t *testing.T) {
 				IPLength:      60,
 				IPProto:       ip.ICMPProtocol,
 			},
-			ob: new(logInfo),
 			wantOb: &logInfo{
 				srcIP:       "0.0.0.0",
 				srcPort:     "<nil>",
@@ -308,7 +427,13 @@ func TestGetPacketInfo(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		tc.ob = new(logInfo)
 		getPacketInfo(tc.packet, tc.ob)
 		assert.Equal(t, tc.wantOb, tc.ob)
 	}
+}
+
+func prepareMockOFTablesWithCache() {
+	openflow.InitMockTables(mockOFTables)
+	openflow.InitOFTableCache(mockOFTables)
 }

@@ -346,11 +346,10 @@ const (
 	DispositionDrop  = 0b01
 	DispositionRej   = 0b10
 	DispositionPass  = 0b11
-
-	// CustomReasonLogging is used when send packet-in to controller indicating this
+	// CustomReasonLogging is used when sending packet-in to controller indicating this
 	// packet need logging.
 	CustomReasonLogging = 0b01
-	// CustomReasonReject is not only used when send packet-in to controller indicating
+	// CustomReasonReject is not only used when sending packet-in to controller indicating
 	// that this packet should be rejected, but also used in the case that when
 	// controller send reject packet as packet-out, we want reject response to bypass
 	// the connTrack to avoid unexpected drop.
@@ -362,6 +361,10 @@ const (
 	CustomReasonDeny = 0b100
 	CustomReasonDNS  = 0b1000
 	CustomReasonIGMP = 0b10000
+	// DispositionL7NPRedirect is used when sending packet-in to controller for
+	// logging layer 7 NetworkPolicy indicating that this packet is redirected to
+	// l7 engine to determine the disposition.
+	DispositionL7NPRedirect = 0b1
 
 	// EtherTypeDot1q is used when adding 802.1Q VLAN header in OVS action
 	EtherTypeDot1q = 0x8100
@@ -1773,8 +1776,8 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 			}
 			if l7RuleVlanID != nil {
 				return fb.
-					Action().LoadToRegField(conjReg, conjunctionID).                           // Traceflow.
-					Action().LoadRegMark(DispositionAllowRegMark, CustomReasonLoggingRegMark). // AntreaPolicy, Enable logging.
+					Action().LoadToRegField(conjReg, conjunctionID).                                                // Traceflow.
+					Action().LoadRegMark(DispositionAllowRegMark, CustomReasonLoggingRegMark, L7NPRedirectRegMark). // AntreaPolicy, Enable logging.
 					Action().SendToController(uint8(PacketInReasonNP)).
 					Action().CT(true, nextTable, ctZone, f.ctZoneSrcField). // CT action requires commit flag if actions other than NAT without arguments are specified.
 					LoadToLabelField(uint64(conjunctionID), labelField).

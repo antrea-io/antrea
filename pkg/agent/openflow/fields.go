@@ -82,6 +82,9 @@ var (
 	CustomReasonIGMPRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonIGMP)
 	// reg0[18]: Mark to indicate remote SNAT for Egress.
 	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 18)
+	// reg0[19]: Field to indicate redirect action of layer 7 NetworkPolicy.
+	L7NPRegField        = binding.NewRegField(0, 19, 19)
+	L7NPRedirectRegMark = binding.NewRegMark(L7NPRegField, DispositionL7NPRedirect)
 
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
