@@ -14,7 +14,11 @@
 
 package netlink
 
-import "github.com/vishvananda/netlink"
+import (
+	"net"
+
+	"github.com/vishvananda/netlink"
+)
 
 // Interface is created to allow testing.
 type Interface interface {
@@ -25,6 +29,8 @@ type Interface interface {
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
 
 	RouteDel(route *netlink.Route) error
+
+	AddrAdd(link netlink.Link, addr *netlink.Addr) error
 
 	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
 
@@ -40,9 +46,17 @@ type Interface interface {
 
 	LinkByName(name string) (netlink.Link, error)
 
+	LinkByIndex(index int) (netlink.Link, error)
+
 	LinkSetNsFd(link netlink.Link, fd int) error
 
 	LinkSetMTU(link netlink.Link, mtu int) error
+
+	LinkSetDown(link netlink.Link) error
+
+	LinkSetHardwareAddr(link netlink.Link, hwaddr net.HardwareAddr) error
+
+	LinkSetName(link netlink.Link, name string) error
 
 	LinkSetUp(link netlink.Link) error
 }

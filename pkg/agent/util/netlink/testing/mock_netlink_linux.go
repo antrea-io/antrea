@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ package testing
 import (
 	gomock "github.com/golang/mock/gomock"
 	netlink "github.com/vishvananda/netlink"
+	net "net"
 	reflect "reflect"
 )
 
@@ -46,6 +47,20 @@ func NewMockInterface(ctrl *gomock.Controller) *MockInterface {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
+}
+
+// AddrAdd mocks base method
+func (m *MockInterface) AddrAdd(arg0 netlink.Link, arg1 *netlink.Addr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddrAdd", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddrAdd indicates an expected call of AddrAdd
+func (mr *MockInterfaceMockRecorder) AddrAdd(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddrAdd", reflect.TypeOf((*MockInterface)(nil).AddrAdd), arg0, arg1)
 }
 
 // AddrDel mocks base method
@@ -91,6 +106,21 @@ func (mr *MockInterfaceMockRecorder) AddrReplace(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddrReplace", reflect.TypeOf((*MockInterface)(nil).AddrReplace), arg0, arg1)
 }
 
+// LinkByIndex mocks base method
+func (m *MockInterface) LinkByIndex(arg0 int) (netlink.Link, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkByIndex", arg0)
+	ret0, _ := ret[0].(netlink.Link)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LinkByIndex indicates an expected call of LinkByIndex
+func (mr *MockInterfaceMockRecorder) LinkByIndex(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkByIndex", reflect.TypeOf((*MockInterface)(nil).LinkByIndex), arg0)
+}
+
 // LinkByName mocks base method
 func (m *MockInterface) LinkByName(arg0 string) (netlink.Link, error) {
 	m.ctrl.T.Helper()
@@ -106,6 +136,34 @@ func (mr *MockInterfaceMockRecorder) LinkByName(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkByName", reflect.TypeOf((*MockInterface)(nil).LinkByName), arg0)
 }
 
+// LinkSetDown mocks base method
+func (m *MockInterface) LinkSetDown(arg0 netlink.Link) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetDown", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetDown indicates an expected call of LinkSetDown
+func (mr *MockInterfaceMockRecorder) LinkSetDown(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetDown", reflect.TypeOf((*MockInterface)(nil).LinkSetDown), arg0)
+}
+
+// LinkSetHardwareAddr mocks base method
+func (m *MockInterface) LinkSetHardwareAddr(arg0 netlink.Link, arg1 net.HardwareAddr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetHardwareAddr", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetHardwareAddr indicates an expected call of LinkSetHardwareAddr
+func (mr *MockInterfaceMockRecorder) LinkSetHardwareAddr(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetHardwareAddr", reflect.TypeOf((*MockInterface)(nil).LinkSetHardwareAddr), arg0, arg1)
+}
+
 // LinkSetMTU mocks base method
 func (m *MockInterface) LinkSetMTU(arg0 netlink.Link, arg1 int) error {
 	m.ctrl.T.Helper()
@@ -118,6 +176,20 @@ func (m *MockInterface) LinkSetMTU(arg0 netlink.Link, arg1 int) error {
 func (mr *MockInterfaceMockRecorder) LinkSetMTU(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetMTU", reflect.TypeOf((*MockInterface)(nil).LinkSetMTU), arg0, arg1)
+}
+
+// LinkSetName mocks base method
+func (m *MockInterface) LinkSetName(arg0 netlink.Link, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetName", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetName indicates an expected call of LinkSetName
+func (mr *MockInterfaceMockRecorder) LinkSetName(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetName", reflect.TypeOf((*MockInterface)(nil).LinkSetName), arg0, arg1)
 }
 
 // LinkSetNsFd mocks base method

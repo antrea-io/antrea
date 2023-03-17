@@ -43,6 +43,14 @@ const (
 	bridgedUplinkSuffix = "~"
 )
 
+var (
+	// Declared variables which are meant to be overridden for testing.
+	netInterfaceByName  = net.InterfaceByName
+	netInterfaceByIndex = net.InterfaceByIndex
+	netInterfaces       = net.Interfaces
+	netInterfaceAddrs   = (*net.Interface).Addrs
+)
+
 func generateInterfaceName(key string, name string, useHead bool) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	io.WriteString(hash, key)
@@ -119,7 +127,7 @@ func dialUnix(address string) (net.Conn, error) {
 // GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP, and ignores the interfaces which have
 // names in the ignoredInterfaces.
 func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.String) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
-	linkList, err := net.Interfaces()
+	linkList, err := netInterfaces()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -139,7 +147,7 @@ func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.Stri
 		if ignoredInterfaces.Has(link.Name) {
 			continue
 		}
-		addrList, err := link.Addrs()
+		addrList, err := netInterfaceAddrs(&link)
 		if err != nil {
 			continue
 		}
@@ -166,11 +174,11 @@ func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.Stri
 }
 
 func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
-	link, err = net.InterfaceByName(ifaceName)
+	link, err = netInterfaceByName(ifaceName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	addrList, err := link.Addrs()
+	addrList, err := netInterfaceAddrs(link)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -212,12 +220,12 @@ func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, lin
 		return nil, nil, nil, fmt.Errorf("length of cidrs is %v more than max allowed of 2", len(cidrs))
 	}
 
-	ifaces, err := net.Interfaces()
+	ifaces, err := netInterfaces()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	for _, i := range ifaces {
-		addresses, err := i.Addrs()
+	for i := range ifaces {
+		addresses, err := netInterfaceAddrs(&ifaces[i])
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -238,7 +246,7 @@ func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, lin
 			}
 		}
 		if v4IPNet != nil || v6IPNet != nil {
-			return v4IPNet, v6IPNet, &i, nil
+			return v4IPNet, v6IPNet, &ifaces[i], nil
 		}
 	}
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
@@ -246,11 +254,11 @@ func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, lin
 
 func GetAllIPNetsByName(ifaceName string) ([]*net.IPNet, error) {
 	ips := []*net.IPNet{}
-	adapter, err := net.InterfaceByName(ifaceName)
+	adapter, err := netInterfaceByName(ifaceName)
 	if err != nil {
 		return nil, err
 	}
-	addrs, _ := adapter.Addrs()
+	addrs, _ := netInterfaceAddrs(adapter)
 	for _, addr := range addrs {
 		if ip, ipNet, err := net.ParseCIDR(addr.String()); err != nil {
 			klog.Warningf("Unable to parse addr %+v, err=%+v", addr, err)
@@ -343,7 +351,7 @@ func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 	_, ipv6LinkLocalNet, _ := net.ParseCIDR("fe80::/64")
 
 	// Get all interfaces.
-	interfaces, err := net.Interfaces()
+	interfaces, err := netInterfaces()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -351,14 +359,14 @@ func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Transform excludeDevices to a set
 	excludeDevicesSet := sets.NewString(excludeDevices...)
 
-	for _, itf := range interfaces {
+	for i := range interfaces {
 		// If the device is in excludeDevicesSet, skip it.
-		if excludeDevicesSet.Has(itf.Name) {
+		if excludeDevicesSet.Has(interfaces[i].Name) {
 			continue
 		}
 
 		// Get all IPs of every interface
-		addrs, err := itf.Addrs()
+		addrs, err := netInterfaceAddrs(&interfaces[i])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -413,7 +421,7 @@ func GenerateRandomMAC() net.HardwareAddr {
 }
 
 func GetIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
-	addrList, err := link.Addrs()
+	addrList, err := netInterfaceAddrs(link)
 	if err != nil {
 		return nil, err
 	}

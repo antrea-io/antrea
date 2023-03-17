@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright 2019 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,9 +14,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//go:build linux
-// +build linux
 
 package util
 
@@ -31,18 +31,33 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+
+	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
+)
+
+var (
+	// netlinkUtil is introduced for testing.
+	netlinkUtil utilnetlink.Interface = &netlink.Handle{}
+
+	// Declared variables which are meant to be overridden for testing.
+	getNS              = ns.GetNS
+	netNSDo            = ns.NetNS.Do
+	netNSPath          = ns.NetNS.Path
+	netNSClose         = ns.NetNS.Close
+	getVethPeerIfindex = ip.GetVethPeerIfindex
+	netlinkAttrs       = netlink.Link.Attrs
 )
 
 // GetNSPeerDevBridge returns peer device and its attached bridge (if applicable)
 // for device dev in network space indicated by nsPath
 func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 	var peerIdx int
-	netNS, err := ns.GetNS(nsPath)
+	netNS, err := getNS(nsPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get NS for path %s: %w", nsPath, err)
 	}
-	if err := netNS.Do(func(_ ns.NetNS) error {
-		_, peerIdx, err = ip.GetVethPeerIfindex(dev)
+	if err := netNSDo(netNS, func(_ ns.NetNS) error {
+		_, peerIdx, err = getVethPeerIfindex(dev)
 		if err != nil {
 			return fmt.Errorf("failed to get peer idx for dev %s in container %s: %w", dev, nsPath, err)
 		}
@@ -51,11 +66,11 @@ func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 		return nil, "", err
 	}
 
-	peerIntf, err := net.InterfaceByIndex(peerIdx)
+	peerIntf, err := netInterfaceByIndex(peerIdx)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get interface for idx %d: %w", peerIdx, err)
 	}
-	peerLink, err := netlink.LinkByIndex(peerIdx)
+	peerLink, err := netlinkUtil.LinkByIndex(peerIdx)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get link for idx %d: %w", peerIdx, err)
 	}
@@ -65,7 +80,7 @@ func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 		return peerIntf, "", nil
 	}
 
-	bridgeLink, err := netlink.LinkByIndex(peerLink.Attrs().MasterIndex)
+	bridgeLink, err := netlinkUtil.LinkByIndex(peerLink.Attrs().MasterIndex)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get master link for dev %s: %w", peerLink.Attrs().Name, err)
 	}
@@ -79,13 +94,13 @@ func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 
 // GetNSDevInterface returns interface of dev in namespace nsPath.
 func GetNSDevInterface(nsPath, dev string) (*net.Interface, error) {
-	netNS, err := ns.GetNS(nsPath)
+	netNS, err := getNS(nsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get NS for path %s: %w", nsPath, err)
 	}
 	var intf *net.Interface
-	if err := netNS.Do(func(_ ns.NetNS) error {
-		intf, err = net.InterfaceByName(dev)
+	if err := netNSDo(netNS, func(_ ns.NetNS) error {
+		intf, err = netInterfaceByName(dev)
 		if err != nil {
 			return fmt.Errorf("failed to get interface %s in container %s: %w", dev, nsPath, err)
 		}
@@ -98,16 +113,16 @@ func GetNSDevInterface(nsPath, dev string) (*net.Interface, error) {
 
 // GetNSPath returns the path of the specified netns.
 func GetNSPath(netnsName string) (string, error) {
-	netNS, err := ns.GetNS(netnsName)
+	netNS, err := getNS(netnsName)
 	if err != nil {
 		return "", fmt.Errorf("failed to open netns %s: %v", netnsName, err)
 	}
-	defer netNS.Close()
-	return netNS.Path(), nil
+	defer netNSClose(netNS)
+	return netNSPath(netNS), nil
 }
 
 func SetLinkUp(name string) (net.HardwareAddr, int, error) {
-	link, err := netlink.LinkByName(name)
+	link, err := netlinkUtil.LinkByName(name)
 	if err != nil {
 		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			return nil, 0, newLinkNotFoundError(name)
@@ -115,15 +130,16 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 		return nil, 0, err
 	}
 	// Set host gateway interface up.
-	if err := netlink.LinkSetUp(link); err != nil {
+	if err := netlinkUtil.LinkSetUp(link); err != nil {
 		klog.Errorf("Failed to set host link for %s up: %v", name, err)
 		return nil, 0, err
 	}
-	mac := link.Attrs().HardwareAddr
-	index := link.Attrs().Index
+	mac := netlinkAttrs(link).HardwareAddr
+	index := netlinkAttrs(link).Index
 	return mac, index, nil
 }
 
+// addrSliceDifference returns elements in s1 but not in s2.
 func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
 	var diff []*netlink.Addr
 
@@ -147,17 +163,17 @@ func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
 // they are missing from the interface. Any other existing address already configured for the
 // interface will be removed, unless it is a link-local address.
 func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
-	link, err := netlink.LinkByIndex(idx)
+	link, err := netlinkUtil.LinkByIndex(idx)
 	if err != nil {
 		return err
 	}
-	ifaceName := link.Attrs().Name
+	ifaceName := netlinkAttrs(link).Name
 	var newAddrs []netlink.Addr
 	for _, ipNet := range ipNets {
 		newAddrs = append(newAddrs, netlink.Addr{IPNet: ipNet, Label: ""})
 	}
 
-	allAddrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+	allAddrs, err := netlinkUtil.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		return fmt.Errorf("failed to query address list for interface %s: %v", ifaceName, err)
 	}
@@ -179,14 +195,14 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 
 	for _, addr := range addrsToRemove {
 		klog.V(2).Infof("Removing address %v from interface %s", addr, ifaceName)
-		if err := netlink.AddrDel(link, addr); err != nil {
+		if err := netlinkUtil.AddrDel(link, addr); err != nil {
 			return fmt.Errorf("failed to remove address %v from interface %s: %v", addr, ifaceName, err)
 		}
 	}
 
 	for _, addr := range addrsToAdd {
 		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
-		if err := netlink.AddrAdd(link, addr); err != nil && !strings.Contains(err.Error(), "file exists") {
+		if err := netlinkUtil.AddrAdd(link, addr); err != nil && !strings.Contains(err.Error(), "file exists") {
 			return fmt.Errorf("failed to add address %v to interface %s: %v", addr, ifaceName, err)
 		}
 	}
@@ -220,11 +236,11 @@ func DialLocalSocket(address string) (net.Conn, error) {
 
 // SetAdapterMACAddress set specified MAC address on interface.
 func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
-	link, err := netlink.LinkByName(adapterName)
+	link, err := netlinkUtil.LinkByName(adapterName)
 	if err != nil {
 		return err
 	}
-	return netlink.LinkSetHardwareAddr(link, *macConfig)
+	return netlinkUtil.LinkSetHardwareAddr(link, *macConfig)
 }
 
 // DeleteOVSPort deletes specific OVS port. This function calls ovs-vsctl command to bypass OVS bridge client to work when agent exiting.
@@ -234,7 +250,7 @@ func DeleteOVSPort(brName, portName string) error {
 }
 
 func HostInterfaceExists(ifName string) bool {
-	_, err := netlink.LinkByName(ifName)
+	_, err := netlinkUtil.LinkByName(ifName)
 	if err == nil {
 		return true
 	}
@@ -246,17 +262,17 @@ func HostInterfaceExists(ifName string) bool {
 }
 
 func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interface{}, error) {
-	iface, err := net.InterfaceByName(ifName)
+	iface, err := netInterfaceByName(ifName)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get interface by name %s, err %v", ifName, err)
+		return nil, nil, nil, fmt.Errorf("failed to get interface by name %s: %v", ifName, err)
 	}
 	addrs, err := GetIPNetsByLink(iface)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get address for interface %s, err %v", ifName, err)
+		return nil, nil, nil, fmt.Errorf("failed to get address for interface %s: %v", ifName, err)
 	}
 	routes, err := getRoutesOnInterface(iface.Index)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get routes for iface.Index %d, err %v", iface.Index, err)
+		return nil, nil, nil, fmt.Errorf("failed to get routes for iface.Index %d: %v", iface.Index, err)
 	}
 	return iface, addrs, routes, nil
 }
@@ -279,12 +295,12 @@ func RenameInterface(from, to string) error {
 }
 
 func RemoveLinkIPs(link netlink.Link) error {
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+	addrs, err := netlinkUtil.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
 	}
 	for i := range addrs {
-		if err = netlink.AddrDel(link, &addrs[i]); err != nil {
+		if err = netlinkUtil.AddrDel(link, &addrs[i]); err != nil {
 			return err
 		}
 	}
@@ -292,12 +308,12 @@ func RemoveLinkIPs(link netlink.Link) error {
 }
 
 func RemoveLinkRoutes(link netlink.Link) error {
-	routes, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	routes, err := netlinkUtil.RouteList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
 	}
 	for i := range routes {
-		if err = netlink.RouteDel(&routes[i]); err != nil {
+		if err = netlinkUtil.RouteDel(&routes[i]); err != nil {
 			return err
 		}
 	}
@@ -307,8 +323,8 @@ func RemoveLinkRoutes(link netlink.Link) error {
 func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
 	for _, r := range routes {
 		rt := r.(netlink.Route)
-		rt.LinkIndex = link.Attrs().Index
-		if err := netlink.RouteReplace(&rt); err != nil {
+		rt.LinkIndex = netlinkAttrs(link).Index
+		if err := netlinkUtil.RouteReplace(&rt); err != nil {
 			return err
 		}
 	}
@@ -316,11 +332,11 @@ func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
 }
 
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
-	link, err := netlink.LinkByIndex(linkIndex)
+	link, err := netlinkUtil.LinkByIndex(linkIndex)
 	if err != nil {
 		return nil, err
 	}
-	rs, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	rs, err := netlinkUtil.RouteList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		return nil, err
 	}
@@ -332,15 +348,17 @@ func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
 }
 
 func renameHostInterface(oriName string, newName string) error {
-	link, err := netlink.LinkByName(oriName)
+	link, err := netlinkUtil.LinkByName(oriName)
 	if err != nil {
 		return err
 	}
-	if err := netlink.LinkSetDown(link); err != nil {
+	if err := netlinkUtil.LinkSetDown(link); err != nil {
 		return err
 	}
-	defer netlink.LinkSetUp(link)
-	if err := netlink.LinkSetName(link, newName); err != nil {
+	if err := netlinkUtil.LinkSetName(link, newName); err != nil {
+		return err
+	}
+	if err := netlinkUtil.LinkSetUp(link); err != nil {
 		return err
 	}
 	return nil
