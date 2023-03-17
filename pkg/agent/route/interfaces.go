@@ -80,4 +80,11 @@ type Interface interface {
 
 	// DeleteLocalAntreaFlexibleIPAMPodRule is used to delete related IP set entries when an AntreaFlexibleIPAM Pod is deleted.
 	DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error
+
+	// AddRouteForLink adds a route entry for a specific link in format:
+	// "dstCIDR" dev "link" scope link
+	AddRouteForLink(dstCIDR *net.IPNet, linkIndex int) error
+
+	// DeleteRouteForLink deletes a route entry for a specific link.
+	DeleteRouteForLink(dstCIDR *net.IPNet, linkIndex int) error
 }

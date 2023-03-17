@@ -1455,7 +1455,7 @@ func (c *client) InstallMulticlusterNodeFlows(clusterID string,
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	for peerCIDR, remoteGatewayIP := range peerConfigs {
-		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP, enableStretchedNetworkPolicy)...)
+		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteGateway(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP, enableStretchedNetworkPolicy)...)
 	}
 	return c.modifyFlows(c.featureMulticluster.cachedFlows, cacheKey, flows)
 }
@@ -1473,7 +1473,7 @@ func (c *client) InstallMulticlusterGatewayFlows(clusterID string,
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	for peerCIDR, remoteGatewayIP := range peerConfigs {
-		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP, enableStretchedNetworkPolicy)...)
+		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteGateway(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP, enableStretchedNetworkPolicy)...)
 		// Add SNAT flows to change cross-cluster packets' source IP to local Gateway IP.
 		flows = append(flows, c.featureMulticluster.snatConntrackFlows(*peerCIDR, localGatewayIP)...)
 	}

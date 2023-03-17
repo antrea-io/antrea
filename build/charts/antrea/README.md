@@ -90,6 +90,8 @@ Kubernetes: `>= 1.16.0-0`
 | multicluster.enablePodToPodConnectivity | bool | `false` | Enable Multi-cluster Pod to Pod connectivity. |
 | multicluster.enableStretchedNetworkPolicy | bool | `false` | Enable Multi-cluster NetworkPolicy. Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy. |
 | multicluster.namespace | string | `""` | The Namespace where Antrea Multi-cluster Controller is running. The default is antrea-agent's Namespace. |
+| multicluster.trafficEncryptionMode | string | `"none"` | Determines how cross-cluster traffic is encrypted. It has the following options: - none (default):  Cross-cluster traffic will not be encrypted. - wireGuard:       Enable WireGuard for tunnel traffic encryption. |
+| multicluster.wireGuard.port | int | `51821` | WireGuard tunnel port for cross-cluster traffic. |
 | noSNAT | bool | `false` | Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network. |
 | nodeIPAM.clusterCIDRs | list | `[]` | CIDR ranges to use when allocating Pod IP addresses. |
 | nodeIPAM.enable | bool | `false` | Enable Node IPAM in Antrea |
@@ -114,7 +116,7 @@ Kubernetes: `>= 1.16.0-0`
 | tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Antrea APIservers. If empty, the default Go Cipher Suites will be used. See https://golang.org/pkg/crypto/tls/#pkg-constants. |
 | tlsMinVersion | string | `""` | TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13. |
 | trafficEncapMode | string | `"encap"` | Determines how traffic is encapsulated. It must be one of "encap", "noEncap", "hybrid", or "networkPolicyOnly". |
-| trafficEncryptionMode | string | `"none"` | Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.It must be one of "none", "ipsec", "wireGuard". |
+| trafficEncryptionMode | string | `"none"` | Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode. It must be one of "none", "ipsec", "wireGuard". |
 | transportInterface | string | `""` | Name of the interface on Node which is used for tunneling or routing the traffic across Nodes. |
 | transportInterfaceCIDRs | list | `[]` | Network CIDRs of the interface on Node which is used for tunneling or routing the traffic across Nodes. |
 | tunnelCsum | bool | `false` | TunnelCsum determines whether to compute UDP encapsulation header (Geneve or VXLAN) checksums on outgoing packets. For Linux kernel before Mar 2021, UDP checksum must be present to trigger GRO on the receiver for better performance of Geneve and VXLAN tunnels. The issue has been fixed by https://github.com/torvalds/linux/commit/89e5c58fc1e2857ccdaae506fb8bc5fed57ee063, thus computing UDP checksum is no longer necessary. It should only be set to true when you are using an unpatched Linux kernel and observing poor transfer performance. |

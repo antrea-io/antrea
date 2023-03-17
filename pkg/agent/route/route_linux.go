@@ -1551,6 +1551,33 @@ func (c *Client) deleteNodeIP(podCIDR *net.IPNet) error {
 	return nil
 }
 
+func (c *Client) AddRouteForLink(cidr *net.IPNet, linkIndex int) error {
+	route := &netlink.Route{
+		Scope:     netlink.SCOPE_LINK,
+		Dst:       cidr,
+		LinkIndex: linkIndex,
+	}
+
+	return c.netlink.RouteReplace(route)
+}
+
+func (c *Client) DeleteRouteForLink(cidr *net.IPNet, linkIndex int) error {
+	route := &netlink.Route{
+		Scope:     netlink.SCOPE_LINK,
+		Dst:       cidr,
+		LinkIndex: linkIndex,
+	}
+
+	if err := c.netlink.RouteDel(route); err != nil {
+		if err.Error() == "no such process" {
+			klog.V(2).InfoS("Failed to delete WireGuard CIDR route since the route does not exist", "route", route)
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func getTransProtocolStr(protocol binding.Protocol) string {
 	if protocol == binding.ProtocolTCP || protocol == binding.ProtocolTCPv6 {
 		return "tcp"

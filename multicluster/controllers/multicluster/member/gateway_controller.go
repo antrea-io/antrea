@@ -139,12 +139,7 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 		Name:      r.localClusterID,
 		Namespace: r.namespace,
 	}
-	resExportSpec.ClusterInfo = &mcsv1alpha1.ClusterInfo{
-		ClusterID:    r.localClusterID,
-		ServiceCIDR:  gw.ServiceCIDR,
-		PodCIDRs:     r.podCIDRs,
-		GatewayInfos: []mcsv1alpha1.GatewayInfo{{GatewayIP: gw.GatewayIP}},
-	}
+	resExportSpec.ClusterInfo = r.getClusterInfo(gw)
 	klog.V(2).InfoS("Updating ClusterInfo kind of ResourceExport", "clusterinfo", klog.KObj(existingResExport),
 		"gateway", req.NamespacedName)
 	existingResExport.Spec = resExportSpec
@@ -162,16 +157,7 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 		Name:      r.localClusterID,
 		Namespace: r.namespace,
 	}
-	resExportSpec.ClusterInfo = &mcsv1alpha1.ClusterInfo{
-		ClusterID:   r.localClusterID,
-		ServiceCIDR: gateway.ServiceCIDR,
-		PodCIDRs:    r.podCIDRs,
-		GatewayInfos: []mcsv1alpha1.GatewayInfo{
-			{
-				GatewayIP: gateway.GatewayIP,
-			},
-		},
-	}
+	resExportSpec.ClusterInfo = r.getClusterInfo(gateway)
 	resExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: r.leaderNamespace,
@@ -197,4 +183,24 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(r)
+}
+
+func (r *GatewayReconciler) getClusterInfo(gateway *mcsv1alpha1.Gateway) *mcsv1alpha1.ClusterInfo {
+	clusterInfo := &mcsv1alpha1.ClusterInfo{
+		ClusterID:   r.localClusterID,
+		ServiceCIDR: gateway.ServiceCIDR,
+		PodCIDRs:    r.podCIDRs,
+		GatewayInfos: []mcsv1alpha1.GatewayInfo{
+			{
+				GatewayIP: gateway.GatewayIP,
+			},
+		},
+	}
+	if gateway.WireGuard != nil && gateway.WireGuard.PublicKey != "" {
+		clusterInfo.WireGuard = &mcsv1alpha1.WireGuardInfo{
+			PublicKey: gateway.WireGuard.PublicKey,
+		}
+	}
+
+	return clusterInfo
 }

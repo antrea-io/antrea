@@ -300,6 +300,13 @@ type MulticlusterConfig struct {
 	// clusters directly. This feature also requires Pod CIDRs to be provided in the Multi-cluster Controller
 	// configuration.
 	EnablePodToPodConnectivity bool `yaml:"enablePodToPodConnectivity,omitempty"`
+	// Antrea Multi-cluster WireGuard tunnel configuration.
+	WireGuard WireGuardConfig `yaml:"wireGuard,omitempty"`
+	// Determines how cross-cluster traffic is encrypted.
+	// It has the following options:
+	// - none (default): Cross-cluster traffic will not be encrypted.
+	// - wireGuard:      Enable WireGuard for tunnel traffic encryption.
+	TrafficEncryptionMode string `yaml:"trafficEncryptionMode,omitempty"`
 }
 
 type ExternalNodeConfig struct {

@@ -68,7 +68,7 @@ func (f *featureMulticluster) replayFlows() []binding.Flow {
 	return getCachedFlows(f.cachedFlows)
 }
 
-func (f *featureMulticluster) l3FwdFlowToRemoteViaTun(
+func (f *featureMulticluster) l3FwdFlowToRemoteGateway(
 	localGatewayMAC net.HardwareAddr,
 	peerServiceCIDR net.IPNet,
 	tunnelPeer net.IP,
