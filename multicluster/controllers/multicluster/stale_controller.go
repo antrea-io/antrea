@@ -453,3 +453,5 @@ func (c *StaleResCleanupController) RunOnce() error {
 	}
 	return nil
 }
+
+// Test for codecov
