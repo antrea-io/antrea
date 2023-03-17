@@ -206,6 +206,24 @@ func TestParseCapturedPacket(t *testing.T) {
 	}
 }
 
+func getTestPacketBytes() []byte {
+	ipPacket := &protocol.IPv4{
+		Version:  0x4,
+		IHL:      5,
+		Protocol: uint8(8),
+		DSCP:     1,
+		Length:   20,
+		NWSrc:    net.IP(pod1IPv4),
+		NWDst:    net.IP(dstIPv4),
+	}
+	ethernetPkt := protocol.NewEthernet()
+	ethernetPkt.HWSrc = pod1MAC
+	ethernetPkt.Ethertype = protocol.IPv4_MSG
+	ethernetPkt.Data = ipPacket
+	pktBytes, _ := ethernetPkt.MarshalBinary()
+	return pktBytes
+}
+
 func TestParsePacketIn(t *testing.T) {
 	xreg0 := make([]byte, 8)
 	binary.BigEndian.PutUint32(xreg0[0:4], 262144) // RemoteSNATRegMark in 32bit reg0
@@ -226,20 +244,7 @@ func TestParsePacketIn(t *testing.T) {
 	}
 	matchTunDst := openflow15.NewTunnelIpv4DstField(net.ParseIP(egressIP), nil)
 
-	ipPacket := &protocol.IPv4{
-		Version:  0x4,
-		IHL:      5,
-		Protocol: uint8(8),
-		DSCP:     1,
-		Length:   20,
-		NWSrc:    net.IP(pod1IPv4),
-		NWDst:    net.IP(dstIPv4),
-	}
-	ethernetPkt := protocol.NewEthernet()
-	ethernetPkt.HWSrc = pod1MAC
-	ethernetPkt.Ethertype = protocol.IPv4_MSG
-	ethernetPkt.Data = ipPacket
-	pktBytes, _ := ethernetPkt.MarshalBinary()
+	pktBytes := getTestPacketBytes()
 
 	egressQuerier := &fakeEgressQuerier{
 		egressName: egressName,
@@ -441,9 +446,7 @@ func TestParsePacketIn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.expectedTf}, tt.networkConfig, tt.nodeConfig, nil, egressQuerier)
-			defer tfc.mockController.Finish()
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			tfc.crdInformerFactory.Start(stopCh)
@@ -456,4 +459,33 @@ func TestParsePacketIn(t *testing.T) {
 			assert.Equal(t, tt.expectedTf, tf)
 		})
 	}
+}
+
+func TestParsePacketInLiveDuplicates(t *testing.T) {
+	networkConfig := &config.NetworkConfig{
+		TrafficEncapMode: 0,
+	}
+	nodeConfig := &config.NodeConfig{
+		TunnelOFPort: 1,
+		GatewayConfig: &config.GatewayConfig{
+			OFPort: 2,
+		},
+	}
+	tfState := &traceflowState{
+		name:           "dummy-traceflow-pod-to-ipv4",
+		tag:            1,
+		isSender:       true,
+		liveTraffic:    true,
+		receivedPacket: true, // assume we have already received a packet
+	}
+	pktIn := &ofctrl.PacketIn{
+		TableId: openflow.L2ForwardingOutTable.GetID(),
+		Data:    util.NewBuffer(getTestPacketBytes()),
+	}
+
+	tfc := newFakeTraceflowController(t, nil, networkConfig, nodeConfig, nil, nil)
+	tfc.runningTraceflows[tfState.tag] = tfState
+
+	_, _, _, err := tfc.parsePacketIn(pktIn)
+	assert.ErrorIs(t, err, skipTraceflowUpdateErr)
 }
