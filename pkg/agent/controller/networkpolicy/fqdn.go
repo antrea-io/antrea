@@ -169,7 +169,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		gwPort:                 gwPort,
 	}
 	if controller.ofClient != nil {
-		if err := controller.ofClient.NewDNSpacketInConjunction(dnsInterceptRuleID); err != nil {
+		if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {
 			return nil, fmt.Errorf("failed to install flow for DNS response interception: %w", err)
 		}
 	}
@@ -726,7 +726,7 @@ func (f *fqdnController) makeDNSRequest(ctx context.Context, fqdn string) error 
 	return nil
 }
 
-// implements openflow.PacketInHandler
+// HandlePacketIn implements openflow.PacketInHandler
 func (f *fqdnController) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	matches := pktIn.GetMatches()
 	// Get custom reasons in this packet-in.
@@ -746,11 +746,11 @@ func (f *fqdnController) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 	klog.V(4).InfoS("Received a packetIn for DNS response")
 	waitCh := make(chan error, 1)
-	handleUDPData := func(dnsPkt *protocol.UDP) {
-		dnsData := dnsPkt.Data
+	handleDNSData := func(dnsData []byte) {
 		dnsMsg := dns.Msg{}
 		if err := dnsMsg.Unpack(dnsData); err != nil {
-			waitCh <- err
+			// A non-DNS response packet or a fragmented DNS response is received. Forward it to the Pod.
+			waitCh <- nil
 			return
 		}
 		f.onDNSResponseMsg(&dnsMsg, time.Now(), waitCh)
@@ -758,18 +758,52 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 	go func() {
 		ethernetPkt, err := getEthernetPacket(pktIn)
 		if err != nil {
+			// Can't parse the packet. Forward it to the Pod.
+			waitCh <- nil
 			return
 		}
 		switch ipPkt := ethernetPkt.Data.(type) {
 		case *protocol.IPv4:
-			switch dnsPkt := ipPkt.Data.(type) {
-			case *protocol.UDP:
-				handleUDPData(dnsPkt)
+			proto := ipPkt.Protocol
+			switch proto {
+			case protocol.Type_UDP:
+				udpPkt := ipPkt.Data.(*protocol.UDP)
+				handleDNSData(udpPkt.Data)
+			case protocol.Type_TCP:
+				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
+				if err != nil {
+					// Can't parse the packet. Forward it to the Pod.
+					waitCh <- nil
+					return
+				}
+				dnsData, err := binding.GetTCPDNSData(tcpPkt)
+				if err != nil {
+					// A non-DNS response packet is received or a fragmented DNS response is received. Forward it to the Pod.
+					waitCh <- nil
+					return
+				}
+				handleDNSData(dnsData)
 			}
 		case *protocol.IPv6:
-			switch dnsPkt := ipPkt.Data.(type) {
-			case *protocol.UDP:
-				handleUDPData(dnsPkt)
+			proto := ipPkt.NextHeader
+			switch proto {
+			case protocol.Type_UDP:
+				udpPkt := ipPkt.Data.(*protocol.UDP)
+				handleDNSData(udpPkt.Data)
+			case protocol.Type_TCP:
+				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
+				if err != nil {
+					// Can't parse the packet. Forward it to the Pod.
+					waitCh <- nil
+					return
+				}
+				dnsData, err := binding.GetTCPDNSData(tcpPkt)
+				if err != nil {
+					// A non-DNS response packet is received or a fragmented DNS response is received. Forward it to the Pod.
+					waitCh <- nil
+					return
+				}
+				handleDNSData(dnsData)
 			}
 		}
 	}()
@@ -780,74 +814,29 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if err != nil {
 			return fmt.Errorf("error when syncing up rules for DNS reply, dropping packet: %v", err)
 		}
-		klog.V(2).InfoS("Rule sync is successful or not needed, forwarding DNS response to Pod")
+		klog.V(2).InfoS("Rule sync is successful or not needed or a non-DNS response packet or a fragmented DNS response was received, forwarding the packet to Pod")
 		return f.sendDNSPacketout(pktIn)
 	}
 }
 
 // sendDNSPacketout forwards the DNS response packet to the original requesting client.
 func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
-	var (
-		packetData   []byte
-		srcIP, dstIP string
-		prot         uint8
-		isIPv6       bool
-	)
 	ethernetPkt, err := getEthernetPacket(pktIn)
 	if err != nil {
 		return err
 	}
-	switch ipPkt := ethernetPkt.Data.(type) {
-	case *protocol.IPv4:
-		srcIP = ipPkt.NWSrc.String()
-		dstIP = ipPkt.NWDst.String()
-		prot = ipPkt.Protocol
-		isIPv6 = false
-		switch dnsPkt := ipPkt.Data.(type) {
-		case *protocol.UDP:
-			packetData = dnsPkt.Data
-		}
-	case *protocol.IPv6:
-		srcIP = ipPkt.NWSrc.String()
-		dstIP = ipPkt.NWDst.String()
-		prot = ipPkt.NextHeader
-		isIPv6 = true
-		switch dnsPkt := ipPkt.Data.(type) {
-		case *protocol.UDP:
-			packetData = dnsPkt.Data
+	inPort := f.gwPort
+	if inPort == 0 {
+		// Use the original in_port number in the packetIn message to avoid an invalid input port number. Note that,
+		// this should not happen in container case as antrea-gw0 always exists. This check is for security.
+		matches := pktIn.GetMatches()
+		inPortField := matches.GetMatchByName("OXM_OF_IN_PORT")
+		if inPortField != nil {
+			inPort = inPortField.GetValue().(uint32)
 		}
 	}
-	if prot == protocol.Type_UDP {
-		inPort := f.gwPort
-		if inPort == 0 {
-			// Use the original in_port number in the packetIn message to avoid an invalid input port number. Note that,
-			// this should not happen in container case as antrea-gw0 always exists. This check is for security.
-			matches := pktIn.GetMatches()
-			inPortField := matches.GetMatchByName("OXM_OF_IN_PORT")
-			if inPortField != nil {
-				inPort = inPortField.GetValue().(uint32)
-			}
-		}
-		udpSrcPort, udpDstPort, err := binding.GetUDPHeaderData(ethernetPkt.Data)
-		if err != nil {
-			klog.ErrorS(err, "Failed to get UDP header data")
-			return err
-		}
-		mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
-		}
-		return f.ofClient.SendUDPPacketOut(
-			ethernetPkt.HWSrc.String(),
-			ethernetPkt.HWDst.String(),
-			srcIP,
-			dstIP,
-			inPort,
-			0,
-			isIPv6,
-			udpSrcPort,
-			udpDstPort,
-			packetData,
-			mutatePacketOut)
+	mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
 	}
-	return nil
+	return f.ofClient.SendEthPacketOut(inPort, 0, ethernetPkt, mutatePacketOut)
 }

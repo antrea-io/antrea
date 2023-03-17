@@ -57,6 +57,7 @@ const (
 	ServiceGroupIDAddr
 	IGMPAddr
 	LabelIDAddr
+	TCPFlagsAddr
 	UnSupported
 )
 

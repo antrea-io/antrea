@@ -2010,6 +2010,12 @@ func (f *featureNetworkPolicy) addFlowMatch(fb binding.FlowBuilder, matchKey *ty
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
 	case MatchLabelID:
 		fb = fb.MatchTunnelID(uint64(matchValue.(uint32)))
+	case MatchTCPFlags:
+		fallthrough
+	case MatchTCPv6Flags:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
+		tcpFlag := matchValue.(TCPFlags)
+		fb = fb.MatchTCPFlags(tcpFlag.Flag, tcpFlag.Mask)
 	}
 	return fb
 }

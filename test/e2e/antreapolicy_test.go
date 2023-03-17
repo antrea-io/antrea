@@ -1554,7 +1554,7 @@ func testANPGroupServiceRefDelete(t *testing.T) {
 	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
-		t.Errorf("failure -- %d wrong results", wrong)
+		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
 	}
 	// Delete services, pods should be connected.
@@ -1565,7 +1565,7 @@ func testANPGroupServiceRefDelete(t *testing.T) {
 	k8sUtils.Validate(allPods, reachability2, []int32{80}, ProtocolTCP)
 	_, wrong, _ = reachability2.Summary()
 	if wrong != 0 {
-		t.Errorf("failure -- %d wrong results", wrong)
+		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability2.PrintSummary(true, true, true)
 	}
 	// Cleanup test resources.
@@ -2262,10 +2262,10 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -2287,10 +2287,10 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -2353,10 +2353,10 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 			log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
 			connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 			if err != nil {
-				t.Errorf("failure -- could not complete probe: %v", err)
+				t.Errorf("Failure -- could not complete probe: %v", err)
 			}
 			if connectivity != tc.expectedConnectivity {
-				t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 					tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 			}
 		}
@@ -2515,7 +2515,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
-		t.Errorf("failure -- %d wrong results", wrong)
+		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
 	}
 
@@ -2534,7 +2534,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
-		t.Errorf("failure -- %d wrong results", wrong)
+		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
 	}
 
@@ -2548,7 +2548,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
-		t.Errorf("failure -- %d wrong results", wrong)
+		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
 	}
 
@@ -3215,10 +3215,10 @@ func testFQDNPolicy(t *testing.T) {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3306,10 +3306,10 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3317,6 +3317,51 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 	for _, service := range services {
 		failOnError(k8sUtils.DeleteService(service.Namespace, service.Name), t)
 	}
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+}
+
+// testFQDNPolicyTCP
+func testFQDNPolicyTCP(t *testing.T) {
+	// The ipv6-only test env doesn't have IPv6 access to the web.
+	skipIfNotIPv4Cluster(t)
+	// It is convenient to have higher log verbosity for FQDNtests for troubleshooting failures.
+	logLevel := log.GetLevel()
+	log.SetLevel(log.TraceLevel)
+	defer log.SetLevel(logLevel)
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-fqdn-tcp").
+		SetTier("application").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
+	builder.AddFQDNRule("github.com", ProtocolTCP, nil, nil, nil, "", nil, crdv1alpha1.RuleActionDrop)
+	testcases := []podToAddrTestStep{
+		{
+			Pod(namespaces["y"] + "/a"),
+			"github.com",
+			80,
+			Dropped,
+		},
+	}
+	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	for _, tc := range testcases {
+		destIP, err := k8sUtils.digDNS(tc.clientPod.PodName(), tc.clientPod.Namespace(), tc.destAddr, true)
+		if err != nil {
+			t.Errorf("Failure -- could not complete dig: %v", err)
+			continue
+		}
+		log.Tracef("Probing: %s -> %s(%s)", tc.clientPod.PodName(), tc.destAddr, destIP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), destIP, tc.destPort, ProtocolTCP)
+		if err != nil {
+			t.Errorf("Failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 }
 
@@ -3380,10 +3425,10 @@ func testToServices(t *testing.T) {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3467,10 +3512,10 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3529,10 +3574,10 @@ func testACNPNodeSelectorEgress(t *testing.T) {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3604,10 +3649,10 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3676,10 +3721,10 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolICMP)
 		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+			t.Errorf("Failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
 				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
@@ -3766,7 +3811,7 @@ sleep 3600
 			connectivity = DecideProbeResult(stderr, 3)
 		}
 		if connectivity != Rejected {
-			t.Errorf("failure -- wrong results for probe: Source 1.1.1.1 --> Dest %s:%d connectivity: %v, expected: Rej", nodeIP(idx), nodePort, connectivity)
+			t.Errorf("Failure -- wrong results for probe: Source 1.1.1.1 --> Dest %s:%d connectivity: %v, expected: Rej", nodeIP(idx), nodePort, connectivity)
 		}
 	}
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
@@ -3989,7 +4034,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {
-					t.Errorf("failure -- %d wrong results", wrong)
+					t.Errorf("Failure -- %d wrong results", wrong)
 					reachability.PrintSummary(true, true, true)
 				}
 			}
@@ -4016,10 +4061,10 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol AntreaPolicy
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
 	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol, nil)
 	if err != nil {
-		t.Errorf("failure -- could not complete probe: %v", err)
+		t.Errorf("Failure -- could not complete probe: %v", err)
 	}
 	if connectivity != p.ExpectConnectivity {
-		t.Errorf("failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v",
+		t.Errorf("Failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v",
 			p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connectivity, p.ExpectConnectivity)
 	}
 }
@@ -4286,7 +4331,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ANPGroupRefRuleIPBlocks", func(t *testing.T) { testANPGroupRefRuleIPBlocks(t) })
 		t.Run("Case=ANPNestedGroup", func(t *testing.T) { testANPNestedGroupCreateAndUpdate(t, data) })
 		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
-		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=ACNPFQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
 		t.Run("Case=ACNPToServices", func(t *testing.T) { testToServices(t) })
 		t.Run("Case=ACNPServiceAccountSelector", func(t *testing.T) { testServiceAccountSelector(t, data) })
 		t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })

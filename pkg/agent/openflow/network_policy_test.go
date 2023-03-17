@@ -65,7 +65,6 @@ var (
 	actionAllow  = crdv1alpha1.RuleActionAllow
 	actionDrop   = crdv1alpha1.RuleActionDrop
 	port8080     = intstr.FromInt(8080)
-	protocolTCP  = v1beta2.ProtocolTCP
 	protocolICMP = v1beta2.ProtocolICMP
 	priority100  = uint16(100)
 	priority200  = uint16(200)
@@ -174,7 +173,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	// Create a policyRuleConjunction for the dns response interception flows
 	// to ensure nil NetworkPolicyReference is handled correctly by GetNetworkPolicyFlowKeys.
 	dnsID := uint32(1)
-	require.NoError(t, c.NewDNSpacketInConjunction(dnsID))
+	require.NoError(t, c.NewDNSPacketInConjunction(dnsID))
 
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{

@@ -193,7 +193,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 
 	if proto == protocol.Type_TCP {
 		// Get TCP data.
-		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, err := binding.GetTCPHeaderData(ethernetPkt.Data)
+		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, _, _, err := binding.GetTCPHeaderData(ethernetPkt.Data)
 		if err != nil {
 			return err
 		}
@@ -209,8 +209,12 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 			isIPv6,
 			oriTCPDstPort,
 			oriTCPSrcPort,
+			0,
 			oriTCPSeqNum+1,
+			0,
 			TCPAck|TCPRst,
+			0,
+			nil,
 			mutateFunc)
 	}
 	// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
