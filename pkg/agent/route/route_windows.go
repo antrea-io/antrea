@@ -404,22 +404,12 @@ func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protoco
 	return util.RemoveNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, string(protocol))
 }
 
-func (c *Client) AddLoadBalancer(externalIPs []string) error {
-	for _, svcIPStr := range externalIPs {
-		if err := c.addServiceRoute(net.ParseIP(svcIPStr)); err != nil {
-			return err
-		}
-	}
-	return nil
+func (c *Client) AddLoadBalancer(externalIP net.IP) error {
+	return c.addServiceRoute(externalIP)
 }
 
-func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
-	for _, svcIPStr := range externalIPs {
-		if err := c.deleteServiceRoute(net.ParseIP(svcIPStr)); err != nil {
-			return err
-		}
-	}
-	return nil
+func (c *Client) DeleteLoadBalancer(externalIP net.IP) error {
+	return c.deleteServiceRoute(externalIP)
 }
 
 func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
