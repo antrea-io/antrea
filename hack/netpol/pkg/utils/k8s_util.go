@@ -17,10 +17,11 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"k8s.io/client-go/rest"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"k8s.io/client-go/rest"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -219,7 +220,7 @@ func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replica
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
 			ImagePullPolicy: v1.PullIfNotPresent,
-			Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.29",
+			Image:           "registry.k8s.io/e2e-test-images/agnhost:2.29",
 			// "-k" for persistent server
 			Command:         []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", port)},
 			SecurityContext: &v1.SecurityContext{},
