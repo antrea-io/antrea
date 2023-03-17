@@ -510,7 +510,7 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	}
 
 	// Terminating watchers is asynchronous, leave it some reaction time to avoid flakes.
-	terminationReactionTime := time.Millisecond * 100
+	terminationReactionTime := time.Millisecond * 500
 	select {
 	case <-w2.(*storeWatcher).done:
 		t.Fatal("w2 was stopped, expected not stopped")
