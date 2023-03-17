@@ -368,6 +368,20 @@ func (mr *MockClientMockRecorder) InstallMulticlusterNodeFlows(arg0, arg1, arg2,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticlusterNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticlusterNodeFlows), arg0, arg1, arg2, arg3)
 }
 
+// InstallMulticlusterPodFlows mocks base method
+func (m *MockClient) InstallMulticlusterPodFlows(arg0, arg1 net.IP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticlusterPodFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticlusterPodFlows indicates an expected call of InstallMulticlusterPodFlows
+func (mr *MockClientMockRecorder) InstallMulticlusterPodFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticlusterPodFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticlusterPodFlows), arg0, arg1)
+}
+
 // InstallNodeFlows mocks base method
 func (m *MockClient) InstallNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 *ip.DualStackIPs, arg3 uint32, arg4 net.HardwareAddr) error {
 	m.ctrl.T.Helper()
@@ -850,6 +864,20 @@ func (m *MockClient) UninstallMulticlusterFlows(arg0 string) error {
 func (mr *MockClientMockRecorder) UninstallMulticlusterFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallMulticlusterFlows", reflect.TypeOf((*MockClient)(nil).UninstallMulticlusterFlows), arg0)
+}
+
+// UninstallMulticlusterPodFlows mocks base method
+func (m *MockClient) UninstallMulticlusterPodFlows(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallMulticlusterPodFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallMulticlusterPodFlows indicates an expected call of UninstallMulticlusterPodFlows
+func (mr *MockClientMockRecorder) UninstallMulticlusterPodFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallMulticlusterPodFlows", reflect.TypeOf((*MockClient)(nil).UninstallMulticlusterPodFlows), arg0)
 }
 
 // UninstallNodeFlows mocks base method

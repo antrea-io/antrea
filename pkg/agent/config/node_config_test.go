@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 func TestNetworkConfig_NeedsTunnelToPeer(t *testing.T) {
@@ -272,6 +274,75 @@ func TestIsIPv6Enabled(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tt.expectedIPv6Enabled, ipv6Enabled)
+		})
+	}
+}
+
+func TestCalculateMTUDeduction(t *testing.T) {
+	tests := []struct {
+		name                 string
+		nc                   *NetworkConfig
+		isIPv6               bool
+		expectedMTUDeduction int
+	}{
+		{
+			name:                 "VXLan encap without IPv6",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.VXLANTunnel},
+			expectedMTUDeduction: 50,
+		},
+		{
+			name:                 "Geneve encap without IPv6",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel},
+			expectedMTUDeduction: 50,
+		},
+		{
+			name:                 "GRE encap without IPv6",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GRETunnel},
+			expectedMTUDeduction: 38,
+		},
+		{
+			name:                 "Default encap with IPv6",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel},
+			isIPv6:               true,
+			expectedMTUDeduction: 70,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.nc.CalculateMTUDeduction(tt.isIPv6)
+			assert.Equal(t, tt.expectedMTUDeduction, tt.nc.MTUDeduction)
+		})
+	}
+}
+
+func TestNeedsTunnelInterface(t *testing.T) {
+	tests := []struct {
+		name     string
+		nc       *NetworkConfig
+		expected bool
+	}{
+		{
+			name:     "Default encap mode",
+			nc:       &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel},
+			expected: true,
+		},
+		{
+			name:     "networkPolicyOnly with Multicluster enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableMulticlusterGW: true},
+			expected: true,
+		},
+		{
+			name:     "networkPolicyOnly without Multicluster enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableMulticlusterGW: false},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := tt.nc.NeedsTunnelInterface()
+			assert.Equal(t, tt.expected, actual)
 		})
 	}
 }

@@ -117,6 +117,7 @@ type CNIServer struct {
 	enableSecondaryNetworkIPAM bool
 	disableTXChecksumOffload   bool
 	secondaryNetworkEnabled    bool
+	networkConfig              *config.NetworkConfig
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
 }
@@ -192,7 +193,7 @@ func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig,
 		return nil, err
 	}
 	if cniConfig.MTU == 0 {
-		cniConfig.MTU = s.nodeConfig.NodeMTU
+		cniConfig.MTU = s.networkConfig.InterfaceMTU
 	}
 	cniConfig.CniCmdArgs = request.CniArgs
 	klog.V(3).Infof("Load network configurations: %v", cniConfig)
@@ -629,6 +630,7 @@ func New(
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
 	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
+	networkConfig *config.NetworkConfig,
 	networkReadyCh <-chan struct{},
 ) *CNIServer {
 	return &CNIServer{
@@ -644,6 +646,7 @@ func New(
 		enableBridgingMode:         enableBridgingMode,
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
+		networkConfig:              networkConfig,
 		networkReadyCh:             networkReadyCh,
 	}
 }
@@ -718,6 +721,18 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		prevResult.IPs,
 		s.containerAccess); err != nil {
 		return &cnipb.CniCmdResponse{CniResult: []byte("")}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
+	}
+
+	// Packets for multi-cluster traffic will always be encapsulated and sent through
+	// tunnels. So here we need to reduce interface MTU for different tunnel types.
+	if s.networkConfig.MTUDeduction != 0 {
+		if err := s.podConfigurator.ifConfigurator.changeContainerMTU(
+			s.hostNetNsPath(cniConfig.Netns),
+			cniConfig.Ifname,
+			s.networkConfig.MTUDeduction,
+		); err != nil {
+			return &cnipb.CniCmdResponse{CniResult: []byte("")}, fmt.Errorf("failed to change container %s's MTU: %w", cniConfig.ContainerId, err)
+		}
 	}
 
 	// we return prevResult, which should be exactly what we received from

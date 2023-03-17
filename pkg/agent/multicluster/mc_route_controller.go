@@ -28,16 +28,14 @@ import (
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
+	mcinformersv1alpha1 "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
 	mclisters "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
-	controllerName = "AntreaAgentMCRouteController"
+	controllerName = "MCDefaultRouteController"
 
 	// Set resyncPeriod to 0 to disable resyncing
 	resyncPeriod = 0 * time.Second
@@ -50,53 +48,44 @@ const (
 	workerItemKey  = "key"
 )
 
-// MCRouteController watches Gateway and ClusterInfoImport events.
+// MCDefaultRouteController watches Gateway and ClusterInfoImport events.
 // It is responsible for setting up necessary Openflow entries for multi-cluster
 // traffic on a Gateway or a regular Node.
-type MCRouteController struct {
+type MCDefaultRouteController struct {
 	mcClient             mcclientset.Interface
-	ovsBridgeClient      ovsconfig.OVSBridgeClient
 	ofClient             openflow.Client
-	interfaceStore       interfacestore.InterfaceStore
 	nodeConfig           *config.NodeConfig
-	gwInformer           mcinformers.GatewayInformer
+	gwInformer           mcinformersv1alpha1.GatewayInformer
 	gwLister             mclisters.GatewayLister
 	gwListerSynced       cache.InformerSynced
-	ciImportInformer     mcinformers.ClusterInfoImportInformer
+	ciImportInformer     mcinformersv1alpha1.ClusterInfoImportInformer
 	ciImportLister       mclisters.ClusterInfoImportLister
 	ciImportListerSynced cache.InformerSynced
 	queue                workqueue.RateLimitingInterface
 	// installedCIImports is for saving ClusterInfos which have been processed
-	// in MCRouteController. Need to use mutex to protect 'installedCIImports' if
+	// in MCDefaultRouteController. Need to use mutex to protect 'installedCIImports' if
 	// we change the number of 'defaultWorkers'.
 	installedCIImports map[string]*mcv1alpha1.ClusterInfoImport
 	// Need to use mutex to protect 'installedActiveGW' if we change
 	// the number of 'defaultWorkers' to run multiple go routines to handle
 	// events.
-	installedActiveGW *mcv1alpha1.Gateway
-	// The Namespace where Antrea Multi-cluster Controller is running.
-	namespace                    string
+	installedActiveGW            *mcv1alpha1.Gateway
 	enableStretchedNetworkPolicy bool
 	enablePodToPodConnectivity   bool
 }
 
-func NewMCRouteController(
+func NewMCDefaultRouteController(
 	mcClient mcclientset.Interface,
-	gwInformer mcinformers.GatewayInformer,
-	ciImportInformer mcinformers.ClusterInfoImportInformer,
+	gwInformer mcinformersv1alpha1.GatewayInformer,
+	ciImportInformer mcinformersv1alpha1.ClusterInfoImportInformer,
 	client openflow.Client,
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	interfaceStore interfacestore.InterfaceStore,
 	nodeConfig *config.NodeConfig,
-	namespace string,
 	enableStretchedNetworkPolicy bool,
 	enablePodToPodConnectivity bool,
-) *MCRouteController {
-	controller := &MCRouteController{
+) *MCDefaultRouteController {
+	controller := &MCDefaultRouteController{
 		mcClient:                     mcClient,
-		ovsBridgeClient:              ovsBridgeClient,
 		ofClient:                     client,
-		interfaceStore:               interfaceStore,
 		nodeConfig:                   nodeConfig,
 		gwInformer:                   gwInformer,
 		gwLister:                     gwInformer.Lister(),
@@ -106,7 +95,6 @@ func NewMCRouteController(
 		ciImportListerSynced:         ciImportInformer.Informer().HasSynced,
 		queue:                        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute"),
 		installedCIImports:           make(map[string]*mcv1alpha1.ClusterInfoImport),
-		namespace:                    namespace,
 		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
 		enablePodToPodConnectivity:   enablePodToPodConnectivity,
 	}
@@ -141,7 +129,7 @@ func NewMCRouteController(
 	return controller
 }
 
-func (c *MCRouteController) enqueueGateway(obj interface{}, isDelete bool) {
+func (c *MCDefaultRouteController) enqueueGateway(obj interface{}, isDelete bool) {
 	gw, isGW := obj.(*mcv1alpha1.Gateway)
 	if !isGW {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -156,10 +144,6 @@ func (c *MCRouteController) enqueueGateway(obj interface{}, isDelete bool) {
 		}
 	}
 
-	if gw.Namespace != c.namespace {
-		return
-	}
-
 	if !isDelete {
 		if net.ParseIP(gw.InternalIP) == nil || net.ParseIP(gw.GatewayIP) == nil {
 			klog.ErrorS(nil, "No valid Internal IP or Gateway IP is found in Gateway", "gateway", gw.Namespace+"/"+gw.Name)
@@ -169,7 +153,7 @@ func (c *MCRouteController) enqueueGateway(obj interface{}, isDelete bool) {
 	c.queue.Add(workerItemKey)
 }
 
-func (c *MCRouteController) enqueueClusterInfoImport(obj interface{}, isDelete bool) {
+func (c *MCDefaultRouteController) enqueueClusterInfoImport(obj interface{}, isDelete bool) {
 	ciImp, isciImp := obj.(*mcv1alpha1.ClusterInfoImport)
 	if !isciImp {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -182,10 +166,6 @@ func (c *MCRouteController) enqueueClusterInfoImport(obj interface{}, isDelete b
 			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-ClusterInfoImport object", "object", deletedState.Obj)
 			return
 		}
-	}
-
-	if ciImp.Namespace != c.namespace {
-		return
 	}
 
 	if !isDelete {
@@ -204,7 +184,7 @@ func (c *MCRouteController) enqueueClusterInfoImport(obj interface{}, isDelete b
 
 // Run will create defaultWorkers workers (go routines) which will process
 // the Gateway events from the workqueue.
-func (c *MCRouteController) Run(stopCh <-chan struct{}) {
+func (c *MCDefaultRouteController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 	cacheSyncs := []cache.InformerSynced{c.gwListerSynced, c.ciImportListerSynced}
 	klog.InfoS("Starting controller", "controller", controllerName)
@@ -221,12 +201,12 @@ func (c *MCRouteController) Run(stopCh <-chan struct{}) {
 
 // worker is a long-running function that will continually call the processNextWorkItem
 // function in order to read and process a message on the workqueue.
-func (c *MCRouteController) worker() {
+func (c *MCDefaultRouteController) worker() {
 	for c.processNextWorkItem() {
 	}
 }
 
-func (c *MCRouteController) processNextWorkItem() bool {
+func (c *MCDefaultRouteController) processNextWorkItem() bool {
 	obj, quit := c.queue.Get()
 	if quit {
 		return false
@@ -247,7 +227,7 @@ func (c *MCRouteController) processNextWorkItem() bool {
 	return true
 }
 
-func (c *MCRouteController) syncMCFlows() error {
+func (c *MCDefaultRouteController) syncMCFlows() error {
 	startTime := time.Now()
 	defer func() {
 		klog.V(4).InfoS("Finished syncing flows for Multi-cluster", "time", time.Since(startTime))
@@ -290,13 +270,13 @@ func (c *MCRouteController) syncMCFlows() error {
 	return nil
 }
 
-func (c *MCRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
-	desiredCIImports, err := c.ciImportLister.ClusterInfoImports(c.namespace).List(labels.Everything())
+func (c *MCDefaultRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
+	desiredCIImports, err := c.ciImportLister.List(labels.Everything())
 	if err != nil {
 		return err
 	}
 
-	activeGWChanged := c.checkGateWayIPChange(activeGW)
+	activeGWChanged := c.checkGatewayIPChange(activeGW)
 	installedCIImportNames := sets.StringKeySet(c.installedCIImports)
 	for _, ciImp := range desiredCIImports {
 		if err = c.addMCFlowsForSingleCIImp(activeGW, ciImp, c.installedCIImports[ciImp.Name], activeGWChanged); err != nil {
@@ -313,7 +293,7 @@ func (c *MCRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway
 	return nil
 }
 
-func (c *MCRouteController) checkGateWayIPChange(activeGW *mcv1alpha1.Gateway) bool {
+func (c *MCDefaultRouteController) checkGatewayIPChange(activeGW *mcv1alpha1.Gateway) bool {
 	var activeGWChanged bool
 	if activeGW.Name == c.nodeConfig.Name {
 		// On a Gateway Node, the GatewayIP of the active Gateway will impact the Openflow rules.
@@ -325,8 +305,8 @@ func (c *MCRouteController) checkGateWayIPChange(activeGW *mcv1alpha1.Gateway) b
 	return activeGWChanged
 }
 
-func (c *MCRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
-	allCIImports, err := c.ciImportLister.ClusterInfoImports(c.namespace).List(labels.Everything())
+func (c *MCDefaultRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
+	allCIImports, err := c.ciImportLister.List(labels.Everything())
 	if err != nil {
 		return err
 	}
@@ -343,7 +323,7 @@ func (c *MCRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway)
 	return nil
 }
 
-func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gateway, ciImport *mcv1alpha1.ClusterInfoImport,
+func (c *MCDefaultRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gateway, ciImport *mcv1alpha1.ClusterInfoImport,
 	installedCIImp *mcv1alpha1.ClusterInfoImport, activeGWChanged bool) error {
 	tunnelPeerIPToRemoteGW := getPeerGatewayIP(ciImport.Spec)
 	if tunnelPeerIPToRemoteGW == nil {
@@ -403,7 +383,7 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 	return nil
 }
 
-func (c *MCRouteController) deleteMCFlowsForSingleCIImp(ciImpName string) error {
+func (c *MCDefaultRouteController) deleteMCFlowsForSingleCIImp(ciImpName string) error {
 	if err := c.ofClient.UninstallMulticlusterFlows(ciImpName); err != nil {
 		return fmt.Errorf("failed to uninstall multi-cluster flows to remote Gateway Node %s: %v", ciImpName, err)
 	}
@@ -411,34 +391,37 @@ func (c *MCRouteController) deleteMCFlowsForSingleCIImp(ciImpName string) error 
 	return nil
 }
 
-func (c *MCRouteController) deleteMCFlowsForAllCIImps() error {
+func (c *MCDefaultRouteController) deleteMCFlowsForAllCIImps() error {
 	for _, ciImp := range c.installedCIImports {
 		c.deleteMCFlowsForSingleCIImp(ciImp.Name)
 	}
 	return nil
 }
 
-// getActiveGateway compares Gateway's CreationTimestamp to get the active Gateway,
-// The last created Gateway will be the active Gateway.
-func (c *MCRouteController) getActiveGateway() (*mcv1alpha1.Gateway, error) {
-	gws, err := c.gwLister.Gateways(c.namespace).List(labels.Everything())
+func (c *MCDefaultRouteController) getActiveGateway() (*mcv1alpha1.Gateway, error) {
+	activeGW, err := getActiveGateway(c.gwLister)
+	if err != nil {
+		return nil, err
+	}
+	if activeGW == nil {
+		return nil, nil
+	}
+	if net.ParseIP(activeGW.GatewayIP) == nil || net.ParseIP(activeGW.InternalIP) == nil {
+		return nil, fmt.Errorf("the active Gateway %s has no valid GatewayIP or InternalIP", activeGW.Name)
+	}
+	return activeGW, nil
+}
+
+func getActiveGateway(gwLister mclisters.GatewayLister) (*mcv1alpha1.Gateway, error) {
+	gws, err := gwLister.List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
 	if len(gws) == 0 {
 		return nil, nil
 	}
-	// Comparing Gateway's CreationTimestamp to get the last created Gateway.
-	lastCreatedGW := gws[0]
-	for _, gw := range gws {
-		if lastCreatedGW.CreationTimestamp.Before(&gw.CreationTimestamp) {
-			lastCreatedGW = gw
-		}
-	}
-	if net.ParseIP(lastCreatedGW.GatewayIP) == nil || net.ParseIP(lastCreatedGW.InternalIP) == nil {
-		return nil, fmt.Errorf("the last created Gateway %s has no valid GatewayIP or InternalIP", lastCreatedGW.Name)
-	}
-	return lastCreatedGW, nil
+	// The Gateway webhook guarantees there will be at most one Gateway in a cluster.
+	return gws[0], nil
 }
 
 func generatePeerConfigs(subnets []string, gatewayIP net.IP) (map[*net.IPNet]net.IP, error) {

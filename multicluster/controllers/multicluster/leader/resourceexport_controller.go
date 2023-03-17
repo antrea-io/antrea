@@ -356,12 +356,12 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 		}
 		if len(svcResExport.Status.Conditions) > 0 {
 			if svcResExport.Status.Conditions[0].Status != corev1.ConditionTrue {
-				return newResImport, false, fmt.Errorf("corresponding Service type of ResourceExport " + svcResExportName.String() +
-					"has not been converged successfully, retry later")
+				err := fmt.Errorf("the Service type of ResourceExport %s has not been converged successfully, retry later", svcResExportName.String())
+				return newResImport, false, err
 			}
 		} else {
-			return newResImport, false, fmt.Errorf("corresponding Service type of ResourceExport " + svcResExportName.String() +
-				"has not been converged yet, retry later")
+			err := fmt.Errorf("the Service type of ResourceExport %s has not been converged yet, retry later", svcResExportName.String())
+			return newResImport, false, err
 		}
 	}
 

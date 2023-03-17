@@ -120,6 +120,10 @@ func (c *fakeInterfaceConfigurator) checkContainerInterface(containerNetns, cont
 	return c.containerVethPair, nil
 }
 
+func (c *fakeInterfaceConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error {
+	return nil
+}
+
 func newTestInterfaceConfigurator() *fakeInterfaceConfigurator {
 	return &fakeInterfaceConfigurator{
 		containerMAC: "01:02:03:04:05:06",
