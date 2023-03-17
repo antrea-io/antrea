@@ -34,14 +34,15 @@ const (
 )
 
 const (
-	VXLANOverhead     = 50
-	GeneveOverhead    = 50
-	GREOverhead       = 38
+	vxlanOverhead     = 50
+	geneveOverhead    = 50
+	greOverhead       = 38
+	ipv6ExtraOverhead = 20
+
 	WireGuardOverhead = 80
 	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
 	// header and trailer.
-	IPSecESPOverhead  = 38
-	IPv6ExtraOverhead = 20
+	IPSecESPOverhead = 38
 )
 
 const (
@@ -161,10 +162,6 @@ type NodeConfig struct {
 	NodeTransportIPv6Addr *net.IPNet
 	// The original MTU of the Node's transport interface.
 	NodeTransportInterfaceMTU int
-	// Set either via defaultMTU config in antrea.yaml or auto discovered.
-	// Auto discovery will use MTU value of the Node's primary interface.
-	// For Encap and Hybrid mode, Node MTU will be adjusted to account for encap header.
-	NodeMTU int
 	// TunnelOFPort is the OpenFlow port number of tunnel interface allocated by OVS. With noEncap mode, the value is 0.
 	TunnelOFPort uint32
 	// HostInterfaceOFPort is the OpenFlow port number of the host interface allocated by OVS. The host interface is the
@@ -204,6 +201,14 @@ type NetworkConfig struct {
 	TransportIfaceCIDRs   []string
 	IPv4Enabled           bool
 	IPv6Enabled           bool
+	// MTUDeduction only counts IPv4 tunnel overhead, no IPsec and WireGuard overhead.
+	MTUDeduction int
+	// Set by the defaultMTU config option or auto discovered.
+	// Auto discovery will use MTU value of the Node's transport interface.
+	// For Encap and Hybrid mode, InterfaceMTU will be adjusted to account for
+	// encap header.
+	InterfaceMTU         int
+	EnableMulticlusterGW bool
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4. Legal cases are:
@@ -250,9 +255,33 @@ func (nc *NetworkConfig) NeedsTunnelToPeer(peerIP net.IP, localIP *net.IPNet) bo
 	return nc.TrafficEncapMode == TrafficEncapModeEncap || (nc.TrafficEncapMode == TrafficEncapModeHybrid && !localIP.Contains(peerIP))
 }
 
+func (nc *NetworkConfig) NeedsTunnelInterface() bool {
+	return nc.TrafficEncapMode.SupportsEncap() || nc.EnableMulticlusterGW
+}
+
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
 func (nc *NetworkConfig) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IPNet) bool {
 	return (nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid) && localIP.Contains(peerIP)
+}
+
+func (nc *NetworkConfig) CalculateMTUDeduction(isIPv6 bool) int {
+	var mtuDeduction int
+	// When Multi-cluster Gateway is enabled, we need to reduce MTU for potential cross-cluster traffic.
+	if nc.TrafficEncapMode.SupportsEncap() || nc.EnableMulticlusterGW {
+		if nc.TunnelType == ovsconfig.VXLANTunnel {
+			mtuDeduction = vxlanOverhead
+		} else if nc.TunnelType == ovsconfig.GeneveTunnel {
+			mtuDeduction = geneveOverhead
+		} else if nc.TunnelType == ovsconfig.GRETunnel {
+			mtuDeduction = greOverhead
+		}
+	}
+
+	if nc.TrafficEncapMode.SupportsEncap() && isIPv6 {
+		mtuDeduction += ipv6ExtraOverhead
+	}
+	nc.MTUDeduction = mtuDeduction
+	return mtuDeduction
 }
 
 // ServiceConfig includes K8s Service CIDR and available IP addresses for NodePort.

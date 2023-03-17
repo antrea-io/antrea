@@ -189,6 +189,12 @@ func (ic *ifConfigurator) configureContainerLink(
 	return nil
 }
 
+// changeContainerMTU is only used for Antrea Multi-cluster with networkPolicyOnly
+// mode, and this mode doesn't support Windows platform yet.
+func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error {
+	return errors.New("changeContainerMTU is unsupported on Windows")
+}
+
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
 func (ic *ifConfigurator) createContainerLink(endpointName string, result *current.Result, containerID, podName, podNamespace string) (hostLink *hcsshim.HNSEndpoint, err error) {
 	containerIP, err := findContainerIPConfig(result.IPs)

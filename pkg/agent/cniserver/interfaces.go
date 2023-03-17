@@ -31,6 +31,7 @@ type podInterfaceConfigurator interface {
 	getInterceptedInterfaces(sandbox string, containerNetNS string, containerIFDev string) (*current.Interface, *current.Interface, error)
 	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route, sriovVFDeviceID string) (interface{}, error)
 	addPostInterfaceCreateHook(containerID, endpointName string, containerAccess *containerAccessArbitrator, hook postInterfaceCreateHook) error
+	changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error
 }
 
 type SriovNet interface {

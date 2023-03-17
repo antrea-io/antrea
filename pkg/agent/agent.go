@@ -716,12 +716,12 @@ func (i *Initializer) setupGatewayInterface() error {
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
 	// whether the gateway interface already exists, as the desired MTU may change across
 	// restarts.
-	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.nodeConfig.NodeMTU)
+	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.networkConfig.InterfaceMTU)
 
 	if err := i.configureGatewayInterface(gatewayIface); err != nil {
 		return err
 	}
-	if err := i.setInterfaceMTU(i.hostGateway, i.nodeConfig.NodeMTU); err != nil {
+	if err := i.setInterfaceMTU(i.hostGateway, i.networkConfig.InterfaceMTU); err != nil {
 		return err
 	}
 
@@ -819,10 +819,11 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	// It's not necessary for new Linux kernel versions with the following patch:
 	// https://github.com/torvalds/linux/commit/89e5c58fc1e2857ccdaae506fb8bc5fed57ee063.
 	shouldEnableCsum := i.networkConfig.TunnelCsum && (i.networkConfig.TunnelType == ovsconfig.GeneveTunnel || i.networkConfig.TunnelType == ovsconfig.VXLANTunnel)
+	createTunnelInterface := i.networkConfig.NeedsTunnelInterface()
 
 	// Check the default tunnel port.
 	if portExists {
-		if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
+		if createTunnelInterface &&
 			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType &&
 			tunnelIface.TunnelInterfaceConfig.DestinationPort == i.networkConfig.TunnelPort &&
 			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
@@ -839,7 +840,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		}
 
 		if err := i.ovsBridgeClient.DeletePort(tunnelIface.PortUUID); err != nil {
-			if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+			if createTunnelInterface {
 				return fmt.Errorf("failed to remove tunnel port %s with wrong tunnel type: %s", tunnelPortName, err)
 			}
 			klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
@@ -850,7 +851,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	}
 
 	// Create the default tunnel port and interface.
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+	if createTunnelInterface {
 		if tunnelPortName != defaultTunInterfaceName {
 			// Reset the tunnel interface name to the desired name before
 			// recreating the tunnel port and interface.
@@ -1012,12 +1013,11 @@ func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 		WireGuardConfig:            i.wireGuardConfig,
 	}
 
-	mtu, err := i.getNodeMTU(transportInterface)
+	i.networkConfig.InterfaceMTU, err = i.getInterfaceMTU(transportInterface)
 	if err != nil {
 		return err
 	}
-	i.nodeConfig.NodeMTU = mtu
-	klog.InfoS("Setting Node MTU", "MTU", mtu)
+	klog.InfoS("Got Interface MTU", "MTU", i.networkConfig.InterfaceMTU)
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
@@ -1164,27 +1164,19 @@ func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
 	return roundInfo
 }
 
-func (i *Initializer) getNodeMTU(transportInterface *net.Interface) (int, error) {
+func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, error) {
 	if i.mtu != 0 {
 		return i.mtu, nil
 	}
 	mtu := transportInterface.MTU
-	// Make sure mtu is set on the interface.
+	// Make sure MTU is set on the interface.
 	if mtu <= 0 {
 		return 0, fmt.Errorf("Failed to fetch Node MTU : %v", mtu)
 	}
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
-		if i.networkConfig.TunnelType == ovsconfig.VXLANTunnel {
-			mtu -= config.VXLANOverhead
-		} else if i.networkConfig.TunnelType == ovsconfig.GeneveTunnel {
-			mtu -= config.GeneveOverhead
-		} else if i.networkConfig.TunnelType == ovsconfig.GRETunnel {
-			mtu -= config.GREOverhead
-		}
-		if i.nodeConfig.NodeIPv6Addr != nil {
-			mtu -= config.IPv6ExtraOverhead
-		}
-	}
+
+	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
+	mtu -= i.networkConfig.CalculateMTUDeduction(isIPv6)
+
 	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		mtu -= config.IPSecESPOverhead
 	}

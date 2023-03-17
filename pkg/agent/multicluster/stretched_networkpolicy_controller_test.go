@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -159,7 +160,7 @@ func TestEnqueueAllPods(t *testing.T) {
 	c.mcInformerFactory.Start(stopCh)
 	c.mcInformerFactory.WaitForCacheSync(stopCh)
 	go c.podInformer.Run(stopCh)
-	if err := waitForPodRealized(c, pod); err != nil {
+	if err := waitForPodRealized(c.podLister, pod); err != nil {
 		t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 	}
 	if err := waitForLabelIdentityRealized(c, labelIdentity); err != nil {
@@ -248,7 +249,7 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 
 		// Create a Pod whose LabelIdentity doesn't exist.
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
-		if err := waitForPodRealized(c, pod); err != nil {
+		if err := waitForPodRealized(c.podLister, pod); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
@@ -268,7 +269,7 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
-		if err := waitForPodRealized(c, pod); err != nil {
+		if err := waitForPodRealized(c.podLister, pod); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&labelIdentity1.Spec.ID)).Times(1)
@@ -285,7 +286,7 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
 		pod.Labels["foo"] = "bar2"
 		c.clientset.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{})
-		if err := waitForPodLabelUpdate(c, pod); err != nil {
+		if err := waitForPodLabelUpdate(c.podLister, pod); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be updated, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.ofClient.EXPECT().InstallPodFlows(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(&labelIdentity2.Spec.ID)).Times(1)
@@ -412,11 +413,11 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 		}
 
 		c.clientset.CoreV1().Pods(pod1.Namespace).Create(context.TODO(), pod1, metav1.CreateOptions{})
-		if err := waitForPodRealized(c, pod1); err != nil {
+		if err := waitForPodRealized(c.podLister, pod1); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod1.Namespace, pod1.Name, err)
 		}
 		c.clientset.CoreV1().Pods(pod2.Namespace).Create(context.TODO(), pod2, metav1.CreateOptions{})
-		if err := waitForPodRealized(c, pod2); err != nil {
+		if err := waitForPodRealized(c.podLister, pod2); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod2.Namespace, pod2.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod1.Name, pod1.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
@@ -507,7 +508,7 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		}
 
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
-		if err := waitForPodRealized(c, pod); err != nil {
+		if err := waitForPodRealized(c.podLister, pod); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", pod.Namespace, pod.Name, err)
 		}
 		c.interfaceStore.EXPECT().GetContainerInterfacesByPod(pod.Name, pod.Namespace).Return([]*interfacestore.InterfaceConfig{&interfaceConfig}).Times(1)
@@ -560,9 +561,9 @@ func toPodAddEvent(pod *corev1.Pod) antreatypes.PodUpdate {
 	}
 }
 
-func waitForPodRealized(c *fakeStretchedNetworkPolicyController, pod *corev1.Pod) error {
+func waitForPodRealized(podLister v1.PodLister, pod *corev1.Pod) error {
 	return wait.Poll(interval, timeout, func() (bool, error) {
-		_, err := c.podLister.Pods(pod.Namespace).Get(pod.Name)
+		_, err := podLister.Pods(pod.Namespace).Get(pod.Name)
 		if err != nil {
 			return false, nil
 		}
@@ -570,9 +571,9 @@ func waitForPodRealized(c *fakeStretchedNetworkPolicyController, pod *corev1.Pod
 	})
 }
 
-func waitForPodLabelUpdate(c *fakeStretchedNetworkPolicyController, pod *corev1.Pod) error {
+func waitForPodLabelUpdate(podLister v1.PodLister, pod *corev1.Pod) error {
 	return wait.Poll(interval, timeout, func() (bool, error) {
-		getPod, err := c.podLister.Pods(pod.Namespace).Get(pod.Name)
+		getPod, err := podLister.Pods(pod.Namespace).Get(pod.Name)
 		if err != nil || !reflect.DeepEqual(pod.Labels, getPod.Labels) {
 			return false, nil
 		}

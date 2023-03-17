@@ -28,11 +28,12 @@ import (
 
 func TestMulticlusterOptions(t *testing.T) {
 	tests := []struct {
-		name        string
-		mcConfig    agentconfig.MulticlusterConfig
-		featureGate bool
-		encapMode   string
-		expectedErr string
+		name           string
+		mcConfig       agentconfig.MulticlusterConfig
+		featureGate    bool
+		encapMode      string
+		encryptionMode string
+		expectedErr    string
 	}{
 		{
 			name:        "empty input",
@@ -80,13 +81,14 @@ func TestMulticlusterOptions(t *testing.T) {
 			expectedErr: "Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy",
 		},
 		{
-			name: "NoEncap",
+			name: "Multicluster with in-cluster WireGuard Encryption",
 			mcConfig: agentconfig.MulticlusterConfig{
 				EnableGateway: true,
 			},
-			featureGate: true,
-			encapMode:   "NoEncap",
-			expectedErr: "Multicluster is only applicable to the encap mode",
+			featureGate:    true,
+			encapMode:      "encap",
+			encryptionMode: "wireguard",
+			expectedErr:    "Multi-cluster Gateway doesn't support in-cluster WireGuard encryption",
 		},
 		{
 			name: "NoEncap and feature disabled",
@@ -103,6 +105,9 @@ func TestMulticlusterOptions(t *testing.T) {
 				FeatureGates:     map[string]bool{"Multicluster": tt.featureGate},
 				TrafficEncapMode: tt.encapMode,
 				Multicluster:     tt.mcConfig,
+			}
+			if tt.encryptionMode != "" {
+				config.TrafficEncryptionMode = tt.encryptionMode
 			}
 			o := &Options{config: config}
 			features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)

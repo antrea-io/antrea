@@ -264,6 +264,110 @@ func TestConfigureContainerLink(t *testing.T) {
 	}
 }
 
+func TestChangeContainerMTU(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	fakeNetlink := netlinktest.NewMockInterface(controller)
+	hostIfaceName := "pair0"
+	containerIfaceName := "eth0"
+
+	containerInterfaceLink := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: containerVethMac, Name: containerIfaceName, Flags: net.FlagUp}}
+	hostInterfaceLink := &netlink.Dummy{
+		LinkAttrs: netlink.LinkAttrs{Index: 2, MTU: mtu, HardwareAddr: hostVethMac, Name: hostIfaceName, Flags: net.FlagUp},
+	}
+	notFoundErr := fmt.Errorf("not found")
+
+	tests := []struct {
+		name                   string
+		containerLink          netlink.Link
+		hostLink               netlink.Link
+		getPeerErr             error
+		getContainerLinkErr    error
+		getHostLinkErr         error
+		getInfByIdxErr         error
+		setContainerMTUErr     error
+		setPairInterfaceMTUErr error
+		expectedErrStr         string
+	}{
+		{
+			name:          "change MTU successfully",
+			containerLink: containerInterfaceLink,
+			hostLink:      hostInterfaceLink,
+		},
+		{
+			name:                "failed to change MTU due to interface not found",
+			getContainerLinkErr: notFoundErr,
+			expectedErrStr:      "failed to find interface eth0 in container",
+		},
+		{
+			name:           "failed to change MTU due to peer interface not found",
+			getPeerErr:     notFoundErr,
+			expectedErrStr: "failed to get peer index for dev",
+		},
+		{
+			name:           "failed to change MTU due to host interface not found by index",
+			containerLink:  containerInterfaceLink,
+			getInfByIdxErr: notFoundErr,
+			expectedErrStr: "failed to get host interface for index",
+		},
+		{
+			name:           "failed to change MTU due to host link not found by name",
+			containerLink:  containerInterfaceLink,
+			getHostLinkErr: notFoundErr,
+			expectedErrStr: "failed to find host interface pair0",
+		},
+		{
+			name:               "failed to change MTU due to container interface MTU update failure",
+			containerLink:      containerInterfaceLink,
+			setContainerMTUErr: fmt.Errorf("failed to set MTU"),
+			expectedErrStr:     "failed to set MTU for interface eth0 in container",
+		},
+		{
+			name:                   "failed to change MTU due to pair interface MTU update failure",
+			containerLink:          containerInterfaceLink,
+			hostLink:               hostInterfaceLink,
+			setPairInterfaceMTUErr: fmt.Errorf("failed to set MTU"),
+			expectedErrStr:         "failed to set MTU for host interface",
+		},
+	}
+
+	defer mockWithNetNSPath()()
+	testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, nil)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			containerNS := createNS(t, false)
+			defer containerNS.clear()
+			defer mockGetInterfaceByName(nil, 2)()
+			defer mockIpGetVethPeerIfindex(2, tc.getPeerErr)()
+			defer mockGetInterfaceByIndex(tc.getInfByIdxErr, 2, hostIfaceName)()
+
+			if tc.containerLink != nil {
+				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(tc.containerLink, nil).Times(1)
+				fakeNetlink.EXPECT().LinkSetMTU(tc.containerLink, gomock.Any()).Return(tc.setContainerMTUErr).Times(1)
+			} else {
+				fakeNetlink.EXPECT().LinkByName(containerIfaceName).Return(nil, tc.getContainerLinkErr).Times(1)
+			}
+
+			if tc.hostLink != nil {
+				fakeNetlink.EXPECT().LinkByName(hostIfaceName).Return(tc.hostLink, nil).Times(1)
+				fakeNetlink.EXPECT().LinkSetMTU(tc.hostLink, gomock.Any()).Return(tc.setPairInterfaceMTUErr).Times(1)
+			}
+			if tc.getHostLinkErr != nil {
+				fakeNetlink.EXPECT().LinkByName(hostIfaceName).Return(nil, tc.getHostLinkErr).Times(1)
+			}
+
+			err := testIfConfigurator.changeContainerMTU(containerNS.Path(), containerIfaceName, 50)
+			if tc.expectedErrStr != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErrStr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestAdvertiseContainerAddr(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
@@ -400,7 +504,6 @@ func TestCheckContainerInterface(t *testing.T) {
 		containerIPs     []*current.IPConfig
 		containerIface   *current.Interface
 		containerLink    netlink.Link
-		peerIndex        int
 		getPeerErr       error
 		getNetDevice     bool
 		getDeviceErr     error
@@ -487,7 +590,7 @@ func TestCheckContainerInterface(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockIpValidateExpectedInterfaceIPs(tc.validateIPErr)()
 			defer mockIpValidateExpectedRoute(tc.validateRouteErr)()
-			defer mockIpGetVethPeerIfindex(tc.peerIndex, tc.getPeerErr)()
+			defer mockIpGetVethPeerIfindex(0, tc.getPeerErr)()
 
 			containerNS := createNS(t, false)
 			defer containerNS.clear()
@@ -759,6 +862,16 @@ func mockGetInterfaceByName(netInterfaceError error, ifaceIndex int) func() {
 	}
 	return func() {
 		netInterfaceByName = originalNetInterfaceByName
+	}
+}
+
+func mockGetInterfaceByIndex(netInterfaceError error, ifaceIndex int, name string) func() {
+	originalNetInterfaceByIndex := netInterfaceByIndex
+	netInterfaceByIndex = func(idx int) (*net.Interface, error) {
+		return &net.Interface{Index: ifaceIndex, MTU: mtu, HardwareAddr: containerVethMac, Name: name, Flags: net.FlagUp}, netInterfaceError
+	}
+	return func() {
+		netInterfaceByIndex = originalNetInterfaceByIndex
 	}
 }
 

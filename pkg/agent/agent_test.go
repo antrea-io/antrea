@@ -385,7 +385,6 @@ func TestInitNodeLocalConfig(t *testing.T) {
 				NodeTransportInterfaceName: ipDevice.Name,
 				NodeTransportIPv4Addr:      nodeIPNet,
 				NodeTransportInterfaceMTU:  tt.expectedNodeLocalIfaceMTU,
-				NodeMTU:                    tt.expectedMTU,
 				UplinkNetConfig:            new(config.AdapterNetConfig),
 			}
 
@@ -596,12 +595,12 @@ func TestSetupGatewayInterface(t *testing.T) {
 		Type:        config.K8sNode,
 		OVSBridge:   "br-int",
 		PodIPv4CIDR: podCIDR,
-		NodeMTU:     1450,
 	}
 	networkConfig := &config.NetworkConfig{
 		TrafficEncapMode: config.TrafficEncapModeEncap,
 		TunnelType:       ovsconfig.GeneveTunnel,
 		TunnelCsum:       false,
+		InterfaceMTU:     1450,
 	}
 
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -624,7 +623,7 @@ func TestSetupGatewayInterface(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().CreateInternalPort(initializer.hostGateway, ofport, mock.Any(), mock.Any()).Return(portUUID, nil)
 	mockOVSBridgeClient.EXPECT().SetInterfaceMAC(initializer.hostGateway, fakeMAC).Return(nil)
 	mockOVSBridgeClient.EXPECT().GetOFPort(initializer.hostGateway, false).Return(ofport, nil)
-	mockOVSBridgeClient.EXPECT().SetInterfaceMTU(initializer.hostGateway, nodeConfig.NodeMTU).Return(nil)
+	mockOVSBridgeClient.EXPECT().SetInterfaceMTU(initializer.hostGateway, networkConfig.InterfaceMTU).Return(nil)
 	err := initializer.setupGatewayInterface()
 	assert.NoError(t, err)
 }

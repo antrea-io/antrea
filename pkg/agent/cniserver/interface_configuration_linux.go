@@ -52,6 +52,7 @@ var (
 	ethtoolTXHWCsumOff             = ethtool.EthtoolTXHWCsumOff
 	renameInterface                = util.RenameInterface
 	netInterfaceByName             = net.InterfaceByName
+	netInterfaceByIndex            = net.InterfaceByIndex
 	arpingGratuitousARPOverIface   = arping.GratuitousARPOverIface
 	ndpGratuitousNDPOverIface      = ndp.GratuitousNDPOverIface
 	ipValidateExpectedInterfaceIPs = ip.ValidateExpectedInterfaceIPs
@@ -370,6 +371,43 @@ func (ic *ifConfigurator) configureContainerLink(
 		// Create veth pair and link up
 		return ic.configureContainerLinkVeth(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, result)
 	}
+}
+
+func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error {
+	var peerIdx int
+	if err := nsWithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		link, err := ic.netlink.LinkByName(containerIFDev)
+		if err != nil {
+			return fmt.Errorf("failed to find interface %s in container netns %s: %v", containerIFDev, containerNetNS, err)
+		}
+		_, peerIdx, err = ipGetVethPeerIfindex(containerIFDev)
+		if err != nil {
+			return fmt.Errorf("failed to get peer index for dev %s in container netns %s: %w", containerIFDev, containerNetNS, err)
+		}
+		err = ic.netlink.LinkSetMTU(link, link.Attrs().MTU-mtuDeduction)
+		if err != nil {
+			return fmt.Errorf("failed to set MTU for interface %s in container netns %s: %v", containerIFDev, containerNetNS, err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	peerIntf, err := netInterfaceByIndex(peerIdx)
+	if err != nil {
+		return fmt.Errorf("failed to get host interface for index %d: %w", peerIdx, err)
+	}
+
+	hostInterfaceName := peerIntf.Name
+	link, err := ic.netlink.LinkByName(hostInterfaceName)
+	if err != nil {
+		return fmt.Errorf("failed to find host interface %s: %v", hostInterfaceName, err)
+	}
+	err = ic.netlink.LinkSetMTU(link, link.Attrs().MTU-mtuDeduction)
+	if err != nil {
+		return fmt.Errorf("failed to set MTU for host interface %s: %v", hostInterfaceName, err)
+	}
+	return nil
 }
 
 func (ic *ifConfigurator) removeContainerLink(containerID, hostInterfaceName string) error {
