@@ -21,6 +21,7 @@ package testing
 
 import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
+	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
 	ofctrl "antrea.io/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
@@ -2058,6 +2059,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchSrcPort(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchSrcPort), arg0, arg1)
 }
 
+// MatchTCPFlags mocks base method
+func (m *MockFlowBuilder) MatchTCPFlags(arg0, arg1 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchTCPFlags", arg0, arg1)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchTCPFlags indicates an expected call of MatchTCPFlags
+func (mr *MockFlowBuilderMockRecorder) MatchTCPFlags(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTCPFlags", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTCPFlags), arg0, arg1)
+}
+
 // MatchTunMetadata mocks base method
 func (m *MockFlowBuilder) MatchTunMetadata(arg0 int, arg1 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -2546,6 +2561,20 @@ func (mr *MockPacketOutBuilderMockRecorder) SetDstMAC(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDstMAC", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetDstMAC), arg0)
 }
 
+// SetEthPacket mocks base method
+func (m *MockPacketOutBuilder) SetEthPacket(arg0 *protocol.Ethernet) openflow.PacketOutBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetEthPacket", arg0)
+	ret0, _ := ret[0].(openflow.PacketOutBuilder)
+	return ret0
+}
+
+// SetEthPacket indicates an expected call of SetEthPacket
+func (mr *MockPacketOutBuilderMockRecorder) SetEthPacket(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEthPacket", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetEthPacket), arg0)
+}
+
 // SetICMPCode mocks base method
 func (m *MockPacketOutBuilder) SetICMPCode(arg0 byte) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
@@ -2756,6 +2785,20 @@ func (mr *MockPacketOutBuilderMockRecorder) SetTCPAckNum(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPAckNum", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPAckNum), arg0)
 }
 
+// SetTCPData mocks base method
+func (m *MockPacketOutBuilder) SetTCPData(arg0 []byte) openflow.PacketOutBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTCPData", arg0)
+	ret0, _ := ret[0].(openflow.PacketOutBuilder)
+	return ret0
+}
+
+// SetTCPData indicates an expected call of SetTCPData
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPData(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPData", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPData), arg0)
+}
+
 // SetTCPDstPort mocks base method
 func (m *MockPacketOutBuilder) SetTCPDstPort(arg0 uint16) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
@@ -2784,6 +2827,20 @@ func (mr *MockPacketOutBuilderMockRecorder) SetTCPFlags(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPFlags", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPFlags), arg0)
 }
 
+// SetTCPHdrLen mocks base method
+func (m *MockPacketOutBuilder) SetTCPHdrLen(arg0 byte) openflow.PacketOutBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTCPHdrLen", arg0)
+	ret0, _ := ret[0].(openflow.PacketOutBuilder)
+	return ret0
+}
+
+// SetTCPHdrLen indicates an expected call of SetTCPHdrLen
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPHdrLen(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPHdrLen", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPHdrLen), arg0)
+}
+
 // SetTCPSeqNum mocks base method
 func (m *MockPacketOutBuilder) SetTCPSeqNum(arg0 uint32) openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
@@ -2810,6 +2867,20 @@ func (m *MockPacketOutBuilder) SetTCPSrcPort(arg0 uint16) openflow.PacketOutBuil
 func (mr *MockPacketOutBuilderMockRecorder) SetTCPSrcPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPSrcPort", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPSrcPort), arg0)
+}
+
+// SetTCPWinSize mocks base method
+func (m *MockPacketOutBuilder) SetTCPWinSize(arg0 uint16) openflow.PacketOutBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTCPWinSize", arg0)
+	ret0, _ := ret[0].(openflow.PacketOutBuilder)
+	return ret0
+}
+
+// SetTCPWinSize indicates an expected call of SetTCPWinSize
+func (mr *MockPacketOutBuilderMockRecorder) SetTCPWinSize(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTCPWinSize", reflect.TypeOf((*MockPacketOutBuilder)(nil).SetTCPWinSize), arg0)
 }
 
 // SetTTL mocks base method

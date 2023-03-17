@@ -18,6 +18,7 @@ import (
 	"net"
 	"time"
 
+	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 )
@@ -281,6 +282,7 @@ type FlowBuilder interface {
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
 	MatchSrcPort(port uint16, portMask *uint16) FlowBuilder
+	MatchTCPFlags(flag, mask uint16) FlowBuilder
 	MatchICMPType(icmpType byte) FlowBuilder
 	MatchICMPCode(icmpCode byte) FlowBuilder
 	MatchICMPv6Type(icmp6Type byte) FlowBuilder
@@ -402,6 +404,9 @@ type PacketOutBuilder interface {
 	SetTCPFlags(flags uint8) PacketOutBuilder
 	SetTCPSeqNum(seqNum uint32) PacketOutBuilder
 	SetTCPAckNum(ackNum uint32) PacketOutBuilder
+	SetTCPHdrLen(hdrLen uint8) PacketOutBuilder
+	SetTCPWinSize(winSize uint16) PacketOutBuilder
+	SetTCPData(data []byte) PacketOutBuilder
 	SetUDPSrcPort(port uint16) PacketOutBuilder
 	SetUDPDstPort(port uint16) PacketOutBuilder
 	SetUDPData(data []byte) PacketOutBuilder
@@ -418,6 +423,7 @@ type PacketOutBuilder interface {
 	AddLoadRegMark(mark *RegMark) PacketOutBuilder
 	AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder
 	SetL4Packet(packet util.Message) PacketOutBuilder
+	SetEthPacket(packet *protocol.Ethernet) PacketOutBuilder
 	Done() *ofctrl.PacketOut
 }
 

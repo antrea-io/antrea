@@ -17,6 +17,9 @@ package openflow
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
+
+	"k8s.io/klog/v2"
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
@@ -26,10 +29,20 @@ import (
 const (
 	icmpEchoRequestType  uint8 = 8
 	icmp6EchoRequestType uint8 = 128
+	// tcpStandardHdrLen is the TCP header length without options.
+	tcpStandardHdrLen uint8 = 5
 )
 
-// GetTCPHeaderData gets TCP header data from IP packet.
-func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort, tcpDstPort uint16, tcpSeqNum, tcpAckNum uint32, tcpFlags uint8, err error) {
+func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort, tcpDstPort uint16, tcpSeqNum, tcpAckNum uint32, tcpHdrLen uint8, tcpFlags uint8, tcpWinSize uint16, err error) {
+	tcpIn, err := GetTCPPacketFromIPMessage(ipPkt)
+	if err != nil {
+		return 0, 0, 0, 0, 0, 0, 0, err
+	}
+	return tcpIn.PortSrc, tcpIn.PortDst, tcpIn.SeqNum, tcpIn.AckNum, tcpIn.HdrLen, tcpIn.Code, tcpIn.WinSize, nil
+}
+
+// GetTCPPacketFromIPMessage gets a TCP struct from an IP message.
+func GetTCPPacketFromIPMessage(ipPkt util.Message) (tcpPkt *protocol.TCP, err error) {
 	var tcpBytes []byte
 
 	// Transfer Buffer to TCP
@@ -40,15 +53,36 @@ func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort, tcpDstPort uint16, tcpSeq
 		tcpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
 	}
 	if err != nil {
-		return 0, 0, 0, 0, 0, err
+		return nil, err
 	}
-	tcpIn := new(protocol.TCP)
-	err = tcpIn.UnmarshalBinary(tcpBytes)
+	tcpPkt = new(protocol.TCP)
+	err = tcpPkt.UnmarshalBinary(tcpBytes)
 	if err != nil {
-		return 0, 0, 0, 0, 0, err
+		return nil, err
 	}
 
-	return tcpIn.PortSrc, tcpIn.PortDst, tcpIn.SeqNum, tcpIn.AckNum, tcpIn.Code, nil
+	return tcpPkt, nil
+}
+
+func GetTCPDNSData(tcpPkt *protocol.TCP) (data []byte, err error) {
+	// TCP.HdrLen is 4-octet unit indicating the length of TCP header including options.
+	tcpOptionsLen := (tcpPkt.HdrLen - tcpStandardHdrLen) * 4
+	// Move two more octet.
+	// From RFC 7766:
+	// DNS clients and servers SHOULD pass the two-octet length field, and
+	// the message described by that length field, to the TCP layer at the
+	// same time (e.g., in a single "write" system call) to make it more
+	// likely that all the data will be transmitted in a single TCP segment.
+	if int(tcpOptionsLen+2) > len(tcpPkt.Data) {
+		return nil, fmt.Errorf("no DNS data in TCP data")
+	}
+	dnsDataLen := binary.BigEndian.Uint16(tcpPkt.Data[tcpOptionsLen : tcpOptionsLen+2])
+	dnsData := tcpPkt.Data[tcpOptionsLen+2:]
+	if int(dnsDataLen) > len(dnsData) {
+		klog.Info("There is a non-DNS response or a fragmented DNS response in TCP payload")
+		return nil, fmt.Errorf("there is a non-DNS response or a fragmented DNS response in TCP payload")
+	}
+	return dnsData, nil
 }
 
 func GetUDPHeaderData(ipPkt util.Message) (udpSrcPort, udpDstPort uint16, err error) {
@@ -122,7 +156,7 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 
 	var err error
 	if packet.IPProto == protocol.Type_TCP {
-		packet.SourcePort, packet.DestinationPort, _, _, packet.TCPFlags, err = GetTCPHeaderData(ethernetData.Data)
+		packet.SourcePort, packet.DestinationPort, _, _, _, packet.TCPFlags, _, err = GetTCPHeaderData(ethernetData.Data)
 	} else if packet.IPProto == protocol.Type_UDP {
 		packet.SourcePort, packet.DestinationPort, err = GetUDPHeaderData(ethernetData.Data)
 	} else if packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {

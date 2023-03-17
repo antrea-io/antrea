@@ -598,6 +598,13 @@ func (b *ofFlowBuilder) MatchSrcPort(port uint16, portMask *uint16) FlowBuilder 
 	return b
 }
 
+func (b *ofFlowBuilder) MatchTCPFlags(flag, mask uint16) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("tcp_flags=%b/%b", uint8(flag), uint8(mask)))
+	b.Match.TcpFlags = &flag
+	b.Match.TcpFlagsMask = &mask
+	return b
+}
+
 // MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple. This match requires
 // a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches include
 // "+new", "+est", "+rel" and "+trk-inv".

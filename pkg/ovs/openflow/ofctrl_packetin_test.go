@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -33,7 +34,9 @@ func TestGetTCPHeaderData(t *testing.T) {
 		expectTCPDstPort uint16
 		expectTCPSeqNum  uint32
 		expectTCPAckNum  uint32
+		expectTCPHdrLen  uint8
 		expectTCPCode    uint8
+		expectTCPWinSize uint16
 	}
 	tests := []struct {
 		name string
@@ -47,13 +50,17 @@ func TestGetTCPHeaderData(t *testing.T) {
 					PortDst: 80,
 					SeqNum:  0,
 					AckNum:  0,
+					HdrLen:  5,
 					Code:    2,
+					WinSize: 0,
 				},
 				expectTCPSrcPort: 1080,
 				expectTCPDstPort: 80,
 				expectTCPSeqNum:  0,
 				expectTCPAckNum:  0,
+				expectTCPHdrLen:  5,
 				expectTCPCode:    2,
+				expectTCPWinSize: 0,
 			},
 		},
 	}
@@ -66,13 +73,15 @@ func TestGetTCPHeaderData(t *testing.T) {
 			bf.UnmarshalBinary(bytes)
 			pktIn.Data = bf
 
-			tcpSrcPort, tcpDstPort, tcpSeqNum, tcpAckNum, tcpCode, err := GetTCPHeaderData(pktIn)
+			tcpSrcPort, tcpDstPort, tcpSeqNum, tcpAckNum, tcpHdrLen, tcpCode, tcpWinSize, err := GetTCPHeaderData(pktIn)
 			require.NoError(t, err, "GetTCPHeaderData() returned an error")
 			assert.Equal(t, tt.args.expectTCPSrcPort, tcpSrcPort)
 			assert.Equal(t, tt.args.expectTCPDstPort, tcpDstPort)
 			assert.Equal(t, tt.args.expectTCPSeqNum, tcpSeqNum)
 			assert.Equal(t, tt.args.expectTCPAckNum, tcpAckNum)
+			assert.Equal(t, tt.args.expectTCPHdrLen, tcpHdrLen)
 			assert.Equal(t, tt.args.expectTCPCode, tcpCode)
+			assert.Equal(t, tt.args.expectTCPWinSize, tcpWinSize)
 		})
 	}
 }
@@ -216,6 +225,60 @@ func TestParsePacketIn(t *testing.T) {
 				t.Errorf("ParsePacketIn() returned an error = %v, expected error = %v", err, tt.wantErr)
 			}
 			assert.Equal(t, tt.expectedOb, actualOb)
+		})
+	}
+}
+
+func TestGetTCPDNSData(t *testing.T) {
+	type args struct {
+		tcp        protocol.TCP
+		expectErr  error
+		expectData []byte
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "GetTCPDNSDataNoDNS",
+			args: args{
+				tcp: protocol.TCP{
+					HdrLen: 6,
+					Data:   []byte{1, 2, 3, 4, 0},
+				},
+				expectErr:  fmt.Errorf("no DNS data in TCP data"),
+				expectData: nil,
+			},
+		},
+		{
+			name: "GetTCPDNSDataFragmented",
+			args: args{
+				tcp: protocol.TCP{
+					HdrLen: 6,
+					Data:   []byte{1, 2, 3, 4, 0, 2, 5},
+				},
+				expectErr:  fmt.Errorf("there is a non-DNS response or a fragmented DNS response in TCP payload"),
+				expectData: nil,
+			},
+		},
+		{
+			name: "GetTCPDNSDataSuccess",
+			args: args{
+				tcp: protocol.TCP{
+					HdrLen: 6,
+					Data:   []byte{1, 2, 3, 4, 0, 1, 5},
+				},
+				expectErr:  nil,
+				expectData: []byte{5},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcp := tt.args.tcp
+			tcpData, err := GetTCPDNSData(&tcp)
+			assert.Equal(t, tt.args.expectErr, err)
+			assert.Equal(t, tt.args.expectData, tcpData)
 		})
 	}
 }

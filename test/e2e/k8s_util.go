@@ -274,6 +274,65 @@ func decidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 	return Error
 }
 
+func (k *KubernetesUtils) digDNS(
+	podName string,
+	podNamespace string,
+	dstAddr string,
+	useTCP bool,
+) (string, error) {
+	pod, err := k.GetPodByLabel(podNamespace, podName)
+	if err != nil {
+		return "", fmt.Errorf("Pod %s/%s dones't exist", podNamespace, podName)
+	}
+	digCmd := fmt.Sprintf("dig %s", dstAddr)
+	if useTCP {
+		digCmd += " +tcp"
+	}
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		digCmd,
+	}
+	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
+	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name, cmd)
+	log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstAddr, err, stdout, stderr)
+	//========DiG command stdout example========
+	//; <<>> DiG 9.16.6 <<>> github.com +tcp
+	//;; global options: +cmd
+	//;; Got answer:
+	//;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 21816
+	//;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+	//
+	//;; OPT PSEUDOSECTION:
+	//; EDNS: version: 0, flags:; udp: 4096
+	//; COOKIE: 2d7fe493ea37c430 (echoed)
+	//;; QUESTION SECTION:
+	//;github.com.			IN	A
+	//
+	//;; ANSWER SECTION:
+	//github.com.		6	IN	A	140.82.113.3
+	//
+	//;; Query time: 0 msec
+	//;; SERVER: 10.96.0.10#53(10.96.0.10)
+	//;; WHEN: Tue Feb 14 22:34:23 UTC 2023
+	//;; MSG SIZE  rcvd: 77
+	//==========================================
+	answerMarkIdx := strings.Index(stdout, ";; ANSWER SECTION:")
+	if answerMarkIdx == -1 {
+		return "", fmt.Errorf("failed to parse dig response")
+	}
+	splitResp := strings.Split(stdout[answerMarkIdx:], "\n")
+	if len(splitResp) < 2 {
+		return "", fmt.Errorf("failed to parse dig response")
+	}
+	ipLine := splitResp[1]
+	lastTab := strings.LastIndex(ipLine, "\t")
+	if lastTab == -1 {
+		return "", fmt.Errorf("failed to parse dig response")
+	}
+	return ipLine[lastTab:], nil
+}
+
 // Probe execs into a Pod and checks its connectivity to another Pod. It assumes
 // that the target Pod is serving on the input port, and also that agnhost is
 // installed. The connectivity from source Pod to all IPs of the target Pod

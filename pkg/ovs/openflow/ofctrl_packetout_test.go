@@ -603,6 +603,135 @@ func Test_ofPacketOutBuilder_SetIPFlags(t *testing.T) {
 	}
 }
 
+func Test_ofPacketOutBuilder_SetTCPHdrLen(t *testing.T) {
+	tests := []struct {
+		name          string
+		pktOutBuilder *ofPacketOutBuilder
+		tcpHdrLen     uint8
+		want          PacketOutBuilder
+	}{
+		{
+			name:          "New TCP header",
+			pktOutBuilder: &ofPacketOutBuilder{pktOut: new(ofctrl.PacketOut)},
+			tcpHdrLen:     5,
+			want: &ofPacketOutBuilder{
+				pktOut: &ofctrl.PacketOut{
+					TCPHeader: &protocol.TCP{
+						HdrLen: 5,
+					},
+				},
+			},
+		},
+		{
+			name: "Existing TCP header",
+			pktOutBuilder: &ofPacketOutBuilder{pktOut: &ofctrl.PacketOut{
+				TCPHeader: &protocol.TCP{},
+			}},
+			tcpHdrLen: 5,
+			want: &ofPacketOutBuilder{
+				pktOut: &ofctrl.PacketOut{
+					TCPHeader: &protocol.TCP{
+						HdrLen: 5,
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.pktOutBuilder.SetTCPHdrLen(tt.tcpHdrLen); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("SetTCPHdrLen() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_ofPacketOutBuilder_SetTCPWinSize(t *testing.T) {
+	tests := []struct {
+		name          string
+		pktOutBuilder *ofPacketOutBuilder
+		tcpWinSize    uint16
+		want          PacketOutBuilder
+	}{
+		{
+			name:          "New TCP header",
+			pktOutBuilder: &ofPacketOutBuilder{pktOut: new(ofctrl.PacketOut)},
+			tcpWinSize:    1,
+			want: &ofPacketOutBuilder{
+				pktOut: &ofctrl.PacketOut{
+					TCPHeader: &protocol.TCP{
+						WinSize: 1,
+					},
+				},
+			},
+		},
+		{
+			name: "Existing TCP header",
+			pktOutBuilder: &ofPacketOutBuilder{pktOut: &ofctrl.PacketOut{
+				TCPHeader: &protocol.TCP{},
+			}},
+			tcpWinSize: 1,
+			want: &ofPacketOutBuilder{
+				pktOut: &ofctrl.PacketOut{
+					TCPHeader: &protocol.TCP{
+						WinSize: 1,
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.pktOutBuilder.SetTCPWinSize(tt.tcpWinSize); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("SetTCPWinSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_ofPacketOutBuilder_SetTCPData(t *testing.T) {
+	tests := []struct {
+		name          string
+		pktOutBuilder *ofPacketOutBuilder
+		tcpData       []byte
+		want          PacketOutBuilder
+	}{
+		{
+			name:          "New TCP header",
+			pktOutBuilder: &ofPacketOutBuilder{pktOut: new(ofctrl.PacketOut)},
+			tcpData:       []byte{1},
+			want: &ofPacketOutBuilder{
+				pktOut: &ofctrl.PacketOut{
+					TCPHeader: &protocol.TCP{
+						Data: []byte{1},
+					},
+				},
+			},
+		},
+		{
+			name: "Existing TCP header",
+			pktOutBuilder: &ofPacketOutBuilder{pktOut: &ofctrl.PacketOut{
+				TCPHeader: &protocol.TCP{},
+			}},
+			tcpData: []byte{1},
+			want: &ofPacketOutBuilder{
+				pktOut: &ofctrl.PacketOut{
+					TCPHeader: &protocol.TCP{
+						Data: []byte{1},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.pktOutBuilder.SetTCPData(tt.tcpData); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("SetTCPData() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func Test_ofPacketOutBuilder_Done(t *testing.T) {
 	type fields struct {
 		pktOut  *ofctrl.PacketOut
