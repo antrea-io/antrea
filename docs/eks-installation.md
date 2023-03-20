@@ -9,7 +9,7 @@ In `networkPolicyOnly` mode, Antrea implements NetworkPolicy and other services 
 while Amazon VPC CNI takes care of IPAM and Pod traffic routing across Nodes. Refer to
 [the design document](design/policy-only.md) for more information about `networkPolicyOnly` mode.
 
-This document assumes you already have an EKS cluster, and have ``KUBECONFIG`` environment variable
+This document assumes you already have an EKS cluster, and have the `KUBECONFIG` environment variable
 point to the kubeconfig file of that cluster. You can follow [the EKS documentation](https://docs.aws.amazon.com/eks/latest/userguide/create-cluster.html)
 to create the cluster.
 

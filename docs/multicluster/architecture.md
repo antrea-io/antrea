@@ -131,9 +131,8 @@ Multi-cluster connectivity with Multi-cluster Gateways.
 
 <img src="assets/mc-gateway.svg" width="800" alt="Antrea Multi-cluster Gateway">
 
-Antrea Agent is responsible for setting up tunnels between Gateways of meamber
-clusters. At the moment, Multi-cluster Gateway only works with Antrea `encap`
-mode. The tunnels between Gateways use Antrea Agent's configured tunnel type.
+Antrea Agent is responsible for setting up tunnels between Gateways of member
+clusters. The tunnels between Gateways use Antrea Agent's configured tunnel type.
 All member clusters in a ClusterSet need to deploy Antrea with the same tunnel
 type.
 
@@ -201,3 +200,16 @@ be created as a ResourceExport in the leader cluster, and the resource
 export/import pipeline will ensure member clusters receive this ACNP spec
 to be replicated. Each member cluster's Multi-cluster Controller will then
 create an ACNP in their respective clusters.
+
+## Antrea Traffic Modes
+
+Multi-cluster Gateway supports all of `encap`, `noEncap`, `hybrid`, and
+`networkPolicyOnly` modes. In all supported modes, the cross-cluster traffic
+is routed by Multi-cluster Gateways of member clusters, and the traffic goes
+through Antrea overlay tunnels between Gateways. In `noEncap`, `hybrid`, and
+`networkPolicyOnly` modes, even when in-cluster Pod traffic does not go through
+tunnels, antrea-agent still creates tunnels between the Gateway Node and other
+Nodes, and routes cross-cluster traffic to reach the Gateway through the tunnels.
+Specially for [`networkPolicyOnly` mode](../design/policy-only.md), Antrea only
+handles multi-cluster traffic routing, while the primary CNI takes care of in-cluster
+traffic routing.
