@@ -15,7 +15,6 @@ work with that Antrea version.
 | - | - | - | Windows Server 2019 Datacenter (10.0.17763.1817), docker://19.3.14 | t3.medium |  |  |
 | - | - | - | Ubuntu 20.04.2 LTS (5.4.0-1045-aws) arm64, docker://20.10.6 | t3.medium |  |  |
 | - | Cluster API Provider vSphere (CAPV), K8s 1.19.1 | VMC on AWS, vSphere 7.0.1 | Ubuntu 18.04, containerd | 2 vCPUs, 8GB RAM |  | Antrea CI |
-| - | Rancher v2.5.7, K8s v1.20.5-rancher1-1 | AWS EC2 | Ubuntu 18.04.5 LTS (5.4.0-1045-aws) amd64, docker://19.3.15 | t3a.medium | Some tests failing because of [this issue](https://github.com/kubernetes/kubernetes/issues/100197) |  |
 | - | K3s v1.19.8+k3s1 | [OSUOSL] | Ubuntu 20.04.1 LTS (5.4.0-66-generic) arm64, containerd://1.4.3-k3s3 | 2 vCPUs, 4GB RAM |  | Antrea CI, cluster installed with [k3sup] 0.9.13 |
 | - | Kops v1.20, K8s v1.20.5 | AWS EC2 | Ubuntu 20.04.2 LTS (5.4.0-1041-aws) amd64, containerd://1.4.4 | t3.medium | [results tarball](http://downloads.antrea.io/artifacts/sonobuoy-conformance/kops_202104212218_sonobuoy_bf0f8e77-c9df-472a-85e2-65e456cf4d83.tar.gz) |  |
 | - | EKS, K8s v1.17.12 | AWS | AmazonLinux2, docker | t3.medium |  | Antrea CI |
@@ -24,6 +23,7 @@ work with that Antrea version.
 | - | AKS, K8s v1.19.9 | Azure | Ubuntu 18.04, containerd | Standard_DS2_v2 |  | Antrea CI |
 | - | Kind v0.9.0, K8s v1.19.1 | N/A | Ubuntu 20.10, containerd://1.4.0 | N/A |  | [Requirements for using Antrea on Kind](kind.md) |
 | - | Minikube v1.25.0 | N/A | Ubuntu 20.04.2 LTS (5.10.76-linuxkit) arm64, docker://20.10.12 | 8GB RAM | | |
+| v1.10.0 | Rancher v2.7.0, K8s v1.24.10 | vSphere | Ubuntu 22.04.1 LTS (5.15.0-57-generic) amd64, docker://20.10.21 | 4 vCPUs, 4GB RAM |  |  |
 | v1.11.0 | Kubeadm v1.20.2 | N/A | openEuler 22.03 LTS, docker://18.09.0 | 10GB RAM | | |
 | v1.11.0 | Kubeadm v1.25.5 | N/A | openEuler 22.03 LTS, containerd://1.6.18 | 10GB RAM | | |
 
@@ -39,9 +39,17 @@ want. Once the cluster has been created, this CIDR cannot be changed.
 
 ### Rancher
 
-When creating a workload cluster, set the [network
-plugin](https://rancher.com/docs/rke/latest/en/config-options/add-ons/network-plugins/)
-to `none`.
+Follow these steps to deploy Antrea (as a [custom CNI](https://rke.docs.rancher.com/config-options/add-ons/network-plugins/custom-network-plugin-example))
+on [Rancher](https://ranchermanager.docs.rancher.com/pages-for-subheaders/kubernetes-clusters-in-rancher-setup) cluster:
+
+* Edit the cluster YAML and set the `network-plugin` option to none.
+
+* Add an addon for Antrea, in the following manner:
+
+  ```yaml
+  addons_include:
+  - <link of the antrea.yml file>
+  ```
 
 ### K3s
 
