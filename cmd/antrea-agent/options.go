@@ -82,6 +82,10 @@ type Options struct {
 	nplEndPort             int
 	dnsServerOverride      string
 	nodeType               config.NodeType
+
+	// enableEgress represents whether Egress should run or not, calculated from its feature gate configuration and
+	// whether the traffic mode supports it.
+	enableEgress bool
 }
 
 func newOptions() *Options {
@@ -423,6 +427,27 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 }
 
+func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) error {
+	if !features.DefaultFeatureGate.Enabled(features.Egress) {
+		return nil
+	}
+	if encapMode != config.TrafficEncapModeEncap {
+		klog.InfoS("The Egress feature gate is enabled, but it won't work because it is only applicable to the encap mode")
+		return nil
+	}
+	for _, cidr := range o.config.Egress.ExceptCIDRs {
+		_, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
+		}
+	}
+	if o.config.Egress.MaxEgressIPsPerNode > defaultMaxEgressIPsPerNode {
+		return fmt.Errorf("maxEgressIPsPerNode cannot be greater than %d", defaultMaxEgressIPsPerNode)
+	}
+	o.enableEgress = true
+	return nil
+}
+
 func (o *Options) validateK8sNodeOptions() error {
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
@@ -485,13 +510,8 @@ func (o *Options) validateK8sNodeOptions() error {
 	if err := o.validateMulticastConfig(); err != nil {
 		return fmt.Errorf("failed to validate multicast config: %v", err)
 	}
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		for _, cidr := range o.config.Egress.ExceptCIDRs {
-			_, _, err := net.ParseCIDR(cidr)
-			if err != nil {
-				return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
-			}
-		}
+	if err := o.validateEgressConfig(encapMode); err != nil {
+		return fmt.Errorf("failed to validate egress config: %v", err)
 	}
 	if err := o.validateMulticlusterConfig(encapMode, encryptionMode); err != nil {
 		return err
@@ -520,11 +540,6 @@ func (o *Options) validateK8sNodeOptions() error {
 		o.dnsServerOverride = hostPort
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		if o.config.Egress.MaxEgressIPsPerNode > defaultMaxEgressIPsPerNode {
-			return fmt.Errorf("maxEgressIPsPerNode cannot be greater than %d", defaultMaxEgressIPsPerNode)
-		}
-	}
 	return nil
 }
 
