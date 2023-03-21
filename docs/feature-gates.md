@@ -35,7 +35,7 @@ edit the Agent configuration in the
 | Feature Name              | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 |---------------------------|--------------------| ------- | ----- |---------------| ------------ | ---------- |--------------------| ----- |
 | `AntreaProxy`             | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
-| `EndpointSlice`           | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
+| `EndpointSlice`           | Agent              | `true`  | Beta  | v0.13.0       | v1.11        | N/A        | Yes                |       |
 | `TopologyAwareHints`      | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
 | `AntreaPolicy`            | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`               | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
@@ -70,35 +70,35 @@ NetworkPolicy implementation for Pod-to-Service traffic.
 
 Please refer to this [document](antrea-proxy.md) for extra information on AntreaProxy and how it can be configured.
 
-### EndpointSlice
-
-`EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The EndpointSlice API was introduced in Kubernetes
-1.16 (alpha) and it is enabled by default in Kubernetes 1.17 (beta). The EndpointSlice feature gate will take no effect
-if AntreaProxy is not enabled. The endpoint conditions of `Serving` and
-`Terminating` are not supported currently. ServiceTopology is not supported either. Refer to
-this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
-for more information. The EndpointSlice API version that AntreaProxy supports is v1beta1 currently, and other
-EndpointSlice API versions are not supported. If EndpointSlice is enabled in AntreaProxy, but EndpointSlice API is
-disabled in Kubernetes or EndpointSlice API version v1beta1 is not supported in Kubernetes, Antrea Agent will log an
-error message and will not implement Cluster IP functionality as expected.
-
 #### Requirements for this Feature
 
 When using the OVS built-in kernel module (which is the most common case), your kernel version must be >= 4.6 (as
 opposed to >= 4.4 without this feature).
 
-### TopologyAwareHints
+### EndpointSlice
 
-`TopologyAwareHints` enables TopologyAwareHints support in AntreaProxy. The feature
-TopologyAwareHints is at beta stage in Kubernetes 1.23 (beta), and it is enabled by
-default in Kubernetes 1.24. For AntreaProxy, traffic can be routed to the Endpoint
-which is closer to its origin with this feature. Refer to this
-[link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-hints/)
-for more information.
+`EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The EndpointSlice API was introduced in Kubernetes
+1.16 (alpha) and it is enabled by default in Kubernetes 1.17 (beta), promoted to GA in Kubernetes 1.21. The EndpointSlice
+feature will take no effect if AntreaProxy is not enabled. Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
+for more information about EndpointSlice. Don't enable this feature if Kubernetes version is lower than 1.21 or EndpointSlice
+API is disabled in Kubernetes, otherwise Antrea Agent will log an error message and will not implement ClusterIP Service
+functionality as expected.
 
 #### Requirements for this Feature
 
-Feature EndpointSlice is enabled.
+- EndpointSlice API is enabled if Kubernetes version is >=1.16 and <1.21, or if it is >=1.21.
+- `AntreaProxy` is enabled.
+
+### TopologyAwareHints
+
+`TopologyAwareHints` enables TopologyAwareHints support in AntreaProxy. For AntreaProxy, traffic can be routed to the
+Endpoint which is closer to where it originated when this feature is enabled. Refer to this [link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-hints/)
+for more information about TopologyAwareHints.
+
+#### Requirements for this Feature
+
+- `AntreaProxy` is enabled.
+- `EndpointSlice` is enabled.
 
 ### AntreaPolicy
 
