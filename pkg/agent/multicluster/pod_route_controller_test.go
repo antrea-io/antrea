@@ -206,6 +206,25 @@ func TestPodEvent(t *testing.T) {
 		c.ofClient.EXPECT().InstallMulticlusterPodFlows(nginx2PodIP, nginx2HostIP)
 		c.processPodNextWorkItem()
 
+		// Update a Pod with empty host IP
+		nginx2WithEmptyHostIP := nginx2WithIPs.DeepCopy()
+		nginx2WithEmptyHostIP.Status.HostIP = ""
+		c.k8sClient.CoreV1().Pods(defaultNs).Update(ctx, nginx2WithEmptyHostIP, metav1.UpdateOptions{})
+		if err := waitForPodIPUpdate(c.podLister, nginx2WithEmptyHostIP); err != nil {
+			t.Errorf("Error when waiting for Pod '%s/%s' to be updated, err: %v", nginx2WithEmptyHostIP.Namespace, nginx2WithEmptyHostIP.Name, err)
+		}
+		c.ofClient.EXPECT().UninstallMulticlusterPodFlows("192.168.1.12")
+		c.processPodNextWorkItem()
+
+		// Delete the invalid Pod
+		c.k8sClient.CoreV1().Pods(defaultNs).Delete(ctx, nginx2WithEmptyHostIP.Name, metav1.DeleteOptions{})
+
+		// Create a Pod with hostNetwork
+		c.k8sClient.CoreV1().Pods(defaultNs).Create(ctx, nginxWithHostNetwork, metav1.CreateOptions{})
+		if err := waitForPodRealized(c.podLister, nginxWithHostNetwork); err != nil {
+			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", nginxWithHostNetwork.Namespace, nginxWithHostNetwork.Name, err)
+		}
+
 		// Create a Pod without IPs
 		c.k8sClient.CoreV1().Pods(defaultNs).Create(ctx, nginx1NoIPs, metav1.CreateOptions{})
 		if err := waitForPodRealized(c.podLister, nginx1NoIPs); err != nil {
@@ -219,25 +238,6 @@ func TestPodEvent(t *testing.T) {
 		if err := waitForPodLabelUpdate(c.podLister, nginx1NoIPsWithLabel); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be updated, err: %v", nginx1NoIPsWithLabel.Namespace, nginx1NoIPsWithLabel.Name, err)
 		}
-
-		// Create a Pod with hostNetwork
-		c.k8sClient.CoreV1().Pods(defaultNs).Create(ctx, nginxWithHostNetwork, metav1.CreateOptions{})
-		if err := waitForPodRealized(c.podLister, nginxWithHostNetwork); err != nil {
-			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", nginxWithHostNetwork.Namespace, nginxWithHostNetwork.Name, err)
-		}
-
-		// Update a Pod with empty host IP
-		nginx2WithIPsNew := nginx2WithIPs.DeepCopy()
-		nginx2WithIPsNew.Status.HostIP = ""
-		c.k8sClient.CoreV1().Pods(defaultNs).Update(ctx, nginx2WithIPsNew, metav1.UpdateOptions{})
-		if err := waitForPodIPUpdate(c.podLister, nginx2WithIPsNew); err != nil {
-			t.Errorf("Error when waiting for Pod '%s/%s' to be updated, err: %v", nginx2WithIPsNew.Namespace, nginx2WithIPsNew.Name, err)
-		}
-		c.ofClient.EXPECT().UninstallMulticlusterPodFlows("192.168.1.12")
-		c.processPodNextWorkItem()
-
-		// Delete an invalid Pod
-		c.k8sClient.CoreV1().Pods(defaultNs).Delete(ctx, nginx2WithIPsNew.Name, metav1.DeleteOptions{})
 
 		// Update a Pod with IPs
 		nginx1Updated := nginx1NoIPs.DeepCopy()
@@ -269,7 +269,7 @@ func TestPodEvent(t *testing.T) {
 		}
 
 		// Update the old Pod with a new IP
-		nginx1UpdatedWithNewIP := nginx1NoIPs.DeepCopy()
+		nginx1UpdatedWithNewIP := nginx1Updated.DeepCopy()
 		nginx1UpdatedWithNewIP.Status.PodIP = "192.168.110.10"
 		nginx1UpdatedWithNewIP.Status.HostIP = "172.16.10.11"
 		nginx1UpdatedWithNewIP.CreationTimestamp = metav1.NewTime(time.Now())
@@ -291,9 +291,12 @@ func TestPodEvent(t *testing.T) {
 		if err := waitForPodRealized(c.podLister, nginx1DupIP); err != nil {
 			t.Errorf("Error when waiting for Pod '%s/%s' to be realized, err: %v", nginx1DupIP.Namespace, nginx1DupIP.Name, err)
 		}
+		c.ofClient.EXPECT().InstallMulticlusterPodFlows(net.ParseIP("192.168.110.10"), net.ParseIP("172.16.10.11"))
+		c.processPodNextWorkItem()
 
 		// Update the old Pod with an empty IP
 		nginx1UpdatedWithEmptyIP := nginx1UpdatedWithNewIP.DeepCopy()
+		nginx1UpdatedWithEmptyIP.Status.PodIP = ""
 		nginx1UpdatedWithEmptyIP.Status.HostIP = "172.16.10.11"
 		c.k8sClient.CoreV1().Pods(defaultNs).Update(ctx, nginx1UpdatedWithEmptyIP, metav1.UpdateOptions{})
 		if err := waitForPodIPUpdate(c.podLister, nginx1UpdatedWithEmptyIP); err != nil {
