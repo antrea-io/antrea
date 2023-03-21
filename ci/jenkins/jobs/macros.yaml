@@ -223,7 +223,7 @@
           set -e
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test-vm.sh  --registry ${DOCKER_REGISTRY} --kubeconfig /var/lib/jenkins/.kube/config
-          
+
 - builder:
     name: builder-conformance-kind
     builders:
@@ -240,3 +240,22 @@
           kind delete cluster --name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
           exit $return_code
 
+- builder:
+    name: builder-rancher-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          chmod +x ./ci/jenkins/test-rancher.sh
+          ./ci/jenkins/test-rancher.sh --registry ${DOCKER_REGISTRY} --testcase e2e --cluster-name rancher-test
+
+- builder:
+    name: builder-rancher-conformance
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          chmod +x ./ci/jenkins/test-rancher.sh
+          ./ci/jenkins/test-rancher.sh --cluster-name rancher-test --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}}
