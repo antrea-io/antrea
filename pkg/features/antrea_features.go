@@ -37,6 +37,7 @@ const (
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.13
+	// beta: v1.11
 	// Enable EndpointSlice support in AntreaProxy. If AntreaProxy is not enabled, this
 	// flag will not take effect.
 	EndpointSlice featuregate.Feature = "EndpointSlice"
@@ -138,7 +139,7 @@ var (
 		AntreaPolicy:            {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:             {Default: true, PreRelease: featuregate.Beta},
 		Egress:                  {Default: true, PreRelease: featuregate.Beta},
-		EndpointSlice:           {Default: false, PreRelease: featuregate.Alpha},
+		EndpointSlice:           {Default: true, PreRelease: featuregate.Beta},
 		TopologyAwareHints:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:               {Default: true, PreRelease: featuregate.Beta},
 		AntreaIPAM:              {Default: false, PreRelease: featuregate.Alpha},

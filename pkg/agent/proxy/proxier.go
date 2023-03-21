@@ -783,10 +783,14 @@ func (p *proxier) SyncLoop() {
 }
 
 func (p *proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
+	klog.V(2).InfoS("Processing Endpoints ADD event", "Endpoints", klog.KObj(endpoints))
 	p.OnEndpointsUpdate(nil, endpoints)
 }
 
 func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
+	if oldEndpoints != nil && endpoints != nil {
+		klog.V(2).InfoS("Processing Endpoints UPDATE event", "Endpoints", klog.KObj(endpoints))
+	}
 	if p.isIPv6 {
 		metrics.EndpointsUpdatesTotalV6.Inc()
 	} else {
@@ -798,6 +802,7 @@ func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
 }
 
 func (p *proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
+	klog.V(2).InfoS("Processing Endpoints DELETE event", "Endpoints", klog.KObj(endpoints))
 	p.OnEndpointsUpdate(endpoints, nil)
 }
 
@@ -809,18 +814,21 @@ func (p *proxier) OnEndpointsSynced() {
 }
 
 func (p *proxier) OnEndpointSliceAdd(endpointSlice *discovery.EndpointSlice) {
+	klog.V(2).InfoS("Processing EndpointSlice ADD event", "EndpointSlice", klog.KObj(endpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
 func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *discovery.EndpointSlice) {
+	klog.V(2).InfoS("Processing EndpointSlice UPDATE event", "EndpointSlice", klog.KObj(newEndpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
 func (p *proxier) OnEndpointSliceDelete(endpointSlice *discovery.EndpointSlice) {
+	klog.V(2).InfoS("Processing EndpointSlice DELETE event", "EndpointSlice", klog.KObj(endpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
 		p.runner.Run()
 	}
@@ -834,10 +842,14 @@ func (p *proxier) OnEndpointSlicesSynced() {
 }
 
 func (p *proxier) OnServiceAdd(service *corev1.Service) {
+	klog.V(2).InfoS("Processing Service ADD event", "Service", klog.KObj(service))
 	p.OnServiceUpdate(nil, service)
 }
 
 func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
+	if oldService != nil && service != nil {
+		klog.V(2).InfoS("Processing Service UPDATE event", "Service", klog.KObj(service))
+	}
 	if p.isIPv6 {
 		metrics.ServicesUpdatesTotalV6.Inc()
 	} else {
@@ -851,6 +863,7 @@ func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
 }
 
 func (p *proxier) OnServiceDelete(service *corev1.Service) {
+	klog.V(2).InfoS("Processing Service DELETE event", "Service", klog.KObj(service))
 	p.OnServiceUpdate(service, nil)
 }
 
