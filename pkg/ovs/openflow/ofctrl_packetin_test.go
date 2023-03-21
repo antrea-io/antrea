@@ -231,9 +231,10 @@ func TestParsePacketIn(t *testing.T) {
 
 func TestGetTCPDNSData(t *testing.T) {
 	type args struct {
-		tcp        protocol.TCP
-		expectErr  error
-		expectData []byte
+		tcp          protocol.TCP
+		expectErr    error
+		expectData   []byte
+		expectLength int
 	}
 	tests := []struct {
 		name string
@@ -257,8 +258,9 @@ func TestGetTCPDNSData(t *testing.T) {
 					HdrLen: 6,
 					Data:   []byte{1, 2, 3, 4, 0, 2, 5},
 				},
-				expectErr:  fmt.Errorf("there is a non-DNS response or a fragmented DNS response in TCP payload"),
-				expectData: nil,
+				expectErr:    nil,
+				expectData:   []byte{5},
+				expectLength: 2,
 			},
 		},
 		{
@@ -268,17 +270,19 @@ func TestGetTCPDNSData(t *testing.T) {
 					HdrLen: 6,
 					Data:   []byte{1, 2, 3, 4, 0, 1, 5},
 				},
-				expectErr:  nil,
-				expectData: []byte{5},
+				expectErr:    nil,
+				expectData:   []byte{5},
+				expectLength: 1,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tcp := tt.args.tcp
-			tcpData, err := GetTCPDNSData(&tcp)
+			tcpData, dataLength, err := GetTCPDNSData(&tcp)
 			assert.Equal(t, tt.args.expectErr, err)
 			assert.Equal(t, tt.args.expectData, tcpData)
+			assert.Equal(t, tt.args.expectLength, dataLength)
 		})
 	}
 }

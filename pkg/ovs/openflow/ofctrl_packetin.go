@@ -19,8 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"k8s.io/klog/v2"
-
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -64,7 +62,7 @@ func GetTCPPacketFromIPMessage(ipPkt util.Message) (tcpPkt *protocol.TCP, err er
 	return tcpPkt, nil
 }
 
-func GetTCPDNSData(tcpPkt *protocol.TCP) (data []byte, err error) {
+func GetTCPDNSData(tcpPkt *protocol.TCP) (data []byte, length int, err error) {
 	// TCP.HdrLen is 4-octet unit indicating the length of TCP header including options.
 	tcpOptionsLen := (tcpPkt.HdrLen - tcpStandardHdrLen) * 4
 	// Move two more octet.
@@ -74,15 +72,11 @@ func GetTCPDNSData(tcpPkt *protocol.TCP) (data []byte, err error) {
 	// same time (e.g., in a single "write" system call) to make it more
 	// likely that all the data will be transmitted in a single TCP segment.
 	if int(tcpOptionsLen+2) > len(tcpPkt.Data) {
-		return nil, fmt.Errorf("no DNS data in TCP data")
+		return nil, 0, fmt.Errorf("no DNS data in TCP data")
 	}
 	dnsDataLen := binary.BigEndian.Uint16(tcpPkt.Data[tcpOptionsLen : tcpOptionsLen+2])
 	dnsData := tcpPkt.Data[tcpOptionsLen+2:]
-	if int(dnsDataLen) > len(dnsData) {
-		klog.Info("There is a non-DNS response or a fragmented DNS response in TCP payload")
-		return nil, fmt.Errorf("there is a non-DNS response or a fragmented DNS response in TCP payload")
-	}
-	return dnsData, nil
+	return dnsData, int(dnsDataLen), nil
 }
 
 func GetUDPHeaderData(ipPkt util.Message) (udpSrcPort, udpDstPort uint16, err error) {

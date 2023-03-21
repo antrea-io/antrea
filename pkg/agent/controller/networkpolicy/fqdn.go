@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilsets "antrea.io/antrea/pkg/util/sets"
+	dnsutil "antrea.io/antrea/third_party/dns"
 )
 
 const (
@@ -746,10 +747,38 @@ func (f *fqdnController) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 	klog.V(4).InfoS("Received a packetIn for DNS response")
 	waitCh := make(chan error, 1)
-	handleDNSData := func(dnsData []byte) {
+	handleUDP := func(udp *protocol.UDP) {
 		dnsMsg := dns.Msg{}
-		if err := dnsMsg.Unpack(dnsData); err != nil {
+		if err := dnsMsg.Unpack(udp.Data); err != nil {
 			// A non-DNS response packet or a fragmented DNS response is received. Forward it to the Pod.
+			waitCh <- nil
+			return
+		}
+		f.onDNSResponseMsg(&dnsMsg, time.Now(), waitCh)
+	}
+	handleTCP := func(tcpPkt *protocol.TCP) {
+		dnsData, dataLength, err := binding.GetTCPDNSData(tcpPkt)
+		if err != nil {
+			// The packet doesn't contain a valid DNS length field and data. Forward it to the Pod.
+			klog.V(4).InfoS("Unable to get DNS data from the packet, skipping it", "err", err)
+			waitCh <- nil
+			return
+		}
+		dnsMsg := dns.Msg{}
+		if dataLength > len(dnsData) {
+			// This is likely the first fragment containing the length field and partial message of a DNS response.
+			// Usually the first fragment contains the question and answer sections, from which we can get FQDN <-> IP
+			// mapping. So we try to partially unpack it.
+			klog.InfoS("Received a fragmented DNS response, partially unpacking it", "lengthField", dataLength, "actualLength", len(dnsData))
+			if err := dnsutil.UnpackDNSMsgPartially(dnsData, &dnsMsg); err != nil {
+				klog.InfoS("Unable to unpack the DNS response partially, skipping it", "err", err)
+				waitCh <- nil
+				return
+			}
+		} else if err := dnsMsg.Unpack(dnsData); err != nil {
+			// This is likely a non-DNS response packet or a non-first-DNS response packet containing partial message.
+			// Set verbose level to 2 as normally we are not interested in it.
+			klog.V(2).InfoS("Unable to unpack the DNS response, skipping it", "err", err)
 			waitCh <- nil
 			return
 		}
@@ -767,8 +796,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 			proto := ipPkt.Protocol
 			switch proto {
 			case protocol.Type_UDP:
-				udpPkt := ipPkt.Data.(*protocol.UDP)
-				handleDNSData(udpPkt.Data)
+				handleUDP(ipPkt.Data.(*protocol.UDP))
 			case protocol.Type_TCP:
 				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
 				if err != nil {
@@ -776,20 +804,13 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 					waitCh <- nil
 					return
 				}
-				dnsData, err := binding.GetTCPDNSData(tcpPkt)
-				if err != nil {
-					// A non-DNS response packet is received or a fragmented DNS response is received. Forward it to the Pod.
-					waitCh <- nil
-					return
-				}
-				handleDNSData(dnsData)
+				handleTCP(tcpPkt)
 			}
 		case *protocol.IPv6:
 			proto := ipPkt.NextHeader
 			switch proto {
 			case protocol.Type_UDP:
-				udpPkt := ipPkt.Data.(*protocol.UDP)
-				handleDNSData(udpPkt.Data)
+				handleUDP(ipPkt.Data.(*protocol.UDP))
 			case protocol.Type_TCP:
 				tcpPkt, err := binding.GetTCPPacketFromIPMessage(ipPkt)
 				if err != nil {
@@ -797,13 +818,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 					waitCh <- nil
 					return
 				}
-				dnsData, err := binding.GetTCPDNSData(tcpPkt)
-				if err != nil {
-					// A non-DNS response packet is received or a fragmented DNS response is received. Forward it to the Pod.
-					waitCh <- nil
-					return
-				}
-				handleDNSData(dnsData)
+				handleTCP(tcpPkt)
 			}
 		}
 	}()
