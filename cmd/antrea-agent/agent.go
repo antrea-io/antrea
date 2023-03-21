@@ -131,7 +131,6 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
-	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress)
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
@@ -150,7 +149,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
-		egressEnabled,
+		o.enableEgress,
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
 		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge,
@@ -458,7 +457,7 @@ func run(o *Options) error {
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
 
-	if egressEnabled || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
@@ -477,7 +476,7 @@ func run(o *Options) error {
 			return fmt.Errorf("error creating new memberlist cluster: %v", err)
 		}
 	}
-	if egressEnabled {
+	if o.enableEgress {
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
 			memberlistCluster, egressInformer, nodeInformer, podUpdateChannel, o.config.Egress.MaxEgressIPsPerNode,
@@ -700,12 +699,12 @@ func run(o *Options) error {
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 
-	if egressEnabled || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
 	}
 
-	if egressEnabled {
+	if o.enableEgress {
 		go egressController.Run(stopCh)
 	}
 
