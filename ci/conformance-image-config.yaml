@@ -1,1 +1,1 @@
-dockerLibraryRegistry: k8s.gcr.io/e2e-test-images
+dockerLibraryRegistry: registry.k8s.io/e2e-test-images

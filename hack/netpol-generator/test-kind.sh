@@ -33,8 +33,8 @@ kind load docker-image antrea/antrea-ubuntu:latest
 docker pull mfenwick100/cyclonus:v0.4.7
 kind load docker-image mfenwick100/cyclonus:v0.4.7
 # pre-load agnhost image
-docker pull k8s.gcr.io/e2e-test-images/agnhost:2.29
-kind load docker-image k8s.gcr.io/e2e-test-images/agnhost:2.29
+docker pull registry.k8s.io/e2e-test-images/agnhost:2.29
+kind load docker-image registry.k8s.io/e2e-test-images/agnhost:2.29
 
 "$ROOT_DIR"/hack/generate-manifest.sh | kubectl apply -f -
 
