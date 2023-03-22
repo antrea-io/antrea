@@ -354,7 +354,7 @@ func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string
 	var err error
 	allURLs := append(append(allowedURLs, droppedURLs...), rejectedURLs...)
 	for _, url := range allURLs {
-		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
+		err := runCurlCommandOnVM(t, data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
 		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
 	}
 
@@ -374,13 +374,13 @@ func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string
 
 	anp := createANPWithFQDN(t, data, name, namespace, appliedToVM, fqdnSettings)
 	for url, action := range fqdnSettings {
-		err = runCurlCommandOnVM(data, appliedToVM, url, *action)
+		err = runCurlCommandOnVM(t, data, appliedToVM, url, *action)
 		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
 	}
 	err = data.DeleteANP(anp.Namespace, anp.Name)
 	require.Nil(t, err)
 	for _, url := range allURLs {
-		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
+		err := runCurlCommandOnVM(t, data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
 		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
 	}
 }
@@ -606,7 +606,7 @@ func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP,
 	}
 }
 
-func runCurlCommandOnVM(data *TestData, targetVM vmInfo, url string, action crdv1alpha1.RuleAction) error {
+func runCurlCommandOnVM(t *testing.T, data *TestData, targetVM vmInfo, url string, action crdv1alpha1.RuleAction) error {
 	cmd := getCurlCommand(targetVM.osType, url)
 	cmdStr := strings.Join(cmd, " ")
 
@@ -621,6 +621,7 @@ func runCurlCommandOnVM(data *TestData, targetVM vmInfo, url string, action crdv
 	}
 	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
 		if err := runCommandAndCheckResult(data, targetVM.nodeName, cmdStr, expectedOutput, expectedErr); err != nil {
+			t.Logf("Failed with error: %v", err)
 			return false, nil
 		}
 		return true, nil
