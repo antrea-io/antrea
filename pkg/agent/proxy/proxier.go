@@ -15,7 +15,6 @@
 package proxy
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -28,10 +27,12 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -1025,7 +1026,7 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 
 func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
-		return errors.New("empty packetin for Antrea Proxy")
+		return fmt.Errorf("empty packetin for Antrea Proxy")
 	}
 	matches := pktIn.GetMatches()
 
@@ -1089,6 +1090,7 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 func NewProxier(
 	hostname string,
+	k8sClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	ofClient openflow.Client,
 	isIPv6 bool,
@@ -1098,7 +1100,7 @@ func NewProxier(
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
 	groupCounter types.GroupCounter,
-	supportNestedService bool) *proxier {
+	supportNestedService bool) (*proxier, error) {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -1107,6 +1109,16 @@ func NewProxier(
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 
 	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
+	if endpointSliceEnabled {
+		apiAvailable, err := endpointSliceAPIAvailable(k8sClient)
+		if err != nil {
+			return nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
+		}
+		if !apiAvailable {
+			klog.InfoS("The EndpointSlice feature gate is enabled, but the EndpointSlice v1 API is not available, falling back to the Endpoints API")
+			endpointSliceEnabled = false
+		}
+	}
 	topologyAwareHintsEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.TopologyAwareHints)
 	ipFamily := corev1.IPv4Protocol
 	if isIPv6 {
@@ -1162,7 +1174,24 @@ func NewProxier(
 		p.endpointsConfig = config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod)
 		p.endpointsConfig.RegisterEventHandler(p)
 	}
-	return p
+	return p, nil
+}
+
+func endpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {
+	resources, err := k8sClient.Discovery().ServerResourcesForGroupVersion(discovery.SchemeGroupVersion.String())
+	if err != nil {
+		// The group version doesn't exist.
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("error getting server resources for GroupVersion %s: %v", discovery.SchemeGroupVersion.String(), err)
+	}
+	for _, resource := range resources.APIResources {
+		if resource.Name == "endpointslice" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // metaProxierWrapper wraps metaProxier, and implements the extra methods added
@@ -1196,6 +1225,7 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 
 func NewDualStackProxier(
 	hostname string,
+	k8sClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	ofClient openflow.Client,
 	routeClient route.Interface,
@@ -1206,17 +1236,21 @@ func NewDualStackProxier(
 	proxyLoadBalancerIPs bool,
 	v4groupCounter types.GroupCounter,
 	v6groupCounter types.GroupCounter,
-	nestedServiceSupport bool) *metaProxierWrapper {
+	nestedServiceSupport bool) (*metaProxierWrapper, error) {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter, nestedServiceSupport)
-
+	ipv4Proxier, err := NewProxier(hostname, k8sClient, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter, nestedServiceSupport)
+	if err != nil {
+		return nil, fmt.Errorf("error when creating v4 proxier: %v", err)
+	}
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter, nestedServiceSupport)
-
+	ipv6Proxier, err := NewProxier(hostname, k8sClient, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter, nestedServiceSupport)
+	if err != nil {
+		return nil, fmt.Errorf("error when creating v6 proxier: %v", err)
+	}
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
 	metaProxier := k8sproxy.NewMetaProxier(ipv4Proxier, ipv6Proxier)
 
-	return &metaProxierWrapper{ipv4Proxier, ipv6Proxier, metaProxier}
+	return &metaProxierWrapper{ipv4Proxier, ipv6Proxier, metaProxier}, nil
 }
