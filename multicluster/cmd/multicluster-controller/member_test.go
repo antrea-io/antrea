@@ -28,7 +28,9 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
 
@@ -75,6 +77,12 @@ func TestRunMember(t *testing.T) {
 			name:    "Start member controller successfully with stretchedNetworkPolicy enabled",
 			options: &Options{EnableStretchedNetworkPolicy: true},
 		},
+		{
+			name: "Start member controller successfully with ServiceCIDR",
+			options: &Options{
+				ServiceCIDR: "10.101.0.0/16",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -83,6 +91,9 @@ func TestRunMember(t *testing.T) {
 		initMockManager(mockMemberManager)
 		setupManagerAndCertControllerFunc = func(o *Options) (ctrl.Manager, error) {
 			return mockMemberManager, nil
+		}
+		member.ServiceCIDRDiscoverFn = func(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
+			return "10.101.0.0/16", nil
 		}
 		ctrl.SetupSignalHandler = mockSetupSignalHandler
 		t.Run(tc.name, func(t *testing.T) {

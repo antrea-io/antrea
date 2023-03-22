@@ -18,7 +18,6 @@ package member
 
 import (
 	"context"
-	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,7 +42,6 @@ type (
 		commonAreaGetter commonarea.RemoteCommonAreaGetter
 		namespace        string
 		localClusterID   string
-		serviceCIDR      string
 		podCIDRs         []string
 		leaderNamespace  string
 	}
@@ -55,14 +53,12 @@ func NewGatewayReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
 	namespace string,
-	serviceCIDR string,
 	podCIDRs []string,
 	commonAreaGetter commonarea.RemoteCommonAreaGetter) *GatewayReconciler {
 	reconciler := &GatewayReconciler{
 		Client:           client,
 		Scheme:           scheme,
 		namespace:        namespace,
-		serviceCIDR:      serviceCIDR,
 		podCIDRs:         podCIDRs,
 		commonAreaGetter: commonAreaGetter,
 	}
@@ -85,10 +81,6 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true}, err
 	}
 	r.leaderNamespace = commonArea.GetNamespace()
-	err = r.getServiceCIDR(ctx)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	resExportName := common.NewClusterInfoResourceExportName(r.localClusterID)
 	resExportNamespacedName := types.NamespacedName{
@@ -102,21 +94,21 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		},
 	}
 
-	createOrUpdate := func(gwIP string) error {
+	createOrUpdate := func(gateway *mcsv1alpha1.Gateway) error {
 		existingResExport := &mcsv1alpha1.ResourceExport{}
 		err := commonArea.Get(ctx, resExportNamespacedName, existingResExport)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 		if apierrors.IsNotFound(err) || !existingResExport.DeletionTimestamp.IsZero() {
-			if err = r.createResourceExport(ctx, req, commonArea, gwIP); err != nil {
+			if err = r.createResourceExport(ctx, req, commonArea, gateway); err != nil {
 				return err
 			}
 			return nil
 		}
 		// updateResourceExport will update latest Gateway information with the existing ResourceExport's resourceVersion.
 		// It will return an error and retry when there is a version conflict.
-		if err = r.updateResourceExport(ctx, req, commonArea, existingResExport, &mcsv1alpha1.GatewayInfo{GatewayIP: gwIP}); err != nil {
+		if err = r.updateResourceExport(ctx, req, commonArea, existingResExport, gateway); err != nil {
 			return err
 		}
 		return nil
@@ -133,14 +125,14 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	if err := createOrUpdate(gw.GatewayIP); err != nil {
+	if err := createOrUpdate(gw); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
 
 func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.Request,
-	commonArea commonarea.RemoteCommonArea, existingResExport *mcsv1alpha1.ResourceExport, gwInfo *mcsv1alpha1.GatewayInfo) error {
+	commonArea commonarea.RemoteCommonArea, existingResExport *mcsv1alpha1.ResourceExport, gw *mcsv1alpha1.Gateway) error {
 	resExportSpec := mcsv1alpha1.ResourceExportSpec{
 		Kind:      constants.ClusterInfoKind,
 		ClusterID: r.localClusterID,
@@ -149,9 +141,9 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 	}
 	resExportSpec.ClusterInfo = &mcsv1alpha1.ClusterInfo{
 		ClusterID:    r.localClusterID,
-		ServiceCIDR:  r.serviceCIDR,
+		ServiceCIDR:  gw.ServiceCIDR,
 		PodCIDRs:     r.podCIDRs,
-		GatewayInfos: []mcsv1alpha1.GatewayInfo{*gwInfo},
+		GatewayInfos: []mcsv1alpha1.GatewayInfo{{GatewayIP: gw.GatewayIP}},
 	}
 	klog.V(2).InfoS("Updating ClusterInfo kind of ResourceExport", "clusterinfo", klog.KObj(existingResExport),
 		"gateway", req.NamespacedName)
@@ -163,7 +155,7 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 }
 
 func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.Request,
-	commonArea commonarea.RemoteCommonArea, gatewayIP string) error {
+	commonArea commonarea.RemoteCommonArea, gateway *mcsv1alpha1.Gateway) error {
 	resExportSpec := mcsv1alpha1.ResourceExportSpec{
 		Kind:      constants.ClusterInfoKind,
 		ClusterID: r.localClusterID,
@@ -172,11 +164,11 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 	}
 	resExportSpec.ClusterInfo = &mcsv1alpha1.ClusterInfo{
 		ClusterID:   r.localClusterID,
-		ServiceCIDR: r.serviceCIDR,
+		ServiceCIDR: gateway.ServiceCIDR,
 		PodCIDRs:    r.podCIDRs,
 		GatewayInfos: []mcsv1alpha1.GatewayInfo{
 			{
-				GatewayIP: gatewayIP,
+				GatewayIP: gateway.GatewayIP,
 			},
 		},
 	}
@@ -205,16 +197,4 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(r)
-}
-
-// getServiceCIDR gets Service ClusterIP CIDR used in the member cluster.
-func (r *GatewayReconciler) getServiceCIDR(ctx context.Context) error {
-	if len(r.serviceCIDR) == 0 {
-		serviceCIDR, err := common.DiscoverServiceCIDRByInvalidServiceCreation(ctx, r.Client, r.namespace)
-		if err != nil {
-			return fmt.Errorf("failed to find Service ClusterIP range automatically, you may set the 'serviceCIDR' config as an alternative, err: %v, ", err)
-		}
-		r.serviceCIDR = serviceCIDR
-	}
-	return nil
 }

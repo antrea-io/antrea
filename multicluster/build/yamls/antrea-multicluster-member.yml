@@ -398,6 +398,9 @@ spec:
             type: string
           metadata:
             type: object
+          serviceCIDR:
+            description: Service CIDR of the local member cluster.
+            type: string
         type: object
     served: true
     storage: true
