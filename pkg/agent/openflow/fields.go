@@ -68,22 +68,24 @@ var (
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
-	// reg0[13..17]: Field to indicate the reasons of sending packet to the controller. Marks in this field include:
-	//   - 0b00001: logging
-	//   - 0b00010: reject
-	//   - 0b00100: deny (used by Flow Exporter)
-	//   - 0b01000: DNS packet (used by FQDN)
-	//   - 0b10000: IGMP packet (used by Multicast)
-	CustomReasonField          = binding.NewRegField(0, 13, 17)
-	CustomReasonLoggingRegMark = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
-	CustomReasonRejectRegMark  = binding.NewRegMark(CustomReasonField, CustomReasonReject)
-	CustomReasonDenyRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
-	CustomReasonDNSRegMark     = binding.NewRegMark(CustomReasonField, CustomReasonDNS)
-	CustomReasonIGMPRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonIGMP)
-	// reg0[18]: Mark to indicate remote SNAT for Egress.
-	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 18)
-	// reg0[19]: Field to indicate redirect action of layer 7 NetworkPolicy.
-	L7NPRegField        = binding.NewRegField(0, 19, 19)
+	// reg0[13..18]: Field to indicate the reasons of sending packet to the controller. Marks in this field include:
+	//   - 0b000001: logging
+	//   - 0b000010: reject
+	//   - 0b000100: deny (used by Flow Exporter)
+	//   - 0b001000: DNS packet (used by FQDN)
+	//   - 0b010000: IGMP packet (used by Multicast)
+	//   - 0b100000: reject packet to a Service without any Endpoints (used by Proxy)
+	CustomReasonField             = binding.NewRegField(0, 13, 18)
+	CustomReasonLoggingRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
+	CustomReasonRejectRegMark     = binding.NewRegMark(CustomReasonField, CustomReasonReject)
+	CustomReasonDenyRegMark       = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
+	CustomReasonDNSRegMark        = binding.NewRegMark(CustomReasonField, CustomReasonDNS)
+	CustomReasonIGMPRegMark       = binding.NewRegMark(CustomReasonField, CustomReasonIGMP)
+	CustomReasonRejectSvcNoEpMark = binding.NewRegMark(CustomReasonField, CustomReasonRejectSvcNoEp)
+	// reg0[19]: Mark to indicate remote SNAT for Egress.
+	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 19)
+	// reg0[20]: Field to indicate redirect action of layer 7 NetworkPolicy.
+	L7NPRegField        = binding.NewRegField(0, 20, 20)
 	L7NPRedirectRegMark = binding.NewRegMark(L7NPRegField, DispositionL7NPRedirect)
 
 	// reg1(NXM_NX_REG1)
@@ -128,11 +130,11 @@ var (
 	// externalTrafficPolicy is Cluster.
 	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21)
 	// reg4[22..23]: Field to store the action of a traffic control rule. Marks in this field include:
-	TrafficControlActionField = binding.NewRegField(4, 22, 23)
-	// reg4[24]: Mark to indicate whether the Endpoints of a Service includes another Service's ClusterIP.
-	NestedServiceRegMark          = binding.NewOneBitRegMark(4, 24)
+	TrafficControlActionField     = binding.NewRegField(4, 22, 23)
 	TrafficControlMirrorRegMark   = binding.NewRegMark(TrafficControlActionField, 0b01)
 	TrafficControlRedirectRegMark = binding.NewRegMark(TrafficControlActionField, 0b10)
+	// reg4[24]: Mark to indicate whether the Endpoints of a Service includes another Service's ClusterIP.
+	NestedServiceRegMark = binding.NewOneBitRegMark(4, 24)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

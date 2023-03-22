@@ -124,6 +124,15 @@ func newFeatureService(
 	}
 }
 
+// serviceNoEndpointFlow generates the flow to match the packets to Service without Endpoint and send them to controller.
+func (f *featureService) serviceNoEndpointFlow() binding.Flow {
+	return EndpointDNATTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchRegMark(CustomReasonRejectSvcNoEpMark).
+		Action().SendToController(uint8(PacketInReasonSvcReject)).
+		Done()
+}
+
 func (f *featureService) initFlows() []binding.Flow {
 	var flows []binding.Flow
 	if f.enableProxy {
@@ -134,6 +143,7 @@ func (f *featureService) initFlows() []binding.Flow {
 		flows = append(flows, f.snatConntrackFlows()...)
 		flows = append(flows, f.serviceNeedLBFlow())
 		flows = append(flows, f.sessionAffinityReselectFlow())
+		flows = append(flows, f.serviceNoEndpointFlow())
 		flows = append(flows, f.l2ForwardOutputHairpinServiceFlow())
 		if f.proxyAll {
 			// This installs the flows to match the first packet of NodePort connection. The flows set a bit of a register
