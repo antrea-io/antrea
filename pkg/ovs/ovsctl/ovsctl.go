@@ -398,7 +398,8 @@ func (c *ovsCtlClient) DumpPortsDesc() ([][]string, error) {
 
 func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 	// This command does not have standard output, and only has standard err when running with error.
-	_, err := c.ovsOfctlRunner.RunOfctlCmd("mod-port", strconv.FormatUint(uint64(ofport), 10), "no-flood")
+	// NOTE THAT, THIS CONFIGURATION MUST WORK WITH OpenFlow10.
+	_, err := runOfctlCmd(false, "mod-port", c.bridge, strconv.FormatUint(uint64(ofport), 10), "no-flood")
 	if err != nil {
 		return fmt.Errorf("fail to set no-food config for port %d on bridge %s: %v", ofport, c.bridge, err)
 	}
