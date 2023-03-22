@@ -16,9 +16,12 @@ package openflow
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -53,6 +56,10 @@ const (
 	// PacketInReasonMC shares PacketInReasonNP for IGMP packet_in message. This is because OVS "controller" action
 	// only correctly supports reason 0 or 1. Change to another value after the OVS action is corrected.
 	PacketInReasonMC = PacketInReasonNP
+	// PacketInReasonSvcReject shares PacketInReasonNP to process the Service packet not matching any Endpoints within
+	// packet_in message. This is because OVS "controller" action only correctly supports reason 0 or 1. Change to another
+	// value after the OVS action is corrected.
+	PacketInReasonSvcReject = PacketInReasonNP
 	// PacketInQueueSize defines the size of PacketInQueue.
 	// When PacketInQueue reaches PacketInQueueSize, new packet-in will be dropped.
 	PacketInQueueSize = 200
@@ -81,7 +88,7 @@ type featureStartPacketIn struct {
 	packetInQueue *openflow.PacketInQueue
 }
 
-func newfeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStartPacketIn {
+func newFeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{reason: reason, stopCh: stopCh}
 	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(PacketInQueueSize, rate.Limit(PacketInQueueRate))
 
@@ -96,7 +103,7 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 
 	// Iterate through each feature that starts packetin. Subscribe with their specified reason.
 	for reason := range c.packetInHandlers {
-		featurePacketIn := newfeatureStartPacketIn(reason, stopCh)
+		featurePacketIn := newFeatureStartPacketIn(reason, stopCh)
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {
 			klog.Errorf("received error %+v while subscribing packetin for each feature", err)
@@ -147,4 +154,23 @@ func GetMatchFieldByRegID(matchers *ofctrl.Matchers, regID int) *ofctrl.MatchFie
 		return nil
 	}
 	return &ofctrl.MatchField{MatchField: openflow15.NewRegMatchFieldWithMask(regID, data, mask)}
+}
+
+func GetInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
+	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
+	if !ok {
+		return 0, errors.New("register value cannot be retrieved")
+	}
+	if rng != nil {
+		return ofctrl.GetUint32ValueWithRange(regValue.Data, rng), nil
+	}
+	return regValue.Data, nil
+}
+
+func GetEthernetPacket(pktIn *ofctrl.PacketIn) (*protocol.Ethernet, error) {
+	ethernetPkt := new(protocol.Ethernet)
+	if err := ethernetPkt.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
+		return nil, fmt.Errorf("failed to parse ethernet packet from packet-in message: %v", err)
+	}
+	return ethernetPkt, nil
 }

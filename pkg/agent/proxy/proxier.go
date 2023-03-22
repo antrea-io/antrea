@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -23,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -409,10 +412,6 @@ func (p *proxier) installServices() {
 			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
 		}
 		endpointsToInstall := p.endpointsMap[svcPortName]
-		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this Service.
-		if len(endpointsToInstall) == 0 && len(endpointsInstalled) == 0 {
-			continue
-		}
 
 		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		var pSvcInfo *types.ServiceInfo
@@ -960,6 +959,7 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
+		p.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonSvcReject), "svc-reject", p)
 		go p.serviceConfig.Run(stopCh)
 		if p.endpointSliceEnabled {
 			go p.endpointSliceConfig.Run(stopCh)
@@ -1021,6 +1021,70 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 	}
 
 	return flows, groups, found
+}
+
+func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
+	if pktIn == nil {
+		return errors.New("empty packetin for Antrea Proxy")
+	}
+	matches := pktIn.GetMatches()
+
+	match := openflow.GetMatchFieldByRegID(matches, openflow.CustomReasonField.GetRegID())
+	if match == nil {
+		return fmt.Errorf("error getting match mark in CustomField")
+	}
+
+	customReasons, err := openflow.GetInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
+	if err != nil {
+		klog.ErrorS(err, "Received error while unloading customReason from OVS reg")
+		return err
+	}
+	if customReasons&openflow.CustomReasonRejectSvcNoEp != openflow.CustomReasonRejectSvcNoEp {
+		return nil
+	}
+
+	// Get Ethernet data.
+	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
+	if err != nil {
+		return err
+	}
+	srcMAC := ethernetPkt.HWDst.String()
+	dstMAC := ethernetPkt.HWSrc.String()
+
+	var (
+		srcIP, dstIP string
+		proto        uint8
+		isIPv6       bool
+	)
+	switch ipPkt := ethernetPkt.Data.(type) {
+	case *protocol.IPv4:
+		srcIP = ipPkt.NWDst.String()
+		dstIP = ipPkt.NWSrc.String()
+		proto = ipPkt.Protocol
+		isIPv6 = false
+	case *protocol.IPv6:
+		srcIP = ipPkt.NWDst.String()
+		dstIP = ipPkt.NWSrc.String()
+		proto = ipPkt.NextHeader
+		isIPv6 = true
+	}
+
+	inPortField := matches.GetMatchByName(binding.OxmFieldInPort)
+	if inPortField == nil {
+		return fmt.Errorf("error when getting match field inPort")
+	}
+	outPort := inPortField.GetValue().(uint32)
+	return openflow.SendRejectPacketOut(p.ofClient,
+		srcMAC,
+		dstMAC,
+		srcIP,
+		dstIP,
+		0,
+		outPort,
+		isIPv6,
+		ethernetPkt,
+		proto,
+		nil)
 }
 
 func NewProxier(

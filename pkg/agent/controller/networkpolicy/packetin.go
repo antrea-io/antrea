@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
-	"antrea.io/libOpenflow/protocol"
-	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
@@ -209,12 +207,4 @@ func isAntreaPolicyEgressTable(tableID uint8) bool {
 		}
 	}
 	return false
-}
-
-func getEthernetPacket(pktIn *ofctrl.PacketIn) (*protocol.Ethernet, error) {
-	ethernetPkt := new(protocol.Ethernet)
-	if err := ethernetPkt.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
-		return nil, fmt.Errorf("failed to parse ethernet packet from packet-in message: %v", err)
-	}
-	return ethernetPkt, nil
 }

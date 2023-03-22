@@ -15,7 +15,6 @@
 package networkpolicy
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 
@@ -92,7 +91,7 @@ const (
 func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	// All src/dst mean the source/destination of the reject packet, which are destination/source of the incoming packet.
 	// Get ethernet data.
-	ethernetPkt, err := getEthernetPacket(pktIn)
+	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
 	if err != nil {
 		return err
 	}
@@ -191,47 +190,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, c.tunPort)
 	mutateFunc := getRejectPacketOutMutateFunc(packetOutType, c.nodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst, ctZone)
 
-	if proto == protocol.Type_TCP {
-		// Get TCP data.
-		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, _, _, err := binding.GetTCPHeaderData(ethernetPkt.Data)
-		if err != nil {
-			return err
-		}
-		// While sending TCP reject packet-out, switch original src/dst port,
-		// set the ackNum as original seqNum+1 and set the flag as ack+rst.
-		return c.ofClient.SendTCPPacketOut(
-			srcMAC,
-			dstMAC,
-			srcIP,
-			dstIP,
-			inPort,
-			outPort,
-			isIPv6,
-			oriTCPDstPort,
-			oriTCPSrcPort,
-			0,
-			oriTCPSeqNum+1,
-			0,
-			TCPAck|TCPRst,
-			0,
-			nil,
-			mutateFunc)
-	}
-	// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
-	icmpType := ICMPDstUnreachableType
-	icmpCode := ICMPDstHostAdminProhibitedCode
-	ipHdrLen := IPv4HdrLen
-	if isIPv6 {
-		icmpType = ICMPv6DstUnreachableType
-		icmpCode = ICMPv6DstAdminProhibitedCode
-		ipHdrLen = IPv6HdrLen
-	}
-	ipHdr, _ := ethernetPkt.Data.MarshalBinary()
-	icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
-	// Put ICMP unused header in Data prop and set it to zero.
-	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
-	copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
-	return c.ofClient.SendICMPPacketOut(
+	return openflow.SendRejectPacketOut(c.ofClient,
 		srcMAC,
 		dstMAC,
 		srcIP,
@@ -239,9 +198,8 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		inPort,
 		outPort,
 		isIPv6,
-		icmpType,
-		icmpCode,
-		icmpData,
+		ethernetPkt,
+		proto,
 		mutateFunc)
 }
 
