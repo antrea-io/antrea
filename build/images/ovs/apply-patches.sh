@@ -42,8 +42,8 @@ function apply_patch() {
         git apply "$@"
 }
 
-if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.17.3"; then
-    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.17.3)"
+if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.17.5"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.17.5)"
     exit 1
 fi
 
@@ -102,7 +102,7 @@ fi
 # This patch fixes the issue that TCP port matching and TCP flags matching can't
 # take effect when using together.
 # See https://github.com/openvswitch/ovs-issues/issues/272
-if version_get "$OVS_VERSION" "2.13.0" && version_let "$OVS_VERSION" "2.17.3" ; then
+if version_get "$OVS_VERSION" "2.13.0" && version_let "$OVS_VERSION" "2.17.5" ; then
     apply_patch "489553b1c21692063931a9f50b6849b23128443c"
 fi
 

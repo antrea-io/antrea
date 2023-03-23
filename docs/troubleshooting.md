@@ -257,7 +257,7 @@ f06768ee-17ec-4abb-a971-b3b76abc8cda
         Port antrea-gw0
             Interface antrea-gw0
             type: internal
-    ovs_version: "2.17.3"
+    ovs_version: "2.17.5"
 ```
 
 - `ovs-ofctl show br-int`: show OpenFlow information of the OVS bridge.
