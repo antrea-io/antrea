@@ -77,7 +77,7 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
 	output, err := d.executor.Command("antctl", "-oyaml", "get", "memberlist").CombinedOutput()
-	if err != nil && !strings.Contains(string(output), "memberlist is not running") {
+	if err != nil && !strings.Contains(string(output), "memberlist is not enabled") {
 		return fmt.Errorf("error when dumping memberlist: %w", err)
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "memberlist"), "memberlist", output)
