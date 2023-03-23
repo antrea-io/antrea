@@ -80,13 +80,12 @@ opposed to >= 4.4 without this feature).
 `EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The EndpointSlice API was introduced in Kubernetes
 1.16 (alpha) and it is enabled by default in Kubernetes 1.17 (beta), promoted to GA in Kubernetes 1.21. The EndpointSlice
 feature will take no effect if AntreaProxy is not enabled. Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
-for more information about EndpointSlice. Don't enable this feature if Kubernetes version is lower than 1.21 or EndpointSlice
-API is disabled in Kubernetes, otherwise Antrea Agent will log an error message and will not implement ClusterIP Service
-functionality as expected.
+for more information about EndpointSlice. If this feature is enabled but the EndpointSlice v1 API is not available
+(Kubernetes version is lower than 1.21), Antrea Agent will log a message and fallback to the Endpoints API.
 
 #### Requirements for this Feature
 
-- EndpointSlice API is enabled if Kubernetes version is >=1.16 and <1.21, or if it is >=1.21.
+- EndpointSlice v1 API is available (Kubernetes version >=1.21).
 - `AntreaProxy` is enabled.
 
 ### TopologyAwareHints
