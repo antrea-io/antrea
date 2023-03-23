@@ -462,6 +462,8 @@ function deliver_antrea_windows_containerd {
     ${CLEAN_STALE_IMAGES_CONTAINERD}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
+    # Clean docker image to save disk space.
+    ${CLEAN_STALE_IMAGES} 
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
 
     echo "====== Delivering Antrea to all Nodes ======"
@@ -472,9 +474,6 @@ function deliver_antrea_windows_containerd {
 
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
-
-    # Clean docker image to save disk space.
-    ${CLEAN_STALE_IMAGES}
 
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
