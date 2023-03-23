@@ -238,7 +238,7 @@ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/flo
 ```
 
 To deploy the latest version of Flow Aggregator Service (built from the main branch), use the
-checked-in [deployment yaml](/build/yamls/flow-aggregator.yml):
+checked-in [deployment yaml](../build/yamls/flow-aggregator.yml):
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/flow-aggregator.yml

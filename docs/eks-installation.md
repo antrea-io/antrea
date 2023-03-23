@@ -32,7 +32,7 @@ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/ant
 ```
 
 To deploy the latest version of Antrea (built from the main branch), use the
-checked-in [deployment yaml](/build/yamls/antrea-eks.yml):
+checked-in [deployment yaml](../build/yamls/antrea-eks.yml):
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea-eks.yml

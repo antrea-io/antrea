@@ -25,7 +25,7 @@ is included in the kernel. For Ubuntu 18.04, kernel version should be at least
 
 ### Antrea installation
 
-You can simply apply the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml)
+You can simply apply the [Antrea IPsec deployment yaml](../build/yamls/antrea-ipsec.yml)
 to deploy Antrea with IPsec encyption enabled. To deploy a released version of
 Antrea, pick a version from the [list of releases](https://github.com/antrea-io/antrea/releases).
 Note that IPsec support was added in release 0.3.0, which means you can not
@@ -89,7 +89,7 @@ install WireGuard together with the kernel module on various operating systems.
 
 ### Antrea installation
 
-First, download the [Antrea deployment yaml](/build/yamls/antrea.yml). To deploy
+First, download the [Antrea deployment yaml](../build/yamls/antrea.yml). To deploy
 a released version of Antrea, pick a version from the [list of releases](https://github.com/antrea-io/antrea/releases).
 Note that WireGuard support was added in release 1.3.0, which means you can not
 pick a release older than 1.3.0. For any given release `<TAG>` (e.g. `v1.3.0`),
