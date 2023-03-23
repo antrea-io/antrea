@@ -51,7 +51,8 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		memberlistCluster := aq.GetMemberlistCluster()
 		if reflect.ValueOf(memberlistCluster).IsNil() {
-			http.Error(w, "memberlist is not running", http.StatusServiceUnavailable)
+			// The error message must match the "FOO is not enabled" pattern to pass antctl e2e tests.
+			http.Error(w, "memberlist is not enabled", http.StatusServiceUnavailable)
 			return
 		}
 		var memberlist []Response
