@@ -510,7 +510,7 @@ running on an external Node is as follows:
 - Only `update` permission is given on resource `antreaagentinfos`, and `create`
   permission is moved to `antrea-controller`
 
-For more details please refer to [vm-agent-rbac.yml](/build/yamls/externalnode/vm-agent-rbac.yml)
+For more details please refer to [vm-agent-rbac.yml](../build/yamls/externalnode/vm-agent-rbac.yml)
 
 `antrea-agent` reports its status by updating the `antreaagentinfo` resource
 which is created with the same name as the `ExternalNode`. `antrea-controller`

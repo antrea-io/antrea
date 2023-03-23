@@ -15,14 +15,14 @@ antrea-octant-plugin depends on the Antrea monitoring CRDs (AntreaControllerInfo
 To run Octant together with antrea-octant-plugin, please make sure you have these CRDs defined in you K8s cluster.
 
 If Antrea is deployed before antrea-octant-plugin starts by using the standard deployment yaml, these
-CRDs should already be added. If not, please refer to [antrea.yaml](/build/yamls/antrea.yml) to
+CRDs should already be added. If not, please refer to [antrea.yaml](../build/yamls/antrea.yml) to
 create these CRDs first.
 
 ### Deploy Octant and antrea-octant-plugin as a Pod
 
 You can follow the sample below to run Octant and antrea-octant-plugin in Pod.
 In this example, we expose UI as a NodePort Service for accessing externally.
-You can update [antrea-octant.yaml](/build/yamls/antrea-octant.yml) according to
+You can update [antrea-octant.yaml](../build/yamls/antrea-octant.yml) according to
 your environment and preference.
 
 1. Create a secret that contains your kubeconfig.
@@ -32,7 +32,7 @@ your environment and preference.
     kubectl create secret generic octant-kubeconfig --from-file=admin.conf=<path to kubeconfig file> -n kube-system
     ```
 
-2. You can change the sample yaml [build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml)
+2. You can change the sample yaml [build/yamls/antrea-octant.yml](../build/yamls/antrea-octant.yml)
 according to your requirements and environment, then apply the yaml to create both Deployment and NodePort Service.
 
     ```bash

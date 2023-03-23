@@ -336,7 +336,7 @@ Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
 daemons. Antrea now supports only using pre-shared key (PSK) for IKE
 authentication, and the PSK string must be passed to Antrea Agent using an
 environment variable - `ANTREA_IPSEC_PSK`. The PSK string can be specified in
-the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
+the [Antrea IPsec deployment yaml](../../build/yamls/antrea-ipsec.yml), which creates
 a Kubernetes Secret to save the PSK value and populates it to the
 `ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
 
