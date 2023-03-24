@@ -940,7 +940,6 @@ func NewProxier(
 	}
 
 	p := &proxier{
-		endpointsConfig:           config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:             config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:          newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
 		serviceChanges:            newServiceChangesTracker(recorder, ipFamily, skipServices),
@@ -966,7 +965,6 @@ func NewProxier(
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
-	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	if endpointSliceEnabled {
 		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), resyncPeriod)
