@@ -23,36 +23,46 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 )
 
+var (
+	linkByName             = netlink.LinkByName
+	linkSetMTU             = netlink.LinkSetMTU
+	linkSetUp              = netlink.LinkSetUp
+	removeLinkIPs          = util.RemoveLinkIPs
+	removeLinkRoutes       = util.RemoveLinkRoutes
+	configureLinkAddresses = util.ConfigureLinkAddresses
+	configureLinkRoutes    = util.ConfigureLinkRoutes
+)
+
 func (c *ExternalNodeController) moveIFConfigurations(adapterConfig *config.AdapterNetConfig, src string, dst string) error {
-	dstLink, err := netlink.LinkByName(dst)
+	dstLink, err := linkByName(dst)
 	if err != nil {
 		return fmt.Errorf("failed to find link for destination %s, err %v", dst, err)
 	}
 	if src != "" {
-		srcLink, err := netlink.LinkByName(src)
+		srcLink, err := linkByName(src)
 		if err != nil {
 			return fmt.Errorf("failed to find link for source %s, err %v", src, err)
 		}
-		if err := netlink.LinkSetMTU(dstLink, adapterConfig.MTU); err != nil {
+		if err := linkSetMTU(dstLink, adapterConfig.MTU); err != nil {
 			return err
 		}
-		if err := netlink.LinkSetUp(dstLink); err != nil {
+		if err := linkSetUp(dstLink); err != nil {
 			return err
 		}
-		if err := util.RemoveLinkIPs(srcLink); err != nil {
+		if err := removeLinkIPs(srcLink); err != nil {
 			return err
 		}
-		if err := util.RemoveLinkRoutes(srcLink); err != nil {
+		if err := removeLinkRoutes(srcLink); err != nil {
 			return err
 		}
 	}
 	dstIndex := dstLink.Attrs().Index
 	// Configure the source interface's IPs on the destination interface.
-	if err := util.ConfigureLinkAddresses(dstIndex, adapterConfig.IPs); err != nil {
+	if err := configureLinkAddresses(dstIndex, adapterConfig.IPs); err != nil {
 		return err
 	}
 	// Configure the source interface's routes on the destination interface.
-	if err := util.ConfigureLinkRoutes(dstLink, adapterConfig.Routes); err != nil {
+	if err := configureLinkRoutes(dstLink, adapterConfig.Routes); err != nil {
 		return err
 	}
 	return nil
