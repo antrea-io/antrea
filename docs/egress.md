@@ -16,6 +16,9 @@
 - [Usage examples](#usage-examples)
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
   - [Configuring static Egress](#configuring-static-egress)
+- [Configuration options](#configuration-options)
+- [Egress on Cloud](#egress-on-cloud)
+  - [AWS](#aws)
 - [Limitations](#limitations)
 <!-- /toc -->
 
@@ -332,6 +335,61 @@ In this configuration, if the `node-4` Node powers off, re-configuring
 another Node's IP can recover the egress connection. Antrea will detect the
 configuration change and redirect the packets from the Pods in the `prod`
 Namespace to the new Node.
+
+## Configuration options
+
+There are several options that can be configured for Egress according to your
+case.
+
+- `egress.exceptCIDRs` - The CIDR ranges to which outbound Pod traffic will not
+  be SNAT'd by Egresses. The option was added in Antrea v1.4.0.
+- `egress.maxEgressIPsPerNode` - The maximum number of Egress IPs that can be
+  assigned to a Node. It's useful when the Node network restricts the number of
+  secondary IPs a Node can have, e.g. in AWS EC2. The configured value must not
+  be greater than 255. The restriction applies to all Nodes in the cluster. If
+  you want to set different capacities for Nodes, the
+  `node.antrea.io/max-egress-ips` annotation of Node objects can be used to
+  specify different values for different Nodes, taking priority over the value
+  configured in the config file. The option and the annotation were added in
+  Antrea v1.11.0.
+
+## Egress on Cloud
+
+High-Availability Egress requires the Egress IPs to be able to float across
+Nodes. When assigning an Egress IP to a Node, Antrea assumes the responsibility
+of advertising the Egress IPs to the Node network via the ARP or NDP protocols.
+However, cloud networks usually apply SpoofGuard which prevents the Nodes from
+using any IP that is not configured for them in the cloud's control plane, or
+even don't support multicast and broadcast. These restrictions lead to
+High-Availability Egress not being as readily available on some clouds as it is
+on on-premise networks, and some custom (i.e., cloud-specific) work is required
+in the cloud's control plane to assign the Egress IP as secondary Node IPs.
+
+### AWS
+
+In Amazon VPC, ARP packets never hit the network, and traffic with Egress IP as
+source IP or destination IP isn't transmitted arbitrarily unless they are
+explicitly authorized (check [AWS VPC Whitepaper](https://docs.aws.amazon.com/whitepapers/latest/logical-separation/vpc-and-accompanying-features.html)
+for more information). To authorize an Egress IP, it must be configured as the
+secondary IP of the primary network interface of the Egress Node instance. You
+can refer to the [AWS doc](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/MultipleIP.html#assignIP-existing)
+to assign a secondary IP to a network interface.
+
+If you are using static Egress and managing the assignment of Egress IPs
+yourself: you should ensure the Egress IP is assigned as one of the IP
+addresses of the primary network interface of the Egress Node instance via
+Amazon EC2 console or AWS CLI.
+
+If you are using High-Availability Egress and let Antrea manage the assignment
+of Egress IPs: at the moment Antrea can only assign the Egress IP to an Egress
+Node at the operating system level (i.e., add the IP to the interface), and you
+still need to ensure the Egress IP is assigned to the Node instance via Amazon
+EC2 console or AWS CLI. To automate it, you can build a Kubernetes Operator
+which watches the Egress API, gets the Egress IP and the Egress Node from the
+status fields, and configures the Egress IP as the secondary IP of the primary
+network interface of the Egress Node instance via the
+[AssignPrivateIpAddresses](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_AssignPrivateIpAddresses.html)
+API.
 
 ## Limitations
 
