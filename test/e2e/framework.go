@@ -51,6 +51,7 @@ import (
 	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -1277,6 +1278,8 @@ func (b *PodBuilder) Create(data *TestData) error {
 		RestartPolicy:      corev1.RestartPolicyNever,
 		HostNetwork:        b.HostNetwork,
 		ServiceAccountName: b.ServiceAccountName,
+		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
+		TerminationGracePeriodSeconds: pointer.Int64(1),
 	}
 	if b.NodeName != "" {
 		podSpec.NodeSelector = map[string]string{
@@ -2598,6 +2601,8 @@ func (data *TestData) createAgnhostPodOnNodeWithAnnotations(name string, ns stri
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
 	podSpec := corev1.PodSpec{
 		Tolerations: controlPlaneNoScheduleTolerations(),
+		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
+		TerminationGracePeriodSeconds: pointer.Int64(1),
 		Containers: []corev1.Container{
 			{
 				Name:            ctrName,
@@ -2679,6 +2684,8 @@ func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrN
 				Args:            args,
 			},
 		},
+		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
+		TerminationGracePeriodSeconds: pointer.Int64(1),
 	}
 	stsSpec := appsv1.StatefulSetSpec{
 		Selector: &metav1.LabelSelector{
