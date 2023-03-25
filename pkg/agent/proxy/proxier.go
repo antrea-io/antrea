@@ -952,7 +952,7 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
-		p.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonSvcReject), "svc-reject", p)
+		p.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategorySvcReject), p)
 		go p.serviceConfig.Run(stopCh)
 		if p.endpointSliceEnabled {
 			go p.endpointSliceConfig.Run(stopCh)
@@ -1021,20 +1021,6 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		return fmt.Errorf("empty packetin for Antrea Proxy")
 	}
 	matches := pktIn.GetMatches()
-
-	match := openflow.GetMatchFieldByRegID(matches, openflow.CustomReasonField.GetRegID())
-	if match == nil {
-		return fmt.Errorf("error getting match mark in CustomField")
-	}
-
-	customReasons, err := openflow.GetInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
-	if err != nil {
-		klog.ErrorS(err, "Received error while unloading customReason from OVS reg")
-		return err
-	}
-	if customReasons&openflow.CustomReasonRejectSvcNoEp != openflow.CustomReasonRejectSvcNoEp {
-		return nil
-	}
 
 	// Get Ethernet data.
 	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)

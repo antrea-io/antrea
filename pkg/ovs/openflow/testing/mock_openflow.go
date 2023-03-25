@@ -305,6 +305,20 @@ func (mr *MockBridgeMockRecorder) IsConnected() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockBridge)(nil).IsConnected))
 }
 
+// ResumePacket mocks base method
+func (m *MockBridge) ResumePacket(arg0 *ofctrl.PacketIn) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResumePacket", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResumePacket indicates an expected call of ResumePacket
+func (mr *MockBridgeMockRecorder) ResumePacket(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumePacket", reflect.TypeOf((*MockBridge)(nil).ResumePacket), arg0)
+}
+
 // SendPacketOut mocks base method
 func (m *MockBridge) SendPacketOut(arg0 *ofctrl.PacketOut) error {
 	m.ctrl.T.Helper()
@@ -1078,17 +1092,17 @@ func (mr *MockActionMockRecorder) ResubmitToTables(arg0 ...interface{}) *gomock.
 }
 
 // SendToController mocks base method
-func (m *MockAction) SendToController(arg0 byte) openflow.FlowBuilder {
+func (m *MockAction) SendToController(arg0 []byte, arg1 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendToController", arg0)
+	ret := m.ctrl.Call(m, "SendToController", arg0, arg1)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
 // SendToController indicates an expected call of SendToController
-func (mr *MockActionMockRecorder) SendToController(arg0 interface{}) *gomock.Call {
+func (mr *MockActionMockRecorder) SendToController(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToController", reflect.TypeOf((*MockAction)(nil).SendToController), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendToController", reflect.TypeOf((*MockAction)(nil).SendToController), arg0, arg1)
 }
 
 // SetARPSha mocks base method

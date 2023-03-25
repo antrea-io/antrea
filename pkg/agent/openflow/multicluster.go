@@ -112,7 +112,7 @@ func (f *featureMulticluster) l3FwdFlowToRemoteViaTun(
 			L3ForwardingTable.ofTable.BuildFlow(priorityNormal-1).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
-				MatchRegMark(CustomReasonRejectRegMark).
+				MatchRegMark(GeneratedRejectPacketOutMark).
 				MatchDstIP(remoteGatewayIP).
 				Action().SetSrcMAC(localGatewayMAC).
 				Action().SetDstMAC(GlobalVirtualMACForMulticluster).

@@ -30,38 +30,38 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
+var logPacket = (*Controller).logPacket
+var rejectRequest = (*Controller).rejectRequest
+var storeDenyConnection = (*Controller).storeDenyConnection
+
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
 // policy agent controller. It performs the appropriate operations based on which
 // bits are set in the "custom reasons" field of the packet received from OVS.
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
-		return errors.New("empty packetin for Antrea Policy")
+		return errors.New("empty PacketIn for Antrea Policy")
 	}
 
-	matches := pktIn.GetMatches()
-	// Get custom reasons in this packet-in.
-	match := getMatchRegField(matches, openflow.CustomReasonField)
-	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
-	if err != nil {
-		return fmt.Errorf("received error while unloading customReason from reg: %v", err)
+	if len(pktIn.UserData) < 2 {
+		return errors.New("packetIn for Antrea Policy miss the required userdata")
 	}
-
-	// Use reasons to choose operations.
-	var checkCustomReason = func(customReasonMark *binding.RegMark) bool {
-		return customReasons&customReasonMark.GetValue() == customReasonMark.GetValue()
+	packetInOperations := pktIn.UserData[1]
+	// Choose operations.
+	var checkOperation = func(operation uint8) bool {
+		return packetInOperations&operation == operation
 	}
-	if checkCustomReason(openflow.CustomReasonLoggingRegMark) {
-		if err := c.logPacket(pktIn); err != nil {
+	if checkOperation(openflow.PacketInNPLoggingOperation) {
+		if err := logPacket(c, pktIn); err != nil {
 			return err
 		}
 	}
-	if checkCustomReason(openflow.CustomReasonRejectRegMark) {
-		if err := c.rejectRequest(pktIn); err != nil {
+	if checkOperation(openflow.PacketInNPRejectOperation) {
+		if err := rejectRequest(c, pktIn); err != nil {
 			return err
 		}
 	}
-	if checkCustomReason(openflow.CustomReasonDenyRegMark) {
-		if err := c.storeDenyConnection(pktIn); err != nil {
+	if checkOperation(openflow.PacketInNPStoreDenyOperation) {
+		if err := storeDenyConnection(c, pktIn); err != nil {
 			return err
 		}
 	}

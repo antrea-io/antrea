@@ -365,8 +365,14 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				ingressMatch := generateMatch(regID, ingressData)
 				matchers = append(matchers, ingressMatch)
 			}
-			pktIn := &ofctrl.PacketIn{TableId: tc.tableID, Match: openflow15.Match{Fields: matchers}}
-
+			pktIn := &ofctrl.PacketIn{
+				PacketIn: &openflow15.PacketIn{
+					TableId: tc.tableID,
+					Match: openflow15.Match{
+						Fields: matchers,
+					},
+				},
+			}
 			ctrl := gomock.NewController(t)
 			testClientInterface := openflowtest.NewMockClient(ctrl)
 			if tc.expectedCalls != nil {

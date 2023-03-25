@@ -129,13 +129,15 @@ type Bridge interface {
 	// SubscribePacketIn registers a consumer to listen to PacketIn messages matching the provided reason. When the
 	// Bridge receives a PacketIn message with the specified reason, it sends the message to the consumer using the
 	// provided channel.
-	SubscribePacketIn(reason uint8, pktInQueue *PacketInQueue) error
+	SubscribePacketIn(category uint8, pktInQueue *PacketInQueue) error
 	// AddTLVMap adds a TLV mapping with OVS field tun_metadataX. The value loaded in tun_metadataX is transported by
 	// Geneve header with the specified <optClass, optType, optLength>. The value of OptLength must be a multiple of 4.
 	// The value loaded into field tun_metadataX must fit within optLength bytes.
 	AddTLVMap(optClass uint16, optType uint8, optLength uint8, tunMetadataIndex uint16) error
 	// SendPacketOut sends a packetOut message to the OVS Bridge.
 	SendPacketOut(packetOut *ofctrl.PacketOut) error
+	// ResumePacket resumes a paused packetIn.
+	ResumePacket(packetIn *ofctrl.PacketIn) error
 	// BuildPacketOut returns a new PacketOutBuilder.
 	BuildPacketOut() PacketOutBuilder
 }
@@ -244,7 +246,7 @@ type Action interface {
 	GotoTable(table uint8) FlowBuilder
 	NextTable() FlowBuilder
 	GotoStage(stage StageID) FlowBuilder
-	SendToController(reason uint8) FlowBuilder
+	SendToController(userdata []byte, pause bool) FlowBuilder
 	Note(notes string) FlowBuilder
 	Meter(meterID uint32) FlowBuilder
 }

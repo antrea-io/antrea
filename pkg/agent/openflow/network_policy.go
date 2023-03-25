@@ -699,10 +699,7 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 	conj := &policyRuleConjunction{
 		id:          id,
 		ruleTableID: AntreaPolicyIngressRuleTable.ofTable.GetID(),
-		actionFlows: []binding.Flow{
-			c.featureNetworkPolicy.dnsPacketInFlow(id),
-			c.featureNetworkPolicy.dnsResponseBypassPacketInFlow(),
-			c.featureNetworkPolicy.dnsResponseBypassConntrackFlow(c.pipelines[pipelineIP].GetFirstTableInStage(stageConntrackState))},
+		actionFlows: []binding.Flow{c.featureNetworkPolicy.dnsPacketInFlow(id)},
 	}
 	if err := c.ofEntryOperations.AddAll(conj.actionFlows); err != nil {
 		return fmt.Errorf("error when adding action flows for the DNS conjunction: %w", err)
@@ -2043,7 +2040,7 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	}
 	// We have two flows for each allow rule. One matches 'ct_state=+new'
 	// and counts the number of first packets, which is also the number
-	// of sessions (this is the reason why we have 2 flows). The other
+	// of sessions (this is the category why we have 2 flows). The other
 	// matches 'ct_state=-new' and is used to count all subsequent
 	// packets in the session. We need to merge metrics from these 2
 	// flows to get the correct number of total packets.

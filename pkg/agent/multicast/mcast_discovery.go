@@ -68,21 +68,7 @@ type IGMPSnooper struct {
 }
 
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
-	matchers := pktIn.GetMatches()
-	// Get custom reasons in this packet-in.
-	match := openflow.GetMatchFieldByRegID(matchers, openflow.CustomReasonField.GetRegID())
-	if match == nil {
-		return fmt.Errorf("error getting match from IGMP marks in CustomField")
-	}
-	customReasons, err := openflow.GetInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
-	if err != nil {
-		klog.ErrorS(err, "Received error while unloading customReason from OVS reg")
-		return err
-	}
-	if customReasons&openflow.CustomReasonIGMP == openflow.CustomReasonIGMP {
-		return s.processPacketIn(pktIn)
-	}
-	return nil
+	return s.processPacketIn(pktIn)
 }
 
 func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore.InterfaceConfig, error) {
@@ -394,6 +380,6 @@ func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceSto
 	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, encapEnabled: encapEnabled}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	snooper.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
-	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonMC), "MulticastGroupDiscovery", snooper)
+	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryIGMP), snooper)
 	return snooper
 }

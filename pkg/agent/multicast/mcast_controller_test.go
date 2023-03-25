@@ -733,39 +733,6 @@ func TestProcessPacketIn(t *testing.T) {
 	}
 }
 
-func TestHandlePacketInWithErrorCases(t *testing.T) {
-	mockController := newMockMulticastController(t, false)
-	snooper := mockController.igmpSnooper
-
-	for _, tc := range []struct {
-		name  string
-		pktIn ofctrl.PacketIn
-		err   error
-	}{
-		{
-			name: "wrong custom reasons",
-			pktIn: generatePacketWithMatches(protocol.NewIGMPv3Report(make([]protocol.IGMPv3GroupRecord, 0)), 3, nil, []openflow15.MatchField{*openflow15.NewInPortField(3), {
-				Class:   openflow15.OXM_CLASS_PACKET_REGS,
-				Field:   openflow15.OXM_FIELD_IN_PORT,
-				HasMask: true,
-				Mask:    &openflow15.ByteArrayField{Data: []byte{255, 255, 255, 255, 0, 0, 0, 0}, Length: 8},
-				Value:   &openflow15.ByteArrayField{Data: []byte{0, 0, 0, 0, 0, 0, 0, 0}, Length: 8},
-			}}),
-			err: nil,
-		},
-		{
-			name:  "error getting match",
-			pktIn: generatePacketWithMatches(protocol.NewIGMPv3Report(make([]protocol.IGMPv3GroupRecord, 0)), 3, nil, []openflow15.MatchField{*openflow15.NewInPortField(3)}),
-			err:   fmt.Errorf("error getting match from IGMP marks in CustomField"),
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := snooper.HandlePacketIn(&tc.pktIn)
-			assert.Equal(t, err, tc.err)
-		})
-	}
-}
-
 func TestEncapModeInitialize(t *testing.T) {
 	mockController := newMockMulticastController(t, true)
 	assert.True(t, mockController.nodeGroupID != 0)
@@ -1284,7 +1251,7 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 	ovsClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
-	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).Times(1)
 	groupAllocator := openflow.NewGroupAllocator(false)
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
 

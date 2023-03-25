@@ -729,19 +729,7 @@ func (f *fqdnController) makeDNSRequest(ctx context.Context, fqdn string) error 
 
 // HandlePacketIn implements openflow.PacketInHandler
 func (f *fqdnController) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
-	matches := pktIn.GetMatches()
-	// Get custom reasons in this packet-in.
-	match := getMatchRegField(matches, openflow.CustomReasonField)
-	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
-	if err != nil {
-		return fmt.Errorf("received error while unloading customReason from reg: %v", err)
-	}
-	if customReasons&openflow.CustomReasonDNS == openflow.CustomReasonDNS {
-		if err := f.handlePacketIn(pktIn); err != nil {
-			return err
-		}
-	}
-	return nil
+	return f.handlePacketIn(pktIn)
 }
 
 func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
@@ -829,29 +817,7 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if err != nil {
 			return fmt.Errorf("error when syncing up rules for DNS reply, dropping packet: %v", err)
 		}
-		klog.V(2).InfoS("Rule sync is successful or not needed or a non-DNS response packet or a fragmented DNS response was received, forwarding the packet to Pod")
-		return f.sendDNSPacketout(pktIn)
+		klog.V(2).InfoS("Rule sync is successful or not needed or a non-DNS response packet was received, forwarding the packet to Pod")
+		return f.ofClient.ResumePausePacket(pktIn)
 	}
-}
-
-// sendDNSPacketout forwards the DNS response packet to the original requesting client.
-func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
-	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
-	if err != nil {
-		return err
-	}
-	inPort := f.gwPort
-	if inPort == 0 {
-		// Use the original in_port number in the packetIn message to avoid an invalid input port number. Note that,
-		// this should not happen in container case as antrea-gw0 always exists. This check is for security.
-		matches := pktIn.GetMatches()
-		inPortField := matches.GetMatchByName("OXM_OF_IN_PORT")
-		if inPortField != nil {
-			inPort = inPortField.GetValue().(uint32)
-		}
-	}
-	mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
-	}
-	return f.ofClient.SendEthPacketOut(inPort, 0, ethernetPkt, mutatePacketOut)
 }

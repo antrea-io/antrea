@@ -257,7 +257,7 @@ func generatePacketWithMatches(m util.Message, ofport uint32, srcNodeIP net.IP, 
 	ethernetPkt.Data = ipPacket
 	pktBytes, _ := ethernetPkt.MarshalBinary()
 	pkt.Data = util.NewBuffer(pktBytes)
-	return ofctrl.PacketIn(*pkt)
+	return ofctrl.PacketIn{PacketIn: pkt}
 }
 
 func generatePacketInForRemoteReport(t *testing.T, snooper *IGMPSnooper, groups []net.IP, srcNode net.IP, igmpMsgType uint8, tunnelPort uint32) ofctrl.PacketIn {

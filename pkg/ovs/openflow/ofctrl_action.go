@@ -445,11 +445,13 @@ func (a *ofFlowAction) Note(notes string) FlowBuilder {
 	return a.builder
 }
 
-func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
+func (a *ofFlowAction) SendToController(userdata []byte, pause bool) FlowBuilder {
 	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
 		controllerAct := &ofctrl.NXController{
+			Version2:     true,
 			ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
-			Reason:       reason,
+			UserData:     userdata,
+			Pause:        pause,
 		}
 		a.builder.ApplyAction(controllerAct)
 	}

@@ -179,7 +179,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		}
 
 		if c.ofClient != nil {
-			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
+			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryDNS), c.fqdnController)
 		}
 	}
 	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
@@ -196,7 +196,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 
 	if c.ofClient != nil && antreaPolicyEnabled {
 		// Register packetInHandler
-		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
+		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
 		if loggingEnabled {
 			// Initiate logger for Antrea Policy audit logging
 			antreaPolicyLogger, err := newAntreaPolicyLogger()

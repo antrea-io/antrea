@@ -199,7 +199,11 @@ func TestParseCapturedPacket(t *testing.T) {
 			etherPkt.Ethertype = ethType
 			etherPkt.Data = tt.pktInData
 			pktBytes, _ := etherPkt.MarshalBinary()
-			pktIn := ofctrl.PacketIn{Data: util.NewBuffer(pktBytes)}
+			pktIn := ofctrl.PacketIn{
+				PacketIn: &openflow15.PacketIn{
+					Data: util.NewBuffer(pktBytes),
+				},
+			}
 			packet := parseCapturedPacket(&pktIn)
 			assert.True(t, reflect.DeepEqual(packet, tt.pktCap), "parsed packet does not match the expected")
 		})
@@ -277,11 +281,13 @@ func TestParsePacketIn(t *testing.T) {
 				isSender: true,
 			},
 			pktIn: &ofctrl.PacketIn{
-				TableId: openflow.L2ForwardingOutTable.GetID(),
-				Match: openflow15.Match{
-					Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark},
+				PacketIn: &openflow15.PacketIn{
+					TableId: openflow.L2ForwardingOutTable.GetID(),
+					Match: openflow15.Match{
+						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark},
+					},
+					Data: util.NewBuffer(pktBytes),
 				},
-				Data: util.NewBuffer(pktBytes),
 			},
 			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -338,11 +344,13 @@ func TestParsePacketIn(t *testing.T) {
 				isSender: true,
 			},
 			pktIn: &ofctrl.PacketIn{
-				TableId: openflow.L2ForwardingOutTable.GetID(),
-				Match: openflow15.Match{
-					Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
+				PacketIn: &openflow15.PacketIn{
+					TableId: openflow.L2ForwardingOutTable.GetID(),
+					Match: openflow15.Match{
+						Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
+					},
+					Data: util.NewBuffer(pktBytes),
 				},
-				Data: util.NewBuffer(pktBytes),
 			},
 			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -399,11 +407,13 @@ func TestParsePacketIn(t *testing.T) {
 				tag:  1,
 			},
 			pktIn: &ofctrl.PacketIn{
-				TableId: openflow.L2ForwardingOutTable.GetID(),
-				Match: openflow15.Match{
-					Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark},
+				PacketIn: &openflow15.PacketIn{
+					TableId: openflow.L2ForwardingOutTable.GetID(),
+					Match: openflow15.Match{
+						Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark},
+					},
+					Data: util.NewBuffer(pktBytes),
 				},
-				Data: util.NewBuffer(pktBytes),
 			},
 			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -479,8 +489,10 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 		receivedPacket: true, // assume we have already received a packet
 	}
 	pktIn := &ofctrl.PacketIn{
-		TableId: openflow.L2ForwardingOutTable.GetID(),
-		Data:    util.NewBuffer(getTestPacketBytes()),
+		PacketIn: &openflow15.PacketIn{
+			TableId: openflow.L2ForwardingOutTable.GetID(),
+			Data:    util.NewBuffer(getTestPacketBytes()),
+		},
 	}
 
 	tfc := newFakeTraceflowController(t, nil, networkConfig, nodeConfig, nil, nil)

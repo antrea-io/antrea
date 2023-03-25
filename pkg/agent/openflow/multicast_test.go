@@ -39,8 +39,8 @@ func Test_featureMulticast_initFlows(t *testing.T) {
 			expectedFlows: []string{
 				"cookie=0x1050000000000, table=MulticastEgressRule, priority=64990,igmp,reg0=0x3/0xf actions=goto_table:MulticastRouting",
 				"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=210,igmp actions=goto_table:MulticastRouting",
-				"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=set_field:0x20000/0x7e000->reg0,controller:(reason=no_match,max_len=128,id=32776)",
-				"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x1/0xf actions=set_field:0x20000/0x7e000->reg0,controller:(reason=no_match,max_len=128,id=32776)",
+				"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=controller:(id=32776,reason=no_match,userdata=03,max_len=128)",
+				"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x1/0xf actions=controller:(id=32776,reason=no_match,userdata=03,max_len=128)",
 				"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=set_field:0x100/0x100->reg0,set_field:0x2->reg1,goto_table:MulticastOutput",
 				"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=210,igmp actions=goto_table:MulticastOutput",
 				"cookie=0x1050000000000, table=MulticastOutput, priority=210,reg0=0x101/0x10f,reg1=0x2 actions=drop",
@@ -55,7 +55,7 @@ func Test_featureMulticast_initFlows(t *testing.T) {
 			clientOptions:    []clientOptionsFn{enableMulticast},
 			expectedFlows: []string{
 				"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=210,igmp actions=goto_table:MulticastOutput",
-				"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=set_field:0x20000/0x7e000->reg0,controller:(reason=no_match,max_len=128,id=32776)",
+				"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=controller:(id=32776,reason=no_match,userdata=03,max_len=128)",
 				"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=set_field:0x100/0x100->reg0,set_field:0x2->reg1,goto_table:MulticastOutput",
 				"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=210,igmp actions=goto_table:MulticastRouting",
 				"cookie=0x1050000000000, table=MulticastEgressRule, priority=64990,igmp,reg0=0x3/0xf actions=goto_table:MulticastRouting",
