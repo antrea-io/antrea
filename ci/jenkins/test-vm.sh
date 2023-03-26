@@ -274,6 +274,7 @@ function run_e2e_vms {
 
     configure_vm_agent
     echo "====== Running Antrea e2e Tests for VM ======"
+    set +e
     mkdir -p `pwd`/antrea-test-logs
     go test -v -timeout=100m antrea.io/antrea/test/e2e -run=TestVMAgent --logs-export-dir `pwd`/antrea-test-logs -provider=remote -windowsVMs="${WIN_HOSTNAMES[*]}" -linuxVMs="${LIN_HOSTNAMES[*]}"
     if [[ "$?" != "0" ]]; then
@@ -310,3 +311,7 @@ fetch_vm_ip
 apply_antrea
 deliver_antrea_vm
 run_e2e_vms
+
+if [[ ${TEST_FAILURE} == true ]]; then
+    exit 1
+fi
