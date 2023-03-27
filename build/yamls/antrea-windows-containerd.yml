@@ -9,6 +9,8 @@ data:
     mkdir -force C:/var/run/secrets/kubernetes.io/serviceaccount
     cp $mountPath/var/run/secrets/kubernetes.io/serviceaccount/ca.crt C:/var/run/secrets/kubernetes.io/serviceaccount
     cp $mountPath/var/run/secrets/kubernetes.io/serviceaccount/token C:/var/run/secrets/kubernetes.io/serviceaccount
+    mkdir -force c:/opt/cni/bin/
+    mkdir -force c:/etc/cni/net.d/
     cp $mountPath/k/antrea/cni/* c:/opt/cni/bin/
     cp $mountPath/etc/antrea/antrea-cni.conflist c:/etc/cni/net.d/10-antrea.conflist
     mkdir -force c:/k/antrea/bin
