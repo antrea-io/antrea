@@ -613,12 +613,12 @@ func TestServiceGroupInstallAndUninstall(t *testing.T) {
 	groupID1 := binding.GroupIDType(1)
 	groupID2 := binding.GroupIDType(2)
 	for _, tc := range []struct {
-		groupID          binding.GroupIDType
-		sessionAffinity  bool
-		deleteGroupError error
+		groupID              binding.GroupIDType
+		sessionAffinity      bool
+		deleteOFEntriesError error
 	}{
-		{groupID: groupID1, deleteGroupError: fmt.Errorf("failed to delete"), sessionAffinity: true},
-		{groupID: groupID2, deleteGroupError: nil, sessionAffinity: false},
+		{groupID: groupID1, deleteOFEntriesError: fmt.Errorf("error when deleting Openflow entries for Service Endpoints Group %d", groupID1), sessionAffinity: true},
+		{groupID: groupID2, deleteOFEntriesError: nil, sessionAffinity: false},
 	} {
 		mockGroup := ovsoftest.NewMockGroup(ctrl)
 		mockBucketBuilder := ovsoftest.NewMockBucketBuilder(ctrl)
@@ -638,10 +638,13 @@ func TestServiceGroupInstallAndUninstall(t *testing.T) {
 		require.NoError(t, err)
 		_, exists := client.featureService.groupCache.Load(tc.groupID)
 		assert.True(t, exists)
-		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteGroupError)
+		m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
+		if tc.deleteOFEntriesError == nil {
+			mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(nil).Times(1)
+		}
 		err = client.UninstallServiceGroup(tc.groupID)
 		_, exists = client.featureService.groupCache.Load(tc.groupID)
-		if tc.deleteGroupError == nil {
+		if tc.deleteOFEntriesError == nil {
 			assert.NoError(t, err)
 			assert.False(t, exists)
 		} else {
@@ -675,11 +678,11 @@ func TestMulticastGroupInstallAndUninstall(t *testing.T) {
 	groupID1 := binding.GroupIDType(1)
 	groupID2 := binding.GroupIDType(2)
 	for _, tc := range []struct {
-		groupID          binding.GroupIDType
-		deleteGroupError error
+		groupID              binding.GroupIDType
+		deleteOFEntriesError error
 	}{
-		{groupID: groupID1, deleteGroupError: fmt.Errorf("failed to delete")},
-		{groupID: groupID2, deleteGroupError: nil},
+		{groupID: groupID1, deleteOFEntriesError: fmt.Errorf("error when deleting Openflow entries for Multicast receiver Group %d", groupID1)},
+		{groupID: groupID2, deleteOFEntriesError: nil},
 	} {
 		mockGroup := ovsoftest.NewMockGroup(ctrl)
 		mockBucketBuilder := ovsoftest.NewMockBucketBuilder(ctrl)
@@ -696,9 +699,12 @@ func TestMulticastGroupInstallAndUninstall(t *testing.T) {
 		require.NoError(t, err)
 		_, exists := client.featureMulticast.groupCache.Load(tc.groupID)
 		assert.True(t, exists)
-		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteGroupError)
+		m.EXPECT().DeleteOFEntries(gomock.Any()).Return(tc.deleteOFEntriesError).Times(1)
+		if tc.deleteOFEntriesError == nil {
+			mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(nil).Times(1)
+		}
 		err = client.UninstallMulticastGroup(tc.groupID)
-		if tc.deleteGroupError == nil {
+		if tc.deleteOFEntriesError == nil {
 			assert.NoError(t, err)
 			_, exists = client.featureMulticast.groupCache.Load(tc.groupID)
 			assert.False(t, exists)
