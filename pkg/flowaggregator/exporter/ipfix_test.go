@@ -16,6 +16,7 @@ package exporter
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -24,7 +25,9 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/client-go/kubernetes/fake"
 
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
@@ -80,46 +83,10 @@ func TestIPFIXExporter_sendTemplateSet(t *testing.T) {
 
 	for _, tc := range testcases {
 		exporter := newIPFIXExporter(tc.includePodLabels)
-		ianaInfoElements := infoelements.IANAInfoElementsIPv4
-		antreaInfoElements := infoelements.AntreaInfoElementsIPv4
+		elemList := createElementList(tc.isIPv6, mockIPFIXRegistry)
 		testTemplateID := exporter.templateIDv4
 		if tc.isIPv6 {
-			ianaInfoElements = infoelements.IANAInfoElementsIPv6
-			antreaInfoElements = infoelements.AntreaInfoElementsIPv6
 			testTemplateID = exporter.templateIDv6
-		}
-		// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
-		// Only the element name is needed, other arguments have dummy values.
-		elemList := make([]ipfixentities.InfoElementWithValue, 0)
-		for _, ie := range ianaInfoElements {
-			elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for _, ie := range infoelements.IANAReverseInfoElements {
-			elemList = append(elemList, createElement(ie, ipfixregistry.IANAReversedEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for _, ie := range antreaInfoElements {
-			elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for i := range infoelements.StatsElementList {
-			elemList = append(elemList, createElement(infoelements.AntreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			elemList = append(elemList, createElement(infoelements.AntreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
-			elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for i := range infoelements.AntreaThroughputElementList {
-			elemList = append(elemList, createElement(infoelements.AntreaThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			elemList = append(elemList, createElement(infoelements.AntreaSourceThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaSourceThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			elemList = append(elemList, createElement(infoelements.AntreaDestinationThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaDestinationThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
 		}
 		if tc.includePodLabels {
 			for _, ie := range infoelements.AntreaLabelsElementList {
@@ -287,4 +254,107 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
 
 	assert.Error(t, ipfixExporter.AddRecord(mockRecord, false))
+}
+
+func createElementList(isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXRegistry) []ipfixentities.InfoElementWithValue {
+	ianaInfoElements := infoelements.IANAInfoElementsIPv4
+	antreaInfoElements := infoelements.AntreaInfoElementsIPv4
+	if isIPv6 {
+		ianaInfoElements = infoelements.IANAInfoElementsIPv6
+		antreaInfoElements = infoelements.AntreaInfoElementsIPv6
+	}
+	// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
+	// Only the element name is needed, other arguments have dummy values
+	elemList := make([]ipfixentities.InfoElementWithValue, 0)
+	for _, ie := range ianaInfoElements {
+		elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	}
+	for _, ie := range infoelements.IANAReverseInfoElements {
+		elemList = append(elemList, createElement(ie, ipfixregistry.IANAReversedEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	}
+	for _, ie := range antreaInfoElements {
+		elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	}
+	for i := range infoelements.StatsElementList {
+		elemList = append(elemList, createElement(infoelements.AntreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+		elemList = append(elemList, createElement(infoelements.AntreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	}
+	for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
+		elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	}
+	for i := range infoelements.AntreaThroughputElementList {
+		elemList = append(elemList, createElement(infoelements.AntreaThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+		elemList = append(elemList, createElement(infoelements.AntreaSourceThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaSourceThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+		elemList = append(elemList, createElement(infoelements.AntreaDestinationThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
+		mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaDestinationThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
+	}
+	return elemList
+}
+
+func TestInitExportingProcess(t *testing.T) {
+	t.Run("tcp success", func(t *testing.T) {
+		k8sClientset := fake.NewSimpleClientset()
+		ctrl := gomock.NewController(t)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		opt := &options.Options{}
+		opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
+		flowaggregatorconfig.SetConfigDefaults(opt.Config)
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer listener.Close()
+		opt.ExternalFlowCollectorAddr = listener.Addr().String()
+		opt.ExternalFlowCollectorProto = listener.Addr().Network()
+		opt.Config.FlowCollector.RecordFormat = "JSON"
+		obsDomainID := uint32(1)
+		opt.Config.FlowCollector.ObservationDomainID = &obsDomainID
+		createElementList(false, mockIPFIXRegistry)
+		createElementList(true, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
+		err = exp.initExportingProcess()
+		assert.NoError(t, err)
+	})
+	t.Run("udp success", func(t *testing.T) {
+		k8sClientset := fake.NewSimpleClientset()
+		ctrl := gomock.NewController(t)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		opt := &options.Options{}
+		opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
+		flowaggregatorconfig.SetConfigDefaults(opt.Config)
+		udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+		require.NoError(t, err)
+		listener, err := net.ListenUDP("udp", udpAddr)
+		require.NoError(t, err)
+		defer listener.Close()
+		opt.ExternalFlowCollectorAddr = listener.LocalAddr().String()
+		opt.ExternalFlowCollectorProto = listener.LocalAddr().Network()
+		opt.Config.FlowCollector.RecordFormat = "JSON"
+		obsDomainID := uint32(1)
+		opt.Config.FlowCollector.ObservationDomainID = &obsDomainID
+		createElementList(false, mockIPFIXRegistry)
+		createElementList(true, mockIPFIXRegistry)
+		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
+		err = exp.initExportingProcess()
+		assert.NoError(t, err)
+	})
+	t.Run("tcp failure", func(t *testing.T) {
+		k8sClientset := fake.NewSimpleClientset()
+		ctrl := gomock.NewController(t)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		opt := &options.Options{}
+		opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
+		flowaggregatorconfig.SetConfigDefaults(opt.Config)
+		opt.ExternalFlowCollectorAddr = "127.0.0.1:0"
+		opt.ExternalFlowCollectorProto = "tcp"
+		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
+		err := exp.initExportingProcess()
+		assert.ErrorContains(t, err, "got error when initializing IPFIX exporting process: dial tcp 127.0.0.1:0:")
+	})
 }
