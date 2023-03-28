@@ -1,5 +1,15 @@
 # Changelog 1.7
 
+## 1.7.3 - 2023-03-28
+
+### Fixed
+
+- Fix race conditions in NetworkPolicyController. ([#4028](https://github.com/antrea-io/antrea/pull/4028), [@tnqn])
+- Ensure NO_FLOOD is always set for IPsec tunnel ports and TrafficControl ports. ([#4419](https://github.com/antrea-io/antrea/pull/4419) [#4654](https://github.com/antrea-io/antrea/pull/4654) [#4674](https://github.com/antrea-io/antrea/pull/4674), [@xliuxu] [@tnqn])
+- Fix Service routes being deleted on Agent startup on Windows. ([#4470](https://github.com/antrea-io/antrea/pull/4470), [@hongliangl])
+- Fix Agent crash in dual-stack clusters when any Node is not configured with an IP address for each address family. ([#4480](https://github.com/antrea-io/antrea/pull/4480), [@hongliangl])
+- Fix route deletion for Service ClusterIP and LoadBalancerIP when AntreaProxy is enabled. ([#4711](https://github.com/antrea-io/antrea/pull/4711), [@tnqn])
+
 ## 1.7.2 - 2022-12-19
 
 ### Changed
