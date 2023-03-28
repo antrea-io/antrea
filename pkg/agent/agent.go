@@ -1251,7 +1251,7 @@ func (i *Initializer) initVMLocalConfig(nodeName string) error {
 	if err := i.setVMNodeConfig(en, nodeName); err != nil {
 		return err
 	}
-	klog.InfoS("Finished VM config initialization", "ExternalNode", nodeName)
+	klog.InfoS("Finished VM config initializations", "ExternalNode", nodeName)
 	return nil
 }
 
