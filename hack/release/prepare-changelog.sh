@@ -44,6 +44,8 @@ release=""
 from_release=""
 all="no"
 limit=500
+# Disable the pager of gh command to print the output to stdout.
+export PAGER=""
 
 while [[ $# -gt 0 ]]
 do
@@ -115,9 +117,32 @@ echo ""
 
 echo "### Changed"
 echo ""
+
+authors=()
 # Put the changes under "Changed" first, release manager needs to move them to appropriate sections manually.
 gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc label:action/release-note" -L $limit --json number,title,author,labels --template \
 '{{range .}}{{tablerow (printf "- %s. ([#%v](https://github.com/antrea-io/antrea/pull/%v), [@%s])" .title .number .number .author.login)}}{{end}}'
+
+while read -r author; do
+  authors+=("$author")
+done < <(gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc label:action/release-note" -L $limit --json author --jq .[].author.login)
+
+if [ "$patch_number" != "0" ]; then
+  regexp_title="^Cherry pick of (#[[:digit:]]+[[:space:]]*)+ on release"
+  regexp_number="#([[:digit:]]+)"
+  while read -r line; do
+    if [[ ${line} =~ ${regexp_title} ]]; then
+      while [[ ${line} =~ ${regexp_number} ]]; do
+        gh pr view ${BASH_REMATCH[1]} --json number,title,author,labels --template \
+        '{{(printf "- %s. ([#%v](https://github.com/antrea-io/antrea/pull/%v), [@%s])\n" $.title $.number $.number $.author.login)}}'
+        line=${line#*"${BASH_REMATCH[1]}"}
+        author=$(gh pr view ${BASH_REMATCH[1]} --json author --template '{{(printf "%s" $.author.login)}}')
+        authors+=("$author")
+      done
+    fi
+  done < <(gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc label:kind/cherry-pick" -L $limit --json body --template '{{range .}}{{printf "%s\n" .body}}{{end}}')
+fi
+
 echo ""
 
 echo "### Fixed"
@@ -134,4 +159,7 @@ fi
 echo ""
 echo ""
 
-gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:author" -L $limit --json author --jq .[].author.login | sort | uniq | xargs -I AUTHOR echo "[@AUTHOR]: https://github.com/AUTHOR"
+# sort, deduplicate the authors and print the links to GitHub profiles.
+printf "%s\n" "${authors[@]}" | sort -u | while read -r author; do
+  echo "[@${author}]: https://github.com/${author}"
+done
