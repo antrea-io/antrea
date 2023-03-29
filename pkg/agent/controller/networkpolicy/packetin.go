@@ -78,7 +78,7 @@ func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctr
 func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofctrl.MatchField {
 	// Get match from CNPDenyConjIDReg if disposition is Drop or Reject.
 	if disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej {
-		return getMatchRegField(matchers, openflow.CNPConjIDField)
+		return getMatchRegField(matchers, openflow.APConjIDField)
 	}
 	// Get match from ingress/egress reg if disposition is Allow or Pass.
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {

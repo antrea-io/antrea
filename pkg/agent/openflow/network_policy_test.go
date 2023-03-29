@@ -479,18 +479,18 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().CT(true, IngressMetricTable.GetID(), CtZone, nil).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchConjID(11).
-						Action().LoadToRegField(CNPConjIDField, 11).
-						Action().LoadRegMark(CnpDenyRegMark).
+						Action().LoadToRegField(APConjIDField, 11).
+						Action().LoadRegMark(APDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchConjID(12).
-						Action().LoadToRegField(CNPConjIDField, 12).
-						Action().LoadRegMark(CnpDenyRegMark).
+						Action().LoadToRegField(APConjIDField, 12).
+						Action().LoadRegMark(APDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority201).Cookie(cookiePolicy).
 						MatchConjID(13).
-						Action().LoadToRegField(CNPConjIDField, 13).
-						Action().LoadRegMark(CnpDenyRegMark).
+						Action().LoadToRegField(APConjIDField, 13).
+						Action().LoadRegMark(APDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
@@ -546,13 +546,13 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, 10, IngressRuleCTLabel).
 						Action().NextTable().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 11).
+						MatchRegMark(APDenyRegMark).MatchRegFieldWithValue(APConjIDField, 11).
 						Action().Drop().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 12).
+						MatchRegMark(APDenyRegMark).MatchRegFieldWithValue(APConjIDField, 12).
 						Action().Drop().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 13).
+						MatchRegMark(APDenyRegMark).MatchRegFieldWithValue(APConjIDField, 13).
 						Action().Drop().Done(),
 					IngressDefaultTable.ofTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchTunnelID(uint64(UnknownLabelIdentity)).
