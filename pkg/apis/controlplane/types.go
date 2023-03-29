@@ -439,6 +439,17 @@ type GroupAssociation struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// IPGroupAssociation is a list of GroupReferences for responses to IP association queries.
+type IPGroupAssociation struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// AssociatedGroups is a list of GroupReferences that is associated with the
+	// IP address being queried.
+	AssociatedGroups []GroupReference
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type EgressGroup struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta

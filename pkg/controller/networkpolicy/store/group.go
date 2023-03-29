@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	ServiceIndex    = "service"
-	ChildGroupIndex = "childGroup"
+	ServiceIndex      = "service"
+	ChildGroupIndex   = "childGroup"
+	IPBlockGroupIndex = "hasIPBlocks"
+	HasIPBlocks       = "true"
 )
 
 // GroupKeyFunc knows how to get the key of a Group.
@@ -70,6 +72,13 @@ func NewGroupStore() storage.Interface {
 				return namespacedCG, nil
 			}
 			return g.ChildGroups, nil
+		},
+		IPBlockGroupIndex: func(obj interface{}) ([]string, error) {
+			g, ok := obj.(*antreatypes.Group)
+			if !ok || len(g.IPBlocks) == 0 {
+				return []string{}, nil
+			}
+			return []string{HasIPBlocks}, nil
 		},
 	}
 	// genEventFunc is set to nil, thus watchers of this store will not be created.

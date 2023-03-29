@@ -32,12 +32,12 @@ type fakeQuerier struct {
 	groups map[string][]antreatypes.Group
 }
 
-func (q fakeQuerier) GetAssociatedGroups(name, namespace string) ([]antreatypes.Group, error) {
+func (q fakeQuerier) GetAssociatedGroups(name, namespace string) []antreatypes.Group {
 	memberKey := k8s.NamespacedName(namespace, name)
 	if refs, ok := q.groups[memberKey]; ok {
-		return refs, nil
+		return refs
 	}
-	return []antreatypes.Group{}, nil
+	return []antreatypes.Group{}
 }
 
 func TestREST(t *testing.T) {
@@ -127,9 +127,9 @@ func TestRESTGet(t *testing.T) {
 		actualGroupList, err := rest.Get(request.NewDefaultContext(), tt.podName, &metav1.GetOptions{})
 		if tt.expectedErr {
 			require.Error(t, err)
-		} else {
-			require.NoError(t, err)
+			continue
 		}
+		require.NoError(t, err)
 		assert.Equal(t, tt.expectedObj, actualGroupList)
 	}
 }
