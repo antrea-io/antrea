@@ -23,9 +23,9 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      message must be *exactly* `"Update CHANGELOG for <TAG> release"`, as a bot
      will look for this commit and cherry-pick it to update the main branch
      (starting with Antrea v1.0). The
-     [process-changelog.go](../../hack/release/process-changelog.go) script may
+     [prepare-changelog.sh](../../hack/release/prepare-changelog.sh) script may
      be used to easily generate links to PRs and the Github profiles of PR
-     authors.
+     authors. Use `prepare-changelog.sh -h` to get the usage.
    - a commit to update [VERSION](../../VERSION) as needed, using the following
      commit message: `"Set VERSION to <TAG>"`. Before committing, ensure that
      you run `make -C build/charts/ helm-docs` and include the changes.
