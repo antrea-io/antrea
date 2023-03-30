@@ -62,6 +62,24 @@ jobs:
         name: trivy-scan-reports
         path: trivy.*.txt
         retention-days: 90 # max value
+  check-ovs-cve:
+    name: Check if there is any new High or Critical CVE for Open vSwitch
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Check Any New OVS CVE
+        run: |
+          # LAST_FIXED_OVS_CVE_ID is the CVE ID which Antrea has addressed by OVS upgrade or patch.
+          # You need to update this ID to the latest one when the newest HIGH/CRITICAL CVE has been fixed.
+          # The new CVE's severity might be N/A when it's found very recently, so here we also filter
+          # the one with severity `N/A` to get in-time notification.
+          LAST_FIXED_OVS_CVE_ID="CVE-2022-4338"
+          RESULT=`curl -s --location --request GET 'api.cvesearch.com/search?q=openvswitch' | jq -r '.response|.[]|[.basic.key,.details.severity,.basic.nvd_url]|@tsv' | sed -n "/${LAST_FIXED_OVS_CVE_ID}/,$ p" | grep -v "${LAST_FIXED_OVS_CVE_ID}"| grep -E 'HIGH|CRITICAL|N/A'`
+          SIZE=`echo -n $RESULT | wc -c`
+          if [[ $SIZE != 0 ]];then
+            echo "New HIGH OR CRITICAL OVS CVE DETECTED!!!";
+            echo "$RESULT"
+            exit 1
+          fi
   skip:
     if: github.repository != 'antrea-io/antrea'
     runs-on: ubuntu-latest
