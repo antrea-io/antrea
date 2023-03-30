@@ -4082,12 +4082,12 @@ spec:
               name: api
               protocol: TCP
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - container_liveness_probe agent
-            initialDelaySeconds: 5
+            httpGet:
+              host: localhost
+              path: /livez
+              port: api
+              scheme: HTTPS
+            initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5
