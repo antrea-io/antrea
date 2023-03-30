@@ -17,10 +17,10 @@
 
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 YAMLS_DIR="${WORK_DIR}"/../build/yamls
-MANIFESTS=$(ls $YAMLS_DIR)
+MANIFESTS=$(ls $YAMLS_DIR/*.yml)
 
 checksum=$(cat "${WORK_DIR}"/../config/default/configmap/controller_manager_config.yaml | sha256sum | cut -d " " -f 1)
 
 for file in ${MANIFESTS[@]}; do
-    sed -i.bak "s/checksum-placeholder/${checksum}/g" ${YAMLS_DIR}/$file
+    sed -i.bak "s/checksum-placeholder/${checksum}/g" ${file}
 done
