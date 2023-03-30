@@ -49,8 +49,11 @@ NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should en
 
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
-CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
+CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
+
+PRINT_DOCKER_STATUS="docker system df -v"
+PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-containerd-conformance|windows-conformance|windows-containerd-networkpolicy|windows-networkpolicy|windows-containerd-e2e|windows-e2e|e2e|conformance|networkpolicy|multicast-e2e>]
@@ -340,6 +343,7 @@ function deliver_antrea_windows {
 
     prepare_env
     ${CLEAN_STALE_IMAGES}
+    ${PRINT_DOCKER_STATUS}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
@@ -376,7 +380,7 @@ function deliver_antrea_windows {
     echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 !~ /win/ {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
-        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
 
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
@@ -460,10 +464,12 @@ function deliver_antrea_windows_containerd {
 
     prepare_env
     ${CLEAN_STALE_IMAGES_CONTAINERD}
+    ${PRINT_CONTAINERD_STATUS}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     # Clean docker image to save disk space.
-    ${CLEAN_STALE_IMAGES} 
+    ${CLEAN_STALE_IMAGES}
+    ${PRINT_DOCKER_STATUS}
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
 
     echo "====== Delivering Antrea to all Nodes ======"
@@ -490,7 +496,7 @@ function deliver_antrea_windows_containerd {
     echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 !~ /win/ {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
-        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
 
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n=k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
@@ -575,6 +581,7 @@ function deliver_antrea {
     git show --numstat
     make clean
     ${CLEAN_STALE_IMAGES}
+    ${PRINT_DOCKER_STATUS}
     if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
@@ -624,7 +631,7 @@ function deliver_antrea {
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
             kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
@@ -633,13 +640,13 @@ function deliver_antrea {
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@${IP}:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" flow-aggregator.tar jenkins@${IP}:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD};ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     else
         kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
             if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
                 ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
             fi

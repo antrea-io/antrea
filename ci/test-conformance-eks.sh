@@ -267,6 +267,7 @@ function deliver_antrea_to_eks() {
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=2h" || true > /dev/null
+    docker system df -v
 
     cd ${GIT_CHECKOUT_DIR}
     VERSION="$CLUSTER" make

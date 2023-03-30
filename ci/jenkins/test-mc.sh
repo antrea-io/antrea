@@ -41,6 +41,10 @@ multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUS
 membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
+PRINT_DOCKER_STATUS="docker system df -v"
+
+CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
+PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
 
 _usage="Usage: $0 [--kubeconfigs-path <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <e2e>] [--mc-gateway] [--codecov-token] [--coverage] [--kind] [--debug]
@@ -307,9 +311,9 @@ function deliver_antrea_multicluster {
             kubectl get nodes -o wide --no-headers=true ${kubeconfig}| awk '{print $6}' | while read IP; do
                  rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
                  if ${IS_CONTAINERD};then
-                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
+                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
                  else
-                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
                  fi
             done
         done
@@ -347,9 +351,9 @@ function deliver_multicluster_controller {
             kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-mcs.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
                 if ${IS_CONTAINERD};then
-                  ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
+                  ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
                 else
-                  ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
+                  ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
                 fi
             done
         done
@@ -416,10 +420,10 @@ function run_multicluster_e2e {
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
             if ${IS_CONTAINERD};then
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
+                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
                 ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import ${WORKDIR}/agnhost.tar" || true
             else
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/nginx.tar" || true
+                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/nginx.tar" || true
                 ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i ${WORKDIR}/agnhost.tar" || true
             fi
             done
