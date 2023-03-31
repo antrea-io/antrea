@@ -231,7 +231,7 @@ func TestNodeReconciler(t *testing.T) {
 				obj = append(obj, tt.existingGW)
 			}
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(obj...).Build()
-			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", tt.precedence)
+			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", tt.precedence)
 			r.activeGateway = tt.activeGateway
 			if _, err := r.Reconcile(common.TestCtx, tt.req); err != nil {
 				t.Errorf("Node Reconciler should handle Node events successfully but got error = %v", err)
@@ -307,7 +307,7 @@ func TestInitialize(t *testing.T) {
 				obj = append(obj, tt.existingGW)
 			}
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(obj...).Build()
-			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", mcsv1alpha1.PrecedencePublic)
+			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", mcsv1alpha1.PrecedencePublic)
 			if err := r.initialize(); err != nil {
 				t.Errorf("Expected initialize() successfully but got err: %v", err)
 			} else {

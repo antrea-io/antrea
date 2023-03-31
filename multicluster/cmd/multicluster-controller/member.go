@@ -96,7 +96,6 @@ func runMember(o *Options) error {
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
-		opts.ServiceCIDR,
 		opts.PodCIDRs,
 		commonAreaGetter)
 	if err = gwReconciler.SetupWithManager(mgr); err != nil {
@@ -107,6 +106,7 @@ func runMember(o *Options) error {
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
+		opts.ServiceCIDR,
 		opts.GatewayIPPrecedence)
 	if err = nodeReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating Node controller: %v", err)

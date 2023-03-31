@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -47,17 +48,17 @@ func (v *gatewayValidator) Handle(ctx context.Context, req admission.Request) ad
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// Check if there is any existing Gateway.
-	gatewayList := &mcv1alpha1.GatewayList{}
-	if err := v.Client.List(context.TODO(), gatewayList, client.InNamespace(v.namespace)); err != nil {
-		klog.ErrorS(err, "Error reading Gateway", "Namespace", v.namespace)
-		return admission.Errored(http.StatusPreconditionFailed, err)
-	}
-
-	if req.Operation == admissionv1.Create && len(gatewayList.Items) > 0 {
-		err := fmt.Errorf("multiple Gateways in a Namespace are not allowed")
-		klog.ErrorS(err, "failed to create Gateway", "Gateway", klog.KObj(gateway), "Namespace", v.namespace)
-		return admission.Errored(http.StatusPreconditionFailed, err)
+	// Gateway can only be updated or created by antrea-mc-controller
+	if req.Operation == admissionv1.Update || req.Operation == admissionv1.Create {
+		ui := req.UserInfo
+		_, saName, err := serviceaccount.SplitUsername(ui.Username)
+		if err != nil {
+			klog.ErrorS(err, "Error getting ServiceAccount name", "Gateway", req.Namespace+"/"+req.Name)
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		if saName != mcControllerSAName {
+			return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("Gateway can only be created or updated by Antrea Multi-cluster controller"))
+		}
 	}
 	return admission.Allowed("")
 }
