@@ -17,7 +17,6 @@ limitations under the License.
 package member
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -157,7 +156,7 @@ func TestGatewayReconciler(t *testing.T) {
 		mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 		mcReconciler.SetRemoteCommonArea(commonArea)
 		commonAreaGatter := mcReconciler
-		r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", "10.96.0.0/12", []string{"10.200.1.1/16"}, commonAreaGatter)
+		r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, commonAreaGatter)
 		t.Run(tt.name, func(t *testing.T) {
 			req := ctrl.Request{NamespacedName: tt.namespacedName}
 			if _, err := r.Reconcile(common.TestCtx, req); err != nil {
@@ -185,11 +184,4 @@ func TestGatewayReconciler(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGetServiceCIDR(t *testing.T) {
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
-	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", "", []string{"10.200.1.1/16"}, nil)
-	err := r.getServiceCIDR(context.TODO())
-	assert.Contains(t, err.Error(), "expected a specific error but none was returned")
 }

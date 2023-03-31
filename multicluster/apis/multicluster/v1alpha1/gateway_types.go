@@ -41,6 +41,8 @@ type Gateway struct {
 	GatewayIP string `json:"gatewayIP,omitempty"`
 	// In-cluster tunnel IP of the Gateway.
 	InternalIP string `json:"internalIP,omitempty"`
+	// Service CIDR of the local member cluster.
+	ServiceCIDR string `json:"serviceCIDR,omitempty"`
 }
 
 type ClusterInfo struct {

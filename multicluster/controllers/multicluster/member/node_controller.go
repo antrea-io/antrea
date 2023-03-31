@@ -35,6 +35,10 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
+var (
+	ServiceCIDRDiscoverFn = common.DiscoverServiceCIDRByInvalidServiceCreation
+)
+
 type (
 	// NodeReconciler is for member cluster only.
 	NodeReconciler struct {
@@ -44,6 +48,7 @@ type (
 		precedence        mcsv1alpha1.Precedence
 		gatewayCandidates map[string]bool
 		activeGateway     string
+		serviceCIDR       string
 		initialized       bool
 	}
 )
@@ -57,6 +62,7 @@ func NewNodeReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
 	namespace string,
+	serviceCIDR string,
 	precedence mcsv1alpha1.Precedence) *NodeReconciler {
 	if string(precedence) == "" {
 		precedence = mcsv1alpha1.PrecedenceInternal
@@ -65,6 +71,7 @@ func NewNodeReconciler(
 		Client:            client,
 		Scheme:            scheme,
 		namespace:         namespace,
+		serviceCIDR:       serviceCIDR,
 		precedence:        precedence,
 		gatewayCandidates: make(map[string]bool),
 	}
@@ -116,12 +123,12 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	var isValidGateway bool
 
 	if stillGatewayNode {
+		gw.ServiceCIDR = r.serviceCIDR
 		gw.InternalIP, gw.GatewayIP, err = r.getGatawayNodeIP(node)
 		if err != nil {
 			klog.ErrorS(err, "There is no valid Gateway IP for Node", "node", node.Name)
-		} else {
-			isValidGateway = true
 		}
+		isValidGateway = err == nil
 	}
 
 	if isActiveGateway {
@@ -194,11 +201,13 @@ func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mc
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: newGateway.Name, Namespace: r.namespace}, existingGW); err != nil {
 		return err
 	}
-	if existingGW.GatewayIP == newGateway.GatewayIP && existingGW.InternalIP == newGateway.InternalIP {
+	if existingGW.GatewayIP == newGateway.GatewayIP && existingGW.InternalIP == newGateway.InternalIP &&
+		existingGW.ServiceCIDR == newGateway.ServiceCIDR {
 		return nil
 	}
 	existingGW.GatewayIP = newGateway.GatewayIP
 	existingGW.InternalIP = newGateway.InternalIP
+	existingGW.ServiceCIDR = newGateway.ServiceCIDR
 	// If the Gateway version in the client cache is stale, the update operation will fail,
 	// then the reconciler will retry with latest state again.
 	if err := r.Client.Update(ctx, existingGW, &client.UpdateOptions{}); err != nil {
@@ -232,6 +241,7 @@ func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcsv1alpha1.Gateway, 
 	var activeGateway *mcsv1alpha1.Gateway
 	var internalIP, gwIP string
 	var err error
+
 	gatewayNode := &corev1.Node{}
 	for name := range r.gatewayCandidates {
 		if err = r.Client.Get(context.Background(), types.NamespacedName{Name: name}, gatewayNode); err == nil {
@@ -242,13 +252,15 @@ func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcsv1alpha1.Gateway, 
 				klog.V(2).ErrorS(err, "Node has no valid IP", "node", gatewayNode.Name)
 				continue
 			}
+
 			activeGateway = &mcsv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      gatewayNode.Name,
 					Namespace: r.namespace,
 				},
-				GatewayIP:  gwIP,
-				InternalIP: internalIP,
+				GatewayIP:   gwIP,
+				InternalIP:  internalIP,
+				ServiceCIDR: r.serviceCIDR,
 			}
 			klog.InfoS("Found good Gateway candidate", "node", gatewayNode.Name)
 			return activeGateway, nil
@@ -299,6 +311,13 @@ func (r *NodeReconciler) getGatawayNodeIP(node *corev1.Node) (string, string, er
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.serviceCIDR == "" {
+		var err error
+		r.serviceCIDR, err = ServiceCIDRDiscoverFn(context.TODO(), r.Client, r.namespace)
+		if err != nil {
+			return err
+		}
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
 		WithOptions(controller.Options{
