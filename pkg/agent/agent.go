@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/spf13/afero"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -89,6 +90,9 @@ var (
 // otherConfigKeysForIPsecCertificates are configurations added to OVS bridge when AuthenticationMode is "cert" and
 // need to be deleted when changing to "psk".
 var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key", "ca_cert", "remote_cert", "remote_name"}
+
+// Declared as variables for testing.
+var appFs = afero.NewOsFs()
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
@@ -1075,7 +1079,7 @@ func (i *Initializer) waitForIPsecMonitorDaemon() error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
-		if _, err := os.Stat(ovsMonitorIPSecPID); err == nil {
+		if _, err := appFs.Stat(ovsMonitorIPSecPID); err == nil {
 			klog.V(2).Infof("OVS IPsec monitor seems to be present")
 			break
 		}

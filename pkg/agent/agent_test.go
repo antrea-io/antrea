@@ -24,6 +24,7 @@ import (
 
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +36,9 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/wireguard"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
@@ -165,7 +169,7 @@ func TestGetRoundInfo(t *testing.T) {
 	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
 }
 
-func TestInitNodeLocalConfig(t *testing.T) {
+func TestInitK8sNodeLocalConfig(t *testing.T) {
 	nodeName := "node1"
 	ovsBridge := "br-int"
 	nodeIPStr := "192.168.10.10"
@@ -355,6 +359,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node := &corev1.Node{
@@ -554,6 +559,7 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 			expectedOVSCalls:        func(client *ovsconfigtest.MockOVSBridgeClientMockRecorder) {},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)
@@ -693,6 +699,7 @@ func TestRestorePortConfigs(t *testing.T) {
 			expectedErr: "failed to set no-flood for port antrea-tap1: server unavailable",
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)
@@ -710,6 +717,299 @@ func TestRestorePortConfigs(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				assert.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestSetOVSDatapath(t *testing.T) {
+	tests := []struct {
+		name          string
+		expectedCalls func(m *ovsconfigtest.MockOVSBridgeClient)
+		expectedErr   string
+	}{
+		{
+			name: "fail to read OVS bridge other_config",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(nil, ovsconfig.InvalidArgumentsError("failed to read OVS bridge other_config"))
+			},
+			expectedErr: "failed to read OVS bridge other_config",
+		},
+		{
+			name: "fail to set OVS bridge datapath_id",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil)
+				m.EXPECT().SetDatapathID(mock.Any()).Return(ovsconfig.InvalidArgumentsError("failed to set OVS bridge datapath_id"))
+			},
+			expectedErr: "failed to set OVS bridge datapath_id",
+		},
+		{
+			name: "datapath-id exists in other_config on OVS bridge",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{
+					ovsconfig.OVSOtherConfigDatapathIDKey: "datapathId",
+				}, nil)
+			},
+		},
+		{
+			name: "generate and set datapath ID for OVS bridge",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil)
+				m.EXPECT().SetDatapathID(mock.Any())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := mock.NewController(t)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+			initializer := newAgentInitializer(mockOVSBridgeClient, nil)
+			tt.expectedCalls(mockOVSBridgeClient)
+
+			err := initializer.setOVSDatapath()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestPrepareOVSBridge(t *testing.T) {
+	tests := []struct {
+		name          string
+		nodeType      config.NodeType
+		expectedCalls func(m *ovsconfigtest.MockOVSBridgeClient)
+	}{
+		{
+			name:     "k8s node",
+			nodeType: config.K8sNode,
+		},
+		{
+			name:     "external node",
+			nodeType: config.ExternalNode,
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{
+					ovsconfig.OVSOtherConfigDatapathIDKey: "datapathId",
+				}, nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := mock.NewController(t)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+			initializer := newAgentInitializer(mockOVSBridgeClient, nil)
+			initializer.nodeType = tt.nodeType
+			if tt.expectedCalls != nil {
+				tt.expectedCalls(mockOVSBridgeClient)
+			}
+
+			err := initializer.prepareOVSBridge()
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestInitNodeLocalConfig(t *testing.T) {
+	testNode := &crdv1alpha1.ExternalNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "testNode", Namespace: "external"},
+	}
+
+	tests := []struct {
+		name              string
+		nodeName          string
+		client            *fake.Clientset
+		crdClient         *fakeversioned.Clientset
+		nodeType          config.NodeType
+		externalNamespace string
+		expectedErr       string
+	}{
+		{
+			name:        "k8s node unavailable",
+			nodeName:    "testNode",
+			client:      fake.NewSimpleClientset(),
+			nodeType:    config.K8sNode,
+			expectedErr: "node retrieval failed with the following error",
+		},
+		{
+			name:              "Finished VM config initialization",
+			nodeName:          "testNode",
+			crdClient:         fakeversioned.NewSimpleClientset(testNode),
+			nodeType:          config.ExternalNode,
+			externalNamespace: "external",
+		},
+		{
+			name:              "provided external node unavailable",
+			nodeName:          "testNode",
+			crdClient:         fakeversioned.NewSimpleClientset(),
+			nodeType:          config.ExternalNode,
+			externalNamespace: "external",
+			expectedErr:       "timed out waiting for the condition",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer mockNodeNameEnv(tt.nodeName)()
+			stopCh := make(chan struct{})
+			initializer := &Initializer{
+				client:                tt.client,
+				crdClient:             tt.crdClient,
+				ovsBridge:             "br-int",
+				stopCh:                stopCh,
+				networkConfig:         &config.NetworkConfig{},
+				nodeType:              tt.nodeType,
+				externalNodeNamespace: tt.externalNamespace,
+			}
+			close(stopCh)
+
+			err := initializer.initNodeLocalConfig()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func mockIPsecPSKEnv(name string) func() {
+	_ = os.Setenv(ipsecPSKEnvKey, name)
+	return func() { os.Unsetenv(ipsecPSKEnvKey) }
+}
+
+func TestReadIPSecPSK(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedErr string
+	}{
+		{
+			name:        "IPsec PSK env variable not set",
+			expectedErr: "IPsec PSK environment variable 'ANTREA_IPSEC_PSK' is not set or is empty",
+		},
+		{
+			name: "IPsec PSK env variable set",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initializer := &Initializer{
+				networkConfig: &config.NetworkConfig{
+					IPsecConfig: config.IPsecConfig{},
+				},
+			}
+			if tt.expectedErr == "" {
+				defer mockIPsecPSKEnv("key")()
+			}
+
+			err := initializer.readIPSecPSK()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetNodeConfig(t *testing.T) {
+	nodeConfig := &config.NodeConfig{}
+	initializer := &Initializer{
+		nodeConfig: nodeConfig,
+	}
+	assert.Equal(t, nodeConfig, initializer.GetNodeConfig())
+}
+
+func TestGetWireGuardClient(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	nodeConfig := &config.NodeConfig{}
+	wireGuardConfig := &config.WireGuardConfig{}
+	wireGuardClient, err := wireguard.New(client, nodeConfig, wireGuardConfig)
+	require.NoError(t, err)
+	initializer := &Initializer{
+		wireGuardClient: wireGuardClient,
+	}
+	assert.Equal(t, wireGuardClient, initializer.GetWireGuardClient())
+}
+
+func TestSetupOVSBridge(t *testing.T) {
+	tests := []struct {
+		name          string
+		expectedCalls func(m *ovsconfigtest.MockOVSBridgeClient)
+		expectedErr   string
+	}{
+		{
+			name: "error creating OVS bridge",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().Create().Return(ovsconfig.InvalidArgumentsError("failed to create OVS bridge"))
+			},
+			expectedErr: "failed to create OVS bridge",
+		},
+		{
+			name: "error validating supported DP features",
+			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
+				m.EXPECT().Create()
+			},
+			expectedErr: "error listing DP features",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := mock.NewController(t)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+			initializer := &Initializer{
+				ovsBridgeClient: mockOVSBridgeClient,
+			}
+			tt.expectedCalls(mockOVSBridgeClient)
+
+			err := initializer.setupOVSBridge()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWaitForIPSecMonitorDaemon(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedErr string
+	}{
+		{
+			name:        "IPsec monitor is not running",
+			expectedErr: "IPsec was requested, but the OVS IPsec monitor does not seem to be running",
+		},
+		{
+			name: "IPsec monitor running",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initializer := &Initializer{}
+			if tt.expectedErr == "" {
+				appFS := afero.NewMemMapFs()
+				err := appFS.MkdirAll("/var/run/openvswitch", 0777)
+				require.NoError(t, err)
+				_, err = appFS.Create("/var/run/openvswitch/ovs-monitor-ipsec.pid")
+				require.NoError(t, err)
+				appFs = appFS
+				defer func() { appFs = afero.NewOsFs() }()
+			}
+
+			err := initializer.waitForIPsecMonitorDaemon()
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, initializer.waitForIPsecMonitorDaemon(), tt.expectedErr)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
