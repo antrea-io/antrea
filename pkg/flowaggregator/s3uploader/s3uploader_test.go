@@ -17,8 +17,8 @@ package s3uploader
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -30,9 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
-	"k8s.io/apimachinery/pkg/util/wait"
 
-	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
+	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
 )
 
@@ -43,18 +42,6 @@ var (
 )
 
 const seed = 1
-
-type mockS3Uploader struct {
-	testReader      *bytes.Buffer
-	testReaderMutex sync.Mutex
-}
-
-func (m *mockS3Uploader) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *s3manager.Uploader, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
-	m.testReaderMutex.Lock()
-	defer m.testReaderMutex.Unlock()
-	m.testReader.ReadFrom(input.Body)
-	return nil, nil
-}
 
 func init() {
 	registry.LoadRegistry()
@@ -80,7 +67,6 @@ func TestUpdateS3Uploader(t *testing.T) {
 
 func TestCacheRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 2,
@@ -108,7 +94,10 @@ func TestCacheRecord(t *testing.T) {
 }
 
 func TestBatchUploadAll(t *testing.T) {
-	mockS3Uploader := &mockS3Uploader{testReader: &bytes.Buffer{}}
+	ctrl := gomock.NewController(t)
+	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
+	ctx := context.Background()
+	mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil)
 	// #nosec G404: random number generator not used for security purposes
 	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
@@ -121,19 +110,55 @@ func TestBatchUploadAll(t *testing.T) {
 		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
-	testRecord := flowrecordtesting.PrepareTestFlowRecord()
-	s3UploadProc.writeRecordToBuffer(testRecord)
-	s3UploadProc.cachedRecordCount = 1
-	err := s3UploadProc.batchUploadAll(context.TODO())
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
+	s3UploadProc.CacheRecord(mockRecord)
+	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+
+	err := s3UploadProc.batchUploadAll(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
-	assert.Contains(t, mockS3Uploader.testReader.String(), recordStrIPv4)
+}
+
+func TestBatchUploadAllPartialSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
+	ctx := context.Background()
+	gomock.InOrder(
+		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil),
+		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, fmt.Errorf("random error")),
+	)
+	// #nosec G404: random number generator not used for security purposes
+	nameRand := rand.New(rand.NewSource(seed))
+	s3UploadProc := S3UploadProcess{
+		compress:         false,
+		maxRecordPerFile: 1,
+		currentBuffer:    &bytes.Buffer{},
+		bufferQueue:      make([]*bytes.Buffer, 0),
+		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
+		s3UploaderAPI:    mockS3Uploader,
+		nameRand:         nameRand,
+		clusterUUID:      fakeClusterUUID,
+	}
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
+	s3UploadProc.CacheRecord(mockRecord)
+	mockRecord = ipfixentitiestesting.NewMockRecord(ctrl)
+	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
+	s3UploadProc.CacheRecord(mockRecord)
+
+	err := s3UploadProc.batchUploadAll(ctx)
+	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
+	assert.Equal(t, 1, len(s3UploadProc.buffersToUpload))
+	assert.EqualError(t, err, "error when uploading file to S3: random error")
 }
 
 func TestBatchUploadAllError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctx := context.Background()
 	s3uploader := &S3Uploader{}
 	// #nosec G404: random number generator not used for security purposes
 	nameRand := rand.New(rand.NewSource(seed))
@@ -147,16 +172,18 @@ func TestBatchUploadAllError(t *testing.T) {
 		s3UploaderAPI:    s3uploader,
 		nameRand:         nameRand,
 	}
-	cfg, _ := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-west-2"))
+	cfg, _ := config.LoadDefaultConfig(ctx, config.WithRegion("us-west-2"))
 	s3UploadProc.awsS3Client = s3.NewFromConfig(cfg)
 	s3UploadProc.awsS3Uploader = s3manager.NewUploader(s3UploadProc.awsS3Client)
 
-	testRecord := flowrecordtesting.PrepareTestFlowRecord()
-	s3UploadProc.writeRecordToBuffer(testRecord)
-	s3UploadProc.cachedRecordCount = 1
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
+	s3UploadProc.CacheRecord(mockRecord)
+	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+
 	// It is expected to fail when calling uploadFile, as the correct S3 bucket
 	// configuration is not provided.
-	err := s3UploadProc.batchUploadAll(context.TODO())
+	err := s3UploadProc.batchUploadAll(ctx)
 	assert.Equal(t, 1, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
@@ -166,7 +193,16 @@ func TestBatchUploadAllError(t *testing.T) {
 }
 
 func TestFlowRecordPeriodicCommit(t *testing.T) {
-	mockS3Uploader := &mockS3Uploader{testReader: &bytes.Buffer{}}
+	ctrl := gomock.NewController(t)
+	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
+	waitCh := make(chan struct{})
+	mockS3Uploader.EXPECT().Upload(context.Background(), gomock.Any(), nil).DoAndReturn(
+		// arguments have to exactly match func (mr *MockS3UploaderAPIMockRecorder) Upload(arg0, arg1, arg2 interface{}, arg3 ...interface{}) *gomock.Call
+		func(arg0, arg1, arg2 interface{}, arg3 ...interface{}) (*s3manager.UploadOutput, error) {
+			close(waitCh)
+			return nil, nil
+		},
+	)
 	// #nosec G404: random number generator not used for security purposes
 	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
@@ -180,30 +216,33 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
-	testRecord := flowrecordtesting.PrepareTestFlowRecord()
-	s3UploadProc.writeRecordToBuffer(testRecord)
-	s3UploadProc.cachedRecordCount = 1
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
+	s3UploadProc.CacheRecord(mockRecord)
+	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+
 	s3UploadProc.startExportProcess()
-	// wait for ticker to tick
-	err := wait.PollImmediate(10*time.Millisecond, 1*time.Second, func() (bool, error) {
-		mockS3Uploader.testReaderMutex.Lock()
-		defer mockS3Uploader.testReaderMutex.Unlock()
-		if mockS3Uploader.testReader.Len() != 0 {
-			return true, nil
+	assert.Eventually(t, func() bool {
+		select {
+		case <-waitCh:
+			// mock has been called
+			return true
+		default:
+			// mock has not been called yet
+			return false
 		}
-		return false, nil
-	})
-	assert.NoError(t, err)
+	}, 1*time.Second, 10*time.Millisecond)
 	s3UploadProc.stopExportProcess(false)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
-	assert.Contains(t, mockS3Uploader.testReader.String(), recordStrIPv4)
 }
 
 func TestFlushCacheOnStop(t *testing.T) {
-	mockS3Uploader := &mockS3Uploader{testReader: &bytes.Buffer{}}
+	ctrl := gomock.NewController(t)
+	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
+	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, nil)
 	// #nosec G404: random number generator not used for security purposes
 	nameRand := rand.New(rand.NewSource(seed))
 	s3UploadProc := S3UploadProcess{
@@ -217,14 +256,15 @@ func TestFlushCacheOnStop(t *testing.T) {
 		nameRand:         nameRand,
 		clusterUUID:      fakeClusterUUID,
 	}
-	testRecord := flowrecordtesting.PrepareTestFlowRecord()
-	s3UploadProc.writeRecordToBuffer(testRecord)
-	s3UploadProc.cachedRecordCount = 1
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	flowaggregatortesting.PrepareMockIpfixRecord(mockRecord, true)
+	s3UploadProc.CacheRecord(mockRecord)
+	assert.Equal(t, 1, s3UploadProc.cachedRecordCount)
+
 	s3UploadProc.startExportProcess()
 	s3UploadProc.stopExportProcess(true)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
 	assert.Equal(t, 0, s3UploadProc.cachedRecordCount)
-	assert.Contains(t, mockS3Uploader.testReader.String(), recordStrIPv4)
 }
