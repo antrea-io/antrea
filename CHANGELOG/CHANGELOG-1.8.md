@@ -1,5 +1,29 @@
 # Changelog 1.8
 
+## 1.8.1 - 2023-03-31
+
+### Changed
+
+- Add OVS connection check to Agent's liveness probes for self-healing on OVS disconnection. ([#4126](https://github.com/antrea-io/antrea/pull/4126), [@tnqn])
+- Upgrade Antrea base image to ubuntu:22.04. ([#4459](https://github.com/antrea-io/antrea/pull/4459) [#4499](https://github.com/antrea-io/antrea/pull/4499), [@antoninbas])
+
+### Fixed
+
+- Ensure NO_FLOOD is always set for IPsec tunnel ports and TrafficControl ports. ([#4419](https://github.com/antrea-io/antrea/pull/4419) [#4654](https://github.com/antrea-io/antrea/pull/4654) [#4674](https://github.com/antrea-io/antrea/pull/4674), [@xliuxu] [@tnqn])
+- Fix Service routes being deleted on Agent startup on Windows. ([#4470](https://github.com/antrea-io/antrea/pull/4470), [@hongliangl])
+- Fix route deletion for Service ClusterIP and LoadBalancerIP when AntreaProxy is enabled. ([#4711](https://github.com/antrea-io/antrea/pull/4711), [@tnqn])
+- Add a periodic job to rejoin dead Nodes to fix Egress not working properly after long network downtime. ([#4491](https://github.com/antrea-io/antrea/pull/4491), [@tnqn])
+- Fix Agent crash in dual-stack clusters when any Node is not configured with an IP address for each address family. ([#4480](https://github.com/antrea-io/antrea/pull/4480), [@hongliangl])
+- Fix potential deadlocks and memory leaks of memberlist maintenance in large-scale clusters. ([#4469](https://github.com/antrea-io/antrea/pull/4469), [@wenyingd])
+- Fix connectivity issues caused by MAC address changes with systemd v242 and later. ([#4428](https://github.com/antrea-io/antrea/pull/4428), [@wenyingd])
+- Fix OpenFlow rules not being updated when Multi-cluster Gateway updates. ([#4388](https://github.com/antrea-io/antrea/pull/4388), [@luolanzone])
+- Set no-flood config with ports for TrafficControl after Agent restarting. ([#4318](https://github.com/antrea-io/antrea/pull/4318), [@hongliangl])
+- Fix packet resubmission issue when AntreaProxy is enabled and AntreaPolicy is disable. ([#4261](https://github.com/antrea-io/antrea/pull/4261), [@GraysonWu])
+- Fix data race when Multi-cluster controller reconciles ServiceExports concurrently. ([#4305](https://github.com/antrea-io/antrea/pull/4305), [@Dyanngg])
+- Fix multicast group not removed from cache when it is uninstalled. ([#4176](https://github.com/antrea-io/antrea/pull/4176), [@wenyingd])
+- Fix nil pointer error when there is no ClusterSet found during MemberClusterAnnounce validation. ([#4154](https://github.com/antrea-io/antrea/pull/4154), [@luolanzone])
+- Remove redundant Openflow messages when syncing an updated group to OVS. ([#4160](https://github.com/antrea-io/antrea/pull/4160), [@hongliangl])
+
 ## 1.8.0 - 2022-08-18
 
 ### Added
@@ -75,6 +99,7 @@
 [@ceclinux]: https://github.com/ceclinux
 [@dependabot]: https://github.com/dependabot
 [@dreamtalen]: https://github.com/dreamtalen
+[@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
 [@heshengyuan1311]: https://github.com/heshengyuan1311
 [@hjiajing]: https://github.com/hjiajing
