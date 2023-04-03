@@ -241,13 +241,14 @@ To learn more about MetalLB concepts and functionalities, you can read the
 You can run the following commands to install MetalLB using the YAML manifests:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/namespace.yaml
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/metallb.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.9/manifests/namespace.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.9/manifests/metallb.yaml
 ```
 
-The commands will deploy MetalLB of version 0.11.0 into Namespace
-`metallb-system`. You can also refer to this [MetalLB installation guide](https://metallb.universe.tf/installation)
-for other ways of installing MetalLB.
+The commands will deploy MetalLB version 0.13.9 into Namespace
+`metallb-system`. You can also refer to this [MetalLB installation
+guide](https://metallb.universe.tf/installation) for other ways of installing
+MetalLB.
 
 As MetalLB will allocate external IPs for all Services of type LoadBalancer,
 once it is running, the Service external IP management feature of Antrea should
@@ -264,50 +265,61 @@ you are using `kube-proxy` IPVS. Please refer to the [Interoperability with
 kube-proxy IPVS mode](#interoperability-with-kube-proxy-ipvs-mode) section for
 more information.
 
-MetalLB is configured through a ConfigMap. To configure MetalLB to work in the
-layer 2 mode, you just need to provide the IP ranges to allocate external IPs.
-The IP ranges should be from the Node network subnet.
+MetalLB is configured through Custom Resources (since v0.13). To configure
+MetalLB to work in the layer 2 mode, you need to create an `L2Advertisement`
+resource, as well as an `IPAddressPool` resource, which provides the IP ranges
+to allocate external IPs from. The IP ranges should be from the Node network
+subnet.
 
 For example:
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
 metadata:
+  name: first-pool
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    address-pools:
-    - name: default
-      protocol: layer2
-      addresses:
-      - 10.10.0.2-10.10.0.10
+spec:
+  addresses:
+  - 10.10.0.2-10.10.0.10
+---
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
 ```
 
 ### Configure MetalLB with BGP mode
 
 The BGP mode of MetalLB requires more configuration parameters to establish BGP
-peering to the router. The example below configures MetalLB using AS number
-64500 to connect to peer router 10.0.0.1 with AS number 64501:
+peering to the router. The example resources below configure MetalLB using AS
+number 64500 to connect to peer router 10.0.0.1 with AS number 64501:
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
+apiVersion: metallb.io/v1beta2
+kind: BGPPeer
 metadata:
+  name: sample
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    peers:
-    - peer-address: 10.0.0.1
-      peer-asn: 64501
-      my-asn: 64500
-    address-pools:
-    - name: default
-      protocol: bgp
-      addresses:
-      - 10.10.0.2-10.10.0.10
+spec:
+  myASN: 64500
+  peerASN: 64501
+  peerAddress: 10.0.0.1
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.10.0.2-10.10.0.10
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: example
+  namespace: metallb-system
 ```
 
 In addition to the basic layer 2 and BGP mode configurations described in this
