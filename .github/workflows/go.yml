@@ -11,9 +11,6 @@ on:
     - release-*
     - feature/*
 
-env:
-  go-cache-name: go
-
 jobs:
   check-changes:
     name: Check whether tests need to be run based on diff
@@ -41,23 +38,9 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
-    - uses: actions/cache@v3
-      with:
-        # In order:
-        # * Module download cache
-        # * Build cache (Linux)
-        # * Build cache (Mac)
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ env.go-cache-name }}-
     - name: Run unit tests
       run: make test-unit
     - name: Codecov
@@ -78,23 +61,9 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
-      - uses: actions/cache@v3
-        with:
-          # In order:
-          # * Module download cache
-          # * Build cache (Linux)
-          # * Build cache (Mac)
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/Library/Caches/go-build
-            %LocalAppData%\go-build
-          key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ env.go-cache-name }}-
       - name: Run unit tests
         run: make test-unit
       - name: Codecov
@@ -115,23 +84,9 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
-      - uses: actions/cache@v3
-        with:
-          # In order:
-          # * Module download cache
-          # * Build cache (Linux)
-          # * Build cache (Mac)
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/Library/Caches/go-build
-            %LocalAppData%\go-build
-          key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ env.go-cache-name }}-
       - name: Run integration tests
         run: |
           ./build/images/ovs/build.sh
@@ -161,23 +116,11 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
-    - uses: actions/cache@v3
-      with:
-        # In order:
-        # * Module download cache
-        # * Build cache (Linux)
-        # * Build cache (Mac)
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ env.go-cache-name }}-
+        # include all go.sum files (not just the root one), since we are also checking hack/netpol
+        cache-dependency-path: '**/go.sum'
     - name: Run golangci-lint
       run: make golangci
     - name: Run golangci-lint for netpol
@@ -193,23 +136,11 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
-      - uses: actions/cache@v3
-        with:
-          # In order:
-          # * Module download cache
-          # * Build cache (Linux)
-          # * Build cache (Mac)
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/Library/Caches/go-build
-            %LocalAppData%\go-build
-          key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ env.go-cache-name }}-
+          # include all go.sum files (not just the root one), since we are also checking hack/netpol
+          cache-dependency-path: '**/go.sum'
       - name: Run golangci-lint
         run: make golangci
       - name: Run golangci-lint for netpol
@@ -225,23 +156,9 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
-    - uses: actions/cache@v3
-      with:
-        # In order:
-        # * Module download cache
-        # * Build cache (Linux)
-        # * Build cache (Mac)
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ env.go-cache-name }}-
     - name: Build Antrea binaries for amd64
       run: GOARCH=amd64 make bin
     - name: Build Antrea binaries for arm64
@@ -264,23 +181,9 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
-    - uses: actions/cache@v3
-      with:
-        # In order:
-        # * Module download cache
-        # * Build cache (Linux)
-        # * Build cache (Mac)
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ~/Library/Caches/go-build
-          %LocalAppData%\go-build
-        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ env.go-cache-name }}-
     - name: Build Antrea windows binaries
       run: make windows-bin
 
@@ -293,7 +196,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -313,7 +216,7 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
     - name: Run verify scripts
@@ -349,7 +252,7 @@ jobs:
       - name: Check-out code
         uses: actions/checkout@v3
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
       - name: Run Go benchmark test

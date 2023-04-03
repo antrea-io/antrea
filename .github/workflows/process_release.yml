@@ -10,9 +10,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
+        # make sure the latest patch version is used
+        check-latest: true
+        # release assets include Octant plugin
+        cache-dependency-path: '**/go.sum'
     - name: Build assets
       env:
         TAG: ${{ github.ref }}
