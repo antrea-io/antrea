@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog/v2"
 
 	ps "antrea.io/antrea/pkg/agent/util/powershell"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 const (
@@ -74,6 +75,14 @@ func (r Route) String() string {
 		r.LinkIndex, r.DestinationSubnet, r.GatewayAddress, r.RouteMetric)
 }
 
+func (r Route) Equal(x Route) bool {
+	return x.LinkIndex == r.LinkIndex &&
+		x.DestinationSubnet != nil &&
+		r.DestinationSubnet != nil &&
+		x.DestinationSubnet.IP.Equal(r.DestinationSubnet.IP) &&
+		x.GatewayAddress.Equal(r.GatewayAddress)
+}
+
 type Neighbor struct {
 	LinkIndex        int
 	IPAddress        net.IP
@@ -83,6 +92,19 @@ type Neighbor struct {
 
 func (n Neighbor) String() string {
 	return fmt.Sprintf("LinkIndex: %d, IPAddress: %s, LinkLayerAddress: %s", n.LinkIndex, n.IPAddress, n.LinkLayerAddress)
+}
+
+type NetNatStaticMapping struct {
+	Name         string
+	ExternalIP   net.IP
+	ExternalPort uint16
+	InternalIP   net.IP
+	InternalPort uint16
+	Protocol     binding.Protocol
+}
+
+func (n NetNatStaticMapping) String() string {
+	return fmt.Sprintf("Name: %s, ExternalIP %s, ExternalPort: %d, InternalIP: %s, InternalPort: %d, Protocol: %s", n.Name, n.ExternalIP, n.ExternalPort, n.InternalIP, n.InternalPort, n.Protocol)
 }
 
 func GetNSPath(containerNetNS string) (string, error) {
@@ -702,10 +724,10 @@ func NewNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 		}
 	} else {
 		if strings.Contains(internalNet, subnetCIDR.String()) {
-			klog.InfoS("existing netnat in CIDR", "name", internalNet, "subnetCIDR", subnetCIDR.String())
+			klog.V(4).InfoS("The existing netnat matched the subnet CIDR", "name", internalNet, "subnetCIDR", subnetCIDR.String())
 			return nil
 		}
-		klog.InfoS("Removing the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
+		klog.InfoS("Removing the existing NetNat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
 		cmd = fmt.Sprintf("Remove-NetNat -Name %s -Confirm:$false", netNatName)
 		if _, err := runCommand(cmd); err != nil {
 			klog.ErrorS(err, "Failed to remove the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
@@ -721,15 +743,15 @@ func NewNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 	return nil
 }
 
-func ReplaceNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
-	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+func ReplaceNetNatStaticMapping(mapping *NetNatStaticMapping) error {
+	staticMappingStr, err := GetNetNatStaticMapping(mapping)
 	if err != nil {
 		return err
 	}
 	parsed := parseGetNetCmdResult(staticMappingStr, 6)
 	if len(parsed) > 0 {
 		items := parsed[0]
-		if items[4] == internalIPAddr && items[5] == strconv.Itoa(int(internalPort)) {
+		if items[4] == mapping.InternalIP.String() && items[5] == strconv.Itoa(int(mapping.InternalPort)) {
 			return nil
 		}
 		firstCol := strings.Split(items[0], ";")
@@ -737,19 +759,19 @@ func ReplaceNetNatStaticMapping(netNatName string, externalIPAddr string, extern
 		if err != nil {
 			return err
 		}
-		if err := RemoveNetNatStaticMappingByID(netNatName, id); err != nil {
+		if err := RemoveNetNatStaticMappingByID(mapping.Name, id); err != nil {
 			return err
 		}
 	}
-	return AddNetNatStaticMapping(netNatName, externalIPAddr, externalPort, internalIPAddr, internalPort, proto)
+	return AddNetNatStaticMapping(mapping)
 }
 
 // GetNetNatStaticMapping checks if a NetNatStaticMapping exists.
-func GetNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, proto string) (string, error) {
-	cmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", netNatName) +
-		fmt.Sprintf("|? ExternalIPAddress -EQ %s", externalIPAddr) +
-		fmt.Sprintf("|? ExternalPort -EQ %d", externalPort) +
-		fmt.Sprintf("|? Protocol -EQ %s", proto) +
+func GetNetNatStaticMapping(mapping *NetNatStaticMapping) (string, error) {
+	cmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", mapping.Name) +
+		fmt.Sprintf("|? ExternalIPAddress -EQ %s", mapping.ExternalIP) +
+		fmt.Sprintf("|? ExternalPort -EQ %d", mapping.ExternalPort) +
+		fmt.Sprintf("|? Protocol -EQ %s", mapping.Protocol) +
 		"| Format-Table -HideTableHeaders"
 	staticMappingStr, err := runCommand(cmd)
 	if err != nil && !strings.Contains(err.Error(), "No MSFT_NetNatStaticMapping objects found") {
@@ -759,15 +781,15 @@ func GetNetNatStaticMapping(netNatName string, externalIPAddr string, externalPo
 }
 
 // AddNetNatStaticMapping adds a static mapping to a NAT instance.
-func AddNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
+func AddNetNatStaticMapping(mapping *NetNatStaticMapping) error {
 	cmd := fmt.Sprintf("Add-NetNatStaticMapping -NatName %s -ExternalIPAddress %s -ExternalPort %d -InternalIPAddress %s -InternalPort %d -Protocol %s",
-		netNatName, externalIPAddr, externalPort, internalIPAddr, internalPort, proto)
+		mapping.Name, mapping.ExternalIP, mapping.ExternalPort, mapping.InternalIP, mapping.InternalPort, mapping.Protocol)
 	_, err := runCommand(cmd)
 	return err
 }
 
-func RemoveNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, proto string) error {
-	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+func RemoveNetNatStaticMapping(mapping *NetNatStaticMapping) error {
+	staticMappingStr, err := GetNetNatStaticMapping(mapping)
 	if err != nil {
 		return err
 	}
@@ -781,24 +803,24 @@ func RemoveNetNatStaticMapping(netNatName string, externalIPAddr string, externa
 	if err != nil {
 		return err
 	}
-	return RemoveNetNatStaticMappingByID(netNatName, id)
+	return RemoveNetNatStaticMappingByID(mapping.Name, id)
 }
 
-func RemoveNetNatStaticMappingByNPLTuples(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
-	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+func RemoveNetNatStaticMappingByNPLTuples(mapping *NetNatStaticMapping) error {
+	staticMappingStr, err := GetNetNatStaticMapping(mapping)
 	if err != nil {
 		return err
 	}
 	parsed := parseGetNetCmdResult(staticMappingStr, 6)
 	if len(parsed) > 0 {
 		items := parsed[0]
-		if items[4] == internalIPAddr && items[5] == strconv.Itoa(int(internalPort)) {
+		if items[4] == mapping.InternalIP.String() && items[5] == strconv.Itoa(int(mapping.InternalPort)) {
 			firstCol := strings.Split(items[0], ";")
 			id, err := strconv.Atoi(firstCol[1])
 			if err != nil {
 				return err
 			}
-			if err := RemoveNetNatStaticMappingByID(netNatName, id); err != nil {
+			if err := RemoveNetNatStaticMappingByID(mapping.Name, id); err != nil {
 				return err
 			}
 			return nil
