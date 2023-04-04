@@ -26,6 +26,8 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"antrea.io/antrea/pkg/ovs/openflow"
 )
 
 func TestRouteString(t *testing.T) {
@@ -642,16 +644,27 @@ func TestNewNetNat(t *testing.T) {
 
 func TestReplaceNetNatStaticMapping(t *testing.T) {
 	notFoundErr := fmt.Errorf("received error No MSFT_NetNatStaticMapping objects found")
-	testNetNat, testExternalIPAddr, testInternalIPAddr, testProto := "test-nat", "a.b.c.0/24", "192.0.02.179", "tcp"
+	testNetNatName := "test-nat"
 	testExternalPort, testInternalPort := (uint16)(80), (uint16)(8080)
-	getCmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", testNetNat) +
+	testExternalIPAddr, testInternalIPAddr := "10.10.0.1", "192.0.2.179"
+	testProto := openflow.ProtocolTCP
+	testNetNat := &NetNatStaticMapping{
+		Name:         testNetNatName,
+		ExternalIP:   net.ParseIP(testExternalIPAddr),
+		ExternalPort: testExternalPort,
+		InternalIP:   net.ParseIP(testInternalIPAddr),
+		InternalPort: testInternalPort,
+		Protocol:     testProto,
+	}
+
+	getCmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", testNetNatName) +
 		fmt.Sprintf("|? ExternalIPAddress -EQ %s", testExternalIPAddr) +
 		fmt.Sprintf("|? ExternalPort -EQ %d", testExternalPort) +
 		fmt.Sprintf("|? Protocol -EQ %s", testProto) +
 		"| Format-Table -HideTableHeaders"
-	removeCmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", testNetNat, 1)
+	removeCmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", testNetNatName, 1)
 	addCmd := fmt.Sprintf("Add-NetNatStaticMapping -NatName %s -ExternalIPAddress %s -ExternalPort %d -InternalIPAddress %s -InternalPort %d -Protocol %s",
-		testNetNat, testExternalIPAddr, testExternalPort, testInternalIPAddr, testInternalPort, testProto)
+		testNetNatName, testExternalIPAddr, testExternalPort, testInternalIPAddr, testInternalPort, testProto)
 	type testFormat struct {
 		name       string
 		commandOut string
@@ -690,22 +703,32 @@ func TestReplaceNetNatStaticMapping(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)()
-			gotErr := ReplaceNetNatStaticMapping(testNetNat, testExternalIPAddr, testExternalPort, testInternalIPAddr, testInternalPort, testProto)
+			gotErr := ReplaceNetNatStaticMapping(testNetNat)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}
 }
 
 func TestRemoveNetNatStaticMapping(t *testing.T) {
-	testNetNat, testExternalIPAddr, testProto := "test-nat", "a.b.c.0/24", "tcp"
-	testExternalPort := (uint16)(80)
-	getCmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", testNetNat) +
+	testNetNatName := "test-nat"
+	testExternalPort, testInternalPort := (uint16)(80), (uint16)(8080)
+	testExternalIPAddr, testInternalIPAddr := "10.10.0.1", "192.0.2.179"
+	testProto := openflow.ProtocolTCP
+	testNetNat := &NetNatStaticMapping{
+		Name:         testNetNatName,
+		ExternalIP:   net.ParseIP(testExternalIPAddr),
+		ExternalPort: testExternalPort,
+		InternalIP:   net.ParseIP(testInternalIPAddr),
+		InternalPort: testInternalPort,
+		Protocol:     testProto,
+	}
+	getCmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", testNetNatName) +
 		fmt.Sprintf("|? ExternalIPAddress -EQ %s", testExternalIPAddr) +
 		fmt.Sprintf("|? ExternalPort -EQ %d", testExternalPort) +
 		fmt.Sprintf("|? Protocol -EQ %s", testProto) +
 		"| Format-Table -HideTableHeaders"
-	removeIDCmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", testNetNat, 1)
-	removeCmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -Confirm:$false", testNetNat)
+	removeIDCmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", testNetNatName, 1)
+	removeCmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -Confirm:$false", testNetNatName)
 	tests := []struct {
 		name       string
 		commandOut string
@@ -729,11 +752,11 @@ func TestRemoveNetNatStaticMapping(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, false)()
-			gotErr := RemoveNetNatStaticMapping(testNetNat, testExternalIPAddr, testExternalPort, testProto)
+			gotErr := RemoveNetNatStaticMapping(testNetNat)
 			assert.Equal(t, tc.wantErr, gotErr)
-			gotErr = RemoveNetNatStaticMappingByNPLTuples(testNetNat, testExternalIPAddr, testExternalPort, "192.0.02.179", 8080, testProto)
+			gotErr = RemoveNetNatStaticMappingByNPLTuples(testNetNat)
 			assert.Equal(t, tc.wantErr, gotErr)
-			gotErr = RemoveNetNatStaticMappingByNAME(testNetNat)
+			gotErr = RemoveNetNatStaticMappingByNAME(testNetNat.Name)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}

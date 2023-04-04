@@ -37,6 +37,20 @@ import (
 	"antrea.io/antrea/pkg/util/ip"
 )
 
+var (
+	nodeConfig = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
+
+	externalIPv4Addr1 = "1.1.1.1"
+	externalIPv4Addr2 = "1.1.1.2"
+	externalIPv6Addr1 = "fd00:1234:5678:dead:beaf::1"
+	externalIPv6Addr2 = "fd00:1234:5678:dead:beaf::a"
+
+	ipv4Route1 = generateRoute(net.ParseIP(externalIPv4Addr1), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
+	ipv4Route2 = generateRoute(net.ParseIP(externalIPv4Addr2), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
+	ipv6Route1 = generateRoute(net.ParseIP(externalIPv6Addr1), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
+	ipv6Route2 = generateRoute(net.ParseIP(externalIPv6Addr2), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
+)
+
 func TestSyncRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -78,7 +92,7 @@ func TestSyncRoutes(t *testing.T) {
 	c.serviceRoutes.Store("169.254.0.253/32", serviceRoute1)
 	c.serviceRoutes.Store("169.254.0.252/32", serviceRoute2)
 
-	assert.NoError(t, c.syncRoutes())
+	assert.NoError(t, c.syncRoute())
 }
 
 func TestSyncIPSet(t *testing.T) {
@@ -468,7 +482,7 @@ COMMIT
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			c := &Client{ipt: mockIPTables,
+			c := &Client{iptables: mockIPTables,
 				networkConfig:         tt.networkConfig,
 				nodeConfig:            tt.nodeConfig,
 				proxyAll:              tt.proxyAll,
@@ -1124,7 +1138,7 @@ func TestAddSNATRule(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			c := &Client{ipt: mockIPTables,
+			c := &Client{iptables: mockIPTables,
 				nodeConfig: tt.nodeConfig,
 			}
 			tt.expectedCalls(mockIPTables.EXPECT())
@@ -1191,7 +1205,7 @@ func TestDeleteSNATRule(t *testing.T) {
 			defer ctrl.Finish()
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
 			c := &Client{
-				ipt:          mockIPTables,
+				iptables:     mockIPTables,
 				nodeConfig:   tt.nodeConfig,
 				markToSNATIP: sync.Map{},
 			}
@@ -1397,12 +1411,27 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
-				netlink:         mockNetlink,
-				nodeConfig:      nodeConfig,
-				serviceIPv4CIDR: tt.curServiceIPv4CIDR,
-				serviceIPv6CIDR: tt.curServiceIPv6CIDR,
+				netlink:    mockNetlink,
+				nodeConfig: nodeConfig,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
+
+			if tt.curServiceIPv4CIDR != nil {
+				c.serviceRoutes.Store(serviceIPv4CIDRKey, &netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			}
+			if tt.curServiceIPv6CIDR != nil {
+				c.serviceRoutes.Store(serviceIPv6CIDRKey, &netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			}
 
 			if tt.newServiceIPv4CIDR != nil {
 				assert.NoError(t, c.addServiceCIDRRoute(tt.newServiceIPv4CIDR))
@@ -1415,37 +1444,34 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 }
 
 func TestAddLoadBalancer(t *testing.T) {
-	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
 		name          string
-		externalIP    string
+		externalIPs   []string
+		serviceRoutes map[string]*netlink.Route
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:       "IPv4",
-			externalIP: "1.1.1.1",
+			name: "IPv4",
+			serviceRoutes: map[string]*netlink.Route{
+				externalIPv4Addr1: ipv4Route1,
+				externalIPv4Addr2: ipv4Route2,
+			},
+			externalIPs: []string{externalIPv4Addr1, externalIPv4Addr2},
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
-				mockNetlink.RouteReplace(&netlink.Route{
-					Dst: &net.IPNet{
-						IP:   net.ParseIP("1.1.1.1"),
-						Mask: net.CIDRMask(32, 32),
-					},
-					Gw:        config.VirtualServiceIPv4,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
+				mockNetlink.RouteReplace(ipv4Route1)
+				mockNetlink.RouteReplace(ipv4Route2)
 			},
 		},
 		{
-			name:       "IPv6",
-			externalIP: "fd00:1234:5678:dead:beaf::1",
+			name: "IPv6",
+			serviceRoutes: map[string]*netlink.Route{
+				externalIPv6Addr1: ipv6Route1,
+				externalIPv6Addr2: ipv6Route2,
+			},
+			externalIPs: []string{externalIPv6Addr1, externalIPv6Addr2},
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
-				mockNetlink.RouteReplace(&netlink.Route{
-					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
-					Gw:        config.VirtualServiceIPv6,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
+				mockNetlink.RouteReplace(ipv6Route1)
+				mockNetlink.RouteReplace(ipv6Route2)
 			},
 		},
 	}
@@ -1460,43 +1486,42 @@ func TestAddLoadBalancer(t *testing.T) {
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			assert.NoError(t, c.AddLoadBalancer(net.ParseIP(tt.externalIP)))
+			for _, externalIP := range tt.externalIPs {
+				assert.NoError(t, c.AddLoadBalancer(net.ParseIP(externalIP)))
+			}
 		})
 	}
 }
 
 func TestDeleteLoadBalancer(t *testing.T) {
-	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
 		name          string
-		externalIP    string
+		serviceRoutes map[string]*netlink.Route
+		externalIPs   []string
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:       "IPv4",
-			externalIP: "1.1.1.1",
+			name: "IPv4",
+			serviceRoutes: map[string]*netlink.Route{
+				externalIPv4Addr1: ipv4Route1,
+				externalIPv4Addr2: ipv4Route2,
+			},
+			externalIPs: []string{externalIPv4Addr1, externalIPv4Addr2},
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
-				mockNetlink.RouteDel(&netlink.Route{
-					Dst: &net.IPNet{
-						IP:   net.ParseIP("1.1.1.1"),
-						Mask: net.CIDRMask(32, 32),
-					},
-					Gw:        config.VirtualServiceIPv4,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
+				mockNetlink.RouteDel(ipv4Route1)
+				mockNetlink.RouteDel(ipv4Route2)
 			},
 		},
 		{
-			name:       "IPv6",
-			externalIP: "fd00:1234:5678:dead:beaf::1",
+			name: "IPv6",
+			serviceRoutes: map[string]*netlink.Route{
+				externalIPv6Addr1: ipv6Route1,
+				externalIPv6Addr2: ipv6Route2,
+			},
+			externalIPs: []string{externalIPv6Addr1, externalIPv6Addr2},
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
-				mockNetlink.RouteDel(&netlink.Route{
-					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
-					Gw:        config.VirtualServiceIPv6,
-					Scope:     netlink.SCOPE_UNIVERSE,
-					LinkIndex: 10,
-				})
+				mockNetlink.RouteDel(ipv6Route1)
+				mockNetlink.RouteDel(ipv6Route2)
 			},
 		},
 	}
@@ -1506,12 +1531,18 @@ func TestDeleteLoadBalancer(t *testing.T) {
 			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
-				netlink:    mockNetlink,
-				nodeConfig: nodeConfig,
+				netlink:       mockNetlink,
+				nodeConfig:    nodeConfig,
+				serviceRoutes: sync.Map{},
+			}
+			for ipStr, route := range tt.serviceRoutes {
+				c.serviceRoutes.Store(ipStr, route)
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			assert.NoError(t, c.DeleteLoadBalancer(net.ParseIP(tt.externalIP)))
+			for _, externalIP := range tt.externalIPs {
+				assert.NoError(t, c.DeleteLoadBalancer(net.ParseIP(externalIP)))
+			}
 		})
 	}
 }

@@ -50,20 +50,6 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// AddClusterIPRoute mocks base method
-func (m *MockInterface) AddClusterIPRoute(arg0 net.IP) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddClusterIPRoute", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddClusterIPRoute indicates an expected call of AddClusterIPRoute
-func (mr *MockInterfaceMockRecorder) AddClusterIPRoute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClusterIPRoute", reflect.TypeOf((*MockInterface)(nil).AddClusterIPRoute), arg0)
-}
-
 // AddLoadBalancer mocks base method
 func (m *MockInterface) AddLoadBalancer(arg0 net.IP) error {
 	m.ctrl.T.Helper()
@@ -132,20 +118,6 @@ func (m *MockInterface) AddSNATRule(arg0 net.IP, arg1 uint32) error {
 func (mr *MockInterfaceMockRecorder) AddSNATRule(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), arg0, arg1)
-}
-
-// DeleteClusterIPRoute mocks base method
-func (m *MockInterface) DeleteClusterIPRoute(arg0 net.IP) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteClusterIPRoute", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteClusterIPRoute indicates an expected call of DeleteClusterIPRoute
-func (mr *MockInterfaceMockRecorder) DeleteClusterIPRoute(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClusterIPRoute", reflect.TypeOf((*MockInterface)(nil).DeleteClusterIPRoute), arg0)
 }
 
 // DeleteLoadBalancer mocks base method

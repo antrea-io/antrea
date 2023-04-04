@@ -110,11 +110,9 @@ type Initializer struct {
 	serviceConfig         *config.ServiceConfig
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	enableL7NetworkPolicy bool
-	enableProxy           bool
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	proxyAll              bool
 	networkReadyCh        chan<- struct{}
 	stopCh                <-chan struct{}
 	nodeType              config.NodeType
@@ -140,8 +138,6 @@ func NewInitializer(
 	stopCh <-chan struct{},
 	nodeType config.NodeType,
 	externalNodeNamespace string,
-	enableProxy bool,
-	proxyAll bool,
 	connectUplinkToBridge bool,
 	enableL7NetworkPolicy bool,
 ) *Initializer {
@@ -165,8 +161,6 @@ func NewInitializer(
 		stopCh:                stopCh,
 		nodeType:              nodeType,
 		externalNodeNamespace: externalNodeNamespace,
-		enableProxy:           enableProxy,
-		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
 		enableL7NetworkPolicy: enableL7NetworkPolicy,
 	}
@@ -177,7 +171,7 @@ func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 	return i.nodeConfig
 }
 
-// GetNodeConfig returns the NodeConfig.
+// GetWireGuardClient returns the Wireguard client.
 func (i *Initializer) GetWireGuardClient() wireguard.Interface {
 	return i.wireGuardClient
 }
