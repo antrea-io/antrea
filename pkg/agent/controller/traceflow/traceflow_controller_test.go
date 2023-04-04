@@ -15,7 +15,9 @@
 package traceflow
 
 import (
+	"bytes"
 	"net"
+	"os"
 	"testing"
 
 	"antrea.io/libOpenflow/protocol"
@@ -28,6 +30,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -36,6 +40,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/querier"
@@ -43,13 +48,14 @@ import (
 )
 
 var (
-	pod1IPv4   = "192.168.10.10"
-	pod2IPv4   = "192.168.11.10"
-	dstIPv4    = "192.168.99.99"
-	pod1MAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:0f")
-	pod2MAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:00")
-	ofPortPod1 = uint32(1)
-	ofPortPod2 = uint32(2)
+	pod1IPv4       = "192.168.10.10"
+	pod2IPv4       = "192.168.11.10"
+	dstIPv4        = "192.168.99.99"
+	pod1MAC, _     = net.ParseMAC("aa:bb:cc:dd:ee:0f")
+	pod2MAC, _     = net.ParseMAC("aa:bb:cc:dd:ee:00")
+	ofPortPod1     = uint32(1)
+	ofPortPod2     = uint32(2)
+	protocolICMPv6 = int32(58)
 
 	pod1 = v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -69,6 +75,12 @@ var (
 			PodIP: pod2IPv4,
 		},
 	}
+	pod3 = v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-3",
+			Namespace: "default",
+		},
+	}
 )
 
 type fakeTraceflowController struct {
@@ -83,7 +95,7 @@ type fakeTraceflowController struct {
 
 func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, npQuerier querier.AgentNetworkPolicyInfoQuerier, egressQuerier querier.EgressQuerier) *fakeTraceflowController {
 	controller := gomock.NewController(t)
-	kubeClient := fake.NewSimpleClientset(&pod1, &pod2)
+	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
@@ -113,6 +125,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
 		runningTraceflows:     make(map[uint8]*traceflowState),
 	}
+
 	return &fakeTraceflowController{
 		Controller:         tfController,
 		kubeClient:         kubeClient,
@@ -141,12 +154,13 @@ func TestPreparePacket(t *testing.T) {
 	tcs := []struct {
 		name           string
 		tf             *crdv1alpha1.Traceflow
+		intf           *interfacestore.InterfaceConfig
 		receiverOnly   bool
 		expectedPacket *binding.Packet
 		expectedErr    string
 	}{
 		{
-			name: "invalid destination ipv4",
+			name: "invalid destination IPv4",
 			tf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
 				Spec: crdv1alpha1.TraceflowSpec{
@@ -175,7 +189,7 @@ func TestPreparePacket(t *testing.T) {
 			expectedErr: "destination is not specified",
 		},
 		{
-			name: "receive only from a source ipv4 to dst pod1 in live traffic traceflow",
+			name: "receive only from a source IPv4 to destination Pod1 in live traffic traceflow",
 			tf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
 				Spec: crdv1alpha1.TraceflowSpec{
@@ -299,21 +313,147 @@ func TestPreparePacket(t *testing.T) {
 				TTL:            64,
 			},
 		},
+		{
+			name: "source Pod without IPv4 address",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf7", UID: "uid7"},
+			},
+			intf:        &interfacestore.InterfaceConfig{},
+			expectedErr: "source Pod does not have an IPv4 address",
+		},
+		{
+			name: "source Pod without IPv6 address",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf8", UID: "uid8"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Packet: crdv1alpha1.Packet{
+						IPv6Header: &crdv1alpha1.IPv6Header{},
+					},
+				},
+			},
+			intf:        &interfacestore.InterfaceConfig{},
+			expectedErr: "source Pod does not have an IPv6 address",
+		},
+		{
+			name: "destination IP family different from packet",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf9", UID: "uid9"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						IP: "192.168.1.2",
+					},
+					LiveTraffic: true,
+					Packet: crdv1alpha1.Packet{
+						IPv6Header: &crdv1alpha1.IPv6Header{},
+					},
+				},
+			},
+			expectedErr: "destination IP does not match the IP header family",
+		},
+		{
+			name: "source IP family different from packet for receiver only case",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf10", UID: "uid10"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						IP: "192.168.1.2",
+					},
+					LiveTraffic: true,
+					Packet: crdv1alpha1.Packet{
+						IPv6Header: &crdv1alpha1.IPv6Header{},
+					},
+				},
+			},
+			receiverOnly: true,
+			expectedErr:  "source IP does not match the IP header family",
+		},
+		{
+			name: "destination Pod unavailable",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf11", UID: "uid11"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						Pod:       "unknown pod",
+						Namespace: "default",
+					},
+				},
+			},
+			expectedErr: "failed to get the destination Pod: pods \"unknown pod\"",
+		},
+		{
+			name: "destination Pod without IPv4 address in live traffic traceflow",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf12", UID: "uid12"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						Pod:       pod3.Name,
+						Namespace: pod3.Namespace,
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedErr: "destination Pod does not have an IPv4 address",
+		},
+		{
+			name: "destination Pod without IPv6 address in live traffic traceflow",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf13", UID: "uid13"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						Pod:       pod3.Name,
+						Namespace: pod3.Namespace,
+					},
+					LiveTraffic: true,
+					Packet: crdv1alpha1.Packet{
+						IPv6Header: &crdv1alpha1.IPv6Header{},
+					},
+				},
+			},
+			expectedErr: "destination Pod does not have an IPv6 address",
+		},
+		{
+			name: "Pod-to-IPv6 liveTraffic traceflow",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf14", UID: "uid14"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1alpha1.Destination{
+						IP: "2001:db8::68",
+					},
+					LiveTraffic: true,
+					Packet: crdv1alpha1.Packet{
+						IPv6Header: &crdv1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
+					},
+				},
+			},
+			expectedPacket: &binding.Packet{
+				IsIPv6:        true,
+				DestinationIP: net.ParseIP("2001:db8::68"),
+				IPProto:       protocol.Type_IPv6ICMP,
+			},
+		},
 	}
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
-			defer tfc.mockController.Finish()
-
 			podInterfaces := tfc.interfaceStore.GetContainerInterfacesByPod(pod1.Name, pod1.Namespace)
+			if tt.intf != nil {
+				podInterfaces[0] = tt.intf
+			}
 
 			pkt, err := tfc.preparePacket(tt.tf, podInterfaces[0], tt.receiverOnly)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedPacket, pkt)
 			} else {
-				require.EqualError(t, err, tt.expectedErr)
+				assert.ErrorContains(t, err, tt.expectedErr)
+				assert.Nil(t, pkt)
 			}
 		})
 	}
@@ -322,7 +462,7 @@ func TestPreparePacket(t *testing.T) {
 func TestErrTraceflowCRD(t *testing.T) {
 	tf := &crdv1alpha1.Traceflow{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "dummy-traceflow",
+			Name: "tf",
 			UID:  "uid",
 		},
 		Spec: crdv1alpha1.TraceflowSpec{
@@ -346,7 +486,6 @@ func TestErrTraceflowCRD(t *testing.T) {
 	expectedTf.Status.Reason = reason
 
 	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil, nil, nil)
-	defer tfc.mockController.Finish()
 
 	gotTf, err := tfc.errorTraceflowCRD(tf, reason)
 	require.NoError(t, err)
@@ -355,14 +494,18 @@ func TestErrTraceflowCRD(t *testing.T) {
 
 func TestStartTraceflow(t *testing.T) {
 	tcs := []struct {
-		name         string
-		tf           *crdv1alpha1.Traceflow
-		ofPort       uint32
-		receiverOnly bool
-		packet       *binding.Packet
+		name           string
+		tf             *crdv1alpha1.Traceflow
+		ofPort         uint32
+		receiverOnly   bool
+		packet         *binding.Packet
+		expectedCalls  func(mockOFClient *openflowtest.MockClient)
+		nodeConfig     *config.NodeConfig
+		expectedErr    string
+		expectedErrLog string
 	}{
 		{
-			name: "pod-to-pod traceflow",
+			name: "Pod-to-Pod traceflow",
 			tf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
 				Spec: crdv1alpha1.TraceflowSpec{
@@ -390,9 +533,21 @@ func TestStartTraceflow(t *testing.T) {
 				TTL:            64,
 				ICMPType:       8,
 			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, crdv1alpha1.DefaultTraceflowTimeout)
+				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
+					SourceIP:       net.ParseIP(pod1IPv4),
+					SourceMAC:      pod1MAC,
+					DestinationIP:  net.ParseIP(pod2IPv4),
+					DestinationMAC: pod2MAC,
+					IPProto:        1,
+					TTL:            64,
+					ICMPType:       8,
+				}, ofPortPod1, int32(-1))
+			},
 		},
 		{
-			name: "pod-to-ipv4 traceflow",
+			name: "Pod-to-IPv4 traceflow",
 			tf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf2", UID: "uid2"},
 				Spec: crdv1alpha1.TraceflowSpec{
@@ -418,24 +573,108 @@ func TestStartTraceflow(t *testing.T) {
 				TTL:           64,
 				ICMPType:      8,
 			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, crdv1alpha1.DefaultTraceflowTimeout)
+				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
+					SourceIP:      net.ParseIP(pod1IPv4),
+					SourceMAC:     pod1MAC,
+					DestinationIP: net.ParseIP(dstIPv4),
+					IPProto:       1,
+					TTL:           64,
+					ICMPType:      8,
+				}, ofPortPod1, int32(-1))
+			},
+		},
+		{
+			name: "empty source and destination Pod",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
+			},
+			expectedErrLog: "Traceflow tf3 has neither source nor destination Pod specified",
+		},
+		{
+			name: "empty source Pod",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						Namespace: pod2.Namespace,
+						Pod:       pod2.Name,
+					},
+				},
+			},
+			expectedErrLog: "Traceflow tf4 does not have source Pod specified",
+		},
+		{
+			name: "invalid destination IPv4",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf5", UID: "uid5"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1alpha1.Destination{
+						IP: "192.168.1.300",
+					},
+				},
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			nodeConfig: &config.NodeConfig{
+				Name: "node-1",
+			},
+			expectedErr: "destination IP is not valid: 192.168.1.300",
+		},
+		{
+			name: "live traceflow receive only",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf6", UID: "uid6"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						Namespace: pod2.Namespace,
+						Pod:       pod2.Name,
+					},
+					LiveTraffic: true,
+				},
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			ofPort: ofPortPod2,
+			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, false, true, &binding.Packet{DestinationMAC: pod2MAC}, ofPortPod2, crdv1alpha1.DefaultTraceflowTimeout)
+			},
 		},
 	}
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
-			defer tfc.mockController.Finish()
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, tt.nodeConfig, nil, nil)
+			if tt.expectedCalls != nil {
+				tt.expectedCalls(tfc.mockOFClient)
+			}
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			tfc.crdInformerFactory.Start(stopCh)
-			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
-
-			tfc.mockOFClient.EXPECT().InstallTraceflowFlows(tt.tf.Status.DataplaneTag, tt.tf.Spec.LiveTraffic, tt.tf.Spec.DroppedOnly, tt.receiverOnly, nil, tt.ofPort, crdv1alpha1.DefaultTraceflowTimeout)
-			tfc.mockOFClient.EXPECT().SendTraceflowPacket(tt.tf.Status.DataplaneTag, tt.packet, tt.ofPort, int32(-1))
+			bufWriter := bytes.NewBuffer(nil)
+			klog.SetOutput(bufWriter)
+			klog.LogToStderr(false)
+			defer func() {
+				klog.SetOutput(os.Stderr)
+				klog.LogToStderr(true)
+			}()
 
 			err := tfc.startTraceflow(tt.tf)
-			require.NoError(t, err)
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+			if tt.expectedErrLog != "" {
+				assert.Contains(t, bufWriter.String(), tt.expectedErrLog)
+			}
 		})
 	}
 }
@@ -503,13 +742,12 @@ func TestSyncTraceflow(t *testing.T) {
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
-			defer tfc.mockController.Finish()
-			tfc.runningTraceflows[tt.tf.Status.DataplaneTag] = tt.tfState
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			tfc.crdInformerFactory.Start(stopCh)
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 
+			tfc.runningTraceflows[tt.tf.Status.DataplaneTag] = tt.tfState
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(tfc.mockOFClient)
 			}
@@ -557,9 +795,8 @@ func TestProcessTraceflowItem(t *testing.T) {
 		},
 		expected: true,
 	}
-	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil, nil, nil)
-	defer tfc.mockController.Finish()
 
+	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil, nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	tfc.crdInformerFactory.Start(stopCh)
@@ -567,9 +804,60 @@ func TestProcessTraceflowItem(t *testing.T) {
 
 	tfc.mockOFClient.EXPECT().InstallTraceflowFlows(tc.tf.Status.DataplaneTag, tc.tf.Spec.LiveTraffic, tc.tf.Spec.DroppedOnly, tc.receiverOnly, nil, tc.ofPort, crdv1alpha1.DefaultTraceflowTimeout)
 	tfc.mockOFClient.EXPECT().SendTraceflowPacket(tc.tf.Status.DataplaneTag, tc.packet, tc.ofPort, int32(-1))
-
 	tfc.enqueueTraceflow(tc.tf)
-
 	got := tfc.processTraceflowItem()
 	assert.Equal(t, tc.expected, got)
+}
+
+func TestValidateTraceflow(t *testing.T) {
+	tcs := []struct {
+		name               string
+		tf                 *crdv1alpha1.Traceflow
+		antreaProxyEnabled bool
+		expectedErr        string
+	}{
+		{
+			name: "AntreaProxy feature disabled with destination as service",
+			tf: &crdv1alpha1.Traceflow{
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						Service: "svcTest",
+					},
+				},
+			},
+			expectedErr: "using Service destination requires AntreaProxy feature enabled",
+		},
+		{
+			name: "invalid destination IPv4",
+			tf: &crdv1alpha1.Traceflow{
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						IP: "192.168.1.300",
+					},
+				},
+			},
+			antreaProxyEnabled: true,
+			expectedErr:        "destination IP is not valid: 192.168.1.300",
+		},
+		{
+			name: "AntreaProxy feature disabled with ClusterIP destination",
+			tf: &crdv1alpha1.Traceflow{
+				Spec: crdv1alpha1.TraceflowSpec{
+					Destination: crdv1alpha1.Destination{
+						IP: "10.96.1.1",
+					},
+				},
+			},
+			expectedErr: "using ClusterIP destination requires AntreaProxy feature enabled",
+		},
+	}
+
+	for _, tt := range tcs {
+		t.Run(tt.name, func(t *testing.T) {
+			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaProxy, tt.antreaProxyEnabled)()
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
+			err := tfc.validateTraceflow(tt.tf)
+			assert.ErrorContains(t, err, tt.expectedErr)
+		})
+	}
 }
