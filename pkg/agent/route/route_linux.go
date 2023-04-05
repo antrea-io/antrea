@@ -73,9 +73,6 @@ const (
 	antreaPostRoutingChain = "ANTREA-POSTROUTING"
 	antreaOutputChain      = "ANTREA-OUTPUT"
 	antreaMangleChain      = "ANTREA-MANGLE"
-
-	serviceIPv4CIDRKey = "serviceIPv4CIDRKey"
-	serviceIPv6CIDRKey = "serviceIPv6CIDRKey"
 )
 
 // Client implements Interface.
@@ -85,6 +82,9 @@ var (
 	// globalVMAC is used in the IPv6 neighbor configuration to advertise ND solicitation for the IPv6 address of the
 	// host gateway interface on other Nodes.
 	globalVMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	// IPTablesSyncInterval is exported so that sync interval can be configured for running integration test with
+	// smaller values. It is meant to be used internally by Run.
+	IPTablesSyncInterval = 60 * time.Second
 )
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
@@ -92,7 +92,7 @@ type Client struct {
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
 	noSNAT        bool
-	iptables      iptables.Interface
+	ipt           iptables.Interface
 	ipset         ipset.Interface
 	netlink       utilnetlink.Interface
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
@@ -115,6 +115,10 @@ type Client struct {
 	nodePortsIPv4 sync.Map
 	// nodePortsIPv6 caches all existing IPv6 NodePorts.
 	nodePortsIPv6 sync.Map
+	// serviceIPv4CIDR stores the latest Service IPv4 CIDR from serviceCIDRProvider.
+	serviceIPv4CIDR *net.IPNet
+	// serviceIPv6CIDR stores the latest Service IPv6 CIDR from serviceCIDRProvider.
+	serviceIPv6CIDR *net.IPNet
 	// clusterNodeIPs stores the IPv4 of all other Nodes in the cluster
 	clusterNodeIPs sync.Map
 	// clusterNodeIP6s stores the IPv6 of all other Nodes in the cluster
@@ -150,7 +154,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		return fmt.Errorf("failed to initialize ipset: %v", err)
 	}
 
-	c.iptables, err = iptables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
+	c.ipt, err = iptables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
 	if err != nil {
 		return fmt.Errorf("error creating IPTables instance: %v", err)
 	}
@@ -203,28 +207,28 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 // It will not return until stopCh is closed.
 func (c *Client) Run(stopCh <-chan struct{}) {
 	<-c.iptablesInitialized
-	klog.InfoS("Starting iptables, ipset and route sync", "interval", SyncInterval)
-	wait.Until(c.syncIPInfra, SyncInterval, stopCh)
+	klog.Infof("Starting iptables sync, with sync interval %v", IPTablesSyncInterval)
+	wait.Until(c.syncIPInfra, IPTablesSyncInterval, stopCh)
 }
 
 // syncIPInfra is idempotent and can be safely called on every sync operation.
 func (c *Client) syncIPInfra() {
 	// Sync ipset before syncing iptables rules
 	if err := c.syncIPSet(); err != nil {
-		klog.ErrorS(err, "Failed to sync ipset")
+		klog.Errorf("Failed to sync ipset: %v", err)
 		return
 	}
 	if err := c.syncIPTables(); err != nil {
-		klog.ErrorS(err, "Failed to sync iptables")
+		klog.Errorf("Failed to sync iptables: %v", err)
 		return
 	}
-	if err := c.syncRoute(); err != nil {
-		klog.ErrorS(err, "Failed to sync route")
+	if err := c.syncRoutes(); err != nil {
+		klog.Errorf("Failed to sync routes: %v", err)
 	}
-	klog.V(3).Info("Successfully synced iptables, ipset and route")
+	klog.V(3).Infof("Successfully synced node iptables and routes")
 }
 
-func (c *Client) syncRoute() error {
+func (c *Client) syncRoutes() error {
 	routeList, err := c.netlink.RouteList(nil, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
@@ -243,7 +247,7 @@ func (c *Client) syncRoute() error {
 			return true
 		}
 		if err := c.netlink.RouteReplace(route); err != nil {
-			klog.ErrorS(err, "Failed to sync route", "Route", route)
+			klog.Errorf("Failed to add route to the gateway: %v", err)
 			return false
 		}
 		return true
@@ -492,11 +496,11 @@ func (c *Client) syncIPTables() error {
 		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"})
 	}
 	for _, rule := range jumpRules {
-		if err := c.iptables.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
+		if err := c.ipt.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
 			return err
 		}
 		ruleSpec := []string{"-j", rule.dstChain, "-m", "comment", "--comment", rule.comment}
-		if err := c.iptables.AppendRule(iptables.ProtocolDual, rule.table, rule.srcChain, ruleSpec); err != nil {
+		if err := c.ipt.AppendRule(iptables.ProtocolDual, rule.table, rule.srcChain, ruleSpec); err != nil {
 			return err
 		}
 	}
@@ -527,7 +531,7 @@ func (c *Client) syncIPTables() error {
 			false)
 
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
-		if err := c.iptables.Restore(iptablesData.String(), false, false); err != nil {
+		if err := c.ipt.Restore(iptablesData.String(), false, false); err != nil {
 			return err
 		}
 	}
@@ -544,7 +548,7 @@ func (c *Client) syncIPTables() error {
 			snatMarkToIPv6,
 			true)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
-		if err := c.iptables.Restore(iptablesData.String(), false, true); err != nil {
+		if err := c.ipt.Restore(iptablesData.String(), false, true); err != nil {
 			return err
 		}
 	}
@@ -847,7 +851,7 @@ func (c *Client) initServiceIPRoutes() error {
 }
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
-// based on the desired podCIDRs.
+// based on the desired podCIDRs. svcIPs are used for Windows only.
 func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 	// Get the peer IPv6 gateways from pod CIDRs
@@ -933,9 +937,9 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 }
 
 func (c *Client) isServiceRoute(route *netlink.Route) bool {
-	// If the gateway IP or the destination IP is the virtual Service IP, then it is a route added by AntreaProxy.
-	if route.Dst != nil && (route.Dst.IP.Equal(config.VirtualServiceIPv6) || route.Dst.IP.Equal(config.VirtualServiceIPv4)) ||
-		route.Gw != nil && (route.Gw.Equal(config.VirtualServiceIPv6) || route.Gw.Equal(config.VirtualServiceIPv4)) {
+	// If the destination IP or gateway IP is virtual Service IP , then it is a route which is added by AntreaProxy.
+	if route.Dst.IP.Equal(config.VirtualServiceIPv6) || route.Dst.IP.Equal(config.VirtualServiceIPv4) ||
+		route.Gw.Equal(config.VirtualServiceIPv6) || route.Gw.Equal(config.VirtualServiceIPv4) {
 		return true
 	}
 	return false
@@ -1129,6 +1133,10 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	return nil
 }
 
+func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
+	return nil
+}
+
 // Join all words with spaces, terminate with newline and write to buf.
 func writeLine(buf *bytes.Buffer, words ...string) {
 	// We avoid strings.Join for performance reasons.
@@ -1237,7 +1245,7 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	return c.ipt.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
@@ -1252,11 +1260,11 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	if snatIP.To4() == nil {
 		protocol = iptables.ProtocolIPv6
 	}
-	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	return c.ipt.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }
 
-// addVirtualServiceIPRoute is used to add a route which is used to route the packets whose destination IP is a virtual
-// IP to Antrea gateway.
+// addVirtualServiceIPRoute is used to add routing entry which is used to forward the packets whose destination IP is
+// virtual Service IP back to Antrea gateway on host.
 func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	svcIP := config.VirtualServiceIPv4
@@ -1299,7 +1307,6 @@ func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol b
 		} else {
 			c.nodePortsIPv4.Store(ipSetEntry, struct{}{})
 		}
-		klog.V(4).InfoS("Added ipset for NodePort", "IP", nodePortAddresses[i], "Port", port, "Protocol", protocol)
 	}
 
 	return nil
@@ -1326,33 +1333,41 @@ func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protoco
 	return nil
 }
 
+// TODO: remove it after unifying Windows and Linux functions.
+func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
+	return nil
+}
+
 func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
 	isIPv6 := utilnet.IsIPv6(serviceCIDR.IP)
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	scope := netlink.SCOPE_UNIVERSE
-	serviceCIDRKey := serviceIPv4CIDRKey
+	curServiceCIDR := c.serviceIPv4CIDR
 	gw := config.VirtualServiceIPv4
 	if isIPv6 {
-		serviceCIDRKey = serviceIPv6CIDRKey
+		curServiceCIDR = c.serviceIPv6CIDR
 		gw = config.VirtualServiceIPv6
 	}
 
-	oldServiceCIDRRoute, serviceCIDRRouteExists := c.serviceRoutes.Load(serviceCIDRKey)
 	// Generate a route with the new Service CIDR and install it.
 	serviceCIDRMask, _ := serviceCIDR.Mask.Size()
 	route := generateRoute(serviceCIDR.IP, serviceCIDRMask, gw, linkIndex, scope)
 	if err := c.netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install a new Service CIDR route: %w", err)
 	}
-
 	// Store the new Service CIDR.
-	c.serviceRoutes.Store(serviceCIDRKey, route)
+	if isIPv6 {
+		c.serviceIPv6CIDR = serviceCIDR
+	} else {
+		c.serviceIPv4CIDR = serviceCIDR
+	}
 
 	// Collect stale routes.
 	var staleRoutes []*netlink.Route
-	if serviceCIDRRouteExists {
+	if curServiceCIDR != nil {
 		// If current destination CIDR is not nil, the route with current destination CIDR should be uninstalled.
-		staleRoutes = []*netlink.Route{oldServiceCIDRRoute.(*netlink.Route)}
+		route.Dst = curServiceCIDR
+		staleRoutes = []*netlink.Route{route}
 	} else {
 		// If current destination CIDR is nil, which means that Antrea Agent has just started, then all existing routes
 		// whose destination CIDR contains the first ClusterIP should be uninstalled, except the newly installed route.
@@ -1375,10 +1390,10 @@ func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
 			if err.Error() == "no such process" {
 				klog.InfoS("Failed to delete stale Service CIDR route since the route has been deleted", "route", rt)
 			} else {
-				return fmt.Errorf("failed to delete stale Service CIDR route %s: %w", rt.String(), err)
+				return fmt.Errorf("failed to uninstall stale Service CIDR route %s: %w", rt.String(), err)
 			}
 		} else {
-			klog.V(4).InfoS("Deleted stale Service CIDR route successfully", "route", rt)
+			klog.V(4).InfoS("Uninstalled stale Service CIDR route successfully", "route", rt)
 		}
 	}
 
@@ -1397,9 +1412,9 @@ func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
 	}
 	route := generateRoute(vIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
 	if err := c.netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route for NodePort DNAT IP %s: %w", vIP.String(), err)
+		return fmt.Errorf("failed to install routing entry for virtual NodePort DNAT IP %s: %w", vIP.String(), err)
 	}
-	klog.V(4).InfoS("Added NodePort DNAT IP route", "route", route)
+	klog.V(4).InfoS("Added virtual NodePort DNAT IP route", "route", route)
 	c.serviceRoutes.Store(vIP.String(), route)
 
 	return nil
@@ -1422,7 +1437,7 @@ func (c *Client) AddLoadBalancer(svcIP net.IP) error {
 
 	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
 	if err := c.netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
+		return fmt.Errorf("failed to install routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
 	}
 	klog.V(4).InfoS("Added LoadBalancer ingress IP route", "route", route)
 	c.serviceRoutes.Store(svcIP.String(), route)
@@ -1433,21 +1448,28 @@ func (c *Client) AddLoadBalancer(svcIP net.IP) error {
 // DeleteLoadBalancer is used to delete routing entry which is used to route LoadBalancer ingress IP to Antrea
 // gateway on host.
 func (c *Client) DeleteLoadBalancer(svcIP net.IP) error {
-	svcIPStr := svcIP.String()
-	route, found := c.serviceRoutes.Load(svcIPStr)
-	if !found {
-		klog.V(2).InfoS("Didn't find route for LoadBalancer ingress IP", "ingressIP", svcIPStr)
-		return nil
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	isIPv6 := utilnet.IsIPv6(svcIP)
+	var gw net.IP
+	var mask int
+	if !isIPv6 {
+		gw = config.VirtualServiceIPv4
+		mask = net.IPv4len * 8
+	} else {
+		gw = config.VirtualServiceIPv6
+		mask = net.IPv6len * 8
 	}
-	if err := c.netlink.RouteDel(route.(*netlink.Route)); err != nil {
+
+	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
+	if err := c.netlink.RouteDel(route); err != nil {
 		if err.Error() == "no such process" {
-			klog.InfoS("Failed to delete route for LoadBalancer ingress IP since it doesn't exist", "route", route)
+			klog.InfoS("Failed to delete LoadBalancer ingress IP route since the route has been deleted", "route", route)
 		} else {
-			return fmt.Errorf("failed to delete route for LoadBalancer ingress IP %s: %w", svcIPStr, err)
+			return fmt.Errorf("failed to delete routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
 		}
 	}
 	klog.V(4).InfoS("Deleted LoadBalancer ingress IP route", "route", route)
-	c.serviceRoutes.Delete(svcIPStr)
+	c.serviceRoutes.Delete(svcIP.String())
 
 	return nil
 }

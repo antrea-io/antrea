@@ -19,13 +19,11 @@ package rules
 
 import (
 	"fmt"
-	"net"
 
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/util"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 // Use antrea-nat netnatstaticmapping rules as NPL implementation
@@ -70,18 +68,13 @@ func (nn *netnatRules) initRules() error {
 
 // AddRule appends a NetNatStaticMapping rule.
 func (nn *netnatRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
-	netNatStaticMapping := &util.NetNatStaticMapping{
-		Name:         antreaNatNPL,
-		ExternalIP:   net.ParseIP("0.0.0.0"),
-		ExternalPort: util.PortToUint16(nodePort),
-		InternalIP:   net.ParseIP(podIP),
-		InternalPort: util.PortToUint16(podPort),
-		Protocol:     binding.Protocol(protocol),
-	}
-	if err := util.ReplaceNetNatStaticMapping(netNatStaticMapping); err != nil {
+	nodePort16 := util.PortToUint16(nodePort)
+	podPort16 := util.PortToUint16(podPort)
+	podAddr := fmt.Sprintf("%s:%d", podIP, podPort16)
+	if err := util.ReplaceNetNatStaticMapping(antreaNatNPL, "0.0.0.0", nodePort16, podIP, podPort16, protocol); err != nil {
 		return err
 	}
-	klog.InfoS("Successfully added NetNatStaticMapping", "NetNatStaticMapping", netNatStaticMapping)
+	klog.InfoS("Successfully added NetNat rule", "podAddr", podAddr, "nodePort", nodePort16, "protocol", protocol)
 	return nil
 }
 
@@ -97,18 +90,13 @@ func (nn *netnatRules) AddAllRules(nplList []PodNodePort) error {
 
 // DeleteRule deletes a specific NPL rule from NetNatStaticMapping table
 func (nn *netnatRules) DeleteRule(nodePort int, podIP string, podPort int, protocol string) error {
-	netNatStaticMapping := &util.NetNatStaticMapping{
-		Name:         antreaNatNPL,
-		ExternalIP:   net.ParseIP("0.0.0.0"),
-		ExternalPort: util.PortToUint16(nodePort),
-		InternalIP:   net.ParseIP(podIP),
-		InternalPort: util.PortToUint16(podPort),
-		Protocol:     binding.Protocol(protocol),
-	}
-	if err := util.RemoveNetNatStaticMappingByNPLTuples(netNatStaticMapping); err != nil {
+	nodePort16 := util.PortToUint16(nodePort)
+	podPort16 := util.PortToUint16(podPort)
+	podAddr := fmt.Sprintf("%s:%d", podIP, podPort16)
+	if err := util.RemoveNetNatStaticMappingByNPLTuples(antreaNatNPL, "0.0.0.0", nodePort16, podIP, podPort16, protocol); err != nil {
 		return err
 	}
-	klog.InfoS("Successfully deleted NetNatStaticMapping", "NetNatStaticMapping", netNatStaticMapping)
+	klog.InfoS("Successfully deleted NetNatStaticMapping rule", "podAddr", podAddr, "nodePort", nodePort16, "protocol", protocol)
 	return nil
 }
 

@@ -51,6 +51,12 @@ func TestRouteOperation(t *testing.T) {
 	_, destCIDR2, _ := net.ParseCIDR(dest2)
 
 	client, err := NewClient(&config.NetworkConfig{}, true, false, false, false, nil)
+	svcStr1 := "1.1.0.10"
+	svcIP1 := net.ParseIP(svcStr1)
+	svcIPNet1 := util.NewIPNet(svcIP1)
+	svcStr2 := "1.1.0.11"
+	svcIP2 := net.ParseIP(svcStr2)
+	svcIPNet2 := util.NewIPNet(svcIP2)
 
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
@@ -78,6 +84,24 @@ func TestRouteOperation(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes2))
 
+	err = client.AddClusterIPRoute(svcIP1)
+	require.Nil(t, err)
+	route3, err := util.GetNetRoutes(gwLink, svcIPNet1)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(route3))
+	obj, found := client.hostRoutes.Load(svcIPNet1.String())
+	assert.True(t, found)
+	assert.EqualValues(t, route3[0], *obj.(*util.Route))
+
+	err = client.AddClusterIPRoute(svcIP2)
+	require.Nil(t, err)
+	route4, err := util.GetNetRoutes(gwLink, svcIPNet2)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(route4))
+	obj, found = client.hostRoutes.Load(svcIPNet2.String())
+	assert.True(t, found)
+	assert.EqualValues(t, route4[0], *obj.(*util.Route))
+
 	err = client.Reconcile([]string{dest2})
 	require.Nil(t, err)
 
@@ -85,9 +109,21 @@ func TestRouteOperation(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes5))
 
+	routes6, err := util.GetNetRoutes(gwLink, svcIPNet2)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(routes6))
+
 	err = client.DeleteRoutes(destCIDR2)
 	require.Nil(t, err)
 	routes7, err := util.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes7))
+
+	err = client.DeleteClusterIPRoute(svcIP1)
+	require.Nil(t, err)
+	routes8, err := util.GetNetRoutes(gwLink, svcIPNet1)
+	require.Nil(t, err)
+	assert.Equal(t, 0, len(routes8))
+	_, found = client.hostRoutes.Load(svcIPNet1.String())
+	assert.False(t, found)
 }

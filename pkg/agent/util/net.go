@@ -299,9 +299,6 @@ func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
 
 // ExtendCIDRWithIP is used for extending an IPNet with an IP.
 func ExtendCIDRWithIP(ipNet *net.IPNet, ip net.IP) (*net.IPNet, error) {
-	if ipNet == nil {
-		return NewIPNet(ip), nil
-	}
 	cpl := longestCommonPrefixLen(ipNet.IP, ip)
 	if cpl == 0 {
 		return nil, fmt.Errorf("invalid common prefix length")

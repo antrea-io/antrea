@@ -177,6 +177,12 @@ func (p *proxier) removeStaleServices() {
 					continue
 				}
 			}
+			if svcInfo.ClusterIP() != nil {
+				if err := p.deleteRouteForServiceIP(svcInfoStr, svcInfo.ClusterIP(), p.routeClient.DeleteClusterIPRoute); err != nil {
+					klog.ErrorS(err, "Failed to remove ClusterIP Service routes", "Service", svcPortName)
+					continue
+				}
+			}
 		}
 		// Remove LoadBalancer flows and configurations.
 		if p.proxyLoadBalancerIPs && len(svcInfo.LoadBalancerIPStrings()) > 0 {
@@ -593,6 +599,13 @@ func (p *proxier) installServices() {
 							continue
 						}
 					}
+					// If previous Service which has ClusterIP should be removed, remove ClusterIP routes.
+					if pSvcInfo.ClusterIP() != nil {
+						if err := p.deleteRouteForServiceIP(pSvcInfo.String(), pSvcInfo.ClusterIP(), p.routeClient.DeleteClusterIPRoute); err != nil {
+							klog.ErrorS(err, "Error when uninstalling ClusterIP route for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
+							continue
+						}
+					}
 				}
 			}
 
@@ -615,6 +628,15 @@ func (p *proxier) installServices() {
 			}
 
 			if p.proxyAll {
+				// Install ClusterIP route on Node so that ClusterIP can be accessed on Node. Every time a new ClusterIP
+				// is created, the routing target IP block will be recalculated for expansion to be able to route the new
+				// created ClusterIP. Deleting a ClusterIP will not shrink the target routing IP block. The Service CIDR
+				// can be finally calculated after creating enough ClusterIPs.
+				if err := p.addRouteForServiceIP(svcInfo.String(), svcInfo.ClusterIP(), p.routeClient.AddClusterIPRoute); err != nil {
+					klog.ErrorS(err, "Error when installing ClusterIP route for Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
+					continue
+				}
+
 				// If previous Service is nil or NodePort flows and configurations of previous Service have been removed,
 				// install NodePort flows and configurations for current Service.
 				if svcInfo.NodePort() > 0 && (pSvcInfo == nil || needRemoval) {

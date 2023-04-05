@@ -284,9 +284,9 @@ func TestIpTablesSync(t *testing.T) {
 		assert.Equal(t, "", string(actualData), "failed to remove iptables rule for %v", tc)
 	}
 	stopCh := make(chan struct{})
-	route.SyncInterval = 2 * time.Second
+	route.IPTablesSyncInterval = 2 * time.Second
 	go routeClient.Run(stopCh)
-	time.Sleep(route.SyncInterval) // wait for one iteration of sync operation.
+	time.Sleep(route.IPTablesSyncInterval) // wait for one iteration of sync operation.
 	for _, tc := range tcs {
 		saveCmd := fmt.Sprintf("iptables-save -t %s | grep -e '%s %s'", tc.Table, tc.Cmd, tc.Chain)
 		// #nosec G204: ignore in test code
@@ -443,9 +443,9 @@ func TestSyncRoutes(t *testing.T) {
 
 		stopCh := make(chan struct{})
 		defer close(stopCh)
-		route.SyncInterval = 2 * time.Second
+		route.IPTablesSyncInterval = 2 * time.Second
 		go routeClient.Run(stopCh)
-		time.Sleep(route.SyncInterval) // wait for one iteration of sync operation.
+		time.Sleep(route.IPTablesSyncInterval) // wait for one iteration of sync operation.
 
 		output, err := exec.Command("bash", "-c", listCmd).Output()
 		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
@@ -487,10 +487,10 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	route.SyncInterval = 2 * time.Second
+	route.IPTablesSyncInterval = 2 * time.Second
 	go routeClient.Run(stopCh)
 
-	err = wait.Poll(1*time.Second, 2*route.SyncInterval, func() (done bool, err error) {
+	err = wait.Poll(1*time.Second, 2*route.IPTablesSyncInterval, func() (done bool, err error) {
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		if err != nil {
 			return false, err

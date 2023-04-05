@@ -204,6 +204,8 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 	}
 
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
+	// If proxyAll enabled, it will also remove routes that are for Windows ClusterIP Services
+	// which no longer exist.
 	if err := c.routeClient.Reconcile(desiredPodCIDRs); err != nil {
 		return err
 	}

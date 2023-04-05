@@ -257,6 +257,8 @@ func run(o *Options) error {
 		stopCh,
 		o.nodeType,
 		o.config.ExternalNode.ExternalNodeNamespace,
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge,
 		l7NetworkPolicyEnabled)
 	err = agentInitializer.Initialize()
