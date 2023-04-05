@@ -89,6 +89,15 @@ resources:
   controller: true
   domain: crd.antrea.io
   group: multicluster
+  kind: ClusterProperty
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
   kind: ClusterClaim
   path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha2
   version: v1alpha2

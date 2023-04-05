@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,14 @@ type ClusterInfoImportListerExpansion interface{}
 // ClusterInfoImportNamespaceListerExpansion allows custom methods to be added to
 // ClusterInfoImportNamespaceLister.
 type ClusterInfoImportNamespaceListerExpansion interface{}
+
+// ClusterPropertyListerExpansion allows custom methods to be added to
+// ClusterPropertyLister.
+type ClusterPropertyListerExpansion interface{}
+
+// ClusterPropertyNamespaceListerExpansion allows custom methods to be added to
+// ClusterPropertyNamespaceLister.
+type ClusterPropertyNamespaceListerExpansion interface{}
 
 // ClusterSetListerExpansion allows custom methods to be added to
 // ClusterSetLister.

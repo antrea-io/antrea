@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@ type FakeMulticlusterV1alpha1 struct {
 
 func (c *FakeMulticlusterV1alpha1) ClusterInfoImports(namespace string) v1alpha1.ClusterInfoImportInterface {
 	return &FakeClusterInfoImports{c, namespace}
+}
+
+func (c *FakeMulticlusterV1alpha1) ClusterProperties(namespace string) v1alpha1.ClusterPropertyInterface {
+	return &FakeClusterProperties{c, namespace}
 }
 
 func (c *FakeMulticlusterV1alpha1) ClusterSets(namespace string) v1alpha1.ClusterSetInterface {
