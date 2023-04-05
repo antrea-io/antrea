@@ -1,0 +1,31 @@
+# permissions for end users to edit clusterproperties.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: clusterproperty-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: multicluster
+    app.kubernetes.io/part-of: multicluster
+    app.kubernetes.io/managed-by: kustomize
+  name: clusterproperty-editor-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterproperties
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterproperties/status
+  verbs:
+  - get

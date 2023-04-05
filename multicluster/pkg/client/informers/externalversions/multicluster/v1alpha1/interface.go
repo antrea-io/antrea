@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 type Interface interface {
 	// ClusterInfoImports returns a ClusterInfoImportInformer.
 	ClusterInfoImports() ClusterInfoImportInformer
+	// ClusterProperties returns a ClusterPropertyInformer.
+	ClusterProperties() ClusterPropertyInformer
 	// ClusterSets returns a ClusterSetInformer.
 	ClusterSets() ClusterSetInformer
 	// Gateways returns a GatewayInformer.
@@ -52,6 +54,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ClusterInfoImports returns a ClusterInfoImportInformer.
 func (v *version) ClusterInfoImports() ClusterInfoImportInformer {
 	return &clusterInfoImportInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ClusterProperties returns a ClusterPropertyInformer.
+func (v *version) ClusterProperties() ClusterPropertyInformer {
+	return &clusterPropertyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterSets returns a ClusterSetInformer.
