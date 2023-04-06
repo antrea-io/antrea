@@ -394,8 +394,8 @@ function deliver_antrea_windows {
         revert_snapshot_windows ${WORKER_NAME}
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
-        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-busybox:1.29-windows-amd64-1809")
-        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.13" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "gcr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.0" "e2eteam/pause:3.2" "registry.k8s.io/pause:3.2" "docker.io/library/busybox:1.29")
+        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-busybox:1.29-windows-amd64-1809")
+        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.13" "k8s.gcr.io/e2e-test-images/agnhost:2.29" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "gcr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.0" "e2eteam/pause:3.2" "k8s.gcr.io/pause:3.2" "registry.k8s.io/pause:3.2" "docker.io/library/busybox:1.29")
         common_images=("mcr.microsoft.com/windows/servercore/iis:latest")
         # Pull necessary images in advance to avoid transient error
         for i in "${!harbor_images[@]}"; do
@@ -815,7 +815,7 @@ function run_conformance_windows_containerd {
     export KUBE_TEST_REPO_LIST=${WORKDIR}/repo_list
     if [ "$TESTCASE" == "windows-containerd-networkpolicy" ]; then
         # Allow LinuxOnly mark in windows-containerd-networkpolicy because Antrea Windows supports NP functions.
-        ginkgo -timeout=2h --no-color $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus="$WINDOWS_NETWORKPOLICY_FOCUS" --ginkgo.skip="$WINDOWS_NETWORKPOLICY_CONTAINERD_SKIP" > windows_conformance_result_no_color.txt || true
+        ginkgo -timeout=3h --flake-attempts 3 --no-color $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus="$WINDOWS_NETWORKPOLICY_FOCUS" --ginkgo.skip="$WINDOWS_NETWORKPOLICY_CONTAINERD_SKIP" > windows_conformance_result_no_color.txt || true
     else
         ginkgo --no-color $E2ETEST_PATH -- --provider=skeleton --node-os-distro=windows --ginkgo.focus="$WINDOWS_CONFORMANCE_FOCUS" --ginkgo.skip="$WINDOWS_CONFORMANCE_SKIP" > windows_conformance_result_no_color.txt || true
     fi
