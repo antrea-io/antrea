@@ -119,12 +119,7 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
-        # include all go.sum files (not just the root one), since we are also checking hack/netpol
-        cache-dependency-path: '**/go.sum'
     - name: Run golangci-lint
-      run: make golangci
-    - name: Run golangci-lint for netpol
-      working-directory: hack/netpol
       run: make golangci
 
   golangci-lint-macos:
@@ -139,12 +134,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
-          # include all go.sum files (not just the root one), since we are also checking hack/netpol
-          cache-dependency-path: '**/go.sum'
       - name: Run golangci-lint
-        run: make golangci
-      - name: Run golangci-lint for netpol
-        working-directory: hack/netpol
         run: make golangci
 
   bin:
