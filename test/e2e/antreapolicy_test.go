@@ -38,7 +38,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/features"
@@ -804,7 +803,7 @@ func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 // testACNPAppliedToDenyXBtoCGWithYA tests traffic from X/B to ClusterGroup Y/A on named port 81 is dropped.
 func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 	cgName := "cg-pods-ya"
-	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName).
 		SetNamespaceSelector(map[string]string{"ns": namespaces["y"]}, nil).
 		SetPodSelector(map[string]string{"pod": "a"}, nil)
@@ -841,7 +840,7 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 // testACNPIngressRuleDenyCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
 func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	cgName := "cg-pods-xb"
-	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName).
 		SetNamespaceSelector(map[string]string{"ns": namespaces["x"]}, nil).
 		SetPodSelector(map[string]string{"pod": "b"}, nil)
@@ -1161,14 +1160,13 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 		ipBlock2 = append(ipBlock2, crdv1alpha1.IPBlock{CIDR: genCIDR(podZAIP[i])})
 	}
 
-	cgv1a3Name := "cg-ipblocks-pod-in-ns-x"
+	cgName := "cg-ipblocks-pod-in-ns-x"
 	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgv1a3Name).
+	cgBuilder = cgBuilder.SetName(cgName).
 		SetIPBlocks(ipBlock1)
-	// crd/v1alpha2 ClusterGroups should be converted to crd/v1alpha3.
-	cgv1a2Name := "cg-ipblock-pod-za"
+	cgName2 := "cg-ipblock-pod-za"
 	cgBuilder2 := &ClusterGroupV1Alpha3SpecBuilder{}
-	cgBuilder2 = cgBuilder2.SetName(cgv1a2Name).
+	cgBuilder2 = cgBuilder2.SetName(cgName2).
 		SetIPBlocks(ipBlock2)
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -1181,9 +1179,9 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 			},
 		})
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, cgv1a3Name, "", nil)
+		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, cgName, "", nil)
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, cgv1a2Name, "", nil)
+		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, cgName2, "", nil)
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(Pod(namespaces["x"]+"/a"), Pod(namespaces["y"]+"/a"), Dropped)
@@ -4087,9 +4085,6 @@ func applyTestStepResources(t *testing.T, step *TestStep) {
 		case *crdv1alpha3.ClusterGroup:
 			_, err := k8sUtils.CreateOrUpdateV1Alpha3CG(o)
 			failOnError(err, t)
-		case *crdv1alpha2.ClusterGroup:
-			_, err := k8sUtils.CreateOrUpdateV1Alpha2CG(o)
-			failOnError(err, t)
 		case *crdv1alpha3.Group:
 			_, err := k8sUtils.CreateOrUpdateV1Alpha3Group(o)
 			failOnError(err, t)
@@ -4106,7 +4101,7 @@ func cleanupTestCaseResources(t *testing.T, c *TestCase) {
 	// TestSteps in a TestCase may first create and then update the same resource.
 	// Use sets to avoid duplicates.
 	acnpsToDelete, anpsToDelete, npsToDelete := sets.String{}, sets.String{}, sets.String{}
-	svcsToDelete, v1a2ClusterGroupsToDelete, v1a3ClusterGroupsToDelete, v1a3GroupsToDelete := sets.String{}, sets.String{}, sets.String{}, sets.String{}
+	svcsToDelete, v1a3ClusterGroupsToDelete, v1a3GroupsToDelete := sets.String{}, sets.String{}, sets.String{}
 	for _, step := range c.Steps {
 		for _, r := range step.TestResources {
 			switch o := r.(type) {
@@ -4118,8 +4113,6 @@ func cleanupTestCaseResources(t *testing.T, c *TestCase) {
 				npsToDelete.Insert(o.Namespace + "/" + o.Name)
 			case *crdv1alpha3.ClusterGroup:
 				v1a3ClusterGroupsToDelete.Insert(o.Name)
-			case *crdv1alpha2.ClusterGroup:
-				v1a2ClusterGroupsToDelete.Insert(o.Name)
 			case *crdv1alpha3.Group:
 				v1a3GroupsToDelete.Insert(o.Namespace + "/" + o.Name)
 			case *v1.Service:
@@ -4139,9 +4132,6 @@ func cleanupTestCaseResources(t *testing.T, c *TestCase) {
 		namespace := strings.Split(np, "/")[0]
 		name := strings.Split(np, "/")[1]
 		failOnError(k8sUtils.DeleteNetworkPolicy(namespace, name), t)
-	}
-	for cg := range v1a2ClusterGroupsToDelete {
-		failOnError(k8sUtils.DeleteV1Alpha2CG(cg), t)
 	}
 	for cg := range v1a3ClusterGroupsToDelete {
 		failOnError(k8sUtils.DeleteV1Alpha3CG(cg), t)
@@ -4203,7 +4193,6 @@ func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object
 		// The minInterval of AntreaProxy's BoundedFrequencyRunner is 1s, which means a Service may be handled after 1s.
 		time.Sleep(1 * time.Second)
 	case *crdv1alpha1.Tier:
-	case *crdv1alpha2.ClusterGroup:
 	case *crdv1alpha3.ClusterGroup:
 	case *crdv1alpha3.Group:
 	}
