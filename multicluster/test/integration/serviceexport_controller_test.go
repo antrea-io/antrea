@@ -178,7 +178,7 @@ var _ = Describe("ServiceExport controller", func() {
 		Expect(err).ToNot(HaveOccurred())
 		conditions := latestSvcExportNoService.Status.Conditions
 		Expect(len(conditions)).Should(Equal(1))
-		Expect(*conditions[0].Message).Should(Equal("the Service does not exist"))
+		Expect(*conditions[0].Message).Should(Equal("Service does not exist"))
 	})
 
 	It("Should delete existing ResourceExport when existing ServiceExport is deleted", func() {
@@ -248,7 +248,7 @@ var _ = Describe("ServiceExport controller", func() {
 		Expect(err).ToNot(HaveOccurred())
 		conditions := latestsvcExportDeletedService.Status.Conditions
 		Expect(len(conditions)).Should(Equal(1))
-		Expect(*conditions[0].Message).Should(Equal("the Service does not exist"))
+		Expect(*conditions[0].Message).Should(Equal("Service does not exist"))
 
 		resExp := &mcsv1alpha1.ResourceExport{}
 		Eventually(func() bool {

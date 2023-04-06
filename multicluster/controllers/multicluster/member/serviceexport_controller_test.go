@@ -178,6 +178,45 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	nginx2SvcExportWithStatus.Name = "nginx2"
 	existingMessage := "the Service has no related Endpoints"
 	nginx2SvcExportWithStatus.Status.Conditions[0].Message = &existingMessage
+
+	nginx3Svc := common.SvcNginx.DeepCopy()
+	nginx3Svc.Name = "nginx3"
+	nginx3Svc.Spec.Type = corev1.ServiceTypeExternalName
+	nginx3SvcExport := &k8smcsv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx3",
+		},
+	}
+
+	svcNoClusterIP := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nginx-no-ip",
+			Namespace: "default",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				common.SvcPort80,
+			},
+			Type: corev1.ServiceTypeClusterIP,
+		},
+	}
+
+	svcNoClusterIPEP := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx-no-ip",
+		},
+		Subsets: common.EPNginxSubset,
+	}
+
+	svcExpNoClusterIP := &k8smcsv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx-no-ip",
+		},
+	}
+
 	tests := []struct {
 		name            string
 		expectedReason  string
@@ -185,13 +224,31 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		req             ctrl.Request
 	}{
 		{
-			name:           "export non-existing Service",
-			expectedReason: "service_not_found",
-			req:            nginxReq,
+			name:            "export non-existing Service",
+			expectedReason:  "ServiceNotFound",
+			expectedMessage: "Service does not exist",
+			req:             nginxReq,
+		},
+		{
+			name:            "export ExternalName type of Service",
+			expectedReason:  "ServiceTypeNotSupported",
+			expectedMessage: "Service of ExternalName type is not supported",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "nginx3",
+			}},
+		},
+		{
+			name:           "export Service without ClusterIP",
+			expectedReason: "ServiceNoClusterIP",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "nginx-no-ip",
+			}},
 		},
 		{
 			name:           "export multi-cluster Service",
-			expectedReason: "imported_service",
+			expectedReason: "ImportedService",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "antrea-mc-nginx",
@@ -199,15 +256,14 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 		{
 			name:           "export Service without Endpoints",
-			expectedReason: "service_without_endpoints",
+			expectedReason: "ServiceWithoutEndpoints",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "nginx0",
 			}},
 		},
 		{
-			name:           "export Service and update status successfully",
-			expectedReason: "export_succeeded",
+			name: "export Service and update status successfully",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "nginx1",
@@ -215,8 +271,8 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 		{
 			name:            "skip update status",
-			expectedReason:  "service_without_endpoints",
-			expectedMessage: "the Service has no related Endpoints",
+			expectedReason:  "ServiceWithoutEndpoints",
+			expectedMessage: "Service has no Endpoints",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "nginx2",
@@ -224,8 +280,8 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx1EP, nginx2Svc, existSvcExport,
-		nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, mcsSvcExport).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP,
+		nginx2Svc, existSvcExport, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
@@ -243,7 +299,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 					t.Errorf("ServiceExport Reconciler should get new ServiceExport successfully but got error = %v", err)
 				} else {
 					reason := newSvcExport.Status.Conditions[0].Reason
-					if *reason != tt.expectedReason {
+					if reason != nil && *reason != tt.expectedReason {
 						t.Errorf("Expected ServiceExport status should be %s but got %v", tt.expectedReason, *reason)
 					}
 					if tt.expectedMessage != "" && tt.expectedMessage != *newSvcExport.Status.Conditions[0].Message {
@@ -280,9 +336,9 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 		if err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport); err != nil {
 			t.Errorf("Should get ServiceExport successfully but got error = %v", err)
 		} else {
-			reason := newSvcExport.Status.Conditions[0].Reason
-			if *reason != "export_succeeded" {
-				t.Errorf("Expected ServiceExport status should be 'export_succeeded' but got %v", *reason)
+			status := newSvcExport.Status.Conditions[0].Status
+			if status != "True" {
+				t.Errorf("Expected ServiceExport status should be True but got %v", status)
 			}
 		}
 	}
