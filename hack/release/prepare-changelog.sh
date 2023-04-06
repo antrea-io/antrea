@@ -101,7 +101,7 @@ if [ "$patch_number" != "0" ]; then
 fi
 
 # Get the best common ancestor between the current branch and the last release.
-common_ancestor=$(git merge-base "v${from_release}" "${branch}")
+common_ancestor=$(git merge-base "v${from_release}" "upstream/${branch}")
 # Get the merge time of the common ancestor and use it as the start time of the current release.
 release_start_time=$(gh pr list --state merged --search "${common_ancestor}" --json mergedAt -q .[0].mergedAt)
 
