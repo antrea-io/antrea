@@ -126,7 +126,7 @@ The `Certificate` should be created in the `kube-system` namespace. For example,
 A `Certificate` may look like:
 
 ```yaml
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: antrea-controller-tls
