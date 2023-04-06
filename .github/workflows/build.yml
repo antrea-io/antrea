@@ -146,26 +146,6 @@ jobs:
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/antrea-mc-controller:latest
 
-  build-netpol-tmp:
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v3
-    - name: Build netpol Docker image
-      working-directory: hack/netpol
-      run: make build
-    - name: Push netpol Docker image to registry
-      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      working-directory: hack/netpol
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        make push
-        make push-release
-
   build-flow-aggregator:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}

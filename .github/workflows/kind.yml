@@ -595,40 +595,6 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
-  test-netpol-tmp:
-    name: Run experimental network policy tests (netpol) on Kind cluster
-    needs: build-antrea-coverage-image
-    runs-on: [ubuntu-latest]
-    steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
-    - uses: actions/checkout@v3
-    - uses: actions/setup-go@v4
-      with:
-        go-version-file: 'go.mod'
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v3
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-        docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
-    - name: Install Kind
-      run: |
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
-    - name: Build netpol Docker image
-      working-directory: hack/netpol
-      run: make
-    - name: Run netpol tests
-      working-directory: hack/netpol
-      run: ./test-kind.sh
-
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
     needs: build-antrea-coverage-image
@@ -675,7 +641,6 @@ jobs:
     - test-upgrade-from-N-2
     - test-compatible-N-1
     - test-compatible-N-2
-    - test-netpol-tmp
     - validate-prometheus-metrics-doc
     - test-e2e-flow-visibility
     runs-on: [ubuntu-latest]
