@@ -35,10 +35,10 @@ require (
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/lithammer/dedent v1.1.0
-	github.com/mdlayher/arp v0.0.0-20191213142603-f72070a231fc
-	github.com/mdlayher/ethernet v0.0.0-20190606142754-0394541c37b7
-	github.com/mdlayher/ndp v0.0.0-20210831201139-f982b8766fb5
-	github.com/mdlayher/raw v0.0.0-20211126142749-4eae47f3d54b
+	github.com/mdlayher/arp v0.0.0-20220221190821-c37aaafac7f9
+	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
+	github.com/mdlayher/ndp v0.8.0
+	github.com/mdlayher/packet v1.0.0
 	github.com/miekg/dns v1.1.53
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/onsi/ginkgo v1.16.5
@@ -151,7 +151,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/josharian/native v0.0.0-20200817173448-b6b71def0850 // indirect
+	github.com/josharian/native v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
@@ -161,6 +161,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mdlayher/genetlink v1.0.0 // indirect
 	github.com/mdlayher/netlink v1.4.0 // indirect
+	github.com/mdlayher/socket v0.2.1 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
