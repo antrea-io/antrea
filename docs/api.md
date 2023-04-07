@@ -28,12 +28,12 @@ These are the CRDs currently available in `crd.antrea.io`.
 |---|---|---|---|---|
 | `AntreaAgentInfo` | v1beta1 | v1.0.0 | N/A | N/A |
 | `AntreaControllerInfo` | v1beta1 | v1.0.0 | N/A | N/A |
-| `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | Feb 2022 |
 | `ClusterGroup` | v1alpha3 | v1.1.0 | N/A | N/A |
 | `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | N/A | N/A |
 | `Egress` | v1alpha2 | v1.0.0 | N/A | N/A |
 | `ExternalEntity` | v1alpha2 | v1.0.0 | N/A | N/A |
 | `ExternalIPPool` | v1alpha2 | v1.2.0 | N/A | N/A |
+| `Group` | v1alpha3 | v1.8.0 | N/A | N/A |
 | `NetworkPolicy` | v1alpha1 | v1.0.0 | N/A | N/A |
 | `Tier` | v1alpha1 | v1.0.0 | N/A | N/A |
 | `Traceflow` | v1alpha1 | v1.0.0 | N/A | N/A |
@@ -50,6 +50,8 @@ These are the API group versions which are curently available when using Antrea.
 
 ## Previously-supported
 
+### Previously-supported API groups
+
 | API group | API version | API Service? | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|---|
 | `core.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v0.11.0 | v0.11.0 |
@@ -62,6 +64,15 @@ These are the API group versions which are curently available when using Antrea.
 | `security.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | v1.6.0 |
 | `stats.antrea.tanzu.vmware.com` | `v1alpha1` | Yes | v0.10.0 | v1.0.0 | v1.6.0 |
 | `system.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.5.0 | v1.0.0 | v1.6.0 |
+
+### Previously-supported CRDs
+
+| CRD | CRD version | Introduced in | Deprecated in | Removed in |
+|---|---|---|---|---|
+| `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | v1.12.0 [^1] |
+
+[^1]: The v1alpha2 version of the `ClusterGroup` CRD is no longer served by the
+      apiserver in v1.12 and is completely removed in v1.13.
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
 
