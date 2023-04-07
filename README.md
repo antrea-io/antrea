@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/antrea.io/antrea)](https://goreportcard.com/report/antrea.io/antrea)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/4173/badge)](https://bestpractices.coreinfrastructure.org/projects/4173)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-![GitHub release](https://img.shields.io/github/release/antrea-io/antrea.svg?include_prereleases)
+![GitHub release](https://img.shields.io/github/v/release/antrea-io/antrea?display_name=tag&sort=semver)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_shield)
 
 ## Overview
