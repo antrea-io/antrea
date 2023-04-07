@@ -22,14 +22,14 @@ import (
 
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ethernet"
-	"github.com/mdlayher/raw"
+	"github.com/mdlayher/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type fakePacketConn struct {
-	addr   raw.Addr
+	addr   packet.Addr
 	buffer *bytes.Buffer
 }
 
@@ -113,7 +113,7 @@ func TestARPResponder_Advertise(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			conn := &fakePacketConn{
 				buffer: bytes.NewBuffer(nil),
-				addr: raw.Addr{
+				addr: packet.Addr{
 					HardwareAddr: tt.iface.HardwareAddr,
 				},
 			}
@@ -191,7 +191,7 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			conn := &fakePacketConn{
 				buffer: bytes.NewBuffer(nil),
-				addr: raw.Addr{
+				addr: packet.Addr{
 					HardwareAddr: tt.iface.HardwareAddr,
 				},
 			}
@@ -256,7 +256,7 @@ func Test_arpResponder_addIP(t *testing.T) {
 			}
 			conn := &fakePacketConn{
 				buffer: bytes.NewBuffer(nil),
-				addr: raw.Addr{
+				addr: packet.Addr{
 					HardwareAddr: r.iface.HardwareAddr,
 				},
 			}
