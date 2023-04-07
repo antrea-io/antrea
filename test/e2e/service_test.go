@@ -157,7 +157,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 	// e2e framework, nodeName(0)/Control-plane Node is guaranteed to be a Linux one.
 	clientName := "busybox-client"
 	require.NoError(t, data.createBusyboxPodOnNode(clientName, clientNamespace, nodeName(0), false))
-	defer data.deletePodAndWait(defaultTimeout, clientName, clientNamespace)
+	defer data.DeletePodAndWait(defaultTimeout, clientName, clientNamespace)
 	podIPs, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace)
 	require.NoError(t, err)
 	t.Logf("Created client Pod IPs %v", podIPs.ipStrings)
@@ -198,7 +198,7 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 	require.NoError(t, err)
 
 	cleanup := func() {
-		data.deletePodAndWait(defaultTimeout, name, namespace)
+		data.DeletePodAndWait(defaultTimeout, name, namespace)
 		data.deleteServiceAndWait(defaultTimeout, name, namespace)
 	}
 
