@@ -29,14 +29,16 @@ We will continue to add more advanced NetworkPolicy features.
 
 * **Network diagnostics and observability**
 Network diagnostics and observability is one area we want to focus on. Antrea
-already implements some useful features on this front, including [Octant UI
-plugin](docs/octant-plugin-installation.md), [CLI](docs/antctl.md),
-[Traceflow](docs/traceflow-guide.md), [network flow export and visualization](docs/network-flow-visibility.md),
-[Prometheus metrics](docs/prometheus-integration.md), [OVS flow dumping](docs/antctl.md#dumping-ovs-flows)
-and [packet tracing](docs/antctl.md#ovs-packet-tracing), [NetworkPolicy
-diagnostics](docs/antctl.md#networkpolicy-commands). We will continue to
-enhance existing features and add new features to help diagnose K8s networking
-and NetworkPolicy implementation, and to provide good visibility into the Antrea
+already implements some useful features on this front, including the [Antrea
+UI](https://github.com/antrea-io/antrea-ui), [CLI](docs/antctl.md),
+[Traceflow](docs/traceflow-guide.md), [network flow export and
+visualization](docs/network-flow-visibility.md), [Prometheus
+metrics](docs/prometheus-integration.md), [OVS flow
+dumping](docs/antctl.md#dumping-ovs-flows) and [packet
+tracing](docs/antctl.md#ovs-packet-tracing), [NetworkPolicy
+diagnostics](docs/antctl.md#networkpolicy-commands). We will continue to enhance
+existing features and add new features to help diagnose K8s networking and
+NetworkPolicy implementation, and to provide good visibility into the Antrea
 network.
 
 * **NFV and Telco use cases**
