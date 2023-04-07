@@ -115,7 +115,7 @@ spec:
   group: crd.antrea.io
   versions:
     - name: v1alpha2
-      served: true
+      served: false
       storage: false
       schema:
         openAPIV3Schema:
