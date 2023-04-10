@@ -157,6 +157,10 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 		&webhook.Admission{Handler: &clusterClaimValidator{
 			Client:    mgr.GetClient(),
 			namespace: env.GetPodNamespace()}})
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-clusterproperty",
+		&webhook.Admission{Handler: &clusterPropertyValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace()}})
 
 	//+kubebuilder:scaffold:builder
 

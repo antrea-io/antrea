@@ -28,24 +28,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
 
-func TestCreateClusterClaim(t *testing.T) {
+func TestCreateClusterProperty(t *testing.T) {
 	tests := []struct {
-		name                  string
-		expectedResLen        int
-		existingClusterClaims []mcsv1alpha2.ClusterClaim
+		name                      string
+		expectedResLen            int
+		existingClusterProperties []mcsv1alpha1.ClusterProperty
 	}{
 		{
 			name:           "create successfully",
 			expectedResLen: 2,
 		},
 		{
-			name:           "create one cluster ClusterClaim successfully",
+			name:           "create one cluster ClusterProperty successfully",
 			expectedResLen: 1,
-			existingClusterClaims: []mcsv1alpha2.ClusterClaim{
+			existingClusterProperties: []mcsv1alpha1.ClusterProperty{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
@@ -55,25 +54,25 @@ func TestCreateClusterClaim(t *testing.T) {
 			},
 		},
 		{
-			name:           "create one clusterSet ClusterClaim successfully",
+			name:           "create one clusterSet ClusterProperty successfully",
 			expectedResLen: 1,
-			existingClusterClaims: []mcsv1alpha2.ClusterClaim{
+			existingClusterProperties: []mcsv1alpha1.ClusterProperty{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
-						Name:      "id.k8s.io",
+						Name:      "cluster.clusterset.k8s.io",
 					},
 				},
 			},
 		},
 		{
-			name:           "falied to create two ClusterClaims",
+			name:           "falied to create two ClusterProperties",
 			expectedResLen: 0,
-			existingClusterClaims: []mcsv1alpha2.ClusterClaim{
+			existingClusterProperties: []mcsv1alpha1.ClusterProperty{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "default",
-						Name:      "id.k8s.io",
+						Name:      "cluster.clusterset.k8s.io",
 					},
 				},
 				{
@@ -91,16 +90,16 @@ func TestCreateClusterClaim(t *testing.T) {
 			cmd := &cobra.Command{}
 			createdRes := []map[string]interface{}{}
 			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).Build()
-			if len(tt.existingClusterClaims) > 0 {
+			if len(tt.existingClusterProperties) > 0 {
 				var obj []client.Object
-				for _, n := range tt.existingClusterClaims {
+				for _, n := range tt.existingClusterProperties {
 					cc := n
 					obj = append(obj, &cc)
 				}
 				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(obj...).Build()
 			}
 
-			_ = CreateClusterClaim(cmd, fakeClient, "default", "clusterset", "clusterID", &createdRes)
+			_ = CreateClusterProperty(cmd, fakeClient, "default", "clusterset", "clusterID", &createdRes)
 
 			assert.Equal(t, len(createdRes), tt.expectedResLen)
 		})
@@ -146,38 +145,38 @@ func TestCreateClusterSet(t *testing.T) {
 	}
 }
 
-func TestDeleteClusterClaims(t *testing.T) {
-	id := mcsv1alpha2.ClusterClaim{
+func TestDeleteClusterProperties(t *testing.T) {
+	id := mcsv1alpha1.ClusterProperty{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name:      "id.k8s.io",
+			Name:      "cluster.clusterset.k8s.io",
 		},
 	}
-	clusterset := mcsv1alpha2.ClusterClaim{
+	clusterset := mcsv1alpha1.ClusterProperty{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "clusterset.k8s.io",
 		},
 	}
 	tests := []struct {
-		name                  string
-		expectedOutput        string
-		existingClusterClaims *mcsv1alpha2.ClusterClaimList
+		name                      string
+		expectedOutput            string
+		existingClusterProperties *mcsv1alpha1.ClusterPropertyList
 	}{
 		{
 			name:           "delete successfully",
-			expectedOutput: "ClusterClaim \"id.k8s.io\" deleted in Namespace default\nClusterClaim \"clusterset.k8s.io\" deleted in Namespace default\n",
-			existingClusterClaims: &mcsv1alpha2.ClusterClaimList{
-				Items: []mcsv1alpha2.ClusterClaim{
+			expectedOutput: "ClusterProperty \"cluster.clusterset.k8s.io\" deleted in Namespace default\nClusterProperty \"clusterset.k8s.io\" deleted in Namespace default\n",
+			existingClusterProperties: &mcsv1alpha1.ClusterPropertyList{
+				Items: []mcsv1alpha1.ClusterProperty{
 					id, clusterset,
 				},
 			},
 		},
 		{
 			name:           "delete with not found error",
-			expectedOutput: "ClusterClaim \"id.k8s.io\" not found in Namespace default\nClusterClaim \"clusterset.k8s.io\" deleted in Namespace default\n",
-			existingClusterClaims: &mcsv1alpha2.ClusterClaimList{
-				Items: []mcsv1alpha2.ClusterClaim{
+			expectedOutput: "ClusterProperty \"cluster.clusterset.k8s.io\" not found in Namespace default\nClusterProperty \"clusterset.k8s.io\" deleted in Namespace default\n",
+			existingClusterProperties: &mcsv1alpha1.ClusterPropertyList{
+				Items: []mcsv1alpha1.ClusterProperty{
 					clusterset,
 				},
 			},
@@ -187,20 +186,20 @@ func TestDeleteClusterClaims(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{}
 			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).Build()
-			if tt.existingClusterClaims != nil {
-				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithLists(tt.existingClusterClaims).Build()
+			if tt.existingClusterProperties != nil {
+				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithLists(tt.existingClusterProperties).Build()
 			}
 			buf := new(bytes.Buffer)
 			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 
-			deleteClusterClaims(cmd, fakeClient, "default")
+			deleteClusterProperties(cmd, fakeClient, "default")
 
 			assert.Equal(t, tt.expectedOutput, buf.String())
-			remainClusterClaims := &mcsv1alpha2.ClusterClaimList{}
-			fakeClient.List(context.Background(), remainClusterClaims, &client.ListOptions{})
-			assert.Equal(t, len(remainClusterClaims.Items), 0)
+			remainClusterProperties := &mcsv1alpha1.ClusterPropertyList{}
+			fakeClient.List(context.Background(), remainClusterProperties, &client.ListOptions{})
+			assert.Equal(t, len(remainClusterProperties.Items), 0)
 		})
 	}
 }

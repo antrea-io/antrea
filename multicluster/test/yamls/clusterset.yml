@@ -1,12 +1,12 @@
 apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
+kind: ClusterProperty
 metadata:
-  name: id.k8s.io
+  name: cluster.clusterset.k8s.io
   namespace: antrea-multicluster
 value: test-cluster-leader
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
+kind: ClusterProperty
 metadata:
   name: clusterset.k8s.io
   namespace: antrea-multicluster

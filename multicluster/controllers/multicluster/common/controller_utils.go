@@ -26,54 +26,53 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims/finalizers,verbs=update
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterproperties,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterproperties/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterproperties/finalizers,verbs=update
 
-func ValidateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterID ClusterID, clusterSetID ClusterSetID, err error) {
+func ValidateLocalClusterProperty(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterID ClusterID, clusterSetID ClusterSetID, err error) {
 	configNamespace := clusterSet.GetNamespace()
 
-	clusterClaimList := &multiclusterv1alpha2.ClusterClaimList{}
-	klog.InfoS("Validating ClusterClaim", "namespace", configNamespace)
-	if err = c.List(context.TODO(), clusterClaimList, client.InNamespace(configNamespace)); err != nil {
+	clusterPropertyList := &multiclusterv1alpha1.ClusterPropertyList{}
+	klog.InfoS("Validating ClusterProperty", "namespace", configNamespace)
+	if err = c.List(context.TODO(), clusterPropertyList, client.InNamespace(configNamespace)); err != nil {
 		return
 	}
-	if len(clusterClaimList.Items) == 0 {
-		err = fmt.Errorf("ClusterClaim is not configured for the cluster")
+	if len(clusterPropertyList.Items) == 0 {
+		err = fmt.Errorf("ClusterProperty is not configured for the cluster")
 		return
 	}
 
-	wellKnownClusterSetClaimIDExist := false
-	wellKnownClusterClaimIDExist := false
-	for _, clusterClaim := range clusterClaimList.Items {
-		klog.InfoS("Processing ClusterClaim", "name", clusterClaim.Name, "value", clusterClaim.Value)
-		if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet {
-			wellKnownClusterSetClaimIDExist = true
-			clusterSetID = ClusterSetID(clusterClaim.Value)
-		} else if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimID {
-			wellKnownClusterClaimIDExist = true
-			clusterID = ClusterID(clusterClaim.Value)
+	wellKnownClusterSetPropertyIDExist := false
+	wellKnownClusterPropertyIDExist := false
+	for _, clusterProperty := range clusterPropertyList.Items {
+		klog.InfoS("Processing ClusterProperty", "name", clusterProperty.Name, "value", clusterProperty.Value)
+		if clusterProperty.Name == multiclusterv1alpha1.WellKnownClusterPropertyClusterSet {
+			wellKnownClusterSetPropertyIDExist = true
+			clusterSetID = ClusterSetID(clusterProperty.Value)
+		} else if clusterProperty.Name == multiclusterv1alpha1.WellKnownClusterPropertyID {
+			wellKnownClusterPropertyIDExist = true
+			clusterID = ClusterID(clusterProperty.Value)
 		}
 	}
 
-	if !wellKnownClusterSetClaimIDExist {
-		err = fmt.Errorf("ClusterClaim not configured for Name=%s",
-			multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
+	if !wellKnownClusterSetPropertyIDExist {
+		err = fmt.Errorf("ClusterProperty not configured for Name=%s",
+			multiclusterv1alpha1.WellKnownClusterPropertyClusterSet)
 		return
 	}
 
-	if !wellKnownClusterClaimIDExist {
-		err = fmt.Errorf("ClusterClaim not configured for Name=%s",
-			multiclusterv1alpha2.WellKnownClusterClaimID)
+	if !wellKnownClusterPropertyIDExist {
+		err = fmt.Errorf("ClusterProperty not configured for Name=%s",
+			multiclusterv1alpha1.WellKnownClusterPropertyID)
 		return
 	}
 
 	if clusterSet.Name != string(clusterSetID) {
-		err = fmt.Errorf("ClusterSet Name=%s is not same as ClusterClaim Value=%s for Name=%s",
-			clusterSet.Name, clusterSetID, multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
+		err = fmt.Errorf("ClusterSet Name=%s is not same as ClusterProperty Value=%s for Name=%s",
+			clusterSet.Name, clusterSetID, multiclusterv1alpha1.WellKnownClusterPropertyClusterSet)
 		return
 	}
 

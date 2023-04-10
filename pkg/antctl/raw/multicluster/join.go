@@ -251,7 +251,7 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 		joinOpts.TokenSecretName = joinOpts.Secret.Name
 	}
 
-	err = common.CreateClusterClaim(cmd, joinOpts.k8sClient, memberClusterNamespace, memberClusterSet, memberClusterID, &createdRes)
+	err = common.CreateClusterProperty(cmd, joinOpts.k8sClient, memberClusterNamespace, memberClusterSet, memberClusterID, &createdRes)
 	if err != nil {
 		return err
 	}

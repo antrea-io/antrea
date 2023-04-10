@@ -55,7 +55,7 @@ func Cleanup(cmd *cobra.Command, cleanOpts *CleanOptions) error {
 	}
 
 	deleteClusterSet(cmd, cleanOpts.K8sClient, cleanOpts.Namespace, cleanOpts.ClusterSet)
-	deleteClusterClaims(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
+	deleteClusterProperties(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
 	deleteSecrets(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
 	deleteServiceAccounts(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
 	deleteRoleBindings(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)

@@ -34,7 +34,6 @@ import (
 	k8syaml "sigs.k8s.io/yaml"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
@@ -81,36 +80,36 @@ func NewClient(cmd *cobra.Command) (client.Client, error) {
 	return k8sClient, nil
 }
 
-func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterset string, clusterID string, createdRes *[]map[string]interface{}) error {
+func CreateClusterProperty(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterset string, clusterID string, createdRes *[]map[string]interface{}) error {
 	var createErr error
-	var unstructuredClusterClaim map[string]interface{}
-	clusterClaim := newClusterClaim(clusterID, namespace, false)
+	var unstructuredClusterProperty map[string]interface{}
+	clusterProperty := newClusterProperty(clusterID, namespace, false)
 
-	if createErr = k8sClient.Create(context.TODO(), clusterClaim); createErr != nil {
+	if createErr = k8sClient.Create(context.TODO(), clusterProperty); createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\": %v\n", multiclusterv1alpha2.WellKnownClusterClaimID, createErr)
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterProperty \"%s\": %v\n", multiclusterv1alpha1.WellKnownClusterPropertyID, createErr)
 			return createErr
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, namespace)
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterProperty \"%s\" already exists in Namespace %s\n", multiclusterv1alpha1.WellKnownClusterPropertyID, namespace)
 		createErr = nil
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" created in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, namespace)
-		unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
-		*createdRes = append(*createdRes, unstructuredClusterClaim)
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterProperty \"%s\" created in Namespace %s\n", multiclusterv1alpha1.WellKnownClusterPropertyID, namespace)
+		unstructuredClusterProperty, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterProperty)
+		*createdRes = append(*createdRes, unstructuredClusterProperty)
 	}
 
-	clusterClaim = newClusterClaim(clusterset, namespace, true)
-	if createErr = k8sClient.Create(context.TODO(), clusterClaim); createErr != nil {
+	clusterProperty = newClusterProperty(clusterset, namespace, true)
+	if createErr = k8sClient.Create(context.TODO(), clusterProperty); createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\": %v\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, createErr)
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterProperty \"%s\": %v\n", multiclusterv1alpha1.WellKnownClusterPropertyClusterSet, createErr)
 			return createErr
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, namespace)
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterProperty \"%s\" already exists in Namespace %s\n", multiclusterv1alpha1.WellKnownClusterPropertyClusterSet, namespace)
 		createErr = nil
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" created in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, namespace)
-		unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
-		*createdRes = append(*createdRes, unstructuredClusterClaim)
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterProperty \"%s\" created in Namespace %s\n", multiclusterv1alpha1.WellKnownClusterPropertyClusterSet, namespace)
+		unstructuredClusterProperty, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterProperty)
+		*createdRes = append(*createdRes, unstructuredClusterProperty)
 	}
 
 	return nil
@@ -135,19 +134,19 @@ func CreateClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace str
 	return nil
 }
 
-func deleteClusterClaims(cmd *cobra.Command, k8sClient client.Client, namespace string) {
-	clusterClaimNames := []string{
-		multiclusterv1alpha2.WellKnownClusterClaimID,
-		multiclusterv1alpha2.WellKnownClusterClaimClusterSet,
+func deleteClusterProperties(cmd *cobra.Command, k8sClient client.Client, namespace string) {
+	clusterPropertyNames := []string{
+		multiclusterv1alpha1.WellKnownClusterPropertyID,
+		multiclusterv1alpha1.WellKnownClusterPropertyClusterSet,
 	}
-	for _, name := range clusterClaimNames {
-		if err := k8sClient.Delete(context.TODO(), newClusterClaim(name, namespace, name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet)); err == nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" deleted in Namespace %s\n", name, namespace)
+	for _, name := range clusterPropertyNames {
+		if err := k8sClient.Delete(context.TODO(), newClusterProperty(name, namespace, name == multiclusterv1alpha1.WellKnownClusterPropertyClusterSet)); err == nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "ClusterProperty \"%s\" deleted in Namespace %s\n", name, namespace)
 		} else {
 			if apierrors.IsNotFound(err) {
-				fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" not found in Namespace %s\n", name, namespace)
+				fmt.Fprintf(cmd.OutOrStdout(), "ClusterProperty \"%s\" not found in Namespace %s\n", name, namespace)
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterClaim \"%s\": %v\n", name, err)
+				fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterProperty \"%s\": %v\n", name, err)
 			}
 		}
 	}
@@ -392,24 +391,24 @@ func waitForSecretReady(client client.Client, secretName string, namespace strin
 		})
 }
 
-func newClusterClaim(name string, namespace string, clusterSet bool) *multiclusterv1alpha2.ClusterClaim {
-	clusterClaim := &multiclusterv1alpha2.ClusterClaim{
+func newClusterProperty(name string, namespace string, clusterSet bool) *multiclusterv1alpha1.ClusterProperty {
+	clusterProperty := &multiclusterv1alpha1.ClusterProperty{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "multicluster.crd.antrea.io/v1alpha2",
-			Kind:       "ClusterClaim",
+			APIVersion: "multicluster.crd.antrea.io/v1alpha1",
+			Kind:       "ClusterProperty",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      multiclusterv1alpha2.WellKnownClusterClaimID,
+			Name:      multiclusterv1alpha1.WellKnownClusterPropertyID,
 		},
 		Value: name,
 	}
 
 	if clusterSet {
-		clusterClaim.Name = multiclusterv1alpha2.WellKnownClusterClaimClusterSet
+		clusterProperty.Name = multiclusterv1alpha1.WellKnownClusterPropertyClusterSet
 	}
 
-	return clusterClaim
+	return clusterProperty
 }
 
 func newClusterSet(name, namespace, leaderServer, secret, memberClusterID, leaderClusterID, leaderNamespace string) *multiclusterv1alpha1.ClusterSet {

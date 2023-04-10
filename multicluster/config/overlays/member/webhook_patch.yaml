@@ -44,3 +44,10 @@ webhooks:
   namespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: kube-system
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  name: vclusterproperty.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system

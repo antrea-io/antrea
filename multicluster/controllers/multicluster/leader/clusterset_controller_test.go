@@ -66,18 +66,18 @@ func TestLeaderClusterSetAdd(t *testing.T) {
 			Namespace: "mcs1",
 		},
 	}
-	existingClusterClaimList := &mcsv1alpha2.ClusterClaimList{
-		Items: []mcsv1alpha2.ClusterClaim{
+	existingClusterPropertyList := &mcsv1alpha1.ClusterPropertyList{
+		Items: []mcsv1alpha1.ClusterProperty{
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcsv1alpha2.WellKnownClusterClaimClusterSet,
+					Name:      mcsv1alpha1.WellKnownClusterPropertyClusterSet,
 					Namespace: "mcs1",
 				},
 				Value: "clusterset1",
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcsv1alpha2.WellKnownClusterClaimID,
+					Name:      mcsv1alpha1.WellKnownClusterPropertyID,
 					Namespace: "mcs1",
 				},
 				Value: "leader1",
@@ -89,7 +89,7 @@ func TestLeaderClusterSetAdd(t *testing.T) {
 	mcsv1alpha1.AddToScheme(scheme)
 	mcsv1alpha2.AddToScheme(scheme)
 	fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(existingClusterSet, &existingClusterClaimList.Items[0], &existingClusterClaimList.Items[1]).
+		WithObjects(existingClusterSet, &existingClusterPropertyList.Items[0], &existingClusterPropertyList.Items[1]).
 		Build()
 
 	mockCtrl := gomock.NewController(t)

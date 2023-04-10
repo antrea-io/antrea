@@ -1272,6 +1272,9 @@ webhooks:
       path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterproperty
   failurePolicy: Fail
   name: vclusterproperty.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io

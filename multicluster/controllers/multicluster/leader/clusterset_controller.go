@@ -81,10 +81,10 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
 
 	// Handle create or update
-	// If create, make sure the required local ClusterClaims are defined, and the cluster and ClusterSet
+	// If create, make sure the required local ClusterProperties are defined, and the cluster and ClusterSet
 	// IDs are included in the leader cluster's ClusterSet CR.
 	if r.clusterSetConfig == nil {
-		clusterID, clusterSetID, err := common.ValidateLocalClusterClaim(r.Client, clusterSet)
+		clusterID, clusterSetID, err := common.ValidateLocalClusterProperty(r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
 		}

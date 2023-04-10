@@ -38,7 +38,7 @@ var leaderClusterExamples = strings.Trim(`
   $ antctl mc deploy leadercluster -f <PATH_TO_MANIFEST>
 
 The following CRDs will be defined:
-- CRDs: ClusterClaim, ClusterSet, MemberClusterAnnounce, ResourceExport, ResourceImport
+- CRDs: ClusterProperty, ClusterSet, MemberClusterAnnounce, ResourceExport, ResourceImport
 `, "\n")
 
 func (o *leaderClusterOptions) validateAndComplete() error {

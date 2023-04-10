@@ -75,7 +75,7 @@ func NewMemberClusterAnnounceReconciler(client client.Client, scheme *runtime.Sc
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=memberclusterannounces,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=memberclusterannounces/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=memberclusterannounces/finalizers,verbs=update
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims,verbs=get;list;watch;
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterproperties,verbs=get;list;watch;
 
 // Reconcile implements cluster status management on the leader cluster
 func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

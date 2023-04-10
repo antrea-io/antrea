@@ -112,8 +112,8 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Handle create or update
 	if r.clusterSetConfig == nil {
-		// If create, make sure the local ClusterClaim is part of the member ClusterSet.
-		clusterID, clusterSetID, err := common.ValidateLocalClusterClaim(r.Client, clusterSet)
+		// If create, make sure the local ClusterProperty is part of the member ClusterSet.
+		clusterID, clusterSetID, err := common.ValidateLocalClusterProperty(r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
 		}

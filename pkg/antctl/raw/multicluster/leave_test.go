@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
 
@@ -35,7 +34,7 @@ func TestLeave(t *testing.T) {
 	}{
 		{
 			name:           "leave successfully",
-			expectedOutput: "ClusterSet \"test-clusterset\" deleted in Namespace default\nClusterClaim \"id.k8s.io\" deleted in Namespace default\nClusterClaim \"clusterset.k8s.io\" deleted in Namespace default\n",
+			expectedOutput: "ClusterSet \"test-clusterset\" deleted in Namespace default\nClusterProperty \"cluster.clusterset.k8s.io\" deleted in Namespace default\nClusterProperty \"clusterset.k8s.io\" deleted in Namespace default\n",
 			namespace:      "default",
 		},
 		{
@@ -57,19 +56,19 @@ func TestLeave(t *testing.T) {
 			Name:      "test-clusterset",
 		},
 	}
-	clusterClaim1 := &mcsv1alpha2.ClusterClaim{
+	clusterProperty1 := &mcsv1alpha1.ClusterProperty{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name:      "id.k8s.io",
+			Name:      "cluster.clusterset.k8s.io",
 		},
 	}
-	clusterClaim2 := &mcsv1alpha2.ClusterClaim{
+	clusterProperty2 := &mcsv1alpha1.ClusterProperty{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "clusterset.k8s.io",
 		},
 	}
-	fakeClient := fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(clusterSet, clusterClaim1, clusterClaim2).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(clusterSet, clusterProperty1, clusterProperty2).Build()
 	leaveOpts.K8sClient = fakeClient
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -15,6 +15,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
@@ -24,11 +25,17 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/multicluster/controllers/multicluster/crdmirroring"
+	"antrea.io/antrea/multicluster/controllers/multicluster/crdmirroring/crdhandler"
 	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
+	crdclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/env"
 )
+
+const informerDefaultResync = 12 * time.Hour
 
 func newLeaderCommand() *cobra.Command {
 	var leaderCmd = &cobra.Command{
@@ -70,6 +77,7 @@ func runLeader(o *Options) error {
 	if err != nil {
 		return err
 	}
+
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce",
 		&webhook.Admission{Handler: &memberClusterAnnounceValidator{
@@ -112,7 +120,34 @@ func runLeader(o *Options) error {
 		nil,
 		multiclustercontrollers.LeaderCluster,
 	)
+	var ccMirroringController *crdmirroring.Controller
+	if o.LegacyCRDMirroring {
+		crdClient, err := crdclientset.NewForConfig(mgr.GetConfig())
+		if err != nil {
+			return err
+		}
 
+		crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+		if err != nil {
+			return err
+		}
+		legacyCRDClient, err := crdclientset.NewForConfig(mgr.GetConfig())
+		if err != nil {
+			return err
+		}
+
+		cpInformer := crdInformerFactory.Multicluster().V1alpha1().ClusterProperties()
+		legacyCCInformer := crdInformerFactory.Multicluster().V1alpha2().ClusterClaims()
+		ccMirroringHandler := crdhandler.NewClusterClaimHandler(cpInformer.Lister(),
+			legacyCCInformer.Lister(),
+			crdClient.MulticlusterV1alpha1().ClusterProperties(env.GetPodNamespace()),
+			legacyCRDClient.MulticlusterV1alpha2().ClusterClaims(env.GetPodNamespace()))
+		ccMirroringController = crdmirroring.NewController(cpInformer.Informer(),
+			legacyCCInformer.Informer(),
+			ccMirroringHandler,
+			"ClusterProperty")
+		go ccMirroringController.Run(stopCh)
+	}
 	go staleController.Run(stopCh)
 
 	klog.InfoS("Leader MC Controller Starting Manager")

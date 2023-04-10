@@ -43,11 +43,14 @@ type Options struct {
 	// Enable StretchedNetworkPolicy to exchange labelIdentities info among the whole
 	// ClusterSet.
 	EnableStretchedNetworkPolicy bool
+	// Legacy CRD mirroring.
+	LegacyCRDMirroring bool
 }
 
 func newOptions() *Options {
 	return &Options{
-		SelfSignedCert: true,
+		SelfSignedCert:     true,
+		LegacyCRDMirroring: true,
 	}
 }
 
