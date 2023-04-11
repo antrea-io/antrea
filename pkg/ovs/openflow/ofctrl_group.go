@@ -41,7 +41,7 @@ func (g *ofGroup) Reset() {
 	// created successfully before. There will be no duplicate group IDs. If
 	// something is wrong and there is an error, g.ofctrl will be set to nil
 	// and the Agent will crash later.
-	newGroup, _ := g.bridge.ofSwitch.NewGroup(g.ofctrl.ID, g.ofctrl.GroupType)
+	newGroup := &ofctrl.Group{ID: g.ofctrl.ID, GroupType: g.ofctrl.GroupType, Switch: g.bridge.ofSwitch}
 	newGroup.Buckets = g.ofctrl.Buckets
 	g.ofctrl = newGroup
 }
