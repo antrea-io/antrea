@@ -325,7 +325,7 @@ function revert_snapshot_windows {
 }
 
 function deliver_antrea_windows {
-    echo "====== Cleanup Antrea Installation ======"
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows ======"
     clean_up_one_ns "antrea-test"
     kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
@@ -445,7 +445,7 @@ function deliver_antrea_windows {
 }
 
 function deliver_antrea_windows_containerd {
-    echo "====== Cleanup Antrea Installation ======"
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows Containerd ======"
     clean_up_one_ns "antrea-test"
     kubectl delete -f ${WORKDIR}/antrea-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows-containerd.yml --ignore-not-found=true || true
@@ -547,7 +547,7 @@ function deliver_antrea_windows_containerd {
 }
 
 function deliver_antrea {
-    echo "====== Cleanup Antrea Installation ======"
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea ======"
     clean_up_one_ns "monitoring" || true
     clean_up_one_ns "antrea-ipam-test-11" || true
     clean_up_one_ns "antrea-ipam-test-12" || true
@@ -707,11 +707,13 @@ function run_conformance {
     kubectl rollout status deployment.apps/antrea-controller -n kube-system
     kubectl rollout status daemonset/antrea-agent -n kube-system
 
+    set +e
     if [[ "$TESTCASE" =~ "conformance" ]]; then
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip "$CONFORMANCE_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kube-conformance-image-version "auto" > ${WORKSPACE}/test-result.log
     else
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "$NETWORKPOLICY_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kube-conformance-image-version "auto" > ${WORKSPACE}/test-result.log
     fi
+    set -e
 
     cat ${WORKSPACE}/test-result.log
     if grep -Fxq "Failed tests:" ${WORKSPACE}/test-result.log; then
