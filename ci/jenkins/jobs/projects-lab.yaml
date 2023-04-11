@@ -1,6 +1,6 @@
 - project:
-    # ghpr_auth, antrea_admin_list, antrea_org_list and antrea_white_list
-    # should be defined as a global variable somewhere else
+    # ghpr_auth, antrea_admin_list, antrea_org_list, antrea_white_list and
+    # antrea_win_image_node_name should be defined as a global variable somewhere else
     name: antrea
     git_credentials_id: ANTREA_GIT_CREDENTIAL
     org_repo: antrea-io/antrea
@@ -820,3 +820,248 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
+      - '{name}-{test_name}-no-scm':
+            test_name: windows-containerd-conformance-pending-label
+            node: null
+            description: 'This is for marking PR as pending for conformance test.'
+            builders:
+                - builder-pending-label
+            trigger_phrase: null
+            white_list_target_branches: [ ]
+            allow_whitelist_orgs_as_admins: false
+            admin_list: [ ]
+            org_list: [ ]
+            white_list: [ ]
+            only_trigger_phrase: false
+            trigger_permit_all: true
+            throttle_concurrent_builds_category:
+            throttle_concurrent_builds_enabled: 'false'
+            status_context: jenkins-windows-containerd-conformance
+            status_url: --none--
+            success_status: Pending test. Mark as failure. Add comment /test-windows-containerd-conformance to trigger.
+            failure_status: Pending test. Mark as failure. Add comment /test-windows-containerd-conformance to trigger.
+            error_status: Pending test. Mark as failure. Add comment /test-windows-containerd-conformance to trigger.
+            triggered_status: null
+            started_status: null
+            wrappers: [ ]
+            publishers: [ ]
+      - '{name}-{test_name}-for-pull-request':
+            test_name: windows-containerd-conformance
+            node: 'antrea-windows-containerd-testbed'
+            description: 'This is the {test_name} test for {name}.'
+            branches:
+                - ${{sha1}}
+            builders:
+                - builder-conformance-win-containerd:
+                      conformance_type: 'conformance'
+                      win_image_node: '{antrea_win_image_node_name}'
+            trigger_phrase: ^(?!Thanks for your PR).*/test-windows-(containerd-conformance|all).*
+            white_list_target_branches: [ ]
+            allow_whitelist_orgs_as_admins: true
+            admin_list: '{antrea_admin_list}'
+            org_list: '{antrea_org_list}'
+            white_list: '{antrea_white_list}'
+            only_trigger_phrase: true
+            trigger_permit_all: true
+            throttle_concurrent_builds_category:
+                - e2e-lock-per-testbed
+            throttle_concurrent_builds_enabled: 'true'
+            status_context: jenkins-windows-containerd-conformance
+            status_url: --none--
+            success_status: Build finished.
+            failure_status: Failed. Add comment /test-windows-containerd-conformance to re-trigger.
+            error_status: Failed. Add comment /test-windows-containerd-conformance to re-trigger.
+            triggered_status: null
+            started_status: null
+            wrappers:
+                - timeout:
+                      fail: true
+                      timeout: 120
+                      type: absolute
+                - credentials-binding:
+                      - text:
+                            credential-id: GOVC_URL
+                            variable: GOVC_URL
+                      - text:
+                            credential-id: GOVC_USERNAME
+                            variable: GOVC_USERNAME
+                      - text:
+                            credential-id: GOVC_PASSWORD
+                            variable: GOVC_PASSWORD
+                      - text:
+                            credential-id: GOVC_DATACENTER
+                            variable: GOVC_DATACENTER
+                      - text:
+                            credential-id: GOVC_DATASTORE
+                            variable: GOVC_DATASTORE
+            publishers:
+                - archive:
+                      allow-empty: true
+                      artifacts: 'windows_conformance_result_no_color.txt,network_info.tar.gz,antrea_agent_log.tar.gz,debug_logs.tar.gz'
+                      case-sensitive: true
+                      default-excludes: true
+                      fingerprint: false
+                      only-if-success: false
+      - '{name}-{test_name}-no-scm':
+            test_name: windows-containerd-networkpolicy-pending-label
+            node: null
+            description: 'This is for marking PR as pending for networkpolicy test.'
+            builders:
+                - builder-pending-label
+            trigger_phrase: null
+            white_list_target_branches: [ ]
+            allow_whitelist_orgs_as_admins: false
+            admin_list: [ ]
+            org_list: [ ]
+            white_list: [ ]
+            only_trigger_phrase: false
+            trigger_permit_all: true
+            throttle_concurrent_builds_category:
+            throttle_concurrent_builds_enabled: 'false'
+            status_context: jenkins-windows-containerd-networkpolicy
+            status_url: --none--
+            success_status: Pending test. Mark as failure. Add comment /test-windows-containerd-networkpolicy to trigger.
+            failure_status: Pending test. Mark as failure. Add comment /test-windows-containerd-networkpolicy to trigger.
+            error_status: Pending test. Mark as failure. Add comment /test-windows-containerd-networkpolicy to trigger.
+            triggered_status: null
+            started_status: null
+            wrappers: [ ]
+            publishers: [ ]
+      - '{name}-{test_name}-for-pull-request':
+            test_name: windows-containerd-networkpolicy
+            node: 'antrea-windows-containerd-testbed'
+            description: 'This is the {test_name} test for {name}.'
+            branches:
+                - ${{sha1}}
+            builders:
+                - builder-conformance-win-containerd:
+                      conformance_type: 'networkpolicy'
+                      win_image_node: '{antrea_win_image_node_name}'
+            trigger_phrase: ^(?!Thanks for your PR).*/test-windows-(containerd-networkpolicy|all).*
+            white_list_target_branches: [ ]
+            allow_whitelist_orgs_as_admins: true
+            admin_list: '{antrea_admin_list}'
+            org_list: '{antrea_org_list}'
+            white_list: '{antrea_white_list}'
+            only_trigger_phrase: true
+            trigger_permit_all: true
+            throttle_concurrent_builds_category:
+                - e2e-lock-per-testbed
+            throttle_concurrent_builds_enabled: 'true'
+            status_context: jenkins-windows-containerd-networkpolicy
+            status_url: --none--
+            success_status: Build finished.
+            failure_status: Failed. Add comment /test-windows-containerd-networkpolicy to re-trigger.
+            error_status: Failed. Add comment /test-windows-containerd-networkpolicy to re-trigger.
+            triggered_status: null
+            started_status: null
+            wrappers:
+                - timeout:
+                      fail: true
+                      timeout: 135
+                      type: absolute
+                - credentials-binding:
+                      - text:
+                            credential-id: GOVC_URL
+                            variable: GOVC_URL
+                      - text:
+                            credential-id: GOVC_USERNAME
+                            variable: GOVC_USERNAME
+                      - text:
+                            credential-id: GOVC_PASSWORD
+                            variable: GOVC_PASSWORD
+                      - text:
+                            credential-id: GOVC_DATACENTER
+                            variable: GOVC_DATACENTER
+                      - text:
+                            credential-id: GOVC_DATASTORE
+                            variable: GOVC_DATASTORE
+            publishers:
+                - archive:
+                      allow-empty: true
+                      artifacts: 'windows_conformance_result_no_color.txt,network_info.tar.gz,antrea_agent_log.tar.gz,debug_logs.tar.gz'
+                      case-sensitive: true
+                      default-excludes: true
+                      fingerprint: false
+                      only-if-success: false
+      - '{name}-{test_name}-no-scm':
+            test_name: windows-containerd-e2e-pending-label
+            node: null
+            description: 'This is for marking PR as pending for e2e test.'
+            builders:
+                - builder-pending-label
+            trigger_phrase: null
+            white_list_target_branches: [ ]
+            allow_whitelist_orgs_as_admins: false
+            admin_list: [ ]
+            org_list: [ ]
+            white_list: [ ]
+            only_trigger_phrase: false
+            trigger_permit_all: true
+            throttle_concurrent_builds_category:
+            throttle_concurrent_builds_enabled: 'false'
+            status_context: jenkins-windows-containerd-e2e
+            status_url: --none--
+            success_status: Pending test. Mark as failure. Add comment /test-windows-containerd-e2e to trigger.
+            failure_status: Pending test. Mark as failure. Add comment /test-windows-containerd-e2e to trigger.
+            error_status: Pending test. Mark as failure. Add comment /test-windows-containerd-e2e to trigger.
+            triggered_status: null
+            started_status: null
+            wrappers: [ ]
+            publishers: [ ]
+      - '{name}-{test_name}-for-pull-request':
+            test_name: windows-containerd-e2e
+            node: 'antrea-windows-containerd-testbed'
+            description: 'This is the {test_name} test for {name}.'
+            branches:
+                - ${{sha1}}
+            builders:
+                - builder-e2e-win-containerd:
+                      win_image_node: '{antrea_win_image_node_name}'
+            trigger_phrase: ^(?!Thanks for your PR).*/test-windows-(containerd-e2e|all).*
+            white_list_target_branches: [ ]
+            allow_whitelist_orgs_as_admins: true
+            admin_list: '{antrea_admin_list}'
+            org_list: '{antrea_org_list}'
+            white_list: '{antrea_white_list}'
+            only_trigger_phrase: true
+            trigger_permit_all: true
+            throttle_concurrent_builds_category:
+                - e2e-lock-per-testbed
+            throttle_concurrent_builds_enabled: 'true'
+            status_context: jenkins-windows-containerd-e2e
+            status_url: --none--
+            success_status: Build finished.
+            failure_status: Failed. Add comment /test-windows-containerd-e2e to re-trigger.
+            error_status: Failed. Add comment /test-windows-containerda-e2e to re-trigger.
+            triggered_status: null
+            started_status: null
+            wrappers:
+                - timeout:
+                      fail: true
+                      timeout: 120
+                      type: absolute
+                - credentials-binding:
+                      - text:
+                            credential-id: GOVC_URL
+                            variable: GOVC_URL
+                      - text:
+                            credential-id: GOVC_USERNAME
+                            variable: GOVC_USERNAME
+                      - text:
+                            credential-id: GOVC_PASSWORD
+                            variable: GOVC_PASSWORD
+                      - text:
+                            credential-id: GOVC_DATACENTER
+                            variable: GOVC_DATACENTER
+                      - text:
+                            credential-id: GOVC_DATASTORE
+                            variable: GOVC_DATASTORE
+            publishers:
+                - archive:
+                      allow-empty: true
+                      artifacts: antrea-test-logs.tar.gz
+                      case-sensitive: true
+                      default-excludes: true
+                      fingerprint: false
+                      only-if-success: false
