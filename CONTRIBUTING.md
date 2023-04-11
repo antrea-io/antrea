@@ -171,7 +171,7 @@ Here are the trigger phrases for individual checks:
 * `/test-windows-proxyall-e2e`: Windows IPv4 e2e tests with proxyAll enabled
 * `/test-ipv6-e2e`: Linux dual stack e2e tests
 * `/test-ipv6-conformance`: Linux dual stack conformance tests
-* `/test-ipv6-networkpolicy`: dLinux ual stack networkpolicy tests
+* `/test-ipv6-networkpolicy`: Linux dual stack networkpolicy tests
 * `/test-ipv6-only-e2e`: Linux IPv6 only e2e tests
 * `/test-ipv6-only-conformance`: Linux IPv6 only conformance tests
 * `/test-ipv6-only-networkpolicy`: Linux IPv6 only networkpolicy tests
@@ -181,11 +181,14 @@ Here are the trigger phrases for individual checks:
 * `/test-vm-e2e`: ExternalNode e2e tests
 * `/test-whole-conformance`: All conformance tests on Linux
 * `/test-hw-offload`: Hardware offloading e2e tests
+* `/test-rancher-e2e`: Linux IPv4 e2e tests on Rancher clusters.
+* `/test-rancher-conformance`: Linux IPv4 conformance tests on Rancher clusters.
+* `/test-rancher-networkpolicy`: Linux IPv4 networkpolicy tests on Rancher clusters.
 
 Here are the trigger phrases for groups of checks:
 
 * `/test-all`: Linux IPv4 tests
-* `/test-windows-all`: Windows IPv4 tests, including e2e tests with proxyAll enabled
+* `/test-windows-all`: Windows IPv4 tests, including e2e tests with proxyAll enabled. It also includes all Containderd runtime based Windows tests since 1.10.0.
 * `/test-ipv6-all`: Linux dual stack tests
 * `/test-ipv6-only-all`: Linux IPv6 only tests
 
