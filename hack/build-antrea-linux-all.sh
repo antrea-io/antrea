@@ -82,6 +82,9 @@ pushd "$THIS_DIR/.." > /dev/null
 
 ARGS=""
 PLATFORM_ARG=""
+if $PULL; then
+   ARGS="$ARGS --pull"
+fi
 if $PUSH; then
    ARGS="$ARGS --push"
 fi

@@ -296,7 +296,6 @@ function deliver_antrea_multicluster {
     echo "====== Delivering Antrea to all Nodes ======"
     docker save -o ${WORKDIR}/antrea-ubuntu.tar antrea/antrea-ubuntu:latest
 
-
     if [[ ${KIND} == "true" ]]; then
         for name in ${CLUSTER_NAMES[*]}; do
             kind load docker-image antrea/antrea-ubuntu:latest --name ${name}
