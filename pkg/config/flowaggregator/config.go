@@ -43,17 +43,19 @@ type FlowAggregatorConfig struct {
 	AggregatorTransportProtocol AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`
 	// Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
 	FlowAggregatorAddress string `yaml:"flowAggregatorAddress,omitempty"`
-	// recordContents enables configuring some fields in the flow records. Fields can be
+	// RecordContents enables configuring some fields in the flow records. Fields can be
 	// excluded to reduce record size.
 	RecordContents RecordContentsConfig `yaml:"recordContents,omitempty"`
-	// apiServer contains APIServer related configuration options.
+	// APIServer contains APIServer related configuration options.
 	APIServer APIServerConfig `yaml:"apiServer,omitempty"`
-	// flowCollector contains external IPFIX or JSON collector related configuration options.
+	// FlowCollector contains external IPFIX or JSON collector related configuration options.
 	FlowCollector FlowCollectorConfig `yaml:"flowCollector,omitempty"`
-	// clickHouse contains ClickHouse related configuration options.
+	// ClickHouse contains ClickHouse related configuration options.
 	ClickHouse ClickHouseConfig `yaml:"clickHouse,omitempty"`
-	// s3Uploader contains configuration options for uploading flow records to AWS S3.
+	// S3Uploader contains configuration options for uploading flow records to AWS S3.
 	S3Uploader S3UploaderConfig `yaml:"s3Uploader,omitempty"`
+	// FlowLogger contains configuration options for writing flow records to a local log file.
+	FlowLogger FlowLoggerConfig `yaml:"flowLogger,omitempty"`
 }
 
 type RecordContentsConfig struct {
@@ -134,4 +136,51 @@ type S3UploaderConfig struct {
 	MaxRecordsPerFile int32 `yaml:"maxRecordsPerFile,omitempty"`
 	// UploadInterval is the duration between each file upload to S3.
 	UploadInterval string `yaml:"uploadInterval,omitempty"`
+}
+
+type FlowLoggerConfig struct {
+	// Enable is the switch to enable writing flow records to a local log file.
+	Enable bool `yaml:"enable,omitempty"`
+	// Path is the path to the local log file. Defaults to the antrea-flows.log file in the
+	// operating system's default directory for temporary files (provided by os.TempDir).
+	Path string `yaml:"path,omitempty"`
+	// MaxSize is the maximum size in MB of a log file before it gets rotated. Defaults to 100MB.
+	MaxSize int32 `yaml:"maxSize,omitempty"`
+	// MaxBackups is the maximum number of old log files to retain. If set to 0, all log files
+	// will be retained (unless MaxAge causes them to be deleted). Defaults to 3.
+	MaxBackups int32 `yaml:"maxBackups,omitempty"`
+	// MaxAge is the maximum number of days to retain old log files based on the timestamp
+	// encoded in their filename. The default (0) is not to remove old log files based on age.
+	MaxAge int32 `yaml:"maxAge,omitempty"`
+	// Compress enables gzip compression on rotated files. Defaults to true.
+	Compress *bool `yaml:"compress,omitempty"`
+	// RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is
+	// supported at the moment.
+	RecordFormat string `yaml:"recordFormat,omitempty"`
+	// Filters can be used to select which flow records to log to file. The provided filters are
+	// OR-ed to determine whether a specific flow should be logged. By default, all flows are
+	// logged.
+	Filters []FlowFilter `yaml:"filters,omitempty"`
+	// PrettyPrint enables conversion of some numeric fields to a more meaningful string
+	// representation.
+	PrettyPrint *bool `yaml:"prettyPrint,omitempty"`
+}
+
+type NetworkPolicyRuleAction string
+
+const (
+	NetworkPolicyRuleActionNone   NetworkPolicyRuleAction = "None"
+	NetworkPolicyRuleActionAllow  NetworkPolicyRuleAction = "Allow"
+	NetworkPolicyRuleActionDrop   NetworkPolicyRuleAction = "Drop"
+	NetworkPolicyRuleActionReject NetworkPolicyRuleAction = "Reject"
+)
+
+// FlowFilter will match a flow if all individual conditions are fulfilled.
+type FlowFilter struct {
+	// IngressNetworkPolicyRuleActions supports filtering based on the action name for the
+	// ingress policy rule applied to the flow. By default, all actions are considered.
+	IngressNetworkPolicyRuleActions []NetworkPolicyRuleAction `yaml:"ingressNetworkPolicyRuleActions,omitempty"`
+	// EgressNetworkPolicyRuleActions supports filtering based on the action name for the egress
+	// policy rule applied to the flow. By default, all actions are considered.
+	EgressNetworkPolicyRuleActions []NetworkPolicyRuleAction `yaml:"egressNetworkPolicyRuleActions,omitempty"`
 }
