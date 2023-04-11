@@ -133,7 +133,7 @@
           #!/bin/bash
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} 
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}}
 
 - builder:
     name: builder-e2e-proxyall-win
@@ -143,6 +143,24 @@
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
+
+- builder:
+      name: builder-e2e-win-containerd
+      builders:
+          - shell: |-
+                #!/bin/bash
+                set -ex
+                DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+                ./ci/jenkins/test.sh --testcase windows-containerd-e2e --registry ${{DOCKER_REGISTRY}} --win-image-node '{win_image_node}'
+
+- builder:
+      name: builder-conformance-win-containerd
+      builders:
+          - shell: |-
+                #!/bin/bash
+                set -ex
+                DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+                ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --win-image-node '{win_image_node}'
 
 - builder:
     name: builder-flexible-ipam-e2e
