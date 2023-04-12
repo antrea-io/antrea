@@ -17,11 +17,13 @@ package openflow
 import (
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -85,6 +87,26 @@ func TestOFBridgeIsConnected(t *testing.T) {
 		b.IsConnected()
 	}()
 	wg.Wait()
+}
+
+func TestConcurrentCreateGroups(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
+	b.SwitchConnected(newFakeOFSwitch(b))
+	concurrentNum := 1000000
+	groupCount := uint32(0)
+	var wg sync.WaitGroup
+	for i := 0; i < concurrentNum; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			b.CreateGroup(GroupIDType(index))
+			atomic.AddUint32(&groupCount, 1)
+		}(i)
+	}
+	wg.Wait()
+	assert.Equal(t, uint32(concurrentNum), groupCount)
 }
 
 func TestDeleteGroup(t *testing.T) {

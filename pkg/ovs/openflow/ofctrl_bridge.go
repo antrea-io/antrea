@@ -216,21 +216,13 @@ func (b *OFBridge) CreateGroup(id GroupIDType) Group {
 }
 
 func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
-	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), groupType)
-	if err != nil { // group already exists
-		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
-	}
+	ofctrlGroup := &ofctrl.Group{ID: uint32(id), GroupType: groupType, Switch: b.ofSwitch}
 	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
 	return g
 }
 
-// DeleteGroup deletes a specified group in groupDb.
 func (b *OFBridge) DeleteGroup(id GroupIDType) error {
-	ofctrlGroup := b.ofSwitch.GetGroup(uint32(id))
-	if ofctrlGroup == nil {
-		return nil
-	}
-	return b.ofSwitch.DeleteGroup(uint32(id))
+	return nil
 }
 
 func (b *OFBridge) CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
