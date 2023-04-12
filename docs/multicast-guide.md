@@ -20,6 +20,7 @@ Antrea supports multicast traffic in the following scenarios:
 - [Use case example](#use-case-example)
 - [Limitations](#limitations)
   - [Encap mode](#encap-mode)
+  - [Maximum number of receiver groups on one Node](#maximum-number-of-receiver-groups-on-one-node)
   - [Traffic in local network control block](#traffic-in-local-network-control-block)
   - [Linux kernel](#linux-kernel)
 <!-- /toc -->
@@ -136,6 +137,13 @@ Support for Windows and IPv6 will be added in the future.
 
 Configuration option `multicastInterfaces` is not supported with encap mode.
 Multicast packets in encap mode are SNATed and forwarded to the transport interface only.
+
+### Maximum number of receiver groups on one Node
+
+A Linux host limits the maximum number of multicast groups it can subscribe to;
+the default number is 20. The limit can be changed by setting [/proc/sys/net/ipv4/igmp_max_memberships](https://sysctl-explorer.net/net/ipv4/igmp_max_memberships/).
+Users are responsible for changing the limit if Pods on the Node are expected to
+join more than 20 groups.
 
 ### Traffic in local network control block
 
