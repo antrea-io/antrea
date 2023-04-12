@@ -1187,7 +1187,7 @@ func endpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {
 		return false, fmt.Errorf("error getting server resources for GroupVersion %s: %v", discovery.SchemeGroupVersion.String(), err)
 	}
 	for _, resource := range resources.APIResources {
-		if resource.Name == "endpointslice" {
+		if resource.Kind == "EndpointSlice" {
 			return true, nil
 		}
 	}

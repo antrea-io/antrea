@@ -2753,7 +2753,7 @@ func TestEndpointSliceAPIAvailable(t *testing.T) {
 			resources: []*metav1.APIResourceList{
 				{
 					GroupVersion: discovery.SchemeGroupVersion.String(),
-					APIResources: []metav1.APIResource{{Name: "endpointslice"}},
+					APIResources: []metav1.APIResource{{Kind: "EndpointSlice"}},
 				},
 			},
 			expectedAvailable: true,
