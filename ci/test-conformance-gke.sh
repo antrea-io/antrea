@@ -23,7 +23,6 @@ function echoerr {
 GKE_ZONE="us-west1-a"
 GKE_HOST="UBUNTU_CONTAINERD"
 MACHINE_TYPE="e2-standard-4"
-GKE_SERVICE_CIDR="10.94.0.0/16"
 GKE_PROJECT="antrea"
 KUBECONFIG_PATH="$HOME/jenkins/out/gke"
 MODE="report"
@@ -94,10 +93,6 @@ case $key in
     GKE_ZONE="$2"
     shift 2
     ;;
-    --svc-cidr)
-    GKE_SERVICE_CIDR="$2"
-    shift 2
-    ;;
     --host-type)
     GKE_HOST="$2"
     shift 2
@@ -143,8 +138,14 @@ if [[ -z ${GCLOUD_PATH+x} ]]; then
     GCLOUD_PATH=$(which gcloud)
 fi
 
-function setup_gke() {
+export KUBECONFIG="${KUBECONFIG_PATH}/kubeconfig"
 
+# ensures that the script can be run from anywhere
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GIT_CHECKOUT_DIR=${THIS_DIR}/..
+pushd "$THIS_DIR" > /dev/null
+
+function setup_gke() {
     if [[ -z ${K8S_VERSION+x} ]]; then
         K8S_VERSION=$(${GCLOUD_PATH} container get-server-config --zone ${GKE_ZONE} | awk '/validMasterVersions/{getline;print}' | cut -c3- )
     fi
@@ -165,14 +166,15 @@ function setup_gke() {
     ${GCLOUD_PATH} container --project ${GKE_PROJECT} clusters create ${CLUSTER} \
         --image-type ${GKE_HOST} --machine-type ${MACHINE_TYPE} \
         --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
-        --enable-ip-alias --services-ipv4-cidr ${GKE_SERVICE_CIDR}
+        --enable-ip-alias \
+        --no-enable-autoupgrade
     if [[ $? -ne 0 ]]; then
         echo "=== Failed to deploy GKE cluster! ==="
         exit 1
     fi
 
     mkdir -p ${KUBECONFIG_PATH}
-    ${GCLOUD_PATH} container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE} > ${KUBECONFIG_PATH}/kubeconfig
+    ${GCLOUD_PATH} container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE}
 
     sleep 10
     if [[ $(kubectl get nodes) ]]; then
@@ -191,9 +193,6 @@ function deliver_antrea_to_gke() {
     export GOROOT=/usr/local/go
     export PATH=${GOROOT}/bin:$PATH
 
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
-    fi
     make clean -C ${GIT_CHECKOUT_DIR}
     if [[ -n ${JOB_NAME+x} ]]; then
         docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f || true > /dev/null
@@ -203,7 +202,7 @@ function deliver_antrea_to_gke() {
     docker image prune -f --filter "until=2h" || true > /dev/null
 
     cd ${GIT_CHECKOUT_DIR}
-    VERSION="$CLUSTER" make
+    VERSION="$CLUSTER" make -C ${GIT_CHECKOUT_DIR}
     if [[ "$?" -ne "0" ]]; then
         echo "=== Antrea Image build failed ==="
         exit 1
@@ -236,11 +235,6 @@ function deliver_antrea_to_gke() {
     fi
 
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke-node-init.yml
-    sed -i "s|#defaultMTU: 1450|defaultMTU: 1500|g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml
-    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${GKE_SERVICE_CIDR}|g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml
-    echo "defaultMTU set as 1450"
-    echo "seviceCIDR set as ${GKE_SERVICE_CIDR}"
-
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
@@ -262,12 +256,12 @@ function run_conformance() {
     ${GCLOUD_PATH} compute firewall-rules create allow-nodeport --allow tcp:30000-32767
 
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance \
-      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
+      --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log && \
    # Skip Netpol tests for GKE as the test suite's Namespace creation function is not robust, which leads to test
    # failures. See https://github.com/antrea-io/antrea/issues/3762#issuecomment-1195865441.
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "Netpol" \
-      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
+      --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/gke-test.log || \
     TEST_SCRIPT_RC=$?
 
@@ -284,18 +278,15 @@ function run_conformance() {
 
     ${GCLOUD_PATH} compute firewall-rules delete allow-nodeport
 
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
-    fi
     echo "=== Cleanup Antrea Installation ==="
-    for antrea_yml in ${GIT_CHECKOUT_DIR}/build/yamls/*.yml
-    do
-        kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
-    done
+    kubectl delete -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml --ignore-not-found=true || true
+    kubectl delete -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke-node-init.yml --ignore-not-found=true || true
 }
 
 function cleanup_cluster() {
     echo '=== Cleaning up GKE cluster ${cluster} ==='
+    # Do not exit automatically on error (to enable retries below)
+    set +e
     retry=5
     while [[ "${retry}" -gt 0 ]]; do
        yes | ${GCLOUD_PATH} container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
@@ -310,13 +301,9 @@ function cleanup_cluster() {
        exit 1
     fi
     rm -f ${KUBECONFIG_PATH}/kubeconfig
+    set -e
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
-
-# ensures that the script can be run from anywhere
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GIT_CHECKOUT_DIR=${THIS_DIR}/..
-pushd "$THIS_DIR" > /dev/null
 
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
     setup_gke
