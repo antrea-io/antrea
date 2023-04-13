@@ -46,7 +46,7 @@ run them locally:
 | Test category                 | Location              | How to run locally                                 | Automation |
 | ----------------------------- | --------------------- | -------------------------------------------------- | ---------- |
 | **unit tests**                | most Go packages      | `make test-unit` (Linux) / `make docker-test-unit` | [Github Actions] |
-| **integration tests**         | [test/integration]    | `make docker-test-integration`                     | [Github Actions] (soon to be Jenkins) |
+| **integration tests**         | [test/integration]    | `make docker-test-integration`                     | [Github Actions] |
 | **e2e tests**                 | [test/e2e]            | see [test/e2e/README.md]                           | [Github Actions] ([Kind] cluster) + [Jenkins] |
 | **Kubernetes upstream tests** | [upstream Kubernetes] | see [ci/jenkins/README.md]                         | [Jenkins] |
 
