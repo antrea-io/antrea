@@ -11,7 +11,7 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/Microsoft/go-winio v0.6.0 // indirect
+	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/Microsoft/hcsshim v0.8.20 // indirect
 	github.com/awalterschulze/gographviz v2.0.1+incompatible // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
