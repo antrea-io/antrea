@@ -61,6 +61,8 @@ var (
 	loadBalancerIPv6      = net.ParseIP("fec0::169:254:169:1")
 	svcNodePortIPv4       = net.ParseIP("192.168.77.100")
 	svcNodePortIPv6       = net.ParseIP("2001::192:168:77:100")
+	externalIPv4          = net.ParseIP("192.168.77.101")
+	externalIPv6          = net.ParseIP("2001::192:168:77:101")
 	nodePortAddressesIPv4 = []net.IP{svcNodePortIPv4}
 	nodePortAddressesIPv6 = []net.IP{svcNodePortIPv6}
 
@@ -139,6 +141,7 @@ func makeTestEndpointSlice(namespace, name string, eps []discovery.Endpoint, por
 
 func makeTestClusterIPService(svcPortName *k8sproxy.ServicePortName,
 	clusterIP net.IP,
+	externalIPs []net.IP,
 	svcPort int32,
 	protocol corev1.Protocol,
 	affinitySeconds *int32,
@@ -151,6 +154,11 @@ func makeTestClusterIPService(svcPortName *k8sproxy.ServicePortName,
 			Port:     svcPort,
 			Protocol: protocol,
 		}}
+		for _, ip := range externalIPs {
+			if ip != nil {
+				svc.Spec.ExternalIPs = append(svc.Spec.ExternalIPs, ip.String())
+			}
+		}
 		if internalTrafficPolicy != nil {
 			svc.Spec.InternalTrafficPolicy = internalTrafficPolicy
 		}
@@ -170,6 +178,7 @@ func makeTestClusterIPService(svcPortName *k8sproxy.ServicePortName,
 
 func makeTestNodePortService(svcPortName *k8sproxy.ServicePortName,
 	clusterIP net.IP,
+	externalIPs []net.IP,
 	svcPort,
 	svcNodePort int32,
 	protocol corev1.Protocol,
@@ -185,6 +194,11 @@ func makeTestNodePortService(svcPortName *k8sproxy.ServicePortName,
 			Port:     svcPort,
 			Protocol: protocol,
 		}}
+		for _, ip := range externalIPs {
+			if ip != nil {
+				svc.Spec.ExternalIPs = append(svc.Spec.ExternalIPs, ip.String())
+			}
+		}
 		svc.Spec.ExternalTrafficPolicy = externalTrafficPolicy
 		svc.Spec.InternalTrafficPolicy = &internalTrafficPolicy
 		if affinitySeconds != nil {
@@ -200,6 +214,7 @@ func makeTestNodePortService(svcPortName *k8sproxy.ServicePortName,
 
 func makeTestLoadBalancerService(svcPortName *k8sproxy.ServicePortName,
 	clusterIP net.IP,
+	externalIPs,
 	loadBalancerIPs []net.IP,
 	svcPort,
 	svcNodePort int32,
@@ -212,9 +227,16 @@ func makeTestLoadBalancerService(svcPortName *k8sproxy.ServicePortName,
 		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
 		var ingress []corev1.LoadBalancerIngress
 		for _, ip := range loadBalancerIPs {
-			ingress = append(ingress, corev1.LoadBalancerIngress{IP: ip.String()})
+			if ip != nil {
+				ingress = append(ingress, corev1.LoadBalancerIngress{IP: ip.String()})
+			}
 		}
 		svc.Status.LoadBalancer.Ingress = ingress
+		for _, ip := range externalIPs {
+			if ip != nil {
+				svc.Spec.ExternalIPs = append(svc.Spec.ExternalIPs, ip.String())
+			}
+		}
 		svc.Spec.Ports = []corev1.ServicePort{{
 			NodePort: svcNodePort,
 			Name:     svcPortName.Port,
@@ -355,6 +377,7 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 
 func testClusterIPAdd(t *testing.T,
 	svcIP net.IP,
+	externalIP net.IP,
 	ep1IP net.IP,
 	ep2IP net.IP,
 	isIPv6 bool,
@@ -377,7 +400,11 @@ func testClusterIPAdd(t *testing.T,
 	if nodeLocalInternal {
 		internalTrafficPolicy = corev1.ServiceInternalTrafficPolicyLocal
 	}
-	allSvcs := append(extraSvcs, makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true))
+	var externalIPs []net.IP
+	if externalIP != nil {
+		externalIPs = append(externalIPs, externalIP)
+	}
+	allSvcs := append(extraSvcs, makeTestClusterIPService(&svcPortName, svcIP, externalIPs, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true))
 	makeServiceMap(fp, allSvcs...)
 
 	if !endpointSliceEnabled {
@@ -402,8 +429,9 @@ func testClusterIPAdd(t *testing.T,
 		nodeName = hostname
 		serving = true
 	}
-	expectedAllEps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep2IP.String(), nodeName, "", svcPort, true, true, serving, false, nil)}
-	if !nodeLocalInternal {
+	expectedLocalEps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep2IP.String(), nodeName, "", svcPort, true, true, serving, false, nil)}
+	expectedAllEps := expectedLocalEps
+	if !nodeLocalInternal || externalIP != nil {
 		expectedAllEps = append(expectedAllEps, k8sproxy.NewBaseEndpointInfo(ep1IP.String(), "", "", svcPort, false, true, serving, false, nil))
 	}
 
@@ -412,11 +440,28 @@ func testClusterIPAdd(t *testing.T,
 		bindingProtocol = binding.ProtocolTCPv6
 	}
 
-	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
-	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedAllEps)).Times(1)
-	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, true).Times(1)
-
+	if nodeLocalInternal == false {
+		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
+		mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedAllEps)).Times(1)
+		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, true).Times(1)
+		if externalIP != nil {
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		}
+	} else {
+		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
+		mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedAllEps)).Times(1)
+		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedLocalEps)).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, true).Times(1)
+		if externalIP != nil {
+			groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, false)
+			mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		}
+	}
+	if externalIP != nil {
+		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
@@ -425,6 +470,7 @@ func testClusterIPAdd(t *testing.T,
 func testLoadBalancerAdd(t *testing.T,
 	nodePortAddresses []net.IP,
 	svcIP net.IP,
+	externalIP net.IP,
 	ep1IP net.IP,
 	ep2IP net.IP,
 	loadBalancerIP net.IP,
@@ -454,7 +500,9 @@ func testLoadBalancerAdd(t *testing.T,
 	if nodeLocalInternal {
 		internalTrafficPolicy = corev1.ServiceInternalTrafficPolicyLocal
 	}
-	svc := makeTestLoadBalancerService(&svcPortName, svcIP,
+	svc := makeTestLoadBalancerService(&svcPortName,
+		svcIP,
+		[]net.IP{externalIP},
 		[]net.IP{loadBalancerIP},
 		int32(svcPort),
 		int32(svcNodePort),
@@ -511,29 +559,38 @@ func testLoadBalancerAdd(t *testing.T,
 		}
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(clusterIPEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalExternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(nodePortEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		if proxyLoadBalancerIPs {
-			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeLoadBalancer, false).Times(1)
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		}
+		if externalIP != nil {
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
 		}
 	} else {
 		nodeLocalVal := nodeLocalInternal && nodeLocalExternal
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP, false).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		if proxyLoadBalancerIPs {
-			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeLoadBalancer, false).Times(1)
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		}
+		if externalIP != nil {
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
 		}
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, !nodeLocalVal)
 		mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
 	}
 	if proxyLoadBalancerIPs {
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+	if externalIP != nil {
+		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	}
 
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -543,6 +600,7 @@ func testLoadBalancerAdd(t *testing.T,
 func testNodePortAdd(t *testing.T,
 	nodePortAddresses []net.IP,
 	svcIP net.IP,
+	externalIP net.IP,
 	ep1IP net.IP,
 	ep2IP net.IP,
 	isIPv6 bool,
@@ -567,7 +625,9 @@ func testNodePortAdd(t *testing.T,
 	if nodeLocalInternal {
 		internalTrafficPolicy = corev1.ServiceInternalTrafficPolicyLocal
 	}
-	svc := makeTestNodePortService(&svcPortName, svcIP,
+	svc := makeTestNodePortService(&svcPortName,
+		svcIP,
+		[]net.IP{externalIP},
 		int32(svcPort),
 		int32(svcNodePort),
 		corev1.ProtocolTCP,
@@ -623,22 +683,30 @@ func testNodePortAdd(t *testing.T,
 		}
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(clusterIPEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalExternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(nodePortEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
+		if externalIP != nil {
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		}
 	} else {
 		nodeLocalVal := nodeLocalInternal && nodeLocalExternal
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP, false).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort, false).Times(1)
-
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
+		if externalIP != nil {
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		}
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, !nodeLocalVal)
 		mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
 	}
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+	if externalIP != nil {
+		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	}
 
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -649,36 +717,36 @@ func TestClusterIPAdd(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv4, ep1IPv4, ep2IPv4, false, false, []*corev1.Service{}, []*corev1.Endpoints{}, false)
+				testClusterIPAdd(t, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, false, []*corev1.Service{}, []*corev1.Endpoints{}, false)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv4, ep1IPv4, ep2IPv4, false, true, []*corev1.Service{}, []*corev1.Endpoints{}, false)
+				testClusterIPAdd(t, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, true, []*corev1.Service{}, []*corev1.Endpoints{}, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv4, ep1IPv4, ep2IPv4, false, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
+				testClusterIPAdd(t, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv4, ep1IPv4, ep2IPv4, false, true, []*corev1.Service{}, []*corev1.Endpoints{}, true)
+				testClusterIPAdd(t, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, true, []*corev1.Service{}, []*corev1.Endpoints{}, true)
 			})
 		})
 	})
 	t.Run("IPv6", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv6, ep1IPv6, ep2IPv6, true, false, []*corev1.Service{}, []*corev1.Endpoints{}, false)
+				testClusterIPAdd(t, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, false, []*corev1.Service{}, []*corev1.Endpoints{}, false)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv6, ep1IPv6, ep2IPv6, true, true, []*corev1.Service{}, []*corev1.Endpoints{}, false)
+				testClusterIPAdd(t, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, true, []*corev1.Service{}, []*corev1.Endpoints{}, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv6, ep1IPv6, ep2IPv6, true, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
+				testClusterIPAdd(t, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPAdd(t, svc1IPv6, ep1IPv6, ep2IPv6, true, true, []*corev1.Service{}, []*corev1.Endpoints{}, true)
+				testClusterIPAdd(t, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, true, []*corev1.Service{}, []*corev1.Endpoints{}, true)
 			})
 		})
 	})
@@ -688,72 +756,72 @@ func TestLoadBalancerAdd(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, true, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, true, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, false, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, false, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, true, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, true, true, false)
 			})
 			t.Run("No External IPs", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, false, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, false, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, true, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, true, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, false, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, false, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, true, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, true, true, true)
 			})
 			t.Run("No External IPs", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, false, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, false, false, false, true)
 			})
 		})
 	})
 	t.Run("IPv6", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, true, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, true, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, false, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, false, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, true, true, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, true, true, false)
 			})
 			t.Run("No External IPs", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, false, false)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, false, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, true, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, true, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, false, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, false, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, true, true, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, true, true, true)
 			})
 			t.Run("No External IPs", func(t *testing.T) {
-				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, false, true)
+				testLoadBalancerAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, false, false, false, true)
 			})
 		})
 	})
@@ -872,18 +940,18 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.InAnyOrder([]k8sproxy.Endpoint{localEndpointForPort80, remoteEndpointForPort80})).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), false, []k8sproxy.Endpoint{localEndpointForPort80}).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), false, gomock.InAnyOrder([]k8sproxy.Endpoint{localEndpointForPort80, remoteEndpointForPort80})).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), svc1IPv4, uint16(port80Int32), binding.ProtocolTCP, uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), agentconfig.VirtualNodePortDNATIPv4, uint16(port30001Int32), binding.ProtocolTCP, uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), loadBalancerIPv4, uint16(port80Int32), binding.ProtocolTCP, uint16(0), true, corev1.ServiceTypeLoadBalancer, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), svc1IPv4, uint16(port80Int32), binding.ProtocolTCP, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), agentconfig.VirtualNodePortDNATIPv4, uint16(port30001Int32), binding.ProtocolTCP, uint16(0), true, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), loadBalancerIPv4, uint16(port80Int32), binding.ProtocolTCP, uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(port30001Int32), binding.ProtocolTCP).Times(1)
-	mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIPv4).Times(1)
+	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIPv4).Times(1)
 
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.InAnyOrder([]k8sproxy.Endpoint{localEndpointForPort443, remoteEndpointForPort443})).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), false, []k8sproxy.Endpoint{localEndpointForPort443}).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), false, gomock.InAnyOrder([]k8sproxy.Endpoint{localEndpointForPort443, remoteEndpointForPort443})).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), svc1IPv4, uint16(port443Int32), binding.ProtocolTCP, uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), agentconfig.VirtualNodePortDNATIPv4, uint16(port30002Int32), binding.ProtocolTCP, uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), loadBalancerIPv4, uint16(port443Int32), binding.ProtocolTCP, uint16(0), true, corev1.ServiceTypeLoadBalancer, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), svc1IPv4, uint16(port443Int32), binding.ProtocolTCP, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), agentconfig.VirtualNodePortDNATIPv4, uint16(port30002Int32), binding.ProtocolTCP, uint16(0), true, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), loadBalancerIPv4, uint16(port443Int32), binding.ProtocolTCP, uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(port30002Int32), binding.ProtocolTCP).Times(1)
 
 	fp.syncProxyRules()
@@ -906,7 +974,7 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIPv4, uint16(port443Int32), binding.ProtocolTCP)
 	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(port30002Int32), binding.ProtocolTCP)
 	// The route for the ClusterIP and the LoadBalancer IP should only be uninstalled once.
-	mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIPv4)
+	mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIPv4)
 
 	fp.syncProxyRules()
 
@@ -917,60 +985,60 @@ func TestNodePortAdd(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, false, false, false)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, false, false, false)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, false, true, false)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, false, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, true, false, false)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, true, false, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, true, true, false)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, true, true, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, false, false, true)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, false, false, true)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, false, true, true)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, false, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, true, false, true)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, true, false, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, ep2IPv4, false, true, true, true)
+				testNodePortAdd(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, ep2IPv4, false, true, true, true)
 			})
 		})
 	})
 	t.Run("IPv6", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, false, false, false)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, false, false, false)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, false, true, false)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, false, true, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, true, false, false)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, true, false, false)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, true, true, false)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, true, true, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, false, false, true)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, false, false, true)
 			})
 			t.Run("InternalTrafficPolicy:Cluster ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, false, true, true)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, false, true, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Cluster", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, true, false, true)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, true, false, true)
 			})
 			t.Run("InternalTrafficPolicy:Local ExternalTrafficPolicy:Local", func(t *testing.T) {
-				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, ep2IPv6, true, true, true, true)
+				testNodePortAdd(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, ep2IPv6, true, true, true, true)
 			})
 		})
 	})
@@ -988,8 +1056,8 @@ func TestClusterSkipServices(t *testing.T) {
 	skippedServiceName := strings.Split(skippedServiceNN, "/")[1]
 	svc1PortName := makeSvcPortName(skippedServiceNamespace, skippedServiceName, strconv.Itoa(svc1Port), corev1.ProtocolTCP)
 	svc2PortName := makeSvcPortName("kube-system", "test", strconv.Itoa(svc2Port), corev1.ProtocolTCP)
-	svc1 := makeTestClusterIPService(&svc1PortName, svc1ClusterIP, int32(svc1Port), corev1.ProtocolTCP, nil, nil, false)
-	svc2 := makeTestClusterIPService(&svc2PortName, svc2ClusterIP, int32(svc2Port), corev1.ProtocolTCP, nil, nil, false)
+	svc1 := makeTestClusterIPService(&svc1PortName, svc1ClusterIP, nil, int32(svc1Port), corev1.ProtocolTCP, nil, nil, false)
+	svc2 := makeTestClusterIPService(&svc2PortName, svc2ClusterIP, nil, int32(svc2Port), corev1.ProtocolTCP, nil, nil, false)
 	svcs := []*corev1.Service{svc1, svc2}
 
 	epSubset := makeTestEndpointSubset(&svc1PortName, ep1IP, int32(svc1Port), corev1.ProtocolTCP, false)
@@ -998,7 +1066,7 @@ func TestClusterSkipServices(t *testing.T) {
 	ep2 := makeTestEndpoints(&svc2PortName, []corev1.EndpointSubset{*epSubset})
 	eps := []*corev1.Endpoints{ep1, ep2}
 
-	testClusterIPAdd(t, svc1IPv4, ep1IPv4, ep2IPv4, false, false, svcs, eps, false)
+	testClusterIPAdd(t, svc1IPv4, nil, ep1IPv4, ep2IPv4, false, false, svcs, eps, false)
 }
 
 func TestDualStackService(t *testing.T) {
@@ -1038,11 +1106,11 @@ func TestDualStackService(t *testing.T) {
 
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDv4, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDv4, svc1IPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDv4, svc1IPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0), false, false).Times(1)
 
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDv6, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCPv6, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDv6, svc1IPv6, uint16(svcPort), binding.ProtocolTCPv6, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDv6, svc1IPv6, uint16(svcPort), binding.ProtocolTCPv6, uint16(0), false, false).Times(1)
 
 	fpv4.syncProxyRules()
 	fpv6.syncProxyRules()
@@ -1050,7 +1118,7 @@ func TestDualStackService(t *testing.T) {
 	assert.Contains(t, fpv6.serviceInstalledMap, svcPortName)
 }
 
-func testClusterIPRemove(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, nodeLocalInternal, endpointSliceEnabled bool) {
+func testClusterIPRemove(t *testing.T, svcIP, externalIP, epIP net.IP, isIPv6 bool, nodeLocalInternal, endpointSliceEnabled bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
@@ -1065,7 +1133,7 @@ func testClusterIPRemove(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, n
 	if nodeLocalInternal {
 		internalTrafficPolicy = corev1.ServiceInternalTrafficPolicyLocal
 	}
-	svc := makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, []net.IP{externalIP}, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true)
 	makeServiceMap(fp, svc)
 
 	var ep *corev1.Endpoints
@@ -1085,17 +1153,39 @@ func testClusterIPRemove(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, n
 		bindingProtocol = binding.ProtocolTCPv6
 	}
 
-	groupID := groupAllocator.Next()
-	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
-	if !nodeLocalInternal {
+	if nodeLocalInternal == false {
+		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
 		mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	}
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, true).Times(1)
-	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
-	if !nodeLocalInternal {
+		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, true).Times(1)
+		mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(1)
 		mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
+		mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
+		if externalIP != nil {
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+			mockOFClient.EXPECT().UninstallServiceFlows(externalIP, uint16(svcPort), bindingProtocol).Times(1)
+		}
+	} else {
+		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
+		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, true).Times(1)
+		mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
+		mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
+		if externalIP != nil {
+			groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, false)
+			mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
+			mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+
+			mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
+			mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
+			mockOFClient.EXPECT().UninstallServiceFlows(externalIP, uint16(svcPort), bindingProtocol).Times(1)
+		}
 	}
-	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(1)
+	if externalIP != nil {
+		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
+	}
 	fp.syncProxyRules()
 
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -1115,7 +1205,7 @@ func testClusterIPRemove(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, n
 	assert.False(t, exists)
 }
 
-func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, epIP net.IP, isIPv6 bool, endpointSliceEnabled bool) {
+func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP, externalIP, epIP net.IP, isIPv6 bool, endpointSliceEnabled bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
@@ -1126,7 +1216,9 @@ func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, 
 	}
 	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
-	svc := makeTestNodePortService(&svcPortName, svcIP,
+	svc := makeTestNodePortService(&svcPortName,
+		svcIP,
+		[]net.IP{externalIP},
 		int32(svcPort),
 		int32(svcNodePort),
 		corev1.ProtocolTCP,
@@ -1159,15 +1251,23 @@ func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, 
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+	if externalIP != nil {
+		mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	}
 
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(2)
 	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+	if externalIP != nil {
+		mockOFClient.EXPECT().UninstallServiceFlows(externalIP, uint16(svcPort), bindingProtocol).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
+	}
 	fp.syncProxyRules()
 
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -1185,7 +1285,7 @@ func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, 
 	assert.NotContains(t, fp.endpointsInstalledMap, svcPortName)
 }
 
-func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.IP, epIP net.IP, loadBalancerIP net.IP, isIPv6 bool, endpointSliceEnabled bool) {
+func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP, externalIP, epIP, loadBalancerIP net.IP, isIPv6 bool, endpointSliceEnabled bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
@@ -1199,7 +1299,9 @@ func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyTypeLocal
 	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
 
-	svc := makeTestLoadBalancerService(&svcPortName, svcIP,
+	svc := makeTestLoadBalancerService(&svcPortName,
+		svcIP,
+		[]net.IP{externalIP},
 		[]net.IP{loadBalancerIP},
 		int32(svcPort),
 		int32(svcNodePort),
@@ -1233,12 +1335,16 @@ func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, corev1.ServiceTypeLoadBalancer, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
 
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
-	mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
+	if externalIP != nil {
+		mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, externalIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	}
 
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
@@ -1246,7 +1352,11 @@ func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(2)
 	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
-	mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
+	mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+	if externalIP != nil {
+		mockOFClient.EXPECT().UninstallServiceFlows(externalIP, uint16(svcPort), bindingProtocol).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
+	}
 	fp.syncProxyRules()
 
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -1268,36 +1378,36 @@ func TestClusterIPRemove(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv4, ep1IPv4, false, false, false)
+				testClusterIPRemove(t, svc1IPv4, externalIPv4, ep1IPv4, false, false, false)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv4, ep1IPv4, false, true, false)
+				testClusterIPRemove(t, svc1IPv4, externalIPv4, ep1IPv4, false, true, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv4, ep1IPv4, false, false, true)
+				testClusterIPRemove(t, svc1IPv4, externalIPv4, ep1IPv4, false, false, true)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv4, ep1IPv4, false, true, true)
+				testClusterIPRemove(t, svc1IPv4, externalIPv4, ep1IPv4, false, true, true)
 			})
 		})
 	})
 	t.Run("IPv6", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv6, ep1IPv6, true, false, false)
+				testClusterIPRemove(t, svc1IPv6, externalIPv6, ep1IPv6, true, false, false)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv6, ep1IPv6, true, true, false)
+				testClusterIPRemove(t, svc1IPv6, externalIPv6, ep1IPv6, true, true, false)
 			})
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
 			t.Run("InternalTrafficPolicy Cluster", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv6, ep1IPv6, true, false, true)
+				testClusterIPRemove(t, svc1IPv6, externalIPv6, ep1IPv6, true, false, true)
 			})
 			t.Run("InternalTrafficPolicy Local", func(t *testing.T) {
-				testClusterIPRemove(t, svc1IPv6, ep1IPv6, true, true, true)
+				testClusterIPRemove(t, svc1IPv6, externalIPv6, ep1IPv6, true, true, true)
 			})
 		})
 	})
@@ -1306,18 +1416,18 @@ func TestClusterIPRemove(t *testing.T) {
 func TestNodePortRemove(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
-			testNodePortRemove(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, false, false)
+			testNodePortRemove(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, false, false)
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
-			testNodePortRemove(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, false, true)
+			testNodePortRemove(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, false, true)
 		})
 	})
 	t.Run("IPv6", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
-			testNodePortRemove(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, true, false)
+			testNodePortRemove(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, true, false)
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
-			testNodePortRemove(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, true, true)
+			testNodePortRemove(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, true, true)
 		})
 	})
 }
@@ -1325,18 +1435,18 @@ func TestNodePortRemove(t *testing.T) {
 func TestLoadBalancerRemove(t *testing.T) {
 	t.Run("IPv4", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
-			testLoadBalancerRemove(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, loadBalancerIPv4, false, false)
+			testLoadBalancerRemove(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, loadBalancerIPv4, false, false)
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
-			testLoadBalancerRemove(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, loadBalancerIPv4, false, true)
+			testLoadBalancerRemove(t, nodePortAddressesIPv4, svc1IPv4, externalIPv4, ep1IPv4, loadBalancerIPv4, false, true)
 		})
 	})
 	t.Run("IPv6", func(t *testing.T) {
 		t.Run("Endpoints", func(t *testing.T) {
-			testLoadBalancerRemove(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, loadBalancerIPv6, true, false)
+			testLoadBalancerRemove(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, loadBalancerIPv6, true, false)
 		})
 		t.Run("EndpointSlice", func(t *testing.T) {
-			testLoadBalancerRemove(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, loadBalancerIPv6, true, true)
+			testLoadBalancerRemove(t, nodePortAddressesIPv6, svc1IPv6, externalIPv6, ep1IPv6, loadBalancerIPv6, true, true)
 		})
 	})
 
@@ -1349,19 +1459,19 @@ func testClusterIPNoEndpoint(t *testing.T, svcIP net.IP, isIPv6 bool) {
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
 	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
-	svc := makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false)
 	makeServiceMap(fp, svc)
 	makeEndpointSliceMap(fp)
 
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, []k8sproxy.Endpoint{}).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), gomock.Any(), uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), gomock.Any(), uint16(0), false, false).Times(1)
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort+1), gomock.Any(), uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort+1), gomock.Any(), uint16(0), false, false).Times(1)
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	fp.syncProxyRules()
 }
@@ -1382,14 +1492,18 @@ func testNodePortNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
 	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
-	svc := makeTestNodePortService(&svcPortName, svcIP,
+	svc := makeTestNodePortService(&svcPortName,
+		svcIP,
+		nil,
 		int32(svcPort),
 		int32(svcNodePort),
 		corev1.ProtocolTCP,
 		nil,
 		corev1.ServiceInternalTrafficPolicyCluster,
 		corev1.ServiceExternalTrafficPolicyTypeLocal)
-	updatedSvc := makeTestNodePortService(&svcPortName, svcIP,
+	updatedSvc := makeTestNodePortService(&svcPortName,
+		svcIP,
+		nil,
 		int32(svcPort+1),
 		int32(svcNodePort),
 		corev1.ProtocolTCP,
@@ -1408,16 +1522,16 @@ func testNodePortNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	groupIDLocal := fp.groupCounter.AllocateIfNotExist(svcPortName, true)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDCluster, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort), gomock.Any(), uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort), gomock.Any(), uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any()).Times(1)
 	fp.syncProxyRules()
 
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), gomock.Any()).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), gomock.Any()).Times(1)
 	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort+1), gomock.Any(), uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort+1), gomock.Any(), uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any()).Times(1)
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	fp.syncProxyRules()
@@ -1442,7 +1556,9 @@ func testLoadBalancerNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP 
 	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyTypeLocal
 
-	svc := makeTestLoadBalancerService(&svcPortName, svcIP,
+	svc := makeTestLoadBalancerService(&svcPortName,
+		svcIP,
+		nil,
 		[]net.IP{loadBalancerIP},
 		int32(svcPort),
 		int32(svcNodePort),
@@ -1450,7 +1566,9 @@ func testLoadBalancerNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP 
 		nil,
 		&internalTrafficPolicy,
 		externalTrafficPolicy)
-	updatedSvc := makeTestLoadBalancerService(&svcPortName, svcIP,
+	updatedSvc := makeTestLoadBalancerService(&svcPortName,
+		svcIP,
+		nil,
 		[]net.IP{loadBalancerIP},
 		int32(svcPort+1),
 		int32(svcNodePort),
@@ -1470,23 +1588,23 @@ func testLoadBalancerNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP 
 	groupIDLocal := fp.groupCounter.AllocateIfNotExist(svcPortName, true)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDCluster, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort), gomock.Any(), uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort), gomock.Any(), uint16(0), true, corev1.ServiceTypeLoadBalancer, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort), gomock.Any(), uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort), gomock.Any(), uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any()).Times(1)
-	mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	fp.syncProxyRules()
 
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), gomock.Any()).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), gomock.Any()).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), gomock.Any()).Times(1)
 	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any()).Times(1)
-	mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort+1), gomock.Any(), uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort+1), gomock.Any(), uint16(0), true, corev1.ServiceTypeLoadBalancer, false).Times(1)
+	mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDCluster, svcIP, uint16(svcPort+1), gomock.Any(), uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), gomock.Any(), uint16(0), true, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort+1), gomock.Any(), uint16(0), true, false).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any()).Times(1)
-	mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	fp.syncProxyRules()
 }
@@ -1510,8 +1628,8 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	svcPortNameTCP := makeSvcPortName("ns", "svc-tcp", strconv.Itoa(svcPort), corev1.ProtocolTCP)
 	svcPortNameUDP := makeSvcPortName("ns", "svc-udp", strconv.Itoa(svcPort), corev1.ProtocolUDP)
 
-	svcTCP := makeTestClusterIPService(&svcPortNameTCP, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-	svcUDP := makeTestClusterIPService(&svcPortNameUDP, svcIP, int32(svcPort), corev1.ProtocolUDP, nil, nil, false)
+	svcTCP := makeTestClusterIPService(&svcPortNameTCP, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	svcUDP := makeTestClusterIPService(&svcPortNameUDP, svcIP, nil, int32(svcPort), corev1.ProtocolUDP, nil, nil, false)
 	makeServiceMap(fp, svcTCP, svcUDP)
 
 	epTCP, epPortTCP := makeTestEndpointSliceEndpointAndPort(&svcPortNameTCP, epIP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -1534,8 +1652,8 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDUDP, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(protocolTCP, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(protocolUDP, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), protocolTCP, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDUDP, svcIP, uint16(svcPort), protocolUDP, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), protocolTCP, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDUDP, svcIP, uint16(svcPort), protocolUDP, uint16(0), false, false).Times(1)
 	fp.syncProxyRules()
 
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDUDP, false, gomock.Any()).Times(1)
@@ -1565,7 +1683,7 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
 	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
-	svc := makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
 	makeServiceMap(fp, svc)
 
 	ep, epPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, epIP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -1580,7 +1698,7 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 	fp.syncProxyRules()
 
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -1649,7 +1767,7 @@ func testSessionAffinity(t *testing.T, svcIP net.IP, epIP net.IP, affinitySecond
 	} else {
 		expectedAffinity = uint16(affinitySeconds)
 	}
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, expectedAffinity, false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, expectedAffinity, false, false).Times(1)
 
 	fp.syncProxyRules()
 }
@@ -1702,7 +1820,7 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, true, []k8sproxy.Endpoint{}).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), gomock.Any(), uint16(10800), false, gomock.Any(), false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), gomock.Any(), uint16(10800), false, false).Times(1)
 	fp.syncProxyRules()
 }
 
@@ -1732,14 +1850,14 @@ func testServiceClusterIPUpdate(t *testing.T,
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, updatedSvcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+		updatedSvc = makeTestClusterIPService(&svcPortName, updatedSvcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
 	case corev1.ServiceTypeNodePort:
-		svc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestNodePortService(&svcPortName, updatedSvcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestNodePortService(&svcPortName, updatedSvcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, updatedSvcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, updatedSvcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -1759,29 +1877,29 @@ func testServiceClusterIPUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, expectedEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, expectedEps).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 	s1 := mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
-	s2 := mockOFClient.EXPECT().InstallServiceFlows(groupID, updatedSvcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	s2 := mockOFClient.EXPECT().InstallServiceFlows(groupID, updatedSvcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 	s2.After(s1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 
 	fp.syncProxyRules()
@@ -1834,14 +1952,14 @@ func testServicePortUpdate(t *testing.T,
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false)
 	case corev1.ServiceTypeNodePort:
-		svc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -1861,31 +1979,31 @@ func testServicePortUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, expectedEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, expectedEps).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 	s1 := mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
-	s2 := mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort+1), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	s2 := mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort+1), bindingProtocol, uint16(0), false, false).Times(1)
 	s2.After(s1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 
 		s1 = mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol)
-		s2 = mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort+1), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
+		s2 = mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort+1), bindingProtocol, uint16(0), true, false).Times(1)
 		s2.After(s1)
 
-		mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -1937,11 +2055,11 @@ func testServiceNodePortUpdate(t *testing.T,
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
 	case corev1.ServiceTypeNodePort:
-		svc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -1961,21 +2079,21 @@ func testServiceNodePortUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, expectedEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, expectedEps).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 
 		s1 := mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol)
 		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
-		s2 := mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort+1), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		s2 := mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort+1), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort+1), bindingProtocol).Times(1)
 		s2.After(s1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 
 	fp.syncProxyRules()
@@ -2023,11 +2141,11 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T,
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
 	case corev1.ServiceTypeNodePort:
-		svc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeLocal)
+		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeLocal)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeLocal)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeLocal)
 	}
 	makeServiceMap(fp, svc)
 
@@ -2053,15 +2171,15 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedAllEps)).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -2071,14 +2189,14 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T,
 	groupIDLocal := fp.groupCounter.AllocateIfNotExist(svcPortName, true)
 
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), true, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
 		mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, expectedLocalEps).Times(1)
 
 		s1 := mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
-		s2 := mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, corev1.ServiceTypeNodePort, false).Times(1)
+		s2 := mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		s2.After(s1)
 
 		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
@@ -2086,11 +2204,11 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T,
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		s1 := mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol).Times(1)
-		s2 := mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, corev1.ServiceTypeLoadBalancer, false).Times(1)
+		s2 := mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
 		s2.After(s1)
 
-		mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -2130,8 +2248,8 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	internalTrafficPolicyCluster := corev1.ServiceInternalTrafficPolicyCluster
 	internalTrafficPolicyLocal := corev1.ServiceInternalTrafficPolicyLocal
 
-	svc := makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyCluster, false)
-	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyLocal, false)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyCluster, false)
+	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyLocal, false)
 	makeServiceMap(fp, svc)
 
 	remoteEp, remoteEpPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, ep1IP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -2155,7 +2273,7 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedAllEps)).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
@@ -2179,7 +2297,7 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, expectedLocalEps).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 	fp.syncProxyRules()
 
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -2222,8 +2340,8 @@ func testServiceIngressIPsUpdate(t *testing.T,
 		updatedLoadBalancerIPStrs = append(updatedLoadBalancerIPStrs, ip.String())
 	}
 
-	svc := makeTestLoadBalancerService(&svcPortName, svcIP, loadBalancerIPs, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-	updatedSvc := makeTestLoadBalancerService(&svcPortName, svcIP, updatedLoadBalancerIPs, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+	svc := makeTestLoadBalancerService(&svcPortName, svcIP, nil, loadBalancerIPs, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+	updatedSvc := makeTestLoadBalancerService(&svcPortName, svcIP, nil, updatedLoadBalancerIPs, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	makeServiceMap(fp, svc)
 
 	ep, epPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, epIP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -2242,25 +2360,25 @@ func testServiceIngressIPsUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedEps)).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedEps)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 	for _, ip := range loadBalancerIPs {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, ip, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, ip, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
 	}
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	for _, ip := range loadBalancerIPs {
-		mockRouteClient.EXPECT().AddLoadBalancer(ip).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(ip).Times(1)
 	}
 
 	toDeleteLoadBalancerIPs := smallSliceDifference(loadBalancerIPStrs, updatedLoadBalancerIPStrs)
 	toAddLoadBalancerIPs := smallSliceDifference(updatedLoadBalancerIPStrs, loadBalancerIPStrs)
 	for _, ipStr := range toDeleteLoadBalancerIPs {
 		mockOFClient.EXPECT().UninstallServiceFlows(net.ParseIP(ipStr), uint16(svcPort), bindingProtocol).Times(1)
-		mockRouteClient.EXPECT().DeleteLoadBalancer(net.ParseIP(ipStr)).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(net.ParseIP(ipStr)).Times(1)
 	}
 	for _, ipStr := range toAddLoadBalancerIPs {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, net.ParseIP(ipStr), uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(net.ParseIP(ipStr)).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, net.ParseIP(ipStr), uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(net.ParseIP(ipStr)).Times(1)
 	}
 
 	fp.syncProxyRules()
@@ -2307,14 +2425,14 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T,
 	updatedAffinitySeconds := int32(100)
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false)
+		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, false)
 	case corev1.ServiceTypeNodePort:
-		svc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -2334,25 +2452,25 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, expectedEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, true, expectedEps).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, false).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(updatedAffinitySeconds), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(updatedAffinitySeconds), false, false).Times(1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(affinitySeconds), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 		mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
 		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(updatedAffinitySeconds), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(updatedAffinitySeconds), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 		mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol).Times(1)
-		mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(updatedAffinitySeconds), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(updatedAffinitySeconds), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 
 	fp.syncProxyRules()
@@ -2406,14 +2524,14 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T,
 	affinitySeconds := int32(100)
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false)
 	case corev1.ServiceTypeNodePort:
-		svc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -2433,29 +2551,29 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T,
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, expectedEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, expectedEps).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, true, expectedEps).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, false).Times(1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(0), true, false).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeNodePort, false).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(affinitySeconds), true, false).Times(1)
 		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), true, false).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeLoadBalancer, false).Times(1)
-		mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
-		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), true, false).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
 	}
 
 	fp.syncProxyRules()
@@ -2501,8 +2619,8 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 
 	svcPortName1 := makeSvcPortName("ns", "svc1", strconv.Itoa(svcPort), corev1.ProtocolTCP)
 	svcPortName2 := makeSvcPortName("ns", "svc2", strconv.Itoa(svcPort), corev1.ProtocolTCP)
-	svc1 := makeTestClusterIPService(&svcPortName1, svc1IPv4, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-	svc2 := makeTestClusterIPService(&svcPortName2, svc2IPv4, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	svc1 := makeTestClusterIPService(&svcPortName1, svc1IPv4, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	svc2 := makeTestClusterIPService(&svcPortName2, svc2IPv4, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
 	makeServiceMap(fp, svc1, svc2)
 
 	ep1, ep1Port := makeTestEndpointSliceEndpointAndPort(&svcPortName1, ep1IPv4, int32(svcPort), corev1.ProtocolTCP, false)
@@ -2517,8 +2635,8 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	mockOFClient.EXPECT().InstallServiceGroup(groupID2, false, gomock.Any()).Times(1)
 	bindingProtocol := binding.ProtocolTCP
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID1, svc1IPv4, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID2, svc2IPv4, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID1, svc1IPv4, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID2, svc2IPv4, uint16(svcPort), bindingProtocol, uint16(0), false, false).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svc1IPv4, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svc2IPv4, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceGroup(groupID1).Times(1)
@@ -2569,7 +2687,7 @@ func TestMetrics(t *testing.T) {
 				servicesInstallMetric = metrics.ServicesInstalledTotalV6.GaugeMetric
 			}
 
-			testClusterIPAdd(t, tc.svcIP, tc.ep1IP, tc.ep2IP, tc.isIPv6, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
+			testClusterIPAdd(t, tc.svcIP, nil, tc.ep1IP, tc.ep2IP, tc.isIPv6, false, []*corev1.Service{}, []*corev1.Endpoints{}, true)
 			v, err := testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
 			assert.NoError(t, err)
 			assert.Equal(t, 0, int(v))
@@ -2583,7 +2701,7 @@ func TestMetrics(t *testing.T) {
 			assert.Equal(t, 2, int(v))
 			assert.NoError(t, err)
 
-			testClusterIPRemove(t, tc.svcIP, tc.ep1IP, tc.isIPv6, false, false)
+			testClusterIPRemove(t, tc.svcIP, nil, tc.ep1IP, tc.isIPv6, false, false)
 
 			v, err = testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
 			assert.NoError(t, err)
@@ -2608,6 +2726,7 @@ func TestGetServiceFlowKeys(t *testing.T) {
 	groupAllocator := openflow.NewGroupAllocator(false)
 	svc := makeTestNodePortService(&svcPortName,
 		svc1IPv4,
+		nil,
 		int32(svcPort),
 		int32(svcNodePort),
 		corev1.ProtocolTCP,
@@ -2670,8 +2789,8 @@ func TestGetServiceFlowKeys(t *testing.T) {
 				mockRouteClient.EXPECT().AddNodePort(nodePortAddressesIPv4, uint16(svcNodePort), binding.ProtocolTCP).Times(1)
 				mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
 				mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any()).Times(1)
-				mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), gomock.Any(), uint16(svcNodePort), binding.ProtocolTCP, uint16(0), false, corev1.ServiceTypeNodePort, false).Times(1)
-				mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), svc1IPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0), false, corev1.ServiceTypeClusterIP, false).Times(1)
+				mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), gomock.Any(), uint16(svcNodePort), binding.ProtocolTCP, uint16(0), true, false).Times(1)
+				mockOFClient.EXPECT().InstallServiceFlows(gomock.Any(), svc1IPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0), false, false).Times(1)
 				fp.syncProxyRules()
 			}
 

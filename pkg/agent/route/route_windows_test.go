@@ -19,6 +19,7 @@ package route
 
 import (
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,19 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util"
+)
+
+var (
+	// Leverage loopback interface for testing.
+	hostGateway = "Loopback Pseudo-Interface 1"
+	gwLink      = getNetLinkIndex("Loopback Pseudo-Interface 1")
+	nodeConfig  = &config.NodeConfig{
+		OVSBridge: "Loopback Pseudo-Interface 1",
+		GatewayConfig: &config.GatewayConfig{
+			Name:      hostGateway,
+			LinkIndex: gwLink,
+		},
+	}
 )
 
 func getNetLinkIndex(dev string) int {
@@ -38,10 +52,6 @@ func getNetLinkIndex(dev string) int {
 }
 
 func TestRouteOperation(t *testing.T) {
-	// Leverage loopback interface for testing.
-	hostGateway := "Loopback Pseudo-Interface 1"
-	gwLink := getNetLinkIndex("Loopback Pseudo-Interface 1")
-
 	peerNodeIP1 := net.ParseIP("10.0.0.2")
 	peerNodeIP2 := net.ParseIP("10.0.0.3")
 	gwIP1 := net.ParseIP("192.168.2.1")
@@ -53,13 +63,6 @@ func TestRouteOperation(t *testing.T) {
 	client, err := NewClient(&config.NetworkConfig{}, true, false, false, false, nil)
 
 	require.Nil(t, err)
-	nodeConfig := &config.NodeConfig{
-		OVSBridge: "Loopback Pseudo-Interface 1",
-		GatewayConfig: &config.GatewayConfig{
-			Name:      hostGateway,
-			LinkIndex: gwLink,
-		},
-	}
 	called := false
 	err = client.Initialize(nodeConfig, func() { called = true })
 	require.Nil(t, err)
@@ -90,4 +93,29 @@ func TestRouteOperation(t *testing.T) {
 	routes7, err := util.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes7))
+}
+
+func TestAddAndDeleteExternalIPRoute(t *testing.T) {
+	c := &Client{
+		nodeConfig:    nodeConfig,
+		serviceRoutes: &sync.Map{},
+	}
+	externalIP := net.ParseIP("1.1.1.1")
+
+	assert.NoError(t, c.AddExternalIPRoute(externalIP))
+	externalIPNet := util.NewIPNet(externalIP)
+	routes, err := util.GetNetRoutes(gwLink, externalIPNet)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(routes))
+
+	route, ok := c.serviceRoutes.Load(externalIP.String())
+	assert.True(t, ok)
+	assert.EqualValues(t, routes[0], *route.(*util.Route))
+
+	assert.NoError(t, c.DeleteExternalIPRoute(externalIP))
+	routes, err = util.GetNetRoutes(gwLink, externalIPNet)
+	require.Nil(t, err)
+	assert.Equal(t, 0, len(routes))
+	_, ok = c.serviceRoutes.Load(externalIP.String())
+	assert.False(t, ok)
 }

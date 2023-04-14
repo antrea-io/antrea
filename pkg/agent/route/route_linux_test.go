@@ -1443,7 +1443,7 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 	}
 }
 
-func TestAddLoadBalancer(t *testing.T) {
+func TestAddExternalIPRoute(t *testing.T) {
 	tests := []struct {
 		name          string
 		externalIPs   []string
@@ -1487,13 +1487,13 @@ func TestAddLoadBalancer(t *testing.T) {
 			tt.expectedCalls(mockNetlink.EXPECT())
 
 			for _, externalIP := range tt.externalIPs {
-				assert.NoError(t, c.AddLoadBalancer(net.ParseIP(externalIP)))
+				assert.NoError(t, c.AddExternalIPRoute(net.ParseIP(externalIP)))
 			}
 		})
 	}
 }
 
-func TestDeleteLoadBalancer(t *testing.T) {
+func TestDeleteExternalIPRoute(t *testing.T) {
 	tests := []struct {
 		name          string
 		serviceRoutes map[string]*netlink.Route
@@ -1541,7 +1541,7 @@ func TestDeleteLoadBalancer(t *testing.T) {
 			tt.expectedCalls(mockNetlink.EXPECT())
 
 			for _, externalIP := range tt.externalIPs {
-				assert.NoError(t, c.DeleteLoadBalancer(net.ParseIP(externalIP)))
+				assert.NoError(t, c.DeleteExternalIPRoute(net.ParseIP(externalIP)))
 			}
 		})
 	}

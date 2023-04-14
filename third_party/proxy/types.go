@@ -138,12 +138,12 @@ type Endpoint interface {
 	// This is only set when watching EndpointSlices. If using Endpoints, this is always
 	// true since only ready endpoints are read from Endpoints.
 	IsServing() bool
-	// IsTerminating retruns true if an endpoint is terminating. For pods,
+	// IsTerminating returns true if an endpoint is terminating. For pods,
 	// that is any pod with a deletion timestamp.
 	// This is only set when watching EndpointSlices. If using Endpoints, this is always
 	// false since terminating endpoints are always excluded from Endpoints.
 	IsTerminating() bool
-	// GetZoneHint returns the zone hint for the endpoint. This is based on
+	// GetZoneHints returns the zone hint for the endpoint. This is based on
 	// endpoint.hints.forZones[0].name in the EndpointSlice API.
 	GetZoneHints() sets.String
 	// IP returns IP part of the endpoint.
