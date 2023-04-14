@@ -37,14 +37,6 @@ import (
 )
 
 var (
-	addr1 = corev1.EndpointAddress{
-		IP:       "192.168.17.11",
-		Hostname: "pod1",
-	}
-	addr2 = corev1.EndpointAddress{
-		IP:       "192.168.17.12",
-		Hostname: "pod1",
-	}
 	epPorts80 = []corev1.EndpointPort{
 		{
 			Name:     "http",
