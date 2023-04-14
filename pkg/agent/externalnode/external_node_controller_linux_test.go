@@ -40,6 +40,19 @@ var (
 	hostIfName  = "hostIfName"
 	eeName      = "eeName"
 	_, cidr2, _ = net.ParseCIDR("10.20.30.50")
+	intf3       = interfacestore.InterfaceConfig{
+		InterfaceName: ifaceName1,
+		IPs:           []net.IP{net.ParseIP("10.5.6.9")},
+		OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1, PortUUID: portUUID1},
+		EntityInterfaceConfig: &interfacestore.EntityInterfaceConfig{
+			EntityName:      "externalEntity",
+			EntityNamespace: "externalEntityNamespace",
+			UplinkPort: &interfacestore.OVSPortConfig{
+				PortUUID: ifaceUUID1,
+				OFPort:   6,
+			},
+		},
+	}
 )
 
 func TestUpdateExternalNode(t *testing.T) {
