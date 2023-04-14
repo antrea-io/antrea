@@ -163,6 +163,10 @@ tlsCipherSuites: ""
 # VersionTLS13.
 tlsMinVersion: ""
 
+# -- File path of the certificate bundle for all the signers that is recognized
+# for incoming client certificates.
+clientCAFile: ""
+
 # -- To explicitly enable or disable a FeatureGate and bypass the Antrea
 # defaults, add an entry to the dictionary with the FeatureGate's name as the
 # key and a boolean as the value.

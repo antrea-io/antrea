@@ -61,6 +61,9 @@ type ControllerConfig struct {
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
+	// ClientCAFile is the file path of the certificate bundle for all the signers that is recognized for incoming
+	// client certificates.
+	ClientCAFile string `yaml:"clientCAFile,omitempty"`
 	// Legacy CRD mirroring (deprecated).
 	LegacyCRDMirroring *bool `yaml:"legacyCRDMirroring,omitempty"`
 	// NodeIPAM Configuration

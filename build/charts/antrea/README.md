@@ -45,6 +45,7 @@ Kubernetes: `>= 1.16.0-0`
 | antreaProxy.proxyAll | bool | `false` | Proxy all Service traffic, for all Service types, regardless of where it comes from. |
 | antreaProxy.proxyLoadBalancerIPs | bool | `true` | When set to false, AntreaProxy no longer load-balances traffic destined to the External IPs of LoadBalancer Services. |
 | antreaProxy.skipServices | list | `[]` |  |
+| clientCAFile | string | `""` | File path of the certificate bundle for all the signers that is recognized for incoming client certificates. |
 | cni.hostBinPath | string | `"/opt/cni/bin"` | Installation path of CNI binaries on the host. |
 | cni.plugins | object | `{"bandwidth":true,"portmap":true}` | Chained plugins to use alongside antrea-cni. |
 | cni.skipBinaries | list | `[]` | CNI binaries shipped with Antrea for which installation should be skipped. |
