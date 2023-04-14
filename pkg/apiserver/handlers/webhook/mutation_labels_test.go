@@ -15,8 +15,11 @@
 package webhook
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -236,6 +239,43 @@ func TestMutateLabels(t *testing.T) {
 			assert.Equal(t, expValue, actualResp)
 			assert.Equal(t, tt.isAllowed, actualAllowed)
 			assert.Equal(t, tt.msg, actualMsg)
+		})
+	}
+}
+
+func TestHandleMutationLabels(t *testing.T) {
+	testCases := []struct {
+		name               string
+		contentType        string
+		requestBody        []byte
+		expectedStatusCode int
+	}{
+		{
+			name:               "empty request body",
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name:               "invalid content type",
+			expectedStatusCode: http.StatusUnsupportedMediaType,
+			requestBody:        requestBody,
+			contentType:        contentTypeHtml,
+		},
+		{
+			name:               "mutation successfully",
+			requestBody:        requestBody,
+			contentType:        contentTypeJson,
+			expectedStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest("", dummyTarget, bytes.NewReader(tt.requestBody))
+			resp := httptest.NewRecorder()
+			request.Header.Add("content-Type", tt.contentType)
+			fn := HandleMutationLabels()
+			fn(resp, request)
+			assert.Equal(t, tt.expectedStatusCode, resp.Code)
 		})
 	}
 }
