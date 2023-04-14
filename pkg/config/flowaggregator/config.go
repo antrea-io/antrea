@@ -154,7 +154,7 @@ type FlowLoggerConfig struct {
 	MaxAge int32 `yaml:"maxAge,omitempty"`
 	// Compress enables gzip compression on rotated files. Defaults to true.
 	Compress *bool `yaml:"compress,omitempty"`
-	// RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is
+	// RecordFormat defines the format of the flow records logged to file. Only "CSV" is
 	// supported at the moment.
 	RecordFormat string `yaml:"recordFormat,omitempty"`
 	// Filters can be used to select which flow records to log to file. The provided filters are

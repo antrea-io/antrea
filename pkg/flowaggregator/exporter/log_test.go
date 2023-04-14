@@ -121,7 +121,7 @@ func TestLog_Filters(t *testing.T) {
 			},
 		},
 		{
-			name: "unprotected only",
+			name: "ingress and egress unprotected",
 			filters: []flowaggregatorconfig.FlowFilter{
 				{
 					IngressNetworkPolicyRuleActions: []flowaggregatorconfig.NetworkPolicyRuleAction{flowaggregatorconfig.NetworkPolicyRuleActionNone},
@@ -153,7 +153,7 @@ func TestLog_Filters(t *testing.T) {
 			},
 		},
 		{
-			name: "missing policy",
+			name: "ingress and / or egress unprotected",
 			filters: []flowaggregatorconfig.FlowFilter{
 				{
 					IngressNetworkPolicyRuleActions: []flowaggregatorconfig.NetworkPolicyRuleAction{flowaggregatorconfig.NetworkPolicyRuleActionNone},

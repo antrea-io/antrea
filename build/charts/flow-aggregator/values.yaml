@@ -100,7 +100,7 @@ flowLogger:
   maxAge: 0
   # -- Compress enables gzip compression on rotated files.
   compress: true
-  # -- RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is supported at the moment.
+  # -- RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at the moment.
   recordFormat: "CSV"
   # -- Filters can be used to select which flow records to log to file. The provided filters are
   # OR-ed to determine whether a specific flow should be logged. By default, all flows are logged.

@@ -297,7 +297,7 @@ data:
       # Compress enables gzip compression on rotated files.
       compress: true
 
-      # RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is supported at
+      # RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at
       # the moment.
       recordFormat: "CSV"
 

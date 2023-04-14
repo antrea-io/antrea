@@ -42,7 +42,7 @@ Kubernetes: `>= 1.16.0-0`
 | flowLogger.maxSize | int | `100` | MaxSize is the maximum size in MB of a log file before it gets rotated. |
 | flowLogger.path | string | `"/tmp/antrea-flows.log"` | Path is the path to the local log file. |
 | flowLogger.prettyPrint | bool | `true` | PrettyPrint enables conversion of some numeric fields to a more meaningful string representation. |
-| flowLogger.recordFormat | string | `"CSV"` | RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is supported at the moment. |
+| flowLogger.recordFormat | string | `"CSV"` | RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at the moment. |
 | image | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/flow-aggregator","tag":""}` | Container image used by Flow Aggregator. |
 | inactiveFlowRecordTimeout | string | `"90s"` | Provide the inactive flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | logVerbosity | int | `0` |  |

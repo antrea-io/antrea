@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,8 +28,32 @@ import (
 	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
 )
 
-func getTestFlowLogger(maxLatency time.Duration) (*FlowLogger, *bytes.Buffer) {
-	var b bytes.Buffer
+// a thread-safe wrapper around bytes.Buffer
+type buffer struct {
+	sync.Mutex
+	b bytes.Buffer
+}
+
+func (b *buffer) Write(p []byte) (n int, err error) {
+	b.Lock()
+	defer b.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *buffer) Len() int {
+	b.Lock()
+	defer b.Unlock()
+	return b.b.Len()
+}
+
+func (b *buffer) String() string {
+	b.Lock()
+	defer b.Unlock()
+	return b.b.String()
+}
+
+func getTestFlowLogger(maxLatency time.Duration) (*FlowLogger, *buffer) {
+	var b buffer
 	flowLogger := &FlowLogger{
 		maxLatency: maxLatency,
 		writer:     bufio.NewWriter(&b),
