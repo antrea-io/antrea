@@ -3342,6 +3342,10 @@ data:
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     tlsMinVersion: ""
 
+    # File path of the certificate bundle for all the signers that is recognized for incoming client
+    # certificates.
+    clientCAFile: ""
+
     nodeIPAM:
       # Enable the integrated Node IPAM controller within the Antrea controller.
       enableNodeIPAM: false
@@ -4299,7 +4303,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d259115de8dc77cc70fa311cc8770631c67cc2ae23fd4ca673cba8328ac6ea0c
+        checksum/config: 530b8f5633759918bc625c6c3e13b8927c2854687f7a5c5bfd420f1c1e15e3cf
       labels:
         app: antrea
         component: antrea-agent
@@ -4538,7 +4542,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d259115de8dc77cc70fa311cc8770631c67cc2ae23fd4ca673cba8328ac6ea0c
+        checksum/config: 530b8f5633759918bc625c6c3e13b8927c2854687f7a5c5bfd420f1c1e15e3cf
       labels:
         app: antrea
         component: antrea-controller
