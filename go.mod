@@ -45,7 +45,7 @@ require (
 	github.com/onsi/gomega v1.27.6
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.5
-	github.com/prometheus/client_golang v1.14.0
+	github.com/prometheus/client_golang v1.15.0
 	github.com/prometheus/common v0.42.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/afero v1.9.5
@@ -173,7 +173,7 @@ require (
 	github.com/pion/udp v0.1.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
-	github.com/prometheus/procfs v0.8.0 // indirect
+	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
