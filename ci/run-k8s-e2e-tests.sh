@@ -40,7 +40,6 @@ DEFAULT_E2E_SIG_NETWORK_FOCUS="\[sig-network\]"
 DEFAULT_E2E_SIG_NETWORK_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[GCE\]|\[Feature:.+\]|\[Feature:IPv6DualStack\]|\[Feature:IPv6DualStackAlphaFeature\]|should create pod that uses dns|should provide Internet connection for containers"
 MODE="report"
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-KUBE_CONFORMANCE_IMAGE_OPTION=""
 KUBE_CONFORMANCE_IMAGE_VERSION_OPTION=""
 IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
@@ -48,7 +47,7 @@ SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.56.4"
 SYSTEMD_LOGS_IMAGE="projects.registry.vmware.com/sonobuoy/systemd-logs:v0.4"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>]
-                  [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
+                  [--kubeconfig <Kubeconfig>] [--kubernetes-version <ConformanceImageVersion>]
                   [--log-mode <SonobuoyResultLogLevel>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
 using the sonobuoy tool. Possible exit codes are 0 (all tests pass), 1 (all tests were run, but at
@@ -61,8 +60,7 @@ least one failed) and 2 (internal error when running tests, not a test failure).
         --e2e-focus TestRegex                                     Run only tests matching a specific regex, this is useful to run a single tests for example.
         --e2e-skip TestRegex                                      Skip some tests matching a specific regex.
         --kubeconfig Kubeconfig                                   Explicit path to Kubeconfig file. You may also set the KUBECONFIG environment variable.
-        --kube-conformance-image ConformanceImage                 Container image override for the kube conformance image. Overrides --kube-conformance-image-version.
-        --kube-conformance-image-version ConformanceImageVersion  Use specific version of the Conformance tests container image. Default is $KUBE_CONFORMANCE_IMAGE_VERSION.
+        --kubernetes-version ConformanceImageVersion              Use specific version of the Conformance tests container image. Default is $KUBE_CONFORMANCE_IMAGE_VERSION.
         --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --image-pull-policy                                       The ImagePullPolicy Sonobuoy should use for the aggregators and workers. (default Always)
         --sonobuoy-image SonobuoyImage                            Sonobuoy image to use. Default is $SONOBUOY_IMAGE.
@@ -90,12 +88,8 @@ case $key in
     KUBECONFIG_OPTION="--kubeconfig $2"
     shift 2
     ;;
-    --kube-conformance-image)
-    KUBE_CONFORMANCE_IMAGE_OPTION="--kube-conformance-image $2"
-    shift 2
-    ;;
-    --kube-conformance-image-version)
-    KUBE_CONFORMANCE_IMAGE_VERSION_OPTION="--kube-conformance-image-version $2"
+    --kubernetes-version)
+    KUBE_CONFORMANCE_IMAGE_VERSION_OPTION="--kubernetes-version $2"
     shift 2
     ;;
     --e2e-conformance)
@@ -180,14 +174,12 @@ function run_sonobuoy() {
     if [[ "$focus_regex" == "" && "$skip_regex" == "" ]]; then
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
-                $KUBE_CONFORMANCE_IMAGE_OPTION \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --mode "certified-conformance" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     else
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
-                $KUBE_CONFORMANCE_IMAGE_OPTION \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --e2e-focus "$focus_regex" --e2e-skip "$skip_regex" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}

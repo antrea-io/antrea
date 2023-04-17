@@ -249,10 +249,10 @@ function run_conformance() {
     # through public IPs by default. See https://github.com/antrea-io/antrea/issues/2409
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]|NodePort"
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip ${skip_regex} \
-      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
+      --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log && \
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "\[Feature:SCTPConnectivity\]|Netpol" \
-      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
+      --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/aks-test.log || \
     TEST_SCRIPT_RC=$?
 
