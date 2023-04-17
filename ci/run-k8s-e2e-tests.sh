@@ -174,7 +174,7 @@ function run_sonobuoy() {
     local focus_regex="$1"
     local skip_regex="$2"
 
-    $SONOBUOY delete --wait $KUBECONFIG_OPTION
+    $SONOBUOY delete --wait=10 $KUBECONFIG_OPTION
     echo "Running tests with sonobuoy. While test is running, check logs with: $SONOBUOY $KUBECONFIG_OPTION logs -f."
     set -x
     if [[ "$focus_regex" == "" && "$skip_regex" == "" ]]; then
@@ -265,7 +265,7 @@ if $RUN_SIG_NETWORK; then
 fi
 
 echoerr "Deleting sonobuoy resources"
-$SONOBUOY delete --wait $KUBECONFIG_OPTION
+$SONOBUOY delete --wait=10 $KUBECONFIG_OPTION
 
 if [[ $errors -ne 0 ]]; then
     exit 1
