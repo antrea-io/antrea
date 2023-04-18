@@ -138,12 +138,13 @@ if [[ -z ${GCLOUD_PATH+x} ]]; then
     GCLOUD_PATH=$(which gcloud)
 fi
 
-export KUBECONFIG="${KUBECONFIG_PATH}/kubeconfig"
-
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
+
+# disable gcloud prompts, e.g., when deleting resources
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
 
 function setup_gke() {
     if [[ -z ${K8S_VERSION+x} ]]; then
@@ -174,7 +175,7 @@ function setup_gke() {
     fi
 
     mkdir -p ${KUBECONFIG_PATH}
-    ${GCLOUD_PATH} container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE}
+    KUBECONFIG=${KUBECONFIG_PATH}/kubeconfig ${GCLOUD_PATH} container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE}
 
     sleep 10
     if [[ $(kubectl get nodes) ]]; then
@@ -289,7 +290,7 @@ function cleanup_cluster() {
     set +e
     retry=5
     while [[ "${retry}" -gt 0 ]]; do
-       yes | ${GCLOUD_PATH} container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
+       ${GCLOUD_PATH} container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
        if [[ $? -eq 0 ]]; then
          break
        fi
