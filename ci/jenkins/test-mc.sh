@@ -261,13 +261,14 @@ function run_codecov { (set -e
 function modify_config {
   if [[ ${ENABLE_MC_GATEWAY} == "true" ]]; then
   cat > build/yamls/chart-values/antrea.yml << EOF
+trafficEncapMode: "noEncap"
 multicluster:
   enableGateway: true
   enableStretchedNetworkPolicy: true
   enablePodToPodConnectivity: true
-featureGates: {
+featureGates:
   Multicluster: true
-}
+  EndpointSlice: true
 EOF
   make manifest
   cd multicluster
