@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/util/logdir"
 )
 
@@ -54,8 +55,10 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpNetworkConfig(basedir); err != nil {
 		return err
 	}
-	if err := d.dumpHNSResources(basedir); err != nil {
-		return err
+	if d.aq.GetNodeConfig().Type == config.K8sNode {
+		if err := d.dumpHNSResources(basedir); err != nil {
+			return err
+		}
 	}
 	return nil
 }
