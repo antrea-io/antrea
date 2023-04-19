@@ -5,6 +5,13 @@ on:
     # every day at 10am
     - cron: '0 10 * * *'
   workflow_dispatch:
+    inputs:
+      # this is useful for testing an arbitrary released version of Antrea
+      # by default, we will use the latest release (obtained using the Github API)
+      antrea-version:
+        description: 'The released Antrea version to scan'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -14,11 +21,13 @@ jobs:
     - uses: actions/checkout@v3
     - name: Find greatest Antrea version
       id: find-antrea-greatest-version
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION=$(git ls-remote --tags --ref https://github.com/antrea-io/antrea.git | \
-          grep -v rc | \
-          awk '{print $2}' | awk -F/ '{print $3}' | \
-          sort --version-sort -r | head -n 1)
+        VERSION=${{ github.event.inputs.antrea-version }}
+        if [ -z "$VERSION" ]; then
+            VERSION=$(curl -s https://api.github.com/repos/antrea-io/antrea/releases/latest | jq -r '.tag_name')
+        fi
         echo "antrea_version=$VERSION" >> $GITHUB_OUTPUT
     - name: Pull Antrea Docker images
       id: pull
