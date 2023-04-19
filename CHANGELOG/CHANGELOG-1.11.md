@@ -1,5 +1,17 @@
 # Changelog 1.11
 
+## 1.11.1 - 2023-04-20
+
+### Changed
+
+- Document the limit of maximum receiver group number on a Linux Node for multicast. ([#4850](https://github.com/antrea-io/antrea/pull/4850), [@ceclinux])
+
+### Fixed
+
+- Fix Service not being updated correctly when stickyMaxAgeSeconds or InternalTrafficPolicy is updated. ([#4845](https://github.com/antrea-io/antrea/pull/4845), [@tnqn])
+- Fix EndpointSlice API availablility check to resolve the issue that AntreaProxy always falls back to the Endpoints API when EndpointSlice is enabled ([#4852](https://github.com/antrea-io/antrea/pull/4852), [@tnqn])
+- Fix the Antrea Agent crash issue when large amount of multicast receivers with different multicast IPs on one Node start together.([#4870](https://github.com/antrea-io/antrea/pull/4870), [@ceclinux])
+
 ## 1.11.0 - 2023-03-22
 
 - The EndpointSlice feature is graduated from Alpha to Beta and is therefore enabled by default.
