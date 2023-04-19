@@ -137,7 +137,7 @@ function apply_antrea {
         fi
     fi
     echo "====== Applying Antrea yaml ======"
-    ./hack/generate-manifest.sh --feature-gates ExternalNode=true --extra-helm-values "controller.apiNodePort=32767" > ${WORKDIR}/antrea.yml
+    ./hack/generate-manifest.sh --feature-gates ExternalNode=true,SupportBundleCollection=true --extra-helm-values "controller.apiNodePort=32767" > ${WORKDIR}/antrea.yml
     kubectl apply -f ${WORKDIR}/antrea.yml
 }
 
@@ -162,6 +162,10 @@ function configure_vm_agent {
     cp ./build/yamls/externalnode/vm-agent-rbac.yml ${WORKDIR}/vm-agent-rbac.yml
     echo "Applying vm-agent rbac yaml"
     kubectl apply -f ${WORKDIR}/vm-agent-rbac.yml
+    cp ./build/yamls/externalnode/support-bundle-collection-rbac.yml ${WORKDIR}/support-bundle-collection-rbac.yml
+    echo "Applying support-bundle-collection rbac yaml"
+    kubectl apply -f ${WORKDIR}/support-bundle-collection-rbac.yml -n $TEST_NAMESPACE
+    cp ./hack/externalnode/sftp-deployment.yml ${WORKDIR}/sftp-deployment.yml
     cp ./hack/externalnode/install-vm.sh ${WORKDIR}/install-vm.sh
     cp ./hack/externalnode/install-vm.ps1 ${WORKDIR}/install-vm.ps1
     create_kubeconfig_files

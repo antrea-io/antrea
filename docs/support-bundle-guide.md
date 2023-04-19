@@ -100,11 +100,16 @@ names or by matching their labels in a SupportBundleCollection CR.
 Assume we have a cluster with Nodes named "worker1" and "worker2". In addition,
 we have set up two external Nodes named "vm1" and "vm2" in the "vm-ns" Namespace
 by following the instruction of the [VM installation guide](external-node.md#install-antrea-agent-on-vm).
+In addition, an SFTP server needs to be provided in advance to collect the bundle.
+You can host the SFTP server by applying YAML `hack/externalnode/sftp-deployment.yml`
+or deploy one by yourself.
 
 A Secret needs to be created in advance with the username and password of the SFTP
 Server. The Secret will be referred as `authSecret` in the following YAML examples.
 
 ```bash
+# Set username and password with `--from-literal=username='foo' --from-literal=password='pass'`
+# if the sftp server is deployed with sftp-deployment.yml
 kubectl create secret generic support-bundle-secret  --from-literal=username='your-sftp-username'  --from-literal=password='your-sftp-password'
 ```
 
@@ -152,7 +157,7 @@ spec:
         role: vms
     namespace: vm-ns # namespace is mandatory when collecting support bundle from external Nodes.
   fileServer:
-    url: yourtestdomain.com:22/root/test # Scheme sftp can be omitted
+    url: yourtestdomain.com:22/root/test # Scheme sftp can be omitted. The url of "$controlplane_node_ip:30010/upload" is used if deployed with sftp-deployment.yml.
   authentication:
     authType: "BasicAuthentication"
     authSecret:

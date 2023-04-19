@@ -18,12 +18,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"path"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -71,9 +73,152 @@ func TestVMAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up VMAgent test: %v", err)
 	}
+	k8sUtils, err = NewKubernetesUtils(data)
+	failOnError(err, t)
 	defer teardownVMAgentTest(t, data, vmList)
 	t.Run("testExternalNode", func(t *testing.T) { testExternalNode(t, data, vmList) })
 	t.Run("testExternalNodeWithANP", func(t *testing.T) { testExternalNodeWithANP(t, data, vmList) })
+	t.Run("testExternalNodeSupportBundleCollection", func(t *testing.T) { testExternalNodeSupportBundleCollection(t, data, vmList) })
+}
+
+func (data *TestData) waitForDeploymentRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
+	t.Logf("Waiting for Deployment '%s/%s' to be realized", namespace, name)
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		dp, err := data.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return dp.Status.ObservedGeneration == dp.Generation && dp.Status.ReadyReplicas == *dp.Spec.Replicas, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for Deployment '%s/%s' to be realized: %v", namespace, name, err)
+	}
+	return nil
+}
+
+func (data *TestData) waitForSupportBundleCollectionRealized(t *testing.T, name string, timeout time.Duration) error {
+	t.Logf("Waiting for SupportBundleCollection '%s' to be realized", name)
+	var sbc *crdv1alpha1.SupportBundleCollection
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		var getErr error
+		sbc, getErr = data.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), name, metav1.GetOptions{})
+		if getErr != nil {
+			return false, getErr
+		}
+		for _, cond := range sbc.Status.Conditions {
+			if cond.Status == metav1.ConditionTrue && cond.Type == crdv1alpha1.CollectionCompleted {
+				return sbc.Status.DesiredNodes == sbc.Status.CollectedNodes, nil
+			}
+		}
+		return false, nil
+	}); err != nil {
+		if sbc != nil {
+			t.Logf("The conditions of SupportBundleCollection for the vms are %v", sbc.Status.Conditions)
+		}
+		return fmt.Errorf("error when waiting for SupportBundleCollection '%s' to be realized: %v", name, err)
+	}
+	return nil
+}
+
+func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmList []vmInfo) {
+	sftpServiceYAML := "sftp-deployment.yml"
+	secretUserName := "foo"
+	secretPassword := "pass"
+	uploadFolder := "upload"
+	uploadPath := path.Join("/home", secretUserName, uploadFolder)
+	secretName := "support-bundle-secret"
+	vmNames := make([]string, 0, len(vmList))
+	for _, vm := range vmList {
+		vmNames = append(vmNames, vm.nodeName)
+	}
+	applySFTPYamlCommand := fmt.Sprintf("kubectl apply -f %s -n %s", sftpServiceYAML, data.testNamespace)
+	code, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), applySFTPYamlCommand)
+	defer func() {
+		deleteSFTPYamlCommand := fmt.Sprintf("kubectl delete -f %s -n %s", sftpServiceYAML, data.testNamespace)
+		data.RunCommandOnNode(controlPlaneNodeName(), deleteSFTPYamlCommand)
+	}()
+	t.Logf("Stdout of the command '%s': %s", applySFTPYamlCommand, stdout)
+	if code != 0 {
+		t.Errorf("Error when applying %s: %v", sftpServiceYAML, stderr)
+	}
+	require.NoError(t, err)
+	failOnError(data.waitForDeploymentRealized(t, data.testNamespace, "sftp", 30*time.Second), t)
+	sec := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: secretName,
+		},
+		Data: map[string][]byte{
+			"username": []byte(secretUserName),
+			"password": []byte(secretPassword),
+		},
+	}
+	_, err = data.clientset.CoreV1().Secrets(namespace).Create(context.TODO(), sec, metav1.CreateOptions{})
+	require.NoError(t, err)
+	defer data.clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	bundleName := "support-bundle-collection-external-node"
+	sbc := &crdv1alpha1.SupportBundleCollection{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bundleName,
+		},
+		Spec: crdv1alpha1.SupportBundleCollectionSpec{
+			ExternalNodes: &crdv1alpha1.BundleExternalNodes{
+				NodeNames:    vmNames,
+				NodeSelector: &metav1.LabelSelector{},
+				Namespace:    namespace,
+			},
+			ExpirationMinutes: 300,
+			FileServer: crdv1alpha1.BundleFileServer{
+				URL: fmt.Sprintf("%s:30010/upload", controlPlaneNodeIPv4()),
+			},
+			Authentication: crdv1alpha1.BundleServerAuthConfiguration{
+				AuthType: "BasicAuthentication",
+				AuthSecret: &v1.SecretReference{
+					Name:      secretName,
+					Namespace: namespace,
+				},
+			},
+		},
+	}
+	_, err = data.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), sbc, metav1.CreateOptions{})
+	require.NoError(t, err)
+	defer data.crdClient.CrdV1alpha1().SupportBundleCollections().Delete(context.TODO(), bundleName, metav1.DeleteOptions{})
+	failOnError(data.waitForSupportBundleCollectionRealized(t, bundleName, 30*time.Second), t)
+	pods, err := data.clientset.CoreV1().Pods(data.testNamespace).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=sftp"})
+	require.NoError(t, err)
+	require.Len(t, pods.Items, 1)
+	pod := pods.Items[0]
+	for _, vm := range vmList {
+		extractPath := path.Join(uploadPath, vm.nodeName)
+		mkdirCommand := fmt.Sprintf("mkdir %s", extractPath)
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, pod.Name, "", []string{"sh", "-c", mkdirCommand})
+		t.Logf("Stdout of the command '%s': %s", mkdirCommand, stdout)
+		if stderr != "" {
+			t.Errorf("error when creating folder %s on pod %s/%s: %s", extractPath, data.testNamespace, pod.Name, stderr)
+		}
+		require.NoError(t, err)
+		extractCommand := fmt.Sprintf("tar xvf %s/%s_%s.tar.gz -C %s", uploadPath, vm.nodeName, bundleName, extractPath)
+		stdout, stderr, err = data.RunCommandFromPod(data.testNamespace, pod.Name, "", []string{"sh", "-c", extractCommand})
+		t.Logf("Stdout of the command '%s': %s", extractCommand, stdout)
+		if stderr != "" {
+			t.Errorf("error when extracting tarball %s_%s.tar.gz: %s", vm.nodeName, bundleName, stderr)
+		}
+		require.NoError(t, err)
+		lsCommand := fmt.Sprintf("ls %s", extractPath)
+		stdout, stderr, err = data.RunCommandFromPod(data.testNamespace, pod.Name, "", []string{"sh", "-c", lsCommand})
+		t.Logf("Stdout of the command '%s': %s", lsCommand, stdout)
+		if stderr != "" {
+			t.Errorf("error when listing extracted path %s: %s", extractPath, stderr)
+		}
+		require.NoError(t, err)
+		var expectedInfoEntries []string
+		if vm.osType == linuxOS {
+			expectedInfoEntries = []string{"address", "addressgroups", "agentinfo", "appliedtogroups", "flows", "iptables", "link", "logs", "memprofile", "networkpolicies", "ovsports", "route"}
+		} else if vm.osType == windowsOS {
+			expectedInfoEntries = []string{"addressgroups", "agentinfo", "appliedtogroups", "flows", "ipconfig", "logs\\ovs\\ovs-vswitchd.log", "logs\\ovs\\ovsdb-server.log", "memprofile", "network-adapters", "networkpolicies", "ovsports", "routes"}
+		}
+		actualExpectedInfoEntries := strings.Split(strings.Trim(stdout, "\n"), "\n")
+		t.Logf("Actual files after extracting SupportBundleCollection tarball %s_%s: %v", vm.nodeName, bundleName, actualExpectedInfoEntries)
+		assert.ElementsMatch(t, expectedInfoEntries, actualExpectedInfoEntries)
+	}
 }
 
 // setupVMAgentTest creates ExternalNode, starts antrea-agent
