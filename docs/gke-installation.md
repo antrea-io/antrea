@@ -32,17 +32,16 @@ on both VPC-native Enable/Disable modes.
 You can use any method to create a GKE cluster (gcloud SDK, gcloud Console, etc). The example
 given here is using the Google Cloud SDK.
 
-**Note:** Antrea is supported on Ubuntu Nodes only for GKE cluster. Also, it is a must to select service
-CIDR at the time of cluster deployment.
+**Note:** Antrea is supported on Ubuntu Nodes only for GKE cluster. When creating the cluster, you
+  must use the default network provider and must *not* enable "Dataplane V2".
 
 1. Create a GKE cluster
 
     ```bash
     export GKE_ZONE="us-west1"
     export GKE_HOST="UBUNTU"
-    export GKE_SERVICE_CIDR="10.94.0.0/16"
     gcloud container --project $GKE_PROJECT clusters create cluster1 --image-type $GKE_HOST \
-       --zone $GKE_ZONE --enable-ip-alias --services-ipv4-cidr $GKE_SERVICE_CIDR
+       --zone $GKE_ZONE --enable-ip-alias
     ```
 
 2. Access your cluster
@@ -50,8 +49,8 @@ CIDR at the time of cluster deployment.
     ```bash
     kubectl get nodes
     NAME                                      STATUS   ROLES    AGE     VERSION
-    gke-cluster1-default-pool-93d7da1c-61z4   Ready    <none>   3m11s   v1.14.10-gke.17
-    gke-cluster1-default-pool-93d7da1c-rkbm   Ready    <none>   3m9s    v1.14.10-gke.17
+    gke-cluster1-default-pool-93d7da1c-61z4   Ready    <none>   3m11s   1.25.7-gke.1000
+    gke-cluster1-default-pool-93d7da1c-rkbm   Ready    <none>   3m9s    1.25.7-gke.1000
     ```
 
 3. Create a cluster-admin ClusterRoleBinding
@@ -115,13 +114,13 @@ you should be able to see these Pods running in your cluster:
 
     ```bash
     $ kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
-    pod "event-exporter-v0.2.5-7df89f4b8f-cm5r5" deleted
-    pod "fluentd-gcp-scaler-54ccb89d5-2glmv" deleted
-    pod "heapster-gke-6dd876579c-fc7xd" deleted
-    pod "kube-dns-5877696fb4-7cfbc" deleted
-    pod "kube-dns-5877696fb4-9zdpb" deleted
-    pod "kube-dns-autoscaler-8687c64fc-h4dtg" deleted
-    pod "l7-default-backend-8f479dd9-z42mx" deleted
-    pod "metrics-server-v0.3.1-cf56c77fc-7xgvc" deleted
-    pod "stackdriver-metadata-agent-cluster-level-6d96ccfd4-5rmwh" deleted
+    pod "event-exporter-gke-755c4b4d97-wqlcg" deleted
+    pod "konnectivity-agent-5cb8ff9b9-2cv5j" deleted
+    pod "konnectivity-agent-5cb8ff9b9-5jpvp" deleted
+    pod "konnectivity-agent-autoscaler-7dc78c8c9-kqn9f" deleted
+    pod "kube-dns-5b5dfcd97b-79m4c" deleted
+    pod "kube-dns-5b5dfcd97b-q49qj" deleted
+    pod "kube-dns-autoscaler-5f56f8997c-kqrgx" deleted
+    pod "l7-default-backend-d6b749b76-bsv9l" deleted
+    pod "metrics-server-v0.5.2-67864775dc-bhd9p" deleted
     ```
