@@ -673,6 +673,7 @@
           - trigger-parameterized-builds:
             - project:
               - cloud-{name}-eks-cleanup
+              current-parameters: true
               property-file: 'ci_properties.txt'
           - email:
               notify-every-unstable-build: true
@@ -737,6 +738,7 @@
           - trigger-parameterized-builds:
             - project:
               - cloud-{name}-gke-cleanup
+              current-parameters: true
               property-file: 'ci_properties.txt'
           - email:
               notify-every-unstable-build: true
@@ -786,6 +788,7 @@
           - trigger-parameterized-builds:
             - project:
               - cloud-{name}-aks-cleanup
+              current-parameters: true
               property-file: 'ci_properties.txt'
           - email:
               notify-every-unstable-build: true
