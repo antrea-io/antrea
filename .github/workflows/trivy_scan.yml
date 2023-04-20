@@ -6,12 +6,12 @@ on:
     - cron: '0 10 * * *'
   workflow_dispatch:
     inputs:
-      # this is useful for testing an arbitrary released version of Antrea
-      # by default, we will use the latest release (obtained using the Github API)
+      # This is useful for testing an arbitrary released version of Antrea.
+      # If left unset, we will use the latest release (obtained using the Github API).
       antrea-version:
         description: 'The released Antrea version to scan'
+        type: string
         required: false
-        default: ''
 
 jobs:
   build:
