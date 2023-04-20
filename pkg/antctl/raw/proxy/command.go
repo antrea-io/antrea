@@ -17,10 +17,10 @@ package proxy
 import (
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -61,6 +61,7 @@ type proxyOptions struct {
 }
 
 var options *proxyOptions
+var defaultFS = afero.NewOsFs()
 
 // validateAndComplete checks the proxyOptions to see if there is sufficient information to run the
 // command, and adds default values when needed.
@@ -78,11 +79,11 @@ func (o *proxyOptions) validateAndComplete() error {
 	}
 
 	if o.staticDir != "" {
-		fileInfo, err := os.Stat(o.staticDir)
+		fileInfo, err := defaultFS.Stat(o.staticDir)
 		if err != nil {
-			klog.Warningf("Failed to stat static file directory %s: %v", o.staticDir, err)
+			klog.InfoS("Failed to stat static file directory", "name", o.staticDir, "error", err)
 		} else if !fileInfo.IsDir() {
-			klog.Warningf("Static file directory %s is not a directory", o.staticDir)
+			klog.InfoS("Static file directory is not a directory", "name", o.staticDir)
 		}
 	}
 
