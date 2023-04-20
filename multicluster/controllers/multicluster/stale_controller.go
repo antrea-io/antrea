@@ -446,7 +446,7 @@ func (c *StaleResCleanupController) processNextWorkItem() bool {
 		return true
 	}
 
-	klog.ErrorS(err, "Error removing stale resources, requeuing it")
+	klog.ErrorS(err, "Error removing stale resources, re-queuing it")
 	c.queue.AddRateLimited(key)
 	return true
 }

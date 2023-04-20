@@ -19,8 +19,10 @@ package member
 import (
 	"context"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -29,12 +31,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -500,4 +506,96 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fakeManager is a fake K8s controller manager which simulates a burst of ResourceImport events
+// from the leader's apiServer and triggers the LabelIdentityResourceImportReconciler's main
+// Reconcile loop. Once the fakeManager is run, all ResourceImports in the queue will be added
+// into the fakeRemoteClient's cache, and all these events will be reconciled.
+type fakeManager struct {
+	remoteClient client.Client
+	reconciler   *LabelIdentityResourceImportReconciler
+	queue        workqueue.RateLimitingInterface
+}
+
+func (fm *fakeManager) Run(stopCh <-chan struct{}) {
+	defer fm.queue.ShutDown()
+	for i := 0; i < common.DefaultWorkerCount; i++ {
+		go wait.Until(fm.worker, time.Second, stopCh)
+	}
+	<-stopCh
+}
+
+func (fm *fakeManager) worker() {
+	for fm.syncNextItemInQueue() {
+	}
+}
+
+func (fm *fakeManager) syncNextItemInQueue() bool {
+	resImpObj, quit := fm.queue.Get()
+	if quit {
+		return false
+	}
+	defer fm.queue.Done(resImpObj)
+	resImp := resImpObj.(*mcsv1alpha1.ResourceImport)
+	err := fm.remoteClient.Create(ctx, resImp)
+	if err != nil {
+		fm.queue.AddRateLimited(resImp)
+		return true
+	}
+	// Simulate ResourceImport create event and have LabelIdentityResourceImportReconciler reconcile it.
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: resImp.Namespace, Name: resImp.Name}}
+	if _, err = fm.reconciler.Reconcile(ctx, req); err != nil {
+		fm.queue.AddRateLimited(resImp)
+		return true
+	}
+	fm.queue.Forget(resImp)
+	return true
+}
+
+func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists().Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists().Build()
+	ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
+
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true)
+	mcReconciler.SetRemoteCommonArea(ca)
+	c := multicluster.NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, multicluster.MemberCluster)
+	r := newLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", ca)
+
+	stopCh := make(chan struct{})
+	q := workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter())
+	numInitialResImp := 50
+	for i := 1; i <= numInitialResImp; i++ {
+		resImp := &mcsv1alpha1.ResourceImport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "label-identity-" + strconv.Itoa(i),
+				Namespace: "antrea-mcs",
+			},
+			Spec: mcsv1alpha1.ResourceImportSpec{
+				LabelIdentity: &mcsv1alpha1.LabelIdentitySpec{
+					Label: "ns:kubernetes.io/metadata.name=ns&pod:seq=" + strconv.Itoa(i),
+					ID:    uint32(i),
+				},
+			},
+		}
+		q.Add(resImp)
+	}
+	mgr := fakeManager{
+		reconciler:   r,
+		remoteClient: fakeRemoteClient,
+		queue:        q,
+	}
+	// Give the fakeManager a head start. LabelIdentityResourceImportReconciler should be busy
+	// reconciling all new ResourceImport events.
+	go mgr.Run(stopCh)
+	// The staleController should not erroneously delete any LabelIdentities while the reconciliation
+	// of newly added ResourceImports are in-flight.
+	go c.Run(stopCh)
+	time.Sleep(1 * time.Second)
+	actLabelIdentities := &mcsv1alpha1.LabelIdentityList{}
+	err := fakeClient.List(ctx, actLabelIdentities)
+	assert.NoError(t, err)
+	// Verify that no label identities are deleted as part of the cleanup.
+	assert.Equal(t, numInitialResImp, len(actLabelIdentities.Items))
 }
