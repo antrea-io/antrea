@@ -63,10 +63,10 @@ when applying or downloading an Antrea YAML manifest.
 [multi-cluster Pod-to-Pod connectivity](#multi-cluster-pod-to-pod-connectivity),
 in particular configuration (please check the corresponding sections to learn more
 information), requires an Antrea Multi-cluster Gateway to be set up in each member
-cluster to route Service and Pod traffic across clusters. To support Multi-cluster
-Gateways, `antrea-agent` must be deployed with the `Multicluster` feature enabled
-in a member cluster. You can set the following configuration parameters in
-`antrea-agent.conf` of the Antrea deployment manifest to enable the `Multicluster`
+cluster by default to route Service and Pod traffic across clusters. To support
+Multi-cluster Gateways, `antrea-agent` must be deployed with the `Multicluster`
+feature enabled in a member cluster. You can set the following configuration parameters
+in `antrea-agent.conf` of the Antrea deployment manifest to enable the `Multicluster`
 feature:
 
 ```yaml
@@ -80,6 +80,12 @@ antrea-agent.conf: |
     enableGateway: true
     namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
 ```
+
+In order for Multi-cluster features to work, it is necessary for `enableGateway` to be set to true by
+the user, except when Pod-to-Pod direct connectivity already exists (e.g., provided by the cloud provider)
+and `endpointIPType` is configured as `PodIP`. Details can be found in [Multi-cluster Services](#multi-cluster-service).
+Please note that [Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy) always requires
+Gateway.
 
 Prior to Antrea v1.11.0, Multi-cluster Gateway only works with Antrea `encap` traffic
 mode, and all member clusters in a ClusterSet must use the same tunnel type. Since
@@ -353,10 +359,19 @@ spec:
 
 ## Multi-cluster Gateway Configuration
 
-Multi-cluster Gateways are required to support multi-cluster Service access
-across member clusters. Each member cluster should have one Node served as its
-Multi-cluster Gateway. Multi-cluster Service traffic is routed among clusters
-through the tunnels between Gateways.
+Multi-cluster Gateways are responsible for establishing tunnels between clusters.
+Each member cluster should have one Node serving as its Multi-cluster Gateway.
+Multi-cluster Service traffic is routed among clusters through the tunnels between
+Gateways.
+
+Below is a table about communication support for different configurations.
+
+| Pod-to-Pod connectivity provided by underlay | Gateway Enabled | MC EndpointTypes  | Cross-cluster Service/Pod communications |
+| -------------------------------------------- | --------------- | ----------------- | ---------------------------------------- |
+| No                                           | No              | N/A               | No                                       |
+| Yes                                          | No              | PodIP             | Yes                                      |
+| No                                           | Yes             | PodIP/ClusterIP   | Yes                                      |
+| Yes                                          | Yes             | PodIP/ClusterIP   | Yes                                      |
 
 After a member cluster joins a ClusterSet, and the `Multicluster` feature is
 enabled on `antrea-agent`, you can select a Node of the cluster to serve as
