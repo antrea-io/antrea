@@ -24,7 +24,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/util"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -49,24 +48,32 @@ func TestIPSec(t *testing.T) {
 	defer data.redeployAntrea(t, deployAntreaDefault)
 
 	t.Run("testIPSecPSKAuth", func(t *testing.T) {
-		cc := func(config *controllerconfig.ControllerConfig) {
-		}
-		ac := func(config *agentconfig.AgentConfig) {
-			config.IPsec.AuthenticationMode = "psk"
-		}
-		if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
+		conf, err := data.getAgentConf(antreaNamespace)
+		failOnError(err, t)
+		if conf.IPsec.AuthenticationMode != "psk" {
+			t.Logf("Restarting Antrea Agent with IPsec PSK authentication mode. Current mode: %s", conf.IPsec.AuthenticationMode)
+			ac := func(config *agentconfig.AgentConfig) {
+				config.IPsec.AuthenticationMode = "psk"
+			}
+			if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+				t.Fatalf("Failed to change IPsec authentication mode to PSK: %v", err)
+			}
 		}
 		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, false) })
 	})
 
 	t.Run("testIPSecCertificateAuth", func(t *testing.T) {
 		skipIfFeatureDisabled(t, features.IPsecCertAuth, true, true)
-		ac := func(config *agentconfig.AgentConfig) {
-			config.IPsec.AuthenticationMode = "cert"
-		}
-		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
+		conf, err := data.getAgentConf(antreaNamespace)
+		failOnError(err, t)
+		if conf.IPsec.AuthenticationMode != "cert" {
+			t.Logf("Restarting Antrea Agent with IPsec Certificate authentication mode. Current mode: %s", conf.IPsec.AuthenticationMode)
+			ac := func(config *agentconfig.AgentConfig) {
+				config.IPsec.AuthenticationMode = "cert"
+			}
+			if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+				t.Fatalf("Failed to change IPsec authentication mode to Certificate: %v", err)
+			}
 		}
 		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, true) })
 	})
@@ -129,11 +136,11 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	}
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, tag)
 	defer deletePods()
+	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].nodeName, podInfos[1].nodeName)
 	data.runPingMesh(t, podInfos[:2], agnhostContainerName)
 
-	// We know that testPodConnectivityDifferentNodes always creates a Pod on Node 0 for the
-	// inter-Node ping test.
-	nodeName := nodeName(0)
+	// Check that there is at least one 'up' Security Association on the Node
+	nodeName := podInfos[0].nodeName
 	if up, _, isCertAuth, err := data.readSecurityAssociationsStatus(nodeName); err != nil {
 		t.Errorf("Error when reading Security Associations: %v", err)
 	} else if up == 0 {
