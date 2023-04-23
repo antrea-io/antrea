@@ -17,8 +17,6 @@ networking:
 apiServer:
   certSANs:
   - "{{ k8s_api_server_ip }}"
-  extraArgs:
-    feature-gates: "NetworkPolicyEndPort=true"
 ---
 {% if kube_proxy_mode != 'none' %}
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
