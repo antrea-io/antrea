@@ -420,14 +420,25 @@ octant-antrea-ubuntu:
 antrea-mc-controller:
 	@echo "===> Building antrea/antrea-mc-controller Docker image <==="
 ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) antrea/antrea-mc-controller
+
+# Build bins in a golang container, and build the antrea-mc-controller Docker image.
+.PHONY: build-antrea-mc-controller
+build-antrea-mc-controller:
+	@echo "===> Building antrea/antrea-mc-controller Docker image <==="
+ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build $(DOCKER_BUILD_ARGS) .
 else
 	docker build --pull -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) antrea/antrea-mc-controller
 
-.PHONY: antrea-mc-controller-coverage
-antrea-mc-controller-coverage:
+.PHONY: build-antrea-mc-controller-coverage
+build-antrea-mc-controller-coverage:
 	@echo "===> Building antrea/antrea-mc-controller-coverage Docker image <==="
 ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-mc-controller-coverage:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .

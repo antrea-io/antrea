@@ -325,13 +325,13 @@ function deliver_multicluster_controller {
 
     DEFAULT_IMAGE=antrea/antrea-mc-controller:latest
     if $COVERAGE;then
-        export NO_PULL=1;make antrea-mc-controller-coverage
+        export NO_PULL=1;make build-antrea-mc-controller-coverage
         DEFAULT_IMAGE=antrea/antrea-mc-controller-coverage:latest
         docker save "${DEFAULT_IMAGE}" -o "${WORKDIR}"/antrea-mcs.tar
         ./multicluster/hack/generate-manifest.sh -l antrea-multicluster -c > ./multicluster/test/yamls/leader-manifest.yml
         ./multicluster/hack/generate-manifest.sh -m -c > ./multicluster/test/yamls/member-manifest.yml
     else
-        export NO_PULL=1;make antrea-mc-controller
+        export NO_PULL=1;make build-antrea-mc-controller
         docker save "${DEFAULT_IMAGE}" -o "${WORKDIR}"/antrea-mcs.tar
         ./multicluster/hack/generate-manifest.sh -l antrea-multicluster > ./multicluster/test/yamls/leader-manifest.yml
         ./multicluster/hack/generate-manifest.sh -m > ./multicluster/test/yamls/member-manifest.yml
