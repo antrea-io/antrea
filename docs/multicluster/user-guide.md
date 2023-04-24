@@ -800,7 +800,7 @@ Multi-cluster NetworkPolicies to be enforced in the ClusterSet.
 If you'd like to build Multi-cluster Controller Docker image locally, you can
 follow the following steps:
 
-1. Go to your local `antrea` source tree, run `make antrea-mc-controller`, and you
+1. Go to your local `antrea` source tree, run `make build-antrea-mc-controller`, and you
 will get a new image named `antrea/antrea-mc-controller:latest` locally.
 2. Run `docker save antrea/antrea-mc-controller:latest > antrea-mcs.tar` to save
 the image.

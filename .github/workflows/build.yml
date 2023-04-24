@@ -136,7 +136,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build antrea-mc-controller Docker image
-      run: make antrea-mc-controller
+      run: make build-antrea-mc-controller
     - name: Push antrea-mc-controller Docker image to registry
       if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
