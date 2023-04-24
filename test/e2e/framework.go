@@ -2067,12 +2067,16 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
 }
 
-func (data *TestData) runWgetCommandOnBusyboxWithRetry(podName, ns string, url string, maxAttempts int) (string, string, error) {
+func (data *TestData) runWgetCommandOnBusyboxWithRetry(podName string, ns string, url string, maxAttempts int) (string, string, error) {
+	return data.runWgetCommandFromTestPodWithRetry(podName, ns, busyboxContainerName, url, maxAttempts)
+}
+
+func (data *TestData) runWgetCommandFromTestPodWithRetry(podName string, ns string, containerName string, url string, maxAttempts int) (string, string, error) {
 	var stdout, stderr string
 	var err error
 	cmd := []string{"wget", "-O", "-", url, "-T", "1"}
 	for i := 0; i < maxAttempts; i++ {
-		stdout, stderr, err = data.RunCommandFromPod(ns, podName, busyboxContainerName, cmd)
+		stdout, stderr, err = data.RunCommandFromPod(ns, podName, containerName, cmd)
 		if err != nil {
 			if i < maxAttempts-1 {
 				time.Sleep(time.Second)

@@ -260,7 +260,8 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	testK8sRef := "K8sNetworkPolicy:default/test-anp"
 	testPriority, testRule := "61800", "test-rule"
 	allowDispositionData := []byte{0x11, 0x00, 0x00, 0x11}
-	dropDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
+	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
+	dropK8sDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
 	redirectDispositionData := []byte{0x11, 0x10, 0x00, 0x11}
 	ingressData := []byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}
 	tests := []struct {
@@ -311,7 +312,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
 					testANPRef, testPriority, testRule)
 			},
-			dispositionData: dropDispositionData,
+			dispositionData: dropCNPDispositionData,
 			wantOb: &logInfo{
 				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
 				disposition: actionDrop,
@@ -323,7 +324,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		{
 			name:            "K8s Drop",
 			tableID:         openflow.IngressDefaultTable.GetID(),
-			dispositionData: dropDispositionData,
+			dispositionData: dropK8sDispositionData,
 			wantOb: &logInfo{
 				tableName:   openflow.IngressDefaultTable.GetName(),
 				disposition: actionDrop,
@@ -359,7 +360,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			if tc.expectedCalls != nil {
 				regID := openflow.TFIngressConjIDField.GetRegID()
 				if tc.wantOb.disposition == actionDrop {
-					regID = openflow.CNPConjIDField.GetRegID()
+					regID = openflow.APConjIDField.GetRegID()
 				}
 				ingressMatch := generateMatch(regID, ingressData)
 				matchers = append(matchers, ingressMatch)

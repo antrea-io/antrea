@@ -364,10 +364,10 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 	}
 	toPod := toPods[0]
 	fromPodName, toPodName := fmt.Sprintf("%s/%s", ns1, pod1), fmt.Sprintf("%s/%s", ns2, pod2)
-	return k.prodeAndDecideConnectivity(fromPod, toPod, fromPodName, toPodName, port, protocol)
+	return k.probeAndDecideConnectivity(fromPod, toPod, fromPodName, toPodName, port, protocol)
 }
 
-func (k *KubernetesUtils) prodeAndDecideConnectivity(fromPod, toPod v1.Pod,
+func (k *KubernetesUtils) probeAndDecideConnectivity(fromPod, toPod v1.Pod,
 	fromPodName, toPodName string, port int32, protocol utils.AntreaPolicyProtocol) (PodConnectivityMark, error) {
 	// Both IPv4 and IPv6 address should be tested.
 	connectivity := Unknown

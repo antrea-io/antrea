@@ -57,8 +57,9 @@ var (
 	// reg0[9]: Field to indicate whether the packet's source / destination MAC address needs to be rewritten.
 	RewriteMACRegMark    = binding.NewOneBitRegMark(0, 9)
 	NotRewriteMACRegMark = binding.NewOneBitZeroRegMark(0, 9)
-	// reg0[10]: Mark to indicate the packet is denied(Drop/Reject).
-	CnpDenyRegMark = binding.NewOneBitRegMark(0, 10)
+	// reg0[10]: Mark to indicate the packet is denied(Drop/Reject) for Antrea Policy.
+	// K8s default drop will not be recorded in this reg.
+	APDenyRegMark = binding.NewOneBitRegMark(0, 10)
 	// reg0[11..12]: Field to indicate disposition of Antrea Policy. It could have more bits to support more dispositions
 	// that Antrea Policy support in the future. Marks in this field include:
 	//   - 0b00: allow
@@ -100,9 +101,9 @@ var (
 	// reg3(NXM_NX_REG3)
 	// Field to store the selected Service Endpoint IP
 	EndpointIPField = binding.NewRegField(3, 0, 31)
-	// Field to store the conjunction ID which is for rule in CNP. It shares the same register with EndpointIPField,
+	// Field to store the conjunction ID which is for rule in Antrea Policy. It shares the same register with EndpointIPField,
 	// since the service selection will finish when a packet hitting NetworkPolicy related rules.
-	CNPConjIDField = binding.NewRegField(3, 0, 31)
+	APConjIDField = binding.NewRegField(3, 0, 31)
 
 	// reg4(NXM_NX_REG4)
 	// reg4[0..15]: Field to store the selected Service Endpoint port.
