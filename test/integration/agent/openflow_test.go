@@ -1019,13 +1019,13 @@ func getIPProtoStr(addr types.Address) (bool, string) {
 
 func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {
 	expectedFlowCount := `
-	# HELP antrea_agent_ovs_flow_count [STABLE] Flow count for each OVS flow table. The TableID is used as a label.
+	# HELP antrea_agent_ovs_flow_count [STABLE] Flow count for each OVS flow table. The TableID and TableName are used as a label.
 	# TYPE antrea_agent_ovs_flow_count gauge
 	`
 	tableStatus := client.GetFlowTableStatus()
 	totalFlowCount := 0
 	for _, table := range tableStatus {
-		expectedFlowCount = expectedFlowCount + fmt.Sprintf("antrea_agent_ovs_flow_count{table_id=\"%d\"} %d\n", table.ID, table.FlowCount)
+		expectedFlowCount = expectedFlowCount + fmt.Sprintf("antrea_agent_ovs_flow_count{table_id=\"%d\", table_name=\"%s\"} %d\n", table.ID, table.Name, table.FlowCount)
 		totalFlowCount = totalFlowCount + int(table.FlowCount)
 	}
 	expectedTotalFlowCount := `

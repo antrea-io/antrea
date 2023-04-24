@@ -104,7 +104,7 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 	}
 
 	metrics.OVSTotalFlowCount.Add(float64(flowCountDelta))
-	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Add(float64(flowCountDelta))
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id)), t.name).Add(float64(flowCountDelta))
 
 	t.updateTime = time.Now()
 }
@@ -115,7 +115,7 @@ func (t *ofTable) ResetStatus() {
 
 	t.flowCount = 0
 
-	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Set(0)
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id)), t.name).Set(0)
 
 	t.updateTime = time.Now()
 }
