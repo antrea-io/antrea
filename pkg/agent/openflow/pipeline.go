@@ -1667,7 +1667,7 @@ func (f *featureNetworkPolicy) allowRulesMetricFlows(conjunctionID uint32, ingre
 	if metricTable == MulticastEgressMetricTable || metricTable == MulticastIngressMetricTable {
 		flow := metricTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchRegFieldWithValue(CNPConjIDField, conjunctionID).
+			MatchRegFieldWithValue(APConjIDField, conjunctionID).
 			Action().GotoTable(metricTable.GetNext()).
 			Done()
 		flows = append(flows, flow)
@@ -1696,8 +1696,8 @@ func (f *featureNetworkPolicy) denyRuleMetricFlow(conjunctionID uint32, ingress 
 	}
 	return metricTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchRegMark(CnpDenyRegMark).
-		MatchRegFieldWithValue(CNPConjIDField, conjunctionID).
+		MatchRegMark(APDenyRegMark).
+		MatchRegFieldWithValue(APConjIDField, conjunctionID).
 		Action().Drop().
 		Done()
 }
@@ -1826,7 +1826,7 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 	// Any matched flow will be resubmitted to next table in corresponding metric tables.
 	if f.enableMulticast && (tableID == MulticastEgressRuleTable.GetID() || tableID == MulticastIngressRuleTable.GetID()) {
 		flow := table.BuildFlow(ofPriority).MatchConjID(conjunctionID).
-			Action().LoadToRegField(CNPConjIDField, conjunctionID).
+			Action().LoadToRegField(APConjIDField, conjunctionID).
 			Action().NextTable().
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
 			Done()
@@ -1858,8 +1858,8 @@ func (f *featureNetworkPolicy) conjunctionActionDenyFlow(conjunctionID uint32, t
 	}
 	flowBuilder := table.BuildFlow(ofPriority).
 		MatchConjID(conjunctionID).
-		Action().LoadToRegField(CNPConjIDField, conjunctionID).
-		Action().LoadRegMark(CnpDenyRegMark)
+		Action().LoadToRegField(APConjIDField, conjunctionID).
+		Action().LoadRegMark(APDenyRegMark)
 
 	var customReason int
 	if f.enableDenyTracking {

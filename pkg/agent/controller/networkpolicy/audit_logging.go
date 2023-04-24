@@ -206,26 +206,35 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 		}
 	}
 
-	// Set match to corresponding ingress/egress reg according to disposition.
+	// Get K8s default deny action, if traffic is default deny, no conjunction could be matched.
+	if match = getMatchRegField(matchers, openflow.APDenyRegMark.GetField()); match != nil {
+		cnpDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
+		if err != nil {
+			return fmt.Errorf("received error while unloading deny mark from reg: %v", err)
+		}
+		isK8sDefaultDeny := (cnpDenyRegVal == 0) && (disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej)
+		if isK8sDefaultDeny {
+			// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
+			ob.npRef, ob.ofPriority, ob.ruleName = string(v1beta2.K8sNetworkPolicy), "<nil>", "<nil>"
+			return nil
+		}
+	}
+
+	// Set match to corresponding conjunction ID field according to disposition.
 	match = getMatch(matchers, tableID, disposition)
 
-	if match != nil {
-		// Get NetworkPolicy full name and OF priority of the conjunction.
-		conjID, err := getInfoInReg(match, nil)
-		if err != nil {
-			return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
-		}
-		ob.npRef, ob.ofPriority, ob.ruleName = c.ofClient.GetPolicyInfoFromConjunction(conjID)
-		if ob.npRef == "" || ob.ofPriority == "" {
-			return fmt.Errorf("networkpolicy not found for conjunction id: %v", conjID)
-		}
-		// Placeholder for K8s NetworkPolicies without rule names.
-		if ob.ruleName == "" {
-			ob.ruleName = "<nil>"
-		}
-	} else {
-		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
-		ob.npRef, ob.ofPriority, ob.ruleName = string(v1beta2.K8sNetworkPolicy), "<nil>", "<nil>"
+	// Get NetworkPolicy full name and OF priority of the conjunction.
+	conjID, err := getInfoInReg(match, nil)
+	if err != nil {
+		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
+	}
+	ob.npRef, ob.ofPriority, ob.ruleName = c.ofClient.GetPolicyInfoFromConjunction(conjID)
+	if ob.npRef == "" || ob.ofPriority == "" {
+		return fmt.Errorf("networkpolicy not found for conjunction id: %v", conjID)
+	}
+	// Placeholder for K8s NetworkPolicies without rule names.
+	if ob.ruleName == "" {
+		ob.ruleName = "<nil>"
 	}
 	return nil
 }
