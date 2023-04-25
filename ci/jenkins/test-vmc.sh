@@ -350,6 +350,7 @@ function deliver_antrea {
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=1h" || true > /dev/null
+    docker system df -v
     cd $GIT_CHECKOUT_DIR
     # Ensure that files in the Docker context have the correct permissions, or Docker caching cannot
     # be leveraged successfully
