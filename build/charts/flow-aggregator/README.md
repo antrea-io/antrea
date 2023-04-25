@@ -36,7 +36,7 @@ Kubernetes: `>= 1.16.0-0`
 | flowCollector.recordFormat | string | `"IPFIX"` | Provide format for records sent to the configured flow collector. Supported formats are IPFIX and JSON. |
 | flowLogger.compress | bool | `true` | Compress enables gzip compression on rotated files. |
 | flowLogger.enable | bool | `false` | Determine whether to enable exporting flow records to a local log file. |
-| flowLogger.filters | list | `[]` | Filters can be used to select which flow records to log to file. The provided filters are OR-ed to determine whether a specific flow should be logged. By default, all flows are logged. With the following filters, only flow which are denied because of a network policy will be logged: [{ingressNetworkPolicyRuleActions: ["Drop", "Reject"]}, {egressNetworkPolicyRuleActions: ["Drop", "Reject"]}] |
+| flowLogger.filters | list | `[]` | Filters can be used to select which flow records to log to file. The provided filters are OR-ed to determine whether a specific flow should be logged. By default, all flows are logged. With the following filters, only flows which are denied because of a network policy will be logged: [{ingressNetworkPolicyRuleActions: ["Drop", "Reject"]}, {egressNetworkPolicyRuleActions: ["Drop", "Reject"]}] |
 | flowLogger.maxAge | int | `0` | MaxAge is the maximum number of days to retain old log files based on the timestamp encoded in their filename. The default (0) is not to remove old log files based on age. |
 | flowLogger.maxBackups | int | `3` | MaxBackups is the maximum number of old log files to retain. If set to 0, all log files will be retained (unless MaxAge causes them to be deleted). |
 | flowLogger.maxSize | int | `100` | MaxSize is the maximum size in MB of a log file before it gets rotated. |
