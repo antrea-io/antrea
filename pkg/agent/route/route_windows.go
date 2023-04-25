@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -312,11 +311,7 @@ func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
 	// Remove stale routes.
 	for _, rt := range staleRoutes {
 		if err := util.RemoveNetRoute(rt); err != nil {
-			if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects") {
-				klog.InfoS("Failed to delete stale Service CIDR route since the route has been deleted", "route", rt)
-			} else {
-				return fmt.Errorf("failed to delete stale Service CIDR route %s: %w", rt.String(), err)
-			}
+			return fmt.Errorf("failed to delete stale Service CIDR route %s: %w", rt.String(), err)
 		} else {
 			klog.V(4).InfoS("Deleted stale Service CIDR route successfully", "route", rt)
 		}
@@ -547,11 +542,7 @@ func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
 		return nil
 	}
 	if err := util.RemoveNetRoute(route.(*util.Route)); err != nil {
-		if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects") {
-			klog.InfoS("Failed to delete route for external IP since it doesn't exist", "IP", externalIPStr)
-		} else {
-			return fmt.Errorf("failed to delete route for external IP %s: %w", externalIPStr, err)
-		}
+		return fmt.Errorf("failed to delete route for external IP %s: %w", externalIPStr, err)
 	}
 	c.serviceRoutes.Delete(externalIPStr)
 	klog.V(4).InfoS("Deleted route for external IP", "IP", externalIPStr)

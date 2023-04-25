@@ -505,7 +505,7 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 	go func() {
 		ifaceName := fmt.Sprintf("vEthernet (%s)", endpointName)
 		var err error
-		pollErr := wait.PollImmediate(time.Second, 60*time.Second, func() (bool, error) {
+		pollErr := wait.PollImmediate(100*time.Millisecond, 60*time.Second, func() (bool, error) {
 			containerAccess.lockContainer(containerID)
 			defer containerAccess.unlockContainer(containerID)
 			currentEP, ok := ic.getEndpoint(endpointName)
@@ -518,7 +518,7 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 				return true, nil
 			}
 			if !hostInterfaceExistsFunc(ifaceName) {
-				klog.InfoS("Waiting for interface to be created", "interface", ifaceName)
+				klog.V(2).InfoS("Waiting for interface to be created", "interface", ifaceName)
 				return false, nil
 			}
 			if err = hook(); err != nil {

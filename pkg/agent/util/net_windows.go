@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-//Copyright 2020 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,19 +21,26 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"golang.org/x/sys/windows"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	ps "antrea.io/antrea/pkg/agent/util/powershell"
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -56,11 +63,13 @@ const (
 
 var (
 	// Declared variables which are meant to be overridden for testing.
-	runCommand          = ps.RunCommand
-	getHNSNetworkByName = hcsshim.GetHNSNetworkByName
-	hnsNetworkRequest   = hcsshim.HNSNetworkRequest
-	hnsNetworkCreate    = (*hcsshim.HNSNetwork).Create
-	hnsNetworkDelete    = (*hcsshim.HNSNetwork).Delete
+	antreaNetIO          = antreasyscall.NewNetIO()
+	getAdaptersAddresses = windows.GetAdaptersAddresses
+	runCommand           = ps.RunCommand
+	getHNSNetworkByName  = hcsshim.GetHNSNetworkByName
+	hnsNetworkRequest    = hcsshim.HNSNetworkRequest
+	hnsNetworkCreate     = (*hcsshim.HNSNetwork).Create
+	hnsNetworkDelete     = (*hcsshim.HNSNetwork).Delete
 )
 
 type Route struct {
@@ -70,17 +79,37 @@ type Route struct {
 	RouteMetric       int
 }
 
-func (r Route) String() string {
+func (r *Route) String() string {
 	return fmt.Sprintf("LinkIndex: %d, DestinationSubnet: %s, GatewayAddress: %s, RouteMetric: %d",
 		r.LinkIndex, r.DestinationSubnet, r.GatewayAddress, r.RouteMetric)
 }
 
-func (r Route) Equal(x Route) bool {
+func (r *Route) Equal(x Route) bool {
 	return x.LinkIndex == r.LinkIndex &&
 		x.DestinationSubnet != nil &&
 		r.DestinationSubnet != nil &&
-		x.DestinationSubnet.IP.Equal(r.DestinationSubnet.IP) &&
+		x.DestinationSubnet.String() == r.DestinationSubnet.String() &&
 		x.GatewayAddress.Equal(r.GatewayAddress)
+}
+
+func (r *Route) toMibIPForwardRow() *antreasyscall.MibIPForwardRow {
+	row := antreasyscall.NewIPForwardRow()
+	row.DestinationPrefix = *antreasyscall.NewAddressPrefixFromIPNet(r.DestinationSubnet)
+	row.NextHop = *antreasyscall.NewRawSockAddrInetFromIP(r.GatewayAddress)
+	row.Metric = uint32(r.RouteMetric)
+	row.Index = uint32(r.LinkIndex)
+	return row
+}
+
+func routeFromIPForwardRow(row *antreasyscall.MibIPForwardRow) *Route {
+	destination := row.DestinationPrefix.IPNet()
+	gatewayAddr := row.NextHop.IP()
+	return &Route{
+		DestinationSubnet: destination,
+		GatewayAddress:    gatewayAddr,
+		LinkIndex:         int(row.Index),
+		RouteMetric:       int(row.Metric),
+	}
 }
 
 type Neighbor struct {
@@ -202,9 +231,11 @@ func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net
 
 // EnableIPForwarding enables the IP interface to forward packets that arrive at this interface to other interfaces.
 func EnableIPForwarding(ifaceName string) error {
-	cmd := fmt.Sprintf(`Set-NetIPInterface -InterfaceAlias "%s" -Forwarding Enabled`, ifaceName)
-	_, err := runCommand(cmd)
-	return err
+	adapter, err := getAdapterInAllCompartmentsByName(ifaceName)
+	if err != nil {
+		return fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %v", ifaceName, err)
+	}
+	return adapter.setForwarding(true, antreasyscall.AF_INET)
 }
 
 func RenameVMNetworkAdapter(networkName string, macStr, newName string, renameNetAdapter bool) error {
@@ -544,13 +575,18 @@ func EnableRSCOnVSwitch(vSwitch string) error {
 
 // GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the specified interface.
 func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
-	cmd := fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", ifIndex)
-	defaultGW, err := runCommand(cmd)
+	ip, defaultDestination, _ := net.ParseCIDR("0.0.0.0/0")
+	family := addressFamilyByIP(ip)
+	routes, err := listRoutes(family, func(row antreasyscall.MibIPForwardRow) bool {
+		return row.DestinationPrefix.EqualsTo(defaultDestination) && row.Index == uint32(ifIndex)
+	})
 	if err != nil {
 		return "", err
 	}
-	defaultGW = strings.ReplaceAll(defaultGW, "\r\n", "")
-	return defaultGW, nil
+	if len(routes) == 0 {
+		return "", nil
+	}
+	return routes[0].GatewayAddress.String(), nil
 }
 
 // GetDNServersByInterfaceIndex returns the DNS servers configured on the specified interface.
@@ -595,15 +631,8 @@ func DialLocalSocket(address string) (net.Conn, error) {
 }
 
 func HostInterfaceExists(ifaceName string) bool {
-	if _, err := netInterfaceByName(ifaceName); err == nil {
-		return true
-	}
-	// Some kinds of interfaces cannot be retrieved by "net.InterfaceByName" such as
-	// container vnic.
-	// So if an interface cannot be found by above function, use powershell command
-	// "Get-NetAdapter" to check if it exists.
-	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s"`, ifaceName)
-	if _, err := runCommand(cmd); err != nil {
+	_, err := getAdapterInAllCompartmentsByName(ifaceName)
+	if err != nil {
 		return false
 	}
 	return true
@@ -613,92 +642,104 @@ func HostInterfaceExists(ifaceName string) bool {
 // there's no MTU field in HNSEndpoint:
 // https://github.com/Microsoft/hcsshim/blob/4a468a6f7ae547974bc32911395c51fb1862b7df/internal/hns/hnsendpoint.go#L12
 func SetInterfaceMTU(ifaceName string, mtu int) error {
-	cmd := fmt.Sprintf("Set-NetIPInterface -IncludeAllCompartments -InterfaceAlias \"%s\" -NlMtuBytes %d",
-		ifaceName, mtu)
-	_, err := runCommand(cmd)
-	return err
+	adapter, err := getAdapterInAllCompartmentsByName(ifaceName)
+	if err != nil {
+		return fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %v", ifaceName, err)
+	}
+	return adapter.setMTU(mtu, antreasyscall.AF_INET)
 }
 
 func NewNetRoute(route *Route) error {
-	cmd := fmt.Sprintf("New-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop %v -RouteMetric %d -Verbose",
-		route.LinkIndex, route.DestinationSubnet.String(), route.GatewayAddress.String(), route.RouteMetric)
-	_, err := runCommand(cmd)
-	return err
-}
-
-func RemoveNetRoute(route *Route) error {
-	cmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -Verbose -Confirm:$false",
-		route.LinkIndex, route.DestinationSubnet.String())
-	_, err := runCommand(cmd)
-	return err
-}
-
-func ReplaceNetRoute(route *Route) error {
-	rs, err := GetNetRoutes(route.LinkIndex, route.DestinationSubnet)
-	if err != nil {
-		return err
-	}
-
-	if len(rs) == 0 {
-		if err := NewNetRoute(route); err != nil {
-			return err
-		}
+	if route == nil {
 		return nil
 	}
-
-	for _, r := range rs {
-		if r.GatewayAddress.Equal(route.GatewayAddress) {
-			return nil
-		}
-	}
-
-	if err := RemoveNetRoute(route); err != nil {
-		return err
-	}
-	if err := NewNetRoute(route); err != nil {
-		return err
+	row := route.toMibIPForwardRow()
+	if err := antreaNetIO.CreateIPForwardEntry(row); err != nil {
+		return fmt.Errorf("failed to create new IPForward row: %v", err)
 	}
 	return nil
 }
 
+func RemoveNetRoute(route *Route) error {
+	if route == nil || route.DestinationSubnet == nil {
+		return nil
+	}
+	family := addressFamilyByIP(route.DestinationSubnet.IP)
+	rows, err := antreaNetIO.ListIPForwardRows(family)
+	if err != nil {
+		return fmt.Errorf("unable to list Windows IPForward rows: %v", err)
+	}
+	for i := range rows {
+		row := rows[i]
+		if row.DestinationPrefix.EqualsTo(route.DestinationSubnet) && row.Index == uint32(route.LinkIndex) && row.NextHop.IP().Equal(route.GatewayAddress) {
+			if err := antreaNetIO.DeleteIPForwardEntry(&row); err != nil {
+				return fmt.Errorf("failed to delete existing route %s: %v", route.String(), err)
+			}
+		}
+	}
+	return nil
+}
+
+func ReplaceNetRoute(route *Route) error {
+	if route == nil || route.DestinationSubnet == nil {
+		return nil
+	}
+	family := addressFamilyByIP(route.DestinationSubnet.IP)
+	rows, err := antreaNetIO.ListIPForwardRows(family)
+	if err != nil {
+		return fmt.Errorf("unable to list Windows IPForward rows: %v", err)
+	}
+	for i := range rows {
+		row := rows[i]
+		if row.DestinationPrefix.EqualsTo(route.DestinationSubnet) && row.Index == uint32(route.LinkIndex) {
+			if row.NextHop.IP().Equal(route.GatewayAddress) {
+				return nil
+			} else {
+				if err := antreaNetIO.DeleteIPForwardEntry(&row); err != nil {
+					return fmt.Errorf("failed to delete existing route with nextHop %s: %v", route.GatewayAddress, err)
+				}
+			}
+		}
+	}
+	return NewNetRoute(route)
+}
+
 func GetNetRoutes(linkIndex int, dstSubnet *net.IPNet) ([]Route, error) {
-	cmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -DestinationPrefix %s -ErrorAction Ignore | Format-Table -HideTableHeaders",
-		linkIndex, dstSubnet.String())
-	return getNetRoutes(cmd)
+	if dstSubnet == nil {
+		return nil, fmt.Errorf("unable to get net routes for %d", linkIndex)
+	}
+	family := addressFamilyByIP(dstSubnet.IP)
+	return listRoutes(family, func(row antreasyscall.MibIPForwardRow) bool {
+		return row.DestinationPrefix.EqualsTo(dstSubnet) && row.Index == uint32(linkIndex)
+	})
 }
 
 func GetNetRoutesAll() ([]Route, error) {
-	cmd := "Get-NetRoute -ErrorAction Ignore | Format-Table -HideTableHeaders"
-	return getNetRoutes(cmd)
+	return listRoutes(antreasyscall.AF_UNSPEC, nil)
 }
 
-func getNetRoutes(cmd string) ([]Route, error) {
-	routesStr, _ := runCommand(cmd)
-	parsed := parseGetNetCmdResult(routesStr, 6)
-	var routes []Route
-	for _, items := range parsed {
-		idx, err := strconv.Atoi(items[0])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse the LinkIndex '%s': %v", items[0], err)
-		}
-		_, dstSubnet, err := net.ParseCIDR(items[1])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse the DestinationSubnet '%s': %v", items[1], err)
-		}
-		gw := net.ParseIP(items[2])
-		metric, err := strconv.Atoi(items[3])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse the RouteMetric '%s': %v", items[3], err)
-		}
-		route := Route{
-			LinkIndex:         idx,
-			DestinationSubnet: dstSubnet,
-			GatewayAddress:    gw,
-			RouteMetric:       metric,
-		}
-		routes = append(routes, route)
+type routeFilter func(row antreasyscall.MibIPForwardRow) bool
+
+func listRoutes(family uint16, filter routeFilter) ([]Route, error) {
+	rows, err := antreaNetIO.ListIPForwardRows(family)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list Windows IPForward rows: %v", err)
 	}
-	return routes, nil
+	rts := make([]Route, 0, len(rows))
+	for i, r := range rows {
+		if filter == nil || filter(r) {
+			route := routeFromIPForwardRow(&rows[i])
+			rts = append(rts, *route)
+		}
+	}
+	return rts, nil
+}
+
+func addressFamilyByIP(ip net.IP) uint16 {
+	if ip.To4() != nil {
+		return antreasyscall.AF_INET
+	}
+	return antreasyscall.AF_INET6
 }
 
 func parseGetNetCmdResult(result string, itemNum int) [][]string {
@@ -860,7 +901,7 @@ func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse the DestinationIP '%s': %v", items[1], err)
 		}
-		// Get-NetRoute returns LinkLayerAddress like "AA-BB-CC-DD-EE-FF".
+		// Get-NetNeighbor returns LinkLayerAddress like "AA-BB-CC-DD-EE-FF".
 		mac, err := net.ParseMAC(strings.ReplaceAll(items[2], "-", ":"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse the Gateway MAC '%s': %v", items[2], err)
@@ -1026,6 +1067,75 @@ func GenHostInterfaceName(upLinkIfName string) string {
 	return strings.TrimSuffix(upLinkIfName, bridgedUplinkSuffix)
 }
 
+type updateIPInterfaceFunc func(entry *antreasyscall.MibIPInterfaceRow) *antreasyscall.MibIPInterfaceRow
+
+type adapter struct {
+	net.Interface
+	compartmentID uint32
+}
+
+func (a *adapter) setMTU(mtu int, family uint16) error {
+	if err := a.setIPInterfaceEntry(family, func(entry *antreasyscall.MibIPInterfaceRow) *antreasyscall.MibIPInterfaceRow {
+		newEntry := *entry
+		newEntry.NlMtu = uint32(mtu)
+		return &newEntry
+	}); err != nil {
+		return fmt.Errorf("unable to set IPInterface with MTU %d: %v", mtu, err)
+	}
+	return nil
+}
+
+func (a *adapter) setForwarding(enabledForwarding bool, family uint16) error {
+	if err := a.setIPInterfaceEntry(family, func(entry *antreasyscall.MibIPInterfaceRow) *antreasyscall.MibIPInterfaceRow {
+		newEntry := *entry
+		newEntry.ForwardingEnabled = enabledForwarding
+		return &newEntry
+	}); err != nil {
+		return fmt.Errorf("unable to enable IPForwarding on net adapter: %v", err)
+	}
+	return nil
+}
+
+func (a *adapter) setIPInterfaceEntry(family uint16, updateFunc updateIPInterfaceFunc) error {
+	if a.compartmentID > 1 {
+		runtime.LockOSThread()
+		defer func() {
+			hcsshim.SetCurrentThreadCompartmentId(0)
+			runtime.UnlockOSThread()
+		}()
+		if err := hcsshim.SetCurrentThreadCompartmentId(a.compartmentID); err != nil {
+			klog.ErrorS(err, "Failed to change current thread's compartment", "compartment", a.compartmentID)
+			return err
+		}
+	}
+	ipInterfaceRow := &antreasyscall.MibIPInterfaceRow{Family: family, Index: uint32(a.Index)}
+	if err := antreaNetIO.GetIPInterfaceEntry(ipInterfaceRow); err != nil {
+		return fmt.Errorf("unable to get IPInterface entry with Index %d: %v", a.Index, err)
+	}
+	updatedRow := updateFunc(ipInterfaceRow)
+	updatedRow.SitePrefixLength = 0
+	return antreaNetIO.SetIPInterfaceEntry(updatedRow)
+}
+
+var (
+	errInvalidInterfaceName = errors.New("invalid network interface name")
+	errNoSuchInterface      = errors.New("no such network interface")
+)
+
+func getAdapterInAllCompartmentsByName(name string) (*adapter, error) {
+	if name == "" {
+		return nil, &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errInvalidInterfaceName}
+	}
+	adapters, err := getAdaptersByName(name)
+	if err != nil {
+		return nil, &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: err}
+	}
+	if len(adapters) == 0 {
+		return nil, &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errNoSuchInterface}
+	}
+	return &adapters[0], nil
+}
+
 // createVMSwitchWithTeaming creates VMSwitch and enables OVS extension.
 // Connection to VM is lost for few seconds
 func createVMSwitchWithTeaming(switchName, ifName string) error {
@@ -1047,13 +1157,14 @@ func enableOVSExtension() error {
 }
 
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
-	cmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -ErrorAction Ignore | Format-Table -HideTableHeaders", linkIndex)
-	rs, err := getNetRoutes(cmd)
+	rts, err := listRoutes(antreasyscall.AF_UNSPEC, func(row antreasyscall.MibIPForwardRow) bool {
+		return row.Index == uint32(linkIndex)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get routes: %v", err)
 	}
 	var routes []interface{}
-	for _, r := range rs {
+	for _, r := range rts {
 		// Skip the routes automatically generated by Windows host when adding IP address on the network adapter.
 		if r.GatewayAddress != nil && r.GatewayAddress.IsUnspecified() {
 			continue
@@ -1096,4 +1207,92 @@ func renameHostInterface(oriName string, newName string) error {
 	cmd := fmt.Sprintf(`Get-NetAdapter -Name "%s" | Rename-NetAdapter -NewName "%s"`, oriName, newName)
 	_, err := runCommand(cmd)
 	return err
+}
+
+func getAdaptersByName(name string) ([]adapter, error) {
+	aas, err := adapterAddresses()
+	if err != nil {
+		return nil, err
+	}
+	var adapters []adapter
+	for _, aa := range aas {
+		ifName := windows.UTF16PtrToString(aa.FriendlyName)
+		if ifName != name {
+			continue
+		}
+		index := aa.IfIndex
+		if index == 0 { // ipv6IfIndex is a substitute for ifIndex
+			index = aa.Ipv6IfIndex
+		}
+		ifi := net.Interface{
+			Index: int(index),
+			Name:  ifName,
+		}
+		if aa.OperStatus == windows.IfOperStatusUp {
+			ifi.Flags |= net.FlagUp
+		}
+		// For now we need to infer link-layer service capabilities from media types.
+		// TODO: use MIB_IF_ROW2.AccessType now that we no longer support Windows XP.
+		switch aa.IfType {
+		case windows.IF_TYPE_ETHERNET_CSMACD, windows.IF_TYPE_ISO88025_TOKENRING, windows.IF_TYPE_IEEE80211, windows.IF_TYPE_IEEE1394:
+			ifi.Flags |= net.FlagBroadcast | net.FlagMulticast
+		case windows.IF_TYPE_PPP, windows.IF_TYPE_TUNNEL:
+			ifi.Flags |= net.FlagPointToPoint | net.FlagMulticast
+		case windows.IF_TYPE_SOFTWARE_LOOPBACK:
+			ifi.Flags |= net.FlagLoopback | net.FlagMulticast
+		case windows.IF_TYPE_ATM:
+			ifi.Flags |= net.FlagBroadcast | net.FlagPointToPoint | net.FlagMulticast // assume all services available; LANE, point-to-point and point-to-multipoint
+		}
+		if aa.Mtu == 0xffffffff {
+			ifi.MTU = -1
+		} else {
+			ifi.MTU = int(aa.Mtu)
+		}
+		if aa.PhysicalAddressLength > 0 {
+			ifi.HardwareAddr = make(net.HardwareAddr, aa.PhysicalAddressLength)
+			copy(ifi.HardwareAddr, aa.PhysicalAddress[:])
+		}
+		adapter := adapter{
+			Interface:     ifi,
+			compartmentID: aa.CompartmentId,
+		}
+		adapters = append(adapters, adapter)
+	}
+	return adapters, nil
+}
+
+// GAA_FLAG_INCLUDE_ALL_COMPARTMENTS is used in windows.GetAdapterAddresses parameter
+// flags to return addresses in all routing compartments.
+const GAA_FLAG_INCLUDE_ALL_COMPARTMENTS = 0x00000200
+
+// adapterAddresses returns a list of IpAdapterAddresses structures. The structure
+// contains an IP adapter and flattened multiple IP addresses including unicast, anycast
+// and multicast addresses.
+// This function is copied from go/src/net/interface_windows.go, with a change that flag
+// GAA_FLAG_INCLUDE_ALL_COMPARTMENTS is introduced to query interfaces in all compartments.
+func adapterAddresses() ([]*windows.IpAdapterAddresses, error) {
+	flags := uint32(windows.GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_INCLUDE_ALL_COMPARTMENTS)
+	var b []byte
+	l := uint32(15000) // recommended initial size
+	for {
+		b = make([]byte, l)
+		err := getAdaptersAddresses(syscall.AF_UNSPEC, flags, 0, (*windows.IpAdapterAddresses)(unsafe.Pointer(&b[0])), &l)
+		if err == nil {
+			if l == 0 {
+				return nil, nil
+			}
+			break
+		}
+		if err.(syscall.Errno) != syscall.ERROR_BUFFER_OVERFLOW {
+			return nil, os.NewSyscallError("getadaptersaddresses", err)
+		}
+		if l <= uint32(len(b)) {
+			return nil, os.NewSyscallError("getadaptersaddresses", err)
+		}
+	}
+	var aas []*windows.IpAdapterAddresses
+	for aa := (*windows.IpAdapterAddresses)(unsafe.Pointer(&b[0])); aa != nil; aa = aa.Next {
+		aas = append(aas, aa)
+	}
+	return aas, nil
 }
