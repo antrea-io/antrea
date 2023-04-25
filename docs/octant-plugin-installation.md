@@ -1,5 +1,11 @@
 # Octant and antrea-octant-plugin installation
 
+***Octant is no longer maintained and the antrea-octant-plugin is deprecated as
+   of Antrea v1.12. It will be removed completely in subsequent
+   releases. Please refer to [#4640](https://github.com/antrea-io/antrea/issues/4640)
+   for more information, and check out the [Antrea web UI](https://github.com/antrea-io/antrea-ui)
+   for an alternative.***
+
 ## Overview
 
 There are two ways to deploy Octant and antrea-octant-plugin.

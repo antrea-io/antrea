@@ -82,6 +82,8 @@ func main() {
 	// See https://github.com/vmware-tanzu/octant/issues/3012
 	logger.Info("antrea-octant-plugin is starting")
 	log.Printf("antrea-octant-plugin is starting")
+	logger.Info("***WARNING***: Octant is no longer maintained and this plugin is deprecated; it will be removed in the next Antrea release (see https://github.com/antrea-io/antrea/issues/4640)")
+	log.Printf("***WARNING***: Octant is no longer maintained and this plugin is deprecated; it will be removed in the next Antrea release (see https://github.com/antrea-io/antrea/issues/4640)")
 	p.Serve()
 }
 
