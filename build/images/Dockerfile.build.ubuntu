@@ -20,6 +20,8 @@ WORKDIR /antrea
 
 COPY go.mod /antrea/go.mod
 
+ENV GOPROXY="direct"
+
 RUN go mod download
 
 COPY . /antrea
