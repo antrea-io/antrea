@@ -1595,7 +1595,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			for feature, value := range tt.featureGates {
 				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
 			}
-			_, controller := newController()
+			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", admv1.Create, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
@@ -1645,7 +1645,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController()
+			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
@@ -1731,7 +1731,7 @@ func TestValidateAntreaGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController()
+			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAntreaGroup(tt.curGroup, tt.oldGroup, tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
@@ -1866,7 +1866,7 @@ func TestValidateTier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController()
+			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateTier(tt.curTier, tt.oldTier, tt.operation, tt.user)
 			assert.Equal(t, tt.expectedReason, actualReason)

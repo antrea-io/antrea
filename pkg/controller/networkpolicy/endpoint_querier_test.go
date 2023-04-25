@@ -150,7 +150,7 @@ var namespaces = []*corev1.Namespace{
 
 func makeControllerAndEndpointQuerier(objects ...runtime.Object) *endpointQuerier {
 	// create controller
-	_, c := newController(objects...)
+	_, c := newController(objects, nil)
 	c.heartbeatCh = make(chan heartbeat, 1000)
 	stopCh := make(chan struct{})
 	// create querier with stores inside controller
