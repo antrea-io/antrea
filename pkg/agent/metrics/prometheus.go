@@ -79,7 +79,7 @@ var (
 		Namespace:      metricNamespaceAntrea,
 		Subsystem:      metricSubsystemAgent,
 		Name:           "ovs_flow_count",
-		Help:           "Flow count for each OVS flow table. The TableID and TableName are used as a label.",
+		Help:           "Flow count for each OVS flow table. The TableID and TableName are used as labels.",
 		StabilityLevel: metrics.STABLE,
 	}, []string{"table_id", "table_name"})
 
