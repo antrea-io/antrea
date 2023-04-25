@@ -15,10 +15,12 @@
 package exporter
 
 import (
+	"math"
 	"reflect"
 	"sync"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"github.com/vmware/go-ipfix/pkg/registry"
 	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 
@@ -55,15 +57,15 @@ func (e *LogExporter) buildFilters() {
 	ruleActionToUint8 := func(a flowaggregatorconfig.NetworkPolicyRuleAction) uint8 {
 		switch a {
 		case flowaggregatorconfig.NetworkPolicyRuleActionNone:
-			return 0
+			return registry.NetworkPolicyRuleActionNoAction
 		case flowaggregatorconfig.NetworkPolicyRuleActionAllow:
-			return 1
+			return registry.NetworkPolicyRuleActionAllow
 		case flowaggregatorconfig.NetworkPolicyRuleActionDrop:
-			return 2
+			return registry.NetworkPolicyRuleActionDrop
 		case flowaggregatorconfig.NetworkPolicyRuleActionReject:
-			return 3
+			return registry.NetworkPolicyRuleActionReject
 		default: // invalid case
-			return 255
+			return math.MaxUint8
 		}
 	}
 	convertFilter := func(in *flowaggregatorconfig.FlowFilter) flowFilter {

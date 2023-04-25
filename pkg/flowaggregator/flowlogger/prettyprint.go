@@ -22,13 +22,13 @@ import (
 
 func PrettyPrintRuleAction(action uint8) string {
 	switch action {
-	case 0:
+	case registry.NetworkPolicyRuleActionNoAction:
 		return ""
-	case 1:
+	case registry.NetworkPolicyRuleActionAllow:
 		return "Allow"
-	case 2:
+	case registry.NetworkPolicyRuleActionDrop:
 		return "Drop"
-	case 3:
+	case registry.NetworkPolicyRuleActionReject:
 		return "Reject"
 	default:
 		return "Invalid"
