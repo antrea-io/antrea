@@ -167,7 +167,7 @@ managed by the Antrea Agent.
 - **antrea_agent_networkpolicy_count:** Number of NetworkPolicies on local
 Node which are managed by the Antrea Agent.
 - **antrea_agent_ovs_flow_count:** Flow count for each OVS flow table. The
-TableID is used as a label.
+TableID and TableName are used as labels.
 - **antrea_agent_ovs_flow_ops_count:** Number of OVS flow operations,
 partitioned by operation type (add, modify and delete).
 - **antrea_agent_ovs_flow_ops_error_count:** Number of OVS flow operation
