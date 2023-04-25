@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,13 +38,6 @@ import (
 )
 
 var (
-	epPorts80 = []corev1.EndpointPort{
-		{
-			Name:     "http",
-			Port:     80,
-			Protocol: corev1.ProtocolTCP,
-		},
-	}
 	epPorts8080 = []corev1.EndpointPort{
 		{
 			Name:     "http",
@@ -86,7 +80,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP")
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false)
 	r.installedSvcs.Add(&svcInfo{
 		name:      common.SvcNginx.Name,
 		namespace: common.SvcNginx.Namespace,
@@ -255,7 +249,9 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 			}},
 		},
 		{
-			name: "export Service and update status successfully",
+			name:            "export Service and update status successfully",
+			expectedReason:  "Succeed",
+			expectedMessage: "The Service is exported successfully",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "nginx1",
@@ -279,7 +275,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP")
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(common.TestCtx, tt.req); err != nil {
@@ -304,35 +300,82 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 }
 
 func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, common.EPNginx, existSvcExport).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	epReady := true
+	protocol := corev1.ProtocolTCP
+	port := int32(80)
+	epsNginx := &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nginx-abe173ud",
+			Namespace: "default",
+			Labels:    map[string]string{discovery.LabelServiceName: "nginx"},
+		},
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints: []discovery.Endpoint{
+			{
+				Addresses: []string{
+					"192.168.17.11",
+				},
+				Conditions: discovery.EndpointConditions{Ready: &epReady},
+			},
+		},
+		Ports: []discovery.EndpointPort{
+			{
+				Protocol: &protocol,
+				Port:     &port,
+			},
+		},
+	}
 
-	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
-	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP")
-	if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
-		t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
-	} else {
-		svcResExport := &mcsv1alpha1.ResourceExport{}
-		err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, svcResExport)
-		if err != nil {
-			t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
-		}
-		epResExport := &mcsv1alpha1.ResourceExport{}
-		err = fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, epResExport)
-		if err != nil {
-			t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
-		}
-		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
-		if err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport); err != nil {
-			t.Errorf("Should get ServiceExport successfully but got error = %v", err)
-		} else {
-			status := newSvcExport.Status.Conditions[0].Status
-			if status != "True" {
-				t.Errorf("Expected ServiceExport status should be True but got %v", status)
+	tests := []struct {
+		name                 string
+		endpointIPType       string
+		endpointSliceEnabled bool
+		fakeClient           client.WithWatch
+	}{
+		{
+			name:           "with Endpoint API",
+			fakeClient:     fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, common.EPNginx, existSvcExport).Build(),
+			endpointIPType: "ClusterIP",
+		},
+		{
+			name:                 "with EndpointSlice API",
+			fakeClient:           fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, epsNginx, existSvcExport).Build(),
+			endpointIPType:       "PodIP",
+			endpointSliceEnabled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
+			mcReconciler := NewMemberClusterSetReconciler(tt.fakeClient, common.TestScheme, "default", false)
+			mcReconciler.SetRemoteCommonArea(commonArea)
+			r := NewServiceExportReconciler(tt.fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, tt.endpointSliceEnabled)
+			if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
+				t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
+			} else {
+				svcResExport := &mcsv1alpha1.ResourceExport{}
+				err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, svcResExport)
+				if err != nil {
+					t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
+				}
+				epResExport := &mcsv1alpha1.ResourceExport{}
+				err = fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, epResExport)
+				if err != nil {
+					t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
+				}
+				newSvcExport := &k8smcsv1alpha1.ServiceExport{}
+				if err = tt.fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport); err != nil {
+					t.Errorf("Should get ServiceExport successfully but got error = %v", err)
+				} else {
+					status := newSvcExport.Status.Conditions[0].Status
+					if status != "True" {
+						t.Errorf("Expected ServiceExport status should be True but got %v", status)
+					}
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -345,10 +388,27 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 		svcType:    string(common.SvcNginx.Spec.Type),
 	}
 
+	filteredSubsets := []corev1.EndpointSubset{
+		{
+			Addresses: []corev1.EndpointAddress{
+				{
+					IP: "192.168.17.11",
+				},
+			},
+			Ports: []corev1.EndpointPort{
+				{
+					Name:     "http",
+					Port:     80,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+
 	epInfo := &epInfo{
 		name:      common.EPNginx.Name,
 		namespace: common.EPNginx.Namespace,
-		subsets:   common.FilterEndpointSubsets(common.EPNginx.Subsets),
+		subsets:   filteredSubsets,
 	}
 
 	newSvcNginx := common.SvcNginx.DeepCopy()
@@ -385,7 +445,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 
 	existEpRe := re.DeepCopy()
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
-	existEpRe.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{Subsets: common.FilterEndpointSubsets(common.EPNginxSubset)}
+	existEpRe.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{Subsets: filteredSubsets}
 
 	tests := []struct {
 		name              string
@@ -460,7 +520,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 							IP: "192.168.17.11",
 						},
 					},
-					Ports: epPorts80,
+					Ports: common.EPPorts80,
 				},
 			},
 		},
@@ -474,7 +534,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType)
+			r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, false)
 			r.installedSvcs.Add(sinfo)
 			r.installedEps.Add(epInfo)
 			if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
@@ -505,7 +565,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 }
 
-func Test_serviceMapFunc(t *testing.T) {
+func Test_objectMapFunc(t *testing.T) {
 	tests := []struct {
 		name string
 		obj  client.Object
@@ -533,6 +593,50 @@ func Test_serviceMapFunc(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := objectMapFunc(tt.obj); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Test_objectMapFunc() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_endpointSliceMapFunc(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  client.Object
+		want []reconcile.Request
+	}{
+		{
+			name: "map EndpointSlice Object",
+			obj: &discovery.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx-as4asjh1",
+					Namespace: "default",
+					Labels:    map[string]string{discovery.LabelServiceName: "nginx"},
+				},
+			},
+			want: []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      "nginx",
+						Namespace: "default",
+					},
+				},
+			},
+		},
+		{
+			name: "map EndpointSlice Object without Service Name label",
+			obj: &discovery.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx-as4asjh1",
+					Namespace: "default",
+				},
+			},
+			want: []reconcile.Request{{}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := endpointSliceMapFunc(tt.obj); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Test_endpointSliceMapFunc() = %v, want %v", got, tt.want)
 			}
 		})
 	}

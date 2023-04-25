@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 type Options struct {
@@ -43,6 +44,8 @@ type Options struct {
 	// Enable StretchedNetworkPolicy to exchange labelIdentities info among the whole
 	// ClusterSet.
 	EnableStretchedNetworkPolicy bool
+	// Watch EndpointSlice API for exported Service if EndpointSlice API is available.
+	EnableEndpointSlice bool
 }
 
 func newOptions() *Options {
@@ -82,8 +85,11 @@ func (o *Options) complete(args []string) error {
 		o.PodCIDRs = cidrs
 		o.GatewayIPPrecedence = ctrlConfig.GatewayIPPrecedence
 		if ctrlConfig.EndpointIPType == "" {
-			o.EndpointIPType = "ClusterIP"
+			o.EndpointIPType = common.EndpointIPTypeClusterIP
 		} else {
+			if ctrlConfig.EndpointIPType != common.EndpointIPTypeClusterIP && ctrlConfig.EndpointIPType != common.EndpointIPTypePodIP {
+				return fmt.Errorf("invalid endpointIPType: %s, only 'PodIP' or 'ClusterIP' is allowed", ctrlConfig.EndpointIPType)
+			}
 			o.EndpointIPType = ctrlConfig.EndpointIPType
 		}
 		o.EnableStretchedNetworkPolicy = ctrlConfig.EnableStretchedNetworkPolicy
