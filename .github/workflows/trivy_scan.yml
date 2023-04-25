@@ -22,11 +22,11 @@ jobs:
     - name: Find greatest Antrea version
       id: find-antrea-greatest-version
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         VERSION=${{ github.event.inputs.antrea-version }}
         if [ -z "$VERSION" ]; then
-            VERSION=$(curl -s https://api.github.com/repos/antrea-io/antrea/releases/latest | jq -r '.tag_name')
+            VERSION=$(gh api /repos/antrea-io/antrea/releases/latest --jq '.tag_name')
         fi
         echo "antrea_version=$VERSION" >> $GITHUB_OUTPUT
     - name: Pull Antrea Docker images
