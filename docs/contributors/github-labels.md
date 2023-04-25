@@ -24,7 +24,6 @@ The labels in this list originated within Kubernetes at
 | area/component/cni                 | Issues or PRs related to the cni component | Any |
 | area/component/controller          | Issues or PRs related to the Controller component | Any |
 | area/component/flow-aggregator     | Issues or PRs related to the Flow Aggregator component | Any |
-| area/component/octant-plugin       | Issues or PRs related to the octant-plugin component | Any |
 | area/dependency                    | Issues or PRs related to dependency changes | Any |
 | area/endpoint/identity             | Issues or PRs related to endpoint identity | Any |
 | area/endpoint/selection            | Issues or PRs related to endpoint selection | Any |
@@ -51,7 +50,6 @@ The labels in this list originated within Kubernetes at
 | area/network-policy/lifecycle      | Issues or PRs related to the network policy lifecycle | Any |
 | area/network-policy/match          | Issues or PRs related to matching packets | Any |
 | area/network-policy/precedence     | Issues or PRs related to network policy precedence | Any |
-| area/octant                        | Issues or PRs related to Octant | Any |
 | area/ops                           | Issues or PRs related to features which support network operations and troubleshooting | Any |
 | area/ops/traceflow                 | Issues or PRs related to the Traceflow feature | Any |
 | area/ovs/openflow                  | Issues or PRs related to Open vSwitch Open Flow | Any |

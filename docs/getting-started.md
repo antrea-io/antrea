@@ -212,11 +212,12 @@ are in different subnets, but does not encapsulate when the source and the
 destination Nodes are in the same subnet. Refer to [this guide](noencap-hybrid-modes.md)
 to learn how to configure Antrea with `NoEncap` or `Hybrid` mode.
 
-### Octant UI
+### Antrea Web UI
 
-Antrea ships with an Octant UI plugin which can show runtime information of Antrea
-components and perform Antrea Traceflow operations. Refer to [this guide](octant-plugin-installation.md)
-to learn how to install Octant and the Antrea plugin.
+Antrea comes with a web UI, which can show runtime information of Antrea
+components and perform Antrea Traceflow operations. Please refer to the [Antrea
+UI repository](https://github.com/antrea-io/antrea-ui) for installation
+instructions and more information.
 
 ### OVS Hardware Offload
 

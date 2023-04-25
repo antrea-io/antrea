@@ -1,16 +1,16 @@
 # Traceflow User Guide
 
 Antrea supports using Traceflow for network diagnosis. It can inject a packet
-into OVS on a Node and trace the forwarding path of the packet across Nodes,
-and it can also trace a matched packet of real traffic from or to a Pod. In
-either case, a Traceflow operation is triggered by a Traceflow CRD which
-specifies the type of Traceflow, the source and destination of the packet to
-trace, and the headers of the packet. And the Traceflow results will be
-populated to the `status` field of the Traceflow CRD, which include the
-observations of the trace packet at various observations points in the
-forwarding path. Besides creating the Traceflow CRD using kubectl, users can
-also start a Traceflow using `antctl`, or from the Antrea Octant Plugin. When
-using the Antrea Octant plugin, the Traceflow results can be visualized using a
+into OVS on a Node and trace the forwarding path of the packet across Nodes, and
+it can also trace a matched packet of real traffic from or to a Pod. In either
+case, a Traceflow operation is triggered by a Traceflow CRD which specifies the
+type of Traceflow, the source and destination of the packet to trace, and the
+headers of the packet. And the Traceflow results will be populated to the
+`status` field of the Traceflow CRD, which include the observations of the trace
+packet at various observations points in the forwarding path. Besides creating
+the Traceflow CRD using kubectl, users can also start a Traceflow using
+`antctl`, or from the [Antrea web UI](https://github.com/antrea-io/antrea-ui).
+When using the Antrea web UI, the Traceflow results can be visualized using a
 graph.
 
 ## Table of Contents
@@ -22,7 +22,8 @@ graph.
   - [Using kubectl and YAML file (IPv6)](#using-kubectl-and-yaml-file-ipv6)
   - [Live-traffic Traceflow](#live-traffic-traceflow)
   - [Using antctl](#using-antctl)
-  - [Using Octant with antrea-octant-plugin](#using-octant-with-antrea-octant-plugin)
+  - [Using the Antrea web UI](#using-the-antrea-web-ui)
+  - [Using Octant with antrea-octant-plugin (DEPRECATED)](#using-octant-with-antrea-octant-plugin-deprecated)
 - [View Traceflow Result and Graph](#view-traceflow-result-and-graph)
 - [View Traceflow CRDs](#view-traceflow-crds)
 - [RBAC](#rbac)
@@ -50,8 +51,6 @@ is enabled in the Agent configuration:
     # Service traffic.
       AntreaProxy: true
 ```
-
-For antrea-octant-plugin installation, please refer to [antrea-octant-installation](octant-plugin-installation.md).
 
 ## Start a New Traceflow
 
@@ -172,7 +171,19 @@ spec:
 
 Please refer to the corresponding [antctl page](antctl.md#traceflow).
 
-### Using Octant with antrea-octant-plugin
+### Using the Antrea web UI
+
+Please refer to the [Antrea UI documentation](https://github.com/antrea-io/antrea-ui)
+for installation instructions. Once you can access the UI in your browser,
+navigate to the `Traceflow` page.
+
+### Using Octant with antrea-octant-plugin (DEPRECATED)
+
+***Octant is no longer maintained and the antrea-octant-plugin is deprecated as
+   of Antrea v1.12. It will be removed completely in subsequent
+   releases. Please refer to [#4640](https://github.com/antrea-io/antrea/issues/4640)
+   for more information, and check out the [Antrea web UI](https://github.com/antrea-io/antrea-ui)
+   for an alternative.***
 
 <img src="https://downloads.antrea.io/static/tf_create.1.png" width="600" alt="Start a New Trace">
 

@@ -25,10 +25,9 @@ init container that installs the CNI plugin - `antrea-cni` - on the Node and
 ensures that the OVS kernel module is loaded and it is chained with the portmap
 and bandwidth CNI plugins. All Antrea Controller, Agent, OVS daemons, and
 `antrea-cni` bits are included in a single Docker image. Antrea also has a
-command-line tool called `antctl`, and an [Octant](https://github.com/vmware-tanzu/octant)
-UI plugin.
+command-line tool called `antctl`.
 
-<img src="../assets/arch.svg.png" width="600" alt="Antrea Architecture Overview">
+<img src="../assets/arch.svg" width="600" alt="Antrea Architecture Overview">
 
 ### Antrea Controller
 
@@ -137,14 +136,17 @@ executed through `kubectl` as a `kubectl` plugin as well.
 When accessing the Agent, `antctl` connects to the Agent's local REST endpoint,
 and can only be executed locally in the Agent's container.
 
-### Octant UI plugin
+### Antrea web UI
 
-Antrea also implements an Octant plugin which can show the Controller and
-Agent's health and basic runtime information in the Octant UI. The Octant plugin
-gets the Controller and Agent's information from the `AntreaControllerInfo` and
-`AntreaAgentInfo` CRDs (Custom Resource Definition) in the Kubernetes API. The
-CRDs are created by the Antrea Controller and each Antrea Agent to populate
-their health and runtime information.
+Antrea also comes with a web UI, which can show the Controller and Agent's
+health and basic runtime information. The UI gets the Controller and Agent's
+information from the `AntreaControllerInfo` and `AntreaAgentInfo` CRDs (Custom
+Resource Definition) in the Kubernetes API. The CRDs are created by the Antrea
+Controller and each Antrea Agent to populate their health and runtime
+information.
+
+The Antrea web UI provides additional capabilities. Please refer to the [Antrea
+UI repository](https://github.com/antrea-io/antrea-ui) for more information.
 
 ## Pod Networking
 
