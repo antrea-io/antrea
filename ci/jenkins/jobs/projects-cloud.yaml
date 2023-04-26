@@ -665,7 +665,7 @@
           publishers:
           - archive:
               allow-empty: true
-              artifacts: 'eks-test.log, ci/*.tar.gz'
+              artifacts: 'eks-test.log, *sonobuoy*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
@@ -730,7 +730,7 @@
           publishers:
           - archive:
               allow-empty: true
-              artifacts: 'gke-test.log, ci/*.tar.gz'
+              artifacts: 'gke-test.log, *sonobuoy*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
@@ -780,7 +780,7 @@
           publishers:
           - archive:
               allow-empty: true
-              artifacts: 'aks-test.log, ci/*.tar.gz'
+              artifacts: 'aks-test.log, *sonobuoy*.tar.gz'
               case-sensitive: true
               default-excludes: true
               fingerprint: false
