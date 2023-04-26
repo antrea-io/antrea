@@ -79,6 +79,8 @@ type reason int
 
 const (
 	serviceNotFound reason = iota
+	serviceNotSupported
+	serviceNoClusterIP
 	isImportedService
 	serviceWithoutEndpoints
 	serviceExported
@@ -199,6 +201,16 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
+	// The ExternalName type of Service is not supported since it has no ClusterIP
+	// assgined to the Service.
+	if svc.Spec.Type == corev1.ServiceTypeExternalName {
+		err = r.updateSvcExportStatus(ctx, req, serviceNotSupported)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// Skip if ServiceExport is trying to export a multi-cluster Service.
 	if !svcInstalled {
 		if _, ok := svc.Annotations[common.AntreaMCServiceAnnotation]; ok {
@@ -258,7 +270,16 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if r.endpointIPType == "ClusterIP" {
-		eps.Subsets = []corev1.EndpointSubset{common.GetServiceEndpointSubset(svc)}
+		svcIPAsSubset := common.GetServiceEndpointSubset(svc)
+		if len(svcIPAsSubset.Addresses) == 0 {
+			err = r.updateSvcExportStatus(ctx, req, serviceNoClusterIP)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		} else {
+			eps.Subsets = []corev1.EndpointSubset{svcIPAsSubset}
+		}
 	} else {
 		newSubsets := common.FilterEndpointSubsets(eps.Subsets)
 		if epsInstalled {
@@ -400,18 +421,22 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 
 	switch cause {
 	case serviceNotFound:
-		newCondition.Reason = getStringPointer("service_not_found")
-		newCondition.Message = getStringPointer("the Service does not exist")
+		newCondition.Reason = getStringPointer("ServiceNotFound")
+		newCondition.Message = getStringPointer("Service does not exist")
+	case serviceNotSupported:
+		newCondition.Reason = getStringPointer("ServiceTypeNotSupported")
+		newCondition.Message = getStringPointer("Service of ExternalName type is not supported")
+	case serviceNoClusterIP:
+		newCondition.Reason = getStringPointer("ServiceNoClusterIP")
+		newCondition.Message = getStringPointer("Service does not have a valid ClusterIP")
 	case serviceWithoutEndpoints:
-		newCondition.Reason = getStringPointer("service_without_endpoints")
-		newCondition.Message = getStringPointer("the Service has no Endpoints, failed to export")
+		newCondition.Reason = getStringPointer("ServiceWithoutEndpoints")
+		newCondition.Message = getStringPointer("Service has no Endpoints")
 	case isImportedService:
-		newCondition.Reason = getStringPointer("imported_service")
-		newCondition.Message = getStringPointer("the Service is imported, not allowed to export")
+		newCondition.Reason = getStringPointer("ImportedService")
+		newCondition.Message = getStringPointer("The Service is imported, not allowed to export")
 	case serviceExported:
 		newCondition.Status = corev1.ConditionTrue
-		newCondition.Reason = getStringPointer("export_succeeded")
-		newCondition.Message = getStringPointer("the Service is exported successfully")
 	}
 
 	svcExportConditions := svcExport.Status.DeepCopy().Conditions
@@ -426,7 +451,7 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 	}
 
 	if existingCondition != (k8smcsv1alpha1.ServiceExportCondition{}) {
-		if *existingCondition.Reason == *newCondition.Reason {
+		if newCondition.Reason != nil && *existingCondition.Reason == *newCondition.Reason {
 			// No need to update the ServiceExport when there is no status change.
 			return nil
 		}
