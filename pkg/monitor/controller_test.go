@@ -127,7 +127,7 @@ func TestSyncExternalNode(t *testing.T) {
 		name                 string
 		key                  string
 		existingExternalNode *v1alpha1.ExternalNode
-		expectedAgentCRD     *v1beta1.AntreaAgentInfo
+		expectedAgentCR      *v1beta1.AntreaAgentInfo
 		expectedError        string
 	}{
 		{
@@ -144,7 +144,7 @@ func TestSyncExternalNode(t *testing.T) {
 			name:                 "Key exists",
 			key:                  "ns1/TestExternalNode",
 			existingExternalNode: en,
-			expectedAgentCRD: &v1beta1.AntreaAgentInfo{
+			expectedAgentCR: &v1beta1.AntreaAgentInfo{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "TestExternalNode",
 				},
@@ -160,6 +160,12 @@ func TestSyncExternalNode(t *testing.T) {
 			} else {
 				clientset = fakeclientset.NewSimpleClientset()
 			}
+			clientset.Resources = []*metav1.APIResourceList{
+				{
+					GroupVersion: v1beta1.SchemeGroupVersion.String(),
+					APIResources: []metav1.APIResource{{Name: agentInfoResourceKind}},
+				},
+			}
 			controller := newControllerMonitor(clientset)
 			stopCh := make(chan struct{})
 			initController(controller, stopCh)
@@ -169,14 +175,14 @@ func TestSyncExternalNode(t *testing.T) {
 				assert.EqualError(t, err, tt.expectedError)
 			} else {
 				require.NoError(t, err)
-				if tt.expectedAgentCRD == nil {
+				if tt.expectedAgentCR == nil {
 					_, name, _ := splitKeyFunc(tt.key)
 					_, err := controller.controllerMonitor.client.CrdV1beta1().AntreaAgentInfos().Get(ctx, name, metav1.GetOptions{})
 					assert.True(t, errortesting.IsNotFound(err))
 				} else {
-					crd, err := controller.controllerMonitor.client.CrdV1beta1().AntreaAgentInfos().Get(ctx, tt.expectedAgentCRD.Name, metav1.GetOptions{})
+					crd, err := controller.controllerMonitor.client.CrdV1beta1().AntreaAgentInfos().Get(ctx, tt.expectedAgentCR.Name, metav1.GetOptions{})
 					require.NoError(t, err)
-					assert.Equal(t, tt.expectedAgentCRD, crd)
+					assert.Equal(t, tt.expectedAgentCR, crd)
 				}
 			}
 		})
@@ -223,6 +229,12 @@ func TestSyncNode(t *testing.T) {
 	for _, tt := range tc {
 		t.Run(tt.name, func(t *testing.T) {
 			clientset := fakeclientset.NewSimpleClientset()
+			clientset.Resources = []*metav1.APIResourceList{
+				{
+					GroupVersion: v1beta1.SchemeGroupVersion.String(),
+					APIResources: []metav1.APIResource{{Name: agentInfoResourceKind}},
+				},
+			}
 			controller := newControllerMonitor(clientset)
 			if tt.existingNode != nil {
 				controller.client = fake.NewSimpleClientset(node)
@@ -429,6 +441,12 @@ func TestDeleteStaleAgentCRD(t *testing.T) {
 			if tt.existingExternalNode != nil {
 				clientset = fakeclientset.NewSimpleClientset(tt.existingExternalNode)
 			}
+			clientset.Resources = []*metav1.APIResourceList{
+				{
+					GroupVersion: v1beta1.SchemeGroupVersion.String(),
+					APIResources: []metav1.APIResource{{Name: agentInfoResourceKind}},
+				},
+			}
 			tt.prepareReactor(clientset)
 			controller := newControllerMonitor(clientset)
 			stopCh := make(chan struct{})
@@ -623,4 +641,39 @@ func TestEnqueueExternalNode(t *testing.T) {
 	expectedkey, _ := keyFunc(externalNode)
 	obj, _ := controller.controllerMonitor.externalNodeQueue.Get()
 	assert.Equal(t, expectedkey, obj.(string))
+}
+
+func TestAntreaAgentInfoAPIAvailable(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		resources    []*metav1.APIResourceList
+		expectResult bool
+	}{
+		{
+			name: "AntreaAgentInfo API unavailable",
+			resources: []*metav1.APIResourceList{
+				{
+					GroupVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+			},
+			expectResult: false,
+		}, {
+			name: "AntreaAgentInfo API available",
+			resources: []*metav1.APIResourceList{
+				{
+					GroupVersion: v1beta1.SchemeGroupVersion.String(),
+					APIResources: []metav1.APIResource{{Kind: agentInfoResourceKind}},
+				},
+			},
+			expectResult: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clientset := fakeclientset.NewSimpleClientset()
+			clientset.Resources = tc.resources
+			c := &controllerMonitor{client: clientset}
+			stopCh := make(chan struct{})
+			assert.Equal(t, tc.expectResult, c.antreaAgentInfoAPIAvailable(stopCh))
+		})
+	}
 }

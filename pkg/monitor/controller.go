@@ -45,7 +45,8 @@ const (
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing a Node/ExternalNode change.
-	defaultWorkers = 4
+	defaultWorkers        = 4
+	agentInfoResourceKind = "AntreaAgentInfo"
 )
 
 var (
@@ -128,11 +129,14 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	monitor.deleteStaleAgentCRDs()
-
 	// Sync controller monitoring CRD every minute util stopCh is closed.
 	go wait.Until(monitor.syncControllerCRD, time.Minute, stopCh)
 
+	if !monitor.antreaAgentInfoAPIAvailable(stopCh) {
+		klog.InfoS("The AntreaAgentInfo API is unavailable, will not run node workers")
+		return
+	}
+	monitor.deleteStaleAgentCRDs()
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(monitor.nodeWorker, time.Second, stopCh)
 		if monitor.externalNodeEnabled {
@@ -364,4 +368,39 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) error {
 		}
 	}
 	return nil
+}
+
+func (monitor *controllerMonitor) antreaAgentInfoAPIAvailable(stopCh <-chan struct{}) bool {
+	groupVersion := v1beta1.SchemeGroupVersion.String()
+	checkFunc := func() (done bool, err error) {
+		resources, err := monitor.client.Discovery().ServerResourcesForGroupVersion(groupVersion)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return false, err
+			}
+			klog.InfoS("No server resources found for GroupVersion", "groupVersion", groupVersion)
+			return false, nil
+		}
+		for _, resource := range resources.APIResources {
+			if resource.Kind == agentInfoResourceKind {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	found := false
+	if err := wait.PollImmediateUntil(time.Second*10, func() (done bool, err error) {
+		var checkErr error
+		found, checkErr = checkFunc()
+		if checkErr != nil {
+			klog.ErrorS(err, "Error getting server resources for GroupVersion, will retry after 10s", "groupVersion", groupVersion)
+			return false, nil
+		}
+		return true, nil
+	}, stopCh); err != nil {
+		klog.ErrorS(err, "Failed to get server resources for GroupVersion", "groupVersion", groupVersion)
+		found = false
+	}
+	return found
 }
