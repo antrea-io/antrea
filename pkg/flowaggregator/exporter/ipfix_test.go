@@ -351,8 +351,12 @@ func TestInitExportingProcess(t *testing.T) {
 		opt := &options.Options{}
 		opt.Config = &flowaggregatorconfig.FlowAggregatorConfig{}
 		flowaggregatorconfig.SetConfigDefaults(opt.Config)
+		// dialing this address is guaranteed to fail (we use 0 as the port number)
 		opt.ExternalFlowCollectorAddr = "127.0.0.1:0"
 		opt.ExternalFlowCollectorProto = "tcp"
+		// the observation domain should be set, or the test will take 10s to run
+		obsDomainID := uint32(1)
+		opt.Config.FlowCollector.ObservationDomainID = &obsDomainID
 		exp := NewIPFIXExporter(k8sClientset, opt, mockIPFIXRegistry)
 		err := exp.initExportingProcess()
 		assert.ErrorContains(t, err, "got error when initializing IPFIX exporting process: dial tcp 127.0.0.1:0:")

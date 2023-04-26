@@ -274,6 +274,41 @@ data:
 
       # UploadInterval is the duration between each file upload to S3.
       uploadInterval: "60s"
+
+    # FlowLogger contains configuration options for writing flow records to a local log file.
+    flowLogger:
+      # Enable is the switch to enable writing flow records to a local log file.
+      enable: false
+
+      # Path is the path to the local log file.
+      path: "/tmp/antrea-flows.log"
+
+      # MaxSize is the maximum size in MB of a log file before it gets rotated.
+      maxSize: 100
+
+      # MaxBackups is the maximum number of old log files to retain. If set to 0, all log files will be
+      # retained (unless MaxAge causes them to be deleted).
+      maxBackups: 3
+
+      # MaxAge is the maximum number of days to retain old log files based on the timestamp encoded in
+      # their filename. The default (0) is not to remove old log files based on age.
+      maxAge: 0
+
+      # Compress enables gzip compression on rotated files.
+      compress: true
+
+      # RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at
+      # the moment.
+      recordFormat: "CSV"
+
+      # Filters can be used to select which flow records to log to file. The provided filters are OR-ed
+      # to determine whether a specific flow should be logged.
+      filters:
+        []
+
+      # PrettyPrint enables conversion of some numeric fields to a more meaningful string
+      # representation.
+      prettyPrint: true
 kind: ConfigMap
 metadata:
   labels:

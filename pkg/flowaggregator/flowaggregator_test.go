@@ -59,8 +59,6 @@ func init() {
 
 func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
@@ -191,6 +189,10 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 				Enable:     true,
 				BucketName: "test-bucket-name",
 			},
+			FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+				Enable: true,
+				Path:   "/tmp/antrea-flows.log",
+			},
 		},
 	}
 	wd, err := os.Getwd()
@@ -243,6 +245,8 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 		assert.Equal(t, opt.Config.ClickHouse.Enable, msg.Config.ClickHouse.Enable)
 		assert.Equal(t, opt.Config.S3Uploader.Enable, msg.Config.S3Uploader.Enable)
 		assert.Equal(t, opt.Config.S3Uploader.BucketName, msg.Config.S3Uploader.BucketName)
+		assert.Equal(t, opt.Config.FlowLogger.Enable, msg.Config.FlowLogger.Enable)
+		assert.Equal(t, opt.Config.FlowLogger.Path, msg.Config.FlowLogger.Path)
 	case <-time.After(5 * time.Second):
 		t.Errorf("Timeout while waiting for update")
 	}
@@ -252,18 +256,20 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 
 func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
+	mockLogExporter := exportertesting.NewMockInterface(ctrl)
 
 	newIPFIXExporterSaved := newIPFIXExporter
 	newClickHouseExporterSaved := newClickHouseExporter
 	newS3ExporterSaved := newS3Exporter
+	newLogExporterSaved := newLogExporter
 	defer func() {
 		newIPFIXExporter = newIPFIXExporterSaved
 		newClickHouseExporter = newClickHouseExporterSaved
 		newS3Exporter = newS3ExporterSaved
+		newLogExporter = newLogExporterSaved
 	}()
 	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
 		return mockIPFIXExporter
@@ -273,6 +279,9 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	}
 	newS3Exporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
 		return mockS3Exporter, nil
+	}
+	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
+		return mockLogExporter, nil
 	}
 
 	t.Run("updateIPFIX", func(t *testing.T) {
@@ -386,25 +395,68 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 		mockS3Exporter.EXPECT().UpdateOptions(opt)
 		flowAggregator.updateFlowAggregator(opt)
 	})
+	t.Run("enableFlowLogger", func(t *testing.T) {
+		flowAggregator := &flowAggregator{}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+					Enable: true,
+					Path:   "/tmp/antrea-flows.log",
+				},
+			},
+		}
+		mockLogExporter.EXPECT().Start()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("disableFlowLogger", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			s3Exporter: mockLogExporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+					Enable: false,
+				},
+			},
+		}
+		mockLogExporter.EXPECT().Stop()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("updateFlowLogger", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			logExporter: mockLogExporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+					Enable: true,
+					Path:   "/tmp/antrea-flows.log",
+				},
+			},
+		}
+		mockLogExporter.EXPECT().UpdateOptions(opt)
+		flowAggregator.updateFlowAggregator(opt)
+	})
 }
 
 func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
+	mockLogExporter := exportertesting.NewMockInterface(ctrl)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
 	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
 
 	newIPFIXExporterSaved := newIPFIXExporter
 	newClickHouseExporterSaved := newClickHouseExporter
 	newS3ExporterSaved := newS3Exporter
+	newLogExporterSaved := newLogExporter
 	defer func() {
 		newIPFIXExporter = newIPFIXExporterSaved
 		newClickHouseExporter = newClickHouseExporterSaved
 		newS3Exporter = newS3ExporterSaved
+		newLogExporter = newLogExporterSaved
 	}()
 	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
 		return mockIPFIXExporter
@@ -414,6 +466,9 @@ func TestFlowAggregator_Run(t *testing.T) {
 	}
 	newS3Exporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
 		return mockS3Exporter, nil
+	}
+	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
+		return mockLogExporter, nil
 	}
 
 	// create dummy watcher: we will not add any files or directory to it.
@@ -453,6 +508,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockIPFIXExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 	mockClickHouseExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 	mockS3Exporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+	mockLogExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 
 	stopCh := make(chan struct{})
 	var wg sync.WaitGroup
@@ -504,6 +560,20 @@ func TestFlowAggregator_Run(t *testing.T) {
 			},
 		},
 	}
+	enableFlowLoggerOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+				Enable: true,
+			},
+		},
+	}
+	disableFlowLoggerOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+				Enable: false,
+			},
+		},
+	}
 
 	mockIPFIXExporter.EXPECT().Start().Times(2)
 	mockIPFIXExporter.EXPECT().Stop().Times(2)
@@ -511,6 +581,8 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockClickHouseExporter.EXPECT().Stop()
 	mockS3Exporter.EXPECT().Start()
 	mockS3Exporter.EXPECT().Stop()
+	mockLogExporter.EXPECT().Start()
+	mockLogExporter.EXPECT().Stop()
 
 	// we do a few operations: the main purpose is to ensure that cleanup
 	// (i.e., stopping the exporters) is done properly. This sequence of
@@ -521,13 +593,17 @@ func TestFlowAggregator_Run(t *testing.T) {
 	// 4. The ClickHouseExporter is then disabled, so we expect a call to mockClickHouseExporter.Stop()
 	// 5. The S3Uploader is then enabled, so we expect a call to mockS3Exporter.Start()
 	// 6. The S3Uploader is then disabled, so we expect a call to mockS3Exporter.Stop()
-	// 7. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
-	// 8. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
+	// 7. The FlowLogger is then enabled, so we expect a call to mockLogExporter.Start()
+	// 8. The FlowLogger is then disabled, so we expect a call to mockLogExporter.Stop()
+	// 9. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
+	// 10. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
 	updateOptions(disableIPFIXOptions)
 	updateOptions(enableClickHouseOptions)
 	updateOptions(disableClickHouseOptions)
 	updateOptions(enableS3UploaderOptions)
 	updateOptions(disableS3UploaderOptions)
+	updateOptions(enableFlowLoggerOptions)
+	updateOptions(disableFlowLoggerOptions)
 	updateOptions(enableIPFIXOptions)
 
 	close(stopCh)

@@ -15,6 +15,8 @@
 package flowaggregator
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"antrea.io/antrea/pkg/apis"
@@ -27,15 +29,21 @@ const (
 	DefaultInactiveFlowRecordTimeout      = "90s"
 	DefaultAggregatorTransportProtocol    = "TLS"
 	DefaultRecordFormat                   = "IPFIX"
-	DefaultClickHouseDatabase             = "default"
-	DefaultClickHouseCommitInterval       = "8s"
-	MinClickHouseCommitInterval           = 1 * time.Second
-	DefaultClickHouseDatabaseUrl          = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
-	DefaultS3Region                       = "us-west-2"
-	DefaultS3RecordFormat                 = "CSV"
-	DefaultS3MaxRecordsPerFile            = 1000000
-	DefaultS3UploadInterval               = "60s"
-	MinS3CommitInterval                   = 1 * time.Second
+
+	DefaultClickHouseDatabase       = "default"
+	DefaultClickHouseCommitInterval = "8s"
+	MinClickHouseCommitInterval     = 1 * time.Second
+	DefaultClickHouseDatabaseUrl    = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
+
+	DefaultS3Region            = "us-west-2"
+	DefaultS3RecordFormat      = "CSV"
+	DefaultS3MaxRecordsPerFile = 1000000
+	DefaultS3UploadInterval    = "60s"
+	MinS3CommitInterval        = 1 * time.Second
+
+	DefaultLoggerMaxSize      = 100
+	DefaultLoggerMaxBackups   = 3
+	DefaultLoggerRecordFormat = "CSV"
 )
 
 func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
@@ -79,5 +87,25 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	}
 	if flowAggregatorConf.S3Uploader.UploadInterval == "" {
 		flowAggregatorConf.S3Uploader.UploadInterval = DefaultS3UploadInterval
+	}
+	if flowAggregatorConf.FlowLogger.Path == "" {
+		flowAggregatorConf.FlowLogger.Path = filepath.Join(os.TempDir(), "antrea-flows.log")
+	}
+	if flowAggregatorConf.FlowLogger.MaxSize == 0 {
+		flowAggregatorConf.FlowLogger.MaxSize = DefaultLoggerMaxSize
+	}
+	if flowAggregatorConf.FlowLogger.MaxBackups == 0 {
+		flowAggregatorConf.FlowLogger.MaxBackups = DefaultLoggerMaxBackups
+	}
+	if flowAggregatorConf.FlowLogger.Compress == nil {
+		flowAggregatorConf.FlowLogger.Compress = new(bool)
+		*flowAggregatorConf.FlowLogger.Compress = true
+	}
+	if flowAggregatorConf.FlowLogger.RecordFormat == "" {
+		flowAggregatorConf.FlowLogger.RecordFormat = DefaultLoggerRecordFormat
+	}
+	if flowAggregatorConf.FlowLogger.PrettyPrint == nil {
+		flowAggregatorConf.FlowLogger.PrettyPrint = new(bool)
+		*flowAggregatorConf.FlowLogger.PrettyPrint = true
 	}
 }
