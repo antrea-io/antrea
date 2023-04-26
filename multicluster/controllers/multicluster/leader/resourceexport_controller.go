@@ -444,7 +444,7 @@ func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1al
 				Type:               mcsv1alpha1.ResourceExportFailure,
 				Status:             corev1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "converge_failure",
+				Reason:             "ConvergeFailure",
 				Message:            "ResourceExport can't be converged to ResourceImport",
 			},
 		}
