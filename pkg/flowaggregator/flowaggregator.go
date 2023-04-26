@@ -99,6 +99,9 @@ var (
 	newS3Exporter = func(k8sClient kubernetes.Interface, opt *options.Options) (exporter.Interface, error) {
 		return exporter.NewS3Exporter(k8sClient, opt)
 	}
+	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
+		return exporter.NewLogExporter(opt)
+	}
 )
 
 type flowAggregator struct {
@@ -121,6 +124,7 @@ type flowAggregator struct {
 	ipfixExporter               exporter.Interface
 	clickHouseExporter          exporter.Interface
 	s3Exporter                  exporter.Interface
+	logExporter                 exporter.Interface
 	logTickerDuration           time.Duration
 }
 
@@ -192,6 +196,13 @@ func NewFlowAggregator(
 		fa.s3Exporter, err = newS3Exporter(k8sClient, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating S3 export process: %v", err)
+		}
+	}
+	if opt.Config.FlowLogger.Enable {
+		var err error
+		fa.logExporter, err = newLogExporter(opt)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating log export process: %v", err)
 		}
 	}
 	if opt.Config.FlowCollector.Enable {
@@ -298,6 +309,9 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	if fa.s3Exporter != nil {
 		fa.s3Exporter.Start()
 	}
+	if fa.logExporter != nil {
+		fa.logExporter.Start()
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -344,6 +358,9 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 		}
 		if fa.s3Exporter != nil {
 			fa.s3Exporter.Stop()
+		}
+		if fa.logExporter != nil {
+			fa.logExporter.Stop()
 		}
 	}()
 	updateCh := fa.updateCh
@@ -403,6 +420,11 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	}
 	if fa.s3Exporter != nil {
 		if err := fa.s3Exporter.AddRecord(record.Record, !isRecordIPv4); err != nil {
+			return err
+		}
+	}
+	if fa.logExporter != nil {
+		if err := fa.logExporter.AddRecord(record.Record, !isRecordIPv4); err != nil {
 			return err
 		}
 	}
@@ -635,6 +657,28 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			fa.s3Exporter.Stop()
 			fa.s3Exporter = nil
 			klog.InfoS("Disabled S3Uploader")
+		}
+	}
+	if opt.Config.FlowLogger.Enable {
+		if fa.logExporter == nil {
+			klog.InfoS("Enabling FlowLogger")
+			var err error
+			fa.logExporter, err = newLogExporter(opt)
+			if err != nil {
+				klog.ErrorS(err, "Error when creating log export process")
+				return
+			}
+			fa.logExporter.Start()
+			klog.InfoS("Enabled FlowLogger")
+		} else {
+			fa.logExporter.UpdateOptions(opt)
+		}
+	} else {
+		if fa.logExporter != nil {
+			klog.InfoS("Disabling FlowLogger")
+			fa.logExporter.Stop()
+			fa.logExporter = nil
+			klog.InfoS("Disabled FlowLogger")
 		}
 	}
 }

@@ -57,7 +57,7 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 	if opt.Config.S3Uploader.Enable && opt.Config.S3Uploader.BucketName == "" {
 		return nil, fmt.Errorf("s3Uploader enabled without specifying bucket name")
 	}
-	if !opt.Config.FlowCollector.Enable && !opt.Config.ClickHouse.Enable && !opt.Config.S3Uploader.Enable {
+	if !opt.Config.FlowCollector.Enable && !opt.Config.ClickHouse.Enable && !opt.Config.S3Uploader.Enable && !opt.Config.FlowLogger.Enable {
 		return nil, fmt.Errorf("external flow collector or ClickHouse or S3Uploader should be configured")
 	}
 	// Validate common parameters
@@ -112,6 +112,12 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		if opt.S3UploadInterval < flowaggregatorconfig.MinS3CommitInterval {
 			return nil, fmt.Errorf("uploadInterval %s is too small: shortest supported interval is %v",
 				opt.Config.S3Uploader.UploadInterval, flowaggregatorconfig.MinS3CommitInterval)
+		}
+	}
+	// Validate FlowLogger specific parameters
+	if opt.Config.FlowLogger.Enable {
+		if opt.Config.FlowLogger.RecordFormat != "CSV" {
+			return nil, fmt.Errorf("record format %s is not supported", opt.Config.FlowLogger.RecordFormat)
 		}
 	}
 	return &opt, nil
