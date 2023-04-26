@@ -1874,8 +1874,12 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	groupIDLocal := fp.groupCounter.AllocateIfNotExist(svcPortName, true)
 
+	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
+	mockRouteClient.EXPECT().DeleteClusterIPRoute(svcIP).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedLocalEps)).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDLocal, false, expectedLocalEps).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDLocal, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP).Times(1)
+	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	fp.syncProxyRules()
 }
 
@@ -2026,15 +2030,25 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T,
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, true, expectedEps).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeClusterIP).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
-
+	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
+	mockRouteClient.EXPECT().DeleteClusterIPRoute(svcIP).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(updatedAffinitySeconds), false, corev1.ServiceTypeClusterIP).Times(1)
+	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeNodePort).Times(1)
 		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+		mockOFClient.EXPECT().UninstallServiceFlows(vIP, uint16(svcNodePort), bindingProtocol).Times(1)
+		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, vIP, uint16(svcNodePort), bindingProtocol, uint16(updatedAffinitySeconds), false, corev1.ServiceTypeNodePort).Times(1)
+		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(affinitySeconds), false, corev1.ServiceTypeLoadBalancer).Times(1)
+		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), bindingProtocol).Times(1)
+		mockRouteClient.EXPECT().DeleteLoadBalancer(loadBalancerIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(updatedAffinitySeconds), false, corev1.ServiceTypeLoadBalancer).Times(1)
 		mockRouteClient.EXPECT().AddLoadBalancer(loadBalancerIP).Times(1)
 	}
 

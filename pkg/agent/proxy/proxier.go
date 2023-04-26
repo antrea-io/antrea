@@ -272,9 +272,7 @@ func (p *proxier) removeStaleEndpoints() {
 func serviceIdentityChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
 	return svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
 		svcInfo.Port() != pSvcInfo.Port() ||
-		svcInfo.OFProtocol != pSvcInfo.OFProtocol ||
-		svcInfo.NodePort() != pSvcInfo.NodePort() ||
-		svcInfo.NodeLocalExternal() != pSvcInfo.NodeLocalExternal()
+		svcInfo.OFProtocol != pSvcInfo.OFProtocol
 }
 
 // smallSliceDifference builds a slice which includes all the strings from s1
@@ -419,8 +417,13 @@ func (p *proxier) installServices() {
 		var needRemoval, needUpdateService, needUpdateEndpoints bool
 		if ok { // Need to update.
 			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
-			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) || (svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType())
-			needUpdateService = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
+			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) ||
+				svcInfo.NodePort() != pSvcInfo.NodePort() ||
+				svcInfo.NodeLocalExternal() != pSvcInfo.NodeLocalExternal() ||
+				svcInfo.NodeLocalInternal() != pSvcInfo.NodeLocalInternal() ||
+				svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType() ||
+				svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds()
+			needUpdateService = needRemoval
 			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
 				pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal() ||
 				pSvcInfo.NodeLocalInternal() != svcInfo.NodeLocalInternal()
