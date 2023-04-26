@@ -564,6 +564,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	r := newLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", ca)
 
 	stopCh := make(chan struct{})
+	defer close(stopCh)
 	q := workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter())
 	numInitialResImp := 50
 	for i := 1; i <= numInitialResImp; i++ {
@@ -596,6 +597,6 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	actLabelIdentities := &mcsv1alpha1.LabelIdentityList{}
 	err := fakeClient.List(ctx, actLabelIdentities)
 	assert.NoError(t, err)
-	// Verify that no label identities are deleted as part of the cleanup.
+	// Verify that no LabelIdentities are deleted as part of the cleanup.
 	assert.Equal(t, numInitialResImp, len(actLabelIdentities.Items))
 }
