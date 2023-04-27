@@ -1,0 +1,68 @@
+# Copyright 2022 Antrea Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2019 as downloader
+ADD https://aka.ms/vs/17/release/vc_redist.x64.exe /
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2019
+# Set working directory
+WORKDIR c:\\
+
+# Switch to a privileged user
+USER ContainerAdministrator
+
+COPY --from=downloader /vc_redist.x64.exe /
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Run the installation in PowerShell
+
+RUN powershell -Command "Start-Process -FilePath C:\vc_redist.x64.exe -ArgumentList ‘/install’,’/quiet’,’/norestart’ -Verb RunAs -Wait"
+
+# Download and extract Open vSwitch
+ADD https://downloads.antrea.io/ovs/ovs-2.15.2-antrea.0-win64.zip .
+RUN powershell -Command Expand-Archive ovs-2.15.2-antrea.0-win64.zip -DestinationPath .
+
+# Set environment variables
+ENV OVS_DIR=c:\\openvswitch
+
+# Download and extract OpenSSL
+
+ADD https://indy.fulgan.com/SSL/openssl-1.0.2u-x64_86-win64.zip .
+RUN powershell -Command Expand-Archive openssl-1.0.2u-x64_86-win64.zip -DestinationPath .
+
+RUN powershell -Command Copy-Item -Path libeay32.dll -Destination $env:OVS_DIR/usr/sbin/
+RUN powershell -Command Move-Item -Path libeay32.dll -Destination $env:OVS_DIR/usr/bin/
+RUN powershell -Command Copy-Item -Path ssleay32.dll -Destination $env:OVS_DIR/usr/sbin/
+RUN powershell -Command Move-Item -Path ssleay32.dll -Destination $env:OVS_DIR/usr/bin/
+RUN powershell -Command mkdir -p $env:OVS_DIR/var/log/openvswitch
+RUN powershell -Command mkdir -p $env:OVS_DIR/var/run/openvswitch
+
+# Set OVS database schema and path
+
+ENV OVS_DB_SCHEMA_PATH="$OVS_DIR\usr\share\openvswitch\vswitch.ovsschema"
+ENV OVS_DB_PATH="$OVS_DIR\etc\openvswitch\conf.db"
+
+# Create ovsdb config file
+CMD ["powershell", "-Command", “./$OVS_DIR\usr\bin\ovsdb-tool.exe create \"OVS_DB_PATH\" \"OVS_DB_SCHEMA_PATH\""]
+
+# Expose OVS management interface
+EXPOSE 6640
+
+# Start ovsdb-server and ovs-vswitchd
+CMD ["powershell", "-Command", "C:\\openvswitch\\usr\\sbin\\ovsdb-server.exe C:\\openvswitch\\etc\\openvswitch\\conf.db -vfile:info --remote=punix:db.sock --remote=ptcp:6640 --log-file --pidfile --detach"]
+CMD ["powershell", "-Command", "C:\\openvswitch\\usr\\sbin\\ovs-vswitchd.exe --pidfile -vfile:info --log-file --detach"]
+
+# Switch back to a non-privileged user
+USER ContainerUser
