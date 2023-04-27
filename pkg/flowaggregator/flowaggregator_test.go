@@ -441,6 +441,7 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 
 func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
@@ -501,6 +502,16 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockCollectingProcess.EXPECT().Stop()
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
+
+	// Mock expectations determined by sequence of updateOptions operations below.
+	mockIPFIXExporter.EXPECT().Start().Times(2)
+	mockIPFIXExporter.EXPECT().Stop().Times(2)
+	mockClickHouseExporter.EXPECT().Start()
+	mockClickHouseExporter.EXPECT().Stop()
+	mockS3Exporter.EXPECT().Start()
+	mockS3Exporter.EXPECT().Stop()
+	mockLogExporter.EXPECT().Start()
+	mockLogExporter.EXPECT().Stop()
 
 	// this is not really relevant; but in practice there will be one call
 	// to mockClickHouseExporter.UpdateOptions because of the hack used to
@@ -575,18 +586,8 @@ func TestFlowAggregator_Run(t *testing.T) {
 		},
 	}
 
-	mockIPFIXExporter.EXPECT().Start().Times(2)
-	mockIPFIXExporter.EXPECT().Stop().Times(2)
-	mockClickHouseExporter.EXPECT().Start()
-	mockClickHouseExporter.EXPECT().Stop()
-	mockS3Exporter.EXPECT().Start()
-	mockS3Exporter.EXPECT().Stop()
-	mockLogExporter.EXPECT().Start()
-	mockLogExporter.EXPECT().Stop()
-
 	// we do a few operations: the main purpose is to ensure that cleanup
-	// (i.e., stopping the exporters) is done properly. This sequence of
-	// updates determines the mock expectations above.
+	// (i.e., stopping the exporters) is done properly.
 	// 1. The IPFIXExporter is enabled on start, so we expect a call to mockIPFIXExporter.Start()
 	// 2. The IPFIXExporter is then disabled, so we expect a call to mockIPFIXExporter.Stop()
 	// 3. The ClickHouseExporter is then enabled, so we expect a call to mockClickHouseExporter.Start()
