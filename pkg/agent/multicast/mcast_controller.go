@@ -131,7 +131,7 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 	newStatus := &GroupMemberStatus{
 		group:          status.group,
 		localMembers:   make(map[string]time.Time),
-		remoteMembers:  status.remoteMembers,
+		remoteMembers:  status.remoteMembers.Union(nil),
 		lastIGMPReport: status.lastIGMPReport,
 		ofGroupID:      status.ofGroupID,
 	}
@@ -559,10 +559,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 func (c *Controller) groupIsStale(status *GroupMemberStatus) bool {
 	membersCount := len(status.localMembers)
 	diff := time.Now().Sub(status.lastIGMPReport)
-	if membersCount == 0 || diff > c.mcastGroupTimeout {
-		return true
-	}
-	return false
+	return membersCount == 0 || diff > c.mcastGroupTimeout
 }
 
 func (c *Controller) groupHasInstalled(groupKey string) bool {
