@@ -115,22 +115,28 @@ func init() {
 	}
 }
 
-func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
+var getRestClient func(cmd *cobra.Command) (rest.Interface, error) = setupRestClient
+
+func setupRestClient(cmd *cobra.Command) (rest.Interface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	kubeconfig.APIPath = "/apis"
 	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
 	raw.SetupKubeconfig(kubeconfig)
 	client, err := rest.RESTClientFor(kubeconfig)
+	return client, err
+}
+func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer) error {
+	client, err := getRestClient(cmd)
 	if err != nil {
 		return fmt.Errorf("error when creating rest client: %w", err)
 	}
 	_, err = client.Post().
 		Resource("supportbundles").
 		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: mode}}).
-		DoRaw(context.TODO())
+		DoRaw(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("error when requesting the agent support bundle: %w", err)
 	}
@@ -139,14 +145,14 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
 		err := client.Get().
 			Resource("supportbundles").
 			Name(mode).
-			Do(context.TODO()).
+			Do(cmd.Context()).
 			Into(&supportBundle)
 		if err != nil {
 			return fmt.Errorf("error when requesting the agent support bundle: %w", err)
 		}
 		if supportBundle.Status == systemv1beta1.SupportBundleStatusCollected {
-			fmt.Printf("Created bundle under %s\n", os.TempDir())
-			fmt.Printf("Expire time: %s\n", supportBundle.DeletionTimestamp)
+			fmt.Fprintf(writer, "Created bundle under %s\n", os.TempDir())
+			fmt.Fprintf(writer, "Expire time: %s\n", supportBundle.DeletionTimestamp)
 			break
 		}
 	}
@@ -155,14 +161,14 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
 }
 
 func agentRunE(cmd *cobra.Command, _ []string) error {
-	return localSupportBundleRequest(cmd, runtime.ModeAgent)
+	return localSupportBundleRequest(cmd, runtime.ModeAgent, os.Stdout)
 }
 
 func controllerLocalRunE(cmd *cobra.Command, _ []string) error {
-	return localSupportBundleRequest(cmd, runtime.ModeController)
+	return localSupportBundleRequest(cmd, runtime.ModeController, os.Stdout)
 }
 
-func request(component string, client *rest.RESTClient) error {
+func request(component string, client rest.Interface) error {
 	var err error
 	_, err = client.Post().
 		Resource("supportbundles").
@@ -179,7 +185,7 @@ type result struct {
 	err      error
 }
 
-func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) map[string]error {
+func mapClients(prefix string, agentClients map[string]rest.Interface, controllerClient rest.Interface, bar *pb.ProgressBar, af, cf func(nodeName string, c rest.Interface) error) map[string]error {
 	bar.Set("prefix", prefix)
 	rateLimiter := rate.NewLimiter(requestRate, requestBurst)
 	ch := make(chan result)
@@ -210,22 +216,22 @@ func mapClients(prefix string, agentClients map[string]*rest.RESTClient, control
 	return results
 }
 
-func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) map[string]error {
+func requestAll(agentClients map[string]rest.Interface, controllerClient rest.Interface, bar *pb.ProgressBar) map[string]error {
 	return mapClients(
 		"Requesting",
 		agentClients,
 		controllerClient,
 		bar,
-		func(nodeName string, c *rest.RESTClient) error {
+		func(nodeName string, c rest.Interface) error {
 			return request(runtime.ModeAgent, c)
 		},
-		func(nodeName string, c *rest.RESTClient) error {
+		func(nodeName string, c rest.Interface) error {
 			return request(runtime.ModeController, c)
 		},
 	)
 }
 
-func download(suffix, downloadPath string, client *rest.RESTClient, component string) error {
+func download(suffix, downloadPath string, client rest.Interface, component string) error {
 	for {
 		var supportBundle systemv1beta1.SupportBundle
 		err := client.Get().Resource("supportbundles").Name(component).Do(context.TODO()).Into(&supportBundle)
@@ -286,20 +292,20 @@ func writeFailedNodes(downloadPath string, nodes []string) error {
 
 // downloadAll will download all supportBundles. preResults is the request results of node/controller supportBundle.
 // if err happens for some nodes or controller, the download step will be skipped for the failed nodes or the controller.
-func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar, preResults map[string]error) map[string]error {
+func downloadAll(agentClients map[string]rest.Interface, controllerClient rest.Interface, downloadPath string, bar *pb.ProgressBar, preResults map[string]error) map[string]error {
 	results := mapClients(
 		"Downloading",
 		agentClients,
 		controllerClient,
 		bar,
-		func(nodeName string, c *rest.RESTClient) error {
+		func(nodeName string, c rest.Interface) error {
 			if preResults[nodeName] == nil {
 				return download(nodeName, downloadPath, c, runtime.ModeAgent)
 			}
 			return preResults[nodeName]
 
 		},
-		func(nodeName string, c *rest.RESTClient) error {
+		func(nodeName string, c rest.Interface) error {
 			if preResults[""] == nil {
 				return download("", downloadPath, c, runtime.ModeController)
 			}
@@ -315,8 +321,8 @@ func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *res
 }
 
 // createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
-func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string, nameList []string) (map[string]*rest.RESTClient, error) {
-	clients := map[string]*rest.RESTClient{}
+func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string, nameList []string) (map[string]rest.Interface, error) {
+	clients := map[string]rest.Interface{}
 	nodeAgentInfoMap := map[string]string{}
 	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
@@ -377,20 +383,20 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 	return clients, nil
 }
 
-func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.RESTClient, error) {
-	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
+func createControllerClient(ctx context.Context, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (rest.Interface, error) {
+	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(ctx, "antrea-controller", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(context.TODO(), controllerInfo.NodeRef.Name, metav1.GetOptions{})
+	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(ctx, controllerInfo.NodeRef.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
 	var controllerNodeIPs *ip.DualStackIPs
 	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
 	if err != nil {
-		return nil, fmt.Errorf("error when parsing controllre IP: %w", err)
+		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
 	}
 
 	cfg := rest.CopyConfig(cfgTmpl)
@@ -403,7 +409,7 @@ func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset a
 	cfg.Host = net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort))
 	controllerClient, err := rest.RESTClientFor(cfg)
 	if err != nil {
-		klog.Warningf("Error when creating controller client for node: %s", controllerInfo.NodeRef.Name)
+		klog.InfoS("Error when creating controller client for Node", "nodeName", controllerInfo.NodeRef.Name)
 	}
 	return controllerClient, nil
 }
@@ -507,6 +513,7 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 }
 
 func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	if option.dir == "" {
 		cwd, _ := os.Getwd()
 		option.dir = filepath.Join(cwd, "support-bundles_"+time.Now().Format(timeFormat))
@@ -533,13 +540,13 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	var controllerClient *rest.RESTClient
-	var agentClients map[string]*rest.RESTClient
+	var controllerClient rest.Interface
+	var agentClients map[string]rest.Interface
 
 	// Collect controller bundle when no Node name or label filter is specified, or
 	// when --controller-only is set.
 	if (len(args) == 0 && len(option.nodeListFile) == 0 && option.labelSelector == "") || option.controllerOnly {
-		controllerClient, err = createControllerClient(k8sClientset, antreaClientset, restconfigTmpl)
+		controllerClient, err = createControllerClient(ctx, k8sClientset, antreaClientset, restconfigTmpl)
 		if err != nil {
 			return fmt.Errorf("error when creating controller client: %w", err)
 		}
