@@ -2259,7 +2259,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -2284,7 +2284,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -2350,7 +2350,7 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 
 		for _, tc := range testcases {
 			log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
-			connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+			connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 			if err != nil {
 				t.Errorf("Failure -- could not complete probe: %v", err)
 			}
@@ -2576,7 +2576,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil)
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil, nil)
 		}()
 	}
 	oneProbe(namespaces["x"], "a", namespaces["z"], "a")
@@ -2624,7 +2624,7 @@ func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil)
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil, nil)
 		}()
 	}
 	oneProbe(namespaces["x"], "b", namespaces["x"], "a")
@@ -3203,7 +3203,7 @@ func testFQDNPolicy(t *testing.T) {
 	failOnError(waitForResourceReady(t, timeout, acnp), t)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3294,7 +3294,7 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3342,7 +3342,7 @@ func testFQDNPolicyTCP(t *testing.T) {
 			continue
 		}
 		log.Tracef("Probing: %s -> %s(%s)", tc.clientPod.PodName(), tc.destAddr, destIP)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), destIP, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), destIP, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3413,7 +3413,7 @@ func testToServices(t *testing.T) {
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3500,7 +3500,7 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3562,7 +3562,7 @@ func testACNPNodeSelectorEgress(t *testing.T) {
 	time.Sleep(networkPolicyDelay)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3637,7 +3637,7 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -3709,7 +3709,7 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolICMP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolICMP, &tc.expectedConnectivity)
 		if err != nil {
 			t.Errorf("Failure -- could not complete probe: %v", err)
 		}
@@ -4097,7 +4097,7 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol AntreaPolicy
 	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
 	defer dstPodCleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol, nil)
+	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol, nil, &p.ExpectConnectivity)
 	if err != nil {
 		t.Errorf("Failure -- could not complete probe: %v", err)
 	}
