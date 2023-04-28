@@ -13,6 +13,7 @@ on:
 jobs:
   update-website:
     name: Trigger website update for main
+    if: github.repository == 'antrea-io/antrea'
     runs-on: ubuntu-latest
     steps:
     - name: Update website source
