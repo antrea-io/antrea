@@ -106,42 +106,66 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember() error {
 	if err != nil {
 		return err
 	}
-
+	svcImpList := &k8smcsv1alpha1.ServiceImportList{}
+	if err := c.List(context.Background(), svcImpList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	svcList := &corev1.ServiceList{}
+	if err := c.List(context.Background(), svcList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	acnpList := &crdv1alpha1.ClusterNetworkPolicyList{}
+	if err := c.List(context.Background(), acnpList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	ciImpList := &mcsv1alpha1.ClusterInfoImportList{}
+	if err := c.List(context.Background(), ciImpList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	labelIdentityList := &mcsv1alpha1.LabelIdentityList{}
+	if err := c.List(context.Background(), labelIdentityList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	// All previously imported resources need to be listed before ResourceImports are listed.
+	// This prevents race condition between stale_controller and other reconcilers.
+	// See https://github.com/antrea-io/antrea/issues/4854
 	resImpList := &mcsv1alpha1.ResourceImportList{}
 	if err := commonArea.List(context.Background(), resImpList, &client.ListOptions{Namespace: commonArea.GetNamespace()}); err != nil {
 		return err
 	}
-	if err := c.cleanupStaleServiceResources(commonArea, resImpList); err != nil {
+	// Clean up any imported Services that do not have corresponding ResourceImport anymore
+	if err := c.cleanupStaleServiceResources(svcImpList, svcList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported Services")
 		return err
 	}
-	// Cleanup any imported ACNPs that do not have corresponding ResourceImport anymore
-	if err := c.cleanupACNPResources(resImpList); err != nil {
+	// Clean up any imported ACNPs that do not have corresponding ResourceImport anymore
+	if err := c.cleanupACNPResources(acnpList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported ACNPs")
 		return err
 	}
-	if err := c.cleanupClusterInfoImport(resImpList); err != nil {
+	// Clean up any imported ClusterInfos that do not have corresponding ResourceImport anymore
+	if err := c.cleanupClusterInfoImport(ciImpList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale ClusterInfoImports")
 		return err
 	}
-	if err := c.cleanupLabelIdentities(resImpList); err != nil {
+	// Clean up any imported LabelIdentities that do not have corresponding ResourceImport anymore
+	if err := c.cleanupLabelIdentities(labelIdentityList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported LabelIdentities")
 		return err
 	}
 
 	// Clean up stale ResourceExports in the leader cluster.
+	if err := c.cleanupClusterInfoResourceExport(commonArea); err != nil {
+		return err
+	}
 	resExpList := &mcsv1alpha1.ResourceExportList{}
 	if err := commonArea.List(context.Background(), resExpList, &client.ListOptions{Namespace: commonArea.GetNamespace()}); err != nil {
 		return err
 	}
-
 	if len(resExpList.Items) == 0 {
 		return nil
 	}
 	if err := c.cleanupServiceResourceExport(commonArea, resExpList); err != nil {
-		return err
-	}
-	if err := c.cleanupClusterInfoResourceExport(commonArea, resExpList); err != nil {
 		return err
 	}
 	if err := c.cleanupLabelIdentityResourceExport(commonArea, resExpList); err != nil {
@@ -150,18 +174,8 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember() error {
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupStaleServiceResources(commonArea commonarea.RemoteCommonArea,
-	resImpList *mcsv1alpha1.ResourceImportList) error {
-	svcImpList := &k8smcsv1alpha1.ServiceImportList{}
-	if err := c.List(context.Background(), svcImpList, &client.ListOptions{}); err != nil {
-		return err
-	}
-
-	svcList := &corev1.ServiceList{}
-	if err := c.List(context.Background(), svcList, &client.ListOptions{}); err != nil {
-		return err
-	}
-
+func (c *StaleResCleanupController) cleanupStaleServiceResources(svcImpList *k8smcsv1alpha1.ServiceImportList,
+	svcList *corev1.ServiceList, resImpList *mcsv1alpha1.ResourceImportList) error {
 	svcImpItems := map[string]k8smcsv1alpha1.ServiceImport{}
 	for _, svcImp := range svcImpList.Items {
 		svcImpItems[svcImp.Namespace+"/"+svcImp.Name] = svcImp
@@ -173,7 +187,6 @@ func (c *StaleResCleanupController) cleanupStaleServiceResources(commonArea comm
 			mcsSvcItems[svc.Namespace+"/"+svc.Name] = svc
 		}
 	}
-
 	for _, resImp := range resImpList.Items {
 		if resImp.Spec.Kind == constants.ServiceImportKind {
 			delete(mcsSvcItems, resImp.Spec.Namespace+"/"+common.AntreaMCSPrefix+resImp.Spec.Name)
@@ -198,11 +211,8 @@ func (c *StaleResCleanupController) cleanupStaleServiceResources(commonArea comm
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupACNPResources(resImpList *mcsv1alpha1.ResourceImportList) error {
-	acnpList := &crdv1alpha1.ClusterNetworkPolicyList{}
-	if err := c.List(context.Background(), acnpList, &client.ListOptions{}); err != nil {
-		return err
-	}
+func (c *StaleResCleanupController) cleanupACNPResources(acnpList *crdv1alpha1.ClusterNetworkPolicyList,
+	resImpList *mcsv1alpha1.ResourceImportList) error {
 	staleMCACNPItems := map[string]crdv1alpha1.ClusterNetworkPolicy{}
 	for _, acnp := range acnpList.Items {
 		if _, ok := acnp.Annotations[common.AntreaMCACNPAnnotation]; ok {
@@ -225,12 +235,8 @@ func (c *StaleResCleanupController) cleanupACNPResources(resImpList *mcsv1alpha1
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupClusterInfoImport(resImpList *mcsv1alpha1.ResourceImportList) error {
-	ciImpList := &mcsv1alpha1.ClusterInfoImportList{}
-	if err := c.List(context.Background(), ciImpList, &client.ListOptions{}); err != nil {
-		return err
-	}
-
+func (c *StaleResCleanupController) cleanupClusterInfoImport(ciImpList *mcsv1alpha1.ClusterInfoImportList,
+	resImpList *mcsv1alpha1.ResourceImportList) error {
 	staleCIImps := map[string]mcsv1alpha1.ClusterInfoImport{}
 	for _, item := range ciImpList.Items {
 		staleCIImps[item.Name] = item
@@ -250,11 +256,8 @@ func (c *StaleResCleanupController) cleanupClusterInfoImport(resImpList *mcsv1al
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupLabelIdentities(resImpList *mcsv1alpha1.ResourceImportList) error {
-	labelIdentityList := &mcsv1alpha1.LabelIdentityList{}
-	if err := c.List(context.Background(), labelIdentityList, &client.ListOptions{}); err != nil {
-		return err
-	}
+func (c *StaleResCleanupController) cleanupLabelIdentities(labelIdentityList *mcsv1alpha1.LabelIdentityList,
+	resImpList *mcsv1alpha1.ResourceImportList) error {
 	staleLabelIdentities := map[string]mcsv1alpha1.LabelIdentity{}
 	for _, labelIdentityObj := range labelIdentityList.Items {
 		staleLabelIdentities[labelIdentityObj.Name] = labelIdentityObj
@@ -274,8 +277,7 @@ func (c *StaleResCleanupController) cleanupLabelIdentities(resImpList *mcsv1alph
 
 // cleanupServiceResourceExport removes any Service/Endpoint kind of ResourceExports when there is no
 // corresponding ServiceExport in the local cluster.
-func (c *StaleResCleanupController) cleanupServiceResourceExport(commonArea commonarea.RemoteCommonArea,
-	resExpList *mcsv1alpha1.ResourceExportList) error {
+func (c *StaleResCleanupController) cleanupServiceResourceExport(commonArea commonarea.RemoteCommonArea, resExpList *mcsv1alpha1.ResourceExportList) error {
 	svcExpList := &k8smcsv1alpha1.ServiceExportList{}
 	if err := c.List(context.Background(), svcExpList, &client.ListOptions{}); err != nil {
 		return err
@@ -308,8 +310,7 @@ func (c *StaleResCleanupController) cleanupServiceResourceExport(commonArea comm
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(commonArea commonarea.RemoteCommonArea,
-	resExpList *mcsv1alpha1.ResourceExportList) error {
+func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(commonArea commonarea.RemoteCommonArea, resExpList *mcsv1alpha1.ResourceExportList) error {
 	podList, nsList := &corev1.PodList{}, &corev1.NamespaceList{}
 	if err := c.List(context.Background(), podList, &client.ListOptions{}); err != nil {
 		return err
@@ -353,8 +354,7 @@ func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(commonAre
 
 // cleanupClusterInfoResourceExport removes any ClusterInfo kind of ResourceExports when there is no
 // Gateway in the local cluster.
-func (c *StaleResCleanupController) cleanupClusterInfoResourceExport(commonArea commonarea.RemoteCommonArea,
-	resExpList *mcsv1alpha1.ResourceExportList) error {
+func (c *StaleResCleanupController) cleanupClusterInfoResourceExport(commonArea commonarea.RemoteCommonArea) error {
 	var gws mcsv1alpha1.GatewayList
 	if err := c.Client.List(context.Background(), &gws, &client.ListOptions{}); err != nil {
 		return err
@@ -441,7 +441,7 @@ func (c *StaleResCleanupController) processNextWorkItem() bool {
 		return true
 	}
 
-	klog.ErrorS(err, "Error removing stale resources, requeuing it")
+	klog.ErrorS(err, "Error removing stale resources, re-queuing it")
 	c.queue.AddRateLimited(key)
 	return true
 }
