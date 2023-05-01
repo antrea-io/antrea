@@ -34,7 +34,7 @@ const (
 	MulticastRecvBufferSize = 128
 )
 
-func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.Set[string], encapEnabled bool) *MRouteClient {
+func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.Set[string], encapEnabled bool, flexibleIPAMEnabled bool) *MRouteClient {
 	var m = &MRouteClient{
 		igmpMsgChan:         make(chan []byte, workerCount),
 		nodeConfig:          nodeconfig,
@@ -42,6 +42,7 @@ func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, mul
 		inboundRouteCache:   cache.NewIndexer(getMulticastInboundEntryKey, cache.Indexers{GroupNameIndexName: inboundGroupIndexFunc}),
 		multicastInterfaces: sets.List(multicastInterfaces),
 		socket:              multicastSocket,
+		flexibleIPAMEnabled: flexibleIPAMEnabled,
 	}
 	return m
 }
@@ -79,6 +80,7 @@ type MRouteClient struct {
 	multicastInterfaceConfigs []multicastInterfaceConfig
 	internalInterfaceVIF      uint16
 	externalInterfaceVIFs     []uint16
+	flexibleIPAMEnabled       bool
 }
 
 // multicastInterfacesJoinMgroup allows multicast interfaces to join multicast group,

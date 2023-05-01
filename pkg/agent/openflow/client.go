@@ -322,7 +322,10 @@ type Client interface {
 
 	// UninstallMulticastFlows removes the flow matching the given multicastIP.
 	UninstallMulticastFlows(multicastIP net.IP) error
-
+	// InstallMulticastFlexibleIPAMFlows installs two flows and forwards them to the first table of Multicast Pipeline
+	// when flexibleIPAM is enabled, with one flow matching inbound multicast traffic from the uplink and the other from
+	// the host interface, making multicast packets coming from the host and other Nodes be forward to the OVS multicast pipeline.
+	InstallMulticastFlexibleIPAMFlows() error
 	// InstallMulticastRemoteReportFlows installs flows to forward the IGMP report messages to the other Nodes,
 	// and packetIn the report messages to Antrea Agent which is received via tunnel port.
 	// The OpenFlow group identified by groupID is used to forward packet to all other Nodes in the cluster
@@ -968,8 +971,13 @@ func (c *client) generatePipelines() {
 	}
 
 	if c.enableMulticast {
+		uplinkPort := uint32(0)
+		if c.nodeConfig.UplinkNetConfig != nil {
+			uplinkPort = c.nodeConfig.UplinkNetConfig.OFPort
+		}
+
 		// TODO: add support for IPv6 protocol
-		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), config.DefaultTunOFPort)
+		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), config.DefaultTunOFPort, uplinkPort, c.nodeConfig.HostInterfaceOFPort, c.connectUplinkToBridge)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
 
@@ -1436,6 +1444,15 @@ func (c *client) UninstallMulticastFlows(multicastIP net.IP) error {
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
 	return c.deleteFlows(c.featureMulticast.cachedFlows, cacheKey)
+}
+
+func (c *client) InstallMulticastFlexibleIPAMFlows() error {
+	firstMulticastTable := c.pipelines[pipelineMulticast].GetFirstTable()
+	flows := c.featureMulticast.multicastForwardFlexibleIPAMFlows(firstMulticastTable)
+	cacheKey := "multicast_flexible_ipam"
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) InstallMulticastRemoteReportFlows(groupID binding.GroupIDType) error {
