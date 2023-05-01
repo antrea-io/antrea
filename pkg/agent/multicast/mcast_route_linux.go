@@ -65,6 +65,13 @@ func (c *MRouteClient) run(stopCh <-chan struct{}) {
 		for {
 			buf := make([]byte, MulticastRecvBufferSize)
 			n, _ := syscall.Read(c.socket.GetFD(), buf)
+			// When Antrea FlexibleIPAM is enabled, messages received by the socket
+			// will be dropped directly because we won't create any route from the upcall igmpmsg messages.
+			// In addition, by reading the socket, we can avoid potential errors such as memory bloat.
+			if c.flexibleIPAMEnabled {
+				klog.V(4).InfoS("Message was received from the multicast routing socket", "message", buf[:n])
+				continue
+			}
 			if n > 0 {
 				c.igmpMsgChan <- buf[:n]
 			}

@@ -643,7 +643,7 @@ OVS bridge, and both interfaces are configured with the same MAC address, the
 match condition of an OpenFlow entry in `L2ForwardingCalcTable` uses the input
 port number but not the MAC address of the packet. The flow actions are:
 
-1) set flag `OFPortFoundRegMark`, and
+1) set flag `OutputToOFPortRegMark`, and
 2) set the peer port as the `TargetOFPortField`, and
 3) enforce the packet to go to stageIngressSecurity.
 

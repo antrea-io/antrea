@@ -2899,20 +2899,24 @@ func (f *featureMulticast) localMulticastForwardFlows(multicastIP net.IP, groupI
 	}
 }
 
-// externalMulticastReceiverFlow generates the flow to output multicast packets to Antrea gateway, so that local Pods can
-// send multicast packets to access the external receivers. For the case that one or more local Pods have joined the target
-// multicast group, it is handled by the flows created by function "localMulticastForwardFlows" after local Pods report the
-// IGMP membership.
+// externalMulticastReceiverFlow generates the flow to output multicast packets to Antrea gateway interface (to the host interface
+// and the uplink interface when flexibleIPAM is enabled), so that local Pods can send multicast packets to the external receivers.
+// For the case that one or more local Pods have joined the target multicast group, it is handled by the flows created by
+// function "localMulticastForwardFlows" after local Pods report the IGMP membership.
 // Because there are ingress tables between MulticastRoutingTable and MulticastOutputTable, while currently ingress rules only
 // support IGMP query, it is not necessary to goto the ingress tables for other multicast traffic.
 func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
-	return MulticastRoutingTable.ofTable.BuildFlow(priorityLow).
+	outputPorts := []uint32{f.gatewayPort}
+	if f.flexibleIPAMEnabled {
+		outputPorts = []uint32{f.hostOFPort, f.uplinkPort}
+	}
+	flow := MulticastRoutingTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchProtocol(binding.ProtocolIP).
-		Action().LoadRegMark(OutputToOFPortRegMark).
-		Action().LoadToRegField(TargetOFPortField, f.gatewayPort).
-		Action().GotoStage(stageOutput).
-		Done()
+		MatchProtocol(binding.ProtocolIP)
+	for _, outputPort := range outputPorts {
+		flow = flow.Action().Output(outputPort)
+	}
+	return flow.Done()
 }
 
 // NewClient is the constructor of the Client interface.
