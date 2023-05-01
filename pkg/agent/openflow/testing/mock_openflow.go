@@ -274,6 +274,34 @@ func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1)
 }
 
+// InstallMulticastFlexibleIPAMFlows mocks base method
+func (m *MockClient) InstallMulticastFlexibleIPAMFlows(arg0 openflow.GroupIDType) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticastFlexibleIPAMFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticastFlexibleIPAMFlows indicates an expected call of InstallMulticastFlexibleIPAMFlows
+func (mr *MockClientMockRecorder) InstallMulticastFlexibleIPAMFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastFlexibleIPAMFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticastFlexibleIPAMFlows), arg0)
+}
+
+// InstallMulticastFlexibleIPAMGroup mocks base method
+func (m *MockClient) InstallMulticastFlexibleIPAMGroup(arg0 openflow.GroupIDType) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticastFlexibleIPAMGroup", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticastFlexibleIPAMGroup indicates an expected call of InstallMulticastFlexibleIPAMGroup
+func (mr *MockClientMockRecorder) InstallMulticastFlexibleIPAMGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastFlexibleIPAMGroup", reflect.TypeOf((*MockClient)(nil).InstallMulticastFlexibleIPAMGroup), arg0)
+}
+
 // InstallMulticastFlows mocks base method
 func (m *MockClient) InstallMulticastFlows(arg0 net.IP, arg1 openflow.GroupIDType) error {
 	m.ctrl.T.Helper()

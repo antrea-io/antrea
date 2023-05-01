@@ -117,6 +117,12 @@ type bucketBuilder struct {
 	bucket *openflow15.Bucket
 }
 
+func (b *bucketBuilder) Output(port uint32) BucketBuilder {
+	outputAction := ofctrl.NewOutputPort(port)
+	b.bucket.AddAction(outputAction.GetActionMessage())
+	return b
+}
+
 // LoadXXReg makes the learned flow to load data to xxreg[regID] with specific range.
 func (b *bucketBuilder) LoadXXReg(regID int, data []byte) BucketBuilder {
 	field, _ := openflow15.FindFieldHeaderByName(fmt.Sprintf("NXM_NX_XXREG%d", regID), false)

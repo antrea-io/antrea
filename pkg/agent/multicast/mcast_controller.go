@@ -261,9 +261,13 @@ type Controller struct {
 	queryGroupId binding.GroupIDType
 	// nodeGroupID is the OpenFlow group ID in OVS which is used to send IGMP report messages to other Nodes.
 	nodeGroupID binding.GroupIDType
+	// forwardOutboundGroupID is the OpenFlow group ID in OVS which is used to forward outbound multicast traffic
+	// to uplink and host interface when flexibleIPAM is enabled and there is not receiver from the local Pods.
+	forwardOutboundGroupID binding.GroupIDType
 	// installedNodes is the installed Node set that the IGMP report message is sent to.
-	installedNodes sets.Set[string]
-	encapEnabled   bool
+	installedNodes      sets.Set[string]
+	encapEnabled        bool
+	flexibleIPAMEnabled bool
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -277,7 +281,8 @@ func NewMulticastController(ofClient openflow.Client,
 	igmpQueryVersions []uint8,
 	validator types.McastNetworkPolicyController,
 	isEncap bool,
-	nodeInformer coreinformers.NodeInformer) *Controller {
+	nodeInformer coreinformers.NodeInformer,
+	enableFlexibleIPAM bool) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
 	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
@@ -300,6 +305,10 @@ func NewMulticastController(ofClient openflow.Client,
 		mcastGroupTimeout:    igmpQueryInterval * 3,
 		queryGroupId:         v4GroupAllocator.Allocate(),
 		encapEnabled:         isEncap,
+		flexibleIPAMEnabled:  enableFlexibleIPAM,
+	}
+	if enableFlexibleIPAM {
+		c.forwardOutboundGroupID = v4GroupAllocator.Allocate()
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -336,10 +345,22 @@ func (c *Controller) Initialize() error {
 	if err != nil {
 		return err
 	}
+	if c.flexibleIPAMEnabled {
+		if err := c.ofClient.InstallMulticastFlexibleIPAMGroup(c.forwardOutboundGroupID); err != nil {
+			klog.ErrorS(err, "Failed to install OpenFlow group to handle outbound multicast traffic when flexibleIPAM enabled")
+			return err
+		}
+		if err := c.ofClient.InstallMulticastFlexibleIPAMFlows(c.forwardOutboundGroupID); err != nil {
+			klog.ErrorS(err, "Failed to install OpenFlow flows to handle multicast traffic when flexibleIPAM enabled")
+			return err
+		}
+
+	}
 	if c.encapEnabled {
 		// Install OpenFlow group to send the multicast groups that local Pods joined to all other Nodes in the cluster.
 		if err := c.ofClient.InstallMulticastGroup(c.nodeGroupID, nil, nil); err != nil {
 			klog.ErrorS(err, "Failed to update OpenFlow group for remote Nodes")
+			return err
 		}
 		if err := c.ofClient.InstallMulticastRemoteReportFlows(c.nodeGroupID); err != nil {
 			klog.ErrorS(err, "Failed to install OpenFlow group and flow to send IGMP report to other Nodes")
@@ -370,7 +391,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		// Process multicast Group membership report or leave messages.
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
-	go c.mRouteClient.run(stopCh)
+	if !c.flexibleIPAMEnabled {
+		go c.mRouteClient.run(stopCh)
+	}
 }
 
 func (c *Controller) worker() {
@@ -432,7 +455,11 @@ func (c *Controller) syncGroup(groupKey string) error {
 	}
 	status := obj.(*GroupMemberStatus)
 	memberPorts := make([]uint32, 0, len(status.localMembers)+1)
-	memberPorts = append(memberPorts, config.HostGatewayOFPort)
+	if c.flexibleIPAMEnabled {
+		memberPorts = append(memberPorts, config.UplinkOFPort, c.nodeConfig.HostInterfaceOFPort)
+	} else {
+		memberPorts = append(memberPorts, config.HostGatewayOFPort)
+	}
 	for memberInterfaceName := range status.localMembers {
 		obj, found := c.ifaceStore.GetInterfaceByName(memberInterfaceName)
 		if !found {

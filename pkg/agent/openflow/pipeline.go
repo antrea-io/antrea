@@ -2860,6 +2860,16 @@ func (f *featureMulticast) localMulticastForwardFlows(multicastIP net.IP, groupI
 	}
 }
 
+// externalFlexibleIPAMMulticastReceiverFlow generates a flow similar to externalMulticastReceiverFlow,
+// except it outputs to the uplink interface and the host interface.
+func (f *featureMulticast) externalFlexibleIPAMMulticastReceiverFlow(groupID binding.GroupIDType) binding.Flow {
+	return MulticastRoutingTable.ofTable.BuildFlow(priorityLow).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(binding.ProtocolIP).
+		Action().Group(groupID).
+		Done()
+}
+
 // externalMulticastReceiverFlow generates the flow to output multicast packets to Antrea gateway, so that local Pods can
 // send multicast packets to access the external receivers. For the case that one or more local Pods have joined the target
 // multicast group, it is handled by the flows created by function "localMulticastForwardFlows" after local Pods report the

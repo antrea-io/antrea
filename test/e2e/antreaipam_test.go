@@ -251,6 +251,18 @@ func TestAntreaIPAM(t *testing.T) {
 		testAntreaIPAMStatefulSet(t, data, nil)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
+
+	t.Run("testMulticastWithFlexibleIPAM", func(t *testing.T) {
+		transportInterface, err = data.GetTransportInterface()
+		if err != nil {
+			t.Fatalf("Error getting transport interfaces: %v", err)
+		}
+		nodeMulticastInterfaces, err := computeMulticastInterfaces(t, data)
+		if err != nil {
+			t.Fatalf("Error computing multicast interfaces: %v", err)
+		}
+		runMulticastTestCases(t, data, nodeMulticastInterfaces, testAntreaIPAMNamespace, false, false)
+	})
 }
 
 func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {

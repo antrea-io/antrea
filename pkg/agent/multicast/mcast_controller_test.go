@@ -91,7 +91,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 		time:  time.Now(),
 		iface: if1,
 	}
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	err := mctrl.initialize(t)
 	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
@@ -114,7 +114,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 }
 
 func TestUpdateGroupMemberStatus(t *testing.T) {
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	err := mctrl.initialize(t)
 	assert.NoError(t, err)
 	mgroup := net.ParseIP("224.96.1.4")
@@ -180,7 +180,7 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 }
 
 func TestCheckNodeUpdate(t *testing.T) {
-	mockController := newMockMulticastController(t, false)
+	mockController := newMockMulticastController(t, false, false)
 	err := mockController.initialize(t)
 	require.NoError(t, err)
 
@@ -256,7 +256,7 @@ func TestCheckNodeUpdate(t *testing.T) {
 }
 
 func TestCheckLastMember(t *testing.T) {
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	workerCount = 1
 	lastProbe := time.Now()
 	mgroup := net.ParseIP("224.96.1.2")
@@ -348,7 +348,7 @@ func TestCheckLastMember(t *testing.T) {
 func TestGetGroupPods(t *testing.T) {
 	now := time.Now()
 
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	err := mctrl.initialize(t)
 	require.NoError(t, err)
 	groupMemberStatuses := []*GroupMemberStatus{
@@ -384,7 +384,7 @@ func TestGetGroupPods(t *testing.T) {
 }
 
 func TestGetPodStats(t *testing.T) {
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	err := mctrl.initialize(t)
 	require.NoError(t, err)
 
@@ -401,7 +401,7 @@ func TestGetPodStats(t *testing.T) {
 }
 
 func TestGetAllPodStats(t *testing.T) {
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	err := mctrl.initialize(t)
 	require.NoError(t, err)
 
@@ -445,7 +445,7 @@ func TestGetAllPodStats(t *testing.T) {
 }
 
 func TestClearStaleGroupsCreatingLeaveEvent(t *testing.T) {
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	workerCount = 1
 	err := mctrl.initialize(t)
 	require.NoError(t, err)
@@ -481,7 +481,7 @@ func TestClearStaleGroupsCreatingLeaveEvent(t *testing.T) {
 }
 
 func TestClearStaleGroups(t *testing.T) {
-	mctrl := newMockMulticastController(t, false)
+	mctrl := newMockMulticastController(t, false, false)
 	workerCount = 1
 	err := mctrl.initialize(t)
 	require.NoError(t, err)
@@ -557,7 +557,7 @@ func TestClearStaleGroups(t *testing.T) {
 }
 
 func TestProcessPacketIn(t *testing.T) {
-	mockController := newMockMulticastController(t, false)
+	mockController := newMockMulticastController(t, false, false)
 	snooper := mockController.igmpSnooper
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -732,14 +732,14 @@ func TestProcessPacketIn(t *testing.T) {
 }
 
 func TestEncapModeInitialize(t *testing.T) {
-	mockController := newMockMulticastController(t, true)
-	assert.True(t, mockController.nodeGroupID != 0)
+	mockController := newMockMulticastController(t, true, false)
+	assert.NotZero(t, mockController.nodeGroupID)
 	err := mockController.initialize(t)
 	assert.NoError(t, err)
 }
 
 func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
-	mockController := newMockMulticastController(t, true)
+	mockController := newMockMulticastController(t, true, false)
 	_ = mockController.initialize(t)
 	mockController.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
@@ -847,7 +847,7 @@ func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
 }
 
 func TestNodeUpdate(t *testing.T) {
-	mockController := newMockMulticastController(t, true)
+	mockController := newMockMulticastController(t, true, false)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	informerFactory.Start(stopCh)
@@ -941,7 +941,7 @@ func TestNodeUpdate(t *testing.T) {
 }
 
 func TestMemberChanged(t *testing.T) {
-	mockController := newMockMulticastController(t, false)
+	mockController := newMockMulticastController(t, false, false)
 	_ = mockController.initialize(t)
 
 	containerA := &interfacestore.ContainerInterfaceConfig{PodNamespace: "nameA", PodName: "podA", ContainerID: "tttt"}
@@ -998,7 +998,7 @@ func TestMemberChanged(t *testing.T) {
 }
 
 func TestConcurrentEventHandlerAndWorkers(t *testing.T) {
-	c := newMockMulticastController(t, true)
+	c := newMockMulticastController(t, true, false)
 	c.ifaceStore = interfacestore.NewInterfaceStore()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -1084,7 +1084,7 @@ func TestConcurrentEventHandlerAndWorkers(t *testing.T) {
 }
 
 func TestRemoteMemberJoinLeave(t *testing.T) {
-	mockController := newMockMulticastController(t, true)
+	mockController := newMockMulticastController(t, true, false)
 	_ = mockController.initialize(t)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -1240,7 +1240,7 @@ func compareGroupStatus(t *testing.T, cache cache.Indexer, event *mcastGroupEven
 	}
 }
 
-func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
+func newMockMulticastController(t *testing.T, isEncap bool, enableFlexibleIPAM bool) *Controller {
 	controller := gomock.NewController(t)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	mockIfaceStore = ifaceStoretest.NewMockInterfaceStore(controller)
@@ -1255,8 +1255,15 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 	clientset = fake.NewSimpleClientset()
 	informerFactory = informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, nodeInformer)
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, nodeInformer, enableFlexibleIPAM)
 	return mctrl
+}
+
+func TestFlexibleIPAMModeInitialize(t *testing.T) {
+	mockController := newMockMulticastController(t, false, true)
+	assert.NotZero(t, mockController.forwardOutboundGroupID)
+	err := mockController.initialize(t)
+	assert.NoError(t, err)
 }
 
 func (c *Controller) initialize(t *testing.T) error {
@@ -1268,6 +1275,10 @@ func (c *Controller) initialize(t *testing.T) error {
 	if c.encapEnabled {
 		mockOFClient.EXPECT().InstallMulticastGroup(c.nodeGroupID, gomock.Any(), gomock.Any()).Times(1)
 		mockOFClient.EXPECT().InstallMulticastRemoteReportFlows(c.nodeGroupID).Times(1)
+	}
+	if c.flexibleIPAMEnabled {
+		mockOFClient.EXPECT().InstallMulticastFlexibleIPAMGroup(c.forwardOutboundGroupID).Times(1)
+		mockOFClient.EXPECT().InstallMulticastFlexibleIPAMFlows(c.forwardOutboundGroupID).Times(1)
 	}
 	return c.Initialize()
 }

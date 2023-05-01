@@ -2100,6 +2100,30 @@ func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
 }
 
+func Test_client_InstallMulticasFlexibleIPAMFlows(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	groupID := binding.GroupIDType(113)
+	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeNoEncap, enableMulticast, enableConnectUplinkToBridge, disableEgress)
+	defer resetPipelines()
+
+	expectedFlows := []string{
+		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=4,nw_dst=224.0.0.0/4 actions=goto_table:MulticastRouting",
+		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=4294967294,nw_dst=224.0.0.0/4 actions=goto_table:MulticastRouting",
+		"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=group:113",
+	}
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+
+	cacheKey := "multicast_flexible_ipam"
+
+	assert.NoError(t, fc.InstallMulticastFlexibleIPAMFlows(groupID))
+	fCacheI, ok := fc.featureMulticast.cachedFlows.Load(cacheKey)
+	require.True(t, ok)
+	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
+}
+
 func Test_client_SendIGMPQueryPacketOut(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockBridge := ovsoftest.NewMockBridge(ctrl)
@@ -2336,6 +2360,20 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_client_InstallMulticastFlexibleIPAMGroups(t *testing.T) {
+	outboundGroupID := binding.GroupIDType(107)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := oftest.NewMockOFEntryOperations(ctrl)
+
+	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeNoEncap, enableMulticast, enableConnectUplinkToBridge, disableEgress)
+	defer resetPipelines()
+
+	m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
+	assert.NoError(t, fc.InstallMulticastFlexibleIPAMGroup(outboundGroupID))
 }
 
 func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {

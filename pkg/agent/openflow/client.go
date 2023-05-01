@@ -295,7 +295,17 @@ type Client interface {
 
 	// UninstallMulticastFlows removes the flow matching the given multicastIP.
 	UninstallMulticastFlows(multicastIP net.IP) error
-
+	// InstallMulticastFlexibleIPAMGroup installs a group when flexibleIPAM is enabled.
+	// The installed group matches outbound multicast packets received when
+	// there are no local Pod receivers,
+	// with one Bucket forcing the packet to the uplink
+	// and the other outputting the traffic to the host interface.
+	InstallMulticastFlexibleIPAMGroup(groupID binding.GroupIDType) error
+	// InstallMulticastFlexibleIPAMFlows installs three flows when flexibleIPAM is enabled,
+	// with two flows matching inbound multicast traffic forward to MulticastRoutingTable and
+	// one flow matching outbound multicast traffic forward to the uplink interface
+	// and the host interface when there are no local receivers.
+	InstallMulticastFlexibleIPAMFlows(groupID binding.GroupIDType) error
 	// InstallMulticastRemoteReportFlows installs flows to forward the IGMP report messages to the other Nodes,
 	// and packetIn the report messages to Antrea Agent which is received via tunnel port.
 	// The OpenFlow group identified by groupID is used to forward packet to all other Nodes in the cluster
@@ -928,8 +938,13 @@ func (c *client) generatePipelines() {
 	}
 
 	if c.enableMulticast {
+		uplinkPort := uint32(0)
+		if c.nodeConfig.UplinkNetConfig != nil {
+			uplinkPort = c.nodeConfig.UplinkNetConfig.OFPort
+		}
+
 		// TODO: add support for IPv6 protocol
-		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), config.DefaultTunOFPort)
+		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), config.DefaultTunOFPort, uplinkPort, c.nodeConfig.HostInterfaceOFPort, c.connectUplinkToBridge)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
 
@@ -1334,6 +1349,15 @@ func (c *client) UninstallMulticastFlows(multicastIP net.IP) error {
 	return c.deleteFlows(c.featureMulticast.cachedFlows, cacheKey)
 }
 
+func (c *client) InstallMulticastFlexibleIPAMFlows(groupID binding.GroupIDType) error {
+	flows := c.featureMulticast.multicastForwardFlexibleIPAMFlows(MulticastRoutingTable.ofTable)
+	flows = append(flows, c.featureMulticast.externalFlexibleIPAMMulticastReceiverFlow(groupID))
+	cacheKey := "multicast_flexible_ipam"
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
+}
+
 func (c *client) InstallMulticastRemoteReportFlows(groupID binding.GroupIDType) error {
 	firstMulticastTable := c.pipelines[pipelineMulticast].GetFirstTable()
 	flows := c.featureMulticast.multicastRemoteReportFlows(groupID, firstMulticastTable)
@@ -1409,6 +1433,17 @@ func (c *client) SendIGMPRemoteReportPacketOut(
 	packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolIGMP).SetL4Packet(igmp)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) InstallMulticastFlexibleIPAMGroup(groupID binding.GroupIDType) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	group := c.featureMulticast.multicastFlexibleIPAMGroup(groupID)
+	if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
+		return fmt.Errorf("error when installing Multicast receiver Group %d: %w", groupID, err)
+	}
+	c.featureMulticast.groupCache.Store(groupID, group)
+	return nil
 }
 
 func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceivers []uint32, remoteNodeReceivers []net.IP) error {

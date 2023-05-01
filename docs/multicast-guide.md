@@ -23,6 +23,7 @@ Antrea supports multicast traffic in the following scenarios:
   - [Maximum number of receiver groups on one Node](#maximum-number-of-receiver-groups-on-one-node)
   - [Traffic in local network control block](#traffic-in-local-network-control-block)
   - [Linux kernel](#linux-kernel)
+  - [Antrea FlexibleIPAM](#antrea-flexibleipam)
 <!-- /toc -->
 
 ## Prerequisites
@@ -141,7 +142,7 @@ Support for Windows and IPv6 will be added in the future.
 
 ### Encap mode
 
-Configuration option `multicastInterfaces` is not supported with encap mode.
+The configuration option `multicastInterfaces` is not supported with encap mode.
 Multicast packets in encap mode are SNATed and forwarded to the transport interface only.
 
 ### Maximum number of receiver groups on one Node
@@ -165,3 +166,10 @@ is not routed correctly:
 
 1. Node kernel version under 5.4
 2. Node network doesn't support IGMP snooping
+
+### Antrea FlexibleIPAM
+
+The configuration option `multicastInterfaces` is not supported with
+[Antrea FlexibleIPAM](antrea-ipam.md#antrea-flexible-ipam).
+When Antrea FlexibleIPAM is enabled, multicast packets are forwarded
+to the uplink interface only.

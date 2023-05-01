@@ -2356,6 +2356,20 @@ func (mr *MockBucketBuilderMockRecorder) LoadXXReg(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadXXReg", reflect.TypeOf((*MockBucketBuilder)(nil).LoadXXReg), arg0, arg1)
 }
 
+// Output mocks base method
+func (m *MockBucketBuilder) Output(arg0 uint32) openflow.BucketBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Output", arg0)
+	ret0, _ := ret[0].(openflow.BucketBuilder)
+	return ret0
+}
+
+// Output indicates an expected call of Output
+func (mr *MockBucketBuilderMockRecorder) Output(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Output", reflect.TypeOf((*MockBucketBuilder)(nil).Output), arg0)
+}
+
 // ResubmitToTable mocks base method
 func (m *MockBucketBuilder) ResubmitToTable(arg0 byte) openflow.BucketBuilder {
 	m.ctrl.T.Helper()

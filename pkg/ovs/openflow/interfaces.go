@@ -346,6 +346,7 @@ type BucketBuilder interface {
 	LoadRegMark(mark *RegMark) BucketBuilder
 	ResubmitToTable(tableID uint8) BucketBuilder
 	SetTunnelDst(addr net.IP) BucketBuilder
+	Output(port uint32) BucketBuilder
 	Done() Group
 }
 
