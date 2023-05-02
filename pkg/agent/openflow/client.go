@@ -22,7 +22,6 @@ import (
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	ofutil "antrea.io/libOpenflow/util"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -97,14 +96,13 @@ type Client interface {
 	// InstallEndpointFlows.
 	UninstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
 
-	// InstallServiceFlows installs flows for accessing Service NodePort, LoadBalancer and ClusterIP. It installs the
-	// flow that uses the group/bucket to do service LB. If the affinityTimeout is not zero, it also installs the flow
-	// which has a learn action to maintain the LB decision. The group with the groupID must be installed before,
-	// otherwise the installation will fail.
-	// nodeLocalExternal represents if the externalTrafficPolicy is Local or not. This field is meaningful only when
-	// the svcType is NodePort or LoadBalancer.
-	// nested represents if the Service has the Endpoints which is other Service's ClusterIP.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error
+	// InstallServiceFlows installs flows for accessing Service NodePort, LoadBalancer, ExternalIP and ClusterIP. It
+	// installs the flow that uses the group/bucket to do Service LB. If the affinityTimeout is not zero, it also
+	// installs the flow which has a learn action to maintain the LB decision. The group with the groupID must be
+	// installed before, otherwise the installation will fail.
+	// externallyAccessible indicates that whether the Service is externally accessible, like NodePort, LoadBalancer and ExternalIP.
+	// nested indicates that whether the Service has the Endpoints which is other Service's ClusterIP.
+	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, externallyAccessible, nested bool) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
@@ -754,15 +752,17 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoints []p
 	return c.deleteFlowsWithMultipleKeys(c.featureService.cachedFlows, flowCacheKeys)
 }
 
-func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType, nested bool) error {
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, externallyAccessible, nested bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, nodeLocalExternal, svcType, nested))
+	// If svcIP is set to VirtualNodePortDNATIPv4 or VirtualNodePortDNATIPv6, it means that the Service type is NodePort.
+	isNodePortSvc := svcIP.Equal(config.VirtualNodePortDNATIPv4) || svcIP.Equal(config.VirtualNodePortDNATIPv6)
+	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, externallyAccessible, isNodePortSvc, nested))
 	if affinityTimeout != 0 {
-		flows = append(flows, c.featureService.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, svcType))
+		flows = append(flows, c.featureService.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout, externallyAccessible, isNodePortSvc))
 	}
-	if svcType == v1.ServiceTypeClusterIP && !nested {
+	if !externallyAccessible && !nested {
 		flows = append(flows, c.featureService.endpointRedirectFlowForServiceIP(svcIP, svcPort, protocol, groupID))
 	}
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)

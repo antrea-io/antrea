@@ -28,7 +28,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/component-base/metrics/legacyregistry"
 
@@ -785,7 +784,7 @@ func installServiceFlows(t *testing.T, gid uint32, svc svcConfig, endpointList [
 	assert.NoError(t, err, "no error should return when installing flows for Endpoints")
 	err = c.InstallServiceGroup(groupID, svc.withSessionAffinity, endpointList)
 	assert.NoError(t, err, "no error should return when installing groups for Service")
-	err = c.InstallServiceFlows(groupID, svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds, false, v1.ServiceTypeClusterIP, false)
+	err = c.InstallServiceFlows(groupID, svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds, false, false)
 	assert.NoError(t, err, "no error should return when installing flows for Service")
 }
 
@@ -824,7 +823,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 	svcFlows := expectTableFlows{tableName: "ServiceLB", flows: []*ofTestUtils.ExpectFlow{
 		{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x10000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
-			ActStr:   fmt.Sprintf("set_field:0x%x/0x70000->reg4,set_field:0x200/0x200->reg0,%sgroup:%d", serviceLearnReg<<16, loadGourpID, gid),
+			ActStr:   fmt.Sprintf("set_field:0x200/0x200->reg0,set_field:0x%x/0x70000->reg4,%sgroup:%d", serviceLearnReg<<16, loadGourpID, gid),
 		},
 		{
 			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),

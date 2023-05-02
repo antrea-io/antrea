@@ -121,15 +121,13 @@ var (
 	EpUnionField = binding.NewRegField(4, 0, 18)
 	// reg4[19]: Mark to indicate the Service type is NodePort.
 	ToNodePortAddressRegMark = binding.NewOneBitRegMark(4, 19)
-	// reg4[16..19]: Field to store the union value of Endpoint state and the mark of whether Service type is NodePort.
-	NodePortUnionField = binding.NewRegField(4, 16, 19)
 	// reg4[20]: Field to indicate whether the packet is from local Antrea IPAM Pod. NotAntreaFlexibleIPAMRegMark will
 	// be used with RewriteMACRegMark, thus the reg id must not be same due to the limitation of ofnet library.
 	AntreaFlexibleIPAMRegMark    = binding.NewOneBitRegMark(4, 20)
 	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 20)
 	// reg4[21]: Mark to indicate whether the packet is accessing a NodePort or a LoadBalancer IP of a Service whose
 	// externalTrafficPolicy is Cluster.
-	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21)
+	ExternalAccessibleRegMark = binding.NewOneBitRegMark(4, 21)
 	// reg4[22..23]: Field to store the action of a traffic control rule. Marks in this field include:
 	TrafficControlActionField     = binding.NewRegField(4, 22, 23)
 	TrafficControlMirrorRegMark   = binding.NewRegMark(TrafficControlActionField, 0b01)
