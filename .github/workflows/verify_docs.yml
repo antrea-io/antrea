@@ -8,6 +8,7 @@ on:
 jobs:
   verify:
     name: Verify docs and spelling
+    if: github.repository == 'antrea-io/antrea'
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
