@@ -37,7 +37,6 @@ import (
 
 func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 	// Create flow for testing adding and updating of same connection.
 	refTime := time.Now()

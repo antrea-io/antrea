@@ -37,7 +37,7 @@ type fakeRouteController struct {
 	ofClient        *oftest.MockClient
 }
 
-func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) (*fakeRouteController, func()) {
+func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) *fakeRouteController {
 	mcClient := mcfake.NewSimpleClientset()
 	mcInformerFactory := mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
 		60*time.Second,
@@ -61,7 +61,7 @@ func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) (*
 		mcClient:                 mcClient,
 		informerFactory:          mcInformerFactory,
 		ofClient:                 ofClient,
-	}, ctrl.Finish
+	}
 }
 
 var (
@@ -122,8 +122,7 @@ var (
 )
 
 func TestMCRouteControllerAsGateway(t *testing.T) {
-	c, closeFn := newMCDefaultRouteController(t, &config.NodeConfig{Name: "node-1"})
-	defer closeFn()
+	c := newMCDefaultRouteController(t, &config.NodeConfig{Name: "node-1"})
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -208,8 +207,7 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 }
 
 func TestMCRouteControllerAsRegularNode(t *testing.T) {
-	c, closeFn := newMCDefaultRouteController(t, &config.NodeConfig{Name: "node-3"})
-	defer closeFn()
+	c := newMCDefaultRouteController(t, &config.NodeConfig{Name: "node-3"})
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})

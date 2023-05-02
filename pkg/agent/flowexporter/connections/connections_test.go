@@ -46,7 +46,6 @@ var testFlowExporterOptions = &flowexporter.FlowExporterOptions{
 
 func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	// Create two flows; one is already in connectionStore and other one is new
 	testFlows := make([]*flowexporter.Connection, 2)
 	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
@@ -104,7 +103,6 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 
 func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 	// test on deny connection store
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)

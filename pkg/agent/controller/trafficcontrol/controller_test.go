@@ -475,7 +475,6 @@ func TestTrafficControlAdd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			c := newFakeController(t, []runtime.Object{ns1, ns2, pod1, pod2, pod3, pod4}, []runtime.Object{tt.tc}, append(interfaces, tt.extraInterfaces...))
-			defer c.mockController.Finish()
 
 			if tt.portToTCBindings != nil {
 				c.portToTCBindings = tt.portToTCBindings
@@ -572,7 +571,6 @@ func TestTrafficControlUpdate(t *testing.T) {
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, []runtime.Object{ns1, ns2, pod1, pod2, pod3, pod4}, []runtime.Object{tc1}, interfaces)
-			defer c.mockController.Finish()
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -628,7 +626,6 @@ func TestSharedTargetPort(t *testing.T) {
 	}
 
 	c := newFakeController(t, []runtime.Object{pod1, pod2, pod3, pod4}, []runtime.Object{tc1, tc2}, interfaces)
-	defer c.mockController.Finish()
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -681,7 +678,6 @@ func TestPodUpdateFromCNIServer(t *testing.T) {
 	tc1 := generateTrafficControl(tc1Name, nil, labels1, directionIngress, actionMirror, targetPort1, false, nil)
 
 	c := newFakeController(t, nil, []runtime.Object{tc1}, []*interfacestore.InterfaceConfig{targetInterface1})
-	defer c.mockController.Finish()
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -822,7 +818,6 @@ func TestPodLabelsUpdate(t *testing.T) {
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, []runtime.Object{testPod}, []runtime.Object{tc1, tc2, tc3}, interfaces)
-			defer c.mockController.Finish()
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -999,7 +994,6 @@ func TestNamespaceLabelsUpdate(t *testing.T) {
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, []runtime.Object{testNS, testPod}, []runtime.Object{tc1, tc2, tc3}, interfaces)
-			defer c.mockController.Finish()
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -1111,7 +1105,6 @@ func TestPodDelete(t *testing.T) {
 	}
 
 	c := newFakeController(t, []runtime.Object{pod1, pod3}, []runtime.Object{tc1, tc2, tc3}, interfaces)
-	defer c.mockController.Finish()
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)

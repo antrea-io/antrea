@@ -644,8 +644,6 @@ func TestSyncEgress(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, []runtime.Object{tt.existingEgress})
-			defer c.mockController.Finish()
-
 			if tt.maxEgressIPsPerNode > 0 {
 				c.egressIPScheduler.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
 			}
@@ -705,7 +703,6 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 		},
 	}
 	c := newFakeController(t, []runtime.Object{egress})
-	defer c.mockController.Finish()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go c.podUpdateChannel.Run(stopCh)
@@ -780,7 +777,6 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		},
 	}
 	c := newFakeController(t, []runtime.Object{egress1, egress2, egress3})
-	defer c.mockController.Finish()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)
@@ -984,8 +980,6 @@ func TestGetEgress(t *testing.T) {
 	}
 
 	c := newFakeController(t, []runtime.Object{egress})
-	defer c.mockController.Finish()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)
@@ -1047,8 +1041,6 @@ func TestGetEgressIPByMark(t *testing.T) {
 	}
 
 	c := newFakeController(t, []runtime.Object{egress})
-	defer c.mockController.Finish()
-
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.crdInformerFactory.Start(stopCh)

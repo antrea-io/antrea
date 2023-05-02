@@ -51,7 +51,6 @@ var (
 
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 	// Create flows for test
 
@@ -110,7 +109,6 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 
 func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 
 	// Create mock interface
@@ -196,7 +194,6 @@ func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
 
 func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 	// Set expect call of dpctl/ct-get-maxconns for mock ovsCtlClient
 	expMaxConns := 300000

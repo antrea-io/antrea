@@ -318,7 +318,6 @@ func prepareSetup(t *testing.T, ipamType string, name string, containerID, infra
 
 func TestCmdAdd(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	ipamType := "windows-test"
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ipam.ResetIPAMDriver(ipamType, ipamMock)
@@ -559,7 +558,6 @@ func TestCmdAdd(t *testing.T) {
 
 func TestCmdDel(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	ipamType := "windows-test"
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ipam.ResetIPAMDriver(ipamType, ipamMock)
@@ -670,8 +668,6 @@ func TestCmdDel(t *testing.T) {
 
 func TestCmdCheck(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	ipamType := "windows-test"
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ipam.ResetIPAMDriver(ipamType, ipamMock)
@@ -856,7 +852,6 @@ func newAsyncWaiter(podName, containerID string) *asyncWaiter {
 
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()

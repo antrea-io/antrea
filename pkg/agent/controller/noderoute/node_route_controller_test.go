@@ -68,7 +68,7 @@ func (f *fakeIPsecCertificateManager) HasSynced() bool {
 	return true
 }
 
-func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeController, func()) {
+func newController(t *testing.T, networkConfig *config.NetworkConfig) *fakeController {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	ctrl := gomock.NewController(t)
@@ -92,12 +92,11 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeCont
 		routeClient:     routeClient,
 		ovsCtlClient:    ovsCtlClient,
 		interfaceStore:  interfaceStore,
-	}, ctrl.Finish
+	}
 }
 
 func TestControllerWithDuplicatePodCIDR(t *testing.T) {
-	c, closeFn := newController(t, &config.NetworkConfig{})
-	defer closeFn()
+	c := newController(t, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -176,8 +175,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 }
 
 func TestIPInPodSubnets(t *testing.T) {
-	c, closeFn := newController(t, &config.NetworkConfig{})
-	defer closeFn()
+	c := newController(t, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -240,8 +238,8 @@ func TestIPInPodSubnets(t *testing.T) {
 	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("8.8.8.8")))
 }
 
-func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticationMode config.IPsecAuthenticationMode) (*fakeController, func()) {
-	c, closeFn := newController(t, &config.NetworkConfig{
+func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticationMode config.IPsecAuthenticationMode) *fakeController {
+	c := newController(t, &config.NetworkConfig{
 		TrafficEncapMode:      0,
 		TunnelType:            ovsconfig.TunnelType("vxlan"),
 		TrafficEncryptionMode: config.TrafficEncryptionModeIPSec,
@@ -253,11 +251,11 @@ func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticatio
 	for _, i := range ifaces {
 		c.interfaceStore.AddInterface(i)
 	}
-	return c, closeFn
+	return c
 }
 
 func TestRemoveStaleTunnelPorts(t *testing.T) {
-	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
+	c := setup(t, []*interfacestore.InterfaceConfig{
 		{
 			Type:          interfacestore.IPSecTunnelInterface,
 			InterfaceName: util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1"),
@@ -273,7 +271,6 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 		},
 	}, config.IPsecAuthenticationModePSK)
 
-	defer closeFn()
 	defer c.queue.ShutDown()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -305,7 +302,7 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 }
 
 func TestCreateIPSecTunnelPortPSK(t *testing.T) {
-	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
+	c := setup(t, []*interfacestore.InterfaceConfig{
 		{
 			Type:          interfacestore.IPSecTunnelInterface,
 			InterfaceName: "mismatchedname",
@@ -335,7 +332,6 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 		},
 	}, config.IPsecAuthenticationModePSK)
 
-	defer closeFn()
 	defer c.queue.ShutDown()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -406,9 +402,8 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 }
 
 func TestCreateIPSecTunnelPortCert(t *testing.T) {
-	c, closeFn := setup(t, nil, config.IPsecAuthenticationModeCert)
+	c := setup(t, nil, config.IPsecAuthenticationModeCert)
 
-	defer closeFn()
 	defer c.queue.ShutDown()
 	stopCh := make(chan struct{})
 	defer close(stopCh)

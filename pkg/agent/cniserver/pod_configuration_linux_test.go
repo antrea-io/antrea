@@ -133,8 +133,6 @@ func newTestInterfaceConfigurator() *fakeInterfaceConfigurator {
 
 func TestConnectInterceptedInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	testPodName := "test-pod"
 	podNamespace := testPodNamespace
 	hostInterfaceName := util.GenerateContainerInterfaceName(testPodName, testPodNamespace, testPodInfraContainerID)
@@ -241,8 +239,6 @@ func TestConnectInterceptedInterface(t *testing.T) {
 
 func TestCreateOVSPort(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	containerID := generateUUID(t)
 	podName := "p0"
 	podNameSpace := testPodNamespace
@@ -401,8 +397,6 @@ func TestParseOVSPortInterfaceConfig(t *testing.T) {
 
 func TestCheckHostInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	hostIfaceName := "port1"
 	containerID := generateUUID(t)
 	containerIntf := &current.Interface{Name: ifname, Sandbox: netns, Mac: "01:02:03:04:05:06"}
@@ -460,8 +454,6 @@ func TestCheckHostInterface(t *testing.T) {
 
 func TestConfigureSriovSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	containerID := generateUUID(t)
 	containerNS := "containerNS"
 

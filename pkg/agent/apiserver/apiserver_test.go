@@ -78,7 +78,6 @@ current-context: cluster
 	}()
 	version.Version = "v1.2.3"
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	agentQuerier := aqtest.NewMockAgentQuerier(ctrl)
 	agentQuerier.EXPECT().GetNodeConfig().Return(&config.NodeConfig{OVSBridge: "br-int"})
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)

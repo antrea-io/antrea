@@ -30,7 +30,6 @@ import (
 
 func TestRestoreRules(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockIPTables, mockPortOpener)

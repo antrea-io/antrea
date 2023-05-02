@@ -152,7 +152,6 @@ func init() {
 
 func TestPodControllerRun(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	client := fake.NewSimpleClientset()
 	netdefclient := netdefclientfake.NewSimpleClientset().K8sCniCncfIoV1()
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
@@ -262,7 +261,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("missing network", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, _, _ := newPodController(ctrl)
 		podController.podCache.AddCNIConfigInfo(cniConfig)
 		_, err := podController.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
@@ -272,7 +270,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("multiple network interfaces", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, mockIPAM, interfaceConfigurator := newPodController(ctrl)
 
 		pod, cniConfig := testPod(
@@ -327,7 +324,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("no network interfaces", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, _, _ := newPodController(ctrl)
 
 		pod, cniConfig := testPod(podName, containerID, podIP)
@@ -340,7 +336,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("missing podcache entry", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, _, _ := newPodController(ctrl)
 
 		network := testNetwork(networkName)
@@ -354,7 +349,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("missing Status.PodIPs", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, _, _ := newPodController(ctrl)
 
 		pod, cniConfig := testPod(podName, containerID, "")
@@ -370,7 +364,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("different Namespace for Pod and NetworkAttachmentDefinition", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, mockIPAM, interfaceConfigurator := newPodController(ctrl)
 
 		networkNamespace := "nsB"
@@ -412,7 +405,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("no interface name", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, mockIPAM, interfaceConfigurator := newPodController(ctrl)
 
 		pod, cniConfig := testPod(
@@ -464,7 +456,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("error when creating interface", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, mockIPAM, interfaceConfigurator := newPodController(ctrl)
 
 		network := testNetwork(networkName)
@@ -493,7 +484,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("invalid networks annotation", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		podController, _, _ := newPodController(ctrl)
 
 		pod, cniConfig := testPod(podName, containerID, podIP)
@@ -513,7 +503,6 @@ func TestPodControllerAddPod(t *testing.T) {
 
 	t.Run("Error when adding VF deviceID cache per Pod", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
 		network := testNetwork(networkName)
 		podController, _, _ := newPodController(ctrl)
 		podController.podCache.AddCNIConfigInfo(cniConfig)

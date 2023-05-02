@@ -140,7 +140,6 @@ func TestCluster_Run(t *testing.T) {
 				// Make sure mock controller is closed after Run() finishes.
 				close(stopCh)
 				<-stoppedCh
-				controller.Finish()
 			}()
 
 			nodeConfig := &config.NodeConfig{
@@ -183,7 +182,6 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		// Make sure mock controller is closed after Run() finishes.
 		close(stopCh)
 		<-stoppedCh
-		controller.Finish()
 	}()
 
 	nodeName := "localNodeName"
@@ -660,7 +658,6 @@ func TestCluster_RejoinNodes(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockMemberlist := NewMockMemberlist(controller)
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.2"})
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.3"})

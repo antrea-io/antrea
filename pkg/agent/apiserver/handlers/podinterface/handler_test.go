@@ -140,8 +140,6 @@ func parseMAC(mac string) net.HardwareAddr {
 
 func TestPodInterfaceQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testcases := map[string]struct {
 		query           string
 		expectedStatus  int
@@ -195,8 +193,6 @@ func TestPodInterfaceQuery(t *testing.T) {
 
 func TestPodInterfaceListQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testcases := map[string]struct {
 		query           string
 		expectedStatus  int

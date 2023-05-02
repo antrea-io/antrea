@@ -29,7 +29,6 @@ import (
 
 func TestRecordMetricsQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	faq := queriertest.NewMockFlowAggregatorQuerier(ctrl)
 	faq.EXPECT().GetRecordMetrics().Return(querier.Metrics{
 		NumRecordsExported: 20,

@@ -95,7 +95,6 @@ var (
 
 func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -139,7 +138,6 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 
 func TestUpdateOVSPortsData(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -284,7 +282,6 @@ func TestParseHostInterfaceConfig(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			mockOVSBridgeClient.EXPECT().GetPortData(
 				tt.portData.ExternalIDs[ovsExternalIDUplinkPort],
@@ -302,7 +299,6 @@ func TestParseHostInterfaceConfig(t *testing.T) {
 
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -337,7 +333,6 @@ func TestReconcile(t *testing.T) {
 
 func TestAddExternalNode(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -387,7 +382,6 @@ func TestAddExternalNode(t *testing.T) {
 
 func TestEnqueueExternalNodeUpdate(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)

@@ -202,7 +202,6 @@ func TestUpdateExternalNode(t *testing.T) {
 			defer mockLinkByName(t, tt.linkByNameCalledTimes)()
 
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -358,7 +357,6 @@ func TestAddInterface(t *testing.T) {
 			defer mockLinkByName(t, tt.linkByNameCalledTimes)()
 
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -373,7 +371,6 @@ func TestAddInterface(t *testing.T) {
 
 func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -444,7 +441,6 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 
 func TestDeleteExternalNode(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
@@ -489,7 +485,6 @@ func TestDeleteExternalNode(t *testing.T) {
 
 func TestMoveIFConfigurations(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)

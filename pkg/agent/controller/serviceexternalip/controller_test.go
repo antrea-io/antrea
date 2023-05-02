@@ -386,7 +386,6 @@ func TestCreateService(t *testing.T) {
 			}
 			objs = append(objs, tt.serviceToCreate)
 			c := newFakeController(t, objs...)
-			defer c.mockController.Finish()
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
@@ -595,7 +594,6 @@ func TestUpdateService(t *testing.T) {
 			objs = append(objs, tt.serviceToUpdate)
 			c := newFakeController(t, objs...)
 			c.externalIPStates = tt.previousExternalIPStates
-			defer c.mockController.Finish()
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)

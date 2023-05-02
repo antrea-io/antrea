@@ -63,7 +63,7 @@ type fakeStretchedNetworkPolicyController struct {
 	podUpdateChannel  *channel.SubscribableChannel
 }
 
-func newStretchedNetworkPolicyController(t *testing.T, clientset *fake.Clientset, mcClient *mcfake.Clientset) (*fakeStretchedNetworkPolicyController, func()) {
+func newStretchedNetworkPolicyController(t *testing.T, clientset *fake.Clientset, mcClient *mcfake.Clientset) *fakeStretchedNetworkPolicyController {
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	listOptions := func(options *metav1.ListOptions) {
 		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "test-node").String()
@@ -102,7 +102,7 @@ func newStretchedNetworkPolicyController(t *testing.T, clientset *fake.Clientset
 		ovsClient:                        ovsClient,
 		interfaceStore:                   interfaceStore,
 		podUpdateChannel:                 podUpdateChannel,
-	}, ctrl.Finish
+	}
 }
 
 var (
@@ -149,8 +149,7 @@ func TestEnqueueAllPods(t *testing.T) {
 
 	clientset := fake.NewSimpleClientset(ns, pod)
 	mcClient := mcfake.NewSimpleClientset(labelIdentity)
-	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
-	defer closeFn()
+	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -226,8 +225,7 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 
 	clientset := fake.NewSimpleClientset()
 	mcClient := mcfake.NewSimpleClientset()
-	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
-	defer closeFn()
+	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -373,8 +371,7 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 
 	clientset := fake.NewSimpleClientset()
 	mcClient := mcfake.NewSimpleClientset()
-	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
-	defer closeFn()
+	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -486,8 +483,7 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 	}
 	clientset := fake.NewSimpleClientset()
 	mcClient := mcfake.NewSimpleClientset()
-	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
-	defer closeFn()
+	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})

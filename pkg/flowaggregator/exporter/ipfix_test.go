@@ -51,7 +51,6 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 
 func TestIPFIXExporter_sendTemplateSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
 	mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
@@ -108,7 +107,6 @@ func TestIPFIXExporter_sendTemplateSet(t *testing.T) {
 
 func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
 	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
@@ -169,7 +167,6 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 
 func TestIPFIXExporter_AddRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
 	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
@@ -205,7 +202,6 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 
 func TestIPFIXExporter_initIPFIXExportingProcess_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 
@@ -229,7 +225,6 @@ func TestIPFIXExporter_initIPFIXExportingProcess_Error(t *testing.T) {
 
 func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
 	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)

@@ -119,7 +119,6 @@ func TestAddFQDNRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			f, c := newMockFQDNController(t, controller, nil)
 			if tt.addressAdded {
 				c.EXPECT().AddAddressToDNSConjunction(dnsInterceptRuleID, gomock.Any()).Times(1)
@@ -277,7 +276,6 @@ func TestDeleteFQDNRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			f, c := newMockFQDNController(t, controller, nil)
 			c.EXPECT().AddAddressToDNSConjunction(dnsInterceptRuleID, gomock.Any()).Times(len(tt.previouslyAddedRules))
 			f.dnsEntryCache = tt.existingDNSCache
@@ -296,7 +294,6 @@ func TestDeleteFQDNRule(t *testing.T) {
 
 func TestLookupIPFallback(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	dnsServer := "" // force a fallback to local resolver
 	f, _ := newMockFQDNController(t, controller, &dnsServer)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

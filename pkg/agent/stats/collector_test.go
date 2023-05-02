@@ -58,8 +58,6 @@ var (
 
 func TestCollect(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	tests := []struct {
 		name                    string
 		ruleStats               map[uint32]*agenttypes.RuleMetric
@@ -338,8 +336,6 @@ func TestCalculateDiff(t *testing.T) {
 
 func TestCalculateNodeStatsSummary(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	tests := []struct {
 		name                string
 		lastStatsCollection *statsCollection
@@ -420,8 +416,6 @@ func TestCalculateNodeStatsSummary(t *testing.T) {
 }
 
 func TestConvertMulticastGroups(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	tests := []struct {
 		name                      string
 		multicastGroupMap         map[string][]cpv1beta.PodReference
@@ -454,7 +448,6 @@ func TestConvertMulticastGroups(t *testing.T) {
 
 func TestMergeStatsWithIGMPReports(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	tests := []struct {
 		name              string
 		curAnpStats       []cpv1beta.NetworkPolicyStats

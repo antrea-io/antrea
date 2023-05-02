@@ -208,7 +208,6 @@ func Test_client_defaultFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, tc.nodeType, tc.trafficEncapMode, tc.clientOptions...)
