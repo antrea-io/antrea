@@ -150,6 +150,7 @@ if $PULL; then
     done
 fi
 
+export NO_PULL=1
 cd build/images/ovs
 ./build.sh $ARGS
 cd -
@@ -158,7 +159,6 @@ cd build/images/base
 ./build.sh $ARGS
 cd -
 
-export NO_PULL=1
 if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
         make build-ubuntu-coverage
