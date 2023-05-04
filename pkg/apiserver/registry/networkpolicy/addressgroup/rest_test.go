@@ -142,7 +142,7 @@ func TestRESTWatch(t *testing.T) {
 	addressGroups := []*types.AddressGroup{
 		{
 			Name:     "addressGroup1",
-			SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+			SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1")},
 		},
 	}
 	tests := []struct {

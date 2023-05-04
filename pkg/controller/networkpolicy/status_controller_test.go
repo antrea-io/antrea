@@ -90,7 +90,7 @@ func newTestStatusController(initialObjects ...runtime.Object) (*StatusControlle
 
 func newInternalNetworkPolicy(name string, generation int64, nodes []string, ref *controlplane.NetworkPolicyReference) *types.NetworkPolicy {
 	return &types.NetworkPolicy{
-		SpanMeta:   types.SpanMeta{NodeNames: sets.NewString(nodes...)},
+		SpanMeta:   types.SpanMeta{NodeNames: sets.New[string](nodes...)},
 		Generation: generation,
 		Name:       name,
 		SourceRef:  ref,

@@ -90,7 +90,7 @@ func TestMemberlistQuery(t *testing.T) {
 			name: "get memberlist",
 			memberlistInterface: func(c *gomock.Controller) memberlist.Interface {
 				m := memberlisttest.NewMockInterface(c)
-				m.EXPECT().AliveNodes().Return(sets.NewString("node1"))
+				m.EXPECT().AliveNodes().Return(sets.New[string]("node1"))
 				return m
 			},
 			nodeLister:     nodeLister,

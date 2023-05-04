@@ -41,7 +41,7 @@ type ndpConn interface {
 type ndpResponder struct {
 	iface           *net.Interface
 	conn            ndpConn
-	assignedIPs     sets.String
+	assignedIPs     sets.Set[string]
 	multicastGroups map[int]int
 	mutex           sync.Mutex
 }
@@ -65,7 +65,7 @@ func NewNDPResponder(iface *net.Interface) (*ndpResponder, error) {
 		iface:           iface,
 		conn:            conn,
 		multicastGroups: make(map[int]int),
-		assignedIPs:     sets.NewString(),
+		assignedIPs:     sets.New[string](),
 	}, nil
 }
 

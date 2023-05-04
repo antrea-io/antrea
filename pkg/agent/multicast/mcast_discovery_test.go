@@ -43,15 +43,15 @@ var (
 
 type snooperValidator struct {
 	eventCh          chan *mcastGroupEvent
-	groupJoinedNodes map[string]sets.String
-	groupLeftNodes   map[string]sets.String
+	groupJoinedNodes map[string]sets.Set[string]
+	groupLeftNodes   map[string]sets.Set[string]
 }
 
 func (v *snooperValidator) processPackets(expectedPackets int) {
-	appendSrcNode := func(groupKey string, groupNodes map[string]sets.String, nodeIP net.IP) map[string]sets.String {
+	appendSrcNode := func(groupKey string, groupNodes map[string]sets.Set[string], nodeIP net.IP) map[string]sets.Set[string] {
 		_, exists := groupNodes[groupKey]
 		if !exists {
-			groupNodes[groupKey] = sets.NewString()
+			groupNodes[groupKey] = sets.New[string]()
 		}
 		groupNodes[groupKey] = groupNodes[groupKey].Insert(nodeIP.String())
 		return groupNodes
@@ -171,22 +171,22 @@ func TestIGMPRemoteReport(t *testing.T) {
 		}
 		return packets
 	}
-	validateGroupNodes := func(groups []net.IP, expectedNodesIPs []net.IP, testGroupNodes map[string]sets.String) {
+	validateGroupNodes := func(groups []net.IP, expectedNodesIPs []net.IP, testGroupNodes map[string]sets.Set[string]) {
 		if len(expectedNodesIPs) == 0 {
 			return
 		}
 		for _, g := range groups {
-			expectedNodes := sets.NewString()
+			expectedNodes := sets.New[string]()
 			for _, n := range expectedNodesIPs {
 				expectedNodes.Insert(n.String())
 			}
 			nodes, exists := testGroupNodes[g.String()]
 			assert.True(t, exists)
-			assert.True(t, nodes.HasAll(expectedNodes.List()...))
+			assert.True(t, nodes.HasAll(sets.List(expectedNodes)...))
 		}
 	}
 	testPacketProcess := func(groups []net.IP, joinedNodes []net.IP, leftNodes []net.IP) {
-		validator := snooperValidator{eventCh: eventCh, groupJoinedNodes: make(map[string]sets.String), groupLeftNodes: make(map[string]sets.String)}
+		validator := snooperValidator{eventCh: eventCh, groupJoinedNodes: make(map[string]sets.Set[string]), groupLeftNodes: make(map[string]sets.Set[string])}
 		packets := make([]ofctrl.PacketIn, 0, len(joinedNodes)+len(leftNodes))
 		packets = append(packets, generateRemotePackets(groups, joinedNodes, protocol.IGMPIsEx)...)
 		packets = append(packets, generateRemotePackets(groups, leftNodes, protocol.IGMPToIn)...)

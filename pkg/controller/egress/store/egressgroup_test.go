@@ -39,7 +39,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 	egressUID := k8stypes.UID("uid")
 	pod1 := &controlplane.PodReference{Name: "pod1", Namespace: "namespace1"}
 	eg1 := &types.EgressGroup{
-		SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node-local")},
+		SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node-local")},
 		UID:      egressUID,
 		Name:     egressName,
 		GroupMemberByNode: map[string]controlplane.GroupMemberSet{
@@ -48,7 +48,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 	}
 
 	eg2 := &types.EgressGroup{
-		SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+		SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 		UID:               egressUID,
 		Name:              egressName,
 		GroupMemberByNode: map[string]controlplane.GroupMemberSet{},
@@ -56,7 +56,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 
 	pod2 := &controlplane.PodReference{Name: "pod2", Namespace: "namespace2"}
 	eg3 := &types.EgressGroup{
-		SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node-local")},
+		SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node-local")},
 		UID:      egressUID,
 		Name:     egressName,
 		GroupMemberByNode: map[string]controlplane.GroupMemberSet{

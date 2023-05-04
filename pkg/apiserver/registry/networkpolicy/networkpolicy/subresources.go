@@ -47,6 +47,9 @@ func (s StatusREST) New() runtime.Object {
 	return &controlplane.NetworkPolicyStatus{}
 }
 
+func (s StatusREST) Destroy() {
+}
+
 func (s StatusREST) Create(ctx context.Context, name string, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	status, ok := obj.(*controlplane.NetworkPolicyStatus)
 	if !ok {

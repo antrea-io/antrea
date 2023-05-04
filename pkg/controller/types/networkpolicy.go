@@ -25,7 +25,7 @@ import (
 type SpanMeta struct {
 	// NodeNames is a set of node names that this object should be sent to.
 	// nil means it's not calculated yet while empty set means the span is 0 Node.
-	NodeNames sets.String
+	NodeNames sets.Set[string]
 }
 
 // Span provides methods to work with SpanMeta and objects composed of it.
@@ -108,8 +108,8 @@ type NetworkPolicy struct {
 }
 
 // GetAddressGroups returns AddressGroups used by this NetworkPolicy.
-func (p *NetworkPolicy) GetAddressGroups() sets.String {
-	addressGroups := sets.NewString()
+func (p *NetworkPolicy) GetAddressGroups() sets.Set[string] {
+	addressGroups := sets.New[string]()
 	for _, rule := range p.Rules {
 		addressGroups.Insert(rule.From.AddressGroups...)
 		addressGroups.Insert(rule.To.AddressGroups...)
@@ -118,6 +118,6 @@ func (p *NetworkPolicy) GetAddressGroups() sets.String {
 }
 
 // GetAppliedToGroups returns AppliedToGroups used by this NetworkPolicy.
-func (p *NetworkPolicy) GetAppliedToGroups() sets.String {
-	return sets.NewString(p.AppliedToGroups...)
+func (p *NetworkPolicy) GetAppliedToGroups() sets.Set[string] {
+	return sets.New[string](p.AppliedToGroups...)
 }

@@ -86,9 +86,9 @@ type egressState struct {
 	mark uint32
 	// The actual openflow ports for which we have installed SNAT rules. Used to identify stale openflow ports when
 	// updating or deleting an Egress.
-	ofPorts sets.Int32
+	ofPorts sets.Set[int32]
 	// The actual Pods of the Egress. Used to identify stale Pods when updating or deleting an Egress.
-	pods sets.String
+	pods sets.Set[string]
 }
 
 // egressIPState keeps the actual state of an Egress IP. It's maintained separately from egressState because
@@ -96,7 +96,7 @@ type egressState struct {
 type egressIPState struct {
 	egressIP net.IP
 	// The names of the Egresses that are currently referring to it.
-	egressNames sets.String
+	egressNames sets.Set[string]
 	// The datapath mark of this Egress IP. 0 if this is not a local IP.
 	mark uint32
 	// Whether its flows have been installed.
@@ -109,7 +109,7 @@ type egressIPState struct {
 // There is one effective Egress for a Pod at any given time.
 type egressBinding struct {
 	effectiveEgress     string
-	alternativeEgresses sets.String
+	alternativeEgresses sets.Set[string]
 }
 
 type EgressController struct {
@@ -129,7 +129,7 @@ type EgressController struct {
 	nodeName        string
 	idAllocator     *idAllocator
 
-	egressGroups      map[string]sets.String
+	egressGroups      map[string]sets.Set[string]
 	egressGroupsMutex sync.RWMutex
 
 	egressBindings      map[string]*egressBinding
@@ -174,7 +174,7 @@ func NewEgressController(
 		egressListerSynced:   egressInformer.Informer().HasSynced,
 		nodeName:             nodeName,
 		ifaceStore:           ifaceStore,
-		egressGroups:         map[string]sets.String{},
+		egressGroups:         map[string]sets.Set[string]{},
 		egressStates:         map[string]*egressState{},
 		egressIPStates:       map[string]*egressIPState{},
 		egressBindings:       map[string]*egressBinding{},
@@ -333,7 +333,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 // on this node. The unassigned IPs are from Egresses that were either deleted from the Kubernetes API or migrated
 // to other Nodes when the agent on this Node was not running.
 func (c *EgressController) replaceEgressIPs() error {
-	desiredLocalEgressIPs := sets.NewString()
+	desiredLocalEgressIPs := sets.New[string]()
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, egress := range egresses {
 		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName && egress.Status.EgressIP != "" {
@@ -399,7 +399,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string) (uint32,
 	if !exists {
 		ipState = &egressIPState{
 			egressIP:    net.ParseIP(egressIP),
-			egressNames: sets.NewString(egressName),
+			egressNames: sets.New[string](egressName),
 		}
 		c.egressIPStates[egressIP] = ipState
 	} else if !ipState.egressNames.Has(egressName) {
@@ -508,8 +508,8 @@ func (c *EgressController) newEgressState(egressName string, egressIP string) *e
 	defer c.egressStatesMutex.Unlock()
 	state := &egressState{
 		egressIP: egressIP,
-		ofPorts:  sets.NewInt32(),
-		pods:     sets.NewString(),
+		ofPorts:  sets.New[int32](),
+		pods:     sets.New[string](),
 	}
 	c.egressStates[egressName] = state
 	return state
@@ -525,7 +525,7 @@ func (c *EgressController) bindPodEgress(pod, egress string) bool {
 		// Promote itself as the effective Egress if there was not one.
 		c.egressBindings[pod] = &egressBinding{
 			effectiveEgress:     egress,
-			alternativeEgresses: sets.NewString(),
+			alternativeEgresses: sets.New[string](),
 		}
 		return true
 	}
@@ -694,7 +694,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	stalePods := eState.pods.Union(nil)
 
 	// Get a copy of the desired Pods.
-	pods := func() sets.String {
+	pods := func() sets.Set[string] {
 		c.egressGroupsMutex.RLock()
 		defer c.egressGroupsMutex.RUnlock()
 		pods, exist := c.egressGroups[egressName]
@@ -760,7 +760,7 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 	return nil
 }
 
-func (c *EgressController) uninstallPodFlows(egressName string, egressState *egressState, ofPorts sets.Int32, pods sets.String) error {
+func (c *EgressController) uninstallPodFlows(egressName string, egressState *egressState, ofPorts sets.Set[int32], pods sets.Set[string]) error {
 	for ofPort := range ofPorts {
 		if err := c.ofClient.UninstallPodSNATFlows(uint32(ofPort)); err != nil {
 			return err
@@ -772,7 +772,7 @@ func (c *EgressController) uninstallPodFlows(egressName string, egressState *egr
 	// may install new flows for the Pod before this Egress uninstalls its previous flows, causing conflicts.
 	// For each Pod, if the Egress was the Pod's effective Egress and there are other Egresses applying to it, it will
 	// pick one and trigger its resync.
-	newEffectiveEgresses := sets.NewString()
+	newEffectiveEgresses := sets.New[string]()
 	for pod := range pods {
 		delete(egressState.pods, pod)
 		newEffectiveEgress, exists := c.unbindPodEgress(pod, egressName)
@@ -871,14 +871,14 @@ func (c *EgressController) replaceEgressGroups(groups []*cpv1b2.EgressGroup) {
 	c.egressGroupsMutex.Lock()
 	defer c.egressGroupsMutex.Unlock()
 
-	oldGroupKeys := make(sets.String, len(c.egressGroups))
+	oldGroupKeys := make(sets.Set[string], len(c.egressGroups))
 	for key := range c.egressGroups {
 		oldGroupKeys.Insert(key)
 	}
 
 	for _, group := range groups {
 		oldGroupKeys.Delete(group.Name)
-		pods := sets.NewString()
+		pods := sets.New[string]()
 		for _, member := range group.GroupMembers {
 			pods.Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
 		}
@@ -897,7 +897,7 @@ func (c *EgressController) replaceEgressGroups(groups []*cpv1b2.EgressGroup) {
 }
 
 func (c *EgressController) addEgressGroup(group *cpv1b2.EgressGroup) {
-	pods := sets.NewString()
+	pods := sets.New[string]()
 	for _, member := range group.GroupMembers {
 		pods.Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
 	}

@@ -63,7 +63,7 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 		return true
 	}
 	ipBlocksUpdated := func() bool {
-		oldIPBs, newIPBs := sets.String{}, sets.String{}
+		oldIPBs, newIPBs := sets.Set[string]{}, sets.Set[string]{}
 		for _, ipb := range oldGroup.IPBlocks {
 			oldIPBs.Insert(ipb.CIDR.String())
 		}
@@ -73,7 +73,7 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 		return oldIPBs.Equal(newIPBs)
 	}
 	childGroupsUpdated := func() bool {
-		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
+		oldChildGroups, newChildGroups := sets.Set[string]{}, sets.Set[string]{}
 		for _, c := range oldGroup.ChildGroups {
 			oldChildGroups.Insert(c)
 		}

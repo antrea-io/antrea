@@ -25,13 +25,13 @@ import (
 )
 
 type fakeSuricata struct {
-	calledScCommands      sets.String
+	calledScCommands      sets.Set[string]
 	startSuricataFnCalled bool
 }
 
 func newFakeSuricata() *fakeSuricata {
 	return &fakeSuricata{
-		calledScCommands:      sets.NewString(),
+		calledScCommands:      sets.New[string](),
 		startSuricataFnCalled: false,
 	}
 }
@@ -213,7 +213,7 @@ func TestRuleLifecycle(t *testing.T) {
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			expectedScCommands := sets.NewString("register-tenant 1 /etc/suricata/antrea-tenant-1.yaml", "register-tenant-handler 1 vlan 1")
+			expectedScCommands := sets.New[string]("register-tenant 1 /etc/suricata/antrea-tenant-1.yaml", "register-tenant-handler 1 vlan 1")
 			assert.True(t, fs.startSuricataFnCalled)
 			assert.Equal(t, expectedScCommands, fs.calledScCommands)
 

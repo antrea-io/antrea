@@ -760,7 +760,7 @@ func run(o *Options) error {
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
-			sets.NewString(append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
+			sets.New[string](append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
 			ovsBridgeClient,
 			podUpdateChannel,
 			o.igmpQueryInterval,

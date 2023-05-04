@@ -253,7 +253,7 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 	c.appliedToSetLock.RUnlock()
 
 	var policies []v1beta.NetworkPolicy
-	policyKeys := sets.NewString()
+	policyKeys := sets.New[string]()
 	for _, group := range groups {
 		rules, _ := c.rules.ByIndex(appliedToGroupIndex, group)
 		for _, ruleObj := range rules {
@@ -375,7 +375,7 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 // NetworkPolicy.
 func toServicesIndexFunc(obj interface{}) ([]string, error) {
 	rule := obj.(*rule)
-	toSvcNamespacedName := sets.String{}
+	toSvcNamespacedName := sets.Set[string]{}
 	for _, svc := range rule.To.ToServices {
 		toSvcNamespacedName.Insert(k8s.NamespacedName(svc.Namespace, svc.Name))
 	}
@@ -386,7 +386,7 @@ func toServicesIndexFunc(obj interface{}) ([]string, error) {
 // It's provided to cache.Indexer to build an index of NetworkPolicy.
 func toIGMPReportGroupAddressIndexFunc(obj interface{}) ([]string, error) {
 	rule := obj.(*rule)
-	mcastGroupAddresses := sets.String{}
+	mcastGroupAddresses := sets.Set[string]{}
 	if rule.Direction == v1beta.DirectionOut {
 		for _, svc := range rule.Services {
 			if svc.Protocol != nil && *svc.Protocol == v1beta.ProtocolIGMP && svc.IGMPType == nil ||
@@ -501,7 +501,7 @@ func (c *ruleCache) ReplaceAddressGroups(groups []*v1beta.AddressGroup) {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
-	oldGroupKeys := make(sets.String, len(c.addressSetByGroup))
+	oldGroupKeys := make(sets.Set[string], len(c.addressSetByGroup))
 	for key := range c.addressSetByGroup {
 		oldGroupKeys.Insert(key)
 	}
@@ -594,7 +594,7 @@ func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta.AppliedToGroup) {
 	c.appliedToSetLock.Lock()
 	defer c.appliedToSetLock.Unlock()
 
-	oldGroupKeys := make(sets.String, len(c.appliedToSetByGroup))
+	oldGroupKeys := make(sets.Set[string], len(c.appliedToSetByGroup))
 	for key := range c.appliedToSetByGroup {
 		oldGroupKeys.Insert(key)
 	}
@@ -724,7 +724,7 @@ func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta.NetworkPolicy) {
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
 
-	oldKeys := make(sets.String, len(c.policyMap))
+	oldKeys := make(sets.Set[string], len(c.policyMap))
 	for key := range c.policyMap {
 		oldKeys.Insert(key)
 	}

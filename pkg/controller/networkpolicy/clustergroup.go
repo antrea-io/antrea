@@ -65,7 +65,7 @@ func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		return true
 	}
 	ipBlocksUpdated := func() bool {
-		oldIPBs, newIPBs := sets.String{}, sets.String{}
+		oldIPBs, newIPBs := sets.Set[string]{}, sets.Set[string]{}
 		for _, ipb := range oldGroup.IPBlocks {
 			oldIPBs.Insert(ipb.CIDR.String())
 		}
@@ -75,7 +75,7 @@ func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		return !oldIPBs.Equal(newIPBs)
 	}
 	childGroupsUpdated := func() bool {
-		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
+		oldChildGroups, newChildGroups := sets.Set[string]{}, sets.Set[string]{}
 		for _, c := range oldGroup.ChildGroups {
 			oldChildGroups.Insert(c)
 		}
@@ -153,8 +153,8 @@ func (c *NetworkPolicyController) processClusterGroup(cg *crdv1alpha3.ClusterGro
 }
 
 // filterInternalGroupsForService computes a list of internal Group keys which references the Service.
-func (c *NetworkPolicyController) filterInternalGroupsForService(obj metav1.Object) sets.String {
-	matchingKeySet := sets.String{}
+func (c *NetworkPolicyController) filterInternalGroupsForService(obj metav1.Object) sets.Set[string] {
+	matchingKeySet := sets.Set[string]{}
 	indexKey, _ := cache.MetaNamespaceKeyFunc(obj)
 	matchedSvcGroups, _ := c.internalGroupStore.GetByIndex(store.ServiceIndex, indexKey)
 	for i := range matchedSvcGroups {

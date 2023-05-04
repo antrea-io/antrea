@@ -79,7 +79,7 @@ func TestAllocateForRule(t *testing.T) {
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
 		From:      []types.Address{},
-		To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+		To:        ofPortsToOFAddresses(sets.New[int32](1)),
 		Service:   nil,
 	}
 	tests := []struct {
@@ -178,7 +178,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
 		From:      []types.Address{},
-		To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+		To:        ofPortsToOFAddresses(sets.New[int32](1)),
 		Service:   nil,
 	}
 	tests := []struct {

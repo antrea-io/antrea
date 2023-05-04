@@ -172,6 +172,9 @@ func (r *supportBundleREST) New() runtime.Object {
 	return &systemv1beta1.SupportBundle{}
 }
 
+func (r *supportBundleREST) Destroy() {
+}
+
 // Get returns current status of the bundle. It only allows querying the resource
 // whose name is equal to the mode.
 func (r *supportBundleREST) Get(_ context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
@@ -313,6 +316,9 @@ type downloadREST struct {
 
 func (d *downloadREST) New() runtime.Object {
 	return &systemv1beta1.SupportBundle{}
+}
+
+func (d *downloadREST) Destroy() {
 }
 
 func (d *downloadREST) Get(_ context.Context, _ string, _ *metav1.GetOptions) (runtime.Object, error) {

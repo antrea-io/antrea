@@ -83,10 +83,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 		existResImp              *mcsv1alpha1.ResourceImportList
 		resExpNamespacedName     types.NamespacedName
 		expNormalizedLabel       string
-		originalLabelsToClusters map[string]sets.String
-		originalClusterToLabels  map[string]sets.String
-		expLabelsToClusters      map[string]sets.String
-		expClusterToLabels       map[string]sets.String
+		originalLabelsToClusters map[string]sets.Set[string]
+		originalClusterToLabels  map[string]sets.Set[string]
+		expLabelsToClusters      map[string]sets.Set[string]
+		expClusterToLabels       map[string]sets.Set[string]
 		expLabelResImpDeleted    bool
 	}{
 		{
@@ -97,8 +97,8 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			existResImp:           &mcsv1alpha1.ResourceImportList{},
 			resExpNamespacedName:  resExpNamespacedName,
 			expNormalizedLabel:    normalizedLabel,
-			expLabelsToClusters:   map[string]sets.String{labelHash: sets.NewString(common.LocalClusterID)},
-			expClusterToLabels:    map[string]sets.String{common.LocalClusterID: sets.NewString(labelHash)},
+			expLabelsToClusters:   map[string]sets.Set[string]{labelHash: sets.New[string](common.LocalClusterID)},
+			expClusterToLabels:    map[string]sets.Set[string]{common.LocalClusterID: sets.New[string](labelHash)},
 			expLabelResImpDeleted: false,
 		},
 		{
@@ -111,8 +111,8 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			},
 			resExpNamespacedName:  resExpNamespacedName,
 			expNormalizedLabel:    normalizedLabel,
-			expLabelsToClusters:   map[string]sets.String{labelHash: sets.NewString(common.LocalClusterID)},
-			expClusterToLabels:    map[string]sets.String{common.LocalClusterID: sets.NewString(labelHash)},
+			expLabelsToClusters:   map[string]sets.Set[string]{labelHash: sets.New[string](common.LocalClusterID)},
+			expClusterToLabels:    map[string]sets.Set[string]{common.LocalClusterID: sets.New[string](labelHash)},
 			expLabelResImpDeleted: false,
 		},
 		{
@@ -125,10 +125,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			},
 			resExpNamespacedName:     resExpNamespacedNameClusterB,
 			expNormalizedLabel:       normalizedLabel,
-			originalLabelsToClusters: map[string]sets.String{labelHash: sets.NewString(common.LocalClusterID, clusterBID)},
-			originalClusterToLabels:  map[string]sets.String{common.LocalClusterID: sets.NewString(labelHash), clusterBID: sets.NewString(labelHash)},
-			expLabelsToClusters:      map[string]sets.String{labelHash: sets.NewString(common.LocalClusterID)},
-			expClusterToLabels:       map[string]sets.String{common.LocalClusterID: sets.NewString(labelHash), clusterBID: sets.NewString()},
+			originalLabelsToClusters: map[string]sets.Set[string]{labelHash: sets.New[string](common.LocalClusterID, clusterBID)},
+			originalClusterToLabels:  map[string]sets.Set[string]{common.LocalClusterID: sets.New[string](labelHash), clusterBID: sets.New[string](labelHash)},
+			expLabelsToClusters:      map[string]sets.Set[string]{labelHash: sets.New[string](common.LocalClusterID)},
+			expClusterToLabels:       map[string]sets.Set[string]{common.LocalClusterID: sets.New[string](labelHash), clusterBID: sets.New[string]()},
 			expLabelResImpDeleted:    false,
 		},
 		{
@@ -139,10 +139,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			},
 			resExpNamespacedName:     resExpNamespacedName,
 			expNormalizedLabel:       "",
-			originalLabelsToClusters: map[string]sets.String{labelHash: sets.NewString(common.LocalClusterID)},
-			originalClusterToLabels:  map[string]sets.String{common.LocalClusterID: sets.NewString(labelHash)},
-			expLabelsToClusters:      map[string]sets.String{},
-			expClusterToLabels:       map[string]sets.String{common.LocalClusterID: sets.NewString()},
+			originalLabelsToClusters: map[string]sets.Set[string]{labelHash: sets.New[string](common.LocalClusterID)},
+			originalClusterToLabels:  map[string]sets.Set[string]{common.LocalClusterID: sets.New[string](labelHash)},
+			expLabelsToClusters:      map[string]sets.Set[string]{},
+			expClusterToLabels:       map[string]sets.Set[string]{common.LocalClusterID: sets.New[string]()},
 			expLabelResImpDeleted:    true,
 		},
 	}

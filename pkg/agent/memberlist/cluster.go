@@ -85,7 +85,7 @@ type ClusterNodeEventHandler func(objName string)
 type Interface interface {
 	ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error)
 	SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error)
-	AliveNodes() sets.String
+	AliveNodes() sets.Set[string]
 	AddClusterEventHandler(handler ClusterNodeEventHandler)
 }
 
@@ -255,7 +255,7 @@ func (c *Cluster) handleUpdateNode(oldObj, newObj interface{}) {
 	klog.V(2).InfoS("Processed Node UPDATE event", "nodeName", node.Name, "affectedExternalIPPoolNum", affectedEIPs.Len())
 }
 
-func (c *Cluster) enqueueExternalIPPools(eips sets.String) {
+func (c *Cluster) enqueueExternalIPPools(eips sets.Set[string]) {
 	for eip := range eips {
 		c.queue.Add(eip)
 	}
@@ -291,8 +291,8 @@ func (c *Cluster) newClusterMember(node *corev1.Node) (string, error) {
 	return nodeAddr.String(), nil
 }
 
-func (c *Cluster) filterEIPsFromNodeLabels(node *corev1.Node) sets.String {
-	pools := sets.NewString()
+func (c *Cluster) filterEIPsFromNodeLabels(node *corev1.Node) sets.Set[string] {
+	pools := sets.New[string]()
 	eips, _ := c.externalIPPoolLister.List(labels.Everything())
 	for _, eip := range eips {
 		nodeSelector, _ := metav1.LabelSelectorAsSelector(&eip.Spec.NodeSelector)
@@ -495,8 +495,8 @@ func (c *Cluster) handleClusterNodeEvents(nodeEvent *memberlist.NodeEvent) {
 }
 
 // AliveNodes returns the list of nodeNames in the cluster.
-func (c *Cluster) AliveNodes() sets.String {
-	nodes := sets.NewString()
+func (c *Cluster) AliveNodes() sets.Set[string] {
+	nodes := sets.New[string]()
 	for _, node := range c.mList.Members() {
 		nodes.Insert(node.Name)
 	}

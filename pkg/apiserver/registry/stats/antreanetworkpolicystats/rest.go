@@ -68,6 +68,9 @@ func (r *REST) New() runtime.Object {
 	return &statsv1alpha1.AntreaNetworkPolicyStats{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) NewList() runtime.Object {
 	return &statsv1alpha1.AntreaNetworkPolicyStatsList{}
 }

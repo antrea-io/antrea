@@ -41,7 +41,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV1 := &types.NetworkPolicy{
 		Name:      "bar",
 		SourceRef: &npRef,
-		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+		SpanMeta:  types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
 			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
@@ -53,7 +53,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV2 := &types.NetworkPolicy{
 		Name:      "bar",
 		SourceRef: &npRef,
-		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+		SpanMeta:  types.SpanMeta{NodeNames: sets.New[string]("node1", "node3")},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
 			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
@@ -65,7 +65,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 	policyV3 := &types.NetworkPolicy{
 		Name:      "bar",
 		SourceRef: &npRef,
-		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+		SpanMeta:  types.SpanMeta{NodeNames: sets.New[string]("node1", "node3")},
 		Rules: []controlplane.NetworkPolicyRule{{
 			Direction: controlplane.DirectionIn,
 			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},

@@ -49,6 +49,9 @@ func (r *REST) New() runtime.Object {
 	return &controlplane.ClusterGroupMembers{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) Get(ctx context.Context, name string, options runtime.Object) (runtime.Object, error) {
 	groupMembers, ipBlocks, err := r.querier.GetGroupMembers(name)
 	if err != nil {

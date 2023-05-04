@@ -34,7 +34,7 @@ type Response struct {
 	Status   string `json:"status,omitempty"`
 }
 
-func generateResponse(node *v1.Node, aliveNodes sets.String) Response {
+func generateResponse(node *v1.Node, aliveNodes sets.Set[string]) Response {
 	status := "Dead"
 	if aliveNodes.Has(node.Name) {
 		status = "Alive"

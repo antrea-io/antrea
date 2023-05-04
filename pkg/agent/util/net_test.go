@@ -75,7 +75,7 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 	tests := []struct {
 		name                string
 		localIPs            *ip.DualStackIPs
-		ignoredInterfaces   sets.String
+		ignoredInterfaces   sets.Set[string]
 		testNetInterfaceErr error
 		wantIPv4IPNet       *net.IPNet
 		wantIPv6IPNet       *net.IPNet
@@ -83,13 +83,13 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 		{
 			name:              "IPv4 Interface",
 			localIPs:          &ip.DualStackIPs{IPv4: ipv4Public},
-			ignoredInterfaces: sets.String{},
+			ignoredInterfaces: sets.Set[string]{},
 			wantIPv4IPNet:     &ipv4PublicIPNet,
 		},
 		{
 			name:              "IPv6 Interface",
 			localIPs:          &ip.DualStackIPs{IPv6: ipv6Global},
-			ignoredInterfaces: sets.String{},
+			ignoredInterfaces: sets.Set[string]{},
 			wantIPv6IPNet: &net.IPNet{
 				IP:   ipv6Global,
 				Mask: net.CIDRMask(128, 128),
@@ -101,7 +101,7 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 				IPv4: ipv4Public,
 				IPv6: ipv6Global,
 			},
-			ignoredInterfaces: make(sets.String).Insert("1"),
+			ignoredInterfaces: make(sets.Set[string]).Insert("1"),
 			wantIPv4IPNet: &net.IPNet{
 				IP:   ipv4Public,
 				Mask: net.CIDRMask(32, 32),
@@ -114,7 +114,7 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 				IPv4: ipv4Public,
 				IPv6: ipv6Global,
 			},
-			ignoredInterfaces: sets.String{},
+			ignoredInterfaces: sets.Set[string]{},
 		},
 		{
 			name:                "Invalid",

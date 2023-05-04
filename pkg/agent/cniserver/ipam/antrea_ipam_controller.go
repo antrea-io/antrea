@@ -62,7 +62,7 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("obj is not IPPool: %+v", obj)
 	}
-	podNames := sets.NewString()
+	podNames := sets.New[string]()
 	for _, ipAddress := range ipPool.Status.IPAddresses {
 		if ipAddress.Owner.Pod != nil {
 			podNames.Insert(k8s.NamespacedName(ipAddress.Owner.Pod.Namespace, ipAddress.Owner.Pod.Name))

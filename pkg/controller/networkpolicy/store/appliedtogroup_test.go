@@ -61,22 +61,22 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				store.Create(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1), "node2": controlplane.NewGroupMemberSet(pod2)},
 				})
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1), "node2": controlplane.NewGroupMemberSet(pod3)},
 				})
 				store.Create(&types.AppliedToGroup{
 					Name:              "bar",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee2)},
 				})
 				store.Update(&types.AppliedToGroup{
 					Name:              "bar",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(ee1), "node2": controlplane.NewGroupMemberSet(ee3)},
 				})
 			},
@@ -109,31 +109,31 @@ func TestWatchAppliedToGroupEvent(t *testing.T) {
 				// This should not be seen as it doesn't span node3.
 				store.Create(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1), "node2": controlplane.NewGroupMemberSet(pod2, ee2)},
 				})
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node3")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1), "node3": controlplane.NewGroupMemberSet(pod3, ee3)},
 				})
 				// This should be seen as a modified event as it updates appliedToGroups of node3.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1", "node3")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1), "node3": controlplane.NewGroupMemberSet(pod4, ee4)},
 				})
 				// This should not be seen as a modified event as the change doesn't span node3.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node3")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node3")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node3": controlplane.NewGroupMemberSet(pod4, ee4)},
 				})
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AppliedToGroup{
 					Name:              "foo",
-					SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node1")},
+					SpanMeta:          types.SpanMeta{NodeNames: sets.New[string]("node1")},
 					GroupMemberByNode: map[string]controlplane.GroupMemberSet{"node1": controlplane.NewGroupMemberSet(pod1, ee1)},
 				})
 			},

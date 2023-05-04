@@ -422,7 +422,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 
 func mockGetIPNetDeviceFromIP(ipNet *net.IPNet, ipDevice *net.Interface) func() {
 	prevGetIPNetDeviceFromIP := getIPNetDeviceFromIP
-	getIPNetDeviceFromIP = func(localIP *ip.DualStackIPs, ignoredHostInterfaces sets.String) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+	getIPNetDeviceFromIP = func(localIP *ip.DualStackIPs, ignoredHostInterfaces sets.Set[string]) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 		return ipNet, nil, ipDevice, nil
 	}
 	return func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP }

@@ -195,7 +195,7 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 	c.ipAllocatorMutex.Lock()
 	defer c.ipAllocatorMutex.Unlock()
 
-	existingIPRanges := sets.NewString()
+	existingIPRanges := sets.New[string]()
 	multiIPAllocator, exists := c.ipAllocatorMap[ipPool.Name]
 	if !exists {
 		multiIPAllocator = ipallocator.MultiIPAllocator{}

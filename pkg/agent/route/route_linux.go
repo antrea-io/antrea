@@ -849,7 +849,7 @@ func (c *Client) initServiceIPRoutes() error {
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
 func (c *Client) Reconcile(podCIDRs []string) error {
-	desiredPodCIDRs := sets.NewString(podCIDRs...)
+	desiredPodCIDRs := sets.New[string](podCIDRs...)
 	// Get the peer IPv6 gateways from pod CIDRs
 	desiredIPv6GWs := getIPv6Gateways(podCIDRs)
 
@@ -958,8 +958,8 @@ func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 }
 
 // getIPv6Gateways returns the IPv6 gateway addresses of the given CIDRs.
-func getIPv6Gateways(podCIDRs []string) sets.String {
-	ipv6GWs := sets.NewString()
+func getIPv6Gateways(podCIDRs []string) sets.Set[string] {
+	ipv6GWs := sets.New[string]()
 	for _, podCIDR := range podCIDRs {
 		peerPodCIDRAddr, _, _ := net.ParseCIDR(podCIDR)
 		if peerPodCIDRAddr.To4() != nil {

@@ -282,8 +282,8 @@ func (c *ExternalNodeController) updateExternalNode(preEn *v1alpha1.ExternalNode
 		}
 
 	} else {
-		preIPs := sets.NewString(preEn.Spec.Interfaces[0].IPs...)
-		curIPs := sets.NewString(curEn.Spec.Interfaces[0].IPs...)
+		preIPs := sets.New[string](preEn.Spec.Interfaces[0].IPs...)
+		curIPs := sets.New[string](curEn.Spec.Interfaces[0].IPs...)
 		if (!reflect.DeepEqual(preEn.Labels, curEn.Labels)) || (!preIPs.Equal(curIPs)) {
 			updatedEE, err := genExternalEntity(curEEName, curEn)
 			if err != nil {

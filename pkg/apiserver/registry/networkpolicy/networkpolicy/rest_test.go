@@ -142,7 +142,7 @@ func TestRESTWatch(t *testing.T) {
 	networkPolicies := []*types.NetworkPolicy{
 		{
 			Name:     "networkPolicy1",
-			SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+			SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1")},
 		},
 	}
 	tests := []struct {

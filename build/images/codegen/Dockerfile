@@ -32,11 +32,11 @@ LABEL description="A Docker image based on the golang image, which includes code
 
 ENV GO111MODULE=on
 
-ARG K8S_VERSION=1.24.0
+ARG K8S_VERSION=1.26.4
 # The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
 # We use the version that is referenced in the Kubernetes go.mod (for the
 # correct K8s version).
-ARG KUBEOPENAPI_VERSION=v0.0.0-20220328201542-3ee0da9b0b42
+ARG KUBEOPENAPI_VERSION=v0.0.0-20221012153701-172d655c2280
 
 RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go install k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \

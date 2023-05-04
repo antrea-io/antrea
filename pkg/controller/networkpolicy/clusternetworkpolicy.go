@@ -82,7 +82,7 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 
 // filterPerNamespaceRuleACNPsByNSLabels gets all ClusterNetworkPolicy names that will need to be
 // re-processed based on the entire label set of an added/updated/deleted Namespace.
-func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels labels.Set) sets.String {
+func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels labels.Set) sets.Set[string] {
 	namespaceLabelMatches := func(peers []crdv1alpha1.AppliedTo) bool {
 		for _, peer := range peers {
 			nsLabelSelector := peer.NamespaceSelector
@@ -118,7 +118,7 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 		return false
 	}
 
-	affectedPolicies := sets.NewString()
+	affectedPolicies := sets.New[string]()
 	objs, _ := n.cnpInformer.Informer().GetIndexer().ByIndex(perNamespaceRuleIndex, HasPerNamespaceRule)
 	for _, obj := range objs {
 		cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
@@ -214,7 +214,7 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 	defer n.heartbeat("deleteNamespace")
 	klog.V(2).Infof("Processing Namespace %s DELETE event, labels: %v", namespace.Name, namespace.Labels)
 	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(namespace.Labels)
-	for _, cnpName := range affectedACNPs.List() {
+	for _, cnpName := range sets.List(affectedACNPs) {
 		// Ignore the ClusterNetworkPolicy if it has been removed during the process.
 		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
 			n.enqueueInternalNetworkPolicy(getACNPReference(cnp))
@@ -222,8 +222,8 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 	}
 }
 
-func (c *NetworkPolicyController) filterAGsFromNodeLabels(node *v1.Node) sets.String {
-	ags := sets.NewString()
+func (c *NetworkPolicyController) filterAGsFromNodeLabels(node *v1.Node) sets.Set[string] {
+	ags := sets.New[string]()
 	addressGroupObjs, _ := c.addressGroupStore.GetByIndex(store.IsNodeAddressGroupIndex, "true")
 	for _, addressGroupObj := range addressGroupObjs {
 		addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
@@ -235,8 +235,8 @@ func (c *NetworkPolicyController) filterAGsFromNodeLabels(node *v1.Node) sets.St
 	return ags
 }
 
-func (c *NetworkPolicyController) getATGsAppliedToService() sets.String {
-	atgs := sets.NewString()
+func (c *NetworkPolicyController) getATGsAppliedToService() sets.Set[string] {
+	atgs := sets.New[string]()
 	appliedToGroupObjs, _ := c.appliedToGroupStore.GetByIndex(store.IsAppliedToServiceIndex, "true")
 	for _, appliedToGroupObj := range appliedToGroupObjs {
 		appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
@@ -343,7 +343,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	// During policy peer processing, any ClusterSet-scoped selector will be registered with the
 	// labelIdentityInterface and added to this set. By the end of the function, this set will
 	// be used to remove any stale selector from the policy in the labelIdentityInterface.
-	var clusterSetScopeSelectorKeys sets.String
+	var clusterSetScopeSelectorKeys sets.Set[string]
 	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
 		for _, at := range cnp.Spec.AppliedTo {
 			if at.ServiceAccount != nil {
@@ -459,7 +459,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 			UID:  cnp.UID,
 		},
 		UID:              cnp.UID,
-		AppliedToGroups:  sets.StringKeySet(appliedToGroups).List(),
+		AppliedToGroups:  sets.List(sets.KeySet(appliedToGroups)),
 		Rules:            rules,
 		Priority:         &cnp.Spec.Priority,
 		TierPriority:     &tierPriority,

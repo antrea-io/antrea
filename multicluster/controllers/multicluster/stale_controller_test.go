@@ -168,7 +168,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 		name                  string
 		existingACNPList      *v1alpha1.ClusterNetworkPolicyList
 		existingResImpList    *mcsv1alpha1.ResourceImportList
-		expectedACNPRemaining sets.String
+		expectedACNPRemaining sets.Set[string]
 	}{
 		{
 			name: "cleanup stale ACNP",
@@ -182,7 +182,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 					acnpResImport,
 				},
 			},
-			expectedACNPRemaining: sets.NewString(common.AntreaMCSPrefix+acnpImportName, "non-mcs-acnp"),
+			expectedACNPRemaining: sets.New[string](common.AntreaMCSPrefix+acnpImportName, "non-mcs-acnp"),
 		},
 	}
 	for _, tt := range tests {
@@ -202,7 +202,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 			if err := fakeClient.List(ctx, acnpList, &client.ListOptions{}); err != nil {
 				t.Errorf("Error when listing the ACNPs after cleanup")
 			}
-			acnpRemaining := sets.NewString()
+			acnpRemaining := sets.New[string]()
 			for _, acnp := range acnpList.Items {
 				acnpRemaining.Insert(acnp.Name)
 			}

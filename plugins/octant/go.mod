@@ -5,7 +5,7 @@ go 1.19
 require (
 	antrea.io/antrea v0.0.0
 	github.com/vmware-tanzu/octant v0.24.0
-	k8s.io/apimachinery v0.24.9
+	k8s.io/apimachinery v0.26.4
 )
 
 require (
@@ -102,7 +102,7 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.19.1 // indirect
+	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
@@ -120,15 +120,15 @@ require (
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.24.9 // indirect
-	k8s.io/apiextensions-apiserver v0.24.0 // indirect
-	k8s.io/client-go v0.24.9 // indirect
+	k8s.io/api v0.26.4 // indirect
+	k8s.io/apiextensions-apiserver v0.26.4 // indirect
+	k8s.io/client-go v0.26.4 // indirect
 	k8s.io/klog/v2 v2.80.1 // indirect
-	k8s.io/kube-aggregator v0.24.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
+	k8s.io/kube-aggregator v0.26.4 // indirect
+	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/metrics v0.24.0 // indirect
-	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 

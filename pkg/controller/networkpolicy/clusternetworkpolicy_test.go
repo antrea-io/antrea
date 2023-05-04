@@ -2011,35 +2011,35 @@ func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
 	tests := []struct {
 		name     string
 		nsLabels labels.Set
-		want     sets.String
+		want     sets.Set[string]
 	}{
 		{
 			name: "match spec AppliedTo",
 			nsLabels: map[string]string{
 				"foo1": "bar1",
 			},
-			want: sets.NewString(cnpWithSpecAppliedTo.Name, cnpMatchAllNamespaces.Name),
+			want: sets.New[string](cnpWithSpecAppliedTo.Name, cnpMatchAllNamespaces.Name),
 		},
 		{
 			name: "match per-namespace ingress rule AppliedTo",
 			nsLabels: map[string]string{
 				"foo2": "bar2",
 			},
-			want: sets.NewString(cnpWithRuleAppliedTo.Name, cnpMatchAllNamespaces.Name),
+			want: sets.New[string](cnpWithRuleAppliedTo.Name, cnpMatchAllNamespaces.Name),
 		},
 		{
 			name: "match non-per-namespace ingress rule AppliedTo",
 			nsLabels: map[string]string{
 				"foo3": "bar3",
 			},
-			want: sets.NewString(cnpMatchAllNamespaces.Name),
+			want: sets.New[string](cnpMatchAllNamespaces.Name),
 		},
 		{
 			name: "match per-namespace egress rule AppliedTo",
 			nsLabels: map[string]string{
 				"foo4": "bar4",
 			},
-			want: sets.NewString(cnpWithRuleAppliedTo.Name, cnpMatchAllNamespaces.Name),
+			want: sets.New[string](cnpWithRuleAppliedTo.Name, cnpMatchAllNamespaces.Name),
 		},
 	}
 	for _, tt := range tests {

@@ -44,7 +44,7 @@ type ipAssigner struct {
 	// assignIPs caches the IPs that are assigned to the dummy device.
 	// TODO: Add a goroutine to ensure that the cache is in sync with the IPs assigned to the dummy device in case the
 	// IPs are removed by users accidentally.
-	assignedIPs  sets.String
+	assignedIPs  sets.Set[string]
 	mutex        sync.RWMutex
 	arpResponder responder.Responder
 	ndpResponder responder.Responder
@@ -58,7 +58,7 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAss
 	}
 	a := &ipAssigner{
 		externalInterface: externalInterface,
-		assignedIPs:       sets.NewString(),
+		assignedIPs:       sets.New[string](),
 	}
 	if ipv4 != nil {
 		// For the Egress scenario, the external IPs should always be present on the dummy
@@ -128,12 +128,12 @@ func ensureDummyDevice(deviceName string) (netlink.Link, error) {
 }
 
 // loadIPAddresses gets the IP addresses on the dummy device and caches them in memory.
-func (a *ipAssigner) loadIPAddresses() (sets.String, error) {
+func (a *ipAssigner) loadIPAddresses() (sets.Set[string], error) {
 	addresses, err := netlink.AddrList(a.dummyDevice, netlink.FAMILY_ALL)
 	if err != nil {
 		return nil, err
 	}
-	newAssignIPs := sets.NewString()
+	newAssignIPs := sets.New[string]()
 	for _, address := range addresses {
 		newAssignIPs.Insert(address.IP.String())
 	}
@@ -224,7 +224,7 @@ func (a *ipAssigner) UnassignIP(ip string) error {
 }
 
 // AssignedIPs return the IPs that are assigned to the dummy device.
-func (a *ipAssigner) AssignedIPs() sets.String {
+func (a *ipAssigner) AssignedIPs() sets.Set[string] {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
 	// Return a copy.
@@ -234,7 +234,7 @@ func (a *ipAssigner) AssignedIPs() sets.String {
 // InitIPs loads the IPs from the dummy device and replaces the IPs that are assigned to it
 // with the given ones. This function also adds the given IPs to the ARP/NDP responder if
 // applicable. It can be used to recover the IP assigner to the desired state after Agent restarts.
-func (a *ipAssigner) InitIPs(ips sets.String) error {
+func (a *ipAssigner) InitIPs(ips sets.Set[string]) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	if a.dummyDevice != nil {

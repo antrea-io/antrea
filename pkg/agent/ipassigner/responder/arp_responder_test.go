@@ -201,14 +201,14 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 			require.NoError(t, err)
 			err = fakeARPClient.WriteTo(packet, tt.dstHWAddr)
 			require.NoError(t, err)
-			assignedIPs := sets.NewString()
+			assignedIPs := sets.New[string]()
 			for _, ip := range tt.assignedIPs {
 				assignedIPs.Insert(ip.String())
 			}
 			r := arpResponder{
 				iface:       tt.iface,
 				conn:        fakeARPClient,
-				assignedIPs: sets.NewString(),
+				assignedIPs: sets.New[string](),
 			}
 			for _, ip := range tt.assignedIPs {
 				r.AddIP(ip)
@@ -224,27 +224,27 @@ func Test_arpResponder_addIP(t *testing.T) {
 	tests := []struct {
 		name                string
 		ip                  net.IP
-		assignedIPs         sets.String
+		assignedIPs         sets.Set[string]
 		expectedError       bool
-		expectedAssignedIPs sets.String
+		expectedAssignedIPs sets.Set[string]
 	}{
 		{
 			name:                "Add new IP",
 			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.NewString(),
-			expectedAssignedIPs: sets.NewString("2.0.2.2"),
+			assignedIPs:         sets.New[string](),
+			expectedAssignedIPs: sets.New[string]("2.0.2.2"),
 		},
 		{
 			name:                "Add new IP with some IPs added",
 			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.NewString("2.0.2.1"),
-			expectedAssignedIPs: sets.NewString("2.0.2.1", "2.0.2.2"),
+			assignedIPs:         sets.New[string]("2.0.2.1"),
+			expectedAssignedIPs: sets.New[string]("2.0.2.1", "2.0.2.2"),
 		},
 		{
 			name:                "Add invalid IP",
 			ip:                  net.ParseIP("2022::abcd"),
-			assignedIPs:         sets.NewString("2.0.2.1"),
-			expectedAssignedIPs: sets.NewString("2.0.2.1"),
+			assignedIPs:         sets.New[string]("2.0.2.1"),
+			expectedAssignedIPs: sets.New[string]("2.0.2.1"),
 			expectedError:       true,
 		},
 	}
@@ -278,27 +278,27 @@ func Test_arpResponder_removeIP(t *testing.T) {
 	tests := []struct {
 		name                string
 		ip                  net.IP
-		assignedIPs         sets.String
+		assignedIPs         sets.Set[string]
 		expectedError       bool
-		expectedAssignedIPs sets.String
+		expectedAssignedIPs sets.Set[string]
 	}{
 		{
 			name:                "Remove existing IP",
 			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.NewString("2.0.2.2"),
-			expectedAssignedIPs: sets.NewString(),
+			assignedIPs:         sets.New[string]("2.0.2.2"),
+			expectedAssignedIPs: sets.New[string](),
 		},
 		{
 			name:                "Remove non-existent IP",
 			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.NewString("2.0.2.1"),
-			expectedAssignedIPs: sets.NewString("2.0.2.1"),
+			assignedIPs:         sets.New[string]("2.0.2.1"),
+			expectedAssignedIPs: sets.New[string]("2.0.2.1"),
 		},
 		{
 			name:                "Remove invalid IP",
 			ip:                  net.ParseIP("2022::abcd"),
-			assignedIPs:         sets.NewString("2.0.2.1"),
-			expectedAssignedIPs: sets.NewString("2.0.2.1"),
+			assignedIPs:         sets.New[string]("2.0.2.1"),
+			expectedAssignedIPs: sets.New[string]("2.0.2.1"),
 			expectedError:       true,
 		},
 	}
