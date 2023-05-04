@@ -107,6 +107,7 @@ if $PULL; then
         IMAGES_LIST=(
             "antrea/openvswitch:$BUILD_TAG"
             "antrea/cni-binaries:$CNI_BINARIES_VERSION"
+            "antrea/suricata-builder:$SURICATA_VERSION"
             "antrea/base-ubuntu:$BUILD_TAG"
         )
     elif [ "$DISTRO" == "ubi" ]; then
@@ -135,9 +136,16 @@ docker build $PLATFORM_ARG --target cni-binaries \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg BUILD_TAG=$BUILD_TAG .
 
+docker build $PLATFORM_ARG --target suricata-builder \
+       --cache-from antrea/suricata-builder:$SURICATA_VERSION \
+       -t antrea/suricata-builder:$SURICATA_VERSION \
+       --build-arg SURICATA_VERSION=$SURICATA_VERSION \
+       --build-arg BUILD_TAG=$BUILD_TAG .
+
 if [ "$DISTRO" == "ubuntu" ]; then
     docker build $PLATFORM_ARG \
            --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
+           --cache-from antrea/suricata-builder:$SURICATA_VERSION \
            --cache-from antrea/base-ubuntu:$BUILD_TAG \
            -t antrea/base-ubuntu:$BUILD_TAG \
            --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
@@ -156,6 +164,7 @@ fi
 
 if $PUSH; then
     docker push antrea/cni-binaries:$CNI_BINARIES_VERSION
+    docker push antrea/suricata-builder:$SURICATA_VERSION
     docker push antrea/base-$DISTRO:$BUILD_TAG
 fi
 

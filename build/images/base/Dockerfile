@@ -37,9 +37,66 @@ RUN set -eux; \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS; \
     wget -q -O /opt/cni/bin/whereabouts https://github.com/k8snetworkplumbingwg/whereabouts/releases/download/$WHEREABOUTS_VERSION/whereabouts-${pluginsArch} && chmod +x /opt/cni/bin/whereabouts
 
-FROM antrea/openvswitch:${BUILD_TAG}
+FROM ubuntu:22.04 as suricata-builder
 
 ARG SURICATA_VERSION
+
+ENV SURICATA_DEPS build-essential \
+                  pkg-config \
+                  libpcre3-dev \
+                  libpcap-dev \
+                  libcap-ng-dev \
+                  libnspr4-dev \
+                  libyaml-dev \
+                  libmagic-dev \
+                  libjansson-dev \
+                  libevent-dev \
+                  libnfnetlink-dev \
+                  libnetfilter-queue-dev \
+                  libnetfilter-log-dev \
+                  libnet1-dev \
+                  liblz4-dev \
+                  libnss3-dev \
+                  python3-dev \
+                  zlib1g-dev \
+                  rustc cargo
+
+ENV SURICATA_RUNTIME_DEPS libpcre3 \
+                          libpcap0.8 \
+                          libcap-ng0 \
+                          libnspr4 \
+                          libyaml-0-2 \
+                          libmagic1 \
+                          libjansson4 \
+                          libevent-2.1-7 \
+                          libevent-pthreads-2.1-7 \
+                          libnfnetlink0 \
+                          libnetfilter-queue1 \
+                          libnetfilter-log1 \
+                          libnet1 \
+                          liblz4-1 \
+                          libnss3 \
+                          python3 \
+                          python3-simplejson \
+                          zlib1g
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl $SURICATA_DEPS $SURICATA_RUNTIME_DEPS && \
+    curl -OL https://www.openinfosecfoundation.org/download/suricata-${SURICATA_VERSION}.tar.gz && \
+    tar zxf suricata-${SURICATA_VERSION}.tar.gz && \
+    cd suricata-${SURICATA_VERSION} && \
+    ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-shared --disable-gccmarch-native --enable-nfqueue && \
+    make -j$(nproc) && \
+    make install-strip install-conf DESTDIR=/fakeroot && \
+    cd - && \
+    rm -rf suricata-${SURICATA_VERSION} suricata-${SURICATA_VERSION}.tar.gz && \
+    apt-get remove -y $SURICATA_DEPS && apt-get autoremove -y --purge && \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
+    echo $SURICATA_RUNTIME_DEPS > /suricata-runtime-deps.txt
+
+# Something about the Docker mounts won't let us copy /var/run in the next stage.
+RUN rm -rf /fakeroot/var/run
+
+FROM antrea/openvswitch:${BUILD_TAG}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="An Ubuntu based Docker base image for Antrea."
@@ -52,10 +109,14 @@ USER root
 # chmod in the RUN command below instead.
 ADD https://raw.githubusercontent.com/kubernetes-sigs/iptables-wrappers/9e6ce59c864623ea71a6f7d59c35fcb13a919b87/iptables-wrapper-installer.sh /iptables-wrapper-installer.sh
 
-RUN apt-get update && apt-get install -y --no-install-recommends ipset jq inotify-tools gpg-agent software-properties-common && \
-    add-apt-repository ppa:oisf/suricata-${SURICATA_VERSION} && apt-get update && apt-get install -y suricata && \
-    apt-get remove -y gpg-agent software-properties-common && apt-get autoremove -y && rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
+COPY --from=suricata-builder /suricata-runtime-deps.txt /suricata-runtime-deps.txt
+
+RUN apt-get update && apt-get install -y --no-install-recommends ipset jq inotify-tools && \
+    apt-get install -y --no-install-recommends `cat /suricata-runtime-deps.txt` && \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
     chmod +x /iptables-wrapper-installer.sh && \
     /iptables-wrapper-installer.sh
+
+COPY --from=suricata-builder /fakeroot /
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
