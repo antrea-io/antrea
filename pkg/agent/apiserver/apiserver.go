@@ -34,6 +34,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/exit"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
@@ -87,6 +88,7 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/serviceexternalip", serviceexternalip.HandleFunc(seipq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/memberlist", memberlist.HandleFunc(aq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/exit", exit.HandleFunc())
 }
 
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {

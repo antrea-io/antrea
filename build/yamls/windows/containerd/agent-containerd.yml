@@ -39,6 +39,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - powershell
+                - -file
+                - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Exit-AntreaAgent-Containerd.ps1
         image: antrea-windows
         name: antrea-agent
         volumeMounts:

@@ -1,11 +1,13 @@
 apiVersion: v1
 data:
+  Exit-AntreaAgent-Containerd.ps1: |-
+    $token=cat /var/run/antrea/apiserver/loopback-client-token
+    curl.exe --insecure --header "Authorization: Bearer $token" https://127.0.0.1:10350/exit
   Install-WindowsCNI-Containerd.ps1: |
-    $ErrorActionPreference = "Stop";    
+    $ErrorActionPreference = "Stop";
     mkdir -force c:/var/log/antrea
-
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
-    $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/') 
+    $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/')
     mkdir -force C:/var/run/secrets/kubernetes.io/serviceaccount
     cp $mountPath/var/run/secrets/kubernetes.io/serviceaccount/ca.crt C:/var/run/secrets/kubernetes.io/serviceaccount
     cp $mountPath/var/run/secrets/kubernetes.io/serviceaccount/token C:/var/run/secrets/kubernetes.io/serviceaccount
@@ -15,7 +17,6 @@ data:
     cp $mountPath/etc/antrea/antrea-cni.conflist c:/etc/cni/net.d/10-antrea.conflist
     mkdir -force c:/k/antrea/bin
     cp $mountPath/k/antrea/bin/antctl.exe c:/k/antrea/bin/antctl.exe
-    
   Run-AntreaAgent-Containerd.ps1: |
     $ErrorActionPreference = "Stop"
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
@@ -25,7 +26,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-kht6m7hthm
+  name: antrea-agent-windows-8k42mc57m6
   namespace: kube-system
 ---
 apiVersion: v1
@@ -41,7 +42,7 @@ data:
     # Enable EndpointSlice support in AntreaProxy. Don't enable this feature unless that EndpointSlice
     # API version v1beta1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
     # this flag will not take effect.
-    #  EndpointSlice: false
+    #  EndpointSlice: true
 
     # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
     #  NodePortLocal: true
@@ -187,7 +188,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-8kfkb8t957
+  name: antrea-windows-config-hth2gk6b96
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -206,15 +207,11 @@ spec:
   template:
     metadata:
       annotations:
-        "microsoft.com/hostprocess-inherit-user": "true"
+        microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea
         component: antrea-agent
     spec:
-      securityContext:
-        windowsOptions:
-          runAsUserName: "NT AUTHORITY\\SYSTEM"
-          hostProcess: true
       containers:
       - args:
         - -file
@@ -236,6 +233,13 @@ spec:
               fieldPath: spec.nodeName
         image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - powershell
+              - -file
+              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Exit-AntreaAgent-Containerd.ps1
         name: antrea-agent
         volumeMounts:
         - mountPath: /etc/antrea
@@ -263,6 +267,10 @@ spec:
       nodeSelector:
         kubernetes.io/os: windows
       priorityClassName: system-node-critical
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: NT AUTHORITY\SYSTEM
       serviceAccountName: antrea-agent
       tolerations:
       - key: CriticalAddonsOnly
@@ -271,11 +279,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-8kfkb8t957
+          name: antrea-windows-config-hth2gk6b96
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-kht6m7hthm
+          name: antrea-agent-windows-8k42mc57m6
         name: antrea-agent-windows
       - hostPath:
           path: /var/log/antrea/

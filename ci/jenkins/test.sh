@@ -248,7 +248,7 @@ function collect_windows_network_info_and_logs {
 
 function wait_for_antrea_windows_pods_ready {
     kubectl apply -f "${WORKDIR}/antrea.yml"
-    if [[ "${PROXY_ALL}" == false ]]; then
+    if [[ "${PROXY_ALL}" == false && ${WINDOWS_YAML_SUFFIX} == "windows" ]]; then
         kubectl apply -f "${WORKDIR}/kube-proxy-${WINDOWS_YAML_SUFFIX}.yml"
     fi
     kubectl apply -f "${WORKDIR}/antrea-${WINDOWS_YAML_SUFFIX}.yml"
@@ -257,7 +257,7 @@ function wait_for_antrea_windows_pods_ready {
     kubectl rollout status deployment.apps/antrea-controller -n kube-system
     kubectl rollout status daemonset/antrea-agent -n kube-system
     kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
-    if [[ "${PROXY_ALL}" == false ]]; then
+    if [[ "${PROXY_ALL}" == false && ${WINDOWS_YAML_SUFFIX} == "windows" ]]; then
         kubectl rollout status daemonset/kube-proxy-windows -n kube-system
     fi
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
@@ -480,6 +480,13 @@ function deliver_antrea_windows_containerd {
 
     # Enable verbose log for troubleshooting.
     sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
+
+    echo "====== Updating yaml files to enable proxyAll ======"
+    KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
+    KUBERNETES_SVC_EP_PORT=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].ports[0].port}')
+    KUBERNETES_SVC_EP_ADDR="${KUBERNETES_SVC_EP_IP}:${KUBERNETES_SVC_EP_PORT}"
+    sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
+    sed -i "s|.*proxyAll: false|      proxyAll: true|g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
 
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest

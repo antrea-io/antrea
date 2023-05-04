@@ -10,4 +10,5 @@ configMapGenerator:
 - files:
   - conf/Run-AntreaAgent-Containerd.ps1
   - conf/Install-WindowsCNI-Containerd.ps1
+  - conf/Exit-AntreaAgent-Containerd.ps1
   name: antrea-agent-windows
