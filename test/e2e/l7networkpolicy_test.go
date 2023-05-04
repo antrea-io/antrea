@@ -57,6 +57,9 @@ func TestL7NetworkPolicy(t *testing.T) {
 	t.Run("HTTP", func(t *testing.T) {
 		testL7NetworkPolicyHTTP(t, data)
 	})
+	t.Run("TLS", func(t *testing.T) {
+		testL7NetworkPolicyTLS(t, data)
+	})
 }
 
 func createL7NetworkPolicy(t *testing.T,
@@ -121,7 +124,7 @@ func createL7NetworkPolicy(t *testing.T,
 	assert.NoError(t, err)
 }
 
-func probeL7NetworkPolicy(t *testing.T, data *TestData, serverPodName, clientPodName string, serverIPs []*net.IP, allowHTTPPathHostname, allowHTTPPathClientIP bool) {
+func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clientPodName string, serverIPs []*net.IP, allowHTTPPathHostname, allowHTTPPathClientIP bool) {
 	for _, ip := range serverIPs {
 		baseURL := net.JoinHostPort(ip.String(), "8080")
 
@@ -164,6 +167,19 @@ func probeL7NetworkPolicy(t *testing.T, data *TestData, serverPodName, clientPod
 			}))
 		}
 	}
+}
+
+func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string, serverName string, canAccess bool) {
+	url := fmt.Sprintf("https://%s", serverName)
+	assert.NoError(t, wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
+		_, _, err := data.runWgetCommandFromTestPodWithRetry(clientPodName, data.testNamespace, agnhostContainerName, url, 5)
+		if canAccess && err != nil {
+			return false, err
+		} else if !canAccess && err == nil {
+			return false, fmt.Errorf("should not be able to access to the server")
+		}
+		return true, nil
+	}))
 }
 
 func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
@@ -227,7 +243,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// the first L7 NetworkPolicy has higher priority, matched packets will be only matched by the first L7 NetworkPolicy.
 		// As a result, only HTTP path 'hostname' is allowed by the first L7 NetworkPolicy, other HTTP path like 'clientip'
 		// will be rejected.
-		probeL7NetworkPolicy(t, data, serverPodName, clientPodName, serverIPs, true, false)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
 		data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
@@ -235,7 +251,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
 		// and the second L7 NetworkPolicy allows any HTTP path, then both path 'hostname' and 'clientip' are allowed.
-		probeL7NetworkPolicy(t, data, serverPodName, clientPodName, serverIPs, true, true)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, true)
 
 		data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowAnyPath, metav1.DeleteOptions{})
 	})
@@ -254,7 +270,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// the first L7 NetworkPolicy has higher priority, matched packets will be only matched by the first L7 NetworkPolicy.
 		// As a result, only HTTP path 'hostname' is allowed by the first L7 NetworkPolicy, other HTTP path like 'clientip'
 		// will be rejected.
-		probeL7NetworkPolicy(t, data, serverPodName, clientPodName, serverIPs, true, false)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
 		data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
@@ -262,6 +278,54 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
 		// and the second L7 NetworkPolicy allows any HTTP path, then both path 'hostname' and 'clientip' are allowed.
-		probeL7NetworkPolicy(t, data, serverPodName, clientPodName, serverIPs, true, true)
+		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, true)
 	})
+}
+
+func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
+	clientPodName := "test-l7-tls-client-selected"
+	clientPodLabels := map[string]string{"test-l7-tls-e2e": "client"}
+	cmd := []string{"bash", "-c", "sleep 3600"}
+
+	// Create a client Pod which will be selected by test L7 NetworkPolices.
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(clientPodLabels).Create(data))
+	if _, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace); err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientPodName, err)
+	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
+
+	l7ProtocolAllowsGoogle := []crdv1alpha1.L7Protocol{
+		{
+			TLS: &crdv1alpha1.TLSProtocol{
+				SNI: "*.google.com",
+			},
+		},
+	}
+	l7ProtocolAllowsFacebook := []crdv1alpha1.L7Protocol{
+		{
+			TLS: &crdv1alpha1.TLSProtocol{
+				SNI: "*.facebook.com",
+			},
+		},
+	}
+
+	policyAllowSNI1 := "test-l7-tls-allow-sni-google"
+	policyAllowSNI2 := "test-l7-tls-allow-sni-facebook"
+
+	// Create two L7 NetworkPolicies, one allows server name '*.google.com', the other allows '*.facebook.com'. Note
+	// that, the priority of the first one is higher than the second one, and they have the same appliedTo labels and Pod
+	// selector labels.
+	createL7NetworkPolicy(t, data, false, policyAllowSNI1, 1, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsGoogle)
+	createL7NetworkPolicy(t, data, false, policyAllowSNI2, 2, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsFacebook)
+	time.Sleep(networkPolicyDelay)
+
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", true)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", false)
+
+	// Delete the first L7 NetworkPolicy that allows server name '*.google.com'.
+	data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNI1, metav1.DeleteOptions{})
+	time.Sleep(networkPolicyDelay)
+
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", false)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", true)
 }

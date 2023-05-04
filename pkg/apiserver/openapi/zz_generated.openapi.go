@@ -72,6 +72,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionList":       schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus": schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionNodeStatus(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionStatus":     schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol":                       schema_pkg_apis_controlplane_v1beta2_TLSProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition":                             schema_pkg_apis_crd_v1beta1_AgentCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo":                            schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfoList":                        schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
@@ -1333,11 +1334,16 @@ func schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref common.ReferenceCallbac
 							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol"),
 						},
 					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol"},
 	}
 }
 
@@ -2404,6 +2410,26 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref comm
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_TLSProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this matches all TLS handshake packets.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"sni": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

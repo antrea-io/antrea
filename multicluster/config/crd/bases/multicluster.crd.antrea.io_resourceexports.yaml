@@ -793,6 +793,17 @@ spec:
                                       (Ex. "/index.html", "/admin").
                                     type: string
                                 type: object
+                              tls:
+                                description: TLSProtocol matches TLS handshakes with
+                                  specific SNI. If the field is not provided, this
+                                  matches all TLS handshakes.
+                                properties:
+                                  sni:
+                                    description: SNI (Server Name Indication) indicates
+                                      the server domain name in the TLS/SSL hello
+                                      message.
+                                    type: string
+                                type: object
                             type: object
                           type: array
                         logLabel:
@@ -1695,6 +1706,17 @@ spec:
                                   path:
                                     description: Path represents the URI path to match
                                       (Ex. "/index.html", "/admin").
+                                    type: string
+                                type: object
+                              tls:
+                                description: TLSProtocol matches TLS handshakes with
+                                  specific SNI. If the field is not provided, this
+                                  matches all TLS handshakes.
+                                properties:
+                                  sni:
+                                    description: SNI (Server Name Indication) indicates
+                                      the server domain name in the TLS/SSL hello
+                                      message.
                                     type: string
                                 type: object
                             type: object

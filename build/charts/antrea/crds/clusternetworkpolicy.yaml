@@ -267,6 +267,7 @@ spec:
                           type: object
                           oneOf:
                             - required: [http]
+                            - required: [tls]
                           properties:
                             http:
                               type: object
@@ -277,6 +278,11 @@ spec:
                                   type: string
                                   enum: ['GET', 'POST', 'PUT', 'HEAD', 'DELETE', 'TRACE', 'OPTIONS', 'CONNECT', 'PATCH']
                                 path:
+                                  type: string
+                            tls:
+                              type: object
+                              properties:
+                                sni:
                                   type: string
                       from:
                         type: array
@@ -522,6 +528,7 @@ spec:
                           type: object
                           oneOf:
                             - required: [http]
+                            - required: [tls]
                           properties:
                             http:
                               type: object
@@ -532,6 +539,11 @@ spec:
                                   type: string
                                   enum: ['GET', 'POST', 'PUT', 'HEAD', 'DELETE', 'TRACE', 'OPTIONS', 'CONNECT', 'PATCH']
                                 path:
+                                  type: string
+                            tls:
+                              type: object
+                              properties:
+                                sni:
                                   type: string
                       to:
                         type: array

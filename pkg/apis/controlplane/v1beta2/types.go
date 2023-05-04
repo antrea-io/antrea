@@ -312,6 +312,7 @@ type Service struct {
 // L7Protocol defines application layer protocol to match.
 type L7Protocol struct {
 	HTTP *HTTPProtocol `json:"http,omitempty" protobuf:"bytes,1,opt,name=http"`
+	TLS  *TLSProtocol  `json:"tls,omitempty" protobuf:"bytes,2,opt,name=tls"`
 }
 
 // HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together.
@@ -325,6 +326,13 @@ type HTTPProtocol struct {
 	Method string `json:"method,omitempty" protobuf:"bytes,2,opt,name=method"`
 	// Path represents the URI path to match (Ex. "/index.html", "/admin").
 	Path string `json:"path,omitempty" protobuf:"bytes,3,opt,name=path"`
+}
+
+// TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this
+// matches all TLS handshake packets.
+type TLSProtocol struct {
+	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
+	SNI string `json:"sni,omitempty" protobuf:"bytes,1,opt,name=sni"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
