@@ -436,7 +436,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 		namespacedName := k8s.NamespacedName(containerConfig.PodNamespace, containerConfig.PodName)
 		if desiredPods.Has(namespacedName) {
 			// Find the OVS ports which are not connected to host interfaces. This is useful on Windows if the runtime is
-			// Containerd, because the host interface is created async from the OVS port.
+			// containerd, because the host interface is created async from the OVS port.
 			if containerConfig.OFPort == -1 {
 				missingIfConfigs = append(missingIfConfigs, containerConfig)
 				continue

@@ -48,7 +48,7 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
         --cluster-name           The cluster name to be used for the generated VMC cluster.
         --kubeconfig             Path to save kubeconfig of generated VMC cluster.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
+        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --testcase               The testcase to run: e2e, conformance, all-features-conformance, whole-conformance or networkpolicy.
         --garbage-collection     Do garbage collection to clean up some unused testbeds.
         --setup-only             Only perform setting up the cluster and run test.

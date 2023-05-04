@@ -397,22 +397,22 @@ kind: ClusterNetworkPolicy
 metadata:
   name: acnp-reject-ping-request
 spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - podSelector:
-          matchLabels:
-            role: server
-        namespaceSelector:
-          matchLabels:
-            env: prod
-    egress:
-      - action: Reject
-        protocols:
-          - icmp:
-              icmpType: 8
-              icmpCode: 0
-        name: DropPingRequest
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          role: server
+      namespaceSelector:
+        matchLabels:
+          env: prod
+  egress:
+    - action: Reject
+      protocols:
+        - icmp:
+            icmpType: 8
+            icmpCode: 0
+      name: DropPingRequest
 ```
 
 #### ACNP for IGMP traffic
@@ -423,26 +423,26 @@ kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-igmp-drop
 spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - podSelector:
-          matchLabels:
-            app: mcjoin6
-    ingress:
-      - action: Drop
-        protocols:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: mcjoin6
+  ingress:
+    - action: Drop
+      protocols:
         - igmp:
             igmpType: 0x11
             groupAddress: 224.0.0.1
-        name: dropIGMPQuery
-    egress:
-      - action: Drop
-        protocols:
+      name: dropIGMPQuery
+  egress:
+    - action: Drop
+      protocols:
         - igmp:
             igmpType: 0x16
             groupAddress: 225.1.2.3
-    name: dropIGMPReport
+      name: dropIGMPReport
 ```
 
 #### ACNP for multicast egress traffic
@@ -453,18 +453,18 @@ kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-multicast-traffic-drop
 spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - podSelector:
-          matchLabels:
-            app: mcjoin6
-    egress:
-      - action: Drop
-        to:
-          - ipBlock:
-              cidr: 225.1.2.3/32
-        name: dropMcastUDPTraffic
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: mcjoin6
+  egress:
+    - action: Drop
+      to:
+        - ipBlock:
+            cidr: 225.1.2.3/32
+      name: dropMcastUDPTraffic
 ```
 
 #### ACNP for HTTP traffic
@@ -1110,25 +1110,25 @@ metadata:
   name: test-anp-by-name
   namespace: default
 spec:
-    priority: 5
-    tier: application
-    appliedTo:
-      - podSelector: {}
-    egress:
-      - action: Allow
-        to:
-          - podSelector:
-              matchLabels:
-                k8s-app: kube-dns
-            namespaceSelector:
-              matchLabels:
-                kubernetes.io/metadata.name: kube-system
-        ports:
-          - protocol: TCP
-            port: 53
-          - protocol: UDP
-            port: 53
-        name: AllowToCoreDNS
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector: {}
+  egress:
+    - action: Allow
+      to:
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+      name: AllowToCoreDNS
 ```
 
 **Note**: `NamespaceDefaultLabelName` feature gate is scheduled to be removed in K8s v1.24, thereby
@@ -1181,25 +1181,25 @@ metadata:
   name: test-anp-by-name
   namespace: default
 spec:
-    priority: 5
-    tier: application
-    appliedTo:
-      - podSelector: {}
-    egress:
-      - action: Allow
-        to:
-          - podSelector:
-              matchLabels:
-                k8s-app: kube-dns
-            namespaceSelector:
-              matchLabels:
-                antrea.io/metadata.name: kube-system
-        ports:
-          - protocol: TCP
-            port: 53
-          - protocol: UDP
-            port: 53
-        name: AllowToCoreDNS
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector: {}
+  egress:
+    - action: Allow
+      to:
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+          namespaceSelector:
+            matchLabels:
+              antrea.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+      name: AllowToCoreDNS
 ```
 
 The above example allows all Pods from Namespace "default" to connect to all "kube-dns"
@@ -1303,7 +1303,7 @@ spec:
     ports:
       - protocol: TCP
         port: 8080
-  - action: Drop      # Drop all other egress traffic, in-cluster or out-of-cluster 
+  - action: Drop      # Drop all other egress traffic, in-cluster or out-of-cluster
 ```
 
 The above example allows all traffic destined to any FQDN that matches the wildcard expression
@@ -1427,19 +1427,19 @@ kind: ClusterNetworkPolicy
 metadata:
   name: acnp-service-account
 spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - serviceAccount:
-          name: sa-1
-          namespace: ns-1
-    egress:
-      - action: Drop
-        to:
-          - serviceAccount:
-              name: sa-2
-              namespace: ns-2
-        name: ServiceAccountEgressRule
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - serviceAccount:
+        name: sa-1
+        namespace: ns-1
+  egress:
+    - action: Drop
+      to:
+        - serviceAccount:
+            name: sa-2
+            namespace: ns-2
+      name: ServiceAccountEgressRule
 ```
 
 In this example, the policy will be applied to all Pods whose ServiceAccount is `sa-1` of `ns-1`.
@@ -1477,17 +1477,17 @@ kind: ClusterNetworkPolicy
 metadata:
   name: acnp-deny-external-client-nodeport-svc-access
 spec:
-    priority: 5
-    tier: securityops
-    appliedTo:
-      - service:
-          name: svc-1
-          namespace: ns-1
-    ingress:
-      - action: Drop
-        from:
-          - ipBlock:
-              cidr: 1.1.1.0/24
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - service:
+        name: svc-1
+        namespace: ns-1
+  ingress:
+    - action: Drop
+      from:
+        - ipBlock:
+            cidr: 1.1.1.0/24
 ```
 
 In this example, the policy will be applied to the NodePort Service `svc-1` in Namespace `ns-1`,

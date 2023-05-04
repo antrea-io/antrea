@@ -1006,26 +1006,6 @@ func (br *OVSBridge) AddBridgeOtherConfig(configs map[string]interface{}) Error 
 	return nil
 }
 
-// SetBridgeMcastSnooping configures bridge to enable multicast snooping
-func (br *OVSBridge) SetBridgeMcastSnooping(enabled bool) Error {
-	tx := br.ovsdb.Transaction(openvSwitchSchema)
-
-	tx.Update(dbtransaction.Update{
-		Table: "Bridge",
-		Row: map[string]interface{}{
-			"mcast_snooping_enable": enabled,
-		},
-		Where: [][]interface{}{{"name", "==", br.name}},
-	})
-
-	_, err, temporary := tx.Commit()
-	if err != nil {
-		klog.Error("Transaction failed: ", err)
-		return NewTransactionError(err, temporary)
-	}
-	return nil
-}
-
 func (br *OVSBridge) GetBridgeName() string {
 	return br.name
 }

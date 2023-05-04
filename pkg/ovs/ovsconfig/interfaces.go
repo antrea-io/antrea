@@ -62,7 +62,6 @@ type OVSBridgeClient interface {
 	UpdateOVSOtherConfig(configs map[string]interface{}) Error
 	DeleteOVSOtherConfig(configs map[string]interface{}) Error
 	AddBridgeOtherConfig(configs map[string]interface{}) Error
-	SetBridgeMcastSnooping(enabled bool) Error
 	GetBridgeName() string
 	IsHardwareOffloadEnabled() bool
 	GetOVSDatapathType() OVSDatapathType

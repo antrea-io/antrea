@@ -30,7 +30,7 @@ import (
 )
 
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
-// in another goroutine. The function is for Containerd runtime. The host interface is created after
+// in another goroutine. The function is for containerd runtime. The host interface is created after
 // CNI call completes.
 func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) error {
 	ovsPortName := ifConfig.InterfaceName
@@ -76,14 +76,14 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips, vlanID)
 	hostIfAlias := util.VirtualAdapterName(ovsPortName)
-	// - For Containerd runtime, the container interface is created after CNI replying the network setup result.
+	// - For containerd runtime, the container interface is created after CNI replying the network setup result.
 	//   So for such case we need to use asynchronous way to wait for interface to be created: we create the OVS port
 	//   and set the OVS Interface type "" first, and change the OVS Interface type to "internal" to connect to the
 	//   container interface after it is created. After OVS connects to the container interface, an OFPort is allocated.
 	// - For Docker runtime, the container interface is created after antrea-agent attaches the HNSEndpoint to the
 	//   sandbox container, so we create OVS port synchronously.
 	// - Here antrea-agent determines the way of OVS port creation by checking if container interface is yet created.
-	//   If one day Containerd runtime changes the behavior and container interface can be created when attaching
+	//   If one day containerd runtime changes the behavior and container interface can be created when attaching
 	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
 	//   way to create OVS port.
 	if hostInterfaceExistsFunc(hostIfAlias) {

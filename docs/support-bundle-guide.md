@@ -121,6 +121,7 @@ collect support bundle on external Nodes "vm1" and "vm2" in Namespace "vm-ns":
 
 ```bash
 cat << EOF | kubectl apply -f -
+apiVersion: crd.antrea.io/v1alpha1
 kind: SupportBundleCollection
 metadata:
   name: support-bundle-for-nodes

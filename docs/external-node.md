@@ -548,6 +548,7 @@ labeled with `role=db` to reject SSH connections from IP "172.16.100.5" or from
 other external Nodes labeled with `role=front`:
 
 ```yaml
+apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
   name: anp1

@@ -45,7 +45,7 @@ Setup a AKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --azure-tenant-id        Azure Service Principal Tenant ID.
         --azure-password         Azure Service Principal Password.
         --aks-region             The Azure region where the cluster will be initiated. Defaults to westus.
-        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
+        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster."
 

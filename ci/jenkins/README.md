@@ -121,7 +121,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
 ```
 
-* windows containerd e2e: e2e tests in a Windows setup with Containerd runtime.
+* windows containerd e2e: e2e tests in a Windows setup with containerd runtime.
 
 ```shell
 #!/bin/bash
@@ -129,7 +129,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --win-image-node {antrea_win_image_node_name}
 ```
 
-* windows containerd conformance: community tests on Windows cluster with Containerd runtime, focusing on "Conformance|sig-windows" and
+* windows containerd conformance: community tests on Windows cluster with containerd runtime, focusing on "Conformance|sig-windows" and
   "sig-network", and skipping "LinuxOnly", "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage",
   "sig-auth", "sig-api-machinery", "sig-apps", "sig-node", "Privileged", "should be able to change the type from",
   "[sig-network] Services should be able to create a functioning NodePort service [Conformance]", "Service endpoints
@@ -141,7 +141,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-conformance --registry ${DOCKER_REGISTRY} --win-image-node {antrea_win_image_node_name}
 ```
 
-* windows containerd network policy: community tests on Windows cluster with Containerd runtime, focusing on "Feature:NetworkPolicy".
+* windows containerd network policy: community tests on Windows cluster with containerd runtime, focusing on "Feature:NetworkPolicy".
 
 ```shell
 #!/bin/bash

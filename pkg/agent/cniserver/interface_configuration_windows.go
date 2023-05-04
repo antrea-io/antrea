@@ -222,7 +222,7 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 // addresses and routes to the interface.
 // For different CRI runtimes we need to use the appropriate Windows container API:
 //   - Docker runtime: HNS API
-//   - Containerd runtime: HCS API
+//   - containerd runtime: HCS API
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
 	var attached bool
 	var err error
@@ -234,7 +234,7 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 			return nil, err
 		}
 	} else {
-		// Containerd runtime
+		// containerd runtime
 		if hcnEp, err = getHcnEndpointByIDFunc(ep.Id); err != nil {
 			return nil, err
 		}
@@ -259,7 +259,7 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 				return nil, err
 			}
 		} else {
-			// Containerd runtime
+			// containerd runtime
 			if err := attachEndpointInNamespaceFunc(hcnEp, sandbox); err != nil {
 				return nil, err
 			}
