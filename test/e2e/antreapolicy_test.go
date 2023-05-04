@@ -3167,7 +3167,7 @@ func testFQDNPolicy(t *testing.T) {
 	log.SetLevel(log.TraceLevel)
 	defer log.SetLevel(logLevel)
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("test-acnp-reject-all-github").
+	builder = builder.SetName("test-acnp-fqdn").
 		SetTier("application").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
@@ -3181,7 +3181,10 @@ func testFQDNPolicy(t *testing.T) {
 	// See https://github.com/antrea-io/antrea/issues/4130 for more details.
 	builder.AddFQDNRule("*github.com", ProtocolTCP, nil, nil, nil, "r1", nil, crdv1alpha1.RuleActionReject)
 	builder.AddFQDNRule("wayfair.com", ProtocolTCP, nil, nil, nil, "r2", nil, crdv1alpha1.RuleActionDrop)
+	// Test upper-case FQDN.
+	builder.AddFQDNRule("Stackoverflow.com", ProtocolTCP, nil, nil, nil, "r3", nil, crdv1alpha1.RuleActionDrop)
 
+	// All client Pods below are randomly chosen from test Namespaces.
 	testcases := []podToAddrTestStep{
 		{
 			Pod(namespaces["x"] + "/a"),
@@ -3203,6 +3206,12 @@ func testFQDNPolicy(t *testing.T) {
 		},
 		{
 			Pod(namespaces["y"] + "/b"),
+			"stackoverflow.com",
+			80,
+			Dropped,
+		},
+		{
+			Pod(namespaces["z"] + "/a"),
 			"facebook.com",
 			80,
 			Connected,
