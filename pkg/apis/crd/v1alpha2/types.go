@@ -202,6 +202,9 @@ type Egress struct {
 type EgressStatus struct {
 	// The name of the Node that holds the Egress IP.
 	EgressNode string `json:"egressNode"`
+	// EgressIP indicates the effective Egress IP for the selected workloads. It could be empty if the Egress IP in spec
+	// is not assigned to any Node. It's also useful when there are more than one Egress IP specified in spec.
+	EgressIP string `json:"egressIP"`
 }
 
 // EgressSpec defines the desired state for Egress.
@@ -213,11 +216,18 @@ type EgressSpec struct {
 	// If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically.
 	// If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.
 	EgressIP string `json:"egressIP,omitempty"`
+	// EgressIPs specifies multiple SNAT IP addresses for the selected workloads.
+	// Cannot be set with EgressIP.
+	EgressIPs []string `json:"egressIPs,omitempty"`
 	// ExternalIPPool specifies the IP Pool that the EgressIP should be allocated from.
 	// If it is empty, the specified EgressIP must be assigned to a Node manually.
 	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
 	// to a different Node when the Node becomes unreachable.
-	ExternalIPPool string `json:"externalIPPool"`
+	ExternalIPPool string `json:"externalIPPool,omitempty"`
+	// ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the
+	// same index in EgressIPs and ExternalIPPools are correlated.
+	// Cannot be set with ExternalIPPool.
+	ExternalIPPools []string `json:"externalIPPools,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -126,10 +126,16 @@ func NewEgressController(crdClient clientset.Interface,
 		if !ok {
 			return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 		}
-		if egress.Spec.ExternalIPPool == "" {
-			return nil, nil
+		var externalIPPools []string
+		if egress.Spec.ExternalIPPool != "" {
+			externalIPPools = append(externalIPPools, egress.Spec.ExternalIPPool)
 		}
-		return []string{egress.Spec.ExternalIPPool}, nil
+		for _, externalIPPool := range egress.Spec.ExternalIPPools {
+			if externalIPPool != "" {
+				externalIPPools = append(externalIPPools, externalIPPool)
+			}
+		}
+		return externalIPPools, nil
 	}})
 	c.externalIPAllocator.AddEventHandler(func(ipPool string) {
 		c.enqueueEgresses(ipPool)

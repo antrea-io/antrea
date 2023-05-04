@@ -198,7 +198,16 @@ func NewEgressController(
 				if !ok {
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
-				return []string{egress.Spec.EgressIP}, nil
+				var egressIPs []string
+				if egress.Spec.EgressIP != "" {
+					egressIPs = append(egressIPs, egress.Spec.EgressIP)
+				}
+				for _, egressIP := range egress.Spec.EgressIPs {
+					if egressIP != "" {
+						egressIPs = append(egressIPs, egressIP)
+					}
+				}
+				return egressIPs, nil
 			},
 		})
 	c.egressInformer.AddEventHandlerWithResyncPeriod(
@@ -327,11 +336,11 @@ func (c *EgressController) replaceEgressIPs() error {
 	desiredLocalEgressIPs := sets.NewString()
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, egress := range egresses {
-		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName {
-			desiredLocalEgressIPs.Insert(egress.Spec.EgressIP)
+		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName && egress.Status.EgressIP != "" {
+			desiredLocalEgressIPs.Insert(egress.Status.EgressIP)
 			// Record the Egress's state as we assign their IPs to this Node in the following call. It makes sure these
 			// Egress IPs will be unassigned when the Egresses are deleted.
-			c.newEgressState(egress.Name, egress.Spec.EgressIP)
+			c.newEgressState(egress.Name, egress.Status.EgressIP)
 		}
 	}
 	if err := c.ipAssigner.InitIPs(desiredLocalEgressIPs); err != nil {
@@ -552,22 +561,28 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, isLocal bool) error {
+func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, egressIP string) error {
+	isLocal := false
+	if egressIP != "" {
+		isLocal = c.localIPDetector.IsLocalIP(egressIP)
+	}
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if isLocal {
 			// Do nothing if the current EgressNode in status is already this Node.
-			if toUpdate.Status.EgressNode == c.nodeName {
+			if toUpdate.Status.EgressNode == c.nodeName && toUpdate.Status.EgressIP == egressIP {
 				return nil
 			}
 			toUpdate.Status.EgressNode = c.nodeName
+			toUpdate.Status.EgressIP = egressIP
 		} else {
 			// Do nothing if the current EgressNode in status is not this Node.
 			if toUpdate.Status.EgressNode != c.nodeName {
 				return nil
 			}
 			toUpdate.Status.EgressNode = ""
+			toUpdate.Status.EgressIP = ""
 		}
 		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
 		_, updateErr = c.crdClient.CrdV1alpha2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
@@ -633,7 +648,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 	// Do not proceed if EgressIP is empty.
 	if desiredEgressIP == "" {
-		if err := c.updateEgressStatus(egress, false); err != nil {
+		if err := c.updateEgressStatus(egress, ""); err != nil {
 			return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 		}
 		return nil
@@ -670,7 +685,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		eState.mark = mark
 	}
 
-	if err := c.updateEgressStatus(egress, c.localIPDetector.IsLocalIP(desiredEgressIP)); err != nil {
+	if err := c.updateEgressStatus(egress, desiredEgressIP); err != nil {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
