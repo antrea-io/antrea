@@ -51,9 +51,6 @@ ENV SURICATA_DEPS build-essential \
                   libmagic-dev \
                   libjansson-dev \
                   libevent-dev \
-                  libnfnetlink-dev \
-                  libnetfilter-queue-dev \
-                  libnetfilter-log-dev \
                   libnet1-dev \
                   liblz4-dev \
                   libnss3-dev \
@@ -70,9 +67,6 @@ ENV SURICATA_RUNTIME_DEPS libpcre3 \
                           libjansson4 \
                           libevent-2.1-7 \
                           libevent-pthreads-2.1-7 \
-                          libnfnetlink0 \
-                          libnetfilter-queue1 \
-                          libnetfilter-log1 \
                           libnet1 \
                           liblz4-1 \
                           libnss3 \
@@ -80,11 +74,17 @@ ENV SURICATA_RUNTIME_DEPS libpcre3 \
                           python3-simplejson \
                           zlib1g
 
+# suricata build options:
+# --disable-shared: we do not require the suricata shared library, so we prefer static linking
+# --disable-gccmarch-native: recommended when the suricata binary is meant to be portable and may
+# run on different hardware (including VMs)
+# --enable-gccprotect: detect and use gcc hardening options (e.g., stack protection)
+
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl $SURICATA_DEPS $SURICATA_RUNTIME_DEPS && \
     curl -OL https://www.openinfosecfoundation.org/download/suricata-${SURICATA_VERSION}.tar.gz && \
     tar zxf suricata-${SURICATA_VERSION}.tar.gz && \
     cd suricata-${SURICATA_VERSION} && \
-    ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-shared --disable-gccmarch-native --enable-nfqueue && \
+    ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --disable-shared --disable-gccmarch-native --enable-gccprotect && \
     make -j$(nproc) && \
     make install-strip install-conf DESTDIR=/fakeroot && \
     cd - && \

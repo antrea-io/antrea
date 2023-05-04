@@ -136,9 +136,12 @@ docker build $PLATFORM_ARG --target cni-binaries \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg BUILD_TAG=$BUILD_TAG .
 
+# Without BuildKit, docker will "build" cni-binaries again (in practice the
+# cache will be used), and CNI_BINARIES_VERSION needs to be set.
 docker build $PLATFORM_ARG --target suricata-builder \
        --cache-from antrea/suricata-builder:$SURICATA_VERSION \
        -t antrea/suricata-builder:$SURICATA_VERSION \
+       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg SURICATA_VERSION=$SURICATA_VERSION \
        --build-arg BUILD_TAG=$BUILD_TAG .
 
