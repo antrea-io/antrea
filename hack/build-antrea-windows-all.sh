@@ -69,6 +69,8 @@ pushd "$THIS_DIR/.." > /dev/null
 NANOSERVER_VERSION=$(head -n 1 build/images/deps/nanoserver-version)
 CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
 GO_VERSION=$(head -n 1 build/images/deps/go-version)
+WIN_OVS_VERSION=$(head -n 1 build/images/deps/ovs-version-windows)
+WIN_BUILD_OVS_TAG=$(echo $NANOSERVER_VERSION-$WIN_OVS_VERSION)
 WIN_BUILD_TAG=$(echo $GO_VERSION $CNI_BINARIES_VERSION $NANOSERVER_VERSION| md5sum| head -c 10)
 
 echo "WIN_BUILD_TAG=$WIN_BUILD_TAG"
@@ -81,6 +83,7 @@ if $PULL; then
     docker pull antrea/windows-utility-base:$WIN_BUILD_TAG || true
     docker pull antrea/windows-golang:$WIN_BUILD_TAG || true
     docker pull antrea/base-windows:$WIN_BUILD_TAG || true
+    docker pull antrea/windows-ovs:$WIN_BUILD_OVS_TAG || true
 fi
 
 cd build/images/base-windows
@@ -105,10 +108,19 @@ docker build \
        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
 cd -
 
+cd build/images/ovs
+
+docker build --target windows-ovs -f Dockerfile.windows \
+        -t antrea/windows-ovs:$WIN_BUILD_OVS_TAG \
+        --build-arg WIN_OVS_VERSION=$WIN_OVS_VERSION \
+        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
+cd -
+
 if $PUSH; then
     docker push antrea/windows-utility-base:$WIN_BUILD_TAG
     docker push antrea/windows-golang:$WIN_BUILD_TAG
     docker push antrea/base-windows:$WIN_BUILD_TAG
+    docker push antrea/windows-ovs:$WIN_BUILD_OVS_TAG
 fi
 
 export NO_PULL=1
