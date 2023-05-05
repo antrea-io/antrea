@@ -344,6 +344,8 @@ const (
 	NetworkPolicyRealizing NetworkPolicyPhase = "Realizing"
 	// NetworkPolicyRealized means the NetworkPolicy has been enforced to all Pods on all Nodes it applies to.
 	NetworkPolicyRealized NetworkPolicyPhase = "Realized"
+	// NetworkPolicyFailed means the NetworkPolicy is failed to be enforced on at least one Node.
+	NetworkPolicyFailed NetworkPolicyPhase = "Failed"
 )
 
 // These are valid conditions of a deployment.
