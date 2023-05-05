@@ -69,6 +69,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 
 	newFlowAggregator := func(includePodLabels bool) *flowAggregator {
+		podInformer := informerFactory.Core().V1().Pods()
 		return &flowAggregator{
 			aggregatorTransportProtocol: "tcp",
 			aggregationProcess:          mockAggregationProcess,
@@ -79,7 +80,8 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 			registry:                    mockIPFIXRegistry,
 			flowAggregatorAddress:       "",
 			includePodLabels:            includePodLabels,
-			podInformer:                 informerFactory.Core().V1().Pods(),
+			podInformer:                 podInformer,
+			podLister:                   podInformer.Lister(),
 		}
 	}
 
@@ -158,12 +160,14 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		mockAggregationProcess.EXPECT().SetCorrelatedFieldsFilled(tc.flowRecord, true)
 		if tc.includePodLabels {
 			mockAggregationProcess.EXPECT().AreExternalFieldsFilled(*tc.flowRecord).Return(false)
-			sourcePodLabelsElement := ipfixentities.NewInfoElement("sourcePodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0)
+			mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(sourcePodNameElem, 0, false)
+			sourcePodLabelsElement := ipfixentities.NewInfoElement("sourcePodLabels", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
 			mockIPFIXRegistry.EXPECT().GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID).Return(sourcePodLabelsElement, nil)
 			sourcePodLabelsIE, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString("").Bytes())
 			mockRecord.EXPECT().AddInfoElement(sourcePodLabelsIE).Return(nil)
-			destinationPodLabelsElement := ipfixentities.NewInfoElement("destinationPodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0)
-			mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(ipfixentities.NewInfoElement("destinationPodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil)
+			mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(destPodNameElem, 0, false)
+			destinationPodLabelsElement := ipfixentities.NewInfoElement("destinationPodLabels", 0, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
+			mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(destinationPodLabelsElement, nil)
 			destinationPodLabelsIE, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString("").Bytes())
 			mockRecord.EXPECT().AddInfoElement(destinationPodLabelsIE).Return(nil)
 			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(tc.flowRecord, true)
@@ -748,29 +752,35 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(pod)
 
 	tests := []struct {
-		name       string
-		podAddress string
-		want       string
+		name         string
+		podName      string
+		podNamespace string
+		want         string
 	}{
 		{
-			name:       "no pod object",
-			podAddress: "192.168.1.3",
+			name:         "no pod object",
+			podName:      "",
+			podNamespace: "",
+			want:         "",
 		},
 		{
-			name:       "pod with label",
-			podAddress: "192.168.1.2",
-			want:       "{\"test\":\"ut\"}",
+			name:         "pod with label",
+			podName:      "testPod",
+			podNamespace: "default",
+			want:         "{\"test\":\"ut\"}",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			podInformer := informerFactory.Core().V1().Pods()
 			fa := &flowAggregator{
 				k8sClient:        client,
 				includePodLabels: true,
-				podInformer:      informerFactory.Core().V1().Pods(),
+				podInformer:      podInformer,
+				podLister:        podInformer.Lister(),
 			}
-			got := fa.fetchPodLabels(tt.podAddress)
+			got := fa.fetchPodLabels(tt.podNamespace, tt.podName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
