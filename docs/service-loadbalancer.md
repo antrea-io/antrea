@@ -165,6 +165,69 @@ spec:
   type: LoadBalancer
 ```
 
+By default, Antrea doesn't allocate a single IP to multiple Services. Before
+Antrea v2.1, if multiple Services requested the same IP, only one of them would
+get the IP assigned. Starting with Antrea v2.1, to share an IP between multiple
+Services, you can annotate the Services with
+`service.antrea.io/allow-shared-load-balancer-ip: true` when requesting a
+particular IP. Note that the IP will only be shared between Services having the
+annotation. If not all Services are annotated, the IP may either be allocated
+to one of the unannotated Services or shared between the annotated Services,
+depending on the order in which they are processed. The annotation only takes
+effect during the IP allocation phase. Once the IP has been allocated, removing
+this annotation from a Service will not result in the IP being reclaimed from
+it or other Services.
+
+For example, the following two Services will share an IP:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service-1
+  annotations:
+    service.antrea.io/external-ip-pool: "service-external-ip-pool"
+    service.antrea.io/allow-shared-load-balancer-ip: "true"
+spec:
+  selector:
+    app: MyApp1
+  loadBalancerIP: "10.10.0.2"
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service-2
+  annotations:
+    service.antrea.io/external-ip-pool: "service-external-ip-pool"
+    service.antrea.io/allow-shared-load-balancer-ip: "true"
+spec:
+  selector:
+    app: MyApp2
+  loadBalancerIP: "10.10.0.2"
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer
+```
+
+Note that sharing a LoadBalancer IP between multiple Services only works under
+the following conditions:
+
+* The Services use different ports.
+* The Services use the `Cluster` external traffic policy. Sharing a
+  LoadBalancer IP between Services using the `Local` external traffic policy
+  can also work if they have identical Endpoints. However, in such cases, it
+  may be preferable to consolidate the Services into a single Service.
+
+Otherwise, the datapath may not work even though the IP is allocated to the
+Services successfully.
+
 #### Validate Service external IP
 
 Once Antrea allocates an external IP for a Service of type LoadBalancer, it

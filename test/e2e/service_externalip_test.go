@@ -56,6 +56,7 @@ func TestServiceExternalIP(t *testing.T) {
 	t.Run("testServiceExternalTrafficPolicyLocal", func(t *testing.T) { testServiceExternalTrafficPolicyLocal(t, data) })
 	t.Run("testServiceNodeFailure", func(t *testing.T) { testServiceNodeFailure(t, data) })
 	t.Run("testExternalIPAccess", func(t *testing.T) { testExternalIPAccess(t, data) })
+	t.Run("testServiceSharingLoadBalancerIP", func(t *testing.T) { testServiceSharingLoadBalancerIP(t, data) })
 }
 
 func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
@@ -366,6 +367,69 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			checkEIPStatus(0)
 		})
 	}
+}
+
+func testServiceSharingLoadBalancerIP(t *testing.T, data *TestData) {
+	ctx := context.Background()
+	pool := data.createExternalIPPool(t, "pool-", v1beta1.IPRange{CIDR: "172.30.0.0/28"}, nil, nil, nil)
+	defer data.crdClient.CrdV1beta1().ExternalIPPools().Delete(ctx, pool.Name, metav1.DeleteOptions{})
+
+	annotationNormal := map[string]string{
+		antreaagenttypes.ServiceExternalIPPoolAnnotationKey: pool.Name,
+	}
+	annotationAllowingSharedIP := map[string]string{
+		antreaagenttypes.ServiceExternalIPPoolAnnotationKey: pool.Name,
+		antreaagenttypes.ServiceAllowSharedIPAnnotationKey:  "true",
+	}
+	loadBalancerIPMutator := func(svc *v1.Service) { svc.Spec.LoadBalancerIP = "172.30.0.1" }
+
+	t.Run("services-allowing-shared-ip", func(t *testing.T) {
+		svc1, err := data.CreateServiceWithAnnotations("svc1",
+			data.testNamespace, 80, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotationAllowingSharedIP,
+			loadBalancerIPMutator)
+		require.NoError(t, err)
+		defer data.clientset.CoreV1().Services(svc1.Namespace).Delete(ctx, svc1.Name, metav1.DeleteOptions{})
+
+		require.NoError(t, data.waitForServiceLoadBalancerIP(svc1, "172.30.0.1"))
+
+		svc2, err := data.CreateServiceWithAnnotations("svc2",
+			data.testNamespace, 81, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotationAllowingSharedIP,
+			loadBalancerIPMutator)
+		require.NoError(t, err)
+		defer data.clientset.CoreV1().Services(svc2.Namespace).Delete(ctx, svc2.Name, metav1.DeleteOptions{})
+		svc3, err := data.CreateServiceWithAnnotations("svc3",
+			data.testNamespace, 82, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotationNormal,
+			loadBalancerIPMutator)
+		require.NoError(t, err)
+		defer data.clientset.CoreV1().Services(svc3.Namespace).Delete(ctx, svc3.Name, metav1.DeleteOptions{})
+
+		assert.NoError(t, data.waitForServiceLoadBalancerIP(svc2, "172.30.0.1"), "svc2 should get the shared IP assigned")
+		assert.NoError(t, data.waitForServiceLoadBalancerIP(svc3, ""), "svc3 should not get the shared IP assigned")
+	})
+
+	t.Run("services-not-allowing-shared-ip", func(t *testing.T) {
+		svc1, err := data.CreateServiceWithAnnotations("svc1",
+			data.testNamespace, 80, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotationNormal,
+			loadBalancerIPMutator)
+		require.NoError(t, err)
+		defer data.clientset.CoreV1().Services(svc1.Namespace).Delete(ctx, svc1.Name, metav1.DeleteOptions{})
+
+		require.NoError(t, data.waitForServiceLoadBalancerIP(svc1, "172.30.0.1"))
+
+		svc2, err := data.CreateServiceWithAnnotations("svc2",
+			data.testNamespace, 81, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotationAllowingSharedIP,
+			loadBalancerIPMutator)
+		require.NoError(t, err)
+		defer data.clientset.CoreV1().Services(svc2.Namespace).Delete(ctx, svc2.Name, metav1.DeleteOptions{})
+		svc3, err := data.CreateServiceWithAnnotations("svc3",
+			data.testNamespace, 82, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotationNormal,
+			loadBalancerIPMutator)
+		require.NoError(t, err)
+		defer data.clientset.CoreV1().Services(svc3.Namespace).Delete(ctx, svc3.Name, metav1.DeleteOptions{})
+
+		assert.NoError(t, data.waitForServiceLoadBalancerIP(svc2, ""), "svc2 should not get the exclusive IP assigned")
+		assert.NoError(t, data.waitForServiceLoadBalancerIP(svc3, ""), "svc3 should not get the exclusive IP assigned")
+	})
 }
 
 func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
@@ -736,4 +800,24 @@ func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExte
 			service.Name, err, expectedExternalIP, expectedNodeName, service.Status, assignedNode)
 	}
 	return service, assignedNode, nil
+}
+
+func (data *TestData) waitForServiceLoadBalancerIP(service *v1.Service, expectedLoadBalancerIP string) error {
+	// Do not poll immediate to avoid false negative when the expected IP is empty.
+	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 5*time.Second, false, func(ctx context.Context) (done bool, err error) {
+		service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if expectedLoadBalancerIP == "" {
+			if len(service.Status.LoadBalancer.Ingress) > 0 {
+				return false, err
+			}
+		} else {
+			if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP != expectedLoadBalancerIP {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
 }

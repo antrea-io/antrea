@@ -30,6 +30,9 @@ const (
 	// ServiceExternalIPPoolAnnotationKey is the key of the Service annotation that specifies the Service's desired external IP pool.
 	ServiceExternalIPPoolAnnotationKey string = "service.antrea.io/external-ip-pool"
 
+	// ServiceAllowSharedIPAnnotationKey is the key of the Service annotation that specifies whether the Service is allowed to use a shared LoadBalancer IP.
+	ServiceAllowSharedIPAnnotationKey string = "service.antrea.io/allow-shared-load-balancer-ip"
+
 	// ServiceLoadBalancerModeAnnotationKey is the key of the Service annotation that specifies the Service's load balancer mode.
 	ServiceLoadBalancerModeAnnotationKey string = "service.antrea.io/load-balancer-mode"
 
