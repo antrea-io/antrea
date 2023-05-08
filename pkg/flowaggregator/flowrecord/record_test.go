@@ -32,8 +32,6 @@ func init() {
 
 func TestGetFlowRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testcases := []struct {
 		isIPv4 bool
 	}{

@@ -101,7 +101,6 @@ func prepareInterfaceConfigs(contID, podName, podNS, ifName string, ip *net.IP) 
 func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Test setup
 	ctrl := mock.NewController(t)
-	defer ctrl.Finish()
 
 	// Prepare connections and interface config for test
 	testConns, testConnKeys := createConnsForTest()

@@ -441,7 +441,6 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 
 func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 	mockS3Exporter := exportertesting.NewMockInterface(ctrl)

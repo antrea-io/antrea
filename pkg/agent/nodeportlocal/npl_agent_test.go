@@ -302,7 +302,6 @@ func setUpWithTestServiceAndPod(t *testing.T, tc *testConfig, customNodePort *in
 func (t *testData) tearDown() {
 	close(t.stopCh)
 	t.wg.Wait()
-	t.ctrl.Finish()
 	os.Unsetenv("NODE_NAME")
 }
 

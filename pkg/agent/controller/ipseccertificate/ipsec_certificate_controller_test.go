@@ -146,8 +146,6 @@ func newFakeController(t *testing.T) *fakeController {
 func TestController_syncConfigurations(t *testing.T) {
 	t.Run("rotate certificate if current certificates are empty", func(t *testing.T) {
 		fakeController := newFakeController(t)
-		defer fakeController.mockController.Finish()
-
 		ch := make(chan struct{})
 		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
 			close(ch)

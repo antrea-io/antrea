@@ -87,7 +87,6 @@ type expectConjunctionTimes struct {
 
 func TestPolicyRuleConjunction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	preparePipelines()
 	defer resetPipelines()
 	c = prepareClient(ctrl, false)
@@ -161,8 +160,6 @@ func TestPolicyRuleConjunction(t *testing.T) {
 
 func TestInstallPolicyRuleFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	preparePipelines()
 	defer resetPipelines()
 	c = prepareClient(ctrl, false)
@@ -569,7 +566,6 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockOperations := oftest.NewMockOFEntryOperations(ctrl)
 			ofClient := NewClient(bridgeName, bridgeMgmtAddr, false, true, false, false, false, false, false, false, false, false)
 			c = ofClient.(*client)
@@ -672,8 +668,6 @@ func BenchmarkBatchInstallPolicyRuleFlows(b *testing.B) {
 
 func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	preparePipelines()
 	defer resetPipelines()
 	c = prepareClient(ctrl, false)
@@ -718,8 +712,6 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 
 func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	preparePipelines()
 	defer resetPipelines()
 	c = prepareClient(ctrl, true)
@@ -1215,8 +1207,6 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
 			preparePipelines()
 			defer resetPipelines()
 			c = prepareClient(ctrl, false)
@@ -1234,7 +1224,6 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 
 func TestGetMatchFlowUpdates(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	preparePipelines()
 	defer resetPipelines()
 	c = prepareClient(ctrl, false)
@@ -1326,7 +1315,6 @@ func setMockOFTables(ctrl *gomock.Controller, tableMap map[*Table]**mocks.MockTa
 
 func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	preparePipelines()
 	defer resetPipelines()
 	c = prepareClient(ctrl, false)

@@ -35,7 +35,6 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 	features.DefaultMutableFeatureGate.Set("Multicast=true")
 	defer features.DefaultMutableFeatureGate.Set("Multicast=false")
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	testcases := map[string]struct {
 		name                   string

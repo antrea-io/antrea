@@ -143,8 +143,6 @@ func getFakeNS(nspath string) (ns.NetNS, error) {
 
 func TestConfigureContainerLink(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 
@@ -266,8 +264,6 @@ func TestConfigureContainerLink(t *testing.T) {
 
 func TestChangeContainerMTU(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 	hostIfaceName := "pair0"
 	containerIfaceName := "eth0"
@@ -369,9 +365,6 @@ func TestChangeContainerMTU(t *testing.T) {
 }
 
 func TestAdvertiseContainerAddr(t *testing.T) {
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	interfaceID := 1
 	ipv4CIDR := net.IPNet{
 		IP:   net.ParseIP("192.168.100.100"),
@@ -485,8 +478,6 @@ func TestAdvertiseContainerAddr(t *testing.T) {
 
 func TestCheckContainerInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	containerIPs := ipamResult.IPs
 	containerRoutes := ipamResult.Routes
 	sriovVfNetdeviceName := "vfDevice"
@@ -618,8 +609,6 @@ func TestCheckContainerInterface(t *testing.T) {
 
 func TestValidateVFRepInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	fakeSriovNet := cniservertest.NewMockSriovNet(controller)
 	testIfConfigurator := newTestIfConfigurator(false, nil, fakeSriovNet)
 
@@ -728,8 +717,6 @@ func TestGetInterceptedInterfaces(t *testing.T) {
 
 func TestValidateContainerPeerInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	fakeNetlink := netlinktest.NewMockInterface(controller)
 	testIfConfigurator := newTestIfConfigurator(false, fakeNetlink, nil)
 

@@ -90,7 +90,6 @@ var (
 
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 	refTime := time.Now()
 
@@ -260,7 +259,6 @@ func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection)
 
 func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 	// Create two flows; one is already in connectionStore and other one is new
 	testFlows := make([]*flowexporter.Connection, 2)
@@ -315,7 +313,6 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 
 func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
 
 	testFlows := make([]*flowexporter.Connection, 0)

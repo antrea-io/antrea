@@ -646,7 +646,6 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 func TestAntreaServerFunc(t *testing.T) {
 	controller := mock.NewController(t)
-	defer controller.Finish()
 	ipamMock = ipamtest.NewMockIPAMDriver(controller)
 	ipam.RegisterIPAMDriver("mock", ipamMock)
 	ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -766,7 +765,6 @@ func TestCNIServerChaining(t *testing.T) {
 
 	testRequire := require.New(t)
 	controller := mock.NewController(t)
-	defer controller.Finish()
 	var server *cniserver.CNIServer
 	testContainerOFPort := int32(1234)
 	testPatchPortName := "antrea-gw0"

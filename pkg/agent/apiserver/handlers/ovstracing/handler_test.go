@@ -82,8 +82,6 @@ type testCase struct {
 
 func TestPodFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testcases := []testCase{
 		{
 			test:           "Invalid port format",

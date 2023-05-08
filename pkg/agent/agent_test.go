@@ -57,7 +57,6 @@ func convertExternalIDMap(in map[string]interface{}) map[string]string {
 
 func TestInitstore(t *testing.T) {
 	controller := mock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
@@ -134,7 +133,6 @@ func TestPersistRoundNum(t *testing.T) {
 	const roundNum uint64 = 5555
 
 	controller := mock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
 	transactionError := ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true)
@@ -153,7 +151,6 @@ func TestPersistRoundNum(t *testing.T) {
 
 func TestGetRoundInfo(t *testing.T) {
 	controller := mock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
 	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true))
@@ -557,7 +554,6 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)
-			defer controller.Finish()
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 			client := fake.NewSimpleClientset()
 			ifaceStore := interfacestore.NewInterfaceStore()
@@ -586,7 +582,6 @@ func TestSetupGatewayInterface(t *testing.T) {
 	defer mockSetInterfaceMTU(nil)()
 
 	controller := mock.NewController(t)
-	defer controller.Finish()
 
 	podCIDRStr := "172.16.10.0/24"
 	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
@@ -696,7 +691,6 @@ func TestRestorePortConfigs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := mock.NewController(t)
-			defer controller.Finish()
 			mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
 			ifaceStore := interfacestore.NewInterfaceStore()
 			initializer := &Initializer{

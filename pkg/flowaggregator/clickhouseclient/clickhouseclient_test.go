@@ -78,7 +78,6 @@ func TestGetDataSourceName(t *testing.T) {
 
 func TestCacheRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	chExportProc := ClickHouseExportProcess{
 		deque: deque.New(),

@@ -179,7 +179,6 @@ func TestReconcilerForget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			ifaceStore := interfacestore.NewInterfaceStore()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			if len(tt.expectedOFRuleIDs) == 0 {
@@ -579,7 +578,6 @@ func TestReconcilerReconcile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {
@@ -817,7 +815,6 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {
@@ -885,7 +882,6 @@ func TestReconcileWithTransientError(t *testing.T) {
 	}
 
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOFClient := openflowtest.NewMockClient(controller)
 	r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, true)
 	// Set deleteInterval to verify openflow ID is released immediately.
@@ -1044,7 +1040,6 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, true)
 			if tt.numInstalledRules > 0 {
@@ -1296,7 +1291,6 @@ func TestReconcilerUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).MaxTimes(2)
 			priority := gomock.Any()
@@ -1816,7 +1810,6 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {
@@ -2217,7 +2210,6 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
-			defer controller.Finish()
 			mockOFClient := openflowtest.NewMockClient(controller)
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {

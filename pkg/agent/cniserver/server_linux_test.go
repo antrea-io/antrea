@@ -117,7 +117,6 @@ func TestValidatePrevResult(t *testing.T) {
 
 func TestRemoveInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
@@ -230,7 +229,6 @@ func createCNIRequestAndInterfaceName(t *testing.T, name string, cniType string,
 
 func TestCmdAdd(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ctx := context.TODO()
 
@@ -395,8 +393,6 @@ func TestCmdAdd(t *testing.T) {
 
 func TestCmdDel(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ovsPortID := generateUUID(t)
 	ovsPort := int32(100)
@@ -546,8 +542,6 @@ func TestCmdDel(t *testing.T) {
 
 func TestCmdCheck(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
-
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ovsPortID := generateUUID(t)
 	ovsPort := int32(100)
@@ -637,7 +631,6 @@ func TestCmdCheck(t *testing.T) {
 
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
