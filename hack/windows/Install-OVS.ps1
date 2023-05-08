@@ -32,7 +32,7 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
-$OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-2.15.2-antrea.0-win64.zip"
+$OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-2.16.7-antrea.0-win64.zip"
 # Use a SHA256 hash to ensure that the downloaded archive is correct.
 $OVSPublishedHash = '969703a11c980bc2752948d5707074c83bc2778351b81554edcef9e6d220bb7f'
 $WorkDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
