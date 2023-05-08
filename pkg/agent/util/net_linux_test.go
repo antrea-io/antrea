@@ -146,7 +146,6 @@ func TestGetNSPeerDevBridge(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			defer mockGetNS(&mockNetNS{}, tc.getNSErr)()
 			defer mockNetNSDo()()
@@ -295,7 +294,6 @@ func TestSetLinkUp(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			defer mockUtilNetlinkAttrs(testLink)()
 			gotMac, gotIndex, gotErr := SetLinkUp("antrea-en0")
@@ -393,7 +391,6 @@ func TestConfigureLinkAddresses(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			defer mockUtilNetlinkAttrs(testLink)()
 			gotErr := ConfigureLinkAddresses(0, tc.ipNets)
@@ -436,7 +433,6 @@ func TestSetAdapterMACAddress(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			gotErr := SetAdapterMACAddress("test-en0", &testMACAddr)
 			assert.Equal(t, tc.wantErr, gotErr)
@@ -476,7 +472,6 @@ func TestHostInterfaceExists(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			gotExists := HostInterfaceExists("test-en0")
 			assert.Equal(t, tc.wantExists, gotExists)
@@ -543,7 +538,6 @@ func TestGetInterfaceConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			defer mockNetInterfaceByName(&testNetInterface, tc.testNetInterfaceErr)()
 			defer mockNetInterfaceAddrs(testNetInterface, tc.testNetAddrsErr)()
@@ -616,7 +610,6 @@ func TestRenameInterface(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			gotErr := RenameInterface("test1", "test2")
 			assert.Equal(t, tc.wantErr, gotErr)
@@ -659,7 +652,6 @@ func TestRemoveLinkIPs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			gotErr := RemoveLinkIPs(mockLink{name: "test"})
 			assert.Equal(t, tc.wantErr, gotErr)
@@ -702,7 +694,6 @@ func TestRemoveLinkRoutes(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			gotErr := RemoveLinkRoutes(mockLink{name: "test"})
 			assert.Equal(t, tc.wantErr, gotErr)
@@ -738,7 +729,6 @@ func TestConfigureLinkRoutes(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			defer mockUtilNetlink(ctrl, tc.expectedCalls)()
 			defer mockUtilNetlinkAttrs(testLink)()
 			gotErr := ConfigureLinkRoutes(testLink, testRoutes)

@@ -87,7 +87,6 @@ var responses = []response{
 // with incomplete arguments (for now, missing pod or namespace)
 func TestIncompleteArguments(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podname and namespace)
 	namespace := "namespace"
 	// outline test cases with expected behavior
@@ -112,7 +111,6 @@ func TestIncompleteArguments(t *testing.T) {
 // any existing endpoint
 func TestInvalidArguments(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podname and namespace)
 	pod, namespace := "pod", "namespace"
 	// outline test cases with expected behavior
@@ -136,7 +134,6 @@ func TestInvalidArguments(t *testing.T) {
 // single policy response
 func TestSinglePolicyResponse(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podName and namespace)
 	pod, namespace := "pod", "namespace"
 	// outline test cases with expected behavior
@@ -170,7 +167,6 @@ func TestSinglePolicyResponse(t *testing.T) {
 // multiple policy responses
 func TestMultiPolicyResponse(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	// sample selector arguments (right now, only supports podName and namespace)
 	pod, namespace := "pod", "namespace"
 	// outline test cases with expected behavior

@@ -84,8 +84,6 @@ func TestBadRequests(t *testing.T) {
 
 func TestPodFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testInterface := &interfacestore.InterfaceConfig{InterfaceName: "interface0"}
 	testcases := []testCase{
 		{
@@ -129,8 +127,6 @@ func TestPodFlows(t *testing.T) {
 
 func TestServiceFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testcases := []testCase{
 		{
 			test:           "Existing Service",
@@ -174,8 +170,6 @@ func TestServiceFlows(t *testing.T) {
 
 func TestNetworkPolicyFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testNetworkPolicy := &cpv1beta.NetworkPolicy{}
 	testcases := []testCase{
 		{
@@ -220,8 +214,6 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 func TestTableFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	getFlowTableName = mockGetFlowTableName
 	getFlowTableID = mockGetFlowTableID
 	testcases := []testCase{
@@ -264,8 +256,6 @@ func mockGetFlowTableID(tableName string) uint8 {
 
 func TestGroups(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	testcases := []struct {
 		testCase
 		groupIDs     []uint32

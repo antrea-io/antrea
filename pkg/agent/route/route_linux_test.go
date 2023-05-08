@@ -53,7 +53,6 @@ var (
 
 func TestSyncRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
 
 	nodeRoute1 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.1.0/24"), Gw: net.ParseIP("1.1.1.1")}
@@ -199,7 +198,6 @@ func TestSyncIPSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			ipset := ipsettest.NewMockInterface(ctrl)
 			c := &Client{ipset: ipset,
 				networkConfig:         tt.networkConfig,
@@ -480,7 +478,6 @@ COMMIT
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
 			c := &Client{iptables: mockIPTables,
 				networkConfig:         tt.networkConfig,
@@ -542,7 +539,6 @@ func TestInitIPRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{netlink: mockNetlink,
 				networkConfig: tt.networkConfig,
@@ -626,7 +622,6 @@ func TestInitServiceIPRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockServiceCIDRProvider := servicecidrtest.NewMockInterface(ctrl)
 			c := &Client{netlink: mockNetlink,
@@ -643,7 +638,6 @@ func TestInitServiceIPRoutes(t *testing.T) {
 
 func TestReconcile(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
 	mockIPSet := ipsettest.NewMockInterface(ctrl)
 	c := &Client{netlink: mockNetlink,
@@ -909,7 +903,6 @@ func TestAddRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{netlink: mockNetlink,
@@ -969,7 +962,6 @@ func TestDeleteRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{netlink: mockNetlink,
@@ -994,7 +986,6 @@ func TestDeleteRoutes(t *testing.T) {
 
 func TestMigrateRoutesToGw(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
 	mockIPSet := ipsettest.NewMockInterface(ctrl)
 
@@ -1075,7 +1066,6 @@ func TestUnMigrateRoutesToGw(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
 				netlink:    mockNetlink,
@@ -1136,7 +1126,6 @@ func TestAddSNATRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
 			c := &Client{iptables: mockIPTables,
 				nodeConfig: tt.nodeConfig,
@@ -1202,7 +1191,6 @@ func TestDeleteSNATRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
 			c := &Client{
 				iptables:     mockIPTables,
@@ -1256,7 +1244,6 @@ func TestAddNodePort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			ipset := ipsettest.NewMockInterface(ctrl)
 			c := &Client{ipset: ipset}
 			tt.expectedCalls(ipset.EXPECT())
@@ -1303,7 +1290,6 @@ func TestDeleteNodePort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			ipset := ipsettest.NewMockInterface(ctrl)
 			c := &Client{ipset: ipset}
 			tt.expectedCalls(ipset.EXPECT())
@@ -1408,7 +1394,6 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
 				netlink:    mockNetlink,
@@ -1478,7 +1463,6 @@ func TestAddLoadBalancer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
 				netlink:    mockNetlink,
@@ -1528,7 +1512,6 @@ func TestDeleteLoadBalancer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			c := &Client{
 				netlink:       mockNetlink,
@@ -1592,7 +1575,6 @@ func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{
 				ipset:                 mockIPSet,
@@ -1633,7 +1615,6 @@ func TestDeleteLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{
 				ipset:                 mockIPSet,
@@ -1682,7 +1663,6 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{
 				ipset:            mockIPSet,

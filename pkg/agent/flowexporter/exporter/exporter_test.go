@@ -67,8 +67,6 @@ func TestFlowExporter_sendTemplateSet(t *testing.T) {
 
 func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
 	flowExp := &FlowExporter{
@@ -218,8 +216,6 @@ func TestFlowExporter_sendDataSet(t *testing.T) {
 
 func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
@@ -548,8 +544,6 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 
 func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	flowExp.process = mockIPFIXExpProc

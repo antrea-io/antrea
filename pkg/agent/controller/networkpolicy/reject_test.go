@@ -389,7 +389,6 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 	conntrackTableID := openflow.ConntrackTable.GetID()
 	l3ForwardingTableID := openflow.L3ForwardingTable.GetID()
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	type args struct {
 		rejectType        RejectType
 		nodeType          config.NodeType

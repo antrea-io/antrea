@@ -31,7 +31,6 @@ import (
 
 func TestRestoreRules(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockPortRules, mockPortOpener)
@@ -67,7 +66,6 @@ func TestRestoreRules(t *testing.T) {
 
 func TestDeleteRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockPortRules, mockPortOpener)
@@ -88,7 +86,6 @@ func TestDeleteRule(t *testing.T) {
 
 func TestDeleteRulesForPod(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockPortRules, mockPortOpener)
@@ -123,7 +120,6 @@ func TestDeleteRulesForPod(t *testing.T) {
 
 func TestAddRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
 	portTable := newPortTable(mockPortRules, mockPortOpener)

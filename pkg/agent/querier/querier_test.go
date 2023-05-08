@@ -44,8 +44,6 @@ func getIPNet(ip string) *net.IPNet {
 
 func TestAgentQuerierGetAgentInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	interfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	interfaceStore.EXPECT().GetContainerInterfaceNum().Return(2).AnyTimes()
 

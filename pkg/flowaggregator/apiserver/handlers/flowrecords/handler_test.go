@@ -145,7 +145,6 @@ func TestGetFlowRecordsQuery(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			faq := queriertest.NewMockFlowAggregatorQuerier(ctrl)

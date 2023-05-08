@@ -29,7 +29,6 @@ import (
 
 func Test_client_InstallVMUplinkFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	m := oftest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, true, config.ExternalNode, config.TrafficEncapModeEncap)
@@ -86,7 +85,6 @@ func Test_client_InstallPolicyBypassFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.ExternalNode, config.TrafficEncapModeEncap)

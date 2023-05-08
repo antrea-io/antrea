@@ -47,7 +47,6 @@ func TestCommandVersionRequestError(t *testing.T) {
 		Use: "antctl",
 	}
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	client := NewMockAntctlClient(ctrl)
 	var bufOut bytes.Buffer
 	CommandList.applyToRootCommand(rootCmd, client, &bufOut)
@@ -70,7 +69,6 @@ func TestExtraArgs(t *testing.T) {
 		Use: "antctl",
 	}
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	client := NewMockAntctlClient(ctrl)
 	var bufOut bytes.Buffer
 	CommandList.applyToRootCommand(cmd, client, os.Stdout)

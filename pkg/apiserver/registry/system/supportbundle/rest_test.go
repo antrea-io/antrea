@@ -239,7 +239,6 @@ func TestAgentStorage(t *testing.T) {
 
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	fakeOVSCtl := ovsctltest.NewMockOVSCtlClient(ctrl)
 	fakeAgentQuerier := agentqueriertest.NewMockAgentQuerier(ctrl)
 	fakeNetworkPolicyQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
@@ -299,7 +298,6 @@ func TestAgentStorageFailure(t *testing.T) {
 
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	fakeOVSCtl := ovsctltest.NewMockOVSCtlClient(ctrl)
 	fakeAgentQuerier := agentqueriertest.NewMockAgentQuerier(ctrl)
 	fakeNetworkPolicyQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)

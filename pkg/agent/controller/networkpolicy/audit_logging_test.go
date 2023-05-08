@@ -368,7 +368,6 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			pktIn := &ofctrl.PacketIn{TableId: tc.tableID, Match: openflow15.Match{Fields: matchers}}
 
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
 			testClientInterface := openflowtest.NewMockClient(ctrl)
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(testClientInterface.EXPECT())

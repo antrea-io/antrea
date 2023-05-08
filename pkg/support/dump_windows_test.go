@@ -46,7 +46,6 @@ func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
 func TestDumpHostNetworkInfo(t *testing.T) {
 	baseDir := "basedir"
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 	q := aqtest.NewMockAgentQuerier(ctrl)
 
 	for _, m := range []struct {

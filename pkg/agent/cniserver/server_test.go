@@ -140,7 +140,6 @@ func checkErrorResponse(t *testing.T, resp *cnipb.CniCmdResponse, code cnipb.Err
 
 func TestIPAMService(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ipam.RegisterIPAMDriver(testIpamType, ipamMock)
 	cniServer := newCNIServer(t)
@@ -227,7 +226,6 @@ func TestIPAMService(t *testing.T) {
 
 func TestIPAMServiceMultiDriver(t *testing.T) {
 	controller := gomock.NewController(t)
-	defer controller.Finish()
 
 	mockDriverA := ipamtest.NewMockIPAMDriver(controller)
 	mockDriverB := ipamtest.NewMockIPAMDriver(controller)
@@ -526,8 +524,6 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 }
 
 func TestValidateOVSInterface(t *testing.T) {
-	controller := gomock.NewController(t)
-	defer controller.Finish()
 	ifaceStore := interfacestore.NewInterfaceStore()
 	podConfigurator := &podConfigurator{ifaceStore: ifaceStore}
 	containerID := uuid.New().String()

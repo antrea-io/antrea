@@ -95,7 +95,7 @@ type fakeMCPodRouteController struct {
 }
 
 func newMCPodRouteController(t *testing.T, nodeConfig *config.NodeConfig,
-	k8sClient *k8sfake.Clientset) (*fakeMCPodRouteController, func()) {
+	k8sClient *k8sfake.Clientset) *fakeMCPodRouteController {
 	mcClient := mcfake.NewSimpleClientset()
 	mcInformerFactory := mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
 		0,
@@ -120,13 +120,12 @@ func newMCPodRouteController(t *testing.T, nodeConfig *config.NodeConfig,
 		mcInformerFactory:    mcInformerFactory,
 		informerFactory:      informerFactory,
 		ofClient:             ofClient,
-	}, ctrl.Finish
+	}
 }
 
 func TestGatewayEvent(t *testing.T) {
 	k8sClient := k8sfake.NewSimpleClientset([]runtime.Object{nginx1NoIPs, nginx2WithIPs}...)
-	c, closeFn := newMCPodRouteController(t, &config.NodeConfig{Name: node1Name}, k8sClient)
-	defer closeFn()
+	c := newMCPodRouteController(t, &config.NodeConfig{Name: node1Name}, k8sClient)
 	defer c.podQueue.ShutDown()
 	defer c.gwQueue.ShutDown()
 
@@ -179,8 +178,7 @@ func TestGatewayEvent(t *testing.T) {
 
 func TestPodEvent(t *testing.T) {
 	k8sClient := k8sfake.NewSimpleClientset([]runtime.Object{nginx2WithIPs}...)
-	c, closeFn := newMCPodRouteController(t, &config.NodeConfig{Name: node1Name}, k8sClient)
-	defer closeFn()
+	c := newMCPodRouteController(t, &config.NodeConfig{Name: node1Name}, k8sClient)
 	defer c.podQueue.ShutDown()
 	defer c.gwQueue.ShutDown()
 
