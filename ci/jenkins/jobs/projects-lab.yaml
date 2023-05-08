@@ -844,8 +844,12 @@
           error_status: Failed. Add comment /test-kind-conformance to re-trigger.
           triggered_status: null
           started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
           publishers: []
-          wrappers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-networkpolicy
           node: 'antrea-kind-testbed'
@@ -870,8 +874,12 @@
           error_status: Failed. Add comment /test-kind-networkpolicy to re-trigger.
           triggered_status: null
           started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
           publishers: []
-          wrappers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: rancher-e2e
           node: 'antrea-rancher-testbed'
