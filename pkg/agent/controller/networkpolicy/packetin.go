@@ -30,16 +30,12 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-var logPacket = (*Controller).logPacket
-var rejectRequest = (*Controller).rejectRequest
-var storeDenyConnection = (*Controller).storeDenyConnection
-
-// HandlePacketIn is the packetin handler registered to openflow by Antrea network
+// HandlePacketIn is the packetIn handler registered to openflow by Antrea network
 // policy agent controller. It performs the appropriate operations based on which
 // bits are set in the "custom reasons" field of the packet received from OVS.
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
-		return errors.New("empty PacketIn for Antrea Policy")
+		return errors.New("empty packetIn for Antrea Policy")
 	}
 
 	if len(pktIn.UserData) < 2 {
@@ -51,17 +47,17 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		return packetInOperations&operation == operation
 	}
 	if checkOperation(openflow.PacketInNPLoggingOperation) {
-		if err := logPacket(c, pktIn); err != nil {
+		if err := c.logPacket(c, pktIn); err != nil {
 			return err
 		}
 	}
 	if checkOperation(openflow.PacketInNPRejectOperation) {
-		if err := rejectRequest(c, pktIn); err != nil {
+		if err := c.rejectRequest(c, pktIn); err != nil {
 			return err
 		}
 	}
 	if checkOperation(openflow.PacketInNPStoreDenyOperation) {
-		if err := storeDenyConnection(c, pktIn); err != nil {
+		if err := c.storeDenyConnection(c, pktIn); err != nil {
 			return err
 		}
 	}
@@ -106,10 +102,10 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32,
 	return regValue.Data, nil
 }
 
-func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
+func storeDenyConnection(c *Controller, pktIn *ofctrl.PacketIn) error {
 	packet, err := binding.ParsePacketIn(pktIn)
 	if err != nil {
-		return fmt.Errorf("error in parsing packetin: %v", err)
+		return fmt.Errorf("error in parsing packetIn: %v", err)
 	}
 
 	// Get 5-tuple information

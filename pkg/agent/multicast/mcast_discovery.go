@@ -67,10 +67,6 @@ type IGMPSnooper struct {
 	encapEnabled             bool
 }
 
-func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
-	return s.processPacketIn(pktIn)
-}
-
 func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore.InterfaceConfig, error) {
 	matches := pktIn.GetMatches()
 	ofPortField := matches.GetMatchByName(binding.OxmFieldInPort)
@@ -223,7 +219,7 @@ func (s *IGMPSnooper) sendIGMPLeaveReport(groups []net.IP) error {
 	return s.sendIGMPReport(protocol.IGMPToIn, groups)
 }
 
-func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
+func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	now := time.Now()
 	iface, err := s.parseSrcInterface(pktIn)
 	if err != nil {

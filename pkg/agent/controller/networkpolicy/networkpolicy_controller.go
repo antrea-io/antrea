@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"antrea.io/ofnet/ofctrl"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -126,6 +127,10 @@ type Controller struct {
 	gwPort        uint32
 	tunPort       uint32
 	nodeConfig    *config.NodeConfig
+
+	logPacket           func(c *Controller, pktIn *ofctrl.PacketIn) error
+	rejectRequest       func(c *Controller, pktIn *ofctrl.PacketIn) error
+	storeDenyConnection func(c *Controller, pktIn *ofctrl.PacketIn) error
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -395,6 +400,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSynced:        false,
 	}
 	c.ifaceStore = ifaceStore
+	c.logPacket = logPacket
+	c.rejectRequest = rejectRequest
+	c.storeDenyConnection = storeDenyConnection
 	return c, nil
 }
 

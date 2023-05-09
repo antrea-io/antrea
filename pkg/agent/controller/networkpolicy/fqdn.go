@@ -729,10 +729,6 @@ func (f *fqdnController) makeDNSRequest(ctx context.Context, fqdn string) error 
 
 // HandlePacketIn implements openflow.PacketInHandler
 func (f *fqdnController) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
-	return f.handlePacketIn(pktIn)
-}
-
-func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 	klog.V(4).InfoS("Received a packetIn for DNS response")
 	waitCh := make(chan error, 1)
 	handleUDP := func(udp *protocol.UDP) {

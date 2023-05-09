@@ -72,39 +72,39 @@ func Test_StartPacketInHandler(t *testing.T) {
 	bridge := fc.bridge.(*openflow.OFBridge)
 	for _, tt := range []struct {
 		name        string
-		userdata    []byte
+		userData    []byte
 		expectValue ofpPacketInCategory
 	}{
 		{
 			name:        "PacketInCategoryTF",
-			userdata:    []byte{uint8(PacketInCategoryTF)},
+			userData:    []byte{uint8(PacketInCategoryTF)},
 			expectValue: PacketInCategoryTF,
 		},
 		{
 			name:        "PacketInCategoryNP",
-			userdata:    []byte{uint8(PacketInCategoryNP)},
+			userData:    []byte{uint8(PacketInCategoryNP)},
 			expectValue: PacketInCategoryNP,
 		},
 		{
 			name:        "PacketInCategoryDNS",
-			userdata:    []byte{uint8(PacketInCategoryDNS)},
+			userData:    []byte{uint8(PacketInCategoryDNS)},
 			expectValue: PacketInCategoryDNS,
 		},
 		{
 			name:        "PacketInCategoryIGMP",
-			userdata:    []byte{uint8(PacketInCategoryIGMP)},
+			userData:    []byte{uint8(PacketInCategoryIGMP)},
 			expectValue: PacketInCategoryIGMP,
 		},
 		{
 			name:        "PacketInCategorySvcReject",
-			userdata:    []byte{uint8(PacketInCategorySvcReject)},
+			userData:    []byte{uint8(PacketInCategorySvcReject)},
 			expectValue: PacketInCategorySvcReject,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			packetIn := &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{},
-				UserData: tt.userdata,
+				UserData: tt.userData,
 			}
 			bridge.PacketRcvd(nil, packetIn)
 			select {

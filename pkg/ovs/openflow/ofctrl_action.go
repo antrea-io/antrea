@@ -445,6 +445,11 @@ func (a *ofFlowAction) Note(notes string) FlowBuilder {
 	return a.builder
 }
 
+// SendToController will send the packet to the OVS controller.
+// If pause option is true, the packet will be not only sent to the controller, but
+// also paused in the pipeline. The controller could use a resume message to resume
+// this packet letting it continue its journey in the pipeline from where it was
+// paused.
 func (a *ofFlowAction) SendToController(userdata []byte, pause bool) FlowBuilder {
 	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
 		controllerAct := &ofctrl.NXController{

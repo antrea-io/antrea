@@ -716,7 +716,7 @@ func TestProcessPacketIn(t *testing.T) {
 			}
 			for _, pkt := range packets {
 				mockIfaceStore.EXPECT().GetInterfaceByOFPort(uint32(tc.iface.OFPort)).Return(tc.iface, true)
-				err := snooper.processPacketIn(pkt)
+				err := snooper.HandlePacketIn(pkt)
 				assert.NoError(t, err)
 			}
 
@@ -1221,7 +1221,7 @@ func testRemoteReport(t *testing.T, mockController *Controller, groups []net.IP,
 func processRemoteReport(t *testing.T, mockController *Controller, groups []net.IP, remoteNode net.IP, reportType uint8, tunnelPort uint32) error {
 	pkt := generatePacketInForRemoteReport(t, mockController.igmpSnooper, groups, remoteNode, reportType, tunnelPort)
 	mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, nodeIf1IP), true)
-	return mockController.igmpSnooper.processPacketIn(&pkt)
+	return mockController.igmpSnooper.HandlePacketIn(&pkt)
 }
 
 func compareGroupStatus(t *testing.T, cache cache.Indexer, event *mcastGroupEvent) {

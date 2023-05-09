@@ -27,20 +27,18 @@ import (
 
 func TestController_HandlePacketIn(t *testing.T) {
 	controller, _, _ := newTestController()
-	logPacket = func(controller *Controller, in *ofctrl.PacketIn) error {
-		return fmt.Errorf("log")
+	logPacketErr := fmt.Errorf("log")
+	rejectRequestErr := fmt.Errorf("reject")
+	storeDenyConnectionErr := fmt.Errorf("storeDenyConnection")
+	controller.logPacket = func(c *Controller, in *ofctrl.PacketIn) error {
+		return logPacketErr
 	}
-	rejectRequest = func(controller *Controller, in *ofctrl.PacketIn) error {
-		return fmt.Errorf("reject")
+	controller.rejectRequest = func(c *Controller, in *ofctrl.PacketIn) error {
+		return rejectRequestErr
 	}
-	storeDenyConnection = func(controller *Controller, in *ofctrl.PacketIn) error {
-		return fmt.Errorf("storeDeny")
+	controller.storeDenyConnection = func(c *Controller, in *ofctrl.PacketIn) error {
+		return storeDenyConnectionErr
 	}
-	defer func() {
-		logPacket = (*Controller).logPacket
-		rejectRequest = (*Controller).rejectRequest
-		storeDenyConnection = (*Controller).storeDenyConnection
-	}()
 
 	logPktIn := &ofctrl.PacketIn{
 		PacketIn: &openflow15.PacketIn{},
@@ -56,7 +54,7 @@ func TestController_HandlePacketIn(t *testing.T) {
 		{
 			name:      "EmptyPacketIn",
 			packetIn:  nil,
-			expectErr: fmt.Errorf("empty PacketIn for Antrea Policy"),
+			expectErr: fmt.Errorf("empty packetIn for Antrea Policy"),
 		},
 		{
 			name: "MissOperationInUserdata",
@@ -72,7 +70,7 @@ func TestController_HandlePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{},
 				UserData: []byte{uint8(openflow.PacketInCategoryNP), uint8(openflow.PacketInNPLoggingOperation)},
 			},
-			expectErr: fmt.Errorf("log"),
+			expectErr: logPacketErr,
 		},
 		{
 			name: "RejectOperation",
@@ -80,7 +78,7 @@ func TestController_HandlePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{},
 				UserData: []byte{uint8(openflow.PacketInCategoryNP), uint8(openflow.PacketInNPRejectOperation)},
 			},
-			expectErr: fmt.Errorf("reject"),
+			expectErr: rejectRequestErr,
 		},
 		{
 			name: "DenyOperation",
@@ -88,7 +86,7 @@ func TestController_HandlePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{},
 				UserData: []byte{uint8(openflow.PacketInCategoryNP), uint8(openflow.PacketInNPStoreDenyOperation)},
 			},
-			expectErr: fmt.Errorf("storeDeny"),
+			expectErr: storeDenyConnectionErr,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

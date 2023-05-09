@@ -201,7 +201,7 @@ func TestIGMPRemoteReport(t *testing.T) {
 		mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true).Times(len(packets))
 		for i := range packets {
 			pkt := &packets[i]
-			err := snooper.processPacketIn(pkt)
+			err := snooper.HandlePacketIn(pkt)
 			assert.NoError(t, err, "Failed to process IGMP Report message")
 		}
 

@@ -72,7 +72,7 @@ const (
 
 // rejectRequest sends reject response to the requesting client, based on the
 // packet-in message.
-func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
+func rejectRequest(c *Controller, pktIn *ofctrl.PacketIn) error {
 	// All src/dst mean the source/destination of the reject packet, which are destination/source of the incoming packet.
 	// Get ethernet data.
 	ethernetPkt, err := openflow.GetEthernetPacket(pktIn)
