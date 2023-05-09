@@ -643,7 +643,6 @@ func run(o *Options) error {
 
 	go antreaClientProvider.Run(ctx)
 
-	go networkPolicyController.Run(stopCh)
 	// Initialize the NPL agent.
 	if enableNodePortLocal {
 		nplController, err := npl.InitializeNPLAgent(
@@ -713,10 +712,6 @@ func run(o *Options) error {
 		go memberlistCluster.Run(stopCh)
 	}
 
-	if o.enableEgress {
-		go egressController.Run(stopCh)
-	}
-
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPController.Run(stopCh)
 	}
@@ -742,6 +737,14 @@ func run(o *Options) error {
 			klog.InfoS("AntreaProxy is ready")
 		}
 	}
+
+	// NetworkPolicyController and EgressController accesses the "antrea" Service via its ClusterIP.
+	// Run them after AntreaProxy is ready.
+	go networkPolicyController.Run(stopCh)
+	if o.enableEgress {
+		go egressController.Run(stopCh)
+	}
+
 	var mcastController *multicast.Controller
 	if multicastEnabled {
 		multicastSocket, err := multicast.CreateMulticastSocket()
