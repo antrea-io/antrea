@@ -192,6 +192,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 
 // fqdnToSelectorItem converts a FQDN expression to a fqdnSelectorItem.
 func fqdnToSelectorItem(fqdn string) fqdnSelectorItem {
+	fqdn = strings.ToLower(fqdn)
 	if strings.Contains(fqdn, "*") {
 		return fqdnSelectorItem{
 			matchRegex: toRegex(fqdn),
@@ -204,7 +205,6 @@ func fqdnToSelectorItem(fqdn string) fqdnSelectorItem {
 // match FQDNs against.
 func toRegex(pattern string) string {
 	pattern = strings.TrimSpace(pattern)
-	pattern = strings.ToLower(pattern)
 
 	// Replace "." as a regex literal, since it's recogized as a separator in FQDN.
 	pattern = strings.Replace(pattern, ".", "[.]", -1)
