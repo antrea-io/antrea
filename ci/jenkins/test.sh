@@ -37,7 +37,7 @@ DEFAULT_IP_MODE="ipv4"
 IP_MODE=""
 K8S_VERSION="1.23.6-00"
 WINDOWS_YAML_SUFFIX="windows"
-WIN_JUMPER=""
+WIN_IMAGE_NODE=""
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
 WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
@@ -67,7 +67,7 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --proxyall               Enable proxyAll to test AntreaProxy.
         --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
-        --win-jumper             Name of the windows jumper node in containerd cluster. Images are built by docker on this node.
+        --win-image-node         Name of the windows image node in containerd cluster. Images are built by docker on this node.
         --kind-cluster-name      Name of the kind Cluster." 
 
 function print_usage {
@@ -115,8 +115,8 @@ case $key in
     IP_MODE="$2"
     shift 2
     ;;
-    --win-jumper)
-    WIN_JUMPER="$2"
+    --win-image-node)
+    WIN_IMAGE_NODE="$2"
     shift 2
     ;;
     -h|--help)
@@ -515,8 +515,8 @@ function deliver_antrea_windows_containerd {
     done
 
     echo "===== Build Antrea Windows on Windows Jumper Node ====="
-    echo "==== Reverting Windows VM ${WIN_JUMPER} ====="
-    revert_snapshot_windows ${WIN_JUMPER}
+    echo "==== Reverting Windows VM ${WIN_IMAGE_NODE} ====="
+    revert_snapshot_windows ${WIN_IMAGE_NODE}
     rm -f antrea-windows.tar.gz
     # Compress antrea repo and copy it to a Windows node
     mkdir -p jenkins
@@ -548,7 +548,7 @@ function deliver_antrea_windows_containerd {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull ${k8s_images[i]} && ctr -n k8s.io images tag ${k8s_images[i]} ${e2e_images[i]}" || true
         done
         if ! (test -f antrea-windows.tar.gz); then
-            echo "Windows VM ${WIN_JUMPER} didn't build antrea-windows.tar.gz, exiting"
+            echo "Windows VM ${WIN_IMAGE_NODE} didn't build antrea-windows.tar.gz, exiting"
             exit 1
         else
             for i in `seq 2`; do
