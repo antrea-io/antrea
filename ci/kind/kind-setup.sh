@@ -265,8 +265,6 @@ function create {
   cat <<EOF > $config_file
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-featureGates:
-  NetworkPolicyEndPort: true
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR

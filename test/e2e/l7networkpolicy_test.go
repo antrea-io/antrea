@@ -125,19 +125,19 @@ func probeL7NetworkPolicy(t *testing.T, data *TestData, serverPodName, clientPod
 	for _, ip := range serverIPs {
 		baseURL := net.JoinHostPort(ip.String(), "8080")
 
-		// To verify that if path 'clientip' is allowed.
+		// Verify that access to path /clientip is as expected.
 		assert.NoError(t, wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
 			_, err := probeClientIPFromPod(data, clientPodName, agnhostContainerName, baseURL)
-			if allowHTTPPathClientIP && err != nil || !allowHTTPPathClientIP && err == nil {
+			if (allowHTTPPathClientIP && err != nil) || (!allowHTTPPathClientIP && err == nil) {
 				return false, nil
 			}
 			return true, nil
 		}))
 
-		// To verify that if path 'hostname' is allowed.
+		// Verify that access to path /hostname is as expected.
 		assert.NoError(t, wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
 			hostname, err := probeHostnameFromPod(data, clientPodName, agnhostContainerName, baseURL)
-			if allowHTTPPathHostname && err != nil || !allowHTTPPathHostname && err == nil {
+			if (allowHTTPPathHostname && err != nil) || (!allowHTTPPathHostname && err == nil) {
 				return false, nil
 			}
 			if allowHTTPPathHostname && serverPodName != hostname {
