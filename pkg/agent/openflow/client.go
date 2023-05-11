@@ -1096,8 +1096,13 @@ func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet,
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
 		}
+		udpSrcPort := packet.SourcePort
+		if udpSrcPort == 0 {
+			// #nosec G404: random number generator not used for security purposes.
+			udpSrcPort = uint16(rand.Uint32())
+		}
 		packetOutBuilder = packetOutBuilder.SetUDPDstPort(packet.DestinationPort).
-			SetUDPSrcPort(packet.SourcePort)
+			SetUDPSrcPort(udpSrcPort)
 	default:
 		packetOutBuilder = packetOutBuilder.SetIPProtocolValue(packet.IsIPv6, packet.IPProto)
 	}
