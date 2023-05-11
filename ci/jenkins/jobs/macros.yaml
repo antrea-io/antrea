@@ -8,6 +8,13 @@
           rm ci/jenkins/jobs/defaults.yaml
 
 - builder:
+    name: builder-jenkins-backup
+    builders:
+      - shell: |-
+          rdiff-backup ${{RDIFF_USERNAME}}@${{RDIFF_IP}}::${{RDIFF_PATH}} backup
+          rdiff-backup --remove-older-than 6M backup
+
+- builder:
     name: builder-eks-cluster-cleanup
     builders:
       - shell: |-
