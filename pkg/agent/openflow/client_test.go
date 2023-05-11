@@ -1059,12 +1059,15 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 
 func Test_client_InstallServiceFlows(t *testing.T) {
 	groupID := binding.GroupIDType(100)
+	clusterGroupID := binding.GroupIDType(101)
 	svcIPv4 := net.ParseIP("10.96.0.100")
 	svcIPv6 := net.ParseIP("fec0:10:96::100")
 	port := uint16(80)
 
 	testCases := []struct {
 		name              string
+		groupID           binding.GroupIDType
+		clusterGroupID    binding.GroupIDType
 		protocol          binding.Protocol
 		svcIP             net.IP
 		affinityTimeout   uint16
@@ -1074,6 +1077,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 	}{
 		{
 			name:     "Service ClusterIP",
+			groupID:  groupID,
 			protocol: binding.ProtocolTCP,
 			svcIP:    svcIPv4,
 			expectedFlows: []string{
@@ -1083,6 +1087,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		},
 		{
 			name:     "Service ClusterIP, nested",
+			groupID:  groupID,
 			protocol: binding.ProtocolTCP,
 			svcIP:    svcIPv4,
 			expectedFlows: []string{
@@ -1092,6 +1097,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		},
 		{
 			name:            "Service ClusterIP,SessionAffinity",
+			groupID:         groupID,
 			protocol:        binding.ProtocolTCP,
 			svcIP:           svcIPv4,
 			affinityTimeout: uint16(100),
@@ -1103,6 +1109,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		},
 		{
 			name:            "Service ClusterIP,IPv6,SessionAffinity",
+			groupID:         groupID,
 			protocol:        binding.ProtocolTCPv6,
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
@@ -1113,6 +1120,8 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		},
 		{
 			name:              "Service NodePort,SessionAffinity",
+			groupID:           groupID,
+			clusterGroupID:    groupID,
 			protocol:          binding.ProtocolUDP,
 			svcIP:             config.VirtualNodePortDNATIPv4,
 			affinityTimeout:   uint16(100),
@@ -1124,6 +1133,8 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		},
 		{
 			name:              "Service NodePort,IPv6,SessionAffinity",
+			groupID:           groupID,
+			clusterGroupID:    groupID,
 			protocol:          binding.ProtocolUDPv6,
 			svcIP:             config.VirtualNodePortDNATIPv6,
 			affinityTimeout:   uint16(100),
@@ -1134,7 +1145,23 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			},
 		},
 		{
+			name:              "Service NodePort,SessionAffinity,Short-circuiting",
+			groupID:           groupID,
+			clusterGroupID:    clusterGroupID,
+			protocol:          binding.ProtocolUDP,
+			svcIP:             config.VirtualNodePortDNATIPv4,
+			affinityTimeout:   uint16(100),
+			toExternalAddress: true,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,udp,reg4=0x90000/0xf0000,nw_src=10.10.0.0/24,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,udp,reg4=0x90000/0xf0000,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,udp,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
 			name:              "Service LoadBalancer,SessionAffinity",
+			groupID:           groupID,
+			clusterGroupID:    groupID,
 			protocol:          binding.ProtocolSCTP,
 			svcIP:             svcIPv4,
 			affinityTimeout:   uint16(100),
@@ -1146,6 +1173,8 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		},
 		{
 			name:              "Service LoadBalancer,IPv6,SessionAffinity",
+			groupID:           groupID,
+			clusterGroupID:    groupID,
 			protocol:          binding.ProtocolSCTPv6,
 			svcIP:             svcIPv6,
 			affinityTimeout:   uint16(100),
@@ -1153,6 +1182,20 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
 				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
+			name:              "Service LoadBalancer,SessionAffinity,Short-circuiting",
+			groupID:           groupID,
+			clusterGroupID:    clusterGroupID,
+			protocol:          binding.ProtocolSCTP,
+			svcIP:             svcIPv4,
+			affinityTimeout:   uint16(100),
+			toExternalAddress: true,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,sctp,reg4=0x10000/0x70000,nw_src=10.10.0.0/24,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 	}
@@ -1169,7 +1212,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 
 			cacheKey := generateServicePortFlowCacheKey(tc.svcIP, port, tc.protocol)
 
-			assert.NoError(t, fc.InstallServiceFlows(groupID, tc.svcIP, port, tc.protocol, tc.affinityTimeout, tc.toExternalAddress, tc.nested))
+			assert.NoError(t, fc.InstallServiceFlows(tc.groupID, tc.clusterGroupID, tc.svcIP, port, tc.protocol, tc.affinityTimeout, tc.toExternalAddress, tc.nested))
 			fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -1198,7 +1241,7 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 		proxy.NewBaseEndpointInfo("10.10.0.12", "", "", 80, true, true, false, false, nil),
 	}
 
-	assert.NoError(t, fc.InstallServiceFlows(groupID, svcIP, svcPort, bindingProtocol, 100, true, false))
+	assert.NoError(t, fc.InstallServiceFlows(groupID, groupID, svcIP, svcPort, bindingProtocol, 100, true, false))
 	assert.NoError(t, fc.InstallEndpointFlows(bindingProtocol, endpoints))
 	flowKeys := fc.GetServiceFlowKeys(svcIP, svcPort, bindingProtocol, endpoints)
 	expectedFlowKeys := []string{

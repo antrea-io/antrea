@@ -100,9 +100,11 @@ type Client interface {
 	// installs the flow that uses the group/bucket to do Service LB. If the affinityTimeout is not zero, it also
 	// installs the flow which has a learn action to maintain the LB decision. The group with the groupID must be
 	// installed before, otherwise the installation will fail.
+	// When externalAddress is set and groupID != clusterGroupID, it also installs the flow to implement short-circuiting
+	// for external Service IPs.
 	// externalAddress indicates that whether the Service is externally accessible, like NodePort, LoadBalancer and ExternalIP.
 	// nested, when setting to true, indicates the Service's Endpoints are ClusterIPs of other Services.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, externalAddress, nested bool) error
+	InstallServiceFlows(groupID, clusterGroupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, externalAddress, nested bool) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
@@ -752,17 +754,20 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoints []p
 	return c.deleteFlowsWithMultipleKeys(c.featureService.cachedFlows, flowCacheKeys)
 }
 
-func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, externalAddress, nested bool) error {
+func (c *client) InstallServiceFlows(groupID, clusterGroupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, externalAddress, nested bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
 	nodePortAddress := svcIP.Equal(config.VirtualNodePortDNATIPv4) || svcIP.Equal(config.VirtualNodePortDNATIPv6)
-	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, externalAddress, nodePortAddress, nested))
+	flows = append(flows, c.featureService.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0, externalAddress, nodePortAddress, nested, false))
 	if affinityTimeout != 0 {
 		flows = append(flows, c.featureService.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout, externalAddress, nodePortAddress))
 	}
 	if !externalAddress && !nested {
 		flows = append(flows, c.featureService.endpointRedirectFlowForServiceIP(svcIP, svcPort, protocol, groupID))
+	}
+	if externalAddress && groupID != clusterGroupID {
+		flows = append(flows, c.featureService.serviceLBFlow(clusterGroupID, svcIP, svcPort, protocol, affinityTimeout != 0, true, nodePortAddress, false, true))
 	}
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.featureService.cachedFlows, cacheKey, flows)
