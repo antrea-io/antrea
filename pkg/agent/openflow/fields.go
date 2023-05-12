@@ -70,10 +70,9 @@ var (
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
 	// reg0[13]: Mark to indicate the packet is a generated reject response packet-out.
-	GeneratedRejectPacketOutMark = binding.NewOneBitRegMark(0, 13)
-	// reg0[14]: Field to indicate a Service without any Endpoints (used by Proxy)
-	SvcNoEpField = binding.NewRegField(0, 14, 14)
-	SvcNoEpMark  = binding.NewOneBitRegMark(0, 14)
+	GeneratedRejectPacketOutRegMark = binding.NewOneBitRegMark(0, 13)
+	// reg0[14]: Mark to indicate a Service without any Endpoints (used by Proxy)
+	SvcNoEpRegMark = binding.NewOneBitRegMark(0, 14)
 	// reg0[19]: Mark to indicate remote SNAT for Egress.
 	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 19)
 	// reg0[20]: Field to indicate redirect action of layer 7 NetworkPolicy.

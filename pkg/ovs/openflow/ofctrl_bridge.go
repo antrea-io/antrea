@@ -311,7 +311,7 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
 	klog.V(2).InfoS("Received packetIn", "packet", packet)
 	if len(packet.UserData) == 0 {
-		klog.Info("Received packetIn without packetIn category in userdata.")
+		klog.Info("Received packetIn without packetIn category in userdata")
 		return
 	}
 	category := packet.UserData[0]

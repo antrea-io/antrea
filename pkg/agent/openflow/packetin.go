@@ -48,24 +48,24 @@ const (
 	PacketInCategoryNP
 	// PacketInCategoryDNS is used for DNS response packetIn messages.
 	PacketInCategoryDNS
-	// PacketInCategoryIGMP is used for IGMP packetIn message.
+	// PacketInCategoryIGMP is used for IGMP packetIn messages.
 	PacketInCategoryIGMP
-	// PacketInCategorySvcReject is used to process the Service packet not matching any
+	// PacketInCategorySvcReject is used to process the Service packets not matching any
 	// Endpoints within packetIn message.
 	PacketInCategorySvcReject
 
 	// PacketIn operations below are used to decide which operation(s) should be
 	// executed by a handler. It(they) should be loaded in the second byte of the
 	// packetIn2 userData. Operations for different handlers could share the value.
-	// If there is only one operation for a handler, then there is no need to provide a
+	// If there is only one operation for a handler, then there is no need to provide an
 	// operation.
 	// For example, if a packetIn2 needs Reject and Logging, the userData of the
 	// packetIn2 will be []byte{1, 0b11}. The first byte indicate that this packetIn2
 	// should be sent to NetworkPolicy packetIn handler(PacketInCategoryNP). And the
-	// second byte, which is 0b1 & 0b10 indicating that it need
+	// second byte, which is 0b1 & 0b10 indicating that it needs
 	// PacketInNPLoggingOperation and PacketInNPRejectOperation.
 	// PacketInNPLoggingOperation is used when sending packetIn to NetworkPolicy
-	// handler indicating this packet need logging.
+	// handler indicating this packet needs logging.
 	PacketInNPLoggingOperation = 0b1
 	// PacketInNPRejectOperation is used when sending packetIn to controller
 	// indicating that this packet should be rejected.
@@ -152,7 +152,7 @@ func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 		if handler, ok := c.packetInHandlers[featurePacketIn.category]; ok {
 			klog.V(2).InfoS("Received packetIn", "category", featurePacketIn.category)
 			if err := handler.HandlePacketIn(pktIn); err != nil {
-				klog.ErrorS(err, "packetIn handler failed to process packet", "category", featurePacketIn.category)
+				klog.ErrorS(err, "PacketIn handler failed to process packet", "category", featurePacketIn.category)
 			}
 		}
 	}

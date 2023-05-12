@@ -47,17 +47,17 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		return packetInOperations&operation == operation
 	}
 	if checkOperation(openflow.PacketInNPLoggingOperation) {
-		if err := c.logPacket(c, pktIn); err != nil {
+		if err := c.logPacketAction(pktIn); err != nil {
 			return err
 		}
 	}
 	if checkOperation(openflow.PacketInNPRejectOperation) {
-		if err := c.rejectRequest(c, pktIn); err != nil {
+		if err := c.rejectRequestAction(pktIn); err != nil {
 			return err
 		}
 	}
 	if checkOperation(openflow.PacketInNPStoreDenyOperation) {
-		if err := c.storeDenyConnection(c, pktIn); err != nil {
+		if err := c.storeDenyConnectionAction(pktIn); err != nil {
 			return err
 		}
 	}
@@ -102,7 +102,7 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32,
 	return regValue.Data, nil
 }
 
-func storeDenyConnection(c *Controller, pktIn *ofctrl.PacketIn) error {
+func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	packet, err := binding.ParsePacketIn(pktIn)
 	if err != nil {
 		return fmt.Errorf("error in parsing packetIn: %v", err)

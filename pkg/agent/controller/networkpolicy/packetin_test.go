@@ -30,13 +30,13 @@ func TestController_HandlePacketIn(t *testing.T) {
 	logPacketErr := fmt.Errorf("log")
 	rejectRequestErr := fmt.Errorf("reject")
 	storeDenyConnectionErr := fmt.Errorf("storeDenyConnection")
-	controller.logPacket = func(c *Controller, in *ofctrl.PacketIn) error {
+	controller.logPacketAction = func(in *ofctrl.PacketIn) error {
 		return logPacketErr
 	}
-	controller.rejectRequest = func(c *Controller, in *ofctrl.PacketIn) error {
+	controller.rejectRequestAction = func(in *ofctrl.PacketIn) error {
 		return rejectRequestErr
 	}
-	controller.storeDenyConnection = func(c *Controller, in *ofctrl.PacketIn) error {
+	controller.storeDenyConnectionAction = func(in *ofctrl.PacketIn) error {
 		return storeDenyConnectionErr
 	}
 

@@ -2440,7 +2440,7 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 
 	if len(endpoints) == 0 {
 		return group.Bucket().Weight(100).
-			LoadToRegField(SvcNoEpField, SvcNoEpMark.GetValue()).
+			LoadRegMark(SvcNoEpRegMark).
 			ResubmitToTable(EndpointDNATTable.GetID()).
 			Done()
 	}

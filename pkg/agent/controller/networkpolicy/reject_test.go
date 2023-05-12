@@ -413,7 +413,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				ctZone:            1,
 			},
 			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
-				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(openflow.AntreaFlexibleIPAMRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
 				builder.EXPECT().AddResubmitAction(nil, &conntrackTableID).Return(builder)
@@ -429,7 +429,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				ctZone:            1,
 			},
 			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
-				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
 				builder.EXPECT().AddResubmitAction(nil, &conntrackTableID).Return(builder)
 			},
@@ -444,7 +444,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				ctZone:            1,
 			},
 			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
-				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(openflow.AntreaFlexibleIPAMRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
 				builder.EXPECT().AddResubmitAction(nil, &l3ForwardingTableID).Return(builder)
@@ -460,7 +460,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				ctZone:            1,
 			},
 			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
-				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
 				builder.EXPECT().AddResubmitAction(nil, &l3ForwardingTableID).Return(builder)
 			},
@@ -475,7 +475,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				ctZone:            1,
 			},
 			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
-				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
 				builder.EXPECT().AddResubmitAction(nil, &conntrackTableID).Return(builder)
 			},
@@ -490,7 +490,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				ctZone:            0,
 			},
 			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
-				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 			},
 		},
 	}

@@ -257,7 +257,7 @@ func getPacketInfo(packet *binding.Packet, ob *logInfo) {
 // logPacket retrieves information from openflow reg, controller cache, packet-in
 // packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
 // Deduplication is safe guarded by logRecordDedupMap mutex.
-func logPacket(c *Controller, pktIn *ofctrl.PacketIn) error {
+func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	ob := new(logInfo)
 	packet, err := binding.ParsePacketIn(pktIn)
 	if err != nil {

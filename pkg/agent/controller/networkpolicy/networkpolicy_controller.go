@@ -65,6 +65,8 @@ type L7RuleReconciler interface {
 
 var emptyWatch = watch.NewEmptyWatch()
 
+type packetInAction func(*ofctrl.PacketIn) error
+
 // Controller is responsible for watching Antrea AddressGroups, AppliedToGroups,
 // and NetworkPolicies, feeding them to ruleCache, getting dirty rules from
 // ruleCache, invoking reconciler to reconcile them.
@@ -128,9 +130,9 @@ type Controller struct {
 	tunPort       uint32
 	nodeConfig    *config.NodeConfig
 
-	logPacket           func(c *Controller, pktIn *ofctrl.PacketIn) error
-	rejectRequest       func(c *Controller, pktIn *ofctrl.PacketIn) error
-	storeDenyConnection func(c *Controller, pktIn *ofctrl.PacketIn) error
+	logPacketAction           packetInAction
+	rejectRequestAction       packetInAction
+	storeDenyConnectionAction packetInAction
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -400,9 +402,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSynced:        false,
 	}
 	c.ifaceStore = ifaceStore
-	c.logPacket = logPacket
-	c.rejectRequest = rejectRequest
-	c.storeDenyConnection = storeDenyConnection
+	c.logPacketAction = c.logPacket
+	c.rejectRequestAction = c.rejectRequest
+	c.storeDenyConnectionAction = c.storeDenyConnection
 	return c, nil
 }
 
