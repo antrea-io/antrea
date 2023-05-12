@@ -44,7 +44,7 @@ Kubernetes: `>= 1.16.0-0`
 | antreaProxy.nodePortAddresses | list | `[]` | String array of values which specifies the host IPv4/IPv6 addresses for NodePort. By default, all host addresses are used. |
 | antreaProxy.proxyAll | bool | `false` | Proxy all Service traffic, for all Service types, regardless of where it comes from. |
 | antreaProxy.proxyLoadBalancerIPs | bool | `true` | When set to false, AntreaProxy no longer load-balances traffic destined to the External IPs of LoadBalancer Services. |
-| antreaProxy.skipServices | list | `[]` |  |
+| antreaProxy.skipServices | list | `[]` | List of Services which should be ignored by AntreaProxy. |
 | clientCAFile | string | `""` | File path of the certificate bundle for all the signers that is recognized for incoming client certificates. |
 | cni.hostBinPath | string | `"/opt/cni/bin"` | Installation path of CNI binaries on the host. |
 | cni.plugins | object | `{"bandwidth":true,"portmap":true}` | Chained plugins to use alongside antrea-cni. |
@@ -78,12 +78,11 @@ Kubernetes: `>= 1.16.0-0`
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |
 | image | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/antrea-ubuntu","tag":""}` | Container image to use for Antrea components. |
 | ipsec.authenticationMode | string | `"psk"` | The authentication mode to use for IPsec. Must be one of "psk" or "cert". |
-| ipsec.csrSigner | object | `{"autoApprove":true,"selfSignedCA":true}` | CSR signer configuration when the authenticationMode is "cert". |
-| ipsec.csrSigner.autoApprove | bool | `true` | - Enable auto approval of Antrea signer for IPsec certificates. |
-| ipsec.csrSigner.selfSignedCA | bool | `true` | - Whether or not to use auto-generated self-signed CA. |
+| ipsec.csrSigner.autoApprove | bool | `true` | Enable auto approval of Antrea signer for IPsec certificates. |
+| ipsec.csrSigner.selfSignedCA | bool | `true` | Whether or not to use auto-generated self-signed CA. |
 | ipsec.psk | string | `"changeme"` | Preshared Key (PSK) for IKE authentication. It will be stored in a secret and passed to antrea-agent as an environment variable. |
 | kubeAPIServerOverride | string | `""` | Address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig. |
-| logVerbosity | int | `0` |  |
+| logVerbosity | int | `0` | Global log verbosity switch for all Antrea components. |
 | multicast.igmpQueryInterval | string | `"125s"` | The interval at which the antrea-agent sends IGMP queries to Pods. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | multicast.multicastInterfaces | list | `[]` | Names of the interfaces on Nodes that are used to forward multicast traffic. |
 | multicluster.enableGateway | bool | `false` | Enable Antrea Multi-cluster Gateway to support cross-cluster traffic. This feature is supported only with encap mode. |
@@ -109,7 +108,7 @@ Kubernetes: `>= 1.16.0-0`
 | secondaryNetwork.tunnelType | string | `"geneve"` | Tunnel protocol used for encapsulating traffic across Nodes. It must be one of "geneve", "vxlan", "gre", "stt". |
 | serviceCIDR | string | `""` | IPv4 CIDR range used for Services. Required when AntreaProxy is disabled. |
 | serviceCIDRv6 | string | `""` | IPv6 CIDR range used for Services. Required when AntreaProxy is disabled. |
-| testing.coverage | bool | `false` |  |
+| testing.coverage | bool | `false` | Enable code coverage measurement (used when testing Antrea only). |
 | testing.simulator.enable | bool | `false` |  |
 | tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Antrea APIservers. If empty, the default Go Cipher Suites will be used. See https://golang.org/pkg/crypto/tls/#pkg-constants. |
 | tlsMinVersion | string | `""` | TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13. |
@@ -120,8 +119,8 @@ Kubernetes: `>= 1.16.0-0`
 | tunnelCsum | bool | `false` | TunnelCsum determines whether to compute UDP encapsulation header (Geneve or VXLAN) checksums on outgoing packets. For Linux kernel before Mar 2021, UDP checksum must be present to trigger GRO on the receiver for better performance of Geneve and VXLAN tunnels. The issue has been fixed by https://github.com/torvalds/linux/commit/89e5c58fc1e2857ccdaae506fb8bc5fed57ee063, thus computing UDP checksum is no longer necessary. It should only be set to true when you are using an unpatched Linux kernel and observing poor transfer performance. |
 | tunnelPort | int | `0` | TunnelPort is the destination port for UDP and TCP based tunnel protocols (Geneve, VXLAN, and STT). If zero, it will use the assigned IANA port for the protocol, i.e. 6081 for Geneve, 4789 for VXLAN, and 7471 for STT. |
 | tunnelType | string | `"geneve"` | Tunnel protocol used for encapsulating traffic across Nodes. It must be one of "geneve", "vxlan", "gre", "stt". |
-| webhooks.labelsMutator.enable | bool | `false` |  |
-| whereabouts.enable | bool | `false` |  |
+| webhooks.labelsMutator.enable | bool | `false` | Mutate all namespaces to add the "antrea.io/metadata.name" label. |
+| whereabouts.enable | bool | `false` | Install and configure Whereabouts, for use by the antrea-agent. |
 | wireGuard.port | int | `51820` | Port for WireGuard to send and receive traffic. |
 
 ----------------------------------------------
