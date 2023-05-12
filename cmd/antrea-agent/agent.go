@@ -374,42 +374,39 @@ func run(o *Options) error {
 		)
 	}
 
+	v4Enabled := networkConfig.IPv4Enabled
+	v6Enabled := networkConfig.IPv6Enabled
+
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
 	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
 	v4GroupCounter := proxytypes.NewGroupCounter(v4GroupIDAllocator, groupIDUpdates)
+	if v4Enabled {
+		groupCounters = append(groupCounters, v4GroupCounter)
+	}
 	v6GroupIDAllocator := openflow.NewGroupAllocator(true)
 	v6GroupCounter := proxytypes.NewGroupCounter(v6GroupIDAllocator, groupIDUpdates)
+	if v6Enabled {
+		groupCounters = append(groupCounters, v6GroupCounter)
+	}
 
-	v4Enabled := networkConfig.IPv4Enabled
-	v6Enabled := networkConfig.IPv6Enabled
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxyAll := o.config.AntreaProxy.ProxyAll
-		skipServices := o.config.AntreaProxy.SkipServices
-		proxyLoadBalancerIPs := *o.config.AntreaProxy.ProxyLoadBalancerIPs
-
-		switch {
-		case v4Enabled && v6Enabled:
-			proxier, err = proxy.NewDualStackProxier(nodeConfig.Name, k8sClient, informerFactory, ofClient, routeClient, nodePortAddressesIPv4, nodePortAddressesIPv6, proxyAll, skipServices, proxyLoadBalancerIPs, v4GroupCounter, v6GroupCounter, enableMulticlusterGW)
-			if err != nil {
-				return fmt.Errorf("error when creating dual-stack proxier: %v", err)
-			}
-			groupCounters = append(groupCounters, v4GroupCounter, v6GroupCounter)
-		case v4Enabled:
-			proxier, err = proxy.NewProxier(nodeConfig.Name, k8sClient, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAll, skipServices, proxyLoadBalancerIPs, v4GroupCounter, enableMulticlusterGW)
-			if err != nil {
-				return fmt.Errorf("error when creating v4 proxier: %v", err)
-			}
-			groupCounters = append(groupCounters, v4GroupCounter)
-		case v6Enabled:
-			proxier, err = proxy.NewProxier(nodeConfig.Name, k8sClient, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAll, skipServices, proxyLoadBalancerIPs, v6GroupCounter, enableMulticlusterGW)
-			if err != nil {
-				return fmt.Errorf("error when creating v6 proxier: %v", err)
-			}
-			groupCounters = append(groupCounters, v6GroupCounter)
-		default:
-			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
+		proxier, err = proxy.NewProxier(nodeConfig.Name,
+			k8sClient,
+			ofClient,
+			routeClient,
+			v4Enabled,
+			v6Enabled,
+			nodePortAddressesIPv4,
+			nodePortAddressesIPv6,
+			o.config.AntreaProxy,
+			v4GroupCounter,
+			v6GroupCounter,
+			enableMulticlusterGW,
+			informerFactory)
+		if err != nil {
+			return fmt.Errorf("error when creating proxier: %v", err)
 		}
 	}
 

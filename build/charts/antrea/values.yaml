@@ -135,6 +135,12 @@ antreaProxy:
   # -- When set to false, AntreaProxy no longer load-balances traffic destined
   # to the External IPs of LoadBalancer Services.
   proxyLoadBalancerIPs: true
+  # -- The value of the "service.kubernetes.io/service-proxy-name" label for
+  # AntreaProxy to match. If it is set, then AntreaProxy will only handle Services
+  # with the label that equals the provided value. If it is not set, then AntreaProxy
+  # will only handle Services without the "service.kubernetes.io/service-proxy-name"
+  # label, but ignore Services with the label no matter what is the value.
+  serviceProxyName: ""
 
 nodeIPAM:
   # -- Enable Node IPAM in Antrea
