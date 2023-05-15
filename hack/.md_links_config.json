@@ -32,6 +32,9 @@
         },
         {
             "pattern": "https://suricata.io/"
+        },
+        {
+            "pattern": "https://twitter.com/*"
         }
     ],
     "retryOn429": false,
