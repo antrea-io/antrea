@@ -110,7 +110,7 @@ flowLogger:
   # -- PrettyPrint enables conversion of some numeric fields to a more meaningful string representation.
   prettyPrint: true
 testing:
-  ## -- Enable code coverage measurement (used when testing Flow Aggregator only).
+  # -- Enable code coverage measurement (used when testing Flow Aggregator only).
   coverage: false
-## -- Log verbosity switch for Flow Aggregator.
+# -- Log verbosity switch for Flow Aggregator.
 logVerbosity: 0

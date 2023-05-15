@@ -97,11 +97,11 @@ ipsec:
   # -- Preshared Key (PSK) for IKE authentication. It will be stored in a secret
   # and passed to antrea-agent as an environment variable.
   psk: "changeme"
-  # -- CSR signer configuration when the authenticationMode is "cert".
+  # CSR signer configuration when the authenticationMode is "cert".
   csrSigner:
-    # --- Enable auto approval of Antrea signer for IPsec certificates.
+    # -- Enable auto approval of Antrea signer for IPsec certificates.
     autoApprove: true
-    # --- Whether or not to use auto-generated self-signed CA.
+    # -- Whether or not to use auto-generated self-signed CA.
     selfSignedCA: true
 
 egress:
@@ -124,7 +124,7 @@ antreaProxy:
   # -- String array of values which specifies the host IPv4/IPv6 addresses for
   # NodePort. By default, all host addresses are used.
   nodePortAddresses: []
-  ## -- List of Services which should be ignored by AntreaProxy.
+  # -- List of Services which should be ignored by AntreaProxy.
   skipServices: []
   # -- When set to false, AntreaProxy no longer load-balances traffic destined
   # to the External IPs of LoadBalancer Services.
@@ -319,17 +319,17 @@ cni:
 
 webhooks:
   labelsMutator:
-    ## -- Mutate all namespaces to add the "antrea.io/metadata.name" label.
+    # -- Mutate all namespaces to add the "antrea.io/metadata.name" label.
     enable: false
 
-## -- Global log verbosity switch for all Antrea components.
+# -- Global log verbosity switch for all Antrea components.
 logVerbosity: 0
 
-## -- Install and configure Whereabouts, for use by the antrea-agent.
 whereabouts:
+  # -- Install and configure Whereabouts, for use by the antrea-agent.
   enable: false
 
-## -- Configure Multicluster defaults for both Antrea Controller and Agent.
+# Configure Multicluster defaults for both Antrea Controller and Agent.
 multicluster:
   # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
   # This feature is supported only with encap mode.
@@ -344,7 +344,7 @@ multicluster:
   enablePodToPodConnectivity: false
 
 testing:
-  ## -- enable code coverage measurement (used when testing Antrea only).
+  # -- Enable code coverage measurement (used when testing Antrea only).
   coverage: false
   simulator:
     enable: false
