@@ -496,12 +496,6 @@ func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacesto
 		} else if packet.DestinationIP.To4() != nil {
 			return nil, errors.New("destination Service does not have an IPv6 ClusterIP")
 		}
-
-		if !liveTraffic {
-			// Set the SYN flag. In encap mode, the SYN flag is only required for
-			// Service traffic, but probably we should always set it.
-			packet.TCPFlags = 2
-		}
 	} else if !liveTraffic {
 		return nil, errors.New("destination is not specified")
 	}
@@ -535,6 +529,9 @@ func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacesto
 		packet.DestinationPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
 		if tf.Spec.Packet.TransportHeader.TCP.Flags != 0 {
 			packet.TCPFlags = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		}
+		if !liveTraffic && tf.Spec.Packet.TransportHeader.TCP.Flags == 0 {
+			packet.TCPFlags = uint8(2)
 		}
 	} else if tf.Spec.Packet.TransportHeader.UDP != nil {
 		packet.IPProto = protocol.Type_UDP

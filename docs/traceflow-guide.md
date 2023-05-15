@@ -89,6 +89,7 @@ spec:
       tcp:
         srcPort: 10000 # Source port needs to be set when Protocol is TCP/UDP.
         dstPort: 80 # Destination port needs to be set when Protocol is TCP/UDP.
+        flags: 2 # Construct a SYN packet: 2 is also the default value when the flags field is omitted.
 ```
 
 The CRD above starts a new trace from port 10000 of source Pod named `tcp-sts-0` to port 80
