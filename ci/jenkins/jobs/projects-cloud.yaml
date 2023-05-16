@@ -807,7 +807,6 @@
           builders:
           - shell: |-
               #!/bin/bash
-              source /home/ubuntu/.bashrc
               sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
                 --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
                 --log-mode detail --setup-only
@@ -870,9 +869,8 @@
           builders:
           - shell: |-
               #!/bin/bash
-              source /home/ubuntu/.bashrc
               # gcloud auth login requires verification code from url
-              ${{GCLOUD_PATH}} auth activate-service-account --key-file=${{GCLOUD_KEY_PATH}}
+              ${{GCLOUD_SDK_PATH}}/bin/gcloud auth activate-service-account --key-file=${{GCLOUD_KEY_PATH}}
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
                 --svc-account antrea-gcp@antrea.iam.gserviceaccount.com --gcloud-sdk-path ${{GCLOUD_SDK_PATH}} \
                 --log-mode detail --setup-only
@@ -922,7 +920,6 @@
           builders:
           - shell: |-
               #!/bin/bash
-              source /home/ubuntu/.bashrc
               sudo ./ci/test-conformance-aks.sh --azure-app-id ${{AZURE_APP_ID}} --azure-password ${{AZURE_PASSWORD}} \
                 --azure-tenant-id ${{AZURE_TENANT_ID}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
                 --log-mode detail --setup-only
