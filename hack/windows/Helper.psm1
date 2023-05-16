@@ -245,7 +245,6 @@ function Start-OVSServices {
 function Start-AntreaAgent {
     Param(
         [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea",
-        [parameter(Mandatory = $false, HelpMessage="kubeconfig file path")] [string] $KubeConfig="c:\k\config",
         [parameter(Mandatory = $false)] [string] $LogDir
     )
     $ErrorActionPreference = "Stop"

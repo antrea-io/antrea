@@ -4,7 +4,7 @@ Param(
     [parameter(Mandatory = $false, HelpMessage="kubeconfig file path")] [string] $KubeConfig="c:\k\config",
     [parameter(Mandatory = $false, HelpMessage="Antrea version to use")] [string] $AntreaVersion="latest",
     [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea",
-    [parameter(Mandatory = $false, HelpMessage="Start kube-proxy")] [bool] $StartKubeProxy=$true
+    [parameter(Mandatory = $false, HelpMessage="Start kube-proxy")] [bool] $StartKubeProxy=$false
 )
 $ErrorActionPreference = "Stop"
 
@@ -86,20 +86,22 @@ if ($StartKubeProxy) {
 }
 
 $env:kubeconfig = $KubeConfig
-$APIServer=$(kubectl get service kubernetes -o jsonpath='{.spec.clusterIP}')
-$APIServerPort=$(kubectl get service kubernetes -o jsonpath='{.spec.ports[0].port}')
-$APIServer="https://$APIServer" + ":" + $APIServerPort
+$APIServer=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
 $APIServer=[System.Uri]$APIServer
 
-Write-Host "Test connection to Kubernetes API server"
-$result = Test-ConnectionWithRetry $APIServer.Host $APIServer.Port 20 3
-if (!$result) {
-    Write-Host "Failed to connection to Kubernetes API server service, exit"
-    exit 1
+if ($StartKubeProxy) {
+    Write-Host "Test connection to Kubernetes API server"
+    $result = Test-ConnectionWithRetry $APIServer.Host $APIServer.Port 20 3
+    if (!$result) {
+        Write-Host "Failed to connect to Kubernetes API server service, exit"
+        exit 1
+    }
+} else {
+    sed -i "s|.*kubeAPIServerOverride:.*|kubeAPIServerOverride: \"$APIServer\"|g" C:/k/antrea/etc/antrea-agent.conf 
 }
 
 Write-Host "Starting antrea-agent..."
-if (!(Start-AntreaAgent -AntreaHome $AntreaHome -KubeConfig $KubeConfig)) {
+if (!(Start-AntreaAgent -AntreaHome $AntreaHome)) {
     Write-Host "Failed to start antrea-agent, exit"
     exit 1
 } else {
