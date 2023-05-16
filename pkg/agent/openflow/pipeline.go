@@ -25,7 +25,6 @@ import (
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -2292,26 +2291,25 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 	svcPort uint16,
 	protocol binding.Protocol,
 	affinityTimeout uint16,
-	nodeLocalExternal bool,
-	svcType v1.ServiceType) binding.Flow {
+	externalAddress bool,
+	nodePortAddress bool) binding.Flow {
 	// Using unique cookie ID here to avoid learned flow cascade deletion.
 	cookieID := f.cookieAllocator.RequestWithObjectID(f.category, uint32(groupID)).Raw()
-	var flowBuilder binding.FlowBuilder
-	if svcType == v1.ServiceTypeNodePort {
-		unionVal := (ToNodePortAddressRegMark.GetValue() << ServiceEPStateField.GetRange().Length()) + EpToLearnRegMark.GetValue()
-		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityLow).
-			Cookie(cookieID).
-			MatchProtocol(protocol).
-			MatchRegFieldWithValue(NodePortUnionField, unionVal).
-			MatchDstPort(svcPort, nil)
+	flowBuilder := ServiceLBTable.ofTable.BuildFlow(priorityLow).
+		Cookie(cookieID).
+		MatchProtocol(protocol).
+		MatchDstPort(svcPort, nil)
+
+	// EpToLearnRegMark is required to match the packets that have done Endpoint selection.
+	regMarksToMatch := []*binding.RegMark{EpToLearnRegMark}
+	// ToNodePortAddressRegMark is required to match the packets if the flow is for NodePort address, otherwise Service IP
+	// is used.
+	if nodePortAddress {
+		regMarksToMatch = append(regMarksToMatch, ToNodePortAddressRegMark)
 	} else {
-		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityLow).
-			Cookie(cookieID).
-			MatchProtocol(protocol).
-			MatchRegMark(EpToLearnRegMark).
-			MatchDstIP(svcIP).
-			MatchDstPort(svcPort, nil)
+		flowBuilder = flowBuilder.MatchDstIP(svcIP)
 	}
+	flowBuilder = flowBuilder.MatchRegMark(regMarksToMatch...)
 
 	// affinityTimeout is used as the OpenFlow "hard timeout": learned flow will be removed from
 	// OVS after that time regarding of whether traffic is still hitting the flow. This is the
@@ -2334,10 +2332,14 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 	case binding.ProtocolSCTPv6:
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPv6DstPort()
 	}
-	// If externalTrafficPolicy of NodePort/LoadBalancer is Cluster, the learned flow which
-	// is used to match the first packet of NodePort/LoadBalancer also requires SNAT.
-	if (svcType == v1.ServiceTypeNodePort || svcType == v1.ServiceTypeLoadBalancer) && !nodeLocalExternal {
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadRegMark(ToClusterServiceRegMark)
+
+	// Loading the EpSelectedRegMark indicates that the Endpoint selection is completed. RewriteMACRegMark must be loaded
+	// for Service packets.
+	regMarksToLoad := []*binding.RegMark{EpSelectedRegMark, RewriteMACRegMark}
+	// If the flow is for external Service IP, which means the Service is accessible externally, the ToExternalAddressRegMark
+	// should be loaded to determine whether SNAT is required for the connection.
+	if externalAddress {
+		regMarksToLoad = append(regMarksToLoad, ToExternalAddressRegMark)
 	}
 
 	ipProtocol := getIPProtocol(svcIP)
@@ -2347,7 +2349,7 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 			MatchLearnedSrcIP().
 			LoadFieldToField(EndpointIPField, EndpointIPField).
 			LoadFieldToField(EndpointPortField, EndpointPortField).
-			LoadRegMark(EpSelectedRegMark, RewriteMACRegMark).
+			LoadRegMark(regMarksToLoad...).
 			Done().
 			Action().LoadRegMark(EpSelectedRegMark).
 			Action().NextTable().
@@ -2358,7 +2360,7 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 			MatchLearnedSrcIPv6().
 			LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field).
 			LoadFieldToField(EndpointPortField, EndpointPortField).
-			LoadRegMark(EpSelectedRegMark, RewriteMACRegMark).
+			LoadRegMark(regMarksToLoad...).
 			Done().
 			Action().LoadRegMark(EpSelectedRegMark).
 			Action().NextTable().
@@ -2372,55 +2374,49 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 	svcIP net.IP,
 	svcPort uint16,
 	protocol binding.Protocol,
-	withSessionAffinity,
-	nodeLocalExternal bool,
-	serviceType v1.ServiceType,
+	withSessionAffinity bool,
+	externalAddress bool,
+	nodePortAddress bool,
 	nested bool) binding.Flow {
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	var lbResultMark *binding.RegMark
-	if withSessionAffinity {
-		lbResultMark = EpToLearnRegMark
+	flowBuilder := ServiceLBTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(protocol).
+		MatchDstPort(svcPort, nil)
+
+	// EpToSelectRegMark is required to match the packets that haven't undergone Endpoint selection yet.
+	regMarksToMatch := []*binding.RegMark{EpToSelectRegMark}
+	// ToNodePortAddressRegMark is required to match the packets if the flow is for NodePort address, otherwise Service IP
+	// is used.
+	if nodePortAddress {
+		regMarksToMatch = append(regMarksToMatch, ToNodePortAddressRegMark)
 	} else {
-		lbResultMark = EpSelectedRegMark
+		flowBuilder = flowBuilder.MatchDstIP(svcIP)
 	}
-	regMarksToLoad := []*binding.RegMark{lbResultMark, RewriteMACRegMark}
-	var flowBuilder binding.FlowBuilder
-	if serviceType == v1.ServiceTypeNodePort {
-		unionVal := (ToNodePortAddressRegMark.GetValue() << ServiceEPStateField.GetRange().Length()) + EpToSelectRegMark.GetValue()
-		// If externalTrafficPolicy of a NodePort Service is Cluster (nodeLocalExternal=false), it loads
-		// ToClusterServiceRegMark to indicate it. The mark will be checked later when determining if SNAT is required
-		// or not.
-		if !nodeLocalExternal {
-			regMarksToLoad = append(regMarksToLoad, ToClusterServiceRegMark)
-		}
-		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchProtocol(protocol).
-			MatchRegFieldWithValue(NodePortUnionField, unionVal).
-			MatchDstPort(svcPort, nil).
-			Action().LoadRegMark(regMarksToLoad...)
+
+	// RewriteMACRegMark must be loaded for Service packets.
+	regMarksToLoad := []*binding.RegMark{RewriteMACRegMark}
+	// If SessionAffinity is set, the result of Endpoint selection should be cached by loading the EpToLearnRegMark.
+	// If SessionAffinity is not set, loading the EpSelectedRegMark indicates that the Endpoint selection is complete.
+	if withSessionAffinity {
+		regMarksToLoad = append(regMarksToLoad, EpToLearnRegMark)
 	} else {
-		// If externalTrafficPolicy of a LoadBalancer Service is Cluster (nodeLocalExternal=false), it loads
-		// ToClusterServiceRegMark to indicate it. The mark will be checked later when determining if SNAT is required
-		// or not.
-		if serviceType == v1.ServiceTypeLoadBalancer && !nodeLocalExternal {
-			regMarksToLoad = append(regMarksToLoad, ToClusterServiceRegMark)
-		}
-		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchProtocol(protocol).
-			MatchDstPort(svcPort, nil).
-			MatchDstIP(svcIP).
-			MatchRegMark(EpToSelectRegMark).
-			Action().LoadRegMark(regMarksToLoad...)
+		regMarksToLoad = append(regMarksToLoad, EpSelectedRegMark)
+	}
+	// If the flow is for external Service IP, which means the Service is accessible externally, the ToExternalAddressRegMark
+	// should be loaded to determine whether SNAT is required for the connection.
+	if externalAddress {
+		regMarksToLoad = append(regMarksToLoad, ToExternalAddressRegMark)
 	}
 	if f.enableAntreaPolicy {
-		flowBuilder = flowBuilder.Action().LoadToRegField(ServiceGroupIDField, uint32(groupID))
+		regMarksToLoad = append(regMarksToLoad, binding.NewRegMark(ServiceGroupIDField, uint32(groupID)))
 	}
 	if nested {
-		flowBuilder = flowBuilder.Action().LoadRegMark(NestedServiceRegMark)
+		regMarksToLoad = append(regMarksToLoad, NestedServiceRegMark)
 	}
-	return flowBuilder.Action().Group(groupID).Done()
+
+	return flowBuilder.MatchRegMark(regMarksToMatch...).
+		Action().LoadRegMark(regMarksToLoad...).
+		Action().Group(groupID).Done()
 }
 
 // endpointRedirectFlowForServiceIP generates the flow which uses the specific group for a Service's ClusterIP
@@ -3011,15 +3007,15 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 			pktDstRegMarks = append(pktDstRegMarks, ToUplinkRegMark)
 		}
 		for _, pktDstRegMark := range pktDstRegMarks {
-			// This generates the flow to match the first packet of NodePort / LoadBalancer connection initiated through the
-			// Antrea gateway and externalTrafficPolicy of the Service is Cluster, and the selected Endpoint is on a remote
-			// Node, then ConnSNATCTMark will be loaded in DNAT CT zone, indicating that SNAT is required for the connection.
+			// This generates the flow to match the first packets of externally-originated connections towards external
+			// addresses of the Service initiated through the Antrea gateway, and the selected Endpoint is on a remote Node,
+			// then ConnSNATCTMark will be loaded in DNAT CT zone, indicating that SNAT is required for the connection.
 			flows = append(flows, SNATMarkTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToClusterServiceRegMark).
+				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark).
 				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 				LoadToCtMark(ConnSNATCTMark).
 				CTDone().

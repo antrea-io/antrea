@@ -78,6 +78,9 @@ func (m *fieldMetadata) getActionNickname() string {
 	name = strings.TrimPrefix(name, "OXM_OF_")
 	name = strings.TrimPrefix(name, "OXM_PACKET_")
 	name = strings.ToLower(name)
+	if strings.HasPrefix(name, "ip_") && name != "ip_dscp" {
+		name = strings.Replace(name, "ip_", "nw_", 1)
+	}
 	if strings.HasPrefix(name, "ipv4_") {
 		name = strings.Replace(name, "ipv4_", "ip_", 1)
 	}
@@ -804,14 +807,14 @@ func nxActionLearnToString(action openflow15.Action) string {
 	if len(a.LearnSpecs) != 0 {
 		for _, spec := range a.LearnSpecs {
 			nBits := spec.Header.NBits
-			isLoad := spec.Header.Dst == false
-			isMatch := spec.Header.Dst == true
+			isLoad := spec.Header.Dst == true
+			isMatch := spec.Header.Dst == false
 			//TODO: add isOutput
 
 			if spec.SrcValue != nil {
 				srcValueStr := strings.TrimLeft(fmt.Sprintf("%x", spec.SrcValue), "0")
 				if isMatch {
-					dstFieldStr := getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, 0, 0, true, false)
+					dstFieldStr := getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, spec.DstField.Ofs, nBits, true, false)
 					parts = append(parts, fmt.Sprintf("%s=0x%s", dstFieldStr, srcValueStr))
 				} else if isLoad {
 					dstFieldStr := getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, spec.DstField.Ofs, nBits, false, false)
