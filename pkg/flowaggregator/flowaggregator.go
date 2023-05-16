@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -126,6 +127,7 @@ type flowAggregator struct {
 	s3Exporter                  exporter.Interface
 	logExporter                 exporter.Interface
 	logTickerDuration           time.Duration
+	podLister                   corelisters.PodLister
 }
 
 func NewFlowAggregator(
@@ -175,6 +177,7 @@ func NewFlowAggregator(
 		configData:                  data,
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
+		podLister:                   podInformer.Lister(),
 	}
 	err = fa.InitCollectingProcess()
 	if err != nil {
@@ -405,7 +408,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record, true)
 	}
 	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
-		fa.fillPodLabels(key, record.Record)
+		fa.fillPodLabels(record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
 	if fa.ipfixExporter != nil {
@@ -482,55 +485,53 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 	}
 }
 
-func (fa *flowAggregator) fetchPodLabels(podAddress string) string {
-	pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, podAddress)
+func (fa *flowAggregator) fetchPodLabels(podNamespace string, podName string) string {
+	pod, err := fa.podLister.Pods(podNamespace).Get(podName)
 	if err != nil {
-		klog.Warning(err)
+		klog.InfoS("Failed to get Pod", "namespace", podNamespace, "name", podName, "err", err)
 		return ""
-	} else if len(pods) == 0 {
-		klog.InfoS("No Pod objects found for Pod Address", "podAddress", podAddress)
-		return ""
-	}
-	pod, ok := pods[0].(*corev1.Pod)
-	if !ok {
-		klog.Warningf("Invalid Pod obj in cache")
 	}
 	labelsJSON, err := json.Marshal(pod.GetLabels())
 	if err != nil {
-		klog.Warningf("JSON encoding of Pod labels failed: %v", err)
+		klog.ErrorS(err, "Error when JSON encoding of Pod labels")
 		return ""
 	}
 	return string(labelsJSON)
 }
 
-func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
-	podLabelString := fa.fetchPodLabels(key.SourceAddress)
-	sourcePodLabelsElement, err := fa.registry.GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID)
-	if err == nil {
-		sourcePodLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
-		if err != nil {
-			klog.Warningf("Create sourcePodLabels InfoElementWithValue failed: %v", err)
+func (fa *flowAggregator) fillPodLabelsForSide(record ipfixentities.Record, podNamespaceIEName, podNameIEName, podLabelsIEName string) error {
+	podLabelsString := ""
+	if podName, _, ok := record.GetInfoElementWithValue(podNameIEName); ok {
+		podNameString := podName.GetStringValue()
+		if podNamespace, _, ok := record.GetInfoElementWithValue(podNamespaceIEName); ok {
+			podNamespaceString := podNamespace.GetStringValue()
+			if podNameString != "" && podNamespaceString != "" {
+				podLabelsString = fa.fetchPodLabels(podNamespaceString, podNameString)
+			}
 		}
-		err = record.AddInfoElement(sourcePodLabelsIE)
-		if err != nil {
-			klog.Warningf("Add sourcePodLabels InfoElementWithValue failed: %v", err)
-		}
-	} else {
-		klog.Warningf("Get sourcePodLabels InfoElement failed: %v", err)
 	}
-	podLabelString = fa.fetchPodLabels(key.DestinationAddress)
-	destinationPodLabelsElement, err := fa.registry.GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID)
+	podLabelsElement, err := fa.registry.GetInfoElement(podLabelsIEName, ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
-		destinationPodLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
+		podLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(podLabelsElement, bytes.NewBufferString(podLabelsString).Bytes())
 		if err != nil {
-			klog.Warningf("Create destinationPodLabelsIE InfoElementWithValue failed: %v", err)
+			return fmt.Errorf("error when creating podLabels InfoElementWithValue: %v", err)
 		}
-		err = record.AddInfoElement(destinationPodLabelsIE)
-		if err != nil {
-			klog.Warningf("Add destinationPodLabels InfoElementWithValue failed: %v", err)
+		if err := record.AddInfoElement(podLabelsIE); err != nil {
+			return fmt.Errorf("error when adding podLabels InfoElementWithValue: %v", err)
 		}
 	} else {
-		klog.Warningf("Get destinationPodLabels InfoElement failed: %v", err)
+		return fmt.Errorf("error when getting podLabels InfoElementWithValue: %v", err)
+	}
+
+	return nil
+}
+
+func (fa *flowAggregator) fillPodLabels(record ipfixentities.Record) {
+	if err := fa.fillPodLabelsForSide(record, "sourcePodNamespace", "sourcePodName", "sourcePodLabels"); err != nil {
+		klog.ErrorS(err, "Error when filling pod labels", "side", "source")
+	}
+	if err := fa.fillPodLabelsForSide(record, "destinationPodNamespace", "destinationPodName", "destinationPodLabels"); err != nil {
+		klog.ErrorS(err, "Error when filling pod labels", "side", "destination")
 	}
 }
 
