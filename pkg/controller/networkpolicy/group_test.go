@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,8 @@ func TestProcessGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
 		inputGroup    *crdv1alpha3.Group
@@ -116,10 +118,11 @@ func TestProcessGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *cidrIPNet,
+						CIDR:   *controlplaneIPNet,
 						Except: []controlplane.IPNet{},
 					},
 				},
+				IPNets: []net.IPNet{*ipNet},
 			},
 		},
 		{
@@ -180,7 +183,8 @@ func TestAddGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
 		inputGroup    *crdv1alpha3.Group
@@ -262,10 +266,11 @@ func TestAddGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *cidrIPNet,
+						CIDR:   *controlplaneIPNet,
 						Except: []controlplane.IPNet{},
 					},
 				},
+				IPNets: []net.IPNet{*ipNet},
 			},
 		},
 	}
@@ -293,7 +298,8 @@ func TestUpdateGroup(t *testing.T) {
 		},
 	}
 	cidr := "10.0.0.0/24"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
 		updatedGroup  *crdv1alpha3.Group
@@ -375,10 +381,11 @@ func TestUpdateGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *cidrIPNet,
+						CIDR:   *controlplaneIPNet,
 						Except: []controlplane.IPNet{},
 					},
 				},
+				IPNets: []net.IPNet{*ipNet},
 			},
 		},
 		{

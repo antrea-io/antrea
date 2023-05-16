@@ -26,6 +26,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
@@ -48,6 +49,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/ipgroupassociation"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
@@ -56,6 +58,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/apiserver/storage"
+	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/egress"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/ipam"
@@ -96,6 +99,8 @@ type ExtraConfig struct {
 	networkPolicyStore            storage.Interface
 	egressGroupStore              storage.Interface
 	bundleCollectionStore         storage.Interface
+	podInformer                   coreinformers.PodInformer
+	eeInformer                    crdv1a2informers.ExternalEntityInformer
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -137,7 +142,9 @@ type completedConfig struct {
 func NewConfig(
 	genericConfig *genericapiserver.Config,
 	k8sClient kubernetes.Interface,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore, supportBundleCollectionStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, egressGroupStore, supportBundleCollectionStore storage.Interface,
+	podInformer coreinformers.PodInformer,
+	eeInformer crdv1a2informers.ExternalEntityInformer,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
@@ -155,6 +162,8 @@ func NewConfig(
 			networkPolicyStore:            networkPolicyStore,
 			egressGroupStore:              egressGroupStore,
 			bundleCollectionStore:         supportBundleCollectionStore,
+			podInformer:                   podInformer,
+			eeInformer:                    eeInformer,
 			caCertController:              caCertController,
 			statsAggregator:               statsAggregator,
 			controllerQuerier:             controllerQuerier,
@@ -178,6 +187,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
+	ipGroupAssociationStorage := ipgroupassociation.NewREST(c.extraConfig.podInformer, c.extraConfig.eeInformer, c.extraConfig.networkPolicyController, c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
 	bundleCollectionStorage := supportbundlecollection.NewREST(c.extraConfig.bundleCollectionStore)
@@ -190,6 +200,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
 	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
+	cpv1beta2Storage["ipgroupassociations"] = ipGroupAssociationStorage
 	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	cpv1beta2Storage["egressgroups"] = egressGroupStorage
 	cpv1beta2Storage["supportbundlecollections"] = bundleCollectionStorage

@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/controller/grouping"
 )
 
 var alwaysReady = func() bool { return true }
@@ -49,8 +50,8 @@ type traceflowController struct {
 	crdInformerFactory crdinformers.SharedInformerFactory
 }
 
-func newController() *traceflowController {
-	client := fake.NewSimpleClientset()
+func newController(k8sObjects ...runtime.Object) *traceflowController {
+	client := fake.NewSimpleClientset(k8sObjects...)
 	crdClient := newCRDClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
@@ -284,7 +285,7 @@ func Test_podIPsIndexFunc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := podIPsIndexFunc(tt.args.obj)
+			got, err := grouping.PodIPsIndexFunc(tt.args.obj)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("podIPsIndexFunc() error = %v, wantErr %v", err, tt.wantErr)
 				return

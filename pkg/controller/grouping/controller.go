@@ -15,6 +15,7 @@
 package grouping
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -33,7 +34,42 @@ const (
 	controllerName = "GroupEntityController"
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
+	// ExternalEntity IP index name for ExternalEntity cache.
+	ExternalEntityIPsIndex = "eeIPs"
+	// PodIP index name for Pod cache.
+	PodIPsIndex = "podIPs"
 )
+
+func PodIPsIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("obj is not pod: %+v", obj)
+	}
+	if pod.Status.PodIPs != nil && len(pod.Status.PodIPs) > 0 && pod.Status.Phase != v1.PodSucceeded && pod.Status.Phase != v1.PodFailed {
+		indexes := make([]string, len(pod.Status.PodIPs))
+		for i := range pod.Status.PodIPs {
+			indexes[i] = pod.Status.PodIPs[i].IP
+		}
+		return indexes, nil
+	}
+	return nil, nil
+}
+
+func ExternalEntityIPsIndexFunc(obj interface{}) ([]string, error) {
+	ee, ok := obj.(*v1alpha2.ExternalEntity)
+	if !ok {
+		return nil, fmt.Errorf("obj is not ExternalEntity: %+v", obj)
+	}
+	ipLen := len(ee.Spec.Endpoints)
+	if ipLen > 0 {
+		indexes := make([]string, ipLen)
+		for i := 0; i < ipLen; i++ {
+			indexes[i] = ee.Spec.Endpoints[i].IP
+		}
+		return indexes, nil
+	}
+	return nil, nil
+}
 
 // eventsCounter is used to keep track of the number of occurrences of an event type. It uses the
 // low-level atomic memory primitives from the sync/atomic package to provide atomic operations

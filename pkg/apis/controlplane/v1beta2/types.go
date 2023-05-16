@@ -442,6 +442,19 @@ type GroupAssociation struct {
 
 // +genclient
 // +genclient:nonNamespaced
+// +genclient:onlyVerbs=get
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type IPGroupAssociation struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// AssociatedGroups is a list of GroupReferences that is associated with the
+	// IP address being queried.
+	AssociatedGroups []GroupReference `json:"associatedGroups" protobuf:"bytes,2,rep,name=associatedGroups"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"net"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -131,6 +132,9 @@ func (c *NetworkPolicyController) processClusterGroup(cg *crdv1alpha3.ClusterGro
 		for i := range cg.Spec.IPBlocks {
 			ipb, _ := toAntreaIPBlockForCRD(&cg.Spec.IPBlocks[i])
 			internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
+			// CIDR format is already validated by the webhook
+			_, ipNet, _ := net.ParseCIDR(cg.Spec.IPBlocks[i].CIDR)
+			internalGroup.IPNets = append(internalGroup.IPNets, *ipNet)
 		}
 		return &internalGroup
 	}
@@ -244,6 +248,7 @@ func (c *NetworkPolicyController) syncInternalClusterGroup(grp *antreatypes.Grou
 			MembersComputed:  membersComputedStatus,
 			Selector:         grp.Selector,
 			IPBlocks:         grp.IPBlocks,
+			IPNets:           grp.IPNets,
 			ServiceReference: grp.ServiceReference,
 			ChildGroups:      grp.ChildGroups,
 		}
@@ -362,22 +367,23 @@ func (c *NetworkPolicyController) serviceToGroupSelector(service *v1.Service) *a
 
 // GetAssociatedGroups retrieves the internal Groups associated with the entity being
 // queried (Pod or ExternalEntity identified by name and namespace).
-func (c *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([]antreatypes.Group, error) {
+func (c *NetworkPolicyController) GetAssociatedGroups(name, namespace string) []antreatypes.Group {
 	// Try Pod first, then ExternalEntity.
 	groups, exists := c.groupingInterface.GetGroupsForPod(namespace, name)
 	if !exists {
 		groups, exists = c.groupingInterface.GetGroupsForExternalEntity(namespace, name)
 		if !exists {
-			return nil, nil
+			return nil
 		}
 	}
 	clusterGroups, exists := groups[internalGroupType]
 	if !exists {
-		return nil, nil
+		return nil
 	}
 	var groupObjs []antreatypes.Group
 	for _, g := range clusterGroups {
-		groupObjs = append(groupObjs, c.getAssociatedGroupsByName(g)...)
+		associatedGroups := c.getAssociatedGroupsByName(g)
+		groupObjs = append(groupObjs, associatedGroups...)
 	}
 	// Remove duplicates in the groupObj slice.
 	groupKeys, j := make(map[string]bool), 0
@@ -388,7 +394,7 @@ func (c *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([
 			j++
 		}
 	}
-	return groupObjs[:j], nil
+	return groupObjs[:j]
 }
 
 // getAssociatedGroupsByName retrieves the internal Group and all it's parent Group objects
@@ -401,10 +407,14 @@ func (c *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []an
 	}
 	grp := groupObj.(*antreatypes.Group)
 	groups = append(groups, *grp)
-	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.SourceReference.ToGroupName())
-	if err != nil {
-		klog.Errorf("Error retrieving parents of %s: %v", grp.SourceReference.ToTypedString(), err)
-	}
+	parentGroups := c.getParentGroups(grp.SourceReference.ToGroupName())
+	groups = append(groups, parentGroups...)
+	return groups
+}
+
+func (c *NetworkPolicyController) getParentGroups(grpName string) []antreatypes.Group {
+	var groups []antreatypes.Group
+	parentGroupObjs, _ := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grpName)
 	for _, p := range parentGroupObjs {
 		parentGrp := p.(*antreatypes.Group)
 		groups = append(groups, *parentGrp)
@@ -423,4 +433,21 @@ func (c *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.G
 		return member, ipb, nil
 	}
 	return nil, nil, fmt.Errorf("no internal Group with name %s is found", cgName)
+}
+
+func (c *NetworkPolicyController) GetAssociatedIPBlockGroups(ip net.IP) []antreatypes.Group {
+	ipBlockGroupObjs, _ := c.internalGroupStore.GetByIndex(store.IPBlockGroupIndex, store.HasIPBlocks)
+	var matchedGroups []antreatypes.Group
+	for _, obj := range ipBlockGroupObjs {
+		group := obj.(*antreatypes.Group)
+		for _, ipNet := range group.IPNets {
+			if ipNet.Contains(ip) {
+				matchedGroups = append(matchedGroups, *group)
+				// Append all parent groups to matchedGroups
+				parentGroups := c.getParentGroups(group.SourceReference.ToGroupName())
+				matchedGroups = append(matchedGroups, parentGroups...)
+			}
+		}
+	}
+	return matchedGroups
 }
