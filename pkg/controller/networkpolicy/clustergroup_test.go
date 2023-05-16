@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,8 @@ func TestProcessClusterGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
 		inputGroup    *crdv1alpha3.ClusterGroup
@@ -116,10 +118,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *cidrIPNet,
+						CIDR:   *controlplaneIPNet,
 						Except: []controlplane.IPNet{},
 					},
 				},
+				IPNets: []net.IPNet{*ipNet},
 			},
 		},
 		{
@@ -178,7 +181,8 @@ func TestAddClusterGroup(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 	cidr := "10.0.0.0/24"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
 		inputGroup    *crdv1alpha3.ClusterGroup
@@ -256,10 +260,11 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *cidrIPNet,
+						CIDR:   *controlplaneIPNet,
 						Except: []controlplane.IPNet{},
 					},
 				},
+				IPNets: []net.IPNet{*ipNet},
 			},
 		},
 	}
@@ -287,7 +292,8 @@ func TestUpdateClusterGroup(t *testing.T) {
 		},
 	}
 	cidr := "10.0.0.0/24"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	controlplaneIPNet, _ := cidrStrToIPNet(cidr)
+	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
 		updatedGroup  *crdv1alpha3.ClusterGroup
@@ -365,10 +371,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 				IPBlocks: []controlplane.IPBlock{
 					{
-						CIDR:   *cidrIPNet,
+						CIDR:   *controlplaneIPNet,
 						Except: []controlplane.IPNet{},
 					},
 				},
+				IPNets: []net.IPNet{*ipNet},
 			},
 		},
 		{
@@ -867,8 +874,7 @@ func TestGetAssociatedGroups(t *testing.T) {
 					npc.groupingInterface.AddGroup(internalGroupType, g.SourceReference.Name, g.Selector)
 				}
 			}
-			groups, err := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
-			assert.Equal(t, err, nil)
+			groups := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
 			assert.ElementsMatch(t, tt.expectedGroups, groups)
 		})
 	}
@@ -1115,6 +1121,78 @@ func TestGetClusterGroupSourceRef(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actualRef := getClusterGroupSourceRef(tt.group)
 			assert.Equal(t, tt.expectedRef, actualRef)
+		})
+	}
+}
+
+func TestGetAssociatedIPBlockGroups(t *testing.T) {
+	cg1 := &crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockGrp1", UID: "UID1"},
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{CIDR: "172.60.0.0/16"},
+			},
+		},
+	}
+	cg2 := &crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockGrp2", UID: "UID2"},
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{CIDR: "172.60.2.0/24"},
+			},
+		},
+	}
+	cg2Parent := &crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockParentGrp", UID: "UID3"},
+		Spec: crdv1alpha3.GroupSpec{
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{
+				"ipBlockGrp2",
+			},
+		},
+	}
+
+	_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cg1, cg2, cg2Parent})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	npc.crdInformerFactory.Start(stopCh)
+	npc.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	npc.addClusterGroup(cg1)
+	npc.syncInternalGroup(internalGroupKeyFunc(cg1))
+	npc.addClusterGroup(cg2)
+	npc.syncInternalGroup(internalGroupKeyFunc(cg2))
+	npc.addClusterGroup(cg2Parent)
+	npc.syncInternalGroup(internalGroupKeyFunc(cg2Parent))
+
+	tests := []struct {
+		name           string
+		ipQuery        net.IP
+		expectedGroups []string
+	}{
+		{
+			name:           "single-group-association",
+			ipQuery:        net.ParseIP("172.60.1.1"),
+			expectedGroups: []string{"ipBlockGrp1"},
+		},
+		{
+			name:           "multiple-group-association",
+			ipQuery:        net.ParseIP("172.60.2.1"),
+			expectedGroups: []string{"ipBlockGrp1", "ipBlockGrp2", "ipBlockParentGrp"},
+		},
+		{
+			name:           "no-group-association",
+			ipQuery:        net.ParseIP("172.160.0.1"),
+			expectedGroups: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			groups := npc.GetAssociatedIPBlockGroups(tt.ipQuery)
+			var groupNames []string
+			for _, g := range groups {
+				groupNames = append(groupNames, g.SourceReference.ToGroupName())
+			}
+			assert.ElementsMatch(t, groupNames, tt.expectedGroups)
 		})
 	}
 }

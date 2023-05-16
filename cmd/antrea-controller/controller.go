@@ -30,6 +30,7 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	csrinformers "k8s.io/client-go/informers/certificates/v1"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	csrlisters "k8s.io/client-go/listers/certificates/v1"
 	"k8s.io/client-go/tools/cache"
@@ -44,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/openapi"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/pkg/clusteridentity"
 	"antrea.io/antrea/pkg/controller/certificatesigningrequest"
 	"antrea.io/antrea/pkg/controller/egress"
@@ -139,6 +141,14 @@ func run(o *Options) error {
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
+
+	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
+	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
+	podInformer.Informer().AddIndexers(cache.Indexers{grouping.PodIPsIndex: grouping.PodIPsIndexFunc})
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		eeInformer.Informer().AddIndexers(cache.Indexers{grouping.ExternalEntityIPsIndex: grouping.ExternalEntityIPsIndexFunc})
+	}
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -267,9 +277,10 @@ func run(o *Options) error {
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
-		groupStore,
 		egressGroupStore,
 		bundleCollectionStore,
+		podInformer,
+		eeInformer,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
@@ -451,9 +462,10 @@ func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
-	groupStore storage.Interface,
 	egressGroupStore storage.Interface,
 	supportBundleCollectionStore storage.Interface,
+	podInformer coreinformers.PodInformer,
+	eeInformer crdv1a2informers.ExternalEntityInformer,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
@@ -516,9 +528,10 @@ func createAPIServerConfig(kubeconfig string,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
-		groupStore,
 		egressGroupStore,
 		supportBundleCollectionStore,
+		podInformer,
+		eeInformer,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,

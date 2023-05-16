@@ -28,7 +28,7 @@ import (
 )
 
 type REST struct {
-	querier groupAssociationQuerier
+	querier GroupAssociationQuerier
 }
 
 var (
@@ -38,13 +38,13 @@ var (
 )
 
 // NewREST returns a REST object that will work against API services.
-func NewREST(querier groupAssociationQuerier) *REST {
+func NewREST(querier GroupAssociationQuerier) *REST {
 	return &REST{querier}
 }
 
 // groupAssociationQuerier is the interface required by the handler.
-type groupAssociationQuerier interface {
-	GetAssociatedGroups(name, namespace string) ([]types.Group, error)
+type GroupAssociationQuerier interface {
+	GetAssociatedGroups(name, namespace string) []types.Group
 }
 
 func (r *REST) New() runtime.Object {
@@ -56,15 +56,13 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	if !ok || len(ns) == 0 {
 		return nil, errors.NewBadRequest("Namespace parameter required.")
 	}
-	groups, err := r.querier.GetAssociatedGroups(name, ns)
-	if err != nil {
-		return nil, errors.NewInternalError(err)
-	}
+	groups := r.querier.GetAssociatedGroups(name, ns)
 	items := make([]controlplane.GroupReference, 0, len(groups))
-	for i := range groups {
+	for _, g := range groups {
 		item := controlplane.GroupReference{
-			Name: groups[i].SourceReference.Name,
-			UID:  groups[i].UID,
+			Name:      g.SourceReference.Name,
+			Namespace: g.SourceReference.Namespace,
+			UID:       g.UID,
 		}
 		items = append(items, item)
 	}

@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -58,9 +59,6 @@ const (
 	tagStep   uint8 = 0b100
 	minTagNum uint8 = 0b1*tagStep + 0b11
 	maxTagNum uint8 = 0b1110*tagStep + 0b11
-
-	// PodIP index name for Pod cache.
-	podIPsIndex = "podIPs"
 
 	// String set to TraceflowStatus.Reason.
 	traceflowTimeout = "Traceflow timeout"
@@ -106,25 +104,7 @@ func NewTraceflowController(client versioned.Interface, podInformer coreinformer
 		},
 		resyncPeriod,
 	)
-	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
-	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
-	podInformer.Informer().AddIndexers(cache.Indexers{podIPsIndex: podIPsIndexFunc})
 	return c
-}
-
-func podIPsIndexFunc(obj interface{}) ([]string, error) {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		return nil, fmt.Errorf("obj is not pod: %+v", obj)
-	}
-	if pod.Status.PodIPs != nil && len(pod.Status.PodIPs) > 0 && pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-		indexes := make([]string, len(pod.Status.PodIPs))
-		for i := range pod.Status.PodIPs {
-			indexes[i] = pod.Status.PodIPs[i].IP
-		}
-		return indexes, nil
-	}
-	return nil, nil
 }
 
 // enqueueTraceflow adds an object to the controller work queue.
@@ -314,7 +294,7 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 				}
 				if ob.TranslatedDstIP != "" {
 					// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
-					pods, err := c.podInformer.Informer().GetIndexer().ByIndex(podIPsIndex, ob.TranslatedDstIP)
+					pods, err := c.podInformer.Informer().GetIndexer().ByIndex(grouping.PodIPsIndex, ob.TranslatedDstIP)
 					if err != nil {
 						klog.Infof("Unable to find Pod from IP, error: %+v", err)
 					} else if len(pods) > 0 {
