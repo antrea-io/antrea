@@ -50,18 +50,18 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
-// AddLoadBalancer mocks base method
-func (m *MockInterface) AddLoadBalancer(arg0 net.IP) error {
+// AddExternalIPRoute mocks base method
+func (m *MockInterface) AddExternalIPRoute(arg0 net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddLoadBalancer", arg0)
+	ret := m.ctrl.Call(m, "AddExternalIPRoute", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddLoadBalancer indicates an expected call of AddLoadBalancer
-func (mr *MockInterfaceMockRecorder) AddLoadBalancer(arg0 interface{}) *gomock.Call {
+// AddExternalIPRoute indicates an expected call of AddExternalIPRoute
+func (mr *MockInterfaceMockRecorder) AddExternalIPRoute(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLoadBalancer", reflect.TypeOf((*MockInterface)(nil).AddLoadBalancer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExternalIPRoute", reflect.TypeOf((*MockInterface)(nil).AddExternalIPRoute), arg0)
 }
 
 // AddLocalAntreaFlexibleIPAMPodRule mocks base method
@@ -120,18 +120,18 @@ func (mr *MockInterfaceMockRecorder) AddSNATRule(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), arg0, arg1)
 }
 
-// DeleteLoadBalancer mocks base method
-func (m *MockInterface) DeleteLoadBalancer(arg0 net.IP) error {
+// DeleteExternalIPRoute mocks base method
+func (m *MockInterface) DeleteExternalIPRoute(arg0 net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteLoadBalancer", arg0)
+	ret := m.ctrl.Call(m, "DeleteExternalIPRoute", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteLoadBalancer indicates an expected call of DeleteLoadBalancer
-func (mr *MockInterfaceMockRecorder) DeleteLoadBalancer(arg0 interface{}) *gomock.Call {
+// DeleteExternalIPRoute indicates an expected call of DeleteExternalIPRoute
+func (mr *MockInterfaceMockRecorder) DeleteExternalIPRoute(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLoadBalancer", reflect.TypeOf((*MockInterface)(nil).DeleteLoadBalancer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExternalIPRoute", reflect.TypeOf((*MockInterface)(nil).DeleteExternalIPRoute), arg0)
 }
 
 // DeleteLocalAntreaFlexibleIPAMPodRule mocks base method

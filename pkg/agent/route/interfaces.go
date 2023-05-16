@@ -65,11 +65,11 @@ type Interface interface {
 	// DeleteNodePort deletes related configurations when a NodePort Service is deleted.
 	DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
 
-	// AddLoadBalancer adds configurations when a LoadBalancer IP is added.
-	AddLoadBalancer(externalIP net.IP) error
+	// AddExternalIPRoute adds a route entry when an external IP is added.
+	AddExternalIPRoute(externalIP net.IP) error
 
-	// DeleteLoadBalancer deletes related configurations when a LoadBalancer IP is deleted.
-	DeleteLoadBalancer(externalIP net.IP) error
+	// DeleteExternalIPRoute deletes the related route entry when an external IP is deleted.
+	DeleteExternalIPRoute(externalIP net.IP) error
 
 	// Run starts the sync loop.
 	Run(stopCh <-chan struct{})

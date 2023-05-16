@@ -1405,11 +1405,11 @@ func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
 	return nil
 }
 
-// AddLoadBalancer is used to add routing entry which is used to route LoadBalancer ingress IP to Antrea
-// gateway on host.
-func (c *Client) AddLoadBalancer(svcIP net.IP) error {
+// AddExternalIPRoute adds a route entry that forwards traffic destined for the external IP to the Antrea gateway interface.
+func (c *Client) AddExternalIPRoute(externalIP net.IP) error {
+	externalIPStr := externalIP.String()
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
-	isIPv6 := utilnet.IsIPv6(svcIP)
+	isIPv6 := utilnet.IsIPv6(externalIP)
 	var gw net.IP
 	var mask int
 	if !isIPv6 {
@@ -1420,35 +1420,32 @@ func (c *Client) AddLoadBalancer(svcIP net.IP) error {
 		mask = net.IPv6len * 8
 	}
 
-	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
+	route := generateRoute(externalIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
 	if err := c.netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
+		return fmt.Errorf("failed to install route for external IP %s: %w", externalIPStr, err)
 	}
-	klog.V(4).InfoS("Added LoadBalancer ingress IP route", "route", route)
-	c.serviceRoutes.Store(svcIP.String(), route)
-
+	c.serviceRoutes.Store(externalIPStr, route)
+	klog.V(4).InfoS("Added route for external IP", "IP", externalIPStr)
 	return nil
 }
 
-// DeleteLoadBalancer is used to delete routing entry which is used to route LoadBalancer ingress IP to Antrea
-// gateway on host.
-func (c *Client) DeleteLoadBalancer(svcIP net.IP) error {
-	svcIPStr := svcIP.String()
-	route, found := c.serviceRoutes.Load(svcIPStr)
+// DeleteExternalIPRoute deletes the route entry for the external IP.
+func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
+	externalIPStr := externalIP.String()
+	route, found := c.serviceRoutes.Load(externalIPStr)
 	if !found {
-		klog.V(2).InfoS("Didn't find route for LoadBalancer ingress IP", "ingressIP", svcIPStr)
+		klog.V(2).InfoS("Didn't find route for external IP", "IP", externalIPStr)
 		return nil
 	}
 	if err := c.netlink.RouteDel(route.(*netlink.Route)); err != nil {
 		if err.Error() == "no such process" {
-			klog.InfoS("Failed to delete route for LoadBalancer ingress IP since it doesn't exist", "route", route)
+			klog.InfoS("Failed to delete route for external IP since it doesn't exist", "IP", externalIPStr)
 		} else {
-			return fmt.Errorf("failed to delete route for LoadBalancer ingress IP %s: %w", svcIPStr, err)
+			return fmt.Errorf("failed to delete route for external IP %s: %w", externalIPStr, err)
 		}
 	}
-	klog.V(4).InfoS("Deleted LoadBalancer ingress IP route", "route", route)
-	c.serviceRoutes.Delete(svcIPStr)
-
+	c.serviceRoutes.Delete(externalIPStr)
+	klog.V(4).InfoS("Deleted route for external IP", "IP", externalIPStr)
 	return nil
 }
 
