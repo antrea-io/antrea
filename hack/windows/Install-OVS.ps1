@@ -34,7 +34,7 @@ Param(
 $ErrorActionPreference = "Stop"
 $OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-2.16.7-antrea.0-win64.zip"
 # Use a SHA256 hash to ensure that the downloaded archive is correct.
-$OVSPublishedHash = '969703a11c980bc2752948d5707074c83bc2778351b81554edcef9e6d220bb7f'
+$OVSPublishedHash = '17d23ca0fbf84e1eac9a392f67ee4315edffd1d5233a729655e04e1332a9f565'
 $WorkDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 $OVSDownloadDir = $WorkDir
 $PowerShellModuleBase = "C:\Windows\System32\WindowsPowerShell\v1.0\Modules"
