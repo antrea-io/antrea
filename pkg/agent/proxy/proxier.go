@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 	corev1 "k8s.io/api/core/v1"
@@ -1053,12 +1054,15 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		return fmt.Errorf("error when getting match field inPort")
 	}
 	outPort := inPortField.GetValue().(uint32)
+	// It cannot use CONTROLLER (the default value when inPort is 0) as the inPort due to a bug in Windows ovsext
+	// driver, otherwise the Windows OS would crash. See https://github.com/openvswitch/ovs-issues/issues/280.
+	inPort := uint32(openflow15.P_LOCAL)
 	return openflow.SendRejectPacketOut(p.ofClient,
 		srcMAC,
 		dstMAC,
 		srcIP,
 		dstIP,
-		0,
+		inPort,
 		outPort,
 		isIPv6,
 		ethernetPkt,
