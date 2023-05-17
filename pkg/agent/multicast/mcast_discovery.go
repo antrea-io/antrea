@@ -56,6 +56,7 @@ type IGMPSnooper struct {
 	eventCh       chan *mcastGroupEvent
 	validator     types.McastNetworkPolicyController
 	queryInterval time.Duration
+	queryVersions []uint8
 	// igmpReportANPStats is a map that saves AntreaNetworkPolicyStats of IGMP report packets.
 	// The map can be interpreted as
 	// map[UID of the AntreaNetworkPolicy]map[name of AntreaNetworkPolicy rule]statistics of rule.
@@ -81,8 +82,8 @@ func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore
 	return ifaceConfig, nil
 }
 
-func (s *IGMPSnooper) queryIGMP(group net.IP, versions []uint8) error {
-	for _, version := range versions {
+func (s *IGMPSnooper) queryIGMP(group net.IP) error {
+	for _, version := range s.queryVersions {
 		igmp, err := generateIGMPQueryPacket(group, version, s.queryInterval)
 		if err != nil {
 			return err
@@ -372,8 +373,8 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	}
 }
 
-func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, multicastValidator types.McastNetworkPolicyController, encapEnabled bool) *IGMPSnooper {
-	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, encapEnabled: encapEnabled}
+func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, igmpQueryVersions []uint8, multicastValidator types.McastNetworkPolicyController, encapEnabled bool) *IGMPSnooper {
+	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, queryVersions: igmpQueryVersions, encapEnabled: encapEnabled}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	snooper.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryIGMP), snooper)
