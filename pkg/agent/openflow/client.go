@@ -22,6 +22,7 @@ import (
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	ofutil "antrea.io/libOpenflow/util"
+	"antrea.io/ofnet/ofctrl"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -192,7 +193,7 @@ type Client interface {
 	// the old priority with the desired one, for each priority update on that table.
 	ReassignFlowPriorities(updates map[uint16]uint16, table uint8) error
 
-	// SubscribePacketIn subscribes to packet in messages for the given reason. Packets
+	// SubscribePacketIn subscribes to packet in messages for the given category. Packets
 	// will be placed in the queue and if the queue is full, the packet in messages
 	// will be dropped. pktInQueue supports rate-limiting for the consumer, in order to
 	// constrain the compute resources that may be used by the consumer.
@@ -214,8 +215,8 @@ type Client interface {
 	GetPolicyInfoFromConjunction(ruleID uint32) (string, string, string)
 
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
-	// packets through registered handlers.
-	RegisterPacketInHandler(packetHandlerReason uint8, packetHandlerName string, packetInHandler interface{})
+	// packets through registered handler.
+	RegisterPacketInHandler(packetHandlerReason uint8, packetInHandler interface{})
 
 	StartPacketInHandler(stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
@@ -276,6 +277,8 @@ type Client interface {
 		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendEthPacketOut sends ethernet packet as a packet-out to OVS.
 	SendEthPacketOut(inPort, outPort uint32, ethPkt *protocol.Ethernet, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
+	// ResumePausePacket resumes a paused packetIn.
+	ResumePausePacket(packetIn *ofctrl.PacketIn) error
 	// NewDNSPacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
 	NewDNSPacketInConjunction(id uint32) error
 	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
@@ -1044,8 +1047,8 @@ func (c *client) DeleteStaleFlows() error {
 	return c.deleteFlowsByRoundNum(*c.roundInfo.PrevRoundNum)
 }
 
-func (c *client) SubscribePacketIn(reason uint8, pktInQueue *binding.PacketInQueue) error {
-	return c.bridge.SubscribePacketIn(reason, pktInQueue)
+func (c *client) SubscribePacketIn(category uint8, pktInQueue *binding.PacketInQueue) error {
+	return c.bridge.SubscribePacketIn(category, pktInQueue)
 }
 
 func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error {
@@ -1300,6 +1303,10 @@ func (c *client) SendUDPPacketOut(
 
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) ResumePausePacket(packetIn *ofctrl.PacketIn) error {
+	return c.bridge.ResumePacket(packetIn)
 }
 
 func (c *client) SendEthPacketOut(inPort, outPort uint32, ethPkt *protocol.Ethernet, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {

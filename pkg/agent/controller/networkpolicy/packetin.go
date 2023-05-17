@@ -30,38 +30,34 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-// HandlePacketIn is the packetin handler registered to openflow by Antrea network
+// HandlePacketIn is the packetIn handler registered to openflow by Antrea network
 // policy agent controller. It performs the appropriate operations based on which
 // bits are set in the "custom reasons" field of the packet received from OVS.
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
-		return errors.New("empty packetin for Antrea Policy")
+		return errors.New("empty packetIn for Antrea Policy")
 	}
 
-	matches := pktIn.GetMatches()
-	// Get custom reasons in this packet-in.
-	match := getMatchRegField(matches, openflow.CustomReasonField)
-	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
-	if err != nil {
-		return fmt.Errorf("received error while unloading customReason from reg: %v", err)
+	if len(pktIn.UserData) < 2 {
+		return errors.New("packetIn for Antrea Policy miss the required userdata")
 	}
-
-	// Use reasons to choose operations.
-	var checkCustomReason = func(customReasonMark *binding.RegMark) bool {
-		return customReasons&customReasonMark.GetValue() == customReasonMark.GetValue()
+	packetInOperations := pktIn.UserData[1]
+	// Choose operations.
+	var checkOperation = func(operation uint8) bool {
+		return packetInOperations&operation == operation
 	}
-	if checkCustomReason(openflow.CustomReasonLoggingRegMark) {
-		if err := c.logPacket(pktIn); err != nil {
+	if checkOperation(openflow.PacketInNPLoggingOperation) {
+		if err := c.logPacketAction(pktIn); err != nil {
 			return err
 		}
 	}
-	if checkCustomReason(openflow.CustomReasonRejectRegMark) {
-		if err := c.rejectRequest(pktIn); err != nil {
+	if checkOperation(openflow.PacketInNPRejectOperation) {
+		if err := c.rejectRequestAction(pktIn); err != nil {
 			return err
 		}
 	}
-	if checkCustomReason(openflow.CustomReasonDenyRegMark) {
-		if err := c.storeDenyConnection(pktIn); err != nil {
+	if checkOperation(openflow.PacketInNPStoreDenyOperation) {
+		if err := c.storeDenyConnectionAction(pktIn); err != nil {
 			return err
 		}
 	}
@@ -109,7 +105,7 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32,
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	packet, err := binding.ParsePacketIn(pktIn)
 	if err != nil {
-		return fmt.Errorf("error in parsing packetin: %v", err)
+		return fmt.Errorf("error in parsing packetIn: %v", err)
 	}
 
 	// Get 5-tuple information

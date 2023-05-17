@@ -716,7 +716,7 @@ func TestProcessPacketIn(t *testing.T) {
 			}
 			for _, pkt := range packets {
 				mockIfaceStore.EXPECT().GetInterfaceByOFPort(uint32(tc.iface.OFPort)).Return(tc.iface, true)
-				err := snooper.processPacketIn(pkt)
+				err := snooper.HandlePacketIn(pkt)
 				assert.NoError(t, err)
 			}
 
@@ -729,39 +729,6 @@ func TestProcessPacketIn(t *testing.T) {
 			for _, s := range statuses {
 				assert.True(t, tc.expGroups.Has(s.group.String()))
 			}
-		})
-	}
-}
-
-func TestHandlePacketInWithErrorCases(t *testing.T) {
-	mockController := newMockMulticastController(t, false)
-	snooper := mockController.igmpSnooper
-
-	for _, tc := range []struct {
-		name  string
-		pktIn ofctrl.PacketIn
-		err   error
-	}{
-		{
-			name: "wrong custom reasons",
-			pktIn: generatePacketWithMatches(protocol.NewIGMPv3Report(make([]protocol.IGMPv3GroupRecord, 0)), 3, nil, []openflow15.MatchField{*openflow15.NewInPortField(3), {
-				Class:   openflow15.OXM_CLASS_PACKET_REGS,
-				Field:   openflow15.OXM_FIELD_IN_PORT,
-				HasMask: true,
-				Mask:    &openflow15.ByteArrayField{Data: []byte{255, 255, 255, 255, 0, 0, 0, 0}, Length: 8},
-				Value:   &openflow15.ByteArrayField{Data: []byte{0, 0, 0, 0, 0, 0, 0, 0}, Length: 8},
-			}}),
-			err: nil,
-		},
-		{
-			name:  "error getting match",
-			pktIn: generatePacketWithMatches(protocol.NewIGMPv3Report(make([]protocol.IGMPv3GroupRecord, 0)), 3, nil, []openflow15.MatchField{*openflow15.NewInPortField(3)}),
-			err:   fmt.Errorf("error getting match from IGMP marks in CustomField"),
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := snooper.HandlePacketIn(&tc.pktIn)
-			assert.Equal(t, err, tc.err)
 		})
 	}
 }
@@ -1254,7 +1221,7 @@ func testRemoteReport(t *testing.T, mockController *Controller, groups []net.IP,
 func processRemoteReport(t *testing.T, mockController *Controller, groups []net.IP, remoteNode net.IP, reportType uint8, tunnelPort uint32) error {
 	pkt := generatePacketInForRemoteReport(t, mockController.igmpSnooper, groups, remoteNode, reportType, tunnelPort)
 	mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, nodeIf1IP), true)
-	return mockController.igmpSnooper.processPacketIn(&pkt)
+	return mockController.igmpSnooper.HandlePacketIn(&pkt)
 }
 
 func compareGroupStatus(t *testing.T, cache cache.Indexer, event *mcastGroupEvent) {
@@ -1284,7 +1251,7 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 	ovsClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
-	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).Times(1)
 	groupAllocator := openflow.NewGroupAllocator(false)
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
 

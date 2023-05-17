@@ -19,6 +19,7 @@ import (
 	"net"
 	"testing"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -199,8 +200,9 @@ func TestParsePacketIn(t *testing.T) {
 		{
 			"ParsePacketIn-ipv6",
 			&ofctrl.PacketIn{
-				Reason: 1,
-				Data:   util.NewBuffer(pktBytes),
+				PacketIn: &openflow15.PacketIn{
+					Data: util.NewBuffer(pktBytes),
+				},
 			},
 			&Packet{
 				IsIPv6:          true,

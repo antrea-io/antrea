@@ -201,7 +201,7 @@ func TestIGMPRemoteReport(t *testing.T) {
 		mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true).Times(len(packets))
 		for i := range packets {
 			pkt := &packets[i]
-			err := snooper.processPacketIn(pkt)
+			err := snooper.HandlePacketIn(pkt)
 			assert.NoError(t, err, "Failed to process IGMP Report message")
 		}
 
@@ -257,7 +257,7 @@ func generatePacketWithMatches(m util.Message, ofport uint32, srcNodeIP net.IP, 
 	ethernetPkt.Data = ipPacket
 	pktBytes, _ := ethernetPkt.MarshalBinary()
 	pkt.Data = util.NewBuffer(pktBytes)
-	return ofctrl.PacketIn(*pkt)
+	return ofctrl.PacketIn{PacketIn: pkt}
 }
 
 func generatePacketInForRemoteReport(t *testing.T, snooper *IGMPSnooper, groups []net.IP, srcNode net.IP, igmpMsgType uint8, tunnelPort uint32) ofctrl.PacketIn {

@@ -777,6 +777,47 @@ func nxActionControllerToString(action openflow15.Action) string {
 	return actionStr
 }
 
+func nxActionController2ToString(action openflow15.Action) string {
+	a := action.(*openflow15.NXActionController2)
+	reasonMap := map[uint8]string{
+		0: "no_match",
+		1: "action",
+		2: "invalid_ttl",
+		3: "action_set",
+		4: "group",
+		5: "packet_out",
+	}
+	var parts []string
+	actionBytes, _ := a.MarshalBinary()
+	n := openflow15.NxActionHeaderLength + 6 // Add padding
+	for n < int(a.Length) {
+		p, err := openflow15.DecodeController2Prop(actionBytes[n:])
+		if err != nil {
+			return ""
+		}
+		switch v := p.(type) {
+		case *openflow15.NXActionController2PropReason:
+			parts = append(parts, fmt.Sprintf("reason=%s", reasonMap[v.Reason]))
+		case *openflow15.NXActionController2PropMaxLen:
+			parts = append(parts, fmt.Sprintf("max_len=%d", v.MaxLen))
+		case *openflow15.NXActionController2PropControllerID:
+			parts = append(parts, fmt.Sprintf("id=%d", v.ControllerID))
+		case *openflow15.NXActionController2PropUserdata:
+			convert := func(bytes []byte) string {
+				s := make([]string, len(bytes))
+				for i, b := range bytes {
+					s[i] = fmt.Sprintf("%.2x", b)
+				}
+				return strings.Join(s, ".")
+			}
+			parts = append(parts, fmt.Sprintf("userdata=%s", convert(v.Userdata)))
+		}
+		n += int(p.Len())
+	}
+	actionStr := fmt.Sprintf("controller:(%s)", strings.Join(parts, ","))
+	return actionStr
+}
+
 func nxActionLearnToString(action openflow15.Action) string {
 	a := action.(*openflow15.NXActionLearn)
 	var parts []string
@@ -1090,6 +1131,8 @@ func getActionString(action openflow15.Action) (string, error) {
 		actionToStringFunc = nxActionNoteToString
 	case *openflow15.NXActionController:
 		actionToStringFunc = nxActionControllerToString
+	case *openflow15.NXActionController2:
+		actionToStringFunc = nxActionController2ToString
 	case *openflow15.ActionMplsTtl:
 	case *openflow15.ActionSetqueue:
 	case *openflow15.ActionPopMpls:
