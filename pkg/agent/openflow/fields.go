@@ -69,20 +69,10 @@ var (
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
-	// reg0[13..18]: Field to indicate the reasons of sending packet to the controller. Marks in this field include:
-	//   - 0b000001: logging
-	//   - 0b000010: reject
-	//   - 0b000100: deny (used by Flow Exporter)
-	//   - 0b001000: DNS packet (used by FQDN)
-	//   - 0b010000: IGMP packet (used by Multicast)
-	//   - 0b100000: reject packet to a Service without any Endpoints (used by Proxy)
-	CustomReasonField             = binding.NewRegField(0, 13, 18)
-	CustomReasonLoggingRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
-	CustomReasonRejectRegMark     = binding.NewRegMark(CustomReasonField, CustomReasonReject)
-	CustomReasonDenyRegMark       = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
-	CustomReasonDNSRegMark        = binding.NewRegMark(CustomReasonField, CustomReasonDNS)
-	CustomReasonIGMPRegMark       = binding.NewRegMark(CustomReasonField, CustomReasonIGMP)
-	CustomReasonRejectSvcNoEpMark = binding.NewRegMark(CustomReasonField, CustomReasonRejectSvcNoEp)
+	// reg0[13]: Mark to indicate the packet is a generated reject response packet-out.
+	GeneratedRejectPacketOutRegMark = binding.NewOneBitRegMark(0, 13)
+	// reg0[14]: Mark to indicate a Service without any Endpoints (used by Proxy)
+	SvcNoEpRegMark = binding.NewOneBitRegMark(0, 14)
 	// reg0[19]: Mark to indicate remote SNAT for Egress.
 	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 19)
 	// reg0[20]: Field to indicate redirect action of layer 7 NetworkPolicy.

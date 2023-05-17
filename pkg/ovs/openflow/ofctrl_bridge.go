@@ -199,7 +199,7 @@ type OFBridge struct {
 	connCh chan struct{}
 	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method.
 	connected chan bool
-	// pktConsumers is a map from PacketIn reason to the channel that is used to publish the PacketIn message.
+	// pktConsumers is a map from PacketIn category to the channel that is used to publish the PacketIn message.
 	pktConsumers      sync.Map
 	multipartReplyChs map[uint32]chan *openflow15.MultipartReply
 	// tunMetadataLengthMap is used to store the tlv-map settings on the OVS bridge. Key is the index of tunnel metedata,
@@ -309,9 +309,13 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 
 // PacketRcvd is a callback when a packetIn is received on ofctrl.OFSwitch.
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
-	klog.V(2).Infof("Received packet: %+v", packet)
-	reason := packet.Reason
-	v, found := b.pktConsumers.Load(reason)
+	klog.V(2).InfoS("Received packetIn", "packet", packet)
+	if len(packet.UserData) == 0 {
+		klog.Info("Received packetIn without packetIn category in userdata")
+		return
+	}
+	category := packet.UserData[0]
+	v, found := b.pktConsumers.Load(category)
 	if found {
 		pktInQueue, _ := v.(*PacketInQueue)
 		pktInQueue.AddOrDrop(packet)
@@ -322,6 +326,7 @@ func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
 func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is connected: %v", sw.DPID())
 	b.SetOFSwitch(sw)
+	b.setPacketInFormatTo2()
 	b.ofSwitch.EnableMonitor()
 	// initialize tables.
 	b.Initialize()
@@ -672,12 +677,12 @@ func (q *PacketInQueue) GetRateLimited(stopCh <-chan struct{}) *ofctrl.PacketIn 
 	}
 }
 
-func (b *OFBridge) SubscribePacketIn(reason uint8, pktInQueue *PacketInQueue) error {
-	_, exist := b.pktConsumers.Load(reason)
+func (b *OFBridge) SubscribePacketIn(category uint8, pktInQueue *PacketInQueue) error {
+	_, exist := b.pktConsumers.Load(category)
 	if exist {
-		return fmt.Errorf("packetIn reason %d already exists", reason)
+		return fmt.Errorf("packetIn category %d already exists", category)
 	}
-	b.pktConsumers.Store(reason, pktInQueue)
+	b.pktConsumers.Store(category, pktInQueue)
 	return nil
 }
 
@@ -691,6 +696,10 @@ func (b *OFBridge) AddTLVMap(optClass uint16, optType uint8, optLength uint8, tu
 
 func (b *OFBridge) SendPacketOut(packetOut *ofctrl.PacketOut) error {
 	return b.ofSwitch.Send(packetOut.GetMessage())
+}
+
+func (b *OFBridge) ResumePacket(packetIn *ofctrl.PacketIn) error {
+	return b.ofSwitch.ResumePacket(packetIn)
 }
 
 func (b *OFBridge) BuildPacketOut() PacketOutBuilder {
@@ -708,6 +717,10 @@ func (b *OFBridge) MaxRetry() int {
 // to OFSwitch if it fails this time.
 func (b *OFBridge) RetryInterval() time.Duration {
 	return b.retryInterval
+}
+
+func (b *OFBridge) setPacketInFormatTo2() {
+	b.ofSwitch.SetPacketInFormat(openflow15.OFPUTIL_PACKET_IN_NXT2)
 }
 
 func (b *OFBridge) queryTableFeatures() {

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"antrea.io/ofnet/ofctrl"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -63,6 +64,8 @@ type L7RuleReconciler interface {
 }
 
 var emptyWatch = watch.NewEmptyWatch()
+
+type packetInAction func(*ofctrl.PacketIn) error
 
 // Controller is responsible for watching Antrea AddressGroups, AppliedToGroups,
 // and NetworkPolicies, feeding them to ruleCache, getting dirty rules from
@@ -126,6 +129,10 @@ type Controller struct {
 	gwPort        uint32
 	tunPort       uint32
 	nodeConfig    *config.NodeConfig
+
+	logPacketAction           packetInAction
+	rejectRequestAction       packetInAction
+	storeDenyConnectionAction packetInAction
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -179,7 +186,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		}
 
 		if c.ofClient != nil {
-			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
+			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryDNS), c.fqdnController)
 		}
 	}
 	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
@@ -196,7 +203,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 
 	if c.ofClient != nil && antreaPolicyEnabled {
 		// Register packetInHandler
-		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
+		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
 		if loggingEnabled {
 			// Initiate logger for Antrea Policy audit logging
 			antreaPolicyLogger, err := newAntreaPolicyLogger()
@@ -395,6 +402,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSynced:        false,
 	}
 	c.ifaceStore = ifaceStore
+	c.logPacketAction = c.logPacket
+	c.rejectRequestAction = c.rejectRequest
+	c.storeDenyConnectionAction = c.storeDenyConnection
 	return c, nil
 }
 

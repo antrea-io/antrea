@@ -901,7 +901,7 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			name:      "No Endpoints",
 			endpoints: []proxy.Endpoint{},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0x40000/0x7e000->reg0,resubmit:EndpointDNAT",
+				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000/0x4000->reg0,resubmit:EndpointDNAT",
 		},
 	}
 
@@ -1822,7 +1822,7 @@ func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 	groupID := binding.GroupIDType(102)
 	expectedFlows := []string{
 		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=1,nw_dst=224.0.0.0/4 actions=set_field:0x1/0xf->reg0,goto_table:MulticastEgressRule",
-		"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,in_port=4294967293 actions=set_field:0x20000/0x7e000->reg0,group:102",
+		"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,in_port=4294967293 actions=group:102",
 		"cookie=0x1050000000000, table=Classifier, priority=200,in_port=4294967293 actions=goto_table:PipelineIPClassifier",
 	}
 
@@ -2092,7 +2092,7 @@ func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {
 			expectedFlows: []string{
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.97.0.0/16 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ct_state=+rpl+trk,ip,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
-				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x4000/0x7e000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x2000/0x2000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 			},
 		},
 		//TODO: IPv6
@@ -2143,7 +2143,7 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 				"cookie=0x1060000000000, table=UnSNAT, priority=200,ip,nw_dst=192.168.77.100 actions=ct(table=ConntrackZone,zone=65521,nat)",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.97.0.0/16 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ct_state=+rpl+trk,ip,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
-				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x4000/0x7e000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x2000/0x2000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=SNATMark, priority=210,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark))",
 				"cookie=0x1060000000000, table=SNAT, priority=200,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=192.168.77.100))",
 			},
@@ -2197,4 +2197,13 @@ func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 	fCacheI, ok := fc.featureMulticluster.cachedFlows.Load(cacheKey)
 	require.True(t, ok)
 	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI))
+}
+
+func Test_client_RegisterPacketInHandler(t *testing.T) {
+	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	ctrl := gomock.NewController(t)
+	bridge := ovsoftest.NewMockBridge(ctrl)
+	bridge.EXPECT().ResumePacket(gomock.Any()).Times(1)
+	fc.bridge = bridge
+	fc.ResumePausePacket(nil)
 }

@@ -73,7 +73,7 @@ func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) b
 
 func (f *featureMulticast) initFlows() []binding.Flow {
 	// Install flows to send the IGMP report messages to Antrea Agent.
-	flows := f.igmpPktInFlows(uint8(PacketInReasonMC))
+	flows := f.igmpPktInFlows()
 	// Install flow to forward the IGMP query messages to all local Pods.
 	flows = append(flows, f.externalMulticastReceiverFlow())
 	// Install flows to forward the multicast traffic to antrea-gw0 if no local Pods have joined in the group, and this
@@ -204,7 +204,6 @@ func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDTyp
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
 			MatchProtocol(binding.ProtocolIGMP).
 			MatchInPort(openflow15.P_CONTROLLER).
-			Action().LoadRegMark(CustomReasonIGMPRegMark).
 			Action().Group(groupID).
 			Done(),
 		// This flow ensures the IGMP report message sent from Antrea Agent to bypass the check in SpoofGuardTable.

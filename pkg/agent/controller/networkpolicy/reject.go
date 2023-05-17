@@ -27,22 +27,6 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-const (
-	IPv4HdrLen uint16 = 20
-	IPv6HdrLen uint16 = 40
-
-	ICMPUnusedHdrLen uint16 = 4
-
-	TCPAck uint8 = 0b010000
-	TCPRst uint8 = 0b000100
-
-	ICMPDstUnreachableType         uint8 = 3
-	ICMPDstHostAdminProhibitedCode uint8 = 10
-
-	ICMPv6DstUnreachableType     uint8 = 1
-	ICMPv6DstAdminProhibitedCode uint8 = 1
-)
-
 type RejectType int
 
 const (
@@ -295,20 +279,20 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst bool, ctZone uint32) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
 	var mutatePacketOut func(binding.PacketOutBuilder) binding.PacketOutBuilder
 	mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark)
+		return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark)
 	}
 	switch rejectType {
 	case RejectServiceLocal:
 		tableID := openflow.ConntrackTable.GetID()
 		if isFlexibleIPAMSrc {
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).
 					AddLoadRegMark(openflow.AntreaFlexibleIPAMRegMark).AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
 					AddResubmitAction(nil, &tableID)
 			}
 		} else {
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).
 					AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
 					AddResubmitAction(nil, &tableID)
 			}
@@ -321,13 +305,13 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 		}
 		if isFlexibleIPAMSrc {
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).
 					AddLoadRegMark(openflow.AntreaFlexibleIPAMRegMark).AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
 					AddResubmitAction(nil, &tableID)
 			}
 		} else {
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).
 					AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
 					AddResubmitAction(nil, &tableID)
 			}
@@ -336,7 +320,7 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 		if isFlexibleIPAMDst {
 			tableID := openflow.ConntrackTable.GetID()
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).
 					AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
 					AddResubmitAction(nil, &tableID)
 			}

@@ -205,7 +205,6 @@ var (
 	priorityMiss            = uint16(0)
 	priorityTopAntreaPolicy = uint16(64990)
 	priorityDNSIntercept    = uint16(64991)
-	priorityDNSBypass       = uint16(64992)
 
 	// Index for priority cache
 	priorityIndex = "priority"
@@ -345,22 +344,6 @@ const (
 	DispositionDrop  = 0b01
 	DispositionRej   = 0b10
 	DispositionPass  = 0b11
-	// CustomReasonLogging is used when sending packet-in to controller indicating this
-	// packet need logging.
-	CustomReasonLogging = 0b01
-	// CustomReasonReject is not only used when sending packet-in to controller indicating
-	// that this packet should be rejected, but also used in the case that when
-	// controller send reject packet as packet-out, we want reject response to bypass
-	// the connTrack to avoid unexpected drop.
-	CustomReasonReject = 0b10
-	// CustomReasonDeny is used when sending packet-in message to controller indicating
-	// that the corresponding connection has been dropped or rejected. It can be consumed
-	// by the Flow Exporter to export flow records for connections denied by network
-	// policy rules.
-	CustomReasonDeny          = 0b100
-	CustomReasonDNS           = 0b1000
-	CustomReasonIGMP          = 0b10000
-	CustomReasonRejectSvcNoEp = 0b100000
 	// DispositionL7NPRedirect is used when sending packet-in to controller for
 	// logging layer 7 NetworkPolicy indicating that this packet is redirected to
 	// l7 engine to determine the disposition.
@@ -446,9 +429,9 @@ type client struct {
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
 	ovsMetersAreSupported bool
-	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
-	// When a packetin arrives, openflow send packet to registered handlers in this map.
-	packetInHandlers map[uint8]map[string]PacketInHandler
+	// packetInHandlers stores handler to process PacketIn event. When a packetIn
+	// arrives, openflow send packet to registered handler in this map.
+	packetInHandlers map[uint8]PacketInHandler
 	// Supported IP Protocols (IP or IPv6) on the current Node.
 	ipProtocols []binding.Protocol
 	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
@@ -901,30 +884,6 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 	return flows
 }
 
-// dnsResponseBypassConntrackFlow generates the flow to bypass the dns response packetout from conntrack, to avoid unexpected
-// packet drop. This flow should be installed on the first table of stageConntrackState.
-func (f *featureNetworkPolicy) dnsResponseBypassConntrackFlow(table binding.Table) binding.Flow {
-	return table.BuildFlow(priorityHigh).
-		MatchRegFieldWithValue(CustomReasonField, CustomReasonDNS).
-		Cookie(f.cookieAllocator.Request(cookie.Default).Raw()).
-		Action().GotoStage(stageSwitching).
-		Done()
-}
-
-// dnsResponseBypassPacketInFlow generates the flow to bypass the dns packetIn conjunction flow for dns response packetOut.
-// This packetOut should be sent directly to the requesting client without being intercepted again.
-func (f *featureNetworkPolicy) dnsResponseBypassPacketInFlow() binding.Flow {
-	// TODO: use a unified register bit to mark packetOuts. The pipeline does not need to be
-	// aware of why the packetOut is being set by the controller, it just needs to be aware that
-	// this is a packetOut message and that some pipeline stages (conntrack, policy enforcement)
-	// should therefore be skipped.
-	return AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priorityDNSBypass).
-		Cookie(f.cookieAllocator.Request(cookie.Default).Raw()).
-		MatchRegFieldWithValue(CustomReasonField, CustomReasonDNS).
-		Action().GotoStage(stageOutput).
-		Done()
-}
-
 // TODO: Use DuplicateToBuilder or integrate this function into original one to avoid unexpected difference.
 // flowsToTrace generates Traceflow specific flows in the connectionTrackStateTable or L2ForwardingCalcTable for featurePodConnectivity.
 // When packet is not provided, the flows bypass the drop flow in conntrackStateFlow to avoid unexpected drop of the
@@ -1031,7 +990,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			if ovsMetersAreSupported {
 				fb = fb.Action().Meter(PacketInMeterIDTF)
 			}
-			fb = fb.Action().SendToController(uint8(PacketInReasonTF))
+			fb = fb.Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false)
 		}
 		return fb
 	}
@@ -1133,7 +1092,7 @@ func (f *featureService) flowsToTrace(dataplaneTag uint8,
 			if ovsMetersAreSupported {
 				fb = fb.Action().Meter(PacketInMeterIDTF)
 			}
-			fb = fb.Action().SendToController(uint8(PacketInReasonTF))
+			fb = fb.Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false)
 		}
 		return fb
 	}
@@ -1191,7 +1150,7 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 				flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 					Cookie(cookieID).
 					SetHardTimeout(timeout).
-					Action().SendToController(uint8(PacketInReasonTF)).
+					Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false).
 					Done())
 				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
 			}
@@ -1201,7 +1160,7 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 			flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 				Cookie(cookieID).
 				SetHardTimeout(timeout).
-				Action().SendToController(uint8(PacketInReasonTF)).
+				Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false).
 				Done())
 		}
 	}
@@ -1221,7 +1180,7 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 					flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 						SetHardTimeout(timeout).
 						Cookie(cookieID).
-						Action().SendToController(uint8(PacketInReasonTF)).
+						Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false).
 						Done())
 					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
 				}
@@ -1231,7 +1190,7 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 				flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
 					Cookie(cookieID).
-					Action().SendToController(uint8(PacketInReasonTF)).
+					Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false).
 					Done())
 			}
 		}
@@ -1776,10 +1735,10 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 			}
 			if l7RuleVlanID != nil {
 				return fb.
-					Action().LoadToRegField(conjReg, conjunctionID).                                                // Traceflow.
-					Action().LoadRegMark(DispositionAllowRegMark, CustomReasonLoggingRegMark, L7NPRedirectRegMark). // AntreaPolicy, Enable logging.
-					Action().SendToController(uint8(PacketInReasonNP)).
-					Action().CT(true, nextTable, ctZone, f.ctZoneSrcField). // CT action requires commit flag if actions other than NAT without arguments are specified.
+					Action().LoadToRegField(conjReg, conjunctionID).                                                 // Traceflow.
+					Action().LoadRegMark(DispositionAllowRegMark, L7NPRedirectRegMark).                              // AntreaPolicy.
+					Action().SendToController([]byte{uint8(PacketInCategoryNP), PacketInNPLoggingOperation}, false). // Enable logging.
+					Action().CT(true, nextTable, ctZone, f.ctZoneSrcField).                                          // CT action requires commit flag if actions other than NAT without arguments are specified.
 					LoadToLabelField(uint64(conjunctionID), labelField).
 					LoadToCtMark(L7NPRedirectCTMark).                               // Mark the packets of the connection should be redirected to an application-aware engine.
 					LoadToLabelField(uint64(*l7RuleVlanID), L7NPRuleVlanIDCTLabel). // Load the VLAN ID allocated for L7 NetworkPolicy rule to CT mark field L7NPRuleVlanIDCTMarkField.
@@ -1788,10 +1747,10 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 					Done()
 			}
 			return fb.
-				Action().LoadToRegField(conjReg, conjunctionID).                           // Traceflow.
-				Action().LoadRegMark(DispositionAllowRegMark, CustomReasonLoggingRegMark). // AntreaPolicy, Enable logging.
-				Action().SendToController(uint8(PacketInReasonNP)).
-				Action().CT(true, nextTable, ctZone, f.ctZoneSrcField). // CT action requires commit flag if actions other than NAT without arguments are specified.
+				Action().LoadToRegField(conjReg, conjunctionID).                                                 // Traceflow.
+				Action().LoadRegMark(DispositionAllowRegMark).                                                   // AntreaPolicy.
+				Action().SendToController([]byte{uint8(PacketInCategoryNP), PacketInNPLoggingOperation}, false). // Enable logging.
+				Action().CT(true, nextTable, ctZone, f.ctZoneSrcField).                                          // CT action requires commit flag if actions other than NAT without arguments are specified.
 				LoadToLabelField(uint64(conjunctionID), labelField).
 				CTDone().
 				Cookie(cookieID).
@@ -1860,19 +1819,19 @@ func (f *featureNetworkPolicy) conjunctionActionDenyFlow(conjunctionID uint32, t
 		Action().LoadToRegField(APConjIDField, conjunctionID).
 		Action().LoadRegMark(APDenyRegMark)
 
-	var customReason int
+	var packetInOperations uint8
 	if f.enableDenyTracking {
-		customReason += CustomReasonDeny
+		packetInOperations += PacketInNPStoreDenyOperation
 		flowBuilder = flowBuilder.
 			Action().LoadToRegField(APDispositionField, disposition)
 	}
 	if enableLogging {
-		customReason += CustomReasonLogging
+		packetInOperations += PacketInNPLoggingOperation
 		flowBuilder = flowBuilder.
 			Action().LoadToRegField(APDispositionField, disposition)
 	}
 	if disposition == DispositionRej {
-		customReason += CustomReasonReject
+		packetInOperations += PacketInNPRejectOperation
 	}
 
 	if enableLogging || f.enableDenyTracking || disposition == DispositionRej {
@@ -1880,8 +1839,7 @@ func (f *featureNetworkPolicy) conjunctionActionDenyFlow(conjunctionID uint32, t
 			flowBuilder = flowBuilder.Action().Meter(PacketInMeterIDNP)
 		}
 		flowBuilder = flowBuilder.
-			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
-			Action().SendToController(uint8(PacketInReasonNP))
+			Action().SendToController([]byte{uint8(PacketInCategoryNP), packetInOperations}, false)
 	}
 
 	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
@@ -1904,8 +1862,8 @@ func (f *featureNetworkPolicy) conjunctionActionPassFlow(conjunctionID uint32, t
 
 	if enableLogging {
 		flowBuilder = flowBuilder.
-			Action().LoadRegMark(DispositionPassRegMark, CustomReasonLoggingRegMark).
-			Action().SendToController(uint8(PacketInReasonNP))
+			Action().LoadRegMark(DispositionPassRegMark).
+			Action().SendToController([]byte{uint8(PacketInCategoryNP), PacketInNPLoggingOperation}, false)
 	}
 	return flowBuilder.Action().GotoTable(nextTable.GetID()).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
@@ -2068,18 +2026,17 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 		fb = f.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
 	}
 
-	var customReason int
+	var packetInOperations uint8
 	if f.enableDenyTracking {
-		customReason += CustomReasonDeny
+		packetInOperations += PacketInNPStoreDenyOperation
 	}
 	if enableLogging {
-		customReason += CustomReasonLogging
+		packetInOperations += PacketInNPLoggingOperation
 	}
 
 	if enableLogging || f.enableDenyTracking {
 		return fb.Action().LoadRegMark(DispositionDropRegMark).
-			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
-			Action().SendToController(uint8(PacketInReasonNP)).
+			Action().SendToController([]byte{uint8(PacketInCategoryNP), packetInOperations}, false).
 			Cookie(cookieID).
 			Done()
 	}
@@ -2105,8 +2062,11 @@ func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flo
 	return AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priorityDNSIntercept).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchConjID(conjunctionID).
-		Action().LoadToRegField(CustomReasonField, CustomReasonDNS).
-		Action().SendToController(uint8(PacketInReasonNP)).
+		// FQDN should pause DNS response packets and send them to the controller. After
+		// the controller processes DNS response packets, like creating related flows in
+		// the OVS or no operations are needed, the controller will resume those packets.
+		Action().SendToController([]byte{uint8(PacketInCategoryDNS)}, true).
+		Action().GotoTable(IngressMetricTable.GetID()).
 		Done()
 }
 
@@ -2480,7 +2440,7 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 
 	if len(endpoints) == 0 {
 		return group.Bucket().Weight(100).
-			LoadToRegField(CustomReasonField, CustomReasonRejectSvcNoEp).
+			LoadRegMark(SvcNoEpRegMark).
 			ResubmitToTable(EndpointDNATTable.GetID()).
 			Done()
 	}
@@ -2694,7 +2654,7 @@ func (f *featureMulticast) igmpEgressFlow() binding.Flow {
 
 // igmpPktInFlows generates the flow to load CustomReasonIGMPRegMark to mark the IGMP packet in MulticastRoutingTable
 // and sends it to antrea-agent.
-func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
+func (f *featureMulticast) igmpPktInFlows() []binding.Flow {
 	var flows []binding.Flow
 	sourceMarks := []*binding.RegMark{FromLocalRegMark}
 	if f.encapEnabled {
@@ -2702,7 +2662,7 @@ func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
 	}
 	for _, m := range sourceMarks {
 		flows = append(flows,
-			// Set a custom reason for the IGMP packets, and then send it to antrea-agent. Then antrea-agent can identify
+			// Set a custom category for the IGMP packets, and then send it to antrea-agent. Then antrea-agent can identify
 			// the local multicast group and its members in the meanwhile.
 			// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
 			// the packet.
@@ -2710,8 +2670,7 @@ func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
 				Cookie(f.cookieAllocator.Request(f.category).Raw()).
 				MatchProtocol(binding.ProtocolIGMP).
 				MatchRegMark(m).
-				Action().LoadRegMark(CustomReasonIGMPRegMark).
-				Action().SendToController(reason).
+				Action().SendToController([]byte{uint8(PacketInCategoryIGMP)}, false).
 				Done())
 	}
 	return flows
@@ -2776,7 +2735,7 @@ func NewClient(bridgeName string,
 		enableMulticluster:    enableMulticluster,
 		connectUplinkToBridge: connectUplinkToBridge,
 		pipelines:             make(map[binding.PipelineID]binding.Pipeline),
-		packetInHandlers:      map[uint8]map[string]PacketInHandler{},
+		packetInHandlers:      map[uint8]PacketInHandler{},
 		ovsctlClient:          ovsctl.NewClient(bridgeName),
 		ovsMetersAreSupported: ovsMetersAreSupported(),
 	}

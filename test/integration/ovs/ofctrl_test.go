@@ -607,9 +607,9 @@ func TestPacketOutIn(t *testing.T) {
 	require.Nil(t, err, "Failed to start OFService")
 	defer bridge.Disconnect()
 
-	reason := uint8(1)
+	category := uint8(1)
 	pktInQueue := binding.NewPacketInQueue(200, rate.Limit(100))
-	err = bridge.SubscribePacketIn(reason, pktInQueue)
+	err = bridge.SubscribePacketIn(category, pktInQueue)
 	require.Nil(t, err)
 
 	srcMAC, _ := net.ParseMAC("11:11:11:11:11:11")
@@ -678,7 +678,7 @@ func TestPacketOutIn(t *testing.T) {
 		MatchSrcMAC(srcMAC).MatchDstMAC(dstcMAC).
 		MatchSrcIP(srcIP).MatchDstIP(dstIP).MatchProtocol(binding.ProtocolTCP).
 		MatchRegFieldWithValue(regField, 0x1).
-		Action().SendToController(0x1).
+		Action().SendToController([]byte{0x1}, false).
 		Done()
 	err = bridge.AddFlowsInBundle([]binding.Flow{flow0, flow1}, nil, nil)
 	require.Nil(t, err)

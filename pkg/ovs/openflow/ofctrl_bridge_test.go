@@ -20,9 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/time/rate"
 
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
@@ -132,4 +134,31 @@ func TestConcurrentCreateGroups(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestOFBridgePacketRcvd(t *testing.T) {
+	b := NewOFBridge("test-br-pkt-rcvd", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br-pkt-rcvd"))
+	packetInQueueTracker := map[uint8]*PacketInQueue{}
+	// Test different userdata.
+	for i := 0; i < 5; i++ {
+		packetInQueue := NewPacketInQueue(1, rate.Limit(10))
+		b.SubscribePacketIn(uint8(i), packetInQueue)
+		packetInQueueTracker[uint8(i)] = packetInQueue
+		b.PacketRcvd(nil, &ofctrl.PacketIn{
+			PacketIn: &openflow15.PacketIn{},
+			UserData: []byte{uint8(i)},
+		})
+		packetIn := <-packetInQueue.packetsCh
+		assert.Equal(t, packetIn.UserData, []byte{uint8(i)})
+	}
+	// Test empty userdata.
+	b.PacketRcvd(nil, &ofctrl.PacketIn{
+		PacketIn: &openflow15.PacketIn{},
+		UserData: []byte{},
+	})
+	for _, v := range packetInQueueTracker {
+		if len(v.packetsCh) > 0 {
+			t.Errorf("unexpected packetIn in channel")
+		}
+	}
 }

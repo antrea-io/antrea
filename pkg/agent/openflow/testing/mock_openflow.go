@@ -28,6 +28,7 @@ import (
 	proxy "antrea.io/antrea/third_party/proxy"
 	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
+	ofctrl "antrea.io/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	net "net"
 	reflect "reflect"
@@ -662,15 +663,15 @@ func (mr *MockClientMockRecorder) ReassignFlowPriorities(arg0, arg1 interface{})
 }
 
 // RegisterPacketInHandler mocks base method
-func (m *MockClient) RegisterPacketInHandler(arg0 byte, arg1 string, arg2 interface{}) {
+func (m *MockClient) RegisterPacketInHandler(arg0 byte, arg1 interface{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RegisterPacketInHandler", arg0, arg1)
 }
 
 // RegisterPacketInHandler indicates an expected call of RegisterPacketInHandler
-func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) RegisterPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPacketInHandler", reflect.TypeOf((*MockClient)(nil).RegisterPacketInHandler), arg0, arg1)
 }
 
 // ReplayFlows mocks base method
@@ -683,6 +684,20 @@ func (m *MockClient) ReplayFlows() {
 func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
+}
+
+// ResumePausePacket mocks base method
+func (m *MockClient) ResumePausePacket(arg0 *ofctrl.PacketIn) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResumePausePacket", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResumePausePacket indicates an expected call of ResumePausePacket
+func (mr *MockClientMockRecorder) ResumePausePacket(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumePausePacket", reflect.TypeOf((*MockClient)(nil).ResumePausePacket), arg0)
 }
 
 // SendEthPacketOut mocks base method
