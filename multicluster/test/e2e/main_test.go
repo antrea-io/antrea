@@ -26,6 +26,16 @@ import (
 	"path"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
+
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+)
+
+const (
+	antreaAgentConfigName string = "antrea-config"
+	antreaAgentNamespace  string = "kube-system"
+	antreaAgentConfName   string = "antrea-agent.conf"
 )
 
 // setupLogging creates a temporary directory to export the test logs if necessary. If a directory
@@ -83,7 +93,45 @@ func testMain(m *testing.M) int {
 	rand.Seed(time.Now().UnixNano())
 
 	ret := m.Run()
+	if ret != 0 {
+		log.Println("Failed to run default Multi-cluster E2E tests")
+		return ret
+	}
+
+	log.Println("Starting E2E test with WireGuard")
+	for _, clusterName := range testData.clusters {
+		if clusterName == leaderCluster {
+			continue
+		}
+		if err := enableWireGuard(clusterName); err != nil {
+			log.Fatalf("Error when enabling WireGuard encryption, error: %v", err)
+		}
+	}
+
+	ret = m.Run()
 	return ret
+}
+
+func enableWireGuard(clusterName string) error {
+	data := testData.clusterTestDataMap[clusterName]
+	configMap, err := data.GetConfigMap(antreaAgentNamespace, antreaAgentConfigName)
+	if err != nil {
+		return err
+	}
+	antreaAgentConfig := &agentconfig.AgentConfig{}
+	if err := yaml.Unmarshal([]byte(configMap.Data[antreaAgentConfName]), antreaAgentConfig); err != nil {
+		return err
+	}
+	antreaAgentConfig.Multicluster.TrafficEncryptionMode = "wireGuard"
+	conf, err := yaml.Marshal(antreaAgentConfig)
+	if err != nil {
+		return err
+	}
+	configMap.Data[antreaAgentConfigName] = string(conf)
+	if err := data.UpdateConfigMap(configMap); err != nil {
+		return err
+	}
+	return data.RestartAntreaAgentPods(defaultTimeout)
 }
 
 func TestMain(m *testing.M) {

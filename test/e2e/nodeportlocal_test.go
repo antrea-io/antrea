@@ -629,7 +629,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 		deleteNPLRuleFromNetNat(t, data, r, antreaPod, ruleToDelete)
 	}
 
-	err = data.restartAntreaAgentPods(defaultTimeout)
+	err = data.RestartAntreaAgentPods(defaultTimeout)
 	r.NoError(err, "Error when restarting Antrea Agent Pods")
 
 	antreaPod, err = data.getAntreaPodOnNode(serverNode)

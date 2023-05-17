@@ -132,6 +132,16 @@ func (data *MCTestData) createTestNamespaces() error {
 	return nil
 }
 
+func (data *MCTestData) deleteTestNamespaces() error {
+	for cluster, d := range data.clusterTestDataMap {
+		if err := d.DeleteNamespace(multiClusterTestNamespace, defaultTimeout); err != nil {
+			log.Errorf("Failed to delete Namespace %s in cluster %s", multiClusterTestNamespace, cluster)
+			return err
+		}
+	}
+	return nil
+}
+
 func (data *MCTestData) patchPod(clusterName, namespace, name string, patch []byte) error {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
 		if err := d.PatchPod(namespace, name, patch); err != nil {

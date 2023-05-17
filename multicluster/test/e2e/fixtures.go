@@ -63,6 +63,9 @@ func teardownTest(tb testing.TB, data *MCTestData) {
 	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
 		_ = os.Remove(data.logsDirForTestCase)
 	}
+	if err := data.deleteTestNamespaces(); err != nil {
+		tb.Fatalf("Failed to delete test Namespace %s", multiClusterTestNamespace)
+	}
 }
 
 func createPodWrapper(tb testing.TB, data *MCTestData, cluster string, namespace string, name string, nodeName string, image string, ctr string, command []string,
