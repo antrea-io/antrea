@@ -20,14 +20,24 @@ set -o pipefail
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
 IMAGE_NAME="antrea/codegen:kubernetes-1.26.4"
 
+# Recent versions of Git will not access .git directories which are owned by
+# another user (as a security measure), unless the directories are explicitly
+# added to a "safe" list in the Git config. When we run the Docker container,
+# the Antrea source directory may be owned (depends on the Docker platform)
+# by a user which is different from the container user (as the source directory
+# is mounted from the host). If this is the case, the Git program inside the
+# container will refuse to run. This is why we explicitly add the Antrea source
+# directory to the list of "safe" directories. We are still looking into the
+# possibility of running the Docker container as the "current host user".
 function docker_run() {
   docker pull ${IMAGE_NAME}
   set -x
+  ANTREA_PATH="/go/src/antrea.io/antrea"
   docker run --rm \
 		-e GOPROXY=${GOPROXY} \
-		-w /go/src/antrea.io/antrea \
-		-v ${ANTREA_ROOT}:/go/src/antrea.io/antrea \
-		"${IMAGE_NAME}" "$@"
+		-w ${ANTREA_PATH} \
+		-v ${ANTREA_ROOT}:${ANTREA_PATH} \
+		"${IMAGE_NAME}" bash -c "git config --global --add safe.directory ${ANTREA_PATH} && $@"
 }
 
 docker_run hack/update-codegen-dockerized.sh "$@"
