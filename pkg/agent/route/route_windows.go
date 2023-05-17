@@ -572,3 +572,11 @@ func generateNeigh(ip net.IP, linkIndex int) *util.Neighbor {
 		State:            "Permanent",
 	}
 }
+
+func (c *Client) AddRouteForLink(dstCIDR *net.IPNet, linkIndex int) error {
+	return errors.New("AddRouteForLink is not implemented on Windows")
+}
+
+func (c *Client) DeleteRouteForLink(dstCIDR *net.IPNet, linkIndex int) error {
+	return errors.New("DeleteRouteForLink is not implemented on Windows")
+}

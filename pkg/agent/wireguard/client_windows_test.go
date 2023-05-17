@@ -24,6 +24,6 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	_, err := New(nil, nil, nil)
+	_, err := New(nil, nil)
 	assert.Equal(t, "WireGuard is not implemented for windows", err.Error())
 }

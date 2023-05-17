@@ -25,6 +25,12 @@ type GatewayInfo struct {
 	GatewayIP string `json:"gatewayIP,omitempty"`
 }
 
+// WireGuardInfo includes information of a WireGuard tunnel.
+type WireGuardInfo struct {
+	// Public key of the WireGuard tunnel.
+	PublicKey string `json:"publicKey,omitempty"`
+}
+
 // +genclient
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
@@ -42,7 +48,8 @@ type Gateway struct {
 	// In-cluster tunnel IP of the Gateway.
 	InternalIP string `json:"internalIP,omitempty"`
 	// Service CIDR of the local member cluster.
-	ServiceCIDR string `json:"serviceCIDR,omitempty"`
+	ServiceCIDR string         `json:"serviceCIDR,omitempty"`
+	WireGuard   *WireGuardInfo `json:"wireGuard,omitempty"`
 }
 
 type ClusterInfo struct {
@@ -53,7 +60,8 @@ type ClusterInfo struct {
 	// GatewayInfos has information of Gateways
 	GatewayInfos []GatewayInfo `json:"gatewayInfos,omitempty"`
 	// PodCIDRs is the Pod IP address CIDRs.
-	PodCIDRs []string `json:"podCIDRs,omitempty"`
+	PodCIDRs  []string       `json:"podCIDRs,omitempty"`
+	WireGuard *WireGuardInfo `json:"wireGuard,omitempty"`
 }
 
 //+kubebuilder:object:root=true

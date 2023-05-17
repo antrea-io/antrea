@@ -344,8 +344,9 @@ func run(o *Options) error {
 			ciImportInformer,
 			ofClient,
 			nodeConfig,
-			o.config.Multicluster.EnableStretchedNetworkPolicy,
-			o.config.Multicluster.EnablePodToPodConnectivity,
+			networkConfig,
+			routeClient,
+			o.config.Multicluster,
 		)
 		if networkConfig.TrafficEncapMode != config.TrafficEncapModeEncap {
 			mcPodRouteController = mcroute.NewMCPodRouteController(

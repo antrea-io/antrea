@@ -20,11 +20,9 @@ package wireguard
 import (
 	"fmt"
 
-	clientset "k8s.io/client-go/kubernetes"
-
 	"antrea.io/antrea/pkg/agent/config"
 )
 
-func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
+func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
 	return nil, fmt.Errorf("WireGuard is not implemented for windows")
 }

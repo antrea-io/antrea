@@ -1086,13 +1086,31 @@ func (i *Initializer) waitForIPsecMonitorDaemon() error {
 // initializeWireguard checks if preconditions are met for using WireGuard and initializes WireGuard client or cleans up.
 func (i *Initializer) initializeWireGuard() error {
 	i.wireGuardConfig.MTU = i.nodeConfig.NodeTransportInterfaceMTU - config.WireGuardOverhead
-	wgClient, err := wireguard.New(i.client, i.nodeConfig, i.wireGuardConfig)
+	wgClient, err := wireguard.New(i.nodeConfig, i.wireGuardConfig)
 	if err != nil {
 		return err
 	}
 
 	i.wireGuardClient = wgClient
-	return i.wireGuardClient.Init()
+	publicKey, err := i.wireGuardClient.Init(nil, nil)
+	if err != nil {
+		return err
+	}
+
+	patch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]string{
+				types.NodeWireGuardPublicAnnotationKey: publicKey,
+			},
+		},
+	})
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), i.nodeConfig.Name, apitypes.MergePatchType, patch, metav1.PatchOptions{}, "status")
+		return err
+	}); err != nil {
+		return fmt.Errorf("error when patching the Node with the '%s' annotation: %w", types.NodeWireGuardPublicAnnotationKey, err)
+	}
+	return err
 }
 
 // readIPSecPSK reads the IPsec PSK value from environment variable ANTREA_IPSEC_PSK

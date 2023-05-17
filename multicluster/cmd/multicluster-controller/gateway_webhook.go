@@ -30,6 +30,10 @@ import (
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 )
 
+const (
+	antreaAgentSAName = "antrea-agent"
+)
+
 //+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-gateway,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=gateways,verbs=create;update,versions=v1alpha1,name=vgateway.kb.io,admissionReviewVersions={v1,v1beta1}
 
 // Gateway validator
@@ -56,8 +60,8 @@ func (v *gatewayValidator) Handle(ctx context.Context, req admission.Request) ad
 			klog.ErrorS(err, "Error getting ServiceAccount name", "Gateway", req.Namespace+"/"+req.Name)
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if saName != mcControllerSAName {
-			return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("Gateway can only be created or updated by Antrea Multi-cluster controller"))
+		if saName != mcControllerSAName && saName != antreaAgentSAName {
+			return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("Gateway can only be created or updated by Antrea Agent or Multi-cluster Controller"))
 		}
 	}
 	return admission.Allowed("")
