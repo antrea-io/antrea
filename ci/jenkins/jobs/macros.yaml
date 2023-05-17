@@ -13,7 +13,6 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          source /home/ubuntu/.bashrc
           sudo ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
@@ -22,8 +21,7 @@
       - shell: |-
          #!/bin/bash
          set -ex
-         source /home/ubuntu/.bashrc
-         ./ci/test-conformance-gke.sh --gcloud-path "${GCLOUD_PATH}" --cluster-name "${CLUSTERNAME}" --cleanup-only
+         ./ci/test-conformance-gke.sh --gcloud-sdk-path "${GCLOUD_SDK_PATH}" --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
     name: builder-aks-cluster-cleanup
@@ -31,7 +29,6 @@
       - shell: |-
          #!/bin/bash
          set -ex
-         source /home/ubuntu/.bashrc
          ./ci/test-conformance-aks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
