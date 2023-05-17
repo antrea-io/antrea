@@ -54,7 +54,7 @@ require (
 	github.com/stretchr/testify v1.8.2
 	github.com/ti-mo/conntrack v0.4.0
 	github.com/vishvananda/netlink v1.1.1-0.20211101163509-b10eb8fe5cf6
-	github.com/vmware/go-ipfix v0.6.0
+	github.com/vmware/go-ipfix v0.6.1
 	golang.org/x/crypto v0.9.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/mod v0.10.0
