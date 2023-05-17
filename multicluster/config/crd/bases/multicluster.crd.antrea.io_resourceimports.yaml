@@ -80,6 +80,14 @@ spec:
                   serviceCIDR:
                     description: ServiceCIDR is the IP ranges used by Service ClusterIP.
                     type: string
+                  wireGuard:
+                    description: WireGuardInfo includes information of a WireGuard
+                      tunnel.
+                    properties:
+                      publicKey:
+                        description: Public key of the WireGuard tunnel.
+                        type: string
+                    type: object
                 type: object
               clusternetworkpolicy:
                 description: If imported resource is AntreaClusterNetworkPolicy.

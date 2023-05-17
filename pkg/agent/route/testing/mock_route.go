@@ -92,6 +92,20 @@ func (mr *MockInterfaceMockRecorder) AddNodePort(arg0, arg1, arg2 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNodePort", reflect.TypeOf((*MockInterface)(nil).AddNodePort), arg0, arg1, arg2)
 }
 
+// AddRouteForLink mocks base method
+func (m *MockInterface) AddRouteForLink(arg0 *net.IPNet, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddRouteForLink", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddRouteForLink indicates an expected call of AddRouteForLink
+func (mr *MockInterfaceMockRecorder) AddRouteForLink(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRouteForLink", reflect.TypeOf((*MockInterface)(nil).AddRouteForLink), arg0, arg1)
+}
+
 // AddRoutes mocks base method
 func (m *MockInterface) AddRoutes(arg0 *net.IPNet, arg1 string, arg2, arg3 net.IP) error {
 	m.ctrl.T.Helper()
@@ -160,6 +174,20 @@ func (m *MockInterface) DeleteNodePort(arg0 []net.IP, arg1 uint16, arg2 openflow
 func (mr *MockInterfaceMockRecorder) DeleteNodePort(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodePort", reflect.TypeOf((*MockInterface)(nil).DeleteNodePort), arg0, arg1, arg2)
+}
+
+// DeleteRouteForLink mocks base method
+func (m *MockInterface) DeleteRouteForLink(arg0 *net.IPNet, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRouteForLink", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteRouteForLink indicates an expected call of DeleteRouteForLink
+func (mr *MockInterfaceMockRecorder) DeleteRouteForLink(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRouteForLink", reflect.TypeOf((*MockInterface)(nil).DeleteRouteForLink), arg0, arg1)
 }
 
 // DeleteRoutes mocks base method

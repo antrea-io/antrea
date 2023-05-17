@@ -27,4 +27,6 @@ const (
 	AntreaAgentClusterMembershipPort = 10351
 	// WireGuardListenPort is the default port for WireGuard encrypted traffic.
 	WireGuardListenPort = 51820
+	// MulticlusterWireGuardListenPort is the default port for Multi-cluster WireGuard encrypted traffic.
+	MulticlusterWireGuardListenPort = 51821
 )

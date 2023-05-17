@@ -185,3 +185,33 @@ func TestGatewayReconciler(t *testing.T) {
 		})
 	}
 }
+
+func TestGetClusterInfo(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
+	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, nil)
+	gw := &mcsv1alpha1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gw",
+		},
+		ServiceCIDR: "10.100.0.0/16",
+		GatewayIP:   "10.10.1.1",
+		InternalIP:  "10.10.1.1",
+		WireGuard: &mcsv1alpha1.WireGuardInfo{
+			PublicKey: "key",
+		},
+	}
+	expectedClusterInfo := &mcsv1alpha1.ClusterInfo{
+		GatewayInfos: []mcsv1alpha1.GatewayInfo{
+			{
+				GatewayIP: "10.10.1.1",
+			},
+		},
+		ServiceCIDR: "10.100.0.0/16",
+		PodCIDRs:    []string{"10.200.1.1/16"},
+		WireGuard: &mcsv1alpha1.WireGuardInfo{
+			PublicKey: "key",
+		},
+	}
+
+	assert.Equal(t, expectedClusterInfo, r.getClusterInfo(gw))
+}

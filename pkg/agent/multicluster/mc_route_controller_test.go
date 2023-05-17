@@ -21,13 +21,21 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcfake "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
 	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/agent/config"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	antrearoute "antrea.io/antrea/pkg/agent/route"
+	routemock "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/wireguard"
+	wireguardmock "antrea.io/antrea/pkg/agent/wireguard/testing"
+	"antrea.io/antrea/pkg/config/agent"
 )
 
 type fakeRouteController struct {
@@ -37,7 +45,13 @@ type fakeRouteController struct {
 	ofClient        *oftest.MockClient
 }
 
-func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) *fakeRouteController {
+func newMCDefaultRouteController(t *testing.T,
+	nodeConfig *config.NodeConfig,
+	networkConfig *config.NetworkConfig,
+	wireGuardConfig agent.WireGuardConfig,
+	routeClient antrearoute.Interface,
+	trafficEncryptionMode string,
+) *fakeRouteController {
 	mcClient := mcfake.NewSimpleClientset()
 	mcInformerFactory := mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
 		60*time.Second,
@@ -45,6 +59,16 @@ func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) *f
 	)
 	gwInformer := mcInformerFactory.Multicluster().V1alpha1().Gateways()
 	ciImportInformer := mcInformerFactory.Multicluster().V1alpha1().ClusterInfoImports()
+
+	multiclusterConfig := agent.MulticlusterConfig{
+		Enable:                       true,
+		EnableGateway:                true,
+		Namespace:                    "default",
+		EnableStretchedNetworkPolicy: true,
+		EnablePodToPodConnectivity:   true,
+		WireGuard:                    wireGuardConfig,
+		TrafficEncryptionMode:        trafficEncryptionMode,
+	}
 	ctrl := gomock.NewController(t)
 	ofClient := oftest.NewMockClient(ctrl)
 	c := NewMCDefaultRouteController(
@@ -53,8 +77,9 @@ func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) *f
 		ciImportInformer,
 		ofClient,
 		nodeConfig,
-		true,
-		true,
+		networkConfig,
+		routeClient,
+		multiclusterConfig,
 	)
 	return &fakeRouteController{
 		MCDefaultRouteController: c,
@@ -67,6 +92,7 @@ func newMCDefaultRouteController(t *testing.T, nodeConfig *config.NodeConfig) *f
 var (
 	gw1CreationTime = metav1.NewTime(time.Now())
 	gw2CreationTime = metav1.NewTime(time.Now().Add(10 * time.Minute))
+	gw4CreationTime = metav1.NewTime(time.Now())
 	gateway1        = mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "node-1",
@@ -87,6 +113,20 @@ var (
 	}
 	gw1GatewayIP  = net.ParseIP(gateway1.GatewayIP)
 	gw2InternalIP = net.ParseIP(gateway2.InternalIP)
+
+	gateway4 = mcv1alpha1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "node-4",
+			Namespace:         "default",
+			CreationTimestamp: gw4CreationTime,
+		},
+		GatewayIP:   "172.17.0.14",
+		InternalIP:  "192.17.0.14",
+		ServiceCIDR: "10.100.0.0/16",
+		WireGuard: &mcv1alpha1.WireGuardInfo{
+			PublicKey: "key",
+		},
+	}
 
 	clusterInfoImport1 = mcv1alpha1.ClusterInfoImport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -119,10 +159,98 @@ var (
 			},
 		},
 	}
+
+	clusterInfoImport3 = mcv1alpha1.ClusterInfoImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-d-default-clusterinfo",
+			Namespace: "default",
+		},
+		Spec: mcv1alpha1.ClusterInfo{
+			ClusterID:   "cluster-d",
+			ServiceCIDR: "14.14.4.0/12",
+			GatewayInfos: []mcv1alpha1.GatewayInfo{
+				{
+					GatewayIP: "12.13.0.10",
+				},
+			},
+			PodCIDRs: []string{
+				"10.10.0.0/16",
+			},
+			WireGuard: &mcv1alpha1.WireGuardInfo{
+				PublicKey: "key",
+			},
+		},
+	}
 )
 
+func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockInterface := routemock.NewMockInterface(ctrl)
+	networkConfig := &config.NetworkConfig{}
+	c := newMCDefaultRouteController(t,
+		&config.NodeConfig{
+			Name: "node-4",
+			PodIPv4CIDR: &net.IPNet{
+				IP: net.ParseIP("10.10.0.0"),
+			},
+		},
+		networkConfig,
+		agent.WireGuardConfig{},
+		mockInterface,
+		"wireGuard",
+	)
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	wireGuardNewFunc = func(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (wireguard.Interface, error) {
+		return &wireguardmock.MockWireGuardClient{}, nil
+	}
+
+	finishCh := make(chan struct{})
+	go func() {
+		defer close(finishCh)
+
+		// Create Gateway4
+		c.mcClient.MulticlusterV1alpha1().Gateways(gateway4.GetNamespace()).Create(context.TODO(),
+			&gateway4, metav1.CreateOptions{})
+		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), true).Times(1)
+		c.processNextWorkItem()
+		c.processNextWorkItem()
+
+		// Create ClusterInfoImport3
+		c.mcClient.MulticlusterV1alpha1().ClusterInfoImports(clusterInfoImport3.GetNamespace()).
+			Create(context.TODO(), &clusterInfoImport3, metav1.CreateOptions{})
+		peerNodeIP3 := getPeerGatewayTunnelIP(clusterInfoImport3.Spec, true)
+		c.ofClient.EXPECT().InstallMulticlusterGatewayFlows(clusterInfoImport3.Name,
+			gomock.Any(), peerNodeIP3, gomock.Any(), true).Times(1)
+		mockInterface.EXPECT().AddRouteForLink(gomock.Any(), 0).Times(1)
+		c.processNextWorkItem()
+
+		// Delete Gateway
+		c.mcClient.MulticlusterV1alpha1().Gateways(gateway4.GetNamespace()).Delete(context.TODO(),
+			gateway4.Name, metav1.DeleteOptions{})
+		c.ofClient.EXPECT().UninstallMulticlusterFlows(clusterInfoImport3.Name).Times(1)
+		c.processNextWorkItem()
+	}()
+	select {
+	case <-time.After(5 * time.Second):
+		t.Errorf("Test didn't finish in time")
+	case <-finishCh:
+	}
+}
+
 func TestMCRouteControllerAsGateway(t *testing.T) {
-	c := newMCDefaultRouteController(t, &config.NodeConfig{Name: "node-1"})
+	c := newMCDefaultRouteController(
+		t,
+		&config.NodeConfig{Name: "node-1"},
+		&config.NetworkConfig{},
+		agent.WireGuardConfig{},
+		nil,
+		"none",
+	)
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -143,14 +271,14 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 		// Create two ClusterInfoImports
 		c.mcClient.MulticlusterV1alpha1().ClusterInfoImports(clusterInfoImport1.GetNamespace()).
 			Create(context.TODO(), &clusterInfoImport1, metav1.CreateOptions{})
-		peerNodeIP1 := getPeerGatewayIP(clusterInfoImport1.Spec)
+		peerNodeIP1 := getPeerGatewayTunnelIP(clusterInfoImport1.Spec, false)
 		c.ofClient.EXPECT().InstallMulticlusterGatewayFlows(clusterInfoImport1.Name,
 			gomock.Any(), peerNodeIP1, gw1GatewayIP, true).Times(1)
 		c.processNextWorkItem()
 
 		c.mcClient.MulticlusterV1alpha1().ClusterInfoImports(clusterInfoImport2.GetNamespace()).
 			Create(context.TODO(), &clusterInfoImport2, metav1.CreateOptions{})
-		peerNodeIP2 := getPeerGatewayIP(clusterInfoImport2.Spec)
+		peerNodeIP2 := getPeerGatewayTunnelIP(clusterInfoImport2.Spec, false)
 		c.ofClient.EXPECT().InstallMulticlusterGatewayFlows(clusterInfoImport2.Name,
 			gomock.Any(), peerNodeIP2, gw1GatewayIP, true).Times(1)
 		c.processNextWorkItem()
@@ -207,7 +335,14 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 }
 
 func TestMCRouteControllerAsRegularNode(t *testing.T) {
-	c := newMCDefaultRouteController(t, &config.NodeConfig{Name: "node-3"})
+	c := newMCDefaultRouteController(
+		t,
+		&config.NodeConfig{Name: "node-3"},
+		&config.NetworkConfig{},
+		agent.WireGuardConfig{},
+		nil,
+		"none",
+	)
 	defer c.queue.ShutDown()
 
 	stopCh := make(chan struct{})
@@ -288,5 +423,191 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
+	}
+}
+
+func TestRemoveWireGuardRouteAndPeer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockInterface := routemock.NewMockInterface(ctrl)
+	networkConfig := &config.NetworkConfig{}
+	c := newMCDefaultRouteController(t,
+		&config.NodeConfig{
+			Name: "node-4",
+			PodIPv4CIDR: &net.IPNet{
+				IP: net.ParseIP("10.10.0.0/16"),
+			},
+		},
+		networkConfig,
+		agent.WireGuardConfig{},
+		mockInterface,
+		"wireGuard",
+	)
+	c.wireGuardClient = &wireguardmock.MockWireGuardClient{}
+	defer c.queue.ShutDown()
+	mockInterface.EXPECT().DeleteRouteForLink(gomock.Any(), gomock.Any()).Times(1)
+
+	testCases := []struct {
+		name        string
+		ciImport    *mcv1alpha1.ClusterInfoImport
+		expectError error
+	}{
+		{
+			name: "remove peer successfully",
+			ciImport: &mcv1alpha1.ClusterInfoImport{
+				Spec: mcv1alpha1.ClusterInfo{
+					ServiceCIDR: "10.100.0.0/16",
+				},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectError, c.removeWireGuardRouteAndPeer(tt.ciImport))
+		})
+	}
+}
+
+func TestEnqueueGateway(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockInterface := routemock.NewMockInterface(ctrl)
+	networkConfig := &config.NetworkConfig{}
+	c := newMCDefaultRouteController(t,
+		&config.NodeConfig{
+			Name: "node-4",
+			PodIPv4CIDR: &net.IPNet{
+				IP: net.ParseIP("10.10.0.0/16"),
+			},
+		},
+		networkConfig,
+		agent.WireGuardConfig{},
+		mockInterface,
+		"wireGuard",
+	)
+	c.wireGuardClient = &wireguardmock.MockWireGuardClient{}
+	defer c.queue.ShutDown()
+
+	testCases := []struct {
+		name      string
+		obj       interface{}
+		isDeleted bool
+		expectNum int
+	}{
+		{
+			name:      "gateway is deleted, enqueue successfully",
+			obj:       &mcv1alpha1.Gateway{},
+			isDeleted: true,
+			expectNum: 1,
+		},
+		{
+			name: "gateway deleted, enqueue successfully",
+			obj: &mcv1alpha1.Gateway{
+				InternalIP: "10.10.1.1",
+				GatewayIP:  "10.10.1.1",
+			},
+			isDeleted: true,
+			expectNum: 1,
+		},
+		{
+			name:      "gateway not deleted, enqueue failed",
+			obj:       &mcv1alpha1.Gateway{},
+			isDeleted: false,
+			expectNum: 0,
+		},
+		{
+			name:      "unexpect object",
+			obj:       map[string]string{},
+			isDeleted: false,
+			expectNum: 0,
+		},
+
+		{
+			name: "invalid delete state",
+			obj: cache.DeletedFinalStateUnknown{
+				Obj: map[string]string{},
+			},
+			isDeleted: false,
+			expectNum: 0,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute")
+			c.enqueueGateway(tt.obj, tt.isDeleted)
+			assert.Equal(t, tt.expectNum, c.queue.Len())
+		})
+	}
+}
+
+func TestEnqueueClusterInfoImport(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockInterface := routemock.NewMockInterface(ctrl)
+	networkConfig := &config.NetworkConfig{}
+	c := newMCDefaultRouteController(t,
+		&config.NodeConfig{
+			Name: "node-4",
+			PodIPv4CIDR: &net.IPNet{
+				IP: net.ParseIP("10.10.0.0/16"),
+			},
+		},
+		networkConfig,
+		agent.WireGuardConfig{},
+		mockInterface,
+		"wireGuard",
+	)
+	c.wireGuardClient = &wireguardmock.MockWireGuardClient{}
+	defer c.queue.ShutDown()
+
+	testCases := []struct {
+		name      string
+		obj       interface{}
+		isDeleted bool
+		expectNum int
+	}{
+		{
+			name:      "ClusterInfoImport without GatewayInfo",
+			obj:       &mcv1alpha1.ClusterInfoImport{},
+			isDeleted: false,
+			expectNum: 0,
+		},
+		{
+			name: "ClusterInfoImport without Gateway IP",
+			obj: &mcv1alpha1.ClusterInfoImport{
+				Spec: mcv1alpha1.ClusterInfo{
+					GatewayInfos: []mcv1alpha1.GatewayInfo{
+						{
+							GatewayIP: "abc",
+						},
+					},
+				},
+			},
+			isDeleted: false,
+			expectNum: 0,
+		},
+		{
+			name:      "unexpected object",
+			obj:       map[string]string{},
+			expectNum: 0,
+		},
+		{
+			name:      "invalid delete state",
+			obj:       cache.DeletedFinalStateUnknown{},
+			expectNum: 0,
+		},
+		{
+			name:      "ClusterInfoImport delete, enqueue successfully",
+			obj:       &mcv1alpha1.ClusterInfoImport{},
+			isDeleted: true,
+			expectNum: 1,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute")
+			c.enqueueClusterInfoImport(tt.obj, tt.isDeleted)
+			assert.Equal(t, tt.expectNum, c.queue.Len())
+		})
 	}
 }

@@ -24,7 +24,7 @@ tunnelPort: 0
 # observing poor transfer performance.
 tunnelCsum: false
 # -- Determines how tunnel traffic is encrypted. Currently encryption only works
-# with encap mode.It must be one of "none", "ipsec", "wireGuard".
+# with encap mode. It must be one of "none", "ipsec", "wireGuard".
 trafficEncryptionMode: "none"
 # -- Enable bridging mode of Pod network on Nodes, in which the Node's transport
 # interface is connected to the OVS bridge.
@@ -342,6 +342,15 @@ multicluster:
   enableStretchedNetworkPolicy: false
   # -- Enable Multi-cluster Pod to Pod connectivity.
   enablePodToPodConnectivity: false
+  # -- Determines how cross-cluster traffic is encrypted.
+  # It has the following options:
+  # - none (default):  Cross-cluster traffic will not be encrypted.
+  # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
+  trafficEncryptionMode: "none"
+  # WireGuard tunnel configuration for cross-cluster traffic.
+  wireGuard:
+    # -- WireGuard tunnel port for cross-cluster traffic.
+    port: 51821
 
 testing:
   # -- Enable code coverage measurement (used when testing Antrea only).

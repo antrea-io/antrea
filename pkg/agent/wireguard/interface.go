@@ -20,14 +20,18 @@ import (
 
 type Interface interface {
 	// Init initializes the WireGuard client and sets up the WireGuard device.
-	// It will generate a new private key if necessary and update the public key to the Node's annotation.
-	Init() error
+	// It will generate a new private key if necessary.
+	// If IPv4 or IPv6 address specified, it will be set as the WireGuard interface's
+	// IP address.
+	Init(ipv4 net.IP, ipv6 net.IP) (string, error)
 	// UpdatePeer updates WireGuard peer by provided public key and Node IPs.
 	// It will create a new WireGuard peer if the specified Node is not present in WireGuard device.
-	UpdatePeer(nodeName, publicKeyString string, peerNodeIP net.IP, podCIDRs []*net.IPNet) error
+	UpdatePeer(nodeName, publicKeyString string, peerNodeIP net.IP, allowedIPs []*net.IPNet) error
 	// RemoveStalePeers reads existing WireGuard peers from the WireGuard device and deletes those which are not in currentPeerPublickeys.
 	// currentPeerPublickeys is a map of Node names to public keys. It is useful to clean up stale WireGuard peers upon antrea starting.
 	RemoveStalePeers(currentPeerPublickeys map[string]string) error
 	// DeletePeer deletes the WireGuard peer by Node name.
 	DeletePeer(nodeName string) error
+	// CleanUp cleans the network interface on the host created by WireGuard client.
+	CleanUp() error
 }

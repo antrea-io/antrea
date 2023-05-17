@@ -18,8 +18,6 @@
 package wireguard
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -31,14 +29,9 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apitypes "k8s.io/apimachinery/pkg/types"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 )
 
@@ -65,14 +58,13 @@ var (
 type client struct {
 	wgClient                wgctrlClient
 	nodeName                string
-	k8sClient               clientset.Interface
 	privateKey              wgtypes.Key
 	peerPublicKeyByNodeName *sync.Map
 	wireGuardConfig         *config.WireGuardConfig
 	gatewayConfig           *config.GatewayConfig
 }
 
-func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
+func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
 	wgClient, err := wgctrl.New()
 	if err != nil {
 		return nil, err
@@ -83,7 +75,6 @@ func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuard
 	c := &client{
 		wgClient:                wgClient,
 		nodeName:                nodeConfig.Name,
-		k8sClient:               clientSet,
 		wireGuardConfig:         wireGuardConfig,
 		peerPublicKeyByNodeName: &sync.Map{},
 		gatewayConfig:           nodeConfig.GatewayConfig,
@@ -91,31 +82,42 @@ func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuard
 	return c, nil
 }
 
-func (client *client) Init() error {
+func (client *client) Init(ipv4 net.IP, ipv6 net.IP) (string, error) {
 	link := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: client.wireGuardConfig.Name, MTU: client.wireGuardConfig.MTU}}
 	err := linkAdd(link)
 	// Ignore existing link as it may have already been created or managed by userspace process.
 	if err != nil && !errors.Is(err, unix.EEXIST) {
 		if errors.Is(err, unix.EOPNOTSUPP) {
-			return fmt.Errorf("WireGuard not supported by the Linux kernel (netlink: %w), make sure the WireGuard kernel module is loaded", err)
+			return "", fmt.Errorf("WireGuard not supported by the Linux kernel (netlink: %w), make sure the WireGuard kernel module is loaded", err)
 		}
-		return err
+		return "", err
 	}
 	if err := linkSetUp(link); err != nil {
-		return err
+		return "", err
 	}
 	// Configure the IP addresses same as Antrea gateway so iptables MASQUERADE target will select it as source address.
 	// It's necessary to make Service traffic requiring SNAT (e.g. host to ClusterIP, external to NodePort) accepted by
 	// peer Node and to make their response routed back correctly.
+	// If ipv4 or ipv6 is not provided, the IP address from client's Gateway configuration will be used.
 	// It uses "/32" mask for IPv4 address and "/128" mask for IPv6 address to avoid impacting routes on Antrea gateway.
 	var gatewayIPs []*net.IPNet
-	if client.gatewayConfig.IPv4 != nil {
+	if ipv4 != nil {
+		gatewayIPs = append(gatewayIPs, &net.IPNet{
+			IP:   ipv4,
+			Mask: net.CIDRMask(32, 32),
+		})
+	} else if client.gatewayConfig.IPv4 != nil {
 		gatewayIPs = append(gatewayIPs, &net.IPNet{
 			IP:   client.gatewayConfig.IPv4,
 			Mask: net.CIDRMask(32, 32),
 		})
 	}
-	if client.gatewayConfig.IPv6 != nil {
+	if ipv6 != nil {
+		gatewayIPs = append(gatewayIPs, &net.IPNet{
+			IP:   ipv6,
+			Mask: net.CIDRMask(128, 128),
+		})
+	} else if client.gatewayConfig.IPv6 != nil {
 		gatewayIPs = append(gatewayIPs, &net.IPNet{
 			IP:   client.gatewayConfig.IPv6,
 			Mask: net.CIDRMask(128, 128),
@@ -123,12 +125,12 @@ func (client *client) Init() error {
 	}
 	// This must be executed after netlink.LinkSetUp as the latter ensures link.Attrs().Index is set.
 	if err := utilConfigureLinkAddresses(link.Attrs().Index, gatewayIPs); err != nil {
-		return err
+		return "", err
 	}
 	client.wireGuardConfig.LinkIndex = link.Attrs().Index
 	wgDev, err := client.wgClient.Device(client.wireGuardConfig.Name)
 	if err != nil {
-		return err
+		return "", err
 	}
 	client.privateKey = wgDev.PrivateKey
 	// WireGuard private key will be persistent across agent restarts. So we only need to
@@ -136,7 +138,7 @@ func (client *client) Init() error {
 	if client.privateKey == zeroKey {
 		newPkey, err := wgtypes.GeneratePrivateKey()
 		if err != nil {
-			return err
+			return "", err
 		}
 		client.privateKey = newPkey
 	}
@@ -145,21 +147,8 @@ func (client *client) Init() error {
 		ListenPort:   &client.wireGuardConfig.Port,
 		ReplacePeers: false,
 	}
-	patch, _ := json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": map[string]string{
-				types.NodeWireGuardPublicAnnotationKey: client.privateKey.PublicKey().String(),
-			},
-		},
-	})
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := client.k8sClient.CoreV1().Nodes().Patch(context.TODO(), client.nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{}, "status")
-		return err
-	}); err != nil {
-		return fmt.Errorf("error when patching the Node with the '%s' annotation: %w", types.NodeWireGuardPublicAnnotationKey, err)
-	}
 
-	return client.wgClient.ConfigureDevice(client.wireGuardConfig.Name, cfg)
+	return client.privateKey.PublicKey().String(), client.wgClient.ConfigureDevice(client.wireGuardConfig.Name, cfg)
 }
 
 func (client *client) RemoveStalePeers(currentPeerPublickeys map[string]string) error {
@@ -254,5 +243,15 @@ func (client *client) DeletePeer(nodeName string) error {
 		return err
 	}
 	client.peerPublicKeyByNodeName.Delete(nodeName)
+	return nil
+}
+
+func (client *client) CleanUp() error {
+	if err := netlink.LinkDel(&netlink.Device{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: client.wireGuardConfig.Name, Index: client.wireGuardConfig.LinkIndex,
+		}}); err != nil && err.Error() != "no such device" {
+		return err
+	}
 	return nil
 }
