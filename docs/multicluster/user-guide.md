@@ -9,6 +9,7 @@
   - [Deploy Antrea Multi-cluster Controller](#deploy-antrea-multi-cluster-controller)
   - [Create ClusterSet](#create-clusterset)
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
+  - [Multi-cluster WireGuard Encryption](#multi-cluster-wireguard-encryption)
 - [Multi-cluster Service](#multi-cluster-service)
 - [Multi-cluster Pod to Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 - [Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy)
@@ -447,6 +448,30 @@ clusters. Once you confirm that all `Gateway` and `ClusterInfoImport` are
 created correctly, you can follow the [Multi-cluster Service](#multi-cluster-service)
 section to create multi-cluster Services and verify cross-cluster Service
 access.
+
+### Multi-cluster WireGuard Encryption
+
+Since Antrea v1.12.0, Antrea Multi-cluster supports WireGuard tunnel between
+member clusters. If WireGuard is enabled, the WireGuard interface and routes
+will be created by Antrea Agent on the Gateway Node, and all cross-cluster
+traffic will be encrypted and forwarded to the WireGuard tunnel.
+
+To enable the WireGuard encryption, the `TrafficEncryptMode`
+in Multi-cluster configuration should be set to `wireGuard` and the `enableGateway`
+field should be set to `true` as follows:
+
+```yaml
+antrea-agent.conf: |
+  featureGates:
+...
+    Multicluster: true
+...
+    multicluster:
+      enableGateway: true
+      trafficEncryptionMode: "wireGuard"
+      wireGuard:
+        port: 51821
+```
 
 ## Multi-cluster Service
 
