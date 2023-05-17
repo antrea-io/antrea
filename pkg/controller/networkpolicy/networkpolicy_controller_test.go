@@ -3044,6 +3044,92 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	checkGroupItemExistence(t, c.appliedToGroupStore)
 }
 
+// TestSyncInternalNetworkPolicyWithSameName verifies SyncInternalNetworkPolicy can work correctly when processing
+// multiple NetworkPolicies that have the same name.
+func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
+	// policyA and policyB have the same name but different UIDs.
+	policyA := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "uidA"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorA,
+		},
+	}
+	policyB := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "uidB"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorB,
+		},
+	}
+
+	selectorAGroup := getNormalizedUID(antreatypes.NewGroupSelector("default", &selectorA, nil, nil, nil).NormalizedName)
+	selectorBGroup := getNormalizedUID(antreatypes.NewGroupSelector("default", &selectorB, nil, nil, nil).NormalizedName)
+	expectedPolicyA := &antreatypes.NetworkPolicy{
+		UID:      "uidA",
+		Name:     "uidA",
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString()},
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "default",
+			Name:      "foo",
+			UID:       "uidA",
+		},
+		AppliedToGroups: []string{selectorAGroup},
+		Rules:           []controlplane.NetworkPolicyRule{},
+	}
+	expectedPolicyB := &antreatypes.NetworkPolicy{
+		UID:      "uidB",
+		Name:     "uidB",
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString()},
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "default",
+			Name:      "foo",
+			UID:       "uidB",
+		},
+		AppliedToGroups: []string{selectorBGroup},
+		Rules:           []controlplane.NetworkPolicyRule{},
+	}
+
+	// Add and sync policyA first, it should create an AppliedToGroup.
+	_, c := newController()
+	c.networkPolicyStore.Add(policyA)
+	networkPolicyRefA := getKNPReference(policyA)
+	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefA))
+	obj, exists, _ := c.internalNetworkPolicyStore.Get(expectedPolicyA.Name)
+	require.True(t, exists)
+	assert.Equal(t, expectedPolicyA, obj.(*antreatypes.NetworkPolicy))
+	checkGroupItemExistence(t, c.appliedToGroupStore, selectorAGroup)
+
+	// Delete policyA and add policyB, then sync them concurrently, the resources associated with policyA should be deleted.
+	c.networkPolicyStore.Delete(policyA)
+	c.networkPolicyStore.Add(policyB)
+	networkPolicyRefB := getKNPReference(policyB)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefA))
+	}()
+	go func() {
+		defer wg.Done()
+		assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefB))
+	}()
+	wg.Wait()
+	_, exists, _ = c.internalNetworkPolicyStore.Get(expectedPolicyA.Name)
+	require.False(t, exists)
+	obj, exists, _ = c.internalNetworkPolicyStore.Get(expectedPolicyB.Name)
+	require.True(t, exists)
+	assert.Equal(t, expectedPolicyB, obj.(*antreatypes.NetworkPolicy))
+	checkGroupItemExistence(t, c.appliedToGroupStore, selectorBGroup)
+
+	// Delete policyB and sync it, the resources associated with policyB should be deleted.
+	c.networkPolicyStore.Delete(policyB)
+	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefB))
+	_, exists, _ = c.internalNetworkPolicyStore.Get(expectedPolicyB.Name)
+	require.False(t, exists)
+	checkGroupItemExistence(t, c.appliedToGroupStore)
+}
+
 // TestSyncInternalNetworkPolicyConcurrently verifies SyncInternalNetworkPolicy can create and delete AppliedToGroups
 // and AddressGroups correctly when concurrently processing multiple NetworkPolicies that refer to the same groups.
 func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
