@@ -63,7 +63,7 @@ function print_help {
 
 
 SRIOV_PLUGIN_REL_TAG=v3.5.1
-WHEREABOUTS_CNI_REL_TAG=v0.5.4
+WHEREABOUTS_CNI_REL_TAG=v0.6.1
 export URL_SRIOV_DP_CONFIG_MAP="https://raw.githubusercontent.com/k8snetworkplumbingwg/sriov-network-device-plugin/$SRIOV_PLUGIN_REL_TAG/deployments/configMap.yaml"
 export URL_SRIOV_DP_DAEMONSET="https://raw.githubusercontent.com/k8snetworkplumbingwg/sriov-network-device-plugin/$SRIOV_PLUGIN_REL_TAG/deployments/k8s-v1.16/sriovdp-daemonset.yaml"
 export YAML_ANTREA='antrea.yml'
