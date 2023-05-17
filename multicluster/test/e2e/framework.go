@@ -132,6 +132,15 @@ func (data *MCTestData) createTestNamespaces() error {
 	return nil
 }
 
+func (data *MCTestData) patchPod(clusterName, namespace, name string, patch []byte) error {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		if err := d.PatchPod(namespace, name, patch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (data *MCTestData) deletePod(clusterName, namespace, name string) error {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
 		if err := d.DeletePod(namespace, name); err != nil {
