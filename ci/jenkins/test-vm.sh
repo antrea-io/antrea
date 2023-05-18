@@ -114,8 +114,11 @@ function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
     clean_up_one_ns $TEST_NAMESPACE
     kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true
-    docker image prune -f --filter "until=1h" || true > /dev/null
+    # The cleanup and stats are best-effort.
+    set +e
+    docker image prune -f --filter "until=1h" > /dev/null
     docker system df -v
+    set -e
 }
 
 function apply_antrea {
