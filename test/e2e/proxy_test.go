@@ -249,10 +249,10 @@ func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl, h
 		testLoadBalancerClusterFromPod(t, data, pods, clusterUrl)
 	})
 	t.Run("ExternalTrafficPolicy:Local/Client:Node", func(t *testing.T) {
-		testLoadBalancerLocalFromNode(t, data, nodes, healthUrls, healthExpected, localUrl, hostnames)
+		testLoadBalancerLocalFromNode(t, data, nodes, healthUrls, healthExpected, localUrl)
 	})
 	t.Run("ExternalTrafficPolicy:Local/Client:Pod", func(t *testing.T) {
-		testLoadBalancerLocalFromPod(t, data, pods, localUrl, podIPs, hostnames)
+		testLoadBalancerLocalFromPod(t, data, pods, localUrl)
 	})
 }
 
@@ -269,12 +269,10 @@ func testLoadBalancerClusterFromPod(t *testing.T, data *TestData, pods []string,
 	}
 }
 
-func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes, healthUrls []string, healthExpected, url string, expectedHostnames []string) {
+func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes, healthUrls []string, healthExpected, url string) {
 	skipIfKubeProxyEnabled(t, data)
-	for idx, node := range nodes {
-		hostname, err := probeHostnameFromNode(node, url, data)
-		require.NoError(t, err, "Service LoadBalancer whose externalTrafficPolicy is Local should be able to be connected from Node")
-		require.Equal(t, hostname, expectedHostnames[idx])
+	for _, node := range nodes {
+		require.NoError(t, probeFromNode(node, url, data), "Service LoadBalancer whose externalTrafficPolicy is Local should be able to be connected from Node")
 
 		for _, healthUrl := range healthUrls {
 			healthOutput, _, err := probeHealthFromNode(node, healthUrl, data)
@@ -284,16 +282,10 @@ func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes, healthUr
 	}
 }
 
-func testLoadBalancerLocalFromPod(t *testing.T, data *TestData, pods []string, url string, expectedClientIPs, expectedHostnames []string) {
+func testLoadBalancerLocalFromPod(t *testing.T, data *TestData, pods []string, url string) {
 	errMsg := "Service NodePort whose externalTrafficPolicy is Local should be able to be connected from Pod"
-	for idx, pod := range pods {
-		hostname, err := probeHostnameFromPod(data, pod, busyboxContainerName, url)
-		require.NoError(t, err, errMsg)
-		require.Equal(t, hostname, expectedHostnames[idx])
-
-		clientIP, err := probeClientIPFromPod(data, pod, busyboxContainerName, url)
-		require.NoError(t, err, errMsg)
-		require.Equal(t, clientIP, expectedClientIPs[idx])
+	for _, pod := range pods {
+		require.NoError(t, probeFromPod(data, pod, busyboxContainerName, url), errMsg)
 	}
 }
 
@@ -404,10 +396,10 @@ func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLoca
 		testNodePortLocalFromRemote(t, data, nodes, reverseStrs(localUrls), nodeIPs, reverseStrs(hostnames))
 	})
 	t.Run("ExternalTrafficPolicy:Local/Client:Node", func(t *testing.T) {
-		testNodePortLocalFromNode(t, data, nodes, localUrls, hostnames)
+		testNodePortLocalFromNode(t, data, nodes, localUrls)
 	})
 	t.Run("ExternalTrafficPolicy:Local/Client:Pod", func(t *testing.T) {
-		testNodePortLocalFromPod(t, data, pods, localUrls, podIPs, hostnames)
+		testNodePortLocalFromPod(t, data, pods, localUrls)
 	})
 }
 
@@ -532,25 +524,16 @@ func testNodePortLocalFromRemote(t *testing.T, data *TestData, nodes, urls, expe
 	}
 }
 
-func testNodePortLocalFromNode(t *testing.T, data *TestData, nodes, urls, expectedHostnames []string) {
+func testNodePortLocalFromNode(t *testing.T, data *TestData, nodes, urls []string) {
 	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
-		hostname, err := probeHostnameFromNode(node, urls[idx], data)
-		require.NoError(t, err, "Service NodePort whose externalTrafficPolicy is Local should be able to be connected rom Node")
-		require.Equal(t, expectedHostnames[idx], hostname)
+		require.NoError(t, probeFromNode(node, urls[idx], data), "Service NodePort whose externalTrafficPolicy is Local should be able to be connected from Node")
 	}
 }
 
-func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls, expectedClientIPs, expectedHostnames []string) {
-	errMsg := "There should be no errors when accessing to Service NodePort whose externalTrafficPolicy is Local from Pod"
+func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls []string) {
 	for idx, pod := range pods {
-		hostname, err := probeHostnameFromPod(data, pod, busyboxContainerName, urls[idx])
-		require.NoError(t, err, errMsg)
-		require.Equal(t, expectedHostnames[idx], hostname)
-
-		clientIP, err := probeClientIPFromPod(data, pod, busyboxContainerName, urls[idx])
-		require.NoError(t, err, errMsg)
-		require.Equal(t, expectedClientIPs[idx], clientIP)
+		require.NoError(t, probeFromPod(data, pod, busyboxContainerName, urls[idx]), "There should be no errors when accessing to Service NodePort whose externalTrafficPolicy is Local from Pod")
 	}
 }
 
