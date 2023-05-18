@@ -151,7 +151,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 			Group:                  ruleGroup,
 		}}
 	}
-	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress)
+	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, icmpType, icmpCode, igmpType, groupAddress)
 	newRule := crdv1alpha1.Rule{
 		From:        policyPeer,
 		Ports:       ports,

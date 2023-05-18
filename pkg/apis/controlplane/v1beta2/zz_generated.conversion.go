@@ -1465,7 +1465,17 @@ func autoConvert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 	if err := Convert_v1beta2_NetworkPolicyPeer_To_controlplane_NetworkPolicyPeer(&in.To, &out.To, s); err != nil {
 		return err
 	}
-	out.Services = *(*[]controlplane.Service)(unsafe.Pointer(&in.Services))
+	if in.Services != nil {
+		in, out := &in.Services, &out.Services
+		*out = make([]controlplane.Service, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta2_Service_To_controlplane_Service(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Services = nil
+	}
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
@@ -1488,7 +1498,17 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(in 
 	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta2_NetworkPolicyPeer(&in.To, &out.To, s); err != nil {
 		return err
 	}
-	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
+	if in.Services != nil {
+		in, out := &in.Services, &out.Services
+		*out = make([]Service, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_Service_To_v1beta2_Service(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Services = nil
+	}
 	out.Name = in.Name
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
@@ -1678,6 +1698,8 @@ func autoConvert_v1beta2_Service_To_controlplane_Service(in *Service, out *contr
 	out.ICMPCode = (*int32)(unsafe.Pointer(in.ICMPCode))
 	out.IGMPType = (*int32)(unsafe.Pointer(in.IGMPType))
 	out.GroupAddress = in.GroupAddress
+	out.SrcPort = (*int32)(unsafe.Pointer(in.SrcPort))
+	out.SrcEndPort = (*int32)(unsafe.Pointer(in.SrcEndPort))
 	return nil
 }
 
@@ -1690,6 +1712,8 @@ func autoConvert_controlplane_Service_To_v1beta2_Service(in *controlplane.Servic
 	out.Protocol = (*Protocol)(unsafe.Pointer(in.Protocol))
 	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
 	out.EndPort = (*int32)(unsafe.Pointer(in.EndPort))
+	out.SrcPort = (*int32)(unsafe.Pointer(in.SrcPort))
+	out.SrcEndPort = (*int32)(unsafe.Pointer(in.SrcEndPort))
 	out.ICMPType = (*int32)(unsafe.Pointer(in.ICMPType))
 	out.ICMPCode = (*int32)(unsafe.Pointer(in.ICMPCode))
 	out.IGMPType = (*int32)(unsafe.Pointer(in.IGMPType))

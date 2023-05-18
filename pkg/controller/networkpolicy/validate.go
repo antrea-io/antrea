@@ -285,17 +285,24 @@ func (v *antreaPolicyValidator) validatePort(ingress, egress []crdv1alpha1.Rule)
 	isValid := func(rules []crdv1alpha1.Rule) error {
 		for _, rule := range rules {
 			for _, port := range rule.Ports {
-				if port.EndPort == nil {
-					continue
+				if port.EndPort != nil {
+					if port.Port == nil {
+						return fmt.Errorf("if `endPort` is specified `port` must be specified")
+					}
+					if port.Port.Type == intstr.String {
+						return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
+					}
+					if *port.EndPort < port.Port.IntVal {
+						return fmt.Errorf("`endPort` should be greater than or equal to `port`")
+					}
 				}
-				if port.Port == nil {
-					return fmt.Errorf("if `endPort` is specified `port` must be specified")
-				}
-				if port.Port.Type == intstr.String {
-					return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
-				}
-				if *port.EndPort < port.Port.IntVal {
-					return fmt.Errorf("`endPort` should be greater than or equal to `port`")
+				if port.SourceEndPort != nil {
+					if port.SourcePort == nil {
+						return fmt.Errorf("if `sourceEndPort` is specified `sourcePort` must be specified")
+					}
+					if *port.SourceEndPort < *port.SourcePort {
+						return fmt.Errorf("`sourceEndPort` should be greater than or equal to `sourcePort`")
+					}
 				}
 			}
 		}

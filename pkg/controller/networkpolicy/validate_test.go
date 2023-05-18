@@ -894,6 +894,34 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "if `endPort` is specified `port` must be specified",
 		},
 		{
+			name: "acnp-sourceendport-without-sourceport-in-ports",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-sourceendport-without-port-in-ports",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							Ports: []crdv1alpha1.NetworkPolicyPort{
+								{
+									SourceEndPort: &int32For32230,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "if `sourceEndPort` is specified `sourcePort` must be specified",
+		},
+		{
 			name: "acnp-endport-smaller-port-in-ports",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -921,6 +949,35 @@ func TestValidateAntreaPolicy(t *testing.T) {
 				},
 			},
 			expectedReason: "`endPort` should be greater than or equal to `port`",
+		},
+		{
+			name: "acnp-sourceendport-smaller-sourceport-in-ports",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-sourceendport-smaller-port-in-ports",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							Ports: []crdv1alpha1.NetworkPolicyPort{
+								{
+									SourcePort:    &int32For32230,
+									SourceEndPort: &int32For32220,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "`sourceEndPort` should be greater than or equal to `sourcePort`",
 		},
 		{
 			name: "acnp-named-port-with-endport-in-ports",

@@ -581,10 +581,18 @@ type NetworkPolicyPort struct {
 	// matches all port names and numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty"`
-	// EndPort defines the end of the port range, being the end included within the range.
+	// EndPort defines the end of the port range, inclusive.
 	// It can only be specified when a numerical `port` is specified.
 	// +optional
 	EndPort *int32 `json:"endPort,omitempty"`
+	// The source port on the given protocol. This can only be a numerical port.
+	// If this field is not provided, rule matches all source ports.
+	// +optional
+	SourcePort *int32 `json:"sourcePort,omitempty"`
+	// SourceEndPort defines the end of the source port range, inclusive.
+	// It can only be specified when `sourcePort` is specified.
+	// +optional
+	SourceEndPort *int32 `json:"sourceEndPort,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.
@@ -595,9 +603,9 @@ const (
 	RuleActionAllow RuleAction = "Allow"
 	// RuleActionDrop describes that the traffic matching the rule must be dropped.
 	RuleActionDrop RuleAction = "Drop"
-	// RuleActionPass indicates that the traffic matching the rule will not be evalutated
+	// RuleActionPass indicates that the traffic matching the rule will not be evaluated
 	// by Antrea NetworkPolicy or ClusterNetworkPolicy, but rather punt to K8s namespaced
-	// NetworkPolicy for evaluaion.
+	// NetworkPolicy for evaluation.
 	RuleActionPass RuleAction = "Pass"
 	// RuleActionReject indicates that the traffic matching the rule must be rejected and the
 	// client will receive a response.

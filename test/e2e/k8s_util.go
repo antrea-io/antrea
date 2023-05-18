@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -129,6 +130,31 @@ func (k *KubernetesUtils) LabelPod(ns, name, key, value string) (*v1.Pod, error)
 	}
 	pod.Labels[key] = value
 	return k.clientset.CoreV1().Pods(ns).Update(context.TODO(), pod, metav1.UpdateOptions{})
+}
+
+func (k *KubernetesUtils) getTCPv4SourcePortRangeFromPod(podNamespace, podNameLabel string) (int32, int32, error) {
+	pod, err := k.GetPodByLabel(podNamespace, podNameLabel)
+	if err != nil {
+		return 0, 0, err
+	}
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		"cat /proc/sys/net/ipv4/ip_local_port_range",
+	}
+	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, "c80", cmd)
+	if err != nil || stderr != "" {
+		log.Errorf("Failed to retrieve TCP source port range for Pod %s/%s", podNamespace, podNameLabel)
+		return 0, 0, err
+	}
+	ports := strings.Fields(stdout)
+	if len(ports) < 2 {
+		log.Errorf("Failed to retrieve TCP source port range for Pod %s/%s", podNamespace, podNameLabel)
+		return 0, 0, err
+	}
+	startPort, _ := strconv.ParseInt(ports[0], 0, 32)
+	endPort, _ := strconv.ParseInt(ports[1], 0, 32)
+	return int32(startPort), int32(endPort), nil
 }
 
 func (k *KubernetesUtils) probe(

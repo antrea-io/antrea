@@ -75,7 +75,9 @@ var (
 	int81   = intstr.FromInt(81)
 	int1000 = intstr.FromInt(1000)
 
-	int32For1999 = int32(1999)
+	int32For1999  = int32(1999)
+	int32For32220 = int32(32220)
+	int32For32230 = int32(32230)
 
 	strHTTP = intstr.FromString("http")
 )
