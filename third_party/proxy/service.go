@@ -164,10 +164,10 @@ func (info *BaseServiceInfo) ExternallyAccessible() bool {
 
 // UsesClusterEndpoints is part of ServicePort interface.
 func (info *BaseServiceInfo) UsesClusterEndpoints() bool {
-	// TODO(hongliang): support short-circuit. Refer to this link https://github.com/kubernetes/kubernetes/issues/108526
-	// for more details.
-	// The service port uses Cluster endpoints if the internal or external traffic policy is "Cluster".
-	return !info.internalPolicyLocal || (!info.externalPolicyLocal && info.ExternallyAccessible())
+	// The service port uses Cluster endpoints if the internal traffic policy is "Cluster",
+	// or it is externally accessible (like NodePort, LoadBalancer or ExternalIP, even the
+	// external traffic policy is "Local", we need Cluster endpoints to implement short-circuiting.)
+	return !info.internalPolicyLocal || info.ExternallyAccessible()
 }
 
 // UsesLocalEndpoints is part of ServicePort interface.
