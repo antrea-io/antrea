@@ -1386,6 +1386,16 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 	return NewPodBuilder(name, ns, agnhostImage).WithContainerName(containerName).WithCommand(cmd).WithEnv([]corev1.EnvVar{env}).WithPorts([]corev1.ContainerPort{port}).WithLabels(labels).Create(data)
 }
 
+func (data *TestData) PatchPod(namespace, name string, patch []byte) error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := data.clientset.CoreV1().Pods(namespace).Patch(context.TODO(), name, types.MergePatchType, patch, metav1.PatchOptions{})
+		return err
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 // DeletePod deletes a Pod in the test namespace.
 func (data *TestData) DeletePod(namespace, name string) error {
 	var gracePeriodSeconds int64 = 5
