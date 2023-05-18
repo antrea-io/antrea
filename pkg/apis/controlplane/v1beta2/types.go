@@ -300,6 +300,11 @@ type Service struct {
 	// +optional
 	IGMPType     *int32 `json:"igmpType,omitempty" protobuf:"varint,6,opt,name=igmpType"`
 	GroupAddress string `json:"groupAddress,omitempty" protobuf:"bytes,7,opt,name=groupAddress"`
+	// SrcPort and SrcEndPort can only be specified, when the Protocol is TCP, UDP, or SCTP.
+	// It restricts the source port of the traffic.
+	// +optional
+	SrcPort    *int32 `json:"srcPort,omitempty" protobuf:"bytes,8,opt,name=srcPort"`
+	SrcEndPort *int32 `json:"srcEndPort,omitempty" protobuf:"bytes,9,opt,name=srcEndPort"`
 }
 
 // L7Protocol defines application layer protocol to match.

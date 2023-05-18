@@ -2134,6 +2134,19 @@ func schema_pkg_apis_controlplane_v1beta2_Service(ref common.ReferenceCallback) 
 							Format: "",
 						},
 					},
+					"srcPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SrcPort and SrcEndPort can only be specified, when the Protocol is TCP, UDP, or SCTP. It restricts the source port of the traffic.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"srcEndPort": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
 				},
 			},
 		},

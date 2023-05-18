@@ -597,6 +597,10 @@ spec:
                               x-kubernetes-int-or-string: true
                             endPort:
                               type: integer
+                            sourcePort:
+                              type: integer
+                            sourceEndPort:
+                              type: integer
                       protocols:
                         type: array
                         items:
@@ -842,6 +846,10 @@ spec:
                             port:
                               x-kubernetes-int-or-string: true
                             endPort:
+                              type: integer
+                            sourcePort:
+                              type: integer
+                            sourceEndPort:
                               type: integer
                       protocols:
                         type: array
@@ -1694,6 +1702,10 @@ spec:
                               x-kubernetes-int-or-string: true
                             endPort:
                               type: integer
+                            sourcePort:
+                              type: integer
+                            sourceEndPort:
+                              type: integer
                       protocols:
                         type: array
                         items:
@@ -1912,6 +1924,10 @@ spec:
                             port:
                               x-kubernetes-int-or-string: true
                             endPort:
+                              type: integer
+                            sourcePort:
+                              type: integer
+                            sourceEndPort:
                               type: integer
                       protocols:
                         type: array

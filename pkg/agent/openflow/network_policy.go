@@ -60,6 +60,8 @@ var (
 	MatchUDPv6DstPort   = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_dst")
 	MatchSCTPDstPort    = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
 	MatchSCTPv6DstPort  = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
+	MatchSCTPSrcPort    = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_src")
+	MatchSCTPv6SrcPort  = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_src")
 	MatchTCPSrcPort     = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_src")
 	MatchTCPv6SrcPort   = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_src")
 	MatchUDPSrcPort     = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_src")
@@ -82,7 +84,7 @@ var (
 
 	protocolUDP = v1beta2.ProtocolUDP
 	protocolTCP = v1beta2.ProtocolTCP
-	dnsPort     = intstr.FromInt(53)
+	dnsPort     = int32(53)
 )
 
 type TCPFlags struct {
@@ -706,19 +708,19 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 	}
 	udpService := v1beta2.Service{
 		Protocol: &protocolUDP,
-		Port:     &dnsPort,
+		SrcPort:  &dnsPort,
 	}
 	tcpService := v1beta2.Service{
 		Protocol: &protocolTCP,
-		Port:     &dnsPort,
+		SrcPort:  &dnsPort,
 	}
 	dnsPriority := priorityDNSIntercept
 	conj.serviceClause = conj.newClause(1, 2, getTableByID(conj.ruleTableID), nil)
 	conj.toClause = conj.newClause(2, 2, getTableByID(conj.ruleTableID), nil)
 	c.featureNetworkPolicy.conjMatchFlowLock.Lock()
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
-	ctxChanges := conj.serviceClause.addServiceFlows(c.featureNetworkPolicy, []v1beta2.Service{udpService}, &dnsPriority, true, false)
-	dnsTCPMatchPairs := getServiceMatchPairs(tcpService, c.featureNetworkPolicy.ipProtocols, true)
+	ctxChanges := conj.serviceClause.addServiceFlows(c.featureNetworkPolicy, []v1beta2.Service{udpService}, &dnsPriority, false)
+	dnsTCPMatchPairs := getServiceMatchPairs(tcpService, c.featureNetworkPolicy.ipProtocols)
 	for _, dnsTCPMatchPair := range dnsTCPMatchPairs {
 		tcpFlagsMatchPair := matchPair{
 			matchKey: MatchTCPFlags,
@@ -846,9 +848,9 @@ func generateAddressConjMatch(ruleTableID uint8, addr types.Address, addrType ty
 	return match
 }
 
-func generateServiceConjMatches(ruleTableID uint8, service v1beta2.Service, priority *uint16, ipProtocols []binding.Protocol, matchSrc bool) []*conjunctiveMatch {
+func generateServiceConjMatches(ruleTableID uint8, service v1beta2.Service, priority *uint16, ipProtocols []binding.Protocol) []*conjunctiveMatch {
 	var matches []*conjunctiveMatch
-	conjMatchesMatchPairs := getServiceMatchPairs(service, ipProtocols, matchSrc)
+	conjMatchesMatchPairs := getServiceMatchPairs(service, ipProtocols)
 	for _, conjMatchMatchPairs := range conjMatchesMatchPairs {
 		matches = append(matches,
 			&conjunctiveMatch{
@@ -860,57 +862,50 @@ func generateServiceConjMatches(ruleTableID uint8, service v1beta2.Service, prio
 	return matches
 }
 
-func getServiceMatchPairs(service v1beta2.Service, ipProtocols []binding.Protocol, matchSrc bool) [][]matchPair {
+func getServiceMatchPairs(service v1beta2.Service, ipProtocols []binding.Protocol) [][]matchPair {
 	var conjMatchesMatchPairs [][]matchPair
-	ovsBitRanges := serviceToBitRanges(service)
-	addL4MatchPairs := func(matchKey *types.MatchKey) {
+	ovsBitRanges := portsToBitRanges(service.Port, service.EndPort)
+	var srcOVSBitRanges []types.BitRange
+	if service.SrcPort != nil {
+		srcPortTyped := intstr.FromInt(int(*service.SrcPort))
+		srcOVSBitRanges = portsToBitRanges(&srcPortTyped, service.SrcEndPort)
+	}
+	addL4MatchPairs := func(matchKey, srcMatchKey *types.MatchKey) {
 		for _, ovsBitRange := range ovsBitRanges {
-			conjMatchesMatchPairs = append(conjMatchesMatchPairs, []matchPair{{matchKey: matchKey, matchValue: ovsBitRange}})
+			matchPairs := []matchPair{{matchKey: matchKey, matchValue: ovsBitRange}}
+			if srcOVSBitRanges != nil {
+				for _, srcRange := range srcOVSBitRanges {
+					matchPairs = append(matchPairs, matchPair{matchKey: srcMatchKey, matchValue: srcRange})
+					conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
+				}
+			} else {
+				conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
+			}
 		}
 	}
 	switch *service.Protocol {
 	case v1beta2.ProtocolTCP:
-		if !matchSrc {
-			for _, ipProtocol := range ipProtocols {
-				if ipProtocol == binding.ProtocolIP {
-					addL4MatchPairs(MatchTCPDstPort)
-				} else {
-					addL4MatchPairs(MatchTCPv6DstPort)
-				}
-			}
-		} else {
-			for _, ipProtocol := range ipProtocols {
-				if ipProtocol == binding.ProtocolIP {
-					addL4MatchPairs(MatchTCPSrcPort)
-				} else {
-					addL4MatchPairs(MatchTCPv6SrcPort)
-				}
+		for _, ipProtocol := range ipProtocols {
+			if ipProtocol == binding.ProtocolIP {
+				addL4MatchPairs(MatchTCPDstPort, MatchTCPSrcPort)
+			} else {
+				addL4MatchPairs(MatchTCPv6DstPort, MatchTCPv6SrcPort)
 			}
 		}
 	case v1beta2.ProtocolUDP:
-		if !matchSrc {
-			for _, ipProtocol := range ipProtocols {
-				if ipProtocol == binding.ProtocolIP {
-					addL4MatchPairs(MatchUDPDstPort)
-				} else {
-					addL4MatchPairs(MatchUDPv6DstPort)
-				}
-			}
-		} else {
-			for _, ipProtocol := range ipProtocols {
-				if ipProtocol == binding.ProtocolIP {
-					addL4MatchPairs(MatchUDPSrcPort)
-				} else {
-					addL4MatchPairs(MatchUDPv6SrcPort)
-				}
+		for _, ipProtocol := range ipProtocols {
+			if ipProtocol == binding.ProtocolIP {
+				addL4MatchPairs(MatchUDPDstPort, MatchUDPSrcPort)
+			} else {
+				addL4MatchPairs(MatchUDPv6DstPort, MatchUDPv6SrcPort)
 			}
 		}
 	case v1beta2.ProtocolSCTP:
 		for _, ipProtocol := range ipProtocols {
 			if ipProtocol == binding.ProtocolIP {
-				addL4MatchPairs(MatchSCTPDstPort)
+				addL4MatchPairs(MatchSCTPDstPort, MatchSCTPSrcPort)
 			} else {
-				addL4MatchPairs(MatchSCTPv6DstPort)
+				addL4MatchPairs(MatchSCTPv6DstPort, MatchSCTPv6SrcPort)
 			}
 		}
 	case v1beta2.ProtocolICMP:
@@ -946,7 +941,7 @@ func getServiceMatchPairs(service v1beta2.Service, ipProtocols []binding.Protoco
 		if service.IGMPType != nil && *service.IGMPType == crdv1alpha1.IGMPQuery {
 			// Since OVS only matches layer 3 IP address on the IGMP query packet, and doesn't
 			// identify the multicast group address set in the IGMP protocol, the flow entry
-			// processes all IGMP query packets by matching the destintaion IP address ( 224.0.0.1 )
+			// processes all IGMP query packets by matching the destination IP address ( 224.0.0.1 )
 			if service.GroupAddress != "" {
 				matchPairs = append(matchPairs, matchPair{matchKey: MatchDstIP, matchValue: net.ParseIP(service.GroupAddress)})
 			} else {
@@ -956,18 +951,18 @@ func getServiceMatchPairs(service v1beta2.Service, ipProtocols []binding.Protoco
 			conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
 		}
 	default:
-		addL4MatchPairs(MatchTCPDstPort)
+		addL4MatchPairs(MatchTCPDstPort, MatchTCPSrcPort)
 	}
 	return conjMatchesMatchPairs
 }
 
-// serviceToBitRanges converts a Service to a list of BitRange.
-func serviceToBitRanges(service v1beta2.Service) []types.BitRange {
+// portsToBitRanges converts ports in Service to a list of BitRange.
+func portsToBitRanges(port *intstr.IntOrString, endPort *int32) []types.BitRange {
 	var ovsBitRanges []types.BitRange
 	// If `EndPort` is equal to `Port`, then treat it as single port case.
-	if service.EndPort != nil && *service.EndPort > service.Port.IntVal {
+	if endPort != nil && *endPort > port.IntVal {
 		// Add several antrea range services based on a port range.
-		portRange := thirdpartynp.PortRange{Start: uint16(service.Port.IntVal), End: uint16(*service.EndPort)}
+		portRange := thirdpartynp.PortRange{Start: uint16(port.IntVal), End: uint16(*endPort)}
 		bitRanges, err := portRange.BitwiseMatch()
 		if err != nil {
 			klog.Errorf("Error when getting BitRanges from %v: %v", portRange, err)
@@ -980,10 +975,10 @@ func serviceToBitRanges(service v1beta2.Service) []types.BitRange {
 				Mask:  &curBitRange.Mask,
 			})
 		}
-	} else if service.Port != nil {
+	} else if port != nil {
 		// Add single antrea service based on a single port.
 		ovsBitRanges = append(ovsBitRanges, types.BitRange{
-			Value: uint16(service.Port.IntVal),
+			Value: uint16(port.IntVal),
 		})
 	} else {
 		// Match all ports with the given protocol type if `Port` and `EndPort` are not
@@ -1012,10 +1007,10 @@ func (c *clause) addAddrFlows(featureNetworkPolicy *featureNetworkPolicy, addrTy
 
 // addServiceFlows translates the specified Antrea Service to conjunctiveMatchFlow,
 // and returns corresponding conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(featureNetworkPolicy *featureNetworkPolicy, services []v1beta2.Service, priority *uint16, matchSrc bool, enableLogging bool) []*conjMatchFlowContextChange {
+func (c *clause) addServiceFlows(featureNetworkPolicy *featureNetworkPolicy, services []v1beta2.Service, priority *uint16, enableLogging bool) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, service := range services {
-		matches := generateServiceConjMatches(c.ruleTable.GetID(), service, priority, featureNetworkPolicy.ipProtocols, matchSrc)
+		matches := generateServiceConjMatches(c.ruleTable.GetID(), service, priority, featureNetworkPolicy.ipProtocols)
 		for _, match := range matches {
 			ctxChange := c.addConjunctiveMatchFlow(featureNetworkPolicy, match, enableLogging, false)
 			conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
@@ -1230,7 +1225,7 @@ func (f *featureNetworkPolicy) addRuleToConjunctiveMatch(conj *policyRuleConjunc
 	}
 	if conj.serviceClause != nil {
 		for _, eachService := range rule.Service {
-			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, f.ipProtocols, false)
+			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, f.ipProtocols)
 			for _, match := range matches {
 				f.addActionToConjunctiveMatch(conj.serviceClause, match, rule.EnableLogging, isMCNPRule)
 			}
@@ -1459,7 +1454,7 @@ func (c *policyRuleConjunction) calculateChangesForRuleCreation(featureNetworkPo
 		ctxChanges = append(ctxChanges, c.toClause.addAddrFlows(featureNetworkPolicy, types.DstAddress, rule.To, rule.Priority, rule.EnableLogging, isMCNPRule)...)
 	}
 	if c.serviceClause != nil {
-		ctxChanges = append(ctxChanges, c.serviceClause.addServiceFlows(featureNetworkPolicy, rule.Service, rule.Priority, false, rule.EnableLogging)...)
+		ctxChanges = append(ctxChanges, c.serviceClause.addServiceFlows(featureNetworkPolicy, rule.Service, rule.Priority, rule.EnableLogging)...)
 	}
 	return ctxChanges
 }

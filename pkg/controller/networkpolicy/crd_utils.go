@@ -84,9 +84,11 @@ func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort, npProtocols []
 			namedPortExists = true
 		}
 		antreaServices = append(antreaServices, controlplane.Service{
-			Protocol: toAntreaProtocol(npPort.Protocol),
-			Port:     npPort.Port,
-			EndPort:  npPort.EndPort,
+			Protocol:   toAntreaProtocol(npPort.Protocol),
+			Port:       npPort.Port,
+			EndPort:    npPort.EndPort,
+			SrcPort:    npPort.SourcePort,
+			SrcEndPort: npPort.SourceEndPort,
 		})
 	}
 	for _, npProtocol := range npProtocols {

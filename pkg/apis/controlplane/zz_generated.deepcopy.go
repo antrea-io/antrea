@@ -1108,6 +1108,16 @@ func (in *Service) DeepCopyInto(out *Service) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.SrcPort != nil {
+		in, out := &in.SrcPort, &out.SrcPort
+		*out = new(int32)
+		**out = **in
+	}
+	if in.SrcEndPort != nil {
+		in, out := &in.SrcEndPort, &out.SrcEndPort
+		*out = new(int32)
+		**out = **in
+	}
 	if in.ICMPType != nil {
 		in, out := &in.ICMPType, &out.ICMPType
 		*out = new(int32)
