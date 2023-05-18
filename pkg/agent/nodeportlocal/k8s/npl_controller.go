@@ -510,7 +510,6 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		} else {
 			nodePort = portData.NodePort
 		}
-
 		if _, ok := nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)]; !ok {
 			nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)] = types.NPLAnnotation{
 				PodPort:   port,

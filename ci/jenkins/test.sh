@@ -411,18 +411,6 @@ function deliver_antrea_windows {
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
         revert_snapshot_windows ${WORKER_NAME}
-        # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
-        # Use e2eteam/agnhost:2.13 instead
-        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-busybox:1.29-windows-amd64-1809")
-        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.13" "k8s.gcr.io/e2e-test-images/agnhost:2.29" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "gcr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.0" "e2eteam/pause:3.2" "k8s.gcr.io/pause:3.2" "registry.k8s.io/pause:3.2" "docker.io/library/busybox:1.29")
-        common_images=("mcr.microsoft.com/windows/servercore/iis:latest")
-        # Pull necessary images in advance to avoid transient error
-        for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
-        done
-        for image in "${common_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${image}" || true
-        done
 
         # Use a script to run antrea agent in windows Network Policy cases
         if [ "$TESTCASE" == "windows-networkpolicy-process" ]; then
@@ -465,6 +453,18 @@ function deliver_antrea_windows {
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker load -i antrea-windows.tar.gz"
             fi
         fi
+        # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
+        # Use e2eteam/agnhost:2.13 instead
+        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-busybox:1.29-windows-amd64-1809")
+        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.13" "k8s.gcr.io/e2e-test-images/agnhost:2.29" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "gcr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.0" "e2eteam/pause:3.2" "k8s.gcr.io/pause:3.2" "registry.k8s.io/pause:3.2" "docker.io/library/busybox:1.29")
+        common_images=("mcr.microsoft.com/windows/servercore/iis:latest")
+        # Pull necessary images in advance to avoid transient error
+        for i in "${!harbor_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+        done
+        for image in "${common_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${image}" || true
+        done
     done
     rm -f antrea-windows.tar.gz
 }
