@@ -64,7 +64,7 @@ function print_help {
 
 NAMESPACE="kube-system"
 ANTREA_DS="ds/antrea-agent"
-WHEREABOUTS_CNI_REL_TAG=v0.5.4
+WHEREABOUTS_CNI_REL_TAG=v0.6.1
 export URL_WHEREABOUTS_IP_POOLS="https://raw.githubusercontent.com/k8snetworkplumbingwg/whereabouts/$WHEREABOUTS_CNI_REL_TAG/doc/crds/whereabouts.cni.cncf.io_ippools.yaml"
 export URL_WHEREABOUTS_OVERLAPPING_IP_RANGE_RES="https://raw.githubusercontent.com/k8snetworkplumbingwg/whereabouts/$WHEREABOUTS_CNI_REL_TAG/doc/crds/whereabouts.cni.cncf.io_overlappingrangeipreservations.yaml"
 export YAML_ANTREA='antrea.yml'
