@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -103,21 +105,35 @@ func testMCServiceConnectivity(t *testing.T, data *MCTestData) {
 	data.testMCServiceConnectivity(t)
 }
 
-// Delete existing Pod to scale down the number of Endpoints to zero, then
+// Updating existing Pod's label to scale down the number of Endpoints to zero, then
 // the Multi-cluster Service should be deleted due to empty Endpoints.
 func testScaleDownMCServiceEndpoints(t *testing.T, data *MCTestData) {
-	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, testServerPod)
-	time.Sleep(2 * time.Second)
-	_, err := data.getService(westCluster, multiClusterTestNamespace, mcEastClusterTestService)
-	if !apierrors.IsNotFound(err) {
-		t.Fatalf("Expected to get not found error when getting the imported Service %s, but got: %v", mcEastClusterTestService, err)
+	newPatch := func(app string) []byte {
+		patch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]interface{}{
+					"app": app,
+				},
+			},
+		})
+		return patch
 	}
 
-	// Revert changes, because we shouldn't make changes to the test env that is also
-	// used by other test cases.
-	if err = createPodWrapper(t, data, eastCluster, multiClusterTestNamespace, testServerPod, "", nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
-		t.Fatalf("Error when creating nginx Pod in cluster %s: %v", eastCluster, err)
+	if err := data.patchPod(eastCluster, multiClusterTestNamespace, testServerPod, newPatch("dummy")); err != nil {
+		t.Fatalf("Failed to patch Pod %s/%s in Cluster %s", multiClusterTestNamespace, testServerPod, eastCluster)
 	}
+	defer func() {
+		// Revert changes, because we shouldn't make changes to the test env that is also
+		// used by other test cases.
+		if err := data.patchPod(eastCluster, multiClusterTestNamespace, testServerPod, newPatch("nginx")); err != nil {
+			t.Fatalf("Failed to patch Pod %s/%s in Cluster %s", multiClusterTestNamespace, testServerPod, eastCluster)
+		}
+	}()
+	var getErr error
+	require.Eventually(t, func() bool {
+		_, getErr = data.getService(westCluster, multiClusterTestNamespace, mcEastClusterTestService)
+		return apierrors.IsNotFound(getErr)
+	}, 2*time.Second, 100*time.Millisecond, "Expected to get not found error when getting the imported Service %s, but got %v", mcEastClusterTestService, getErr)
 }
 
 func testANPToServices(t *testing.T, data *MCTestData) {
