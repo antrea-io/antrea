@@ -1425,21 +1425,24 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 	switch key.Type {
 	case controlplane.AntreaClusterNetworkPolicy:
 		cnp, err := n.cnpLister.Get(key.Name)
-		if err != nil {
+		// We need to check if the UID matches because it's possible another policy is created with the same name after
+		// the policy is deleted. It's safe to just delete the internal NetworkPolicy associated with the old policy as
+		// the two policies are different items in the workqueue and internalNetworkPolicyStore due to different UIDs.
+		if err != nil || cnp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processClusterNetworkPolicy(cnp)
 	case controlplane.AntreaNetworkPolicy:
 		anp, err := n.anpLister.NetworkPolicies(key.Namespace).Get(key.Name)
-		if err != nil {
+		if err != nil || anp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processAntreaNetworkPolicy(anp)
 	case controlplane.K8sNetworkPolicy:
 		knp, err := n.networkPolicyLister.NetworkPolicies(key.Namespace).Get(key.Name)
-		if err != nil {
+		if err != nil || knp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
