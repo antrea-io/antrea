@@ -346,11 +346,16 @@ function deliver_antrea {
     export PATH=$GOROOT/bin:$PATH
 
     make clean -C $GIT_CHECKOUT_DIR
-    docker images | grep "${JOB_NAME}" | awk '{print $3}' | uniq | xargs -r docker rmi -f || true > /dev/null
+
+    # The cleanup and stats are best-effort.
+    set +e
+    docker images | grep "${JOB_NAME}" | awk '{print $3}' | uniq | xargs -r docker rmi -f > /dev/null
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
-    docker image prune -f --filter "until=1h" || true > /dev/null
+    docker image prune -f --filter "until=1h" > /dev/null
     docker system df -v
+    set -e
+
     cd $GIT_CHECKOUT_DIR
     # Ensure that files in the Docker context have the correct permissions, or Docker caching cannot
     # be leveraged successfully

@@ -183,13 +183,17 @@ function deliver_antrea_to_aks() {
         GIT_CHECKOUT_DIR=..
     fi
     make clean -C ${GIT_CHECKOUT_DIR}
+
+    # The cleanup and stats are best-effort.
+    set +e
     if [[ -n ${JOB_NAME+x} ]]; then
-        docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f || true > /dev/null
+        docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f > /dev/null
     fi
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
-    docker image prune -f --filter "until=2h" || true > /dev/null
+    docker image prune -f --filter "until=2h" > /dev/null
     docker system df -v
+    set -e
 
     cd ${GIT_CHECKOUT_DIR}
     VERSION="$CLUSTER" make
