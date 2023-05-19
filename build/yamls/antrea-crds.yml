@@ -758,6 +758,9 @@ spec:
                         type: string
                       enableLogging:
                         type: boolean
+                      logLabel:
+                        type: string
+                        pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]{0,61})?[A-Za-z0-9])?$"
                 egress:
                   type: array
                   items:
@@ -1024,6 +1027,9 @@ spec:
                         type: string
                       enableLogging:
                         type: boolean
+                      logLabel:
+                        type: string
+                        pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]{0,61})?[A-Za-z0-9])?$"
             status:
               type: object
               properties:
@@ -1870,6 +1876,9 @@ spec:
                         type: string
                       enableLogging:
                         type: boolean
+                      logLabel:
+                        type: string
+                        pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]{0,61})?[A-Za-z0-9])?$"
                 egress:
                   type: array
                   items:
@@ -2107,6 +2116,9 @@ spec:
                         type: string
                       enableLogging:
                         type: boolean
+                      logLabel:
+                        type: string
+                        pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]{0,61})?[A-Za-z0-9])?$"
             status:
               type: object
               properties:

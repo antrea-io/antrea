@@ -199,13 +199,14 @@ func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call 
 }
 
 // GetPolicyInfoFromConjunction mocks base method
-func (m *MockClient) GetPolicyInfoFromConjunction(arg0 uint32) (string, string, string) {
+func (m *MockClient) GetPolicyInfoFromConjunction(arg0 uint32) (string, string, string, string) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPolicyInfoFromConjunction", arg0)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(string)
-	return ret0, ret1, ret2
+	ret3, _ := ret[3].(string)
+	return ret0, ret1, ret2, ret3
 }
 
 // GetPolicyInfoFromConjunction indicates an expected call of GetPolicyInfoFromConjunction

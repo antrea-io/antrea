@@ -206,9 +206,10 @@ func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging() *AntreaNetworkPolicySpecBuilder {
+func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging(logLabel string) *AntreaNetworkPolicySpecBuilder {
 	for i, e := range b.Spec.Egress {
 		e.EnableLogging = true
+		e.LogLabel = logLabel
 		b.Spec.Egress[i] = e
 	}
 	return b

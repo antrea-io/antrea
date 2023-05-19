@@ -2629,13 +2629,14 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	npRef := "test-log-acnp-deny"
 	ruleName := "DropToZ"
+	logLabel := "testLogLabel"
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName(npRef).
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": namespaces["x"]}}})
 	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"ns": namespaces["z"]},
 		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", ruleName, nil)
-	builder.AddEgressLogging()
+	builder.AddEgressLogging(logLabel)
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)

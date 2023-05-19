@@ -167,7 +167,7 @@ func TestReconcilerForget(t *testing.T) {
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
-						rule: &rule{Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
+						rule: &rule{Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
 					},
 				},
 			},
@@ -1232,12 +1232,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
 				FromAddresses: addressGroup1,
 				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, SourceRef: &cnp1},
 				FromAddresses: addressGroup2,
 				TargetMembers: appliedToGroup2,
 			},
@@ -1252,12 +1252,12 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-cnp-ingress-rule-uninstall",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1},
 				FromAddresses: addressGroup1,
 				TargetMembers: appliedToGroupWithDiffContainerPort,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, Services: []v1beta2.Service{serviceHTTP}, SourceRef: &cnp1},
 				FromAddresses: addressGroup1,
 				TargetMembers: appliedToGroupWithSingleContainerPort,
 			},
@@ -1272,11 +1272,11 @@ func TestReconcilerUpdate(t *testing.T) {
 		{
 			"updating-mcnp-ingress",
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, From: v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, From: v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}}, SourceRef: &cnp1},
 				TargetMembers: appliedToGroup1,
 			},
 			&CompletedRule{
-				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, From: v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}}, SourceRef: &cnp1, EnableLogging: false},
+				rule:          &rule{ID: "ingress-rule", Direction: v1beta2.DirectionIn, PolicyPriority: &policyPriority, TierPriority: &tierPriority, From: v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}}, SourceRef: &cnp1},
 				TargetMembers: appliedToGroup2,
 			},
 			[]types.Address{},
@@ -2297,7 +2297,8 @@ func (m policyRuleMatcher) Matches(x interface{}) bool {
 		!sliceEqual(a.To, b.To) ||
 		a.PolicyRef != b.PolicyRef ||
 		a.Direction != b.Direction ||
-		a.EnableLogging != b.EnableLogging {
+		a.EnableLogging != b.EnableLogging ||
+		a.LogLabel != b.LogLabel {
 		return false
 	}
 	return true

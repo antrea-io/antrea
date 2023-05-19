@@ -74,17 +74,16 @@ var (
 	}
 	action = secv1alpha1.RuleActionAllow
 	rule1  = agenttypes.PolicyRule{
-		Direction:     cpv1beta.DirectionIn,
-		From:          []agenttypes.Address{},
-		To:            []agenttypes.Address{},
-		Service:       []cpv1beta.Service{},
-		Action:        &action,
-		Priority:      nil,
-		Name:          "",
-		FlowID:        uint32(0),
-		TableID:       uint8(10),
-		PolicyRef:     &np1,
-		EnableLogging: false,
+		Direction: cpv1beta.DirectionIn,
+		From:      []agenttypes.Address{},
+		To:        []agenttypes.Address{},
+		Service:   []cpv1beta.Service{},
+		Action:    &action,
+		Priority:  nil,
+		Name:      "",
+		FlowID:    uint32(0),
+		TableID:   uint8(10),
+		PolicyRef: &np1,
 	}
 )
 

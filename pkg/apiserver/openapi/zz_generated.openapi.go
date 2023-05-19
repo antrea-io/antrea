@@ -1806,6 +1806,13 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 							},
 						},
 					},
+					"logLabel": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"enableLogging"},
 			},

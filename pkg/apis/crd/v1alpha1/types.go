@@ -434,6 +434,9 @@ type Rule struct {
 	// when rules are matched. Should be default to false.
 	// +optional
 	EnableLogging bool `json:"enableLogging"`
+	// LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.
+	// +optional
+	LogLabel string `json:"logLabel,omitempty"`
 	// Select workloads on which this rule will be applied to. Cannot be set in
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
 	// +optional

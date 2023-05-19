@@ -116,6 +116,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			EnableLogging:   ingressRule.EnableLogging,
 			AppliedToGroups: getAppliedToGroupNames(atgs),
 			L7Protocols:     toAntreaL7ProtocolsForCRD(ingressRule.L7Protocols),
+			LogLabel:        ingressRule.LogLabel,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -147,6 +148,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			EnableLogging:   egressRule.EnableLogging,
 			AppliedToGroups: getAppliedToGroupNames(atgs),
 			L7Protocols:     toAntreaL7ProtocolsForCRD(egressRule.L7Protocols),
+			LogLabel:        egressRule.LogLabel,
 		})
 	}
 	tierPriority := n.getTierPriority(np.Spec.Tier)
