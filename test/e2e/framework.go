@@ -127,7 +127,7 @@ const (
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.6.1"
 	ipfixCollectorPort  = "4739"
 	clickHouseHTTPPort  = "8123"
 

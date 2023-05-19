@@ -152,7 +152,7 @@ COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
                     "projects.registry.vmware.com/antrea/perftool")
 
-FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12" \
+FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.6.1" \
                             "projects.registry.vmware.com/antrea/theia-clickhouse-operator:0.18.2" \
                             "projects.registry.vmware.com/antrea/theia-metrics-exporter:0.18.2" \
                             "projects.registry.vmware.com/antrea/theia-clickhouse-server:21.11")

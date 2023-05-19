@@ -1063,8 +1063,8 @@ github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17
 github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae/go.mod h1:DD4vA1DwXk04H54A1oHXtwZmA0grkVMdPxx/VGLCah0=
 github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f h1:p4VB7kIXpOQvVn1ZaTIVp+3vuYAXFe3OJEvjbUYJLaA=
 github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f/go.mod h1:DD4vA1DwXk04H54A1oHXtwZmA0grkVMdPxx/VGLCah0=
-github.com/vmware/go-ipfix v0.6.0 h1:AjMN54CHJ4LmUZsczSPy6TB9xaFngblh5pf2wyAllt8=
-github.com/vmware/go-ipfix v0.6.0/go.mod h1:ir9Rtu4v7Ks8IQwgjTyARzRNmcxn4KFfZde2SZpSLYA=
+github.com/vmware/go-ipfix v0.6.1 h1:6Gh4kuUkPwetEJ6dWxlz029qwgFBXtcYYVWuiqy0Zgo=
+github.com/vmware/go-ipfix v0.6.1/go.mod h1:dGCppoeqknr9o3yz9BD74mP/FPHgefb6v34xdUKxDPI=
 github.com/willf/bitset v1.1.11-0.20200630133818-d5bec3311243/go.mod h1:RjeCKbqT1RxIR/KWY6phxZiaY1IyutSBfGjNPySAYV4=
 github.com/willf/bitset v1.1.11/go.mod h1:83CECat5yLh5zVOf4P1ErAgKA5UDvKtgyUABdr3+MjI=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=
