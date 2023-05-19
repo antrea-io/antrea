@@ -142,7 +142,7 @@ func TestRESTWatch(t *testing.T) {
 	appliedToGroups := []*types.AppliedToGroup{
 		{
 			Name:     "appliedToGroup1",
-			SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+			SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1")},
 		},
 	}
 	tests := []struct {

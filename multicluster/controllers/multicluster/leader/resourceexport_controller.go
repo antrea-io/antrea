@@ -194,7 +194,7 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	if !matchedStatus {
 		latestResImport.Status.ClusterStatuses = append(latestResImport.Status.ClusterStatuses, newStatus)
 	}
-	if err := r.Client.Status().Update(ctx, latestResImport, &client.UpdateOptions{}); err != nil {
+	if err := r.Client.Status().Update(ctx, latestResImport, &client.SubResourceUpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to update ResourceImport Status", "resourceimport", resImpName.String())
 		return err
 	}

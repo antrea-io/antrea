@@ -63,14 +63,14 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				store.Create(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod2", "2.2.2.2"),
 						newAddressGroupMemberExternalEntity("ee5", "5.5.5.5"), newAddressGroupMemberExternalEntity("ee6", "6.6.6.6")),
 				})
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod3", "3.3.3.3"),
 						newAddressGroupMemberExternalEntity("ee5", "5.5.5.5"), newAddressGroupMemberExternalEntity("ee7", "7.7.7.7")),
@@ -100,7 +100,7 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				// This should not be seen as it doesn't span node3.
 				store.Create(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1", "node2")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod2", "2.2.2.2"),
 						newAddressGroupMemberExternalEntity("ee5", "5.5.5.5"), newAddressGroupMemberExternalEntity("ee6", "6.6.6.6")),
@@ -108,7 +108,7 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				// This should be seen as an added event as it makes foo span node3 for the first time.
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1", "node3")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod2", "2.2.2.2"),
 						newAddressGroupMemberExternalEntity("ee5", "5.5.5.5"), newAddressGroupMemberExternalEntity("ee6", "6.6.6.6")),
@@ -116,7 +116,7 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				// This should be seen as a modified event as it updates addressGroups of node3.
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1", "node3")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod3", "3.3.3.3"),
 						newAddressGroupMemberExternalEntity("ee5", "5.5.5.5"), newAddressGroupMemberExternalEntity("ee7", "7.7.7.7")),
@@ -124,7 +124,7 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 				// This should be seen as a deleted event as it makes foo not span node3 any more.
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod3", "3.3.3.3"),
 						newAddressGroupMemberExternalEntity("ee5", "5.5.5.5"), newAddressGroupMemberExternalEntity("ee6", "6.6.6.6")),
@@ -156,13 +156,13 @@ func TestWatchAddressGroupEvent(t *testing.T) {
 			operations: func(store storage.Interface) {
 				store.Create(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "1.1.1.1"), newAddressGroupMemberPod("pod2", "2.2.2.2")),
 				})
 				store.Update(&types.AddressGroup{
 					Name:     "foo",
-					SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node1")},
+					SpanMeta: types.SpanMeta{NodeNames: sets.New[string]("node1")},
 					GroupMembers: controlplane.NewGroupMemberSet(
 						newAddressGroupMemberPod("pod1", "3.3.3.3"), newAddressGroupMemberPod("pod2", "4.4.4.4")),
 				})

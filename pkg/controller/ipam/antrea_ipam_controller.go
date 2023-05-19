@@ -99,7 +99,7 @@ func statefulSetIndexFunc(obj interface{}) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("obj is not IPPool: %+v", obj)
 	}
-	statefulSetNames := sets.NewString()
+	statefulSetNames := sets.New[string]()
 	for _, address := range ipPool.Status.IPAddresses {
 		if address.Owner.StatefulSet != nil {
 			statefulSetNames.Insert(k8s.NamespacedName(address.Owner.StatefulSet.Namespace, address.Owner.StatefulSet.Name))

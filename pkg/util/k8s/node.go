@@ -113,9 +113,9 @@ func GetNodeGatewayAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 }
 
 // GetNodeAllAddrs gets all Node IPs from the Node.
-func GetNodeAllAddrs(node *v1.Node) (ips sets.String, err error) {
+func GetNodeAllAddrs(node *v1.Node) (ips sets.Set[string], err error) {
 	var nodeIPs, gwIPs, transportAddrs *ip.DualStackIPs
-	ips = sets.String{}
+	ips = sets.Set[string]{}
 	appendIP := func(dsIPs *ip.DualStackIPs) {
 		if dsIPs == nil {
 			return

@@ -276,14 +276,14 @@ var cnpIndexers = cache.Indexers{
 		if !ok {
 			return []string{}, nil
 		}
-		groupNames := sets.String{}
+		groupNames := sets.Set[string]{}
 		for _, appTo := range cnp.Spec.AppliedTo {
 			if appTo.Group != "" {
 				groupNames.Insert(appTo.Group)
 			}
 		}
 		if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
-			return groupNames.List(), nil
+			return sets.List(groupNames), nil
 		}
 		appendGroups := func(rule secv1alpha1.Rule) {
 			for _, peer := range rule.To {
@@ -308,7 +308,7 @@ var cnpIndexers = cache.Indexers{
 		for _, rule := range cnp.Spec.Ingress {
 			appendGroups(rule)
 		}
-		return groupNames.List(), nil
+		return sets.List(groupNames), nil
 	},
 	perNamespaceRuleIndex: func(obj interface{}) ([]string, error) {
 		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
@@ -337,14 +337,14 @@ var anpIndexers = cache.Indexers{
 			return []string{}, nil
 		}
 		ns := anp.Namespace + "/"
-		groupNames := sets.String{}
+		groupNames := sets.Set[string]{}
 		for _, appTo := range anp.Spec.AppliedTo {
 			if appTo.Group != "" {
 				groupNames.Insert(ns + appTo.Group)
 			}
 		}
 		if len(anp.Spec.Ingress) == 0 && len(anp.Spec.Egress) == 0 {
-			return groupNames.List(), nil
+			return sets.List(groupNames), nil
 		}
 		appendGroups := func(rule secv1alpha1.Rule) {
 			for _, peer := range rule.To {
@@ -369,7 +369,7 @@ var anpIndexers = cache.Indexers{
 		for _, rule := range anp.Spec.Ingress {
 			appendGroups(rule)
 		}
-		return groupNames.List(), nil
+		return sets.List(groupNames), nil
 	},
 }
 
@@ -717,7 +717,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Name:      np.Name,
 			UID:       np.UID,
 		},
-		AppliedToGroups: sets.StringKeySet(appliedToGroups).List(),
+		AppliedToGroups: sets.List(sets.KeySet(appliedToGroups)),
 		Rules:           rules,
 		Generation:      np.Generation,
 	}
@@ -1049,7 +1049,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	// NodeNames set must be considered immutable once generated and updated
 	// in the store. If any change is needed, the set must be regenerated with
 	// the new NodeNames and the store must be updated.
-	addrGroupNodeNames := sets.String{}
+	addrGroupNodeNames := sets.Set[string]{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 		utilsets.MergeString(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
@@ -1226,7 +1226,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		metrics.DurationAppliedToGroupSyncing.Observe(float64(d.Milliseconds()))
 		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, d)
 	}()
-	appGroupNodeNames := sets.String{}
+	appGroupNodeNames := sets.Set[string]{}
 	appliedToGroupObj, found, _ := n.appliedToGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("AppliedToGroup %s not found.", key)
@@ -1369,7 +1369,7 @@ func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.G
 		}
 		return pods, ees, nil
 	}
-	podNameSet, eeNameSet := sets.String{}, sets.String{}
+	podNameSet, eeNameSet := sets.Set[string]{}, sets.Set[string]{}
 	var pods []*v1.Pod
 	var ees []*v1alpha2.ExternalEntity
 	for _, childName := range group.ChildGroups {
@@ -1449,8 +1449,8 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processNetworkPolicy(knp)
 	}
 
-	newNodeNames, err := func() (sets.String, error) {
-		nodeNames := sets.NewString()
+	newNodeNames, err := func() (sets.Set[string], error) {
+		nodeNames := sets.New[string]()
 		// Calculate the set of Node names based on the span of the
 		// AppliedToGroups referenced by this NetworkPolicy.
 		for appliedToGroupName := range newAppliedToGroups {
@@ -1480,7 +1480,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 	}
 
 	// appliedToGroupsToSync tracks new AppliedToGroups created by this NetworkPolicy.
-	appliedToGroupsToSync := sets.NewString()
+	appliedToGroupsToSync := sets.New[string]()
 
 	// Create the internal NetworkPolicy, AppliedToGroups and AddressGroups if they don't exist. They need to be updated
 	// atomically to avoid race conditions between workers that process multiple NetworkPolicies.
@@ -1538,14 +1538,14 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 	}
 
 	// Enqueue AddressGroups that are affected by this NetworkPolicy.
-	var oldNodeNames sets.String
-	var oldAddressGroupNames sets.String
+	var oldNodeNames sets.Set[string]
+	var oldAddressGroupNames sets.Set[string]
 	if oldInternalNetworkPolicy != nil {
 		oldNodeNames = oldInternalNetworkPolicy.NodeNames
 		oldAddressGroupNames = oldInternalNetworkPolicy.GetAddressGroups()
 	}
-	var addressGroupsToSync sets.String
-	newAddressGroupNames := sets.StringKeySet(newAddressGroups)
+	var addressGroupsToSync sets.Set[string]
+	newAddressGroupNames := sets.KeySet(newAddressGroups)
 	if !newNodeNames.Equal(oldNodeNames) {
 		addressGroupsToSync = oldAddressGroupNames.Union(newAddressGroupNames)
 		klog.V(4).InfoS("Internal NetworkPolicy's Node span changed, enqueuing all related AddressGroups", "NetworkPolicy", key, "AddressGroups", addressGroupsToSync)

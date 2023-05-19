@@ -259,7 +259,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		ipRange            v1alpha2.IPRange
 		nodeSelector       metav1.LabelSelector
 		expectedExternalIP string
-		expectedNodes      sets.String
+		expectedNodes      sets.Set[string]
 		expectedTotal      int
 	}{
 		{
@@ -271,7 +271,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedExternalIP: "169.254.100.1",
-			expectedNodes:      sets.NewString(nodeName(0)),
+			expectedNodes:      sets.New[string](nodeName(0)),
 			expectedTotal:      2,
 		},
 		{
@@ -283,7 +283,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedExternalIP: "2021:1::aaa1",
-			expectedNodes:      sets.NewString(nodeName(0)),
+			expectedNodes:      sets.New[string](nodeName(0)),
 			expectedTotal:      15,
 		},
 		{
@@ -299,7 +299,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedExternalIP: "169.254.101.10",
-			expectedNodes:      sets.NewString(nodeName(0), nodeName(1)),
+			expectedNodes:      sets.New[string](nodeName(0), nodeName(1)),
 			expectedTotal:      2,
 		},
 		{
@@ -311,7 +311,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedExternalIP: "169.254.102.1",
-			expectedNodes:      sets.NewString(),
+			expectedNodes:      sets.New[string](),
 			expectedTotal:      2,
 		},
 	}
@@ -491,12 +491,12 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 				signalAgent(evictNode, "CONT")
 			}
 
-			nodeCandidates := sets.NewString(nodeName(0), nodeName(1))
+			nodeCandidates := sets.New[string](nodeName(0), nodeName(1))
 			matchExpressions := []metav1.LabelSelectorRequirement{
 				{
 					Key:      v1.LabelHostname,
 					Operator: metav1.LabelSelectorOpIn,
-					Values:   nodeCandidates.List(),
+					Values:   sets.List(nodeCandidates),
 				},
 			}
 			externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", tt.ipRange, matchExpressions, nil)

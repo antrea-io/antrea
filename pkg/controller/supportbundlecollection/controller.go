@@ -405,9 +405,9 @@ func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.Supp
 }
 
 // getBundleNodes returns the names of the Nodes configured in the SupportBundleCollection.
-func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.String, error) {
+func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.Set[string], error) {
 	if nodes == nil {
-		return sets.NewString(), nil
+		return sets.New[string](), nil
 	}
 
 	// Return all Kubernetes Nodes if NodeNames is empty and NodeSelector is not specified.
@@ -416,7 +416,7 @@ func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.String, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to list all Nodes in the cluster: %v", err)
 		}
-		nodeNames := sets.NewString()
+		nodeNames := sets.New[string]()
 		for _, n := range allNodes {
 			nodeNames.Insert(n.Name)
 		}
@@ -424,7 +424,7 @@ func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.String, e
 	}
 
 	// Add the Nodes which are configured with the names defined in the resource.
-	nodeNames := sets.NewString()
+	nodeNames := sets.New[string]()
 	for _, name := range nodes.NodeNames {
 		_, err := c.nodeLister.Get(name)
 		if err != nil {
@@ -450,9 +450,9 @@ func (c *Controller) getBundleNodes(nodes *v1alpha1.BundleNodes) (sets.String, e
 }
 
 // getBundleExternalNodes returns the names of the ExternalNodes configured in the SupportBundleCollection.
-func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (sets.String, error) {
+func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (sets.Set[string], error) {
 	if en == nil {
-		return sets.NewString(), nil
+		return sets.New[string](), nil
 	}
 	// Return all ExternalNodes in the en.Namespace if both NodeNames is empty and NodeSelector is not specified.
 	if len(en.NodeNames) == 0 && en.NodeSelector == nil {
@@ -460,7 +460,7 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 		if err != nil {
 			return nil, fmt.Errorf("failed to list all ExternalNodes in the namespace %s: %v", en.Namespace, err)
 		}
-		enNames := sets.NewString()
+		enNames := sets.New[string]()
 		for _, n := range allExternalNodes {
 			enNameKey := k8s.NamespacedName(n.Namespace, n.Name)
 			enNames.Insert(enNameKey)
@@ -468,7 +468,7 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 		return enNames, nil
 	}
 
-	enNames := sets.NewString()
+	enNames := sets.New[string]()
 	for _, name := range en.NodeNames {
 		_, err := c.externalNodeLister.ExternalNodes(en.Namespace).Get(name)
 		if err != nil {
@@ -569,7 +569,7 @@ func (c *Controller) parseBundleAuth(authentication v1alpha1.BundleServerAuthCon
 // supportBundleCollectionAppliedTo resource to maintain the SupportBundleCollection's required Nodes or ExternalNodes.
 func (c *Controller) addInternalSupportBundleCollection(
 	bundleCollection *v1alpha1.SupportBundleCollection,
-	nodeSpan sets.String,
+	nodeSpan sets.Set[string],
 	authentication *controlplane.BundleServerAuthConfiguration,
 	expiredAt metav1.Time) *types.SupportBundleCollection {
 	var processNodes bool
@@ -894,7 +894,7 @@ func conditionExistsIgnoreLastTransitionTime(conditions []v1alpha1.SupportBundle
 func mergeConditions(oldConditions, newConditions []v1alpha1.SupportBundleCollectionCondition) []v1alpha1.SupportBundleCollectionCondition {
 	finalConditions := make([]v1alpha1.SupportBundleCollectionCondition, 0)
 	newConditionMap := make(map[v1alpha1.SupportBundleCollectionConditionType]v1alpha1.SupportBundleCollectionCondition)
-	addedConditions := sets.NewString()
+	addedConditions := sets.New[string]()
 	for _, condition := range newConditions {
 		newConditionMap[condition.Type] = condition
 	}

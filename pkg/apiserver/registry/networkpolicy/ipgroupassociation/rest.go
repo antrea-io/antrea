@@ -63,6 +63,9 @@ func (r *REST) New() runtime.Object {
 	return &controlplane.IPGroupAssociation{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	parsedIP := net.ParseIP(name)
 	if parsedIP == nil {

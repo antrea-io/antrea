@@ -67,7 +67,7 @@ type Resolver interface {
 }
 
 // ShouldSkipService checks if a given service should skip proxying
-func ShouldSkipService(service *v1.Service, skipServices sets.String) bool {
+func ShouldSkipService(service *v1.Service, skipServices sets.Set[string]) bool {
 	// if ClusterIP is "None" or empty, skip proxying
 	if service.Spec.ClusterIP == v1.ClusterIPNone || service.Spec.ClusterIP == "" {
 		klog.V(3).Infof("Skipping service %s in namespace %s due to clusterIP = %q", service.Name, service.Namespace, service.Spec.ClusterIP)

@@ -76,8 +76,8 @@ var _ memberlist.Interface = (*fakeMemberlistCluster)(nil)
 func (f *fakeMemberlistCluster) AddClusterEventHandler(h memberlist.ClusterNodeEventHandler) {
 }
 
-func (f *fakeMemberlistCluster) AliveNodes() sets.String {
-	return sets.NewString(f.nodes...)
+func (f *fakeMemberlistCluster) AliveNodes() sets.Set[string] {
+	return sets.New[string](f.nodes...)
 }
 
 func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
@@ -140,7 +140,7 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
 		cluster:               memberlistCluster,
 		ipAssigner:            mockIPAssigner,
-		assignedIPs:           make(map[string]sets.String),
+		assignedIPs:           make(map[string]sets.Set[string]),
 	}
 	return &fakeController{
 		ServiceExternalIPController: eipController,
@@ -397,7 +397,7 @@ func TestCreateService(t *testing.T) {
 			c.externalIPStates = tt.previousExternalIPStates
 			for service, state := range tt.previousExternalIPStates {
 				if c.assignedIPs[state.ip] == nil {
-					c.assignedIPs[state.ip] = sets.NewString()
+					c.assignedIPs[state.ip] = sets.New[string]()
 				}
 				c.assignedIPs[state.ip].Insert(service.String())
 			}
@@ -604,7 +604,7 @@ func TestUpdateService(t *testing.T) {
 			}
 			for service, state := range tt.previousExternalIPStates {
 				if c.assignedIPs[state.ip] == nil {
-					c.assignedIPs[state.ip] = sets.NewString()
+					c.assignedIPs[state.ip] = sets.New[string]()
 				}
 				c.assignedIPs[state.ip].Insert(service.String())
 			}
@@ -636,7 +636,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 		name                 string
 		endpoints            []*corev1.Endpoints
 		serviceToTest        *corev1.Service
-		expectedHealthyNodes sets.String
+		expectedHealthyNodes sets.Set[string]
 	}{
 		{
 			name: "all Endpoints are healthy",
@@ -650,7 +650,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 				),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
-			expectedHealthyNodes: sets.NewString(fakeNode1, fakeNode2),
+			expectedHealthyNodes: sets.New[string](fakeNode1, fakeNode2),
 		},
 		{
 			name: "one Node does not have any healthy Endpoints",
@@ -665,7 +665,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 				),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
-			expectedHealthyNodes: sets.NewString(fakeNode1),
+			expectedHealthyNodes: sets.New[string](fakeNode1),
 		},
 		{
 			name: "Node have both healthy Endpoints and unhealthy Endpoints",
@@ -682,7 +682,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 				),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
-			expectedHealthyNodes: sets.NewString(fakeNode1, fakeNode2),
+			expectedHealthyNodes: sets.New[string](fakeNode1, fakeNode2),
 		},
 	}
 	for _, tt := range tests {

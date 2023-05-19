@@ -43,12 +43,12 @@ type groupCounter struct {
 	groupAllocator openflow.GroupAllocator
 	groupIDUpdates chan<- string
 
-	servicePortNamesMap map[string]sets.String
+	servicePortNamesMap map[string]sets.Set[string]
 	groupMap            map[string]binding.GroupIDType
 }
 
 func NewGroupCounter(groupAllocator openflow.GroupAllocator, groupIDUpdates chan<- string) *groupCounter {
-	return &groupCounter{groupMap: map[string]binding.GroupIDType{}, groupAllocator: groupAllocator, groupIDUpdates: groupIDUpdates, servicePortNamesMap: map[string]sets.String{}}
+	return &groupCounter{groupMap: map[string]binding.GroupIDType{}, groupAllocator: groupAllocator, groupIDUpdates: groupIDUpdates, servicePortNamesMap: map[string]sets.Set[string]{}}
 }
 
 func keyString(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) string {
@@ -63,7 +63,7 @@ func (c *groupCounter) updateServicePortNameMap(svcNamespacedName string, svcKey
 	if _, ok := c.servicePortNamesMap[svcNamespacedName]; ok {
 		c.servicePortNamesMap[svcNamespacedName].Insert(svcKeyString)
 	} else {
-		keyStringSet := sets.NewString(svcKeyString)
+		keyStringSet := sets.New[string](svcKeyString)
 		c.servicePortNamesMap[svcNamespacedName] = keyStringSet
 	}
 }

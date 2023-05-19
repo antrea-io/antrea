@@ -22,8 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func getStringSets(start, end int) sets.String {
-	s := sets.NewString()
+func getStringSets(start, end int) sets.Set[string] {
+	s := sets.New[string]()
 	for i := start; i < end; i++ {
 		s.Insert(fmt.Sprintf("%v", i))
 	}
@@ -43,9 +43,9 @@ func BenchmarkSymmetricDifferenceString(b *testing.B) {
 func TestMergeString(t *testing.T) {
 	tests := []struct {
 		name string
-		src  sets.String
-		dst  sets.String
-		want sets.String
+		src  sets.Set[string]
+		dst  sets.Set[string]
+		want sets.Set[string]
 	}{
 		{
 			name: "With common items",
@@ -72,21 +72,21 @@ func TestMergeString(t *testing.T) {
 func TestSymmetricDifferenceString(t *testing.T) {
 	tests := []struct {
 		name string
-		s1   sets.String
-		s2   sets.String
-		want sets.String
+		s1   sets.Set[string]
+		s2   sets.Set[string]
+		want sets.Set[string]
 	}{
 		{
 			name: "Equivalent sets",
 			s1:   getStringSets(1, 4),
 			s2:   getStringSets(1, 4),
-			want: sets.NewString(),
+			want: sets.New[string](),
 		},
 		{
 			name: "With common items",
 			s1:   getStringSets(1, 4),
 			s2:   getStringSets(3, 6),
-			want: sets.NewString("1", "2", "4", "5"),
+			want: sets.New[string]("1", "2", "4", "5"),
 		},
 		{
 			name: "Without common items",

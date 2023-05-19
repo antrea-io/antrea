@@ -109,7 +109,7 @@ func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testP
 				return false, nil
 			}
 
-			podIPStrings := sets.NewString(pod.Status.PodIP)
+			podIPStrings := sets.New[string](pod.Status.PodIP)
 			for _, podIP := range pod.Status.PodIPs {
 				ipStr := strings.TrimSpace(podIP.IP)
 				if ipStr != "" {

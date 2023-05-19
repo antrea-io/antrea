@@ -582,17 +582,17 @@ func TestProcessPacketIn(t *testing.T) {
 		name             string
 		iface            *interfacestore.InterfaceConfig
 		version          uint8
-		joinedGroups     sets.String
+		joinedGroups     sets.Set[string]
 		joinedGroupItems map[string]*types.IGMPNPRuleInfo
-		leftGroups       sets.String
+		leftGroups       sets.Set[string]
 		igmpANPStats     map[apitypes.UID]map[string]*types.RuleMetric
 		igmpACNPStats    map[apitypes.UID]map[string]*types.RuleMetric
-		expGroups        sets.String
+		expGroups        sets.Set[string]
 	}{
 		{
 			name:         "join multiple groups groups",
 			iface:        createInterface("p1", 1),
-			joinedGroups: sets.NewString("224.1.101.2", "224.1.101.3", "224.1.101.4"),
+			joinedGroups: sets.New[string]("224.1.101.2", "224.1.101.3", "224.1.101.4"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.101.2": nil,
 				"224.1.101.3": nil,
@@ -603,8 +603,8 @@ func TestProcessPacketIn(t *testing.T) {
 					Name:       "allow_1014",
 				},
 			},
-			leftGroups:    sets.NewString(),
-			expGroups:     sets.NewString("224.1.101.2", "224.1.101.3", "224.1.101.4"),
+			leftGroups:    sets.New[string](),
+			expGroups:     sets.New[string]("224.1.101.2", "224.1.101.3", "224.1.101.4"),
 			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{},
 			version:       1,
@@ -612,7 +612,7 @@ func TestProcessPacketIn(t *testing.T) {
 		{
 			name:         "join multiple groups and block one group",
 			iface:        createInterface("p11", 1),
-			joinedGroups: sets.NewString("224.1.101.20", "224.1.101.21", "224.1.101.22", "224.1.101.23"),
+			joinedGroups: sets.New[string]("224.1.101.20", "224.1.101.21", "224.1.101.22", "224.1.101.23"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.101.20": {
 					RuleAction: drop,
@@ -636,28 +636,28 @@ func TestProcessPacketIn(t *testing.T) {
 			},
 			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
-			expGroups:     sets.NewString("224.1.101.21", "224.1.101.22", "224.1.101.23"),
+			expGroups:     sets.New[string]("224.1.101.21", "224.1.101.22", "224.1.101.23"),
 			version:       1,
 		},
 		{
 			name:         "join multiple groups and leave one group",
 			iface:        createInterface("p2", 2),
-			joinedGroups: sets.NewString("224.1.102.2", "224.1.102.3", "224.1.102.4"),
+			joinedGroups: sets.New[string]("224.1.102.2", "224.1.102.3", "224.1.102.4"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.102.2": nil,
 				"224.1.102.3": nil,
 				"224.1.102.4": nil,
 			},
-			leftGroups:    sets.NewString("224.1.102.3"),
+			leftGroups:    sets.New[string]("224.1.102.3"),
 			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
-			expGroups:     sets.NewString("224.1.102.2", "224.1.102.4"),
+			expGroups:     sets.New[string]("224.1.102.2", "224.1.102.4"),
 			version:       2,
 		},
 		{
 			name:         "join multiple groups groups, leave one group and block one group",
 			iface:        createInterface("p22", 2),
-			joinedGroups: sets.NewString("224.1.102.21", "224.1.102.22", "224.1.102.23", "224.1.102.24"),
+			joinedGroups: sets.New[string]("224.1.102.21", "224.1.102.22", "224.1.102.23", "224.1.102.24"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.102.21": nil,
 				"224.1.102.22": nil,
@@ -669,16 +669,16 @@ func TestProcessPacketIn(t *testing.T) {
 					Name:       "block10120",
 				},
 			},
-			leftGroups:    sets.NewString("224.1.102.23"),
+			leftGroups:    sets.New[string]("224.1.102.23"),
 			version:       2,
 			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
-			expGroups:     sets.NewString("224.1.102.21", "224.1.102.22"),
+			expGroups:     sets.New[string]("224.1.102.21", "224.1.102.22"),
 		},
 		{
 			name:         "mixed case",
 			iface:        createInterface("p33", 3),
-			joinedGroups: sets.NewString("224.1.103.2", "224.1.103.3", "224.1.103.4"),
+			joinedGroups: sets.New[string]("224.1.103.2", "224.1.103.3", "224.1.103.4"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.103.2": nil,
 				"224.1.103.3": {
@@ -694,24 +694,24 @@ func TestProcessPacketIn(t *testing.T) {
 					Name:       "test2",
 				},
 			},
-			leftGroups:    sets.NewString("224.1.103.2", "224.1.103.3"),
+			leftGroups:    sets.New[string]("224.1.103.2", "224.1.103.3"),
 			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp2": {"test": {Packets: 1, Bytes: 58}, "test2": {Packets: 1, Bytes: 66}}, "acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
-			expGroups:     sets.NewString("224.1.103.4"),
+			expGroups:     sets.New[string]("224.1.103.4"),
 			version:       3,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mockIfaceStore.EXPECT().GetInterfaceByName(tc.iface.InterfaceName).Return(tc.iface, true).AnyTimes()
-			packets := createIGMPReportPacketIn(getIPs(tc.joinedGroups.List()), getIPs(tc.leftGroups.List()), tc.version, uint32(tc.iface.OFPort))
+			packets := createIGMPReportPacketIn(getIPs(sets.List(tc.joinedGroups)), getIPs(sets.List(tc.leftGroups)), tc.version, uint32(tc.iface.OFPort))
 			mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 			if tc.version == 3 {
-				for _, leftGroup := range tc.leftGroups.List() {
+				for _, leftGroup := range sets.List(tc.leftGroups) {
 					mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(leftGroup).To4(), gomock.Any()).Times(1)
 				}
 			}
-			for _, joinedGroup := range tc.joinedGroups.List() {
+			for _, joinedGroup := range sets.List(tc.joinedGroups) {
 				mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(joinedGroup).To4(), gomock.Any()).Return(tc.joinedGroupItems[joinedGroup], nil).Times(1)
 			}
 			for _, pkt := range packets {
@@ -861,7 +861,7 @@ func TestNodeUpdate(t *testing.T) {
 		name          string
 		addedNodes    map[string]map[string]string
 		deletedNodes  []string
-		expectedNodes sets.String
+		expectedNodes sets.Set[string]
 	}{
 		{
 			name: "add two nodes to empty install nodes",
@@ -869,21 +869,21 @@ func TestNodeUpdate(t *testing.T) {
 				"n1": {"ip": "10.10.10.11"},
 				"n2": {"ip": "10.10.10.12"},
 			},
-			expectedNodes: sets.NewString("10.10.10.11", "10.10.10.12"),
+			expectedNodes: sets.New[string]("10.10.10.11", "10.10.10.12"),
 		},
 		{
 			name: "add one node to installed nodes",
 			addedNodes: map[string]map[string]string{
 				"n3": {"ip": "10.10.10.13"},
 			},
-			expectedNodes: sets.NewString("10.10.10.11", "10.10.10.12", "10.10.10.13"),
+			expectedNodes: sets.New[string]("10.10.10.11", "10.10.10.12", "10.10.10.13"),
 		},
 		{
 			name: "delete one node from installed nodes",
 			deletedNodes: []string{
 				"n1",
 			},
-			expectedNodes: sets.NewString("10.10.10.12", "10.10.10.13"),
+			expectedNodes: sets.New[string]("10.10.10.12", "10.10.10.13"),
 		},
 		{
 			name: "delete and add nodes to installed nodes",
@@ -893,7 +893,7 @@ func TestNodeUpdate(t *testing.T) {
 			deletedNodes: []string{
 				"n2",
 			},
-			expectedNodes: sets.NewString("10.10.10.13", "10.10.10.24"),
+			expectedNodes: sets.New[string]("10.10.10.13", "10.10.10.24"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1257,7 +1257,7 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 
 	clientset = fake.NewSimpleClientset()
 	informerFactory = informers.NewSharedInformerFactory(clientset, 12*time.Hour)
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber, time.Second*5, mockMulticastValidator, isEncap, informerFactory)
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), ovsClient, podUpdateSubscriber, time.Second*5, mockMulticastValidator, isEncap, informerFactory)
 	return mctrl
 }
 

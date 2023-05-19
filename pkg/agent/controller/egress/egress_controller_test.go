@@ -60,7 +60,7 @@ const (
 )
 
 type fakeLocalIPDetector struct {
-	localIPs sets.String
+	localIPs sets.Set[string]
 }
 
 func (d *fakeLocalIPDetector) IsLocalIP(ip string) bool {
@@ -110,8 +110,8 @@ func (c *fakeSingleNodeCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	return c.node, nil
 }
 
-func (c *fakeSingleNodeCluster) AliveNodes() sets.String {
-	return sets.NewString(c.node)
+func (c *fakeSingleNodeCluster) AliveNodes() sets.Set[string] {
+	return sets.New[string](c.node)
 }
 
 func (c *fakeSingleNodeCluster) AddClusterEventHandler(handler memberlist.ClusterNodeEventHandler) {}
@@ -154,7 +154,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	k8sClient := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	localIPDetector := &fakeLocalIPDetector{localIPs: sets.NewString(fakeLocalEgressIP1, fakeLocalEgressIP2)}
+	localIPDetector := &fakeLocalIPDetector{localIPs: sets.New[string](fakeLocalEgressIP1, fakeLocalEgressIP2)}
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, "ns1", "pod1", 1)
@@ -199,7 +199,7 @@ func TestSyncEgress(t *testing.T) {
 		newEgress           *crdv1a2.Egress
 		existingEgressGroup *cpv1b2.EgressGroup
 		newEgressGroup      *cpv1b2.EgressGroup
-		newLocalIPs         sets.String
+		newLocalIPs         sets.Set[string]
 		expectedEgresses    []*crdv1a2.Egress
 		expectedCalls       func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner)
 	}{
@@ -227,7 +227,7 @@ func TestSyncEgress(t *testing.T) {
 					{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
 				},
 			},
-			newLocalIPs: sets.NewString(),
+			newLocalIPs: sets.New[string](),
 			expectedEgresses: []*crdv1a2.Egress{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -276,7 +276,7 @@ func TestSyncEgress(t *testing.T) {
 					{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
 				},
 			},
-			newLocalIPs: sets.NewString(fakeRemoteEgressIP1),
+			newLocalIPs: sets.New[string](fakeRemoteEgressIP1),
 			expectedEgresses: []*crdv1a2.Egress{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -1000,7 +1000,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 				return true, &egress, nil
 			})
 
-			localIPDetector := &fakeLocalIPDetector{localIPs: sets.NewString(fakeLocalEgressIP1)}
+			localIPDetector := &fakeLocalIPDetector{localIPs: sets.New[string](fakeLocalEgressIP1)}
 			c := &EgressController{crdClient: fakeClient, nodeName: fakeNode, localIPDetector: localIPDetector}
 			_, err := c.crdClient.CrdV1alpha2().Egresses().Create(context.TODO(), &egress, metav1.CreateOptions{})
 			assert.NoError(t, err)
@@ -1135,8 +1135,8 @@ func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface
 	require.Eventually(t, func() bool {
 		return len(items) == queue.Len()
 	}, time.Second, 10*time.Millisecond, "Didn't find enough items in the queue")
-	expectedItems := sets.NewString(items...)
-	actualItems := sets.NewString()
+	expectedItems := sets.New[string](items...)
+	actualItems := sets.New[string]()
 	for i := 0; i < len(expectedItems); i++ {
 		key, _ := queue.Get()
 		actualItems.Insert(key.(string))

@@ -215,11 +215,11 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 				antctlResults: map[string]multicast.PodTrafficStats{
 					"test2-receiver-1": {Inbound: 0, Outbound: 0},
 				},
-				igmpStatsResult: map[string]sets.String{
-					"anp1-igmp": sets.NewString("allow-igmp-report", "drop-igmp-report"),
+				igmpStatsResult: map[string]sets.Set[string]{
+					"anp1-igmp": sets.New[string]("allow-igmp-report", "drop-igmp-report"),
 				},
-				multicastGroupsResult: map[string]sets.String{
-					"225.20.3.3": sets.NewString("test2-receiver-1"),
+				multicastGroupsResult: map[string]sets.Set[string]{
+					"225.20.3.3": sets.New[string]("test2-receiver-1"),
 				},
 			},
 			{
@@ -266,13 +266,13 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 				multicastANPStatsResult: map[string]map[string]int64{
 					"anp1-mixed": {"allow-multicast-traffic": 10, "drop-multicast-traffic": 10},
 				},
-				igmpStatsResult: map[string]sets.String{
-					"anp2-mixed": sets.NewString("allow-igmp-report", "drop-igmp-report"),
-					"anp3-mixed": sets.NewString("allow-igmp-query"),
+				igmpStatsResult: map[string]sets.Set[string]{
+					"anp2-mixed": sets.New[string]("allow-igmp-report", "drop-igmp-report"),
+					"anp3-mixed": sets.New[string]("allow-igmp-query"),
 				},
-				multicastGroupsResult: map[string]sets.String{
-					"225.20.1.2": sets.NewString("test3-receiver-2", "test3-receiver-1"),
-					"225.20.1.3": sets.NewString("test3-receiver-2"),
+				multicastGroupsResult: map[string]sets.Set[string]{
+					"225.20.1.2": sets.New[string]("test3-receiver-2", "test3-receiver-1"),
+					"225.20.1.3": sets.New[string]("test3-receiver-2"),
 				},
 			},
 		}
@@ -306,8 +306,8 @@ type multicastStatsTestcase struct {
 	igmpANPConfigs          []ANPConfigs
 	antctlResults           map[string]multicast.PodTrafficStats
 	multicastANPStatsResult map[string]map[string]int64
-	igmpStatsResult         map[string]sets.String
-	multicastGroupsResult   map[string]sets.String
+	igmpStatsResult         map[string]sets.Set[string]
+	multicastGroupsResult   map[string]sets.Set[string]
 }
 
 type senderConfigs struct {
@@ -466,7 +466,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 				return false, err
 			}
 		}
-		groupAddresses := sets.NewString()
+		groupAddresses := sets.New[string]()
 		for _, receiverConfig := range mc.receiverConfigs {
 			groupAddresses.Insert(receiverConfig.IPs...)
 			stats := mc.antctlResults[receiverConfig.name]
@@ -492,7 +492,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 					return false, nil
 				}
 			} else {
-				ruleNames := sets.NewString()
+				ruleNames := sets.New[string]()
 				for _, ruleName := range stats.RuleTrafficStats {
 					ruleNames.Insert(ruleName.Name)
 				}
@@ -517,7 +517,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 				}
 			}
 		}
-		for _, group := range groupAddresses.List() {
+		for _, group := range sets.List(groupAddresses) {
 			multicastGroup, err := data.crdClient.StatsV1alpha1().MulticastGroups().Get(context.TODO(), group, metav1.GetOptions{})
 			if err != nil && !errors.IsNotFound(err) {
 				t.Logf("Got multicastGroup error %v", err)
@@ -531,7 +531,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 				}
 			} else {
 				t.Logf("Got multicast group information for group %s: %v", group, multicastGroup)
-				podsNames := sets.NewString()
+				podsNames := sets.New[string]()
 				for _, pod := range multicastGroup.Pods {
 					podsNames.Insert(pod.Name)
 				}
@@ -602,7 +602,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
-	readyReceivers := sets.NewInt()
+	readyReceivers := sets.New[int]()
 	senderReady := false
 	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
 		if !senderReady {
@@ -715,10 +715,10 @@ func computeMulticastInterfaces(t *testing.T, data *TestData) (map[int][]string,
 			return nil, err
 		}
 		// The final multicast interfaces used for the node is calculated by (localInterfacesSet intersects multicastInterfaceSet adds transportInterface).
-		localInterfacesSet := sets.NewString(strings.Split(strings.TrimSpace(localInterfacesStr), "\n")...)
-		multicastInterfaceSet := sets.NewString(multicastInterfaces...)
+		localInterfacesSet := sets.New[string](strings.Split(strings.TrimSpace(localInterfacesStr), "\n")...)
+		multicastInterfaceSet := sets.New[string](multicastInterfaces...)
 		externalMulticastInterfaces := localInterfacesSet.Intersection(multicastInterfaceSet)
-		currNodeMulticastInterfaces := externalMulticastInterfaces.Insert(transportInterface).List()
+		currNodeMulticastInterfaces := sets.List(externalMulticastInterfaces.Insert(transportInterface))
 		t.Logf("Multicast interfaces for node index %d is %+v", nodeIdx, currNodeMulticastInterfaces)
 		nodeMulticastInterfaces[nodeIdx] = currNodeMulticastInterfaces
 	}

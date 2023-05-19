@@ -171,7 +171,7 @@ func TestWatchWithFilter(t *testing.T) {
 	expireAt := v1.Date(2022, 12, 31, 0, 0, 0, 0, time.UTC)
 	collection := &types.SupportBundleCollection{
 		SpanMeta: types.SpanMeta{
-			NodeNames: sets.NewString("n1"),
+			NodeNames: sets.New[string]("n1"),
 		},
 		Name:      "foo1",
 		ExpiredAt: expireAt,

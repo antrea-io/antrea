@@ -419,7 +419,7 @@ func parsePrevResult(conf *types.NetworkConfig) error {
 func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *containerAccessArbitrator) error {
 	// desiredPods is the set of Pods that should be present, based on the
 	// current list of Pods got from the Kubernetes API.
-	desiredPods := sets.NewString()
+	desiredPods := sets.New[string]()
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 

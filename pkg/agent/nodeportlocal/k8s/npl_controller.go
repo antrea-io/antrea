@@ -226,22 +226,22 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		validateNPLService(newSvc)
 	}
 
-	podKeys := sets.String{}
+	podKeys := sets.Set[string]{}
 	oldNPLEnabled := oldSvcAnnotation == "true" && oldSvc.Spec.Type != corev1.ServiceTypeNodePort && oldSvc.Spec.Type != corev1.ServiceTypeExternalName
 	newNPLEnabled := newSvcAnnotation == "true" && newSvc.Spec.Type != corev1.ServiceTypeNodePort && newSvc.Spec.Type != corev1.ServiceTypeExternalName
 
 	if oldNPLEnabled != newNPLEnabled {
 		// Process Pods corresponding to Service with valid NPL annotation and Service type.
 		if oldNPLEnabled {
-			podKeys = sets.NewString(c.getPodsFromService(oldSvc)...)
+			podKeys = sets.New[string](c.getPodsFromService(oldSvc)...)
 		} else if newNPLEnabled {
-			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
+			podKeys = sets.New[string](c.getPodsFromService(newSvc)...)
 		}
 	} else if oldNPLEnabled && newNPLEnabled {
-		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
+		newPodSet := sets.New[string](c.getPodsFromService(newSvc)...)
 		if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
 			// Disjunctive union of Pods from both Service sets.
-			oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
+			oldPodSet := sets.New[string](c.getPodsFromService(oldSvc)...)
 			podKeys = utilsets.SymmetricDifferenceString(oldPodSet, newPodSet)
 		}
 		if !reflect.DeepEqual(oldSvc.Spec.Ports, newSvc.Spec.Ports) {
@@ -294,9 +294,9 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 	return pods
 }
 
-func (c *NPLController) getTargetPortsForServicesOfPod(obj interface{}) (sets.String, sets.String) {
-	targetPortsInt := sets.NewString()
-	targetPortsStr := sets.NewString()
+func (c *NPLController) getTargetPortsForServicesOfPod(obj interface{}) (sets.Set[string], sets.Set[string]) {
+	targetPortsInt := sets.New[string]()
+	targetPortsStr := sets.New[string]()
 	pod := obj.(*corev1.Pod)
 	services, err := c.svcInformer.GetIndexer().ByIndex(NPLEnabledAnnotationIndex, "true")
 	if err != nil {
@@ -486,7 +486,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	// first, check which rules are needed based on the target ports of the Services selecting the Pod
 	// (ignoring NPL annotations) and make sure they are present. As we do so, we build the expected list of
 	// NPL annotations for the Pod.
-	for _, targetPortProto := range targetPortsInt.List() {
+	for _, targetPortProto := range sets.List(targetPortsInt) {
 		port, protocol, err := util.ParsePortProto(targetPortProto)
 		if err != nil {
 			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPortProto, key, err)

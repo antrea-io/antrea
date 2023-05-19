@@ -262,8 +262,8 @@ func TestReconcilerReconcile(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1")),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
@@ -281,7 +281,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -322,7 +322,7 @@ func TestReconcilerReconcile(t *testing.T) {
 						openflow.NewIPNetAddress(*diffNet11),
 						openflow.NewIPNetAddress(*diffNet12),
 					},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
@@ -344,7 +344,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -366,7 +366,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{},
 					PolicyRef: &np1,
 				},
@@ -388,7 +388,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1, 3)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
@@ -410,14 +410,14 @@ func TestReconcilerReconcile(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+					To:        ofPortsToOFAddresses(sets.New[int32](3)),
 					Service:   []v1beta2.Service{serviceTCP443},
 					PolicyRef: &np1,
 				},
@@ -436,7 +436,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -460,7 +460,7 @@ func TestReconcilerReconcile(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      labelIDToOFAddresses([]uint32{1}),
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -478,8 +478,8 @@ func TestReconcilerReconcile(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
-					To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+					To:        ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -502,7 +502,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
 					To: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
 						openflow.NewIPNetAddress(*ipNet1),
@@ -540,7 +540,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -564,7 +564,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
 					To: []types.Address{
 						openflow.NewIPNetAddress(*ipNet5),
 					},
@@ -748,7 +748,7 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -773,7 +773,7 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 					To: []types.Address{
 						openflow.NewServiceGroupIDAddress(1),
 					},
@@ -800,7 +800,7 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 					To: []types.Address{
 						openflow.NewServiceGroupIDAddress(1),
 						openflow.NewServiceGroupIDAddress(2),
@@ -902,24 +902,24 @@ func TestReconcileWithTransientError(t *testing.T) {
 	policyRules := []*types.PolicyRule{
 		{
 			Direction: v1beta2.DirectionOut,
-			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			To:        ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 			Service:   []v1beta2.Service{serviceTCP80, serviceTCP8080},
 			PolicyRef: &np1,
 			TableID:   openflow.EgressRuleTable.GetID(),
 		},
 		{
 			Direction: v1beta2.DirectionOut,
-			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			To:        ipsToOFAddresses(sets.NewString("1.1.1.2")),
+			From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			To:        ipsToOFAddresses(sets.New[string]("1.1.1.2")),
 			Service:   []v1beta2.Service{serviceTCP443, serviceTCP8080},
 			PolicyRef: &np1,
 			TableID:   openflow.EgressRuleTable.GetID(),
 		},
 		{
 			Direction: v1beta2.DirectionOut,
-			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			To:        append(ipsToOFAddresses(sets.NewString("1.1.1.3")), openflow.NewIPNetAddress(ipNet)),
+			From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			To:        append(ipsToOFAddresses(sets.New[string]("1.1.1.3")), openflow.NewIPNetAddress(ipNet)),
 			Service:   []v1beta2.Service{serviceTCP8080},
 			PolicyRef: &np1,
 			TableID:   openflow.EgressRuleTable.GetID(),
@@ -981,36 +981,36 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 	expectedOFRules := []*types.PolicyRule{
 		{
 			Direction: v1beta2.DirectionIn,
-			From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
-			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+			From:      ipsToOFAddresses(sets.New[string]("1.1.1.1")),
+			To:        ofPortsToOFAddresses(sets.New[int32](1)),
 			Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta2.DirectionIn,
 			From:      []types.Address{},
-			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+			To:        ofPortsToOFAddresses(sets.New[int32](1)),
 			Service:   nil,
 			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta2.DirectionIn,
 			From:      []types.Address{},
-			To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+			To:        ofPortsToOFAddresses(sets.New[int32](1)),
 			Service:   []v1beta2.Service{serviceTCP80},
 			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta2.DirectionIn,
 			From:      []types.Address{},
-			To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+			To:        ofPortsToOFAddresses(sets.New[int32](3)),
 			Service:   []v1beta2.Service{serviceTCP443},
 			PolicyRef: &np1,
 		},
 		{
 			Direction: v1beta2.DirectionOut,
-			From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			From:      ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			To:        ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 			Service:   nil,
 			PolicyRef: &np1,
 		},
@@ -1109,10 +1109,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				FromAddresses: addressGroup2,
 				TargetMembers: appliedToGroup2,
 			},
-			ipsToOFAddresses(sets.NewString("1.1.1.2")),
-			ofPortsToOFAddresses(sets.NewInt32(2)),
-			ipsToOFAddresses(sets.NewString("1.1.1.1")),
-			ofPortsToOFAddresses(sets.NewInt32(1)),
+			ipsToOFAddresses(sets.New[string]("1.1.1.2")),
+			ofPortsToOFAddresses(sets.New[int32](2)),
+			ipsToOFAddresses(sets.New[string]("1.1.1.1")),
+			ofPortsToOFAddresses(sets.New[int32](1)),
 			false,
 			false,
 			false,
@@ -1129,10 +1129,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				ToAddresses:   addressGroup2,
 				TargetMembers: appliedToGroup2,
 			},
-			ipsToOFAddresses(sets.NewString("3.3.3.3")),
-			ipsToOFAddresses(sets.NewString("1.1.1.2")),
-			ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			ipsToOFAddresses(sets.New[string]("3.3.3.3")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.2")),
+			ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 			false,
 			false,
 			false,
@@ -1149,10 +1149,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				FromAddresses: addressGroup2,
 				TargetMembers: appliedToGroup3,
 			},
-			ipsToOFAddresses(sets.NewString("1.1.1.2")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.2")),
 			[]types.Address{},
-			ipsToOFAddresses(sets.NewString("1.1.1.1")),
-			ofPortsToOFAddresses(sets.NewInt32(1)),
+			ipsToOFAddresses(sets.New[string]("1.1.1.1")),
+			ofPortsToOFAddresses(sets.New[int32](1)),
 			false,
 			false,
 			false,
@@ -1170,9 +1170,9 @@ func TestReconcilerUpdate(t *testing.T) {
 				TargetMembers: appliedToGroup3,
 			},
 			[]types.Address{},
-			ipsToOFAddresses(sets.NewString("1.1.1.2")),
-			ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			ipsToOFAddresses(sets.NewString("1.1.1.1")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.2")),
+			ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.1")),
 			false,
 			false,
 			false,
@@ -1201,10 +1201,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				),
 				TargetMembers: appliedToGroup2,
 			},
-			ipsToOFAddresses(sets.NewString("3.3.3.3")),
-			ipsToOFAddresses(sets.NewString("1.1.1.5")),
-			ipsToOFAddresses(sets.NewString("2.2.2.2")),
-			ipsToOFAddresses(sets.NewString("1.1.1.2", "1.1.1.3")),
+			ipsToOFAddresses(sets.New[string]("3.3.3.3")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.5")),
+			ipsToOFAddresses(sets.New[string]("2.2.2.2")),
+			ipsToOFAddresses(sets.New[string]("1.1.1.2", "1.1.1.3")),
 			false,
 			false,
 			false,
@@ -1221,9 +1221,9 @@ func TestReconcilerUpdate(t *testing.T) {
 				ToAddresses:   nil,
 				TargetMembers: appliedToGroup2,
 			},
-			ipsToOFAddresses(sets.NewString("3.3.3.3")),
+			ipsToOFAddresses(sets.New[string]("3.3.3.3")),
 			[]types.Address{},
-			ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			ipsToOFAddresses(sets.New[string]("2.2.2.2")),
 			[]types.Address{},
 			false,
 			false,
@@ -1241,10 +1241,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				FromAddresses: addressGroup2,
 				TargetMembers: appliedToGroup2,
 			},
-			ipsToOFAddresses(sets.NewString("1.1.1.2")),
-			ofPortsToOFAddresses(sets.NewInt32(2)),
-			ipsToOFAddresses(sets.NewString("1.1.1.1")),
-			ofPortsToOFAddresses(sets.NewInt32(1)),
+			ipsToOFAddresses(sets.New[string]("1.1.1.2")),
+			ofPortsToOFAddresses(sets.New[int32](2)),
+			ipsToOFAddresses(sets.New[string]("1.1.1.1")),
+			ofPortsToOFAddresses(sets.New[int32](1)),
 			false,
 			false,
 			false,
@@ -1280,9 +1280,9 @@ func TestReconcilerUpdate(t *testing.T) {
 				TargetMembers: appliedToGroup2,
 			},
 			[]types.Address{},
-			ofPortsToOFAddresses(sets.NewInt32(2)),
+			ofPortsToOFAddresses(sets.New[int32](2)),
 			[]types.Address{},
-			ofPortsToOFAddresses(sets.NewInt32(1)),
+			ofPortsToOFAddresses(sets.New[int32](1)),
 			false,
 			true,
 			false,
@@ -1505,8 +1505,8 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1")),
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb44::1")),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
@@ -1524,7 +1524,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb44::1")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -1565,7 +1565,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 						openflow.NewIPNetAddress(*diffNet11),
 						openflow.NewIPNetAddress(*diffNet12),
 					},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
@@ -1587,7 +1587,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -1609,7 +1609,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{},
 					PolicyRef: &np1,
 				},
@@ -1631,7 +1631,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1, 3)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
@@ -1653,14 +1653,14 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+					To:        ofPortsToOFAddresses(sets.New[int32](3)),
 					Service:   []v1beta2.Service{serviceTCP443},
 					PolicyRef: &np1,
 				},
@@ -1679,7 +1679,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -1697,8 +1697,8 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
-					To:        ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2")),
+					To:        ipsToOFAddresses(sets.New[string]("2002:1a23:fb44::1")),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -1721,7 +1721,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2")),
 					To: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
 						openflow.NewIPNetAddress(*ipNet1),
@@ -1759,7 +1759,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -1783,7 +1783,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2")),
 					To: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
 						openflow.NewIPNetAddress(*ipNet1),
@@ -1902,8 +1902,8 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1", "2002:1a23:fb44::1")),
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1", "2002:1a23:fb44::1")),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
@@ -1921,7 +1921,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("1.1.1.1", "2002:1a23:fb44::1")),
+					From:      ipsToOFAddresses(sets.New[string]("1.1.1.1", "2002:1a23:fb44::1")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -1972,7 +1972,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 						openflow.NewIPNetAddress(*diffNet19),
 						openflow.NewIPNetAddress(*diffNet20),
 					},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80, serviceTCP},
 					PolicyRef: &np1,
 				},
@@ -1994,7 +1994,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -2016,7 +2016,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{},
 					PolicyRef: &np1,
 				},
@@ -2038,7 +2038,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1, 3)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1, 3)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
@@ -2060,14 +2060,14 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
 				},
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(3)),
+					To:        ofPortsToOFAddresses(sets.New[int32](3)),
 					Service:   []v1beta2.Service{serviceTCP443},
 					PolicyRef: &np1,
 				},
@@ -2086,7 +2086,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 				{
 					Direction: v1beta2.DirectionIn,
 					From:      []types.Address{},
-					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					To:        ofPortsToOFAddresses(sets.New[int32](1)),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -2104,8 +2104,8 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb44::1", "1.1.1.1")),
-					To:        ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb44::1", "1.1.1.1")),
+					To:        ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2", "2.2.2.2")),
 					Service:   nil,
 					PolicyRef: &np1,
 				},
@@ -2128,7 +2128,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2", "2.2.2.2")),
 					To: []types.Address{
 						openflow.NewIPAddress(net.ParseIP("2002:1a23:fb44::1")),
 						openflow.NewIPAddress(net.ParseIP("1.1.1.1")),
@@ -2176,7 +2176,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionOut,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2", "2.2.2.2")),
 					To:        []types.Address{},
 					Service:   nil,
 					PolicyRef: &np1,
@@ -2198,7 +2198,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			[]*types.PolicyRule{
 				{
 					Direction: v1beta2.DirectionIn,
-					From:      ipsToOFAddresses(sets.NewString("2002:1a23:fb45::2", "2.2.2.2", "3.3.3.3", "2002:1a23:fb46::3")),
+					From:      ipsToOFAddresses(sets.New[string]("2002:1a23:fb45::2", "2.2.2.2", "3.3.3.3", "2002:1a23:fb46::3")),
 					To:        []types.Address{},
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,

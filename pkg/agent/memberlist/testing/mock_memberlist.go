@@ -62,10 +62,10 @@ func (mr *MockInterfaceMockRecorder) AddClusterEventHandler(arg0 interface{}) *g
 }
 
 // AliveNodes mocks base method
-func (m *MockInterface) AliveNodes() sets.String {
+func (m *MockInterface) AliveNodes() sets.Set[string] {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AliveNodes")
-	ret0, _ := ret[0].(sets.String)
+	ret0, _ := ret[0].(sets.Set[string])
 	return ret0
 }
 

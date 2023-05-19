@@ -60,7 +60,7 @@ var (
 
 type threadSafeInt32Set struct {
 	sync.RWMutex
-	cached sets.Int32
+	cached sets.Set[int32]
 }
 
 func (g *threadSafeInt32Set) has(key uint32) bool {
@@ -97,15 +97,15 @@ func NewReconciler() *Reconciler {
 		suricataScFn:    suricataSc,
 		startSuricataFn: startSuricata,
 		suricataTenantCache: &threadSafeInt32Set{
-			cached: sets.NewInt32(),
+			cached: sets.New[int32](),
 		},
 		suricataTenantHandlerCache: &threadSafeInt32Set{
-			cached: sets.NewInt32(),
+			cached: sets.New[int32](),
 		},
 	}
 }
 
-func generateTenantRulesData(policyName string, protoKeywords map[string]sets.String, enableLogging bool) *bytes.Buffer {
+func generateTenantRulesData(policyName string, protoKeywords map[string]sets.Set[string], enableLogging bool) *bytes.Buffer {
 	rulesData := bytes.NewBuffer(nil)
 	sid := 1
 
@@ -206,12 +206,12 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 	})
 
 	// Generate the keyword part used in Suricata rules.
-	protoKeywords := make(map[string]sets.String)
+	protoKeywords := make(map[string]sets.Set[string])
 	for _, protocol := range l7Protocols {
 		if protocol.HTTP != nil {
 			httpKeywords := convertProtocolHTTP(protocol.HTTP)
 			if _, ok := protoKeywords[protocolHTTP]; !ok {
-				protoKeywords[protocolHTTP] = sets.NewString()
+				protoKeywords[protocolHTTP] = sets.New[string]()
 			}
 			protoKeywords[protocolHTTP].Insert(httpKeywords)
 		}

@@ -536,7 +536,7 @@ type mockGetIPNetDeviceFromIPParam struct {
 func mockGetIPNetDeviceFromIP(params []mockGetIPNetDeviceFromIPParam) func() {
 	originalGetIPNetDeviceFromIP := getIPNetDeviceFromIP
 	counter := 0
-	getIPNetDeviceFromIP = func(_ *ip.DualStackIPs, _ sets.String) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
+	getIPNetDeviceFromIP = func(_ *ip.DualStackIPs, _ sets.Set[string]) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 		param := params[counter]
 		counter++
 		return &net.IPNet{}, &net.IPNet{}, param.link, param.getIPNetDeviceFromIPErr

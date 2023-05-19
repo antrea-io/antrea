@@ -4220,8 +4220,8 @@ func applyTestStepResources(t *testing.T, step *TestStep) {
 func cleanupTestCaseResources(t *testing.T, c *TestCase) {
 	// TestSteps in a TestCase may first create and then update the same resource.
 	// Use sets to avoid duplicates.
-	acnpsToDelete, anpsToDelete, npsToDelete := sets.String{}, sets.String{}, sets.String{}
-	svcsToDelete, v1a3ClusterGroupsToDelete, v1a3GroupsToDelete := sets.String{}, sets.String{}, sets.String{}
+	acnpsToDelete, anpsToDelete, npsToDelete := sets.Set[string]{}, sets.Set[string]{}, sets.Set[string]{}
+	svcsToDelete, v1a3ClusterGroupsToDelete, v1a3GroupsToDelete := sets.Set[string]{}, sets.Set[string]{}, sets.Set[string]{}
 	for _, step := range c.Steps {
 		for _, r := range step.TestResources {
 			switch o := r.(type) {

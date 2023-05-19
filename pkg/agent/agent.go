@@ -1260,7 +1260,7 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 // When searching the Node interface, antrea-gw0 is ignored because it is configured with the same address as Node IP
 // with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
-	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
+	return getIPNetDeviceFromIP(nodeIPs, sets.New[string](i.hostGateway))
 }
 
 func (i *Initializer) initNodeLocalConfig() error {

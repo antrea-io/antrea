@@ -1498,7 +1498,7 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	if pod.Status.PodIP == "" {
 		return nil, fmt.Errorf("Pod is running but has no assigned IP, which should never happen")
 	}
-	podIPStrings := sets.NewString(pod.Status.PodIP)
+	podIPStrings := sets.New[string](pod.Status.PodIP)
 	for _, podIP := range pod.Status.PodIPs {
 		ipStr := strings.TrimSpace(podIP.IP)
 		if ipStr != "" {
@@ -1521,10 +1521,10 @@ func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace strin
 	return ips, nil
 }
 
-func parsePodIPs(podIPStrings sets.String) (*PodIPs, error) {
+func parsePodIPs(podIPStrings sets.Set[string]) (*PodIPs, error) {
 	ips := new(PodIPs)
-	for idx := range podIPStrings.List() {
-		ipStr := podIPStrings.List()[idx]
+	for idx := range sets.List(podIPStrings) {
+		ipStr := sets.List(podIPStrings)[idx]
 		ip := net.ParseIP(ipStr)
 		if ip.To4() != nil {
 			if ips.ipv4 != nil && ipStr != ips.ipv4.String() {
@@ -1967,8 +1967,10 @@ func (data *TestData) RunCommandFromPod(podNamespace string, podName string, con
 	if err != nil {
 		return "", "", err
 	}
+	ctx, cancelFn := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelFn()
 	var stdoutB, stderrB bytes.Buffer
-	if err := exec.Stream(remotecommand.StreamOptions{
+	if err := exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: &stdoutB,
 		Stderr: &stderrB,
 	}); err != nil {

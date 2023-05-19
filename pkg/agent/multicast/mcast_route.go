@@ -34,13 +34,13 @@ const (
 	MulticastRecvBufferSize = 128
 )
 
-func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.String, encapEnabled bool) *MRouteClient {
+func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.Set[string], encapEnabled bool) *MRouteClient {
 	var m = &MRouteClient{
 		igmpMsgChan:         make(chan []byte, workerCount),
 		nodeConfig:          nodeconfig,
 		groupCache:          groupCache,
 		inboundRouteCache:   cache.NewIndexer(getMulticastInboundEntryKey, cache.Indexers{GroupNameIndexName: inboundGroupIndexFunc}),
-		multicastInterfaces: multicastInterfaces.List(),
+		multicastInterfaces: sets.List(multicastInterfaces),
 		socket:              multicastSocket,
 	}
 	return m

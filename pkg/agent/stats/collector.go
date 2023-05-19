@@ -189,11 +189,11 @@ func isIdenticalMulticastGroupMap(a, b map[string][]cpv1beta.PodReference) bool 
 		if len(aValue) != len(bValue) {
 			return false
 		}
-		aValueSet := sets.NewString()
+		aValueSet := sets.New[string]()
 		for _, av := range aValue {
 			aValueSet.Insert(k8s.NamespacedName(av.Namespace, av.Name))
 		}
-		bValueSet := sets.NewString()
+		bValueSet := sets.New[string]()
 		for _, bv := range bValue {
 			bValueSet.Insert(k8s.NamespacedName(bv.Namespace, bv.Name))
 		}

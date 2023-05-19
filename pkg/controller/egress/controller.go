@@ -356,7 +356,7 @@ func (c *EgressController) syncEgress(key string) error {
 		return nil
 	}
 
-	nodeNames := sets.String{}
+	nodeNames := sets.Set[string]{}
 	podNum := 0
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	egressGroup := egressGroupObj.(*antreatypes.EgressGroup)

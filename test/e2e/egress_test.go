@@ -300,7 +300,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 		ipRange          v1alpha2.IPRange
 		nodeSelector     metav1.LabelSelector
 		expectedEgressIP string
-		expectedNodes    sets.String
+		expectedNodes    sets.Set[string]
 		expectedTotal    int
 	}{
 		{
@@ -312,7 +312,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedEgressIP: "169.254.100.1",
-			expectedNodes:    sets.NewString(nodeName(0)),
+			expectedNodes:    sets.New[string](nodeName(0)),
 			expectedTotal:    2,
 		},
 		{
@@ -324,7 +324,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedEgressIP: "2021:1::aaa1",
-			expectedNodes:    sets.NewString(nodeName(0)),
+			expectedNodes:    sets.New[string](nodeName(0)),
 			expectedTotal:    15,
 		},
 		{
@@ -340,7 +340,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedEgressIP: "169.254.101.10",
-			expectedNodes:    sets.NewString(nodeName(0), nodeName(1)),
+			expectedNodes:    sets.New[string](nodeName(0), nodeName(1)),
 			expectedTotal:    2,
 		},
 		{
@@ -352,7 +352,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				},
 			},
 			expectedEgressIP: "169.254.102.1",
-			expectedNodes:    sets.NewString(),
+			expectedNodes:    sets.New[string](),
 			expectedTotal:    2,
 		},
 	}
@@ -389,7 +389,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				}
 				return true, nil
 			})
-			require.NoError(t, err, "Expected egressIP=%s nodeName in %s, got egressIP=%s nodeName=%s", tt.expectedEgressIP, tt.expectedNodes.List(), egress.Spec.EgressIP, egress.Status.EgressNode)
+			require.NoError(t, err, "Expected egressIP=%s nodeName in %s, got egressIP=%s nodeName=%s", tt.expectedEgressIP, sets.List(tt.expectedNodes), egress.Spec.EgressIP, egress.Status.EgressNode)
 			if egress.Status.EgressNode != "" {
 				exists, err := hasIP(data, egress.Status.EgressNode, egress.Spec.EgressIP)
 				require.NoError(t, err, "Failed to check if IP exists on Node")
@@ -543,13 +543,13 @@ func testEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 			updateNodeSelector := func(poolName, evictNode string, ensureExists bool) {
 				pool, err := data.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 				require.NoError(t, err, "Failed to get ExternalIPPool %v", pool)
-				newNodes := sets.NewString(pool.Spec.NodeSelector.MatchExpressions[0].Values...)
+				newNodes := sets.New[string](pool.Spec.NodeSelector.MatchExpressions[0].Values...)
 				if ensureExists {
 					newNodes.Insert(evictNode)
 				} else {
 					newNodes.Delete(evictNode)
 				}
-				pool.Spec.NodeSelector.MatchExpressions[0].Values = newNodes.List()
+				pool.Spec.NodeSelector.MatchExpressions[0].Values = sets.List(newNodes)
 				_, err = data.crdClient.CrdV1alpha2().ExternalIPPools().Update(context.TODO(), pool, metav1.UpdateOptions{})
 				require.NoError(t, err, "Failed to update ExternalIPPool %v", pool)
 			}
@@ -620,12 +620,12 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 }
 
 func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc func(poolName, evictNode string), checkEvictNode bool, timeout time.Duration, ipRange *v1alpha2.IPRange) {
-	nodeCandidates := sets.NewString(nodeName(0), nodeName(1))
+	nodeCandidates := sets.New[string](nodeName(0), nodeName(1))
 	matchExpressions := []metav1.LabelSelectorRequirement{
 		{
 			Key:      v1.LabelHostname,
 			Operator: metav1.LabelSelectorOpIn,
-			Values:   nodeCandidates.List(),
+			Values:   sets.List(nodeCandidates),
 		},
 	}
 	externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", *ipRange, matchExpressions, nil)

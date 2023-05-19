@@ -47,6 +47,9 @@ func (r *REST) New() runtime.Object {
 	return &controlplane.NodeStatsSummary{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *v1.CreateOptions) (runtime.Object, error) {
 	summary := obj.(*controlplane.NodeStatsSummary)
 	r.statsCollector.Collect(summary)

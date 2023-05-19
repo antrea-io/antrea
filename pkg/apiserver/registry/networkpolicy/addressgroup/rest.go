@@ -54,6 +54,9 @@ func (r *REST) New() runtime.Object {
 	return &controlplane.AddressGroup{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) NewList() runtime.Object {
 	return &controlplane.AddressGroupList{}
 }

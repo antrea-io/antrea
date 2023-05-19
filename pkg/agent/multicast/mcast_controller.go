@@ -85,7 +85,7 @@ type GroupMemberStatus struct {
 	localMembers map[string]time.Time
 	// remoteMembers is a set for Nodes which have joined the multicast group in the cluster. The Node's IP is
 	// added in the set.
-	remoteMembers  sets.String
+	remoteMembers  sets.Set[string]
 	lastIGMPReport time.Time
 	ofGroupID      binding.GroupIDType
 }
@@ -111,7 +111,7 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 	status := &GroupMemberStatus{
 		group:         e.group,
 		ofGroupID:     c.v4GroupAllocator.Allocate(),
-		remoteMembers: sets.NewString(),
+		remoteMembers: sets.New[string](),
 		localMembers:  make(map[string]time.Time),
 	}
 	status = addGroupMember(status, e)
@@ -252,11 +252,11 @@ type Controller struct {
 	nodeUpdateQueue  workqueue.RateLimitingInterface
 	// installedGroups saves the groups which are configured on OVS.
 	// With encap mode, the entries in installedGroups include all multicast groups identified in the cluster.
-	installedGroups      sets.String
+	installedGroups      sets.Set[string]
 	installedGroupsMutex sync.RWMutex
 	// installedLocalGroups saves the groups which are configured on OVS and host. The entries in installedLocalGroups
 	// include the multicast groups that local Pod members join.
-	installedLocalGroups      sets.String
+	installedLocalGroups      sets.Set[string]
 	installedLocalGroupsMutex sync.RWMutex
 	mRouteClient              *MRouteClient
 	ovsBridgeClient           ovsconfig.OVSBridgeClient
@@ -269,7 +269,7 @@ type Controller struct {
 	// nodeGroupID is the OpenFlow group ID in OVS which is used to send IGMP report messages to other Nodes.
 	nodeGroupID binding.GroupIDType
 	// installedNodes is the installed Node set that the IGMP report message is sent to.
-	installedNodes sets.String
+	installedNodes sets.Set[string]
 	encapEnabled   bool
 }
 
@@ -278,7 +278,7 @@ func NewMulticastController(ofClient openflow.Client,
 	nodeConfig *config.NodeConfig,
 	ifaceStore interfacestore.InterfaceStore,
 	multicastSocket RouteInterface,
-	multicastInterfaces sets.String,
+	multicastInterfaces sets.Set[string],
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	podUpdateSubscriber channel.Subscriber,
 	igmpQueryInterval time.Duration,
@@ -299,8 +299,8 @@ func NewMulticastController(ofClient openflow.Client,
 		igmpSnooper:          groupSnooper,
 		groupEventCh:         eventCh,
 		groupCache:           groupCache,
-		installedGroups:      sets.NewString(),
-		installedLocalGroups: sets.NewString(),
+		installedGroups:      sets.New[string](),
+		installedLocalGroups: sets.New[string](),
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
 		mRouteClient:         multicastRouteClient,
 		ovsBridgeClient:      ovsBridgeClient,
@@ -311,7 +311,7 @@ func NewMulticastController(ofClient openflow.Client,
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
-		c.installedNodes = sets.NewString()
+		c.installedNodes = sets.New[string]()
 		c.nodeInformer = informerFactory.Core().V1().Nodes()
 		c.nodeLister = c.nodeInformer.Lister()
 		c.nodeListerSynced = c.nodeInformer.Informer().HasSynced
@@ -683,7 +683,7 @@ func (c *Controller) syncNodes() error {
 		return err
 	}
 	var updatedNodeIPs []net.IP
-	updatedNodeIPSet := sets.NewString()
+	updatedNodeIPSet := sets.New[string]()
 	for _, n := range nodes {
 		if n.Name == c.nodeConfig.Name {
 			continue

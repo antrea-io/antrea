@@ -382,7 +382,7 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 		}
 	}
 	if features.DefaultFeatureGate.Enabled(features.Multicast) {
-		reportedGroups := sets.NewString()
+		reportedGroups := sets.New[string]()
 		a.groupNodePodsMapMutex.Lock()
 		for _, mcastGroupInfo := range summary.Multicast {
 			group := mcastGroupInfo.Group

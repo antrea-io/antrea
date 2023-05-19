@@ -117,7 +117,7 @@ type proxier struct {
 	// With the references, we install a route exactly once as long as it's used by any ServicePorts and uninstall it
 	// exactly once when it's no longer used by any ServicePorts.
 	// It applies to ClusterIP and LoadBalancerIP.
-	serviceIPRouteReferences map[string]sets.String
+	serviceIPRouteReferences map[string]sets.Set[string]
 	// syncedOnce returns true if the proxier has synced rules at least once.
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
@@ -446,7 +446,7 @@ func (p *proxier) addRouteForServiceIP(svcInfoStr string, ip net.IP, addRouteFn 
 		if err := addRouteFn(ip); err != nil {
 			return err
 		}
-		references = sets.NewString(svcInfoStr)
+		references = sets.New[string](svcInfoStr)
 		p.serviceIPRouteReferences[ipStr] = references
 	} else {
 		references.Insert(svcInfoStr)
@@ -1150,7 +1150,7 @@ func NewProxier(
 		endpointsInstalledMap:     types.EndpointsMap{},
 		endpointsMap:              types.EndpointsMap{},
 		endpointReferenceCounter:  map[string]int{},
-		serviceIPRouteReferences:  map[string]sets.String{},
+		serviceIPRouteReferences:  map[string]sets.Set[string]{},
 		nodeLabels:                map[string]string{},
 		serviceStringMap:          map[string]k8sproxy.ServicePortName{},
 		groupCounter:              groupCounter,

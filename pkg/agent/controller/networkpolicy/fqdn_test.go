@@ -59,13 +59,13 @@ func TestAddFQDNRule(t *testing.T) {
 	}
 	tests := []struct {
 		name                       string
-		existingSelectorToRuleIDs  map[fqdnSelectorItem]sets.String
+		existingSelectorToRuleIDs  map[fqdnSelectorItem]sets.Set[string]
 		existingDNSCache           map[string]dnsMeta
 		existingFQDNToSelectorItem map[string]map[fqdnSelectorItem]struct{}
 		ruleID                     string
 		fqdns                      []string
-		podAddrs                   sets.Int32
-		finalSelectorToRuleIDs     map[fqdnSelectorItem]sets.String
+		podAddrs                   sets.Set[int32]
+		finalSelectorToRuleIDs     map[fqdnSelectorItem]sets.Set[string]
 		finalFQDNToSelectorItem    map[string]map[fqdnSelectorItem]struct{}
 		addressAdded               bool
 		addressRemoved             bool
@@ -77,9 +77,9 @@ func TestAddFQDNRule(t *testing.T) {
 			nil,
 			"mockRule1",
 			[]string{"test.antrea.io"},
-			sets.NewInt32(1),
-			map[fqdnSelectorItem]sets.String{
-				selectorItem1: sets.NewString("mockRule1"),
+			sets.New[int32](1),
+			map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem1: sets.New[string]("mockRule1"),
 			},
 			map[string]map[fqdnSelectorItem]struct{}{
 				"test.antrea.io": {selectorItem1: struct{}{}},
@@ -89,8 +89,8 @@ func TestAddFQDNRule(t *testing.T) {
 		},
 		{
 			"addNewFQDNSelectorMatchExisting",
-			map[fqdnSelectorItem]sets.String{
-				selectorItem1: sets.NewString("mockRule1"),
+			map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem1: sets.New[string]("mockRule1"),
 			},
 			map[string]dnsMeta{
 				"test.antrea.io": {},
@@ -102,10 +102,10 @@ func TestAddFQDNRule(t *testing.T) {
 			},
 			"mockRule2",
 			[]string{"*antrea.io"},
-			sets.NewInt32(2),
-			map[fqdnSelectorItem]sets.String{
-				selectorItem1: sets.NewString("mockRule1"),
-				selectorItem2: sets.NewString("mockRule2")},
+			sets.New[int32](2),
+			map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem1: sets.New[string]("mockRule1"),
+				selectorItem2: sets.New[string]("mockRule2")},
 			map[string]map[fqdnSelectorItem]struct{}{
 				"test.antrea.io": {
 					selectorItem1: struct{}{},
@@ -143,7 +143,7 @@ func TestAddFQDNRule(t *testing.T) {
 type fqdnRuleAddArgs struct {
 	ruleID         string
 	fqdns          []string
-	podOFAddresses sets.Int32
+	podOFAddresses sets.Set[int32]
 }
 
 func TestDeleteFQDNRule(t *testing.T) {
@@ -162,7 +162,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 		existingDNSCache        map[string]dnsMeta
 		ruleID                  string
 		fqdns                   []string
-		finalSelectorToRuleIDs  map[fqdnSelectorItem]sets.String
+		finalSelectorToRuleIDs  map[fqdnSelectorItem]sets.Set[string]
 		finalFQDNToSelectorItem map[string]map[fqdnSelectorItem]struct{}
 		addressRemoved          bool
 	}{
@@ -172,7 +172,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 				{
 					"mockRule1",
 					[]string{"test.antrea.io"},
-					sets.NewInt32(1),
+					sets.New[int32](1),
 				},
 			},
 			map[string]dnsMeta{
@@ -180,7 +180,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 			},
 			"mockRule1",
 			[]string{"test.antrea.io"},
-			map[fqdnSelectorItem]sets.String{},
+			map[fqdnSelectorItem]sets.Set[string]{},
 			map[string]map[fqdnSelectorItem]struct{}{},
 			true,
 		},
@@ -190,12 +190,12 @@ func TestDeleteFQDNRule(t *testing.T) {
 				{
 					"mockRule1",
 					[]string{"test.antrea.io"},
-					sets.NewInt32(1),
+					sets.New[int32](1),
 				},
 				{
 					"mockRule2",
 					[]string{"test.antrea.io"},
-					sets.NewInt32(2),
+					sets.New[int32](2),
 				},
 			},
 			map[string]dnsMeta{
@@ -203,8 +203,8 @@ func TestDeleteFQDNRule(t *testing.T) {
 			},
 			"mockRule1",
 			[]string{"test.antrea.io"},
-			map[fqdnSelectorItem]sets.String{
-				selectorItem1: sets.NewString("mockRule2"),
+			map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem1: sets.New[string]("mockRule2"),
 			},
 			map[string]map[fqdnSelectorItem]struct{}{
 				"test.antrea.io": {
@@ -219,12 +219,12 @@ func TestDeleteFQDNRule(t *testing.T) {
 				{
 					"mockRule1",
 					[]string{"test.antrea.io"},
-					sets.NewInt32(1),
+					sets.New[int32](1),
 				},
 				{
 					"mockRule2",
 					[]string{"*antrea.io"},
-					sets.NewInt32(2),
+					sets.New[int32](2),
 				},
 			},
 			map[string]dnsMeta{
@@ -232,8 +232,8 @@ func TestDeleteFQDNRule(t *testing.T) {
 			},
 			"mockRule1",
 			[]string{"test.antrea.io"},
-			map[fqdnSelectorItem]sets.String{
-				selectorItem2: sets.NewString("mockRule2"),
+			map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem2: sets.New[string]("mockRule2"),
 			},
 			map[string]map[fqdnSelectorItem]struct{}{
 				"test.antrea.io": {
@@ -248,12 +248,12 @@ func TestDeleteFQDNRule(t *testing.T) {
 				{
 					"mockRule1",
 					[]string{"maps.google.com"},
-					sets.NewInt32(1),
+					sets.New[int32](1),
 				},
 				{
 					"mockRule2",
 					[]string{"*antrea.io"},
-					sets.NewInt32(2),
+					sets.New[int32](2),
 				},
 			},
 			map[string]dnsMeta{
@@ -262,8 +262,8 @@ func TestDeleteFQDNRule(t *testing.T) {
 			},
 			"mockRule2",
 			[]string{"*antrea.io"},
-			map[fqdnSelectorItem]sets.String{
-				selectorItem3: sets.NewString("mockRule1"),
+			map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem3: sets.New[string]("mockRule1"),
 			},
 			map[string]map[fqdnSelectorItem]struct{}{
 				"maps.google.com": {
@@ -341,15 +341,15 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 	tests := []struct {
 		name                       string
 		fqdns                      []string
-		existingSelectorItemToFQDN map[fqdnSelectorItem]sets.String
+		existingSelectorItemToFQDN map[fqdnSelectorItem]sets.Set[string]
 		existingDNSCache           map[string]dnsMeta
 		expectedMatchedIPs         []net.IP
 	}{
 		{
 			name:  "matched ip found",
 			fqdns: []string{"test.antrea.io"},
-			existingSelectorItemToFQDN: map[fqdnSelectorItem]sets.String{
-				selectorItem: sets.NewString("test.antrea.io"),
+			existingSelectorItemToFQDN: map[fqdnSelectorItem]sets.Set[string]{
+				selectorItem: sets.New[string]("test.antrea.io"),
 			},
 			existingDNSCache: map[string]dnsMeta{
 				"test.antrea.io": {

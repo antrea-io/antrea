@@ -59,7 +59,7 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
 		if deletedIPRanges.Len() > 0 {
 			allowed = false
-			msg = fmt.Sprintf("existing IPRanges %v cannot be deleted", deletedIPRanges.List())
+			msg = fmt.Sprintf("existing IPRanges %v cannot be deleted", sets.List(deletedIPRanges))
 		}
 	case admv1.Delete:
 		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
@@ -77,8 +77,8 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		Result:  result,
 	}
 }
-func getIPRangeSet(ipRanges []crdv1alpha2.IPRange) sets.String {
-	set := sets.NewString()
+func getIPRangeSet(ipRanges []crdv1alpha2.IPRange) sets.Set[string] {
+	set := sets.New[string]()
 	for _, ipRange := range ipRanges {
 		ipRangeStr := ipRange.CIDR
 		if ipRangeStr == "" {

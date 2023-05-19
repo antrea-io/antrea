@@ -51,6 +51,9 @@ func (r *REST) New() runtime.Object {
 	return &controlplane.GroupAssociation{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	ns, ok := request.NamespaceFrom(ctx)
 	if !ok || len(ns) == 0 {
