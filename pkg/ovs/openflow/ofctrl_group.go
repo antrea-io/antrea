@@ -62,10 +62,6 @@ func (g *ofGroup) Type() EntryType {
 	return GroupEntry
 }
 
-func (g *ofGroup) KeyString() string {
-	return fmt.Sprintf("group_id:%d", g.ofctrl.ID)
-}
-
 func (g *ofGroup) Bucket() BucketBuilder {
 	id := uint32(len(g.ofctrl.Buckets))
 	return &bucketBuilder{

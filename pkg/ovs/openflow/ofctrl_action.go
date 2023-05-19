@@ -33,7 +33,6 @@ type ofFlowAction struct {
 // Drop is an action to drop packets.
 func (a *ofFlowAction) Drop() FlowBuilder {
 	a.builder.Drop()
-	a.builder.isDropFlow = true
 	return a.builder
 }
 

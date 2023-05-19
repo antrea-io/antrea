@@ -71,7 +71,7 @@ func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) b
 		Done()
 }
 
-func (f *featureMulticast) initFlows() []binding.Flow {
+func (f *featureMulticast) initFlows() []*openflow15.FlowMod {
 	// Install flows to send the IGMP report messages to Antrea Agent.
 	flows := f.igmpPktInFlows()
 	// Install flow to forward the IGMP query messages to all local Pods.
@@ -84,12 +84,12 @@ func (f *featureMulticast) initFlows() []binding.Flow {
 	}
 	// Install flows to output multicast packets.
 	flows = append(flows, f.multicastOutputFlows()...)
-	return flows
+	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
-func (f *featureMulticast) replayFlows() []binding.Flow {
+func (f *featureMulticast) replayFlows() []*openflow15.FlowMod {
 	// Get cached flows.
-	return getCachedFlows(f.cachedFlows)
+	return getCachedFlowMessages(f.cachedFlows)
 }
 
 func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) binding.Group {

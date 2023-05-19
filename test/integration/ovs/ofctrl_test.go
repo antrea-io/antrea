@@ -371,7 +371,7 @@ func TestTransactions(t *testing.T) {
 	ovsCtlClient := ovsctl.NewClient(br)
 
 	flows, expectflows := prepareFlows(table)
-	err = bridge.AddFlowsInBundle(flows, nil, nil)
+	err = bridge.AddFlowsInBundle(openflow.GetFlowModMessages(flows, binding.AddMessage), nil, nil)
 	require.Nil(t, err, fmt.Sprintf("Failed to add flows in a transaction: %v", err))
 	dumpTable := table.GetID()
 	flowList := CheckFlowExists(t, ovsCtlClient, "", dumpTable, true, expectflows)
@@ -386,7 +386,7 @@ func TestTransactions(t *testing.T) {
 	}
 
 	// Delete flows in a bundle
-	err = bridge.AddFlowsInBundle(nil, nil, flows)
+	err = bridge.AddFlowsInBundle(nil, nil, openflow.GetFlowModMessages(flows, binding.DeleteMessage))
 	require.Nil(t, err, fmt.Sprintf("Failed to delete flows in a transaction: %v", err))
 	dumpTable = table.GetID()
 	flowList = CheckFlowExists(t, ovsCtlClient, "", dumpTable, false, expectflows)
@@ -471,7 +471,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 					MatchInPort(uint32(count + 1)).
 					Action().NextTable().
 					Done()}
-				err = bridge.AddFlowsInBundle(flows, nil, nil)
+				err = bridge.AddFlowsInBundle(openflow.GetFlowModMessages(flows, binding.AddMessage), nil, nil)
 				if err != nil {
 					errMsg := err.Error()
 					_, found := expectedErrorMsgs[errMsg]
@@ -680,7 +680,7 @@ func TestPacketOutIn(t *testing.T) {
 		MatchRegFieldWithValue(regField, 0x1).
 		Action().SendToController([]byte{0x1}, false).
 		Done()
-	err = bridge.AddFlowsInBundle([]binding.Flow{flow0, flow1}, nil, nil)
+	err = bridge.AddFlowsInBundle(openflow.GetFlowModMessages([]binding.Flow{flow0, flow1}, binding.AddMessage), nil, nil)
 	require.Nil(t, err)
 	err = bridge.SendPacketOut(pkt)
 	require.NoError(t, err)
@@ -711,7 +711,7 @@ func TestTLVMap(t *testing.T) {
 		MatchProtocol(binding.ProtocolIP).MatchTunMetadata(0, 0x1234).
 		Action().NextTable().
 		Done()
-	err = bridge.AddFlowsInBundle([]binding.Flow{flow1}, nil, nil)
+	err = bridge.AddFlowsInBundle(openflow.GetFlowModMessages([]binding.Flow{flow1}, binding.AddMessage), nil, nil)
 	require.Nil(t, err)
 	expectedFlows := []*ExpectFlow{
 		{
@@ -744,7 +744,7 @@ func TestMoveTunMetadata(t *testing.T) {
 		Action().MoveFromTunMetadata(0, "NXM_NX_REG0", binding.Range{28, 31}, binding.Range{28, 31}, 4).
 		Action().NextTable().
 		Done()
-	err = bridge.AddFlowsInBundle([]binding.Flow{flow1}, nil, nil)
+	err = bridge.AddFlowsInBundle(openflow.GetFlowModMessages([]binding.Flow{flow1}, binding.AddMessage), nil, nil)
 	require.Nil(t, err)
 	expectedFlows := []*ExpectFlow{
 		{

@@ -50,7 +50,7 @@ func Test_client_InstallVMUplinkFlows(t *testing.T) {
 	assert.NoError(t, fc.InstallVMUplinkFlows(hostIFName, hostPort, uplinkPort))
 	fCacheI, ok := fc.featureExternalNodeConnectivity.uplinkFlowCache.Load(hostIFName)
 	require.True(t, ok)
-	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI.(flowCache)))
+	assert.ElementsMatch(t, expectedFlows, getFlowStrings(fCacheI.(flowMessageCache)))
 
 	assert.NoError(t, fc.UninstallVMUplinkFlows(hostIFName))
 	_, ok = fc.featureExternalNodeConnectivity.uplinkFlowCache.Load(hostIFName)
@@ -90,7 +90,7 @@ func Test_client_InstallPolicyBypassFlows(t *testing.T) {
 			fc := newFakeClient(m, true, true, config.ExternalNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
 
-			m.EXPECT().Add(gomock.Any()).Return(nil).Times(1)
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 
 			assert.NoError(t, fc.InstallPolicyBypassFlows(protocol, ipNet, port, tc.isIngress))
 			fCacheI, ok := fc.featureExternalNodeConnectivity.uplinkFlowCache.Load(policyBypassFlowsKey)

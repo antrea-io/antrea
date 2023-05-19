@@ -18,6 +18,7 @@ import (
 	"net"
 	"time"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -98,8 +99,8 @@ var VLANVIDRange = &Range{0, 11}
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
 	CreateTable(table Table, next uint8, missAction MissActionType) Table
-	// AddTable adds table on the Bridge. Return true if the operation succeeds, otherwise return false.
 	DeleteTable(id uint8) bool
+	GetTableByID(id uint8) (Table, error)
 	CreateGroupTypeAll(id GroupIDType) Group
 	CreateGroup(id GroupIDType) Group
 	DeleteGroup(id GroupIDType) error
@@ -114,7 +115,7 @@ type Bridge interface {
 	DeleteFlowsByCookie(cookieID, cookieMask uint64) error
 	// AddFlowsInBundle syncs multiple Openflow entries in a single transaction. This operation could add new flows in
 	// "addFlows", modify flows in "modFlows", and remove flows in "delFlows" in the same bundle.
-	AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error
+	AddFlowsInBundle(addflows, modFlows, delFlows []*openflow15.FlowMod) error
 	// AddOFEntriesInBundle syncs multiple Openflow entries(including Flow and Group) in a single transaction. This
 	// operation could add new entries in "addEntries", modify entries in "modEntries", and remove entries in
 	// "delEntries" in the same bundle.
@@ -160,6 +161,8 @@ type Table interface {
 	SetNext(next uint8)
 	SetMissAction(action MissActionType)
 	GetStageID() StageID
+	// SetTable is used only for testing.
+	SetTable()
 }
 
 type PipelineID uint8
@@ -186,7 +189,6 @@ type OFEntry interface {
 	Modify() error
 	Delete() error
 	Type() EntryType
-	KeyString() string
 	// Reset ensures that the entry is "correct" and that the Add /
 	// Modify / Delete methods can be called on this object. This method
 	// should be called if a reconnection event happened.
@@ -206,7 +208,6 @@ type Flow interface {
 	// It copies the original actions of the Flow only if copyActions is set to true, and
 	// resets the priority in the new FlowBuilder if the provided priority is not 0.
 	CopyToBuilder(priority uint16, copyActions bool) FlowBuilder
-	IsDropFlow() bool
 }
 
 type Action interface {

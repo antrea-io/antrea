@@ -17,6 +17,8 @@ package openflow
 import (
 	"net"
 
+	"antrea.io/libOpenflow/openflow15"
+
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
@@ -99,7 +101,7 @@ func (f *featureExternalNodeConnectivity) vmUplinkFlows(hostOFPort, uplinkOFPort
 	}
 }
 
-func (f *featureExternalNodeConnectivity) initFlows() []binding.Flow {
+func (f *featureExternalNodeConnectivity) initFlows() []*openflow15.FlowMod {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := []binding.Flow{
 		L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal).
@@ -135,15 +137,14 @@ func (f *featureExternalNodeConnectivity) initFlows() []binding.Flow {
 		)
 	}
 
-	return flows
+	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
-func (f *featureExternalNodeConnectivity) replayFlows() []binding.Flow {
-	var flows []binding.Flow
+func (f *featureExternalNodeConnectivity) replayFlows() []*openflow15.FlowMod {
+	var flows []*openflow15.FlowMod
 	rangeFunc := func(key, value interface{}) bool {
-		cachedFlows := value.([]binding.Flow)
+		cachedFlows := value.([]*openflow15.FlowMod)
 		for _, flow := range cachedFlows {
-			flow.Reset()
 			flows = append(flows, flow)
 		}
 		return true
@@ -202,7 +203,8 @@ func (c *client) UninstallVMUplinkFlows(hostIFName string) error {
 
 func (c *client) InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error {
 	flow := c.featureExternalNodeConnectivity.policyBypassFlow(protocol, ipNet, port, isIngress)
-	if err := c.ofEntryOperations.Add(flow); err != nil {
+	flowMessages := GetFlowModMessages([]binding.Flow{flow}, binding.AddMessage)
+	if err := c.ofEntryOperations.AddAll(flowMessages); err != nil {
 		return err
 	}
 	return c.featureExternalNodeConnectivity.addPolicyBypassFlows(flow)
