@@ -83,6 +83,7 @@ Kubernetes: `>= 1.16.0-0`
 | ipsec.psk | string | `"changeme"` | Preshared Key (PSK) for IKE authentication. It will be stored in a secret and passed to antrea-agent as an environment variable. |
 | kubeAPIServerOverride | string | `""` | Address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig. |
 | logVerbosity | int | `0` | Global log verbosity switch for all Antrea components. |
+| multicast.enable | bool | `false` | To enable Multicast, you need to set "enable" to true, and ensure that the Multicast feature gate is also enabled (which is the default). |
 | multicast.igmpQueryInterval | string | `"125s"` | The interval at which the antrea-agent sends IGMP queries to Pods. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | multicast.igmpQueryVersions | list | `[1,2,3]` | The versions of IGMP queries antrea-agent sends to Pods. Valid versions are 1, 2 and 3. |
 | multicast.multicastInterfaces | list | `[]` | Names of the interfaces on Nodes that are used to forward multicast traffic. |

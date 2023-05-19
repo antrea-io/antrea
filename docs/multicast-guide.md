@@ -27,31 +27,32 @@ Antrea supports multicast traffic in the following scenarios:
 
 ## Prerequisites
 
-Multicast support is introduced in Antrea v1.5.0 as an alpha feature. The feature gate
-`Multicast` must be enabled in the `antrea-controller` and `antrea-agent`
-configuration to use the feature, and three new configuration options -
-`multicastInterfaces`, `igmpQueryVersions` and `igmpQueryInterval` parameters are added for `antrea-agent`.
+Multicast support was introduced in Antrea v1.5.0 as an alpha feature, and was graduated to
+beta in v1.12.0.
+
+* Prior to v1.12.0, a feature gate, `Multicast` must be enabled in the `antrea-controller`
+  and `antrea-agent` configuration to use the feature.
+* Starting from v1.12.0, the feature gate is enabled by default, you need to set the
+  `multicast.enable` flag to true in the `antrea-agent` configuration to use the feature.
+
+There are three other configuration options -`multicastInterfaces`, `igmpQueryVersions`,
+and `igmpQueryInterval` for `antrea-agent`.
 
 ```yaml
-  antrea-controller.conf: |
-    featureGates:
-    # Enable multicast traffic.
-      Multicast: true
   antrea-agent.conf: |
-    # Enable multicast traffic.
-      Multicast: true
     multicast:
-    # The names of the interfaces on Nodes that are used to forward multicast traffic.
-    # Defaults to transport interface if not set.
+      enable: true
+      # The names of the interfaces on Nodes that are used to forward multicast traffic.
+      # Defaults to transport interface if not set.
       multicastInterfaces: 
-    # The versions of IGMP queries antrea-agent sends to Pods.
-    # Valid versions are 1, 2 and 3.
+      # The versions of IGMP queries antrea-agent sends to Pods.
+      # Valid versions are 1, 2 and 3.
       igmpQueryVersions:
       - 1
       - 2
       - 3
-    # The interval at which the antrea-agent sends IGMP queries to Pods.
-    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      # The interval at which the antrea-agent sends IGMP queries to Pods.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       igmpQueryInterval: "125s"
 ```
 

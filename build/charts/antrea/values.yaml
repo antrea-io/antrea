@@ -48,6 +48,9 @@ transportInterface: ""
 transportInterfaceCIDRs: []
 
 multicast:
+  # -- To enable Multicast, you need to set "enable" to true, and ensure that the
+  # Multicast feature gate is also enabled (which is the default).
+  enable: false
   # -- Names of the interfaces on Nodes that are used to forward multicast traffic.
   multicastInterfaces: []
   # -- The versions of IGMP queries antrea-agent sends to Pods.

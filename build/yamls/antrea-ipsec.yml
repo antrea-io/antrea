@@ -3004,7 +3004,7 @@ data:
 
     # Enable TopologyAwareHints in AntreaProxy. This requires AntreaProxy and EndpointSlice to be
     # enabled, otherwise this flag will not take effect.
-    #  TopologyAwareHints: false
+    #  TopologyAwareHints: true
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
@@ -3033,7 +3033,7 @@ data:
     #  AntreaIPAM: false
 
     # Enable multicast traffic.
-    #  Multicast: false
+    #  Multicast: true
 
     # Enable Antrea Multi-cluster features.
     #  Multicluster: false
@@ -3243,17 +3243,23 @@ data:
     transportInterface: ""
 
     multicast:
-    # The names of the interfaces on Nodes that are used to forward multicast traffic.
-    # Defaults to transport interface if not set.
+      # To enable Multicast, you need to set "enable" to true, and ensure that the
+      # Multicast feature gate is also enabled (which is the default).
+      enable: false
+
+      # The names of the interfaces on Nodes that are used to forward multicast traffic.
+      # Defaults to transport interface if not set.
       multicastInterfaces:
-    # The versions of IGMP queries antrea-agent sends to Pods.
-    # Valid versions are 1, 2 and 3.
+
+      # The versions of IGMP queries antrea-agent sends to Pods.
+      # Valid versions are 1, 2 and 3.
       igmpQueryVersions:
       - 1
       - 2
       - 3
-    # The interval at which the antrea-agent sends IGMP queries to Pods.
-    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+      # The interval at which the antrea-agent sends IGMP queries to Pods.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       igmpQueryInterval: "125s"
 
     # The network CIDRs of the interface on Node which is used for tunneling or routing the traffic across
@@ -3363,13 +3369,13 @@ data:
     #  NetworkPolicyStats: true
 
     # Enable multicast traffic.
-    #  Multicast: false
+    #  Multicast: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: true
 
     # Run Kubernetes NodeIPAMController with Antrea.
-    #  NodeIPAM: false
+    #  NodeIPAM: true
 
     # Enable AntreaIPAM, which can allocate IP addresses from IPPools. AntreaIPAM is required by the
     # bridging mode and allocates IPs to Pods in bridging mode. It is also required to use Antrea for
@@ -4371,7 +4377,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 70e72f54b904fdcd72a0664563a42da8772ea2e1527f7d01a95079fb01826bfd
+        checksum/config: d5789c48750f03a8652da56fc0e7f6cd4b12911fff41a84c8426245270fd5ec2
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -4656,7 +4662,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 70e72f54b904fdcd72a0664563a42da8772ea2e1527f7d01a95079fb01826bfd
+        checksum/config: d5789c48750f03a8652da56fc0e7f6cd4b12911fff41a84c8426245270fd5ec2
       labels:
         app: antrea
         component: antrea-controller

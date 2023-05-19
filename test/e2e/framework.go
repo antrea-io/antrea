@@ -171,7 +171,7 @@ type ClusterInfo struct {
 	controlPlaneNodeName string
 	controlPlaneNodeIPv4 string
 	controlPlaneNodeIPv6 string
-	nodes                map[int]ClusterNode
+	nodes                map[int]*ClusterNode
 	nodesOS              map[string]string
 	windowsNodes         []int
 	k8sServerVersion     string
@@ -445,7 +445,7 @@ func (data *TestData) collectClusterInfo() error {
 		return fmt.Errorf("error when listing cluster Nodes: %v", err)
 	}
 	workerIdx := 1
-	clusterInfo.nodes = make(map[int]ClusterNode)
+	clusterInfo.nodes = make(map[int]*ClusterNode)
 	clusterInfo.nodesOS = make(map[string]string)
 	for _, node := range nodes.Items {
 		isControlPlaneNode := func() bool {
@@ -477,44 +477,12 @@ func (data *TestData) collectClusterInfo() error {
 			workerIdx++
 		}
 
-		var podV4NetworkCIDR, podV6NetworkCIDR string
-		var gwV4Addr, gwV6Addr string
-		processPodCIDR := func(podCIDR string) error {
-			_, cidr, err := net.ParseCIDR(podCIDR)
-			if err != nil {
-				return err
-			}
-			if cidr.IP.To4() != nil {
-				podV4NetworkCIDR = podCIDR
-				gwV4Addr = ip.NextIP(cidr.IP).String()
-			} else {
-				podV6NetworkCIDR = podCIDR
-				gwV6Addr = ip.NextIP(cidr.IP).String()
-			}
-			return nil
-		}
-		if len(node.Spec.PodCIDRs) == 0 {
-			if err := processPodCIDR(node.Spec.PodCIDR); err != nil {
-				return fmt.Errorf("error when processing PodCIDR field for Node %s: %v", node.Name, err)
-			}
-		} else {
-			for _, podCIDR := range node.Spec.PodCIDRs {
-				if err := processPodCIDR(podCIDR); err != nil {
-					return fmt.Errorf("error when processing PodCIDRs field for Node %s: %v", node.Name, err)
-				}
-			}
-		}
-
-		clusterInfo.nodes[nodeIdx] = ClusterNode{
-			idx:              nodeIdx,
-			name:             node.Name,
-			ipv4Addr:         nodeIPv4,
-			ipv6Addr:         nodeIPv6,
-			podV4NetworkCIDR: podV4NetworkCIDR,
-			podV6NetworkCIDR: podV6NetworkCIDR,
-			gwV4Addr:         gwV4Addr,
-			gwV6Addr:         gwV6Addr,
-			os:               node.Status.NodeInfo.OperatingSystem,
+		clusterInfo.nodes[nodeIdx] = &ClusterNode{
+			idx:      nodeIdx,
+			name:     node.Name,
+			ipv4Addr: nodeIPv4,
+			ipv6Addr: nodeIPv6,
+			os:       node.Status.NodeInfo.OperatingSystem,
 		}
 		if node.Status.NodeInfo.OperatingSystem == "windows" {
 			clusterInfo.windowsNodes = append(clusterInfo.windowsNodes, nodeIdx)
@@ -598,6 +566,60 @@ func (data *TestData) collectClusterInfo() error {
 	clusterInfo.k8sServiceHost = svc.Spec.ClusterIP
 	clusterInfo.k8sServicePort = svc.Spec.Ports[0].Port
 
+	return nil
+}
+
+func getNodeByName(name string) *ClusterNode {
+	for _, node := range clusterInfo.nodes {
+		if node.name == name {
+			return node
+		}
+	}
+	return nil
+}
+
+func (data *TestData) collectPodCIDRs() error {
+	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error when listing cluster Nodes: %v", err)
+	}
+	for _, node := range nodes.Items {
+		var podV4NetworkCIDR, podV6NetworkCIDR string
+		var gwV4Addr, gwV6Addr string
+		processPodCIDR := func(podCIDR string) error {
+			_, cidr, err := net.ParseCIDR(podCIDR)
+			if err != nil {
+				return err
+			}
+			if cidr.IP.To4() != nil {
+				podV4NetworkCIDR = podCIDR
+				gwV4Addr = ip.NextIP(cidr.IP).String()
+			} else {
+				podV6NetworkCIDR = podCIDR
+				gwV6Addr = ip.NextIP(cidr.IP).String()
+			}
+			return nil
+		}
+		if len(node.Spec.PodCIDRs) == 0 {
+			if err := processPodCIDR(node.Spec.PodCIDR); err != nil {
+				return fmt.Errorf("error when processing PodCIDR field for Node %s: %v", node.Name, err)
+			}
+		} else {
+			for _, podCIDR := range node.Spec.PodCIDRs {
+				if err := processPodCIDR(podCIDR); err != nil {
+					return fmt.Errorf("error when processing PodCIDRs field for Node %s: %v", node.Name, err)
+				}
+			}
+		}
+		clusterNode := getNodeByName(node.Name)
+		if clusterNode == nil {
+			return fmt.Errorf("Node %s not found in ClusterInfo", node.Name)
+		}
+		clusterNode.podV4NetworkCIDR = podV4NetworkCIDR
+		clusterNode.podV6NetworkCIDR = podV6NetworkCIDR
+		clusterNode.gwV4Addr = gwV4Addr
+		clusterNode.gwV6Addr = gwV6Addr
+	}
 	return nil
 }
 
@@ -2253,11 +2275,23 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 }
 
 func GetTransportInterface(data *TestData) (string, error) {
-	_, transportInterfaceUntrimmed, _, err := data.RunCommandOnNode(nodeName(0), fmt.Sprintf("ip -br addr show | grep %s | awk '{print $1}'", clusterInfo.nodes[0].ipv4Addr))
+	cmd := fmt.Sprintf("ip -br addr show | grep %s", clusterInfo.nodes[0].ipv4Addr)
+	if testOptions.providerName == "kind" {
+		cmd = "/bin/sh -c " + cmd
+	}
+	_, stdout, stderr, err := data.RunCommandOnNode(nodeName(0), cmd)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(transportInterfaceUntrimmed), nil
+	if stdout == "" || stderr != "" {
+		return "", fmt.Errorf("failed to get transport interface, stdout: %s, stderr: %s", stdout, stderr)
+	}
+	// Example stdout:
+	// eth0@if461       UP             172.18.0.2/16 fc00:f853:ccd:e793::2/64 fe80::42:acff:fe12:2/64
+	// eno1             UP             10.176.3.138/22 fe80::e643:4bff:fe43:a30e/64
+	fields := strings.Fields(stdout)
+	name, _, _ := strings.Cut(fields[0], "@")
+	return name, nil
 }
 
 // mutateAntreaConfigMap will perform the specified updates on the antrea-agent config and the

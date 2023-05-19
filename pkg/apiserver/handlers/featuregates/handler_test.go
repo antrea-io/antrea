@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	egressStatus string
-	nplStatus    string
+	egressStatus    string
+	multicastStatus string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -59,8 +59,8 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "NodePortLocal", Status: nplStatus, Version: "BETA"},
-				{Component: "agent", Name: "Multicast", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
 				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
 			},
@@ -183,9 +183,10 @@ func Test_getControllerGatesResponse(t *testing.T) {
 				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "NodeIPAM", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
 			},
 		},
 	}
@@ -207,8 +208,9 @@ func Test_getControllerGatesResponse(t *testing.T) {
 
 func init() {
 	egressStatus = "Enabled"
-	nplStatus = "Enabled"
+	multicastStatus = "Enabled"
 	if runtime.IsWindowsPlatform() {
 		egressStatus = "Disabled"
+		multicastStatus = "Disabled"
 	}
 }

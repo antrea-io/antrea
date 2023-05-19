@@ -29,7 +29,7 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 )
 
-var controllerGates = sets.New[string]("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM", "ServiceExternalIP", "Multicluster")
+var controllerGates = sets.New[string]("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM", "ServiceExternalIP", "Multicluster", "Multicast")
 var agentGates = sets.New[string]("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats",
 	"NodePortLocal", "AntreaIPAM", "Multicast", "ServiceExternalIP", "Multicluster")
 

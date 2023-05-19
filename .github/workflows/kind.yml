@@ -124,8 +124,9 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
-  test-e2e-encap-no-proxy:
-    name: E2e tests on a Kind cluster on Linux with AntreaProxy disabled
+  test-e2e-encap-non-default:
+    # NodeIPAM=true cannot run with proxyAll enabled due to https://github.com/antrea-io/antrea/issues/5022.
+    name: E2e tests on a Kind cluster on Linux with non default values (AntreaProxy=false, NodeIPAM=true)
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
@@ -153,15 +154,15 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        mkdir test-e2e-encap-no-proxy-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --feature-gates AntreaProxy=false --coverage --skip mode-irrelevant
+        mkdir test-e2e-encap-non-default-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-non-default-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --feature-gates AntreaProxy=false --node-ipam --coverage
     - name: Tar coverage files
-      run: tar -czf test-e2e-encap-no-proxy-coverage.tar.gz test-e2e-encap-no-proxy-coverage
-    - name: Upload coverage for test-e2e-encap-no-proxy-coverage
+      run: tar -czf test-e2e-encap-non-default-coverage.tar.gz test-e2e-encap-non-default-coverage
+    - name: Upload coverage for test-e2e-encap-non-default-coverage
       uses: actions/upload-artifact@v3
       with:
-        name: test-e2e-encap-no-proxy-coverage
-        path: test-e2e-encap-no-proxy-coverage.tar.gz
+        name: test-e2e-encap-non-default-coverage
+        path: test-e2e-encap-non-default-coverage.tar.gz
         retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v3
@@ -169,8 +170,8 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*.cov.out*'
         flags: kind-e2e-tests
-        name: codecov-test-e2e-encap-no-proxy
-        directory: test-e2e-encap-no-proxy-coverage
+        name: codecov-test-e2e-encap-non-default
+        directory: test-e2e-encap-non-default-coverage
         fail_ci_if_error: ${{ github.event_name == 'push' }}
     - name: Tar log files
       if: ${{ failure() }}
@@ -179,7 +180,7 @@ jobs:
       uses: actions/upload-artifact@v3
       if: ${{ failure() }}
       with:
-        name: e2e-kind-encap-no-proxy.tar.gz
+        name: e2e-kind-encap-non-default.tar.gz
         path: log.tar.gz
         retention-days: 30
 
@@ -214,8 +215,7 @@ jobs:
           mkdir log
           mkdir test-e2e-encap-all-features-enabled-coverage
           # FlowExporter requires the FlowAggregator, so we keep it disabled.
-          # Currently multicast tests require specific testbeds, exclude it for now.
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --feature-gates AllAlpha=true,AllBeta=true,FlowExporter=false,Multicast=false --proxy-all
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --feature-gates AllAlpha=true,AllBeta=true,FlowExporter=false --proxy-all --multicast
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
       - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage
@@ -634,7 +634,7 @@ jobs:
     - build-antrea-coverage-image
     - build-flow-aggregator-coverage-image
     - test-e2e-encap
-    - test-e2e-encap-no-proxy
+    - test-e2e-encap-non-default
     - test-e2e-encap-all-features-enabled
     - test-e2e-noencap
     - test-e2e-hybrid
