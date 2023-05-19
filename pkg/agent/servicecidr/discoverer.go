@@ -106,6 +106,10 @@ func (d *discoverer) updateServiceCIDR(svc *corev1.Service) {
 		defer d.Unlock()
 		for _, clusterIPStr := range clusterIPs {
 			clusterIP := net.ParseIP(clusterIPStr)
+			if clusterIP == nil {
+				klog.V(2).InfoS("Skip invalid ClusterIP", "ClusterIP", clusterIPStr)
+				continue
+			}
 			isIPv6 := utilnet.IsIPv6(clusterIP)
 
 			curServiceCIDR := d.serviceIPv4CIDR
