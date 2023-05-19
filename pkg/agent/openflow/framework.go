@@ -15,6 +15,8 @@
 package openflow
 
 import (
+	"antrea.io/libOpenflow/openflow15"
+
 	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
@@ -55,10 +57,10 @@ type feature interface {
 	getFeatureName() string
 	// getRequiredTables returns a slice of required tables of the feature.
 	getRequiredTables() []*Table
-	// initFlows returns the initial flows of the feature.
-	initFlows() []binding.Flow
-	// replayFlows returns the fixed and cached flows that need to be replayed after OVS is reconnected.
-	replayFlows() []binding.Flow
+	// initFlows returns the Openflow messages of initial flows of the feature.
+	initFlows() []*openflow15.FlowMod
+	// replayFlows returns the Openflow messages of fixed and cached flows that need to be replayed after OVS is reconnected.
+	replayFlows() []*openflow15.FlowMod
 }
 
 const (

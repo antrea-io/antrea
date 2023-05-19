@@ -21,6 +21,7 @@ package testing
 
 import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
+	openflow15 "antrea.io/libOpenflow/openflow15"
 	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
 	ofctrl "antrea.io/ofnet/ofctrl"
@@ -53,7 +54,7 @@ func (m *MockBridge) EXPECT() *MockBridgeMockRecorder {
 }
 
 // AddFlowsInBundle mocks base method
-func (m *MockBridge) AddFlowsInBundle(arg0, arg1, arg2 []openflow.Flow) error {
+func (m *MockBridge) AddFlowsInBundle(arg0, arg1, arg2 []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddFlowsInBundle", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -291,6 +292,21 @@ func (mr *MockBridgeMockRecorder) DumpTableStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableStatus", reflect.TypeOf((*MockBridge)(nil).DumpTableStatus))
 }
 
+// GetTableByID mocks base method
+func (m *MockBridge) GetTableByID(arg0 byte) (openflow.Table, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTableByID", arg0)
+	ret0, _ := ret[0].(openflow.Table)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTableByID indicates an expected call of GetTableByID
+func (mr *MockBridgeMockRecorder) GetTableByID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTableByID", reflect.TypeOf((*MockBridge)(nil).GetTableByID), arg0)
+}
+
 // IsConnected mocks base method
 func (m *MockBridge) IsConnected() bool {
 	m.ctrl.T.Helper()
@@ -478,6 +494,18 @@ func (mr *MockTableMockRecorder) SetNext(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNext", reflect.TypeOf((*MockTable)(nil).SetNext), arg0)
 }
 
+// SetTable mocks base method
+func (m *MockTable) SetTable() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTable")
+}
+
+// SetTable indicates an expected call of SetTable
+func (mr *MockTableMockRecorder) SetTable() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTable", reflect.TypeOf((*MockTable)(nil).SetTable))
+}
+
 // Status mocks base method
 func (m *MockTable) Status() openflow.TableStatus {
 	m.ctrl.T.Helper()
@@ -598,34 +626,6 @@ func (m *MockFlow) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenFl
 func (mr *MockFlowMockRecorder) GetBundleMessages(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockFlow)(nil).GetBundleMessages), arg0)
-}
-
-// IsDropFlow mocks base method
-func (m *MockFlow) IsDropFlow() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDropFlow")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsDropFlow indicates an expected call of IsDropFlow
-func (mr *MockFlowMockRecorder) IsDropFlow() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDropFlow", reflect.TypeOf((*MockFlow)(nil).IsDropFlow))
-}
-
-// KeyString mocks base method
-func (m *MockFlow) KeyString() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KeyString")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// KeyString indicates an expected call of KeyString
-func (mr *MockFlowMockRecorder) KeyString() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyString", reflect.TypeOf((*MockFlow)(nil).KeyString))
 }
 
 // MatchString mocks base method
@@ -2263,20 +2263,6 @@ func (m *MockGroup) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenF
 func (mr *MockGroupMockRecorder) GetBundleMessages(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockGroup)(nil).GetBundleMessages), arg0)
-}
-
-// KeyString mocks base method
-func (m *MockGroup) KeyString() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KeyString")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// KeyString indicates an expected call of KeyString
-func (mr *MockGroupMockRecorder) KeyString() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyString", reflect.TypeOf((*MockGroup)(nil).KeyString))
 }
 
 // Modify mocks base method

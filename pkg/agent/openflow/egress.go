@@ -17,6 +17,8 @@ package openflow
 import (
 	"net"
 
+	"antrea.io/libOpenflow/openflow15"
+
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -71,16 +73,12 @@ func newFeatureEgress(cookieAllocator cookie.Allocator,
 	}
 }
 
-func (f *featureEgress) initFlows() []binding.Flow {
+func (f *featureEgress) initFlows() []*openflow15.FlowMod {
 	// This installs the flows to enable Pods to communicate to the external IP addresses. The flows identify the packets
 	// from local Pods to the external IP address, and mark the packets to be SNAT'd with the configured SNAT IPs.
-	return f.externalFlows()
+	return GetFlowModMessages(f.externalFlows(), binding.AddMessage)
 }
 
-func (f *featureEgress) replayFlows() []binding.Flow {
-	var flows []binding.Flow
-	// Get cached flows.
-	flows = append(flows, getCachedFlows(f.cachedFlows)...)
-
-	return flows
+func (f *featureEgress) replayFlows() []*openflow15.FlowMod {
+	return getCachedFlowMessages(f.cachedFlows)
 }

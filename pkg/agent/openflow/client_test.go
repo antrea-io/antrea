@@ -143,7 +143,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	client := ofClient.(*client)
 	fCacheI, ok := client.featurePodConnectivity.nodeCachedFlows.Load(hostName)
 	if ok {
-		return len(fCacheI.(flowCache)), err
+		return len(fCacheI.(flowMessageCache)), err
 	}
 	return 0, err
 }
@@ -157,7 +157,7 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	client := ofClient.(*client)
 	fCacheI, ok := client.featurePodConnectivity.podCachedFlows.Load(containerID)
 	if ok {
-		return len(fCacheI.(flowCache)), err
+		return len(fCacheI.(flowMessageCache)), err
 	}
 	return 0, err
 }
@@ -171,7 +171,7 @@ func installPodFlowsWithLabelID(ofClient Client, cacheKey string, labelID *uint3
 	client := ofClient.(*client)
 	fCacheI, ok := client.featurePodConnectivity.podCachedFlows.Load(containerID)
 	if ok {
-		return len(fCacheI.(flowCache)), err
+		return len(fCacheI.(flowMessageCache)), err
 	}
 	return 0, err
 }
@@ -453,7 +453,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	client.ipProtocols = ipProtocols
 	client.generatePipelines()
 	client.realizePipelines()
-	ovsoftest.TableNameCache = getTableNameCache()
+	binding.TableNameCache = getTableNameCache()
 	client.bridge.(*binding.OFBridge).SetOFSwitch(ofctrl.NewSwitch(&util.MessageStream{}, GlobalVirtualMAC, nil, make(chan int), 32776))
 	client.bridge.(*binding.OFBridge).Initialize()
 	return client
@@ -471,22 +471,26 @@ func getTableNameCache() map[uint8]string {
 }
 
 func getFlowStrings(flows interface{}) []string {
-	getStrings := func(flow binding.Flow) []string {
+	getStrings := func(message *openflow15.FlowMod) []string {
 		var strs []string
-		messages, _ := flow.GetBundleMessages(binding.AddMessage)
-		for _, message := range messages {
-			f := ovsoftest.FlowModToString(message.GetMessage().(*openflow15.FlowMod))
-			strs = append(strs, f)
-		}
+		f := binding.FlowModToString(message)
+		strs = append(strs, f)
 		return strs
 	}
 	var flowStrings []string
 	switch v := flows.(type) {
-	case flowCache:
+	case flowMessageCache:
 		for _, flow := range v {
 			flowStrings = append(flowStrings, getStrings(flow)...)
 		}
 	case []binding.Flow:
+		for _, flow := range v {
+			messages, _ := flow.GetBundleMessages(binding.AddMessage)
+			for _, msg := range messages {
+				flowStrings = append(flowStrings, getStrings(msg.GetMessage().(*openflow15.FlowMod))...)
+			}
+		}
+	case []*openflow15.FlowMod:
 		for _, flow := range v {
 			flowStrings = append(flowStrings, getStrings(flow)...)
 		}
@@ -495,10 +499,10 @@ func getFlowStrings(flows interface{}) []string {
 }
 
 func getGroupFromCache(groupCache binding.Group) string {
-	ovsoftest.TableNameCache = getTableNameCache()
+	binding.TableNameCache = getTableNameCache()
 
 	messages, _ := groupCache.GetBundleMessages(binding.AddMessage)
-	groupString := ovsoftest.GroupModToString(messages[0].GetMessage().(*openflow15.GroupMod))
+	groupString := binding.GroupModToString(messages[0].GetMessage().(*openflow15.GroupMod))
 	return groupString
 }
 
@@ -825,11 +829,11 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 	assert.NoError(t, fc.InstallPodFlows(interfaceName, podInterfaceIPs, podMAC, uint32(11), 0, nil))
 	flowKeys := fc.GetPodFlowKeys(interfaceName)
 	expectedFlowKeys := []string{
-		"table=1,arp,in_port=11,arp_sha=00:00:10:10:00:11,arp_spa=10.10.0.11",
-		"table=3,in_port=11",
-		"table=4,ip,in_port=11,dl_src=00:00:10:10:00:11,nw_src=10.10.0.11",
-		"table=17,ip,reg0=0x200/0x200,nw_dst=10.10.0.11",
-		"table=22,dl_dst=00:00:10:10:00:11",
+		"table=1,priority=200,arp,in_port=11,arp_spa=10.10.0.11,arp_sha=00:00:10:10:00:11",
+		"table=3,priority=190,in_port=11",
+		"table=4,priority=200,ip,in_port=11,dl_src=00:00:10:10:00:11,nw_src=10.10.0.11",
+		"table=17,priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.11",
+		"table=22,priority=200,dl_dst=00:00:10:10:00:11",
 	}
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
@@ -966,8 +970,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
 			},
 		},
@@ -992,8 +996,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
 			},
 		},
@@ -1018,8 +1022,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
 			},
 		},
@@ -1114,9 +1118,10 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp6,reg4=0x1020050/0x107ffff actions=group:100",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp6,reg4=0x1020050/0x107ffff,xxreg3=0xfec00010009600000000000000000100 actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT"},
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+			},
 		},
 		{
 			name:              "Service NodePort,SessionAffinity",
@@ -1245,11 +1250,11 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 	assert.NoError(t, fc.InstallEndpointFlows(bindingProtocol, endpoints))
 	flowKeys := fc.GetServiceFlowKeys(svcIP, svcPort, bindingProtocol, endpoints)
 	expectedFlowKeys := []string{
-		"table=11,tcp,tp_dst=0x50,nw_dst=10.96.0.224,reg4=0x10000/0x70000",
-		"table=11,tcp,tp_dst=0x50,nw_dst=10.96.0.224,reg4=0x30000/0x70000",
-		"table=12,tcp,reg4=0x20050/0x7ffff,reg3=0xa0a000b",
-		"table=12,tcp,reg4=0x20050/0x7ffff,reg3=0xa0a000c",
-		"table=20,ip,nw_src=10.10.0.12,nw_dst=10.10.0.12,ct_state=+new+trk",
+		"table=11,priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.224,tp_dst=80",
+		"table=11,priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.224,tp_dst=80",
+		"table=12,priority=200,tcp,reg3=0xa0a000b,reg4=0x20050/0x7ffff",
+		"table=12,priority=200,tcp,reg3=0xa0a000c,reg4=0x20050/0x7ffff",
+		"table=20,priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.12,nw_dst=10.10.0.12",
 	}
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
@@ -1496,12 +1501,23 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	fc.bridge = ovsoftest.NewMockBridge(ctrl)
 
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
-	mFlow := ovsoftest.NewMockFlow(ctrl)
-	ctx := &conjMatchFlowContext{dropFlow: mFlow, dropFlowEnableLogging: false}
-	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
-	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.ofTable.BuildFlow(priorityNormal + 2)).Times(1)
+	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
+	flows, _ := EgressDefaultTable.ofTable.BuildFlow(priority100).Action().Drop().Done().GetBundleMessages(binding.AddMessage)
+	flowMsg := flows[0].GetMessage().(*openflow15.FlowMod)
+	ctx := &conjMatchFlowContext{
+		dropFlow:              flowMsg,
+		dropFlowEnableLogging: false,
+		conjunctiveMatch: &conjunctiveMatch{
+			tableID: 1,
+			matchPairs: []matchPair{
+				{
+					matchKey:   MatchCTSrcIPNet,
+					matchValue: *ipCIDR,
+				},
+			},
+		}}
 	fc.featureNetworkPolicy.globalConjMatchFlowCache["mockContext"] = ctx
-	fc.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{fc.featureNetworkPolicy.denyRuleMetricFlow(123, false, 1)}})
+	fc.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []*openflow15.FlowMod{flowMsg}})
 	return fc
 }
 
@@ -1963,30 +1979,30 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 		{
 			name:      "Egress,Redirect",
 			direction: v1alpha2.DirectionEgress,
-			action:    v1alpha2.ActionMirror,
+			action:    v1alpha2.ActionRedirect,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
 			name:      "Ingress,Redirect",
 			direction: v1alpha2.DirectionIngress,
-			action:    v1alpha2.ActionMirror,
+			action:    v1alpha2.ActionRedirect,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x32 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x64 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x32 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x64 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
 			name:      "Both,Redirect",
 			direction: v1alpha2.DirectionBoth,
-			action:    v1alpha2.ActionMirror,
+			action:    v1alpha2.ActionRedirect,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x32 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x64 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x32 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x64 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
 			},
 		},
 	}
@@ -2249,4 +2265,142 @@ func Test_client_RegisterPacketInHandler(t *testing.T) {
 	bridge.EXPECT().ResumePacket(gomock.Any()).Times(1)
 	fc.bridge = bridge
 	fc.ResumePausePacket(nil)
+}
+
+func Test_client_ReplayFlows(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := oftest.NewMockOFEntryOperations(ctrl)
+
+	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableTrafficControl, enableMulticast, enableMulticluster)
+	defer resetPipelines()
+
+	expectedFlows := append(pipelineDefaultFlows(false, true, true), egressInitFlows(true)...)
+	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
+	expectedFlows = append(expectedFlows, networkPolicyInitFlows(false, false)...)
+	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, true)...)
+	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false)...)
+
+	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {
+		fCache := flowMessageCache{}
+		for _, flow := range flows {
+			msg := getFlowModMessage(flow, binding.AddMessage)
+			fCache[flow.MatchString()] = msg
+		}
+		cache.Store(cacheKey, fCache)
+	}
+
+	replayedFlows := make([]string, 0)
+	// Feature Egress replays flows.
+	snatIP := net.ParseIP("192.168.77.100")
+	addFlowInCache(fc.featureEgress.cachedFlows, "egressFlows", []binding.Flow{fc.featureEgress.snatIPFromTunnelFlow(snatIP, uint32(100))})
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+new+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+	)
+	// Feature Multicast replays flows.
+	podIP := net.ParseIP("10.10.0.66")
+	podOfPort := uint32(100)
+	addFlowInCache(fc.featureMulticast.cachedFlows, "multicastFlows", fc.featureMulticast.multicastPodMetricFlows(podIP, podOfPort))
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=200,ip,nw_src=10.10.0.66 actions=goto_table:MulticastRouting",
+		"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=200,ip,reg1=0x64 actions=goto_table:MulticastOutput",
+	)
+	// Feature Multi-cluster replays flows.
+	_, peerServiceCIDRIPv4, _ := net.ParseCIDR("10.97.0.0/16")
+	tunnelPeerIP := net.ParseIP("192.168.78.101")
+	localGatewayMAC, _ := net.ParseMAC("0a:00:00:00:00:01")
+	addFlowInCache(fc.featureMulticluster.cachedFlows, "multiClusterFlows", fc.featureMulticluster.l3FwdFlowToRemoteGateway(localGatewayMAC, *peerServiceCIDRIPv4, tunnelPeerIP, tunnelPeerIP, true))
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1060000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.97.0.0/16 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+		"cookie=0x1060000000000, table=L3Forwarding, priority=200,ct_state=+rpl+trk,ip,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+		"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x2000/0x2000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+	)
+	// Feature Network Policy replays flows.
+	ruleID := uint32(15)
+	priority200 = uint16(200)
+	conj := &policyRuleConjunction{
+		id:          ruleID,
+		actionFlows: []*openflow15.FlowMod{getFlowModMessage(fc.featureNetworkPolicy.conjunctionActionDenyFlow(ruleID, IngressRuleTable.ofTable, &priority200, DispositionDrop, false), binding.AddMessage)},
+		metricFlows: []*openflow15.FlowMod{getFlowModMessage(fc.featureNetworkPolicy.denyRuleMetricFlow(ruleID, true, IngressMetricTable.GetID()), binding.AddMessage)},
+	}
+	assert.NoError(t, fc.featureNetworkPolicy.policyCache.Add(conj))
+	mp := matchPair{matchKey: MatchDstOFPort, matchValue: int32(podOfPort)}
+	context := &conjMatchFlowContext{
+		flow:     getFlowModMessage(fc.featureNetworkPolicy.conjunctiveMatchFlow(IngressRuleTable.GetID(), []matchPair{mp}, &priority200, []*conjunctiveAction{{conjID: ruleID, clauseID: 2, nClause: 2}}), binding.AddMessage),
+		dropFlow: getFlowModMessage(fc.featureNetworkPolicy.defaultDropFlow(IngressDefaultTable.ofTable, []matchPair{mp}, true), binding.AddMessage),
+	}
+	fc.featureNetworkPolicy.globalConjMatchFlowCache["npMatch"] = context
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,goto_table:IngressMetric",
+		"cookie=0x1020000000000, table=IngressRule, priority=200,reg1=0x64 actions=conjunction(15,2/2)",
+		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,controller(id=32776,reason=no_match,userdata=01.01,max_len=128)",
+		"cookie=0x1020000000000, table=IngressMetric, priority=200,reg0=0x400/0x400,reg3=0xf actions=drop",
+	)
+
+	// Feature Pod connectivity replays flows.
+	podMAC, _ := net.ParseMAC("00:00:10:10:00:66")
+	addFlowInCache(fc.featurePodConnectivity.podCachedFlows, "podFlows", fc.featurePodConnectivity.l3FwdFlowToPod(localGatewayMAC, []net.IP{podIP}, podMAC, false, 0))
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
+	)
+	_, peerPodCIDR, _ := net.ParseCIDR("10.10.1.0/24")
+	addFlowInCache(fc.featurePodConnectivity.nodeCachedFlows, "nodeFlows", []binding.Flow{fc.featurePodConnectivity.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)})
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+	)
+	sourceOFPorts := []uint32{50, 100}
+	targetOFPort := uint32(200)
+	addFlowInCache(fc.featurePodConnectivity.tcCachedFlows, "tcFlows", fc.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, v1alpha2.DirectionEgress, v1alpha2.ActionMirror))
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+		"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+	)
+	// Feature Service replays flows.
+	addFlowInCache(fc.featureService.cachedFlows, "endpointFlow", []binding.Flow{fc.featureService.endpointDNATFlow(podIP, uint16(80), binding.ProtocolTCP)})
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0042,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.66:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+	)
+
+	expectedFlows = append(expectedFlows, replayedFlows...)
+
+	actualFlows := make([]string, 0)
+	m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
+		flowStrings := getFlowStrings(flowMessages)
+		actualFlows = append(actualFlows, flowStrings...)
+	}).Return(nil).AnyTimes()
+
+	fc.ReplayFlows()
+	assert.ElementsMatch(t, expectedFlows, actualFlows)
+}
+
+func TestCachedFlowIsDrop(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
+	fc.bridge = ovsoftest.NewMockBridge(ctrl)
+
+	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
+	flows, err := EgressDefaultTable.ofTable.
+		BuildFlow(priority100).
+		MatchDstIPNet(*ipCIDR).
+		Action().Drop().
+		Done().
+		GetBundleMessages(binding.AddMessage)
+	assert.NoError(t, err)
+	require.Equal(t, 1, len(flows))
+	msg := flows[0].GetMessage().(*openflow15.FlowMod)
+	assert.True(t, isDropFlow(msg))
+
+	flows, err = EgressDefaultTable.ofTable.
+		BuildFlow(priority100).
+		MatchDstIPNet(*ipCIDR).
+		Action().GotoTable(1).
+		Done().
+		GetBundleMessages(binding.AddMessage)
+	assert.NoError(t, err)
+	require.Equal(t, 1, len(flows))
+	msg = flows[0].GetMessage().(*openflow15.FlowMod)
+	assert.False(t, isDropFlow(msg))
 }

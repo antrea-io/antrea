@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package testing
+package openflow
 
 import (
 	"fmt"
@@ -26,6 +26,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// TableNameCache is for testing.
 var TableNameCache map[uint8]string
 
 type fieldMetadata struct {
@@ -38,6 +39,7 @@ func (m *fieldMetadata) getMatchNickname() string {
 	name = strings.TrimPrefix(name, "NXM_NX_")
 	name = strings.TrimPrefix(name, "OXM_OF_")
 	name = strings.TrimPrefix(name, "OXM_PACKET_")
+	name = strings.TrimPrefix(name, "OXM_FIELD_")
 	name = strings.ToLower(name)
 	if strings.HasPrefix(name, "ip_") && name != "ip_dscp" {
 		name = strings.Replace(name, "ip_", "nw_", 1)
@@ -77,6 +79,7 @@ func (m *fieldMetadata) getActionNickname() string {
 	name = strings.TrimPrefix(name, "NXM_NX_")
 	name = strings.TrimPrefix(name, "OXM_OF_")
 	name = strings.TrimPrefix(name, "OXM_PACKET_")
+	name = strings.TrimPrefix(name, "OXM_FIELD_")
 	name = strings.ToLower(name)
 	if strings.HasPrefix(name, "ip_") && name != "ip_dscp" {
 		name = strings.Replace(name, "ip_", "nw_", 1)
@@ -219,6 +222,7 @@ var oxxFieldMetadataMap = map[uint16]map[uint8]*fieldMetadata{
 		openflow15.OXM_FIELD_PBB_ISID:       &fieldMetadata{"OXM_OF_PBB_ISID", 3},
 		openflow15.OXM_FIELD_TUNNEL_ID:      &fieldMetadata{"OXM_OF_TUNNEL_ID", 8},
 		openflow15.OXM_FIELD_IPV6_EXTHDR:    &fieldMetadata{"OXM_OF_IPV6_EXTHDR", 2},
+		openflow15.OXM_FIELD_TCP_FLAGS:      &fieldMetadata{"OXM_FIELD_TCP_FLAGS", 2},
 	},
 }
 
@@ -352,6 +356,10 @@ func matchRegToString(idx int, field *openflow15.MatchField) string {
 	return fmt.Sprintf("reg%d=%s", idx, getFieldDataString(field))
 }
 
+func matchXXRegToString(idx int, field *openflow15.MatchField) string {
+	return fmt.Sprintf("xxreg%d=%s", idx, getFieldDataString(field))
+}
+
 func matchInPortToString(field *openflow15.MatchField) string {
 	return fmt.Sprintf("in_port=%s", getFieldDataString(field))
 }
@@ -392,6 +400,10 @@ func matchTunDstToString(field *openflow15.MatchField, isIPv6 bool) string {
 		matchKey = "tun_ipv6_dst"
 	}
 	return fmt.Sprintf("%s=%s", matchKey, getFieldDataString(field))
+}
+
+func matchTunIDToString(field *openflow15.MatchField) string {
+	return fmt.Sprintf("tun_id=%s", getFieldDataString(field))
 }
 
 func matchNwTosToString(field *openflow15.MatchField) string {
@@ -475,6 +487,11 @@ func getFieldDataString(field *openflow15.MatchField) string {
 		if mask != nil {
 			fieldStr = fmt.Sprintf("%s/0x%s", fieldStr, trimLeadingZero(fmt.Sprintf("%x", mask.(*util.Buffer).Bytes())))
 		}
+	case *openflow15.ByteArrayField:
+		fieldStr = fmt.Sprintf("0x%s", trimLeadingZero(fmt.Sprintf("%x", value.(*openflow15.ByteArrayField).Data)))
+		if mask != nil {
+			fieldStr = fmt.Sprintf("%s/0x%s", fieldStr, trimLeadingZero(fmt.Sprintf("%x", mask.(*openflow15.ByteArrayField).Data)))
+		}
 	case *openflow15.Uint32Message:
 		fieldStr = fmt.Sprintf("0x%x", value.(*openflow15.Uint32Message).Data)
 		if mask != nil && mask.(*openflow15.Uint32Message).Data != 0xffffffff {
@@ -541,6 +558,8 @@ func getFieldDataString(field *openflow15.MatchField) string {
 		}
 	case *openflow15.TunnelIpv4DstField:
 		fieldStr = value.(*openflow15.TunnelIpv4DstField).TunnelIpv4Dst.String()
+	case *openflow15.TunnelIdField:
+		fieldStr = fmt.Sprintf("%d", value.(*openflow15.TunnelIdField).TunnelId)
 	case *openflow15.VlanIdField:
 		fieldStr = fmt.Sprintf("%d", value.(*openflow15.VlanIdField).VlanId)
 	case *openflow15.ArpOperField:
@@ -730,7 +749,7 @@ func nxActionDecTTLToString(action openflow15.Action) string {
 
 func nxActionConjunctionToString(action openflow15.Action) string {
 	a := action.(*openflow15.NXActionConjunction)
-	actionStr := fmt.Sprintf("conjunction:(%d,%d/%d)", a.ID, a.Clause, a.NClause)
+	actionStr := fmt.Sprintf("conjunction(%d,%d/%d)", a.ID, a.Clause+1, a.NClause)
 	return actionStr
 }
 
@@ -773,7 +792,7 @@ func nxActionControllerToString(action openflow15.Action) string {
 		fmt.Sprintf("max_len=%d", a.MaxLen),
 		fmt.Sprintf("id=%d", a.ControllerID)}
 
-	actionStr := fmt.Sprintf("controller:(%s)", strings.Join(parts, ","))
+	actionStr := fmt.Sprintf("controller(%s)", strings.Join(parts, ","))
 	return actionStr
 }
 
@@ -814,7 +833,7 @@ func nxActionController2ToString(action openflow15.Action) string {
 		}
 		n += int(p.Len())
 	}
-	actionStr := fmt.Sprintf("controller:(%s)", strings.Join(parts, ","))
+	actionStr := fmt.Sprintf("controller(%s)", strings.Join(parts, ","))
 	return actionStr
 }
 
@@ -919,42 +938,36 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		matchMap[fieldStr] = &flowMod.Match.Fields[i]
 	}
 
-	// pkt_mark
 	if field, ok := matchMap["pkt_mark"]; ok {
 		parts = append(parts, matchPktMarkToString(field))
 	}
 
-	// TODO: recirc_id
+	// TODO: add support for field "recirc_id"
 
-	// TODO: dp_hash
+	// TODO: add support for field "dp_hash"
 
-	// conj_id
 	if field, ok := matchMap["conj_id"]; ok {
 		parts = append(parts, matchConjIdToString(field))
 	}
 
-	// TODO: skb_priority
+	// TODO: add support for field "skb_priority"
 
-	// TODO: actset_output
+	// TODO: add support for field "actset_output"
 
-	// ct_state
 	if field, ok := matchMap["ct_state"]; ok {
 		parts = append(parts, matchCtStateToString(field))
 	}
 
-	// TODO: ct_zone
+	// TODO: add support for field "ct_zone"
 
-	// ct_mark
 	if field, ok := matchMap["ct_mark"]; ok {
 		parts = append(parts, matchCtMarkToString(field))
 	}
 
-	// ct_label
 	if field, ok := matchMap["ct_label"]; ok {
 		parts = append(parts, matchCtLabelToString(field))
 	}
 
-	// ct_nw_src/ct_nw_dst/ct_ipv6_src/ct_ipv6_dst
 	if field, ok := matchMap["ct_nw_src"]; ok {
 		parts = append(parts, matchIpAddrToString(field, true, true, false))
 	}
@@ -968,12 +981,10 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchIpAddrToString(field, true, false, true))
 	}
 
-	// ct_nw_proto
 	if field, ok := matchMap["ct_nw_proto"]; ok {
 		parts = append(parts, matchCtNwProtoToString(field))
 	}
 
-	// ct_tp_src/ct_tp_dst
 	if field, ok := matchMap["ct_tp_src"]; ok {
 		parts = append(parts, matchTpPortToString(field, true, true))
 	}
@@ -981,40 +992,43 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchTpPortToString(field, true, false))
 	}
 
-	// protocol
 	if field, ok := matchMap["dl_type"]; ok {
 		parts = append(parts, matchProtoToString(field, matchMap["nw_proto"]))
 	}
 
-	// regs
 	for i := 0; i < 16; i++ {
 		if field, ok := matchMap[fmt.Sprintf("reg%d", i)]; ok {
 			parts = append(parts, matchRegToString(i, field))
 		}
 	}
 
-	// TODO: other match conditions about tun
-	// tun_dst/tun_ipv6_dst
+	for i := 0; i < 4; i++ {
+		if field, ok := matchMap[fmt.Sprintf("xxreg%d", i)]; ok {
+			parts = append(parts, matchXXRegToString(i, field))
+		}
+	}
+
+	// TODO: add other match conditions about tun
 	if field, ok := matchMap["tun_dst"]; ok {
 		parts = append(parts, matchTunDstToString(field, false))
 	}
 	if field, ok := matchMap["tun_ipv6_dst"]; ok {
 		parts = append(parts, matchTunDstToString(field, true))
 	}
+	if field, ok := matchMap["tun_id"]; ok {
+		parts = append(parts, matchTunIDToString(field))
+	}
 
-	// TODO: metadata
+	// TODO: add support for field "metadata"
 
-	// in_port
 	if field, ok := matchMap["in_port"]; ok {
 		parts = append(parts, matchInPortToString(field))
 	}
 
-	// dl_vlan
 	if field, ok := matchMap["dl_vlan"]; ok {
 		parts = append(parts, matchVlanToString(field))
 	}
 
-	// dl_src/dl_dst
 	if field, ok := matchMap["dl_src"]; ok {
 		parts = append(parts, matchEtherAddrToString(field, true))
 	}
@@ -1022,7 +1036,6 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchEtherAddrToString(field, false))
 	}
 
-	// nw_src/nw_dst/ipv6_src/ipv6_dst
 	if field, ok := matchMap["nw_src"]; ok {
 		parts = append(parts, matchIpAddrToString(field, false, true, false))
 	}
@@ -1036,7 +1049,6 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchIpAddrToString(field, false, false, true))
 	}
 
-	// arp_spa/arp_tpa
 	if field, ok := matchMap["arp_spa"]; ok {
 		parts = append(parts, matchArpPaAddrToString(field, true))
 	}
@@ -1044,14 +1056,12 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchArpPaAddrToString(field, false))
 	}
 
-	// arp_op
 	if field, ok := matchMap["arp_op"]; ok {
 		parts = append(parts, matchArpOpToString(field))
 	}
 
-	// TODO: nw_proto
+	// TODO: add support for field "nw_proto"
 
-	// arp_spa/arp_tha
 	if field, ok := matchMap["arp_sha"]; ok {
 		parts = append(parts, matchArpHaAddrToString(field, true))
 	}
@@ -1059,7 +1069,6 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchArpHaAddrToString(field, false))
 	}
 
-	// nw_tos/ip_dscp
 	if field, ok := matchMap["nw_tos"]; ok {
 		parts = append(parts, matchNwTosToString(field))
 	}
@@ -1067,25 +1076,16 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchIpDscpToString(field))
 	}
 
-	// TODO: nw_ecn
+	// TODO: add support for field "nw_ecn", "nw_ttl", other match conditions about MPLS, and "nw_frag"
 
-	// TODO: nw_ttl
-
-	// TODO: match conditions about MPLS
-
-	// TOD: nw_frag
-
-	// icmp_type
 	if field, ok := matchMap["icmp_type"]; ok {
 		parts = append(parts, matchIcmpTypeToString(field))
 	}
 
-	// icmp_code
 	if field, ok := matchMap["icmp_code"]; ok {
 		parts = append(parts, matchIcmpCodeToString(field))
 	}
 
-	// tp_src/tp_dst
 	if field, ok := matchMap["tp_src"]; ok {
 		parts = append(parts, matchTpPortToString(field, false, true))
 	}
@@ -1093,9 +1093,42 @@ func getFlowModMatch(flowMod *openflow15.FlowMod) string {
 		parts = append(parts, matchTpPortToString(field, false, false))
 	}
 
-	// TODO: tcp_flags
+	if field, ok := matchMap["tcp_flags"]; ok {
+		parts = append(parts, matchTCPFlagsToString(field))
+	}
 
 	return strings.Join(parts, ",")
+}
+
+func matchTCPFlagsToString(field *openflow15.MatchField) string {
+	data := field.Value.(*openflow15.TcpFlagsField).TcpFlags
+	mask := field.Mask.(*openflow15.TcpFlagsField).TcpFlags
+	allTCPFlags := map[int]string{
+		0:  "fin",
+		1:  "syn",
+		2:  "rst",
+		3:  "psh",
+		4:  "ack",
+		5:  "urg",
+		6:  "ece",
+		7:  "cwr",
+		8:  "ns",
+		9:  "[200]",
+		10: "[400]",
+		11: "[800]",
+	}
+	var tcpFlagStrs []string
+	for offset := 0; offset <= 11; offset++ {
+		v := uint16(1) << offset
+		if mask&v == v {
+			if data&v == v {
+				tcpFlagStrs = append(tcpFlagStrs, "+"+allTCPFlags[offset])
+			} else {
+				tcpFlagStrs = append(tcpFlagStrs, "-"+allTCPFlags[offset])
+			}
+		}
+	}
+	return fmt.Sprintf("tcp_flags=%s", strings.Join(tcpFlagStrs, ""))
 }
 
 func getActionString(action openflow15.Action) (string, error) {
@@ -1184,6 +1217,10 @@ func FlowModToString(flowMod *openflow15.FlowMod) string {
 	return fmt.Sprintf("%s, %s %s", getFlowModBaseString(flowMod), getFlowModMatch(flowMod), getFlowModAction(flowMod))
 }
 
+func FlowModMatchString(flowMod *openflow15.FlowMod) string {
+	return fmt.Sprintf("table=%d,%s", flowMod.TableId, getFlowModMatch(flowMod))
+}
+
 func GroupModToString(groupMod *openflow15.GroupMod) string {
 	parts := []string{fmt.Sprintf("group_id=%d", groupMod.GroupId)}
 	switch groupMod.Type {
@@ -1194,10 +1231,8 @@ func GroupModToString(groupMod *openflow15.GroupMod) string {
 	}
 	if len(groupMod.Buckets) != 0 {
 		for _, bucket := range groupMod.Buckets {
-			// bucket_id
 			bucketStr := fmt.Sprintf("bucket=bucket_id:%d", bucket.BucketId)
 
-			// bucket properties
 			for _, property := range bucket.Properties {
 				switch p := property.(type) {
 				case *openflow15.GroupBucketPropWeight:
@@ -1205,7 +1240,6 @@ func GroupModToString(groupMod *openflow15.GroupMod) string {
 				}
 			}
 
-			// bucket actions
 			var actionStrs []string
 			for _, action := range bucket.Actions {
 				actionStr, err := getActionString(action)

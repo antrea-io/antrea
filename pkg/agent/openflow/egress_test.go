@@ -22,6 +22,27 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 )
 
+func egressInitFlows(isIPv4 bool) []string {
+	if isIPv4 {
+		return []string{
+			"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ip,reg0=0x3/0xf,reg4=0x0/0x100000 actions=goto_table:EgressMark",
+			"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ip,reg0=0x1/0xf actions=set_field:0a:00:00:00:00:01->eth_dst,goto_table:EgressMark",
+			"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.78.0/24 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.100 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			"cookie=0x1040000000000, table=EgressMark, priority=190,ct_state=+new+trk,ip,reg0=0x1/0xf actions=drop",
+			"cookie=0x1040000000000, table=EgressMark, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+		}
+	}
+	return []string{
+		"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ipv6,reg0=0x3/0xf,reg4=0x0/0x100000 actions=goto_table:EgressMark",
+		"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ipv6,reg0=0x1/0xf actions=set_field:0a:00:00:00:00:01->eth_dst,goto_table:EgressMark",
+		"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=fec0:192:168:78::/80 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+		"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=fec0:192:168:77::100 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+		"cookie=0x1040000000000, table=EgressMark, priority=190,ct_state=+new+trk,ipv6,reg0=0x1/0xf actions=drop",
+		"cookie=0x1040000000000, table=EgressMark, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+	}
+}
+
 func Test_featureEgress_initFlows(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -30,28 +51,14 @@ func Test_featureEgress_initFlows(t *testing.T) {
 		expectedFlows []string
 	}{
 		{
-			name:       "IPv4",
-			enableIPv4: true,
-			expectedFlows: []string{
-				"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ip,reg0=0x3/0xf,reg4=0x0/0x100000 actions=goto_table:EgressMark",
-				"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ip,reg0=0x1/0xf actions=set_field:0a:00:00:00:00:01->eth_dst,goto_table:EgressMark",
-				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.78.0/24 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.100 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-				"cookie=0x1040000000000, table=EgressMark, priority=190,ct_state=+new+trk,ip,reg0=0x1/0xf actions=drop",
-				"cookie=0x1040000000000, table=EgressMark, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-			},
+			name:          "IPv4",
+			enableIPv4:    true,
+			expectedFlows: egressInitFlows(true),
 		},
 		{
-			name:       "IPv6",
-			enableIPv6: true,
-			expectedFlows: []string{
-				"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ipv6,reg0=0x3/0xf,reg4=0x0/0x100000 actions=goto_table:EgressMark",
-				"cookie=0x1040000000000, table=L3Forwarding, priority=190,ct_state=-rpl+trk,ipv6,reg0=0x1/0xf actions=set_field:0a:00:00:00:00:01->eth_dst,goto_table:EgressMark",
-				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=fec0:192:168:78::/80 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=fec0:192:168:77::100 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-				"cookie=0x1040000000000, table=EgressMark, priority=190,ct_state=+new+trk,ipv6,reg0=0x1/0xf actions=drop",
-				"cookie=0x1040000000000, table=EgressMark, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-			},
+			name:          "IPv6",
+			enableIPv6:    true,
+			expectedFlows: egressInitFlows(false),
 		},
 	}
 	for _, tc := range testCases {

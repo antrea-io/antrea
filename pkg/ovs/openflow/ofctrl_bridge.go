@@ -89,6 +89,10 @@ func (t *ofTable) GetStageID() StageID {
 	return t.stageID
 }
 
+func (t *ofTable) SetTable() {
+	t.Table = &ofctrl.Table{TableId: t.id}
+}
+
 func (t *ofTable) GetPipelineID() PipelineID {
 	return t.pipelineID
 }
@@ -294,6 +298,17 @@ func (b *OFBridge) DeleteTable(id uint8) bool {
 	return true
 }
 
+// GetTableByID returns the existing table by the given id. If no table exists, an error is returned.
+func (b *OFBridge) GetTableByID(id uint8) (Table, error) {
+	b.Lock()
+	defer b.Unlock()
+	t, ok := b.tableCache[id]
+	if !ok {
+		return nil, fmt.Errorf("no table exists with ID %d", id)
+	}
+	return t, nil
+}
+
 // DumpTableStatus dumps table status from local cache.
 func (b *OFBridge) DumpTableStatus() []TableStatus {
 	var r []TableStatus
@@ -449,7 +464,7 @@ func (b *OFBridge) IsConnected() bool {
 	return sw.IsReady()
 }
 
-func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error {
+func (b *OFBridge) AddFlowsInBundle(addflows, modFlows, delFlows []*openflow15.FlowMod) error {
 	// If no Openflow entries are requested to be added or modified or deleted on the OVS bridge, return immediately.
 	if len(addflows) == 0 && len(modFlows) == 0 && len(delFlows) == 0 {
 		klog.V(2).Info("No Openflow entries need to be synced to the OVS bridge, returning")
@@ -462,18 +477,14 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 		return err
 	}
 
-	syncFlows := func(flows []Flow, operation int) error {
-		for _, flow := range flows {
-			ofFlow := flow.(*ofFlow)
+	syncFlows := func(flows []*openflow15.FlowMod, operation int) error {
+		for _, flowMod := range flows {
+			flowMod.Command = uint8(operation)
 			// "AddFlow" operation is async, the function only returns error which occur when constructing and sending
 			// the BundleAdd message. An absence of error does not mean that all Openflow entries are added into the
 			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
 			// returned by function "Complete".
-			flowMod, err := ofFlow.Flow.GetBundleMessage(operation)
-			if err != nil {
-				return err
-			}
-			if err := tx.AddMessage(flowMod); err != nil {
+			if err := tx.AddFlow(flowMod); err != nil {
 				// Close the bundle and cancel it if there is error when adding the FlowMod message.
 				_, err := tx.Complete()
 				if err == nil {
@@ -515,13 +526,13 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	}
 
 	// Update TableStatus after the transaction is committed successfully.
-	for _, flow := range addflows {
-		ofFlow := flow.(*ofFlow)
-		ofFlow.table.UpdateStatus(1)
+	for _, message := range addflows {
+		table := b.tableCache[message.TableId]
+		table.UpdateStatus(1)
 	}
-	for _, flow := range delFlows {
-		ofFlow := flow.(*ofFlow)
-		ofFlow.table.UpdateStatus(-1)
+	for _, message := range delFlows {
+		table := b.tableCache[message.TableId]
+		table.UpdateStatus(-1)
 	}
 	return nil
 }
