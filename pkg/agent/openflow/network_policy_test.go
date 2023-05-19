@@ -538,9 +538,9 @@ func (m flowModIgnoreTxIDMatcher) Matches(x interface{}) bool {
 	if len(wanted) != len(m.flowMods) {
 		return false
 	}
-	sortFlows := func(flows []string) sets.String {
+	sortFlows := func(flows []string) sets.Set[string] {
 		sort.Strings(flows)
-		flowSet := sets.NewString()
+		flowSet := sets.New[string]()
 		getConjunctionID := func(conj string) int {
 			newStr := strings.ReplaceAll(conj, "conjunction(", "")
 			id, _ := strconv.Atoi(strings.Split(newStr, ",")[0])
