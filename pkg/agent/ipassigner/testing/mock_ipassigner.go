@@ -63,10 +63,10 @@ func (mr *MockIPAssignerMockRecorder) AssignIP(arg0 interface{}) *gomock.Call {
 }
 
 // AssignedIPs mocks base method
-func (m *MockIPAssigner) AssignedIPs() sets.String {
+func (m *MockIPAssigner) AssignedIPs() sets.Set[string] {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignedIPs")
-	ret0, _ := ret[0].(sets.String)
+	ret0, _ := ret[0].(sets.Set[string])
 	return ret0
 }
 
@@ -77,7 +77,7 @@ func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 }
 
 // InitIPs mocks base method
-func (m *MockIPAssigner) InitIPs(arg0 sets.String) error {
+func (m *MockIPAssigner) InitIPs(arg0 sets.Set[string]) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InitIPs", arg0)
 	ret0, _ := ret[0].(error)

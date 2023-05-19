@@ -26,13 +26,13 @@ import (
 )
 
 type eventReceiver struct {
-	receivedEvents sets.String
+	receivedEvents sets.Set[string]
 	mutex          sync.RWMutex
 }
 
 func newEventReceiver() *eventReceiver {
 	return &eventReceiver{
-		receivedEvents: sets.NewString(),
+		receivedEvents: sets.New[string](),
 	}
 }
 
@@ -42,7 +42,7 @@ func (r *eventReceiver) receive(e interface{}) {
 	r.receivedEvents.Insert(e.(string))
 }
 
-func (r *eventReceiver) received() sets.String {
+func (r *eventReceiver) received() sets.Set[string] {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	// Return a copy to prevent race condition
@@ -62,7 +62,7 @@ func TestSubscribe(t *testing.T) {
 		eventReceivers = append(eventReceivers, receiver)
 	}
 
-	desiredEvents := sets.NewString()
+	desiredEvents := sets.New[string]()
 	for i := 0; i < 1000; i++ {
 		e := fmt.Sprintf("event-%d", i)
 		c.Notify(e)
@@ -70,7 +70,7 @@ func TestSubscribe(t *testing.T) {
 	}
 
 	var errReceiver int
-	var errReceivedEvents sets.String
+	var errReceivedEvents sets.Set[string]
 	assert.NoError(t, wait.PollImmediate(10*time.Millisecond, 100*time.Millisecond, func() (done bool, err error) {
 		for i, r := range eventReceivers {
 			receivedEvents := r.received()

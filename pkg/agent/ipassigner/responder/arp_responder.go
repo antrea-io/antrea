@@ -29,7 +29,7 @@ import (
 type arpResponder struct {
 	iface       *net.Interface
 	conn        *arp.Client
-	assignedIPs sets.String
+	assignedIPs sets.Set[string]
 	mutex       sync.Mutex
 }
 
@@ -43,7 +43,7 @@ func NewARPResponder(iface *net.Interface) (*arpResponder, error) {
 	return &arpResponder{
 		iface:       iface,
 		conn:        conn,
-		assignedIPs: sets.NewString(),
+		assignedIPs: sets.New[string](),
 	}, nil
 }
 

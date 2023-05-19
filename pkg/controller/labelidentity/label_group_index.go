@@ -54,7 +54,7 @@ type Interface interface {
 	// DeleteSelector deletes or updates a selectorItem when a selector is deleted from a policy.
 	DeleteSelector(selectorKey string, policyKey string)
 	// RemoveStalePolicySelectors cleans up any outdated selector <-> policy mapping based on the policy's latest selectors.
-	RemoveStalePolicySelectors(selectorKeys sets.String, policyKey string)
+	RemoveStalePolicySelectors(selectorKeys sets.Set[string], policyKey string)
 	// DeletePolicySelectors removes any selectors from referring to the policy being deleted.
 	DeletePolicySelectors(policyKey string)
 	// AddLabelIdentity adds LabelIdentity-ID mapping to the index.
@@ -84,9 +84,9 @@ const (
 type selectorItem struct {
 	selector *types.GroupSelector
 	// Keys are the normalized labels of matching LabelIdentities
-	labelIdentityKeys sets.String
+	labelIdentityKeys sets.Set[string]
 	// Keys are the UIDs of the policies that have the selector in their specs.
-	policyKeys sets.String
+	policyKeys sets.Set[string]
 }
 
 func (s *selectorItem) getKey() string {
@@ -101,7 +101,7 @@ type labelIdentityMatch struct {
 	namespace        string
 	namespaceLabels  map[string]string
 	podLabels        map[string]string
-	selectorItemKeys sets.String
+	selectorItemKeys sets.Set[string]
 }
 
 // matches knows if a LabelIdentity matches a selectorItem.
@@ -144,7 +144,7 @@ func newLabelIdentityMatch(labelIdentity string, id uint32) *labelIdentityMatch 
 		namespace:        namespace,
 		namespaceLabels:  nsLabels,
 		podLabels:        podLabels,
-		selectorItemKeys: sets.NewString(),
+		selectorItemKeys: sets.New[string](),
 	}
 }
 
@@ -184,7 +184,7 @@ type LabelIdentityIndex struct {
 	// labelIdentities stores all labelIdentityMatches, with the normalized labels of LabelIdentity as map key.
 	labelIdentities map[string]*labelIdentityMatch
 	// labelIdentityNamespaceIndex is an index from Namespace to LabelIdentity keys in that Namespace.
-	labelIdentityNamespaceIndex map[string]sets.String
+	labelIdentityNamespaceIndex map[string]sets.Set[string]
 	// selectorItems stores all selectorItems, indexed by Namespace and policy keys.
 	selectorItems cache.Indexer
 
@@ -203,7 +203,7 @@ func NewLabelIdentityIndex() *LabelIdentityIndex {
 	synced.Store(false)
 	index := &LabelIdentityIndex{
 		labelIdentities:             map[string]*labelIdentityMatch{},
-		labelIdentityNamespaceIndex: map[string]sets.String{},
+		labelIdentityNamespaceIndex: map[string]sets.Set[string]{},
 		selectorItems:               newSelectorItemStore(),
 		eventChan:                   make(chan string, eventChanSize),
 		eventHandlers:               []eventHandler{},
@@ -249,8 +249,8 @@ func (i *LabelIdentityIndex) AddSelector(selector *types.GroupSelector, policyKe
 	}
 	sItem := &selectorItem{
 		selector:          selector,
-		labelIdentityKeys: sets.NewString(),
-		policyKeys:        sets.NewString(policyKey),
+		labelIdentityKeys: sets.New[string](),
+		policyKeys:        sets.New[string](policyKey),
 	}
 	i.selectorItems.Add(sItem)
 	if selectorNS != emptyNamespace {
@@ -284,7 +284,7 @@ func (i *LabelIdentityIndex) deleteSelector(selectorKey string, policyKey string
 		return
 	}
 	sItem := s.(*selectorItem)
-	if sItem.policyKeys.Equal(sets.NewString(policyKey)) {
+	if sItem.policyKeys.Equal(sets.New[string](policyKey)) {
 		// delete the selectorItem and any LabelIdentity mappings if there's no
 		// policy left that has the selector anymore.
 		for lkey := range sItem.labelIdentityKeys {
@@ -298,7 +298,7 @@ func (i *LabelIdentityIndex) deleteSelector(selectorKey string, policyKey string
 }
 
 // RemoveStalePolicySelectors cleans up any outdated selector <-> policy mapping based on the policy's latest selectors.
-func (i *LabelIdentityIndex) RemoveStalePolicySelectors(selectorKeys sets.String, policyKey string) {
+func (i *LabelIdentityIndex) RemoveStalePolicySelectors(selectorKeys sets.Set[string], policyKey string) {
 	originalSelectors := i.getPolicySelectors(policyKey)
 	if originalSelectors == nil {
 		return
@@ -355,7 +355,7 @@ func (i *LabelIdentityIndex) getMatchedLabelIdentityIDs(sItem *selectorItem) []u
 	return ids
 }
 
-func (i *LabelIdentityIndex) scanLabelIdentityMatches(labelIdentityKeys sets.String, sItem *selectorItem) {
+func (i *LabelIdentityIndex) scanLabelIdentityMatches(labelIdentityKeys sets.Set[string], sItem *selectorItem) {
 	for lkey := range labelIdentityKeys {
 		labelIdentity := i.labelIdentities[lkey]
 		if labelIdentity.matches(sItem) {
@@ -383,7 +383,7 @@ func (i *LabelIdentityIndex) AddLabelIdentity(labelKey string, id uint32) {
 	if keys, ok := i.labelIdentityNamespaceIndex[labelIdentityMatch.namespace]; ok {
 		keys.Insert(labelKey)
 	} else {
-		i.labelIdentityNamespaceIndex[labelIdentityMatch.namespace] = sets.NewString(labelKey)
+		i.labelIdentityNamespaceIndex[labelIdentityMatch.namespace] = sets.New[string](labelKey)
 	}
 	i.scanSelectorItemMatches(labelIdentityMatch, labelKey)
 }
@@ -399,7 +399,7 @@ func (i *LabelIdentityIndex) DeleteLabelIdentity(labelKey string) {
 	}
 	klog.V(2).InfoS("Deleting LabelIdentity", "label", labelKey)
 	labelIdentityNamespace := l.namespace
-	policyKeysToNotify := sets.NewString()
+	policyKeysToNotify := sets.New[string]()
 	for sKey := range l.selectorItemKeys {
 		if s, exists, _ := i.selectorItems.GetByKey(sKey); exists {
 			sItem := s.(*selectorItem)
@@ -418,7 +418,7 @@ func (i *LabelIdentityIndex) DeleteLabelIdentity(labelKey string) {
 	i.notify(policyKeysToNotify)
 }
 
-func (i *LabelIdentityIndex) notify(policyKeys sets.String) {
+func (i *LabelIdentityIndex) notify(policyKeys sets.Set[string]) {
 	for k := range policyKeys {
 		klog.V(2).InfoS("Adding policy to the resync chan", "policyKey", k)
 		i.eventChan <- k

@@ -52,6 +52,9 @@ func (r *REST) New() runtime.Object {
 	return &crdv1beta1.AntreaControllerInfo{}
 }
 
+func (r *REST) Destroy() {
+}
+
 func (r *REST) getControllerInfo() *crdv1beta1.AntreaControllerInfo {
 	// Now AntreaControllerInfo has a single instance.
 	info := new(crdv1beta1.AntreaControllerInfo)

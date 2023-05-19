@@ -29,13 +29,13 @@ var excludeEgressDevices = []string{"kube-ipvs0"}
 
 type localIPDetector struct {
 	mutex         sync.RWMutex
-	localIPs      sets.String
+	localIPs      sets.Set[string]
 	cacheSynced   bool
 	eventHandlers []LocalIPEventHandler
 }
 
 func NewLocalIPDetector() *localIPDetector {
-	return &localIPDetector{localIPs: sets.NewString()}
+	return &localIPDetector{localIPs: sets.New[string]()}
 }
 
 // IsLocalIP checks if the provided IP is configured on the Node.
@@ -91,7 +91,7 @@ func (d *localIPDetector) listAndWatchIPAddresses(stopCh <-chan struct{}) {
 	}
 
 	// List existing excluding devices first.
-	excludeLinkIndexes := sets.NewInt()
+	excludeLinkIndexes := sets.New[int]()
 	for _, deviceName := range excludeEgressDevices {
 		link, err := netlink.LinkByName(deviceName)
 		if err != nil {
@@ -103,7 +103,7 @@ func (d *localIPDetector) listAndWatchIPAddresses(stopCh <-chan struct{}) {
 		excludeLinkIndexes.Insert(link.Attrs().Index)
 	}
 
-	ips := sets.NewString()
+	ips := sets.New[string]()
 	for _, addr := range addresses {
 		// Ignore IP Addresses events of excluded devices.
 		if !excludeLinkIndexes.Has(addr.LinkIndex) {
@@ -113,7 +113,7 @@ func (d *localIPDetector) listAndWatchIPAddresses(stopCh <-chan struct{}) {
 
 	klog.V(4).Infof("Listed existing IP address: %v", ips)
 	// Find IP addresses removed or added during the period it was not watching and call eventHandlers to process them.
-	addedAddresses, deletedAddresses := func() (sets.String, sets.String) {
+	addedAddresses, deletedAddresses := func() (sets.Set[string], sets.Set[string]) {
 		d.mutex.Lock()
 		defer d.mutex.Unlock()
 

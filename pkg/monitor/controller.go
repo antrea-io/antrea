@@ -208,12 +208,12 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 		klog.ErrorS(err, "Failed to list agent monitoring CRDs")
 		return
 	}
-	existingNames := sets.NewString()
+	existingNames := sets.New[string]()
 	for _, crd := range crds.Items {
 		existingNames.Insert(crd.Name)
 	}
 	// Delete stale agent monitoring CRD based on existing Nodes and ExternalNodes.
-	expectedNames := sets.NewString()
+	expectedNames := sets.New[string]()
 	nodes, err := monitor.nodeLister.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "Failed to list nodes")
@@ -233,7 +233,7 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 		}
 	}
 	staleSet := existingNames.Difference(expectedNames)
-	for _, name := range staleSet.List() {
+	for _, name := range sets.List(staleSet) {
 		monitor.deleteAgentCRD(name)
 	}
 }

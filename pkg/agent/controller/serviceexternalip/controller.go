@@ -77,7 +77,7 @@ type ServiceExternalIPController struct {
 	cluster    memberlist.Interface
 	ipAssigner ipassigner.IPAssigner
 
-	assignedIPs      map[string]sets.String
+	assignedIPs      map[string]sets.Set[string]
 	assignedIPsMutex sync.Mutex
 }
 
@@ -103,7 +103,7 @@ func NewServiceExternalIPController(
 		endpointsLister:       endpointsInformer.Lister(),
 		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
-		assignedIPs:           make(map[string]sets.String),
+		assignedIPs:           make(map[string]sets.Set[string]),
 	}
 	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "")
 	if err != nil {
@@ -396,7 +396,7 @@ func (c *ServiceExternalIPController) assignIP(ip string, service apimachineryty
 		if err := c.ipAssigner.AssignIP(ip); err != nil {
 			return err
 		}
-		c.assignedIPs[ip] = sets.NewString(service.String())
+		c.assignedIPs[ip] = sets.New[string](service.String())
 	} else {
 		c.assignedIPs[ip].Insert(service.String())
 	}
@@ -422,8 +422,8 @@ func (c *ServiceExternalIPController) unassignIP(ip string, service apimachinery
 }
 
 // nodesHasHealthyServiceEndpoint returns the set of Nodes which has at least one healthy endpoint.
-func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *corev1.Service) (sets.String, error) {
-	nodes := sets.NewString()
+func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *corev1.Service) (sets.Set[string], error) {
+	nodes := sets.New[string]()
 	endpoints, err := c.endpointsLister.Endpoints(service.Namespace).Get(service.Name)
 	if err != nil {
 		return nodes, err

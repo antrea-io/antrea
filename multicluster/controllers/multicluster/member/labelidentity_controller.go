@@ -60,7 +60,7 @@ type (
 		// It also prevents concurrent updates to labelExportUpdatesInProgress.
 		labelMutex sync.RWMutex
 		// labelToPodsCache stores mapping from label identities to Pods that have this label identity.
-		labelToPodsCache map[string]sets.String
+		labelToPodsCache map[string]sets.Set[string]
 		// podLabelCache stores mapping from Pods to their label identities.
 		podLabelCache map[string]string
 		// labelQueue maintains the normalized labels whose corresponding ResourceExport objects are
@@ -78,7 +78,7 @@ func NewLabelIdentityReconciler(
 		Client:           client,
 		Scheme:           scheme,
 		commonAreaGetter: commonAreaGetter,
-		labelToPodsCache: map[string]sets.String{},
+		labelToPodsCache: map[string]sets.Set[string]{},
 		podLabelCache:    map[string]string{},
 		labelQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter()),
 	}
@@ -201,7 +201,7 @@ func (r *LabelIdentityReconciler) onPodCreateOrUpdate(podNamespacedName, current
 	if !ok {
 		// Create a ResourceExport for this label as this is a new label.
 		klog.V(2).InfoS("New label in cluster, queuing for ResourceExport creation", "label", currentLabel)
-		r.labelToPodsCache[currentLabel] = sets.NewString(podNamespacedName)
+		r.labelToPodsCache[currentLabel] = sets.New[string](podNamespacedName)
 		r.labelQueue.Add(currentLabel)
 	} else {
 		// This is a seen label. Simply update the cache.

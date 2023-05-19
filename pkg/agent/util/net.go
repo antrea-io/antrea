@@ -126,7 +126,7 @@ func dialUnix(address string) (net.Conn, error) {
 
 // GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP, and ignores the interfaces which have
 // names in the ignoredInterfaces.
-func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.String) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
+func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.Set[string]) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	linkList, err := netInterfaces()
 	if err != nil {
 		return nil, nil, nil, err
@@ -360,7 +360,7 @@ func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 	}
 
 	// Transform excludeDevices to a set
-	excludeDevicesSet := sets.NewString(excludeDevices...)
+	excludeDevicesSet := sets.New[string](excludeDevices...)
 
 	for i := range interfaces {
 		// If the device is in excludeDevicesSet, skip it.

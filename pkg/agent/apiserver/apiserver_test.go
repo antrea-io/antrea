@@ -127,6 +127,7 @@ func TestAPIServerLivezCheck(t *testing.T) {
 [+]log ok
 [-]ovs failed: reason withheld
 [+]poststarthook/max-in-flight-filter ok
+[+]poststarthook/storage-object-count-tracker-hook ok
 [+]poststarthook/test-server-ready ok
 livez check failed
 `,

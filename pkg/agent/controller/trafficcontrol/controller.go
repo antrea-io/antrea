@@ -92,23 +92,23 @@ type trafficControlState struct {
 	direction v1alpha2.Direction
 	// The actual openflow ports for which we have installed flows for a TrafficControl. Note that, flows are only installed
 	// for the Pods whose effective TrafficControl is the current TrafficControl, and the ports are these Pods'.
-	ofPorts sets.Int32
+	ofPorts sets.Set[int32]
 	// The actual Pods applied with the TrafficControl. Note that, a TrafficControl can be either effective TrafficControl
 	// or alternative TrafficControl for these Pods.
-	pods sets.String
+	pods sets.Set[string]
 }
 
 // podToTCBinding keeps the TrafficControls applied to a Pod. There is only one effective TrafficControl for a Pod at any
 // given time.
 type podToTCBinding struct {
 	effectiveTC    string
-	alternativeTCs sets.String
+	alternativeTCs sets.Set[string]
 }
 
 // portToTCBinding keeps the TrafficControls using an OVS port.
 type portToTCBinding struct {
 	interfaceConfig *interfacestore.InterfaceConfig
-	trafficControls sets.String
+	trafficControls sets.Set[string]
 }
 
 type Controller struct {
@@ -234,8 +234,8 @@ func (c *Controller) matchedPod(pod *v1.Pod, to *v1alpha2.AppliedTo) bool {
 	return true
 }
 
-func (c *Controller) filterAffectedTCsByPod(pod *v1.Pod) sets.String {
-	affectedTCs := sets.NewString()
+func (c *Controller) filterAffectedTCsByPod(pod *v1.Pod) sets.Set[string] {
+	affectedTCs := sets.New[string]()
 	allTCs, _ := c.trafficControlLister.List(labels.Everything())
 	for _, tc := range allTCs {
 		if c.matchedPod(pod, &tc.Spec.AppliedTo) {
@@ -306,8 +306,8 @@ func matchedNamespace(namespace *v1.Namespace, to *v1alpha2.AppliedTo) bool {
 	return true
 }
 
-func (c *Controller) filterAffectedTCsByNS(namespace *v1.Namespace) sets.String {
-	affectedTCs := sets.NewString()
+func (c *Controller) filterAffectedTCsByNS(namespace *v1.Namespace) sets.Set[string] {
+	affectedTCs := sets.New[string]()
 	allTCs, _ := c.trafficControlLister.List(labels.Everything())
 	for _, tc := range allTCs {
 		if matchedNamespace(namespace, &tc.Spec.AppliedTo) {
@@ -420,8 +420,8 @@ func (c *Controller) newTrafficControlState(tcName string, action v1alpha2.Traff
 	c.tcStatesMutex.Lock()
 	defer c.tcStatesMutex.Unlock()
 	state := &trafficControlState{
-		pods:      sets.NewString(),
-		ofPorts:   sets.NewInt32(),
+		pods:      sets.New[string](),
+		ofPorts:   sets.New[int32](),
 		action:    action,
 		direction: direction,
 	}
@@ -720,7 +720,7 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 		}
 		c.portToTCBindings[portName] = &portToTCBinding{
 			interfaceConfig: itf,
-			trafficControls: sets.NewString(tcName),
+			trafficControls: sets.New[string](tcName),
 		}
 		return uint32(itf.OFPort), nil
 	}
@@ -767,7 +767,7 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 	// Create binding for the newly created port.
 	c.portToTCBindings[portName] = &portToTCBinding{
 		interfaceConfig: itf,
-		trafficControls: sets.NewString(tcName),
+		trafficControls: sets.New[string](tcName),
 	}
 	return uint32(ofPort), nil
 }
@@ -891,8 +891,8 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 	}
 
 	stalePods := tcState.pods.Union(nil)
-	newPods := sets.NewString()
-	newOfPorts := sets.NewInt32()
+	newPods := sets.New[string]()
+	newOfPorts := sets.New[int32]()
 	for _, pod := range pods {
 		podNN := k8s.NamespacedName(pod.Namespace, pod.Name)
 		newPods.Insert(podNN)
@@ -917,7 +917,7 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 	// new ofPort set is different from the old ofPort set, the mark flows should be also reinstalled.
 	if needUpdateMarkFlows || !newOfPorts.Equal(tcState.ofPorts) {
 		var ofPorts []uint32
-		for _, port := range newOfPorts.List() {
+		for _, port := range sets.List(newOfPorts) {
 			ofPorts = append(ofPorts, uint32(port))
 		}
 		if err = c.ofClient.InstallTrafficControlMarkFlows(tc.Name, ofPorts, targetOFPort, tc.Spec.Direction, tc.Spec.Action); err != nil {
@@ -964,9 +964,9 @@ func (c *Controller) uninstallTrafficControl(tcName string, tcState *trafficCont
 	return nil
 }
 
-func (c *Controller) podsResync(pods sets.String, tcName string) {
+func (c *Controller) podsResync(pods sets.Set[string], tcName string) {
 	// Resync the Pods that have new effective TrafficControl.
-	newEffectiveTCs := sets.NewString()
+	newEffectiveTCs := sets.New[string]()
 	for pod := range pods {
 		if newEffectiveTC := c.unbindPodFromTrafficControl(pod, tcName); newEffectiveTC != "" {
 			newEffectiveTCs.Insert(newEffectiveTC)
@@ -989,7 +989,7 @@ func (c *Controller) bindPodToTrafficControl(pod, tc string) bool {
 		// Promote itself as the effective TrafficControl for the Pod if there is no binding information for the Pod.
 		c.podToTCBindings[pod] = &podToTCBinding{
 			effectiveTC:    tc,
-			alternativeTCs: sets.NewString(),
+			alternativeTCs: sets.New[string](),
 		}
 		return true
 	}

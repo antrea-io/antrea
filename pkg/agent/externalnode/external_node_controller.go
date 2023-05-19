@@ -299,8 +299,8 @@ func (c *ExternalNodeController) addInterface(ifName string, eeNamespace string,
 		return ovsErr
 	}
 	preEEName := portData.ExternalIDs[ovsExternalIDEntityName]
-	preIPs := sets.NewString(strings.Split(portData.ExternalIDs[ovsExternalIDIPs], ipsSplitter)...)
-	if preEEName == eeName && sets.NewString(ips...).Equal(preIPs) {
+	preIPs := sets.New[string](strings.Split(portData.ExternalIDs[ovsExternalIDIPs], ipsSplitter)...)
+	if preEEName == eeName && sets.New[string](ips...).Equal(preIPs) {
 		klog.InfoS("Skipping updating OVS port data as both entity name and ip are not changed", "ifName", ifName)
 		return nil
 	}
@@ -609,7 +609,7 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 
 func getHostInterfaceName(iface v1alpha1.NetworkInterface) (string, []string, error) {
 	ifName := ""
-	ips := sets.NewString()
+	ips := sets.New[string]()
 	for _, ipStr := range iface.IPs {
 		var ipFilter *ip.DualStackIPs
 		ifIP := net.ParseIP(ipStr)
@@ -618,23 +618,23 @@ func getHostInterfaceName(iface v1alpha1.NetworkInterface) (string, []string, er
 		} else {
 			ipFilter = &ip.DualStackIPs{IPv6: ifIP}
 		}
-		_, _, link, err := getIPNetDeviceFromIP(ipFilter, sets.NewString())
+		_, _, link, err := getIPNetDeviceFromIP(ipFilter, sets.New[string]())
 		if err == nil {
 			klog.InfoS("Using the interface", "linkName", link.Name, "IP", ipStr)
 			ips.Insert(ipStr)
 			if ifName == "" {
 				ifName = link.Name
 			} else if ifName != link.Name {
-				return "", ips.List(), fmt.Errorf("find different interfaces by IPs, ifName %s, linkName %s", ifName, link.Name)
+				return "", sets.List(ips), fmt.Errorf("find different interfaces by IPs, ifName %s, linkName %s", ifName, link.Name)
 			}
 		} else {
 			klog.ErrorS(err, "Failed to get device from IP", "ip", ifIP)
 		}
 	}
 	if ifName == "" {
-		return "", ips.List(), fmt.Errorf("cannot find interface via IPs %v", iface.IPs)
+		return "", sets.List(ips), fmt.Errorf("cannot find interface via IPs %v", iface.IPs)
 	}
-	return ifName, ips.List(), nil
+	return ifName, sets.List(ips), nil
 }
 
 func ParseHostInterfaceConfig(ovsBridgeClient ovsconfig.OVSBridgeClient, portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) (*interfacestore.InterfaceConfig, error) {

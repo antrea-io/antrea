@@ -48,7 +48,7 @@ type ipsecCSRApprover struct {
 	client clientset.Interface
 }
 
-var ipsecTunnelUsages = sets.NewString(
+var ipsecTunnelUsages = sets.New[string](
 	string(certificatesv1.UsageIPsecTunnel),
 )
 

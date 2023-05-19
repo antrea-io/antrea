@@ -171,12 +171,12 @@ func TestGetMaxPriority(t *testing.T) {
 }
 
 type dirtyRuleRecorder struct {
-	rules   sets.String
+	rules   sets.Set[string]
 	eventCh chan string
 }
 
 func newDirtyRuleRecorder() *dirtyRuleRecorder {
-	return &dirtyRuleRecorder{sets.NewString(), make(chan string, 100)}
+	return &dirtyRuleRecorder{sets.New[string](), make(chan string, 100)}
 }
 
 func (r *dirtyRuleRecorder) Record(ruleID string) {
@@ -226,7 +226,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 		rules              []*rule
 		args               *v1beta2.AddressGroup
 		expectedAddresses  []*v1beta2.GroupMember
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"zero-rule",
@@ -236,7 +236,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				GroupMembers: []v1beta2.GroupMember{},
 			},
 			nil,
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"one-rule",
@@ -246,7 +246,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				GroupMembers: []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1")},
 			},
 			[]*v1beta2.GroupMember{newAddressGroupMember("1.1.1.1")},
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 		},
 		{
 			"two-rules",
@@ -256,7 +256,7 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 				GroupMembers: []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 			},
 			[]*v1beta2.GroupMember{newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")},
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 		},
 	}
 	for _, tt := range tests {
@@ -302,7 +302,7 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 		preExistingGroups  map[string]v1beta2.GroupMemberSet
 		args               []*v1beta2.AppliedToGroup
 		expectedGroups     map[string]v1beta2.GroupMemberSet
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"stale-group-can-be-cleaned",
@@ -310,7 +310,7 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"))},
 			[]*v1beta2.AppliedToGroup{},
 			map[string]v1beta2.GroupMemberSet{},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"existing-group-can-be-updated",
@@ -323,7 +323,7 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 				},
 			},
 			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"), newAppliedToGroupMemberPod("pod2", "ns1"))},
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 		},
 		{
 			"unchanged-group-can-be-skipped",
@@ -336,7 +336,7 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 				},
 			},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"))},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"new-group-can-be-added",
@@ -349,7 +349,7 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 				},
 			},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"), newAppliedToGroupMemberPod("pod2", "ns1"))},
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 		},
 	}
 	for _, tt := range tests {
@@ -386,7 +386,7 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 		preExistingGroups  map[string]v1beta2.GroupMemberSet
 		args               []*v1beta2.AddressGroup
 		expectedGroups     map[string]v1beta2.GroupMemberSet
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"stale-group-can-be-cleaned",
@@ -394,7 +394,7 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
 			[]*v1beta2.AddressGroup{},
 			map[string]v1beta2.GroupMemberSet{},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"existing-group-can-be-updated",
@@ -407,7 +407,7 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 				},
 			},
 			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"), newAddressGroupMember("1.1.1.3"))},
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 		},
 		{
 			"unchanged-group-can-be-skipped",
@@ -420,7 +420,7 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 				},
 			},
 			map[string]v1beta2.GroupMemberSet{"group1": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"new-group-can-be-added",
@@ -433,7 +433,7 @@ func TestRuleCacheReplaceAddressGroups(t *testing.T) {
 				},
 			},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.2"))},
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 		},
 	}
 	for _, tt := range tests {
@@ -491,35 +491,35 @@ func TestRuleCacheReplaceNetworkPolicies(t *testing.T) {
 		rules              []*rule
 		args               []*v1beta2.NetworkPolicy
 		expectedRules      []*rule
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"stale-policy-can-be-cleaned",
 			[]*rule{rule1},
 			[]*v1beta2.NetworkPolicy{},
 			[]*rule{},
-			sets.NewString(rule1.ID),
+			sets.New[string](rule1.ID),
 		},
 		{
 			"existing-policy-can-be-updated",
 			[]*rule{rule1},
 			[]*v1beta2.NetworkPolicy{networkPolicy2},
 			[]*rule{rule2},
-			sets.NewString(rule1.ID, rule2.ID),
+			sets.New[string](rule1.ID, rule2.ID),
 		},
 		{
 			"unchanged-policy-can-be-skipped",
 			[]*rule{rule1},
 			[]*v1beta2.NetworkPolicy{networkPolicy1},
 			[]*rule{rule1},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"new-policy-can-be-added",
 			[]*rule{},
 			[]*v1beta2.NetworkPolicy{networkPolicy1},
 			[]*rule{rule1},
-			sets.NewString(rule1.ID),
+			sets.New[string](rule1.ID),
 		},
 	}
 	for _, tt := range tests {
@@ -553,7 +553,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 		rules              []*rule
 		args               *v1beta2.AppliedToGroup
 		expectedPods       []*v1beta2.GroupMember
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"zero-rule",
@@ -563,7 +563,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				GroupMembers: []v1beta2.GroupMember{},
 			},
 			nil,
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"one-rule",
@@ -573,7 +573,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				GroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")},
 			},
 			[]*v1beta2.GroupMember{newAppliedToGroupMemberPod("pod1", "ns1")},
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 		},
 		{
 			"two-rules",
@@ -583,7 +583,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 				GroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1"), *newAppliedToGroupMemberPod("pod2", "ns1")},
 			},
 			[]*v1beta2.GroupMember{newAppliedToGroupMemberPod("pod1", "ns1"), newAppliedToGroupMemberPod("pod2", "ns1")},
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 		},
 	}
 	for _, tt := range tests {
@@ -685,31 +685,31 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		name               string
 		args               *v1beta2.NetworkPolicy
 		expectedRules      []*rule
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"zero-rule",
 			networkPolicy1,
 			[]*rule{},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"two-rule",
 			networkPolicy2,
 			[]*rule{rule1, rule2},
-			sets.NewString(rule1.ID, rule2.ID),
+			sets.New[string](rule1.ID, rule2.ID),
 		},
 		{
 			"rule-with-appliedTo",
 			networkPolicy3,
 			[]*rule{rule3},
-			sets.NewString(rule3.ID),
+			sets.New[string](rule3.ID),
 		},
 		{
 			"rule-with-label-identity",
 			networkPolicy4,
 			[]*rule{rule4},
-			sets.NewString(rule4.ID),
+			sets.New[string](rule4.ID),
 		},
 	}
 	for _, tt := range tests {
@@ -745,7 +745,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 		rules              []*rule
 		args               *v1beta2.NetworkPolicy
 		expectedRules      []*rule
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"delete-zero-rule",
@@ -754,7 +754,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{UID: "policy0", Namespace: "ns0", Name: "name0"},
 			},
 			[]*rule{rule1, rule2, rule3},
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"delete-one-rule",
@@ -763,7 +763,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 			},
 			[]*rule{rule2, rule3},
-			sets.NewString("rule1"),
+			sets.New[string]("rule1"),
 		},
 		{
 			"delete-two-rule",
@@ -772,7 +772,7 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{UID: "policy2", Namespace: "ns2", Name: "name2"},
 			},
 			[]*rule{rule1},
-			sets.NewString("rule2", "rule3"),
+			sets.New[string]("rule2", "rule3"),
 		},
 	}
 	for _, tt := range tests {
@@ -990,7 +990,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 		podSetByGroup      map[string]v1beta2.GroupMemberSet
 		args               *v1beta2.AppliedToGroupPatch
 		expectedPods       []*v1beta2.GroupMember
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 		expectedErr        bool
 	}{
 		{
@@ -1002,7 +1002,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 				AddedGroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")},
 			},
 			nil,
-			sets.NewString(),
+			sets.New[string](),
 			true,
 		},
 		{
@@ -1015,7 +1015,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 				RemovedGroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")},
 			},
 			[]*v1beta2.GroupMember{newAppliedToGroupMemberPod("pod2", "ns1"), newAppliedToGroupMemberPod("pod3", "ns3")},
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 			false,
 		},
 		{
@@ -1028,7 +1028,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 				RemovedGroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")},
 			},
 			[]*v1beta2.GroupMember{newAppliedToGroupMemberPod("pod2", "ns1"), newAppliedToGroupMemberPod("pod3", "ns3")},
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 			false,
 		},
 	}
@@ -1067,7 +1067,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 		addressSetByGroup  map[string]v1beta2.GroupMemberSet
 		args               *v1beta2.AddressGroupPatch
 		expectedAddresses  []*v1beta2.GroupMember
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 		expectedErr        bool
 	}{
 		{
@@ -1079,7 +1079,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 				AddedGroupMembers: []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")},
 			},
 			nil,
-			sets.NewString(),
+			sets.New[string](),
 			true,
 		},
 		{
@@ -1092,7 +1092,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 				RemovedGroupMembers: []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1")},
 			},
 			[]*v1beta2.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 			false,
 		},
 		{
@@ -1105,7 +1105,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 				RemovedGroupMembers: []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1")},
 			},
 			[]*v1beta2.GroupMember{newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")},
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 			false,
 		},
 	}
@@ -1183,21 +1183,21 @@ func TestRuleCacheUpdateNetworkPolicy(t *testing.T) {
 		rules              []*rule
 		args               *v1beta2.NetworkPolicy
 		expectedRules      []*rule
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"updating-addressgroup",
 			[]*rule{rule1},
 			networkPolicy2,
 			[]*rule{rule2},
-			sets.NewString(rule1.ID, rule2.ID),
+			sets.New[string](rule1.ID, rule2.ID),
 		},
 		{
 			"adding-rule",
 			[]*rule{rule1},
 			networkPolicy3,
 			[]*rule{rule1, rule3},
-			sets.NewString(rule3.ID),
+			sets.New[string](rule3.ID),
 		},
 	}
 	for _, tt := range tests {
@@ -1233,21 +1233,21 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 		rules              []*rule
 		podSetByGroup      map[string]v1beta2.GroupMemberSet
 		podUpdate          string
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"non-matching-group",
 			nil,
 			nil,
 			"bar/foo",
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"matching-one-group-affecting-one-rule",
 			[]*rule{rule1, rule2},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"))},
 			"ns1/pod1",
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 		},
 		{
 			"matching-two-groups-affecting-two-rules",
@@ -1257,7 +1257,7 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 				"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")),
 			},
 			"ns1/pod1",
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 		},
 	}
 	for _, tt := range tests {
@@ -1334,21 +1334,21 @@ func TestRuleCacheProcessServiceGroupIDUpdates(t *testing.T) {
 		rules              []*rule
 		svcSetByGroup      map[string]v1beta2.GroupMemberSet
 		svcUpdate          string
-		expectedDirtyRules sets.String
+		expectedDirtyRules sets.Set[string]
 	}{
 		{
 			"non-matching",
 			[]*rule{rule1, rule2, rule3, rule4},
 			nil,
 			"bar/foo",
-			sets.NewString(),
+			sets.New[string](),
 		},
 		{
 			"matching-one-group-affecting-one-rule",
 			[]*rule{rule1, rule2},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberService("svc1", "ns1"))},
 			"ns1/svc1",
-			sets.NewString("rule2"),
+			sets.New[string]("rule2"),
 		},
 		{
 			"matching-two-groups-affecting-two-rules",
@@ -1358,21 +1358,21 @@ func TestRuleCacheProcessServiceGroupIDUpdates(t *testing.T) {
 				"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMemberService("svc1", "ns1")),
 			},
 			"ns1/svc1",
-			sets.NewString("rule1", "rule2"),
+			sets.New[string]("rule1", "rule2"),
 		},
 		{
 			"matching-one-to-service-affecting-one-rule",
 			[]*rule{rule3, rule4},
 			nil,
 			"ns2/svc2",
-			sets.NewString("rule4"),
+			sets.New[string]("rule4"),
 		},
 		{
 			"matching-two-to-service-affecting-two-rules",
 			[]*rule{rule3, rule4},
 			nil,
 			"ns1/svc1",
-			sets.NewString("rule3", "rule4"),
+			sets.New[string]("rule3", "rule4"),
 		},
 	}
 	for _, tt := range tests {

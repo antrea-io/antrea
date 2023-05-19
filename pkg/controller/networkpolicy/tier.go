@@ -59,7 +59,7 @@ var (
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
-	staticTierSet = sets.NewString("Emergency", "SecurityOps", "NetworkOps", "Platform", "Application", "Baseline")
+	staticTierSet = sets.New[string]("Emergency", "SecurityOps", "NetworkOps", "Platform", "Application", "Baseline")
 	// systemGeneratedTiers are the Tier CRs to be created at init.
 	systemGeneratedTiers = []*secv1alpha1.Tier{
 		{

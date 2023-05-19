@@ -572,17 +572,17 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 	tests := []struct {
 		name           string
 		toMatch        *corev1.Service
-		expectedGroups sets.String
+		expectedGroups sets.Set[string]
 	}{
 		{
 			"service-match-name-default-ns",
 			svc1,
-			sets.NewString("cgA", "cgB"),
+			sets.New[string]("cgA", "cgB"),
 		},
 		{
 			"service-match-name-and-namespace",
 			svc2,
-			sets.NewString("cgC"),
+			sets.New[string]("cgC"),
 		},
 	}
 	_, npc := newController()
@@ -982,7 +982,7 @@ func TestSyncInternalGroup(t *testing.T) {
 	expectedInternalNetworkPolicy1 := &antreatypes.NetworkPolicy{
 		UID:      "uid1",
 		Name:     "uid1",
-		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString()},
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.New[string]()},
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type: controlplane.AntreaClusterNetworkPolicy,
 			Name: "cnp1",
@@ -1033,7 +1033,7 @@ func TestSyncInternalGroup(t *testing.T) {
 	expectedInternalNetworkPolicy2 := &antreatypes.NetworkPolicy{
 		UID:      "uid2",
 		Name:     "uid2",
-		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString()},
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.New[string]()},
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type: controlplane.AntreaClusterNetworkPolicy,
 			Name: "cnp2",

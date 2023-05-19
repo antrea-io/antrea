@@ -114,7 +114,7 @@ type ruleSyncTracker struct {
 	// successful, its ID is removed from this set. Otherwise it will stay in the
 	// dirtyRules set. This is to ensure that the fqdnController does not send
 	// DNS response which has a fqdn rule that previously failed to realize.
-	dirtyRules sets.String
+	dirtyRules sets.Set[string]
 }
 
 type fqdnController struct {
@@ -136,7 +136,7 @@ type fqdnController struct {
 
 	fqdnRuleToPodsMutex sync.Mutex
 	// The mapping between FQDN rule IDs and the Pod's ofPort IDs that the rule selects.
-	fqdnRuleToSelectedPods map[string]sets.Int32
+	fqdnRuleToSelectedPods map[string]sets.Set[int32]
 
 	// Mutex for fqdnToSelectorItem, selectorItemToFQDN and selectorItemToRuleIDs.
 	fqdnSelectorMutex sync.Mutex
@@ -145,9 +145,9 @@ type fqdnController struct {
 	fqdnToSelectorItem map[string]map[fqdnSelectorItem]struct{}
 	// selectorItemToFQDN is a reversed map of fqdnToSelectorItem. It stores all known
 	// FQDNs that match the fqdnSelectorItem.
-	selectorItemToFQDN map[fqdnSelectorItem]sets.String
+	selectorItemToFQDN map[fqdnSelectorItem]sets.Set[string]
 	// selectorItemToRuleIDs maps fqdnToSelectorItem to the rules that contains the selector.
-	selectorItemToRuleIDs map[fqdnSelectorItem]sets.String
+	selectorItemToRuleIDs map[fqdnSelectorItem]sets.Set[string]
 	ipv4Enabled           bool
 	ipv6Enabled           bool
 	gwPort                uint32
@@ -157,14 +157,14 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 	controller := &fqdnController{
 		ofClient:               client,
 		dirtyRuleHandler:       dirtyRuleHandler,
-		ruleSyncTracker:        &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.NewString()},
+		ruleSyncTracker:        &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.New[string]()},
 		idAllocator:            allocator,
 		dnsQueryQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "fqdn"),
 		dnsEntryCache:          map[string]dnsMeta{},
-		fqdnRuleToSelectedPods: map[string]sets.Int32{},
+		fqdnRuleToSelectedPods: map[string]sets.Set[int32]{},
 		fqdnToSelectorItem:     map[string]map[fqdnSelectorItem]struct{}{},
-		selectorItemToFQDN:     map[fqdnSelectorItem]sets.String{},
-		selectorItemToRuleIDs:  map[fqdnSelectorItem]sets.String{},
+		selectorItemToFQDN:     map[fqdnSelectorItem]sets.Set[string]{},
+		selectorItemToRuleIDs:  map[fqdnSelectorItem]sets.Set[string]{},
 		ipv4Enabled:            v4Enabled,
 		ipv6Enabled:            v6Enabled,
 		gwPort:                 gwPort,
@@ -228,7 +228,7 @@ func (f *fqdnController) setFQDNMatchSelector(fqdn string, selectorItem fqdnSele
 	}
 	matchedFQDNs, ok := f.selectorItemToFQDN[selectorItem]
 	if !ok {
-		f.selectorItemToFQDN[selectorItem] = sets.NewString(fqdn)
+		f.selectorItemToFQDN[selectorItem] = sets.New[string](fqdn)
 	} else {
 		matchedFQDNs.Insert(fqdn)
 	}
@@ -260,7 +260,7 @@ func (f *fqdnController) getIPsForFQDNSelectors(fqdns []string) []net.IP {
 
 // addFQDNRule adds a new FQDN rule to fqdnSelectorItem mapping, as well as the OFAddresses of
 // Pods selected by the FQDN rule.
-func (f *fqdnController) addFQDNRule(ruleID string, fqdns []string, podOFAddrs sets.Int32) error {
+func (f *fqdnController) addFQDNRule(ruleID string, fqdns []string, podOFAddrs sets.Set[int32]) error {
 	f.addFQDNSelector(ruleID, fqdns)
 	return f.updateRuleSelectedPods(ruleID, podOFAddrs)
 }
@@ -274,7 +274,7 @@ func (f *fqdnController) addFQDNSelector(ruleID string, fqdns []string) {
 		if !exists {
 			// This is a new fqdnSelectorItem. All existing FQDNs in the cache needs to be matched
 			// against this fqdnSelectorItem to update the mapping.
-			f.selectorItemToRuleIDs[fqdnSelectorItem] = sets.NewString(ruleID)
+			f.selectorItemToRuleIDs[fqdnSelectorItem] = sets.New[string](ruleID)
 			for fqdn := range f.dnsEntryCache {
 				if fqdnSelectorItem.matches(fqdn) {
 					f.setFQDNMatchSelector(fqdn, fqdnSelectorItem)
@@ -293,10 +293,10 @@ func (f *fqdnController) addFQDNSelector(ruleID string, fqdns []string) {
 
 // updateRuleSelectedPods updates the Pod OFAddresses selected by a FQDN rule. Those addresses
 // are used to create DNS response interception rules.
-func (f *fqdnController) updateRuleSelectedPods(ruleID string, podOFAddrs sets.Int32) error {
+func (f *fqdnController) updateRuleSelectedPods(ruleID string, podOFAddrs sets.Set[int32]) error {
 	f.fqdnRuleToPodsMutex.Lock()
 	defer f.fqdnRuleToPodsMutex.Unlock()
-	originalPodSet, newPodSet := sets.Int32{}, sets.Int32{}
+	originalPodSet, newPodSet := sets.Set[int32]{}, sets.Set[int32]{}
 	for _, pods := range f.fqdnRuleToSelectedPods {
 		utilsets.MergeInt32(originalPodSet, pods)
 	}
@@ -375,7 +375,7 @@ func (f *fqdnController) deleteRuleSelectedPods(ruleID string) error {
 	if _, exists := f.fqdnRuleToSelectedPods[ruleID]; !exists {
 		return nil
 	}
-	originalPodSet, newPodSet := sets.Int32{}, sets.Int32{}
+	originalPodSet, newPodSet := sets.Set[int32]{}, sets.Set[int32]{}
 	for _, pods := range f.fqdnRuleToSelectedPods {
 		utilsets.MergeInt32(originalPodSet, pods)
 	}
@@ -492,7 +492,7 @@ func (f *fqdnController) syncDirtyRules(fqdn string, waitCh chan error, addressU
 			}
 		}
 	} else {
-		dirtyRules := sets.NewString()
+		dirtyRules := sets.New[string]()
 		for selectorItem := range f.fqdnToSelectorItem[fqdn] {
 			utilsets.MergeString(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
 		}
@@ -523,7 +523,7 @@ func (f *fqdnController) syncDirtyRules(fqdn string, waitCh chan error, addressU
 // ruleSyncTracker receives a rule realization update, it will decrease the
 // dirty rule count of each subscriber of that rule by one, if the rule is
 // successfully reconciled.
-func (rst *ruleSyncTracker) subscribe(waitCh chan error, dirtyRules sets.String) {
+func (rst *ruleSyncTracker) subscribe(waitCh chan error, dirtyRules sets.Set[string]) {
 	subscriber := &subscriber{waitCh, len(dirtyRules)}
 	rst.mutex.Lock()
 	defer rst.mutex.Unlock()

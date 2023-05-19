@@ -115,8 +115,8 @@ func TestReconcileSupportBundles(t *testing.T) {
 	testClient.start(stopCh)
 	testClient.waitForSync(stopCh)
 
-	processingBundleCollections := sets.NewString()
-	ignoredBundleCollections := sets.NewString()
+	processingBundleCollections := sets.New[string]()
+	ignoredBundleCollections := sets.New[string]()
 	for _, c := range testConfigs {
 		if c.phase == processing {
 			processingBundleCollections.Insert(c.name)
@@ -144,9 +144,9 @@ func TestReconcileSupportBundles(t *testing.T) {
 }
 
 func parseDependentResources(configs []bundleConfig) ([]nodeConfig, []externalNodeConfig) {
-	nodeNames := sets.NewString()
+	nodeNames := sets.New[string]()
 	nodeLabels := make(map[string]string)
-	externalNodeNames := make(map[string]sets.String)
+	externalNodeNames := make(map[string]sets.Set[string])
 	externalNodeLabels := make(map[string]map[string]string)
 	for _, cfg := range configs {
 		if cfg.nodes != nil {
@@ -160,7 +160,7 @@ func parseDependentResources(configs []bundleConfig) ([]nodeConfig, []externalNo
 		if cfg.externalNodes != nil {
 			_, exists := externalNodeNames[cfg.externalNodes.namespace]
 			if !exists {
-				externalNodeNames[cfg.externalNodes.namespace] = sets.NewString()
+				externalNodeNames[cfg.externalNodes.namespace] = sets.New[string]()
 			}
 			for _, name := range cfg.externalNodes.names {
 				externalNodeNames[cfg.externalNodes.namespace].Insert(name)
@@ -547,20 +547,20 @@ func TestGetBundleNodes(t *testing.T) {
 
 	for _, tc := range []struct {
 		bundleNodes   *v1alpha1.BundleNodes
-		expectedNodes sets.String
+		expectedNodes sets.Set[string]
 	}{
 		{
 			bundleNodes: &v1alpha1.BundleNodes{
 				NodeNames: []string{"n1", "n2"},
 			},
-			expectedNodes: sets.NewString("n1", "n2"),
+			expectedNodes: sets.New[string]("n1", "n2"),
 		}, {
 			bundleNodes: &v1alpha1.BundleNodes{
 				NodeSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"test": "selected"},
 				},
 			},
-			expectedNodes: sets.NewString("n3", "n4"),
+			expectedNodes: sets.New[string]("n3", "n4"),
 		}, {
 			bundleNodes: &v1alpha1.BundleNodes{
 				NodeNames: []string{"n1", "n2"},
@@ -568,18 +568,18 @@ func TestGetBundleNodes(t *testing.T) {
 					MatchLabels: map[string]string{"test": "selected"},
 				},
 			},
-			expectedNodes: sets.NewString("n1", "n2", "n3", "n4"),
+			expectedNodes: sets.New[string]("n1", "n2", "n3", "n4"),
 		}, {
 			bundleNodes:   &v1alpha1.BundleNodes{},
-			expectedNodes: sets.NewString("n1", "n2", "n3", "n4", "n5"),
+			expectedNodes: sets.New[string]("n1", "n2", "n3", "n4", "n5"),
 		}, {
 			bundleNodes:   nil,
-			expectedNodes: sets.NewString(),
+			expectedNodes: sets.New[string](),
 		}, {
 			bundleNodes: &v1alpha1.BundleNodes{
 				NodeNames: []string{"n1", "not-exist"},
 			},
-			expectedNodes: sets.NewString("n1"),
+			expectedNodes: sets.New[string]("n1"),
 		},
 	} {
 		actualNodes, err := controller.getBundleNodes(tc.bundleNodes)
@@ -615,14 +615,14 @@ func TestGetBundleExternalNodes(t *testing.T) {
 
 	for _, tc := range []struct {
 		bundleNodes   *v1alpha1.BundleExternalNodes
-		expectedNodes sets.String
+		expectedNodes sets.Set[string]
 	}{
 		{
 			bundleNodes: &v1alpha1.BundleExternalNodes{
 				Namespace: "ns1",
 				NodeNames: []string{"n1", "n2"},
 			},
-			expectedNodes: sets.NewString("ns1/n1", "ns1/n2"),
+			expectedNodes: sets.New[string]("ns1/n1", "ns1/n2"),
 		}, {
 			bundleNodes: &v1alpha1.BundleExternalNodes{
 				Namespace: "ns1",
@@ -631,22 +631,22 @@ func TestGetBundleExternalNodes(t *testing.T) {
 					MatchLabels: map[string]string{"test": "selected"},
 				},
 			},
-			expectedNodes: sets.NewString("ns1/n1", "ns1/n3"),
+			expectedNodes: sets.New[string]("ns1/n1", "ns1/n3"),
 		}, {
 			bundleNodes: &v1alpha1.BundleExternalNodes{
 				Namespace: "ns1",
 			},
-			expectedNodes: sets.NewString("ns1/n1", "ns1/n2", "ns1/n3", "ns1/n4"),
+			expectedNodes: sets.New[string]("ns1/n1", "ns1/n2", "ns1/n3", "ns1/n4"),
 		}, {
 			bundleNodes:   nil,
-			expectedNodes: sets.NewString(),
+			expectedNodes: sets.New[string](),
 		},
 		{
 			bundleNodes: &v1alpha1.BundleExternalNodes{
 				Namespace: "ns1",
 				NodeNames: []string{"not-exist"},
 			},
-			expectedNodes: sets.NewString(),
+			expectedNodes: sets.New[string](),
 		},
 	} {
 		actualNodes, err := controller.getBundleExternalNodes(tc.bundleNodes)
@@ -778,7 +778,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 	expiredCreationTime := time.Now().Add(expiredDuration)
 	testCases := []struct {
 		bundleConfig
-		expectedNodes sets.String
+		expectedNodes sets.Set[string]
 		expectedAuth  controlplane.BundleServerAuthConfiguration
 		expectedError string
 		expectFailure bool
@@ -792,7 +792,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 				},
 				authType: v1alpha1.APIKey,
 			},
-			expectedNodes: sets.NewString("n1", "n2", "n3", "n4"),
+			expectedNodes: sets.New[string]("n1", "n2", "n3", "n4"),
 			expectedAuth: controlplane.BundleServerAuthConfiguration{
 				APIKey: testKeyString,
 			},
@@ -807,7 +807,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 				},
 				authType: v1alpha1.APIKey,
 			},
-			expectedNodes: sets.NewString("ns1/en1", "ns1/en2", "ns1/en3"),
+			expectedNodes: sets.New[string]("ns1/en1", "ns1/en2", "ns1/en3"),
 			expectedAuth: controlplane.BundleServerAuthConfiguration{
 				APIKey: testKeyString,
 			},
@@ -823,7 +823,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 				},
 				authType: v1alpha1.APIKey,
 			},
-			expectedNodes: sets.NewString("n1", "n2", "ns2/en5"),
+			expectedNodes: sets.New[string]("n1", "n2", "ns2/en5"),
 			expectedAuth: controlplane.BundleServerAuthConfiguration{
 				APIKey: testKeyString,
 			},
@@ -1098,19 +1098,19 @@ func TestAddInternalSupportBundleCollection(t *testing.T) {
 		name                    string
 		nodes                   *bundleNodes
 		externalNodes           *bundleExternalNodes
-		nodeSpan                sets.String
+		nodeSpan                sets.Set[string]
 		processingNodes         bool
 		processingExternalNodes bool
 	}{
 		{
 			name:            "b1",
 			nodes:           &bundleNodes{},
-			nodeSpan:        sets.NewString("n1", "n2", "n3", "n4"),
+			nodeSpan:        sets.New[string]("n1", "n2", "n3", "n4"),
 			processingNodes: true,
 		}, {
 			name:                    "b2",
 			externalNodes:           &bundleExternalNodes{namespace: "ns1"},
-			nodeSpan:                sets.NewString("en1", "en2", "en3", "en4"),
+			nodeSpan:                sets.New[string]("en1", "en2", "en3", "en4"),
 			processingExternalNodes: true,
 		},
 	} {
@@ -1232,28 +1232,28 @@ func TestIsCollectionAvailable(t *testing.T) {
 
 	for _, tc := range []struct {
 		existedAppliedTo       string
-		availableCollections   sets.String
-		unAvailableCollections sets.String
+		availableCollections   sets.Set[string]
+		unAvailableCollections sets.Set[string]
 	}{
 		{
 			existedAppliedTo:       "",
-			availableCollections:   sets.NewString("b3", "b4", "b5", "b6", "b7", "b8"),
-			unAvailableCollections: sets.NewString(),
+			availableCollections:   sets.New[string]("b3", "b4", "b5", "b6", "b7", "b8"),
+			unAvailableCollections: sets.New[string](),
 		},
 		{
 			existedAppliedTo:       "b0",
-			availableCollections:   sets.NewString("b4", "b5", "b8"),
-			unAvailableCollections: sets.NewString("b3", "b6", "b7"),
+			availableCollections:   sets.New[string]("b4", "b5", "b8"),
+			unAvailableCollections: sets.New[string]("b3", "b6", "b7"),
 		},
 		{
 			existedAppliedTo:       "b1",
-			availableCollections:   sets.NewString("b3", "b5", "b6", "b7"),
-			unAvailableCollections: sets.NewString("b4", "b8"),
+			availableCollections:   sets.New[string]("b3", "b5", "b6", "b7"),
+			unAvailableCollections: sets.New[string]("b4", "b8"),
 		},
 		{
 			existedAppliedTo:       "b2",
-			availableCollections:   sets.NewString("b5"),
-			unAvailableCollections: sets.NewString("b3", "b4", "b6", "b7", "b8"),
+			availableCollections:   sets.New[string]("b5"),
+			unAvailableCollections: sets.New[string]("b3", "b4", "b6", "b7", "b8"),
 		},
 	} {
 		appliedTo, exists := processingCollections[tc.existedAppliedTo]
@@ -1261,8 +1261,8 @@ func TestIsCollectionAvailable(t *testing.T) {
 			err := controller.supportBundleCollectionAppliedToStore.Add(appliedTo)
 			assert.NoError(t, err)
 		}
-		availableCollections := sets.NewString()
-		unAvailableCollections := sets.NewString()
+		availableCollections := sets.New[string]()
+		unAvailableCollections := sets.New[string]()
 		for _, collection := range testBundleCollections {
 			ok := controller.isCollectionAvailable(collection)
 			if ok {
@@ -1640,7 +1640,7 @@ func TestUpdateStatus(t *testing.T) {
 		controller.supportBundleCollectionStore.Create(&types.SupportBundleCollection{
 			Name: collectionName,
 			SpanMeta: types.SpanMeta{
-				NodeNames: sets.NewString(getSpan(desiredNodes)...),
+				NodeNames: sets.New[string](getSpan(desiredNodes)...),
 			},
 		})
 		stopCh := make(chan struct{})

@@ -318,7 +318,7 @@ type ServiceChangeTracker struct {
 	recorder                record.EventRecorder
 	// skipServices indicates the service list for which we should skip proxying
 	// it will be initialized from antrea-agent.conf
-	skipServices sets.String
+	skipServices sets.Set[string]
 }
 
 // NewServiceChangeTracker initializes a ServiceChangeTracker
@@ -333,7 +333,7 @@ func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
 		recorder:                recorder,
 		ipFamily:                ipFamily,
 		processServiceMapChange: processServiceMapChange,
-		skipServices:            sets.NewString(skipServices...),
+		skipServices:            sets.New[string](skipServices...),
 	}
 }
 
@@ -384,12 +384,12 @@ type UpdateServiceMapResult struct {
 	HCServiceNodePorts map[types.NamespacedName]uint16
 	// UDPStaleClusterIP holds stale (no longer assigned to a Service) Service IPs that had UDP ports.
 	// Callers can use this to abort timeout-waits or clear connection-tracking information.
-	UDPStaleClusterIP sets.String
+	UDPStaleClusterIP sets.Set[string]
 }
 
 // Update updates ServiceMap base on the given changes.
 func (sm ServiceMap) Update(changes *ServiceChangeTracker) (result UpdateServiceMapResult) {
-	result.UDPStaleClusterIP = sets.NewString()
+	result.UDPStaleClusterIP = sets.New[string]()
 	sm.apply(changes, result.UDPStaleClusterIP)
 
 	// TODO: If this will appear to be computationally expensive, consider
@@ -442,7 +442,7 @@ func (sct *ServiceChangeTracker) serviceToServiceMap(service *v1.Service) Servic
 // apply the changes to ServiceMap and update the stale udp cluster IP set. The UDPStaleClusterIP argument is passed in to store the
 // udp protocol service cluster ip when service is deleted from the ServiceMap.
 // apply triggers processServiceMapChange on every change.
-func (sm *ServiceMap) apply(changes *ServiceChangeTracker, UDPStaleClusterIP sets.String) {
+func (sm *ServiceMap) apply(changes *ServiceChangeTracker, UDPStaleClusterIP sets.Set[string]) {
 	changes.lock.Lock()
 	defer changes.lock.Unlock()
 	for _, change := range changes.items {
@@ -478,9 +478,9 @@ func (sm *ServiceMap) apply(changes *ServiceChangeTracker, UDPStaleClusterIP set
 //   - B{{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
 //   - A updated to be {{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
 //   - produce string set {"ns/cluster-ip:http"}
-func (sm *ServiceMap) merge(other ServiceMap) sets.String {
+func (sm *ServiceMap) merge(other ServiceMap) sets.Set[string] {
 	// existingPorts is going to store all identifiers of all services in `other` ServiceMap.
-	existingPorts := sets.NewString()
+	existingPorts := sets.New[string]()
 	for svcPortName, info := range other {
 		// Take ServicePortName.String() as the newly merged service's identifier and put it into existingPorts.
 		existingPorts.Insert(svcPortName.String())
@@ -507,7 +507,7 @@ func (sm *ServiceMap) filter(other ServiceMap) {
 
 // unmerge deletes all other ServiceMap's elements from current ServiceMap.  We pass in the UDPStaleClusterIP strings sets
 // for storing the stale udp service cluster IPs. We will clear stale udp connection base on UDPStaleClusterIP later
-func (sm *ServiceMap) unmerge(other ServiceMap, UDPStaleClusterIP sets.String) {
+func (sm *ServiceMap) unmerge(other ServiceMap, UDPStaleClusterIP sets.Set[string]) {
 	for svcPortName := range other {
 		info, exists := (*sm)[svcPortName]
 		if exists {

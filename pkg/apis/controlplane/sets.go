@@ -98,8 +98,8 @@ func (s GroupMemberSet) Difference(o GroupMemberSet) GroupMemberSet {
 }
 
 // IPDifference returns a String set of GroupMember IPs that are not in o.
-func (s GroupMemberSet) IPDifference(o GroupMemberSet) sets.String {
-	sIPs, oIPs := sets.NewString(), sets.NewString()
+func (s GroupMemberSet) IPDifference(o GroupMemberSet) sets.Set[string] {
+	sIPs, oIPs := sets.New[string](), sets.New[string]()
 	for _, m := range s {
 		for _, ip := range m.IPs {
 			sIPs.Insert(net.IP(ip).String())

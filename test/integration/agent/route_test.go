@@ -57,7 +57,7 @@ var (
 		conn, _ := net.Dial("udp", "8.8.8.8:80")
 		defer conn.Close()
 		return &utilip.DualStackIPs{IPv4: conn.LocalAddr().(*net.UDPAddr).IP}
-	}(), sets.NewString())
+	}(), sets.New[string]())
 	nodeLink, _  = netlink.LinkByName(nodeIntf.Name)
 	localPeerIP  = ip.NextIP(nodeIPv4.IP)
 	remotePeerIP = net.ParseIP("50.50.50.1")

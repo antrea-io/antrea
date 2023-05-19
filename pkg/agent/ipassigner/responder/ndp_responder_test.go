@@ -180,14 +180,14 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 					return msg, nil, tt.requestIP, err
 				},
 			}
-			assignedIPs := sets.NewString()
+			assignedIPs := sets.New[string]()
 			for _, ip := range tt.assignedIPs {
 				assignedIPs.Insert(ip.String())
 			}
 			responder := &ndpResponder{
 				iface:       newFakeNetworkInterface(),
 				conn:        fakeConn,
-				assignedIPs: sets.NewString(),
+				assignedIPs: sets.New[string](),
 			}
 			for _, ip := range tt.assignedIPs {
 				responder.assignedIPs[ip.String()] = struct{}{}
@@ -243,42 +243,42 @@ func Test_ndpResponder_addIP(t *testing.T) {
 		name                    string
 		ip                      net.IP
 		conn                    ndpConn
-		assignedIPs             sets.String
+		assignedIPs             sets.Set[string]
 		multicastGroups         map[int]int
 		expectedJoinedGroups    []net.IP
 		expectedLeftGroups      []net.IP
 		expectedMulticastGroups map[int]int
-		expectedAssigndIPs      sets.String
+		expectedAssigndIPs      sets.Set[string]
 		expectedError           bool
 	}{
 		{
 			name:                 "Add new IP from a new multicast group 1",
 			ip:                   net.ParseIP("2022::beaf"),
-			assignedIPs:          sets.NewString(),
+			assignedIPs:          sets.New[string](),
 			multicastGroups:      map[int]int{},
 			expectedJoinedGroups: []net.IP{net.ParseIP("ff02::1:ff00:beaf")},
 			expectedLeftGroups:   nil,
 			expectedMulticastGroups: map[int]int{
 				0xbeaf: 1,
 			},
-			expectedAssigndIPs: sets.NewString("2022::beaf"),
+			expectedAssigndIPs: sets.New[string]("2022::beaf"),
 		},
 		{
 			name:                 "Add new IP from a new multicast group 2",
 			ip:                   net.ParseIP("2022::beaf:beaf"),
-			assignedIPs:          sets.NewString(),
+			assignedIPs:          sets.New[string](),
 			multicastGroups:      map[int]int{},
 			expectedJoinedGroups: []net.IP{net.ParseIP("ff02::1:ffaf:beaf")},
 			expectedLeftGroups:   nil,
 			expectedMulticastGroups: map[int]int{
 				0xafbeaf: 1,
 			},
-			expectedAssigndIPs: sets.NewString("2022::beaf:beaf"),
+			expectedAssigndIPs: sets.New[string]("2022::beaf:beaf"),
 		},
 		{
 			name:        "Add new IP from an existing multicast group",
 			ip:          net.ParseIP("2021::beaf"),
-			assignedIPs: sets.NewString("2022::beaf"),
+			assignedIPs: sets.New[string]("2022::beaf"),
 			multicastGroups: map[int]int{
 				0xbeaf: 1,
 			},
@@ -287,16 +287,16 @@ func Test_ndpResponder_addIP(t *testing.T) {
 			expectedMulticastGroups: map[int]int{
 				0xbeaf: 2,
 			},
-			expectedAssigndIPs: sets.NewString("2021::beaf", "2022::beaf"),
+			expectedAssigndIPs: sets.New[string]("2021::beaf", "2022::beaf"),
 		},
 		{
 			name:                    "Add invalid IP",
 			ip:                      net.ParseIP("1.2.3.4"),
-			assignedIPs:             sets.NewString(),
+			assignedIPs:             sets.New[string](),
 			multicastGroups:         map[int]int{},
 			expectedError:           true,
 			expectedMulticastGroups: map[int]int{},
-			expectedAssigndIPs:      sets.NewString(),
+			expectedAssigndIPs:      sets.New[string](),
 		},
 	}
 	for _, tt := range tests {
@@ -339,30 +339,30 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 		name                    string
 		ip                      net.IP
 		conn                    ndpConn
-		assignedIPs             sets.String
+		assignedIPs             sets.Set[string]
 		multicastGroups         map[int]int
 		expectedJoinedGroups    []net.IP
 		expectedLeftGroups      []net.IP
 		expectedMulticastGroups map[int]int
-		expectedAssigndIPs      sets.String
+		expectedAssigndIPs      sets.Set[string]
 		expectedError           bool
 	}{
 		{
 			name:        "Remove IP and leave multicast group",
 			ip:          net.ParseIP("2022::beaf"),
-			assignedIPs: sets.NewString("2022::beaf"),
+			assignedIPs: sets.New[string]("2022::beaf"),
 			multicastGroups: map[int]int{
 				0xbeaf: 1,
 			},
 			expectedJoinedGroups:    nil,
 			expectedLeftGroups:      []net.IP{net.ParseIP("ff02::1:ff00:beaf")},
 			expectedMulticastGroups: map[int]int{},
-			expectedAssigndIPs:      sets.NewString(),
+			expectedAssigndIPs:      sets.New[string](),
 		},
 		{
 			name:        "Remove IP and should not leave multicast group",
 			ip:          net.ParseIP("2022::beaf"),
-			assignedIPs: sets.NewString("2022::beaf", "2021::beaf"),
+			assignedIPs: sets.New[string]("2022::beaf", "2021::beaf"),
 			multicastGroups: map[int]int{
 				0xbeaf: 2,
 			},
@@ -371,12 +371,12 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 			expectedMulticastGroups: map[int]int{
 				0xbeaf: 1,
 			},
-			expectedAssigndIPs: sets.NewString("2021::beaf"),
+			expectedAssigndIPs: sets.New[string]("2021::beaf"),
 		},
 		{
 			name:        "Remove non-existent IP",
 			ip:          net.ParseIP("2022::beaf"),
-			assignedIPs: sets.NewString("2021::beaf"),
+			assignedIPs: sets.New[string]("2021::beaf"),
 			multicastGroups: map[int]int{
 				0xbeaf: 1,
 			},
@@ -385,11 +385,11 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 			expectedMulticastGroups: map[int]int{
 				0xbeaf: 1,
 			},
-			expectedAssigndIPs: sets.NewString("2021::beaf"),
+			expectedAssigndIPs: sets.New[string]("2021::beaf"),
 		}, {
 			name:        "Remove invalid IP",
 			ip:          net.ParseIP("1.2.3.4"),
-			assignedIPs: sets.NewString("2021::beaf"),
+			assignedIPs: sets.New[string]("2021::beaf"),
 			multicastGroups: map[int]int{
 				0xbeaf: 1,
 			},
@@ -398,7 +398,7 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 			expectedMulticastGroups: map[int]int{
 				0xbeaf: 1,
 			},
-			expectedAssigndIPs: sets.NewString("2021::beaf"),
+			expectedAssigndIPs: sets.New[string]("2021::beaf"),
 			expectedError:      true,
 		},
 	}

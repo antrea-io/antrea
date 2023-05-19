@@ -21,8 +21,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func getInt32Sets(start, end int) sets.Int32 {
-	s := sets.NewInt32()
+func getInt32Sets(start, end int) sets.Set[int32] {
+	s := sets.New[int32]()
 	for i := start; i < end; i++ {
 		s.Insert(int32(i))
 	}
@@ -32,9 +32,9 @@ func getInt32Sets(start, end int) sets.Int32 {
 func TestMergeInt32(t *testing.T) {
 	tests := []struct {
 		name string
-		src  sets.Int32
-		dst  sets.Int32
-		want sets.Int32
+		src  sets.Set[int32]
+		dst  sets.Set[int32]
+		want sets.Set[int32]
 	}{
 		{
 			name: "With common items",

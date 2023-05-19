@@ -174,7 +174,7 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 	if len(desiredRules) != len(actualRules) {
 		return nil
 	}
-	desiredRuleSet := sets.NewString()
+	desiredRuleSet := sets.New[string]()
 	for _, r := range desiredRules {
 		desiredRuleSet.Insert(r.ID)
 	}

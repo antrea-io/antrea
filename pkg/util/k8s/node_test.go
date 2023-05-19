@@ -224,7 +224,7 @@ func TestGetNodeAllAddrs(t *testing.T) {
 	tests := []struct {
 		name          string
 		node          *corev1.Node
-		expectedAddrs sets.String
+		expectedAddrs sets.Set[string]
 		expectedErr   error
 	}{
 		{
@@ -244,7 +244,7 @@ func TestGetNodeAllAddrs(t *testing.T) {
 					},
 				},
 			},
-			expectedAddrs: sets.NewString("172.16.0.1", "192.168.0.1", "10.176.10.10", "1::1", "2001::1"),
+			expectedAddrs: sets.New[string]("172.16.0.1", "192.168.0.1", "10.176.10.10", "1::1", "2001::1"),
 			expectedErr:   nil,
 		},
 		{
@@ -264,7 +264,7 @@ func TestGetNodeAllAddrs(t *testing.T) {
 					},
 				},
 			},
-			expectedAddrs: sets.NewString("192.168.0.1", "1.1.1.1"),
+			expectedAddrs: sets.New[string]("192.168.0.1", "1.1.1.1"),
 			expectedErr:   nil,
 		},
 		{
@@ -283,7 +283,7 @@ func TestGetNodeAllAddrs(t *testing.T) {
 					},
 				},
 			},
-			expectedAddrs: sets.NewString("1.1.1.1"),
+			expectedAddrs: sets.New[string]("1.1.1.1"),
 			expectedErr:   &net.ParseError{Type: "CIDR address", Text: "x"},
 		},
 		{
@@ -303,7 +303,7 @@ func TestGetNodeAllAddrs(t *testing.T) {
 					},
 				},
 			},
-			expectedAddrs: sets.NewString("1.1.1.1", "192.168.0.1"),
+			expectedAddrs: sets.New[string]("1.1.1.1", "192.168.0.1"),
 			expectedErr:   fmt.Errorf("invalid annotation for ip-address on Node node3: x"),
 		},
 		{
@@ -313,7 +313,7 @@ func TestGetNodeAllAddrs(t *testing.T) {
 					Name: "node4",
 				},
 			},
-			expectedAddrs: sets.NewString(),
+			expectedAddrs: sets.New[string](),
 			expectedErr:   fmt.Errorf("Node node4 has neither external ip nor internal ip"),
 		},
 	}

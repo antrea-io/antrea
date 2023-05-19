@@ -143,16 +143,16 @@ func TestAddSelector(t *testing.T) {
 		existingPolicyKey    string
 		policyKey            string
 		expMatchedIDs        []uint32
-		expLabelIdentityKeys sets.String
-		expPolicyKeys        sets.String
+		expLabelIdentityKeys sets.Set[string]
+		expPolicyKeys        sets.Set[string]
 	}{
 		{
 			name:                 "cluster-wide app=web",
 			selectorToAdd:        types.NewGroupSelector("", pSelWeb, nil, nil, nil),
 			policyKey:            "policyA",
 			expMatchedIDs:        []uint32{1},
-			expLabelIdentityKeys: sets.NewString(labelA),
-			expPolicyKeys:        sets.NewString("policyA"),
+			expLabelIdentityKeys: sets.New[string](labelA),
+			expPolicyKeys:        sets.New[string]("policyA"),
 		},
 		{
 			name:                 "cluster-wide app=web another policy",
@@ -160,40 +160,40 @@ func TestAddSelector(t *testing.T) {
 			existingPolicyKey:    "policyA",
 			policyKey:            "policyB",
 			expMatchedIDs:        []uint32{1},
-			expLabelIdentityKeys: sets.NewString(labelA),
-			expPolicyKeys:        sets.NewString("policyA", "policyB"),
+			expLabelIdentityKeys: sets.New[string](labelA),
+			expPolicyKeys:        sets.New[string]("policyA", "policyB"),
 		},
 		{
 			name:                 "pod app=web and ns purpose=test",
 			selectorToAdd:        types.NewGroupSelector("", pSelWeb, nsSelTest, nil, nil),
 			policyKey:            "policyB",
 			expMatchedIDs:        []uint32{1},
-			expLabelIdentityKeys: sets.NewString(labelA),
-			expPolicyKeys:        sets.NewString("policyB"),
+			expLabelIdentityKeys: sets.New[string](labelA),
+			expPolicyKeys:        sets.New[string]("policyB"),
 		},
 		{
 			name:                 "cluster-wide app=db",
 			selectorToAdd:        types.NewGroupSelector("", pSelDB, nil, nil, nil),
 			policyKey:            "policyC",
 			expMatchedIDs:        []uint32{2, 3},
-			expLabelIdentityKeys: sets.NewString(labelB, labelC),
-			expPolicyKeys:        sets.NewString("policyC"),
+			expLabelIdentityKeys: sets.New[string](labelB, labelC),
+			expPolicyKeys:        sets.New[string]("policyC"),
 		},
 		{
 			name:                 "app=db in ns testing",
 			selectorToAdd:        types.NewGroupSelector("testing", pSelDB, nil, nil, nil),
 			policyKey:            "policyD",
 			expMatchedIDs:        []uint32{2},
-			expLabelIdentityKeys: sets.NewString(labelB),
-			expPolicyKeys:        sets.NewString("policyD"),
+			expLabelIdentityKeys: sets.New[string](labelB),
+			expPolicyKeys:        sets.New[string]("policyD"),
 		},
 		{
 			name:                 "app=db in ns random",
 			selectorToAdd:        types.NewGroupSelector("random", pSelDB, nil, nil, nil),
 			policyKey:            "policyE",
 			expMatchedIDs:        []uint32{},
-			expLabelIdentityKeys: sets.NewString(),
-			expPolicyKeys:        sets.NewString("policyE"),
+			expLabelIdentityKeys: sets.New[string](),
+			expPolicyKeys:        sets.New[string]("policyE"),
 		},
 	}
 	for _, tt := range tests {
@@ -267,8 +267,8 @@ func TestSetPolicySelectors(t *testing.T) {
 			expIDs:    []uint32{1},
 			expSelectorItems: map[string]selectorItem{
 				selectorItemA.selector.NormalizedName: {
-					labelIdentityKeys: sets.NewString(labelA),
-					policyKeys:        sets.NewString("policyA"),
+					labelIdentityKeys: sets.New[string](labelA),
+					policyKeys:        sets.New[string]("policyA"),
 				},
 			},
 		},
@@ -286,12 +286,12 @@ func TestSetPolicySelectors(t *testing.T) {
 			expIDs: []uint32{1, 2, 3},
 			expSelectorItems: map[string]selectorItem{
 				selectorItemB.selector.NormalizedName: {
-					labelIdentityKeys: sets.NewString(labelA),
-					policyKeys:        sets.NewString("policyA"),
+					labelIdentityKeys: sets.New[string](labelA),
+					policyKeys:        sets.New[string]("policyA"),
 				},
 				selectorItemC.selector.NormalizedName: {
-					labelIdentityKeys: sets.NewString(labelB, labelC),
-					policyKeys:        sets.NewString("policyA"),
+					labelIdentityKeys: sets.New[string](labelB, labelC),
+					policyKeys:        sets.New[string]("policyA"),
 				},
 			},
 		},
@@ -310,16 +310,16 @@ func TestSetPolicySelectors(t *testing.T) {
 			expIDs: []uint32{1},
 			expSelectorItems: map[string]selectorItem{
 				selectorItemA.selector.NormalizedName: {
-					labelIdentityKeys: sets.NewString(labelA),
-					policyKeys:        sets.NewString("policyB"),
+					labelIdentityKeys: sets.New[string](labelA),
+					policyKeys:        sets.New[string]("policyB"),
 				},
 				selectorItemB.selector.NormalizedName: {
-					labelIdentityKeys: sets.NewString(labelA),
-					policyKeys:        sets.NewString("policyA", "policyB"),
+					labelIdentityKeys: sets.New[string](labelA),
+					policyKeys:        sets.New[string]("policyA", "policyB"),
 				},
 				selectorItemC.selector.NormalizedName: {
-					labelIdentityKeys: sets.NewString(labelB, labelC),
-					policyKeys:        sets.NewString("policyA"),
+					labelIdentityKeys: sets.New[string](labelB, labelC),
+					policyKeys:        sets.New[string]("policyA"),
 				},
 			},
 		},
@@ -336,7 +336,7 @@ func TestSetPolicySelectors(t *testing.T) {
 				}
 			}
 			var labelIDs []uint32
-			selectorKeys := sets.NewString()
+			selectorKeys := sets.New[string]()
 			for _, sel := range tt.selectors {
 				labelIDs = append(labelIDs, i.AddSelector(sel, tt.policyKey)...)
 				selectorKeys.Insert(sel.NormalizedName)
@@ -389,7 +389,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               1,
-					selectorItemKeys: sets.NewString(selectorItemA.getKey(), selectorItemB.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
 				},
 			},
 		},
@@ -402,7 +402,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               4,
-					selectorItemKeys: sets.NewString(selectorItemA.getKey(), selectorItemB.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
 				},
 			},
 		},
@@ -414,7 +414,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelB: {
 					id:               2,
-					selectorItemKeys: sets.NewString(selectorItemC.getKey(), selectorItemD.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemC.getKey(), selectorItemD.getKey()),
 				},
 			},
 		},
@@ -426,7 +426,7 @@ func TestAddLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelC: {
 					id:               3,
-					selectorItemKeys: sets.NewString(selectorItemC.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemC.getKey()),
 				},
 			},
 		},
@@ -486,11 +486,11 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelB: {
 					id:               2,
-					selectorItemKeys: sets.NewString(selectorItemC.getKey(), selectorItemD.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemC.getKey(), selectorItemD.getKey()),
 				},
 				labelC: {
 					id:               3,
-					selectorItemKeys: sets.NewString(selectorItemC.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemC.getKey()),
 				},
 			},
 		},
@@ -501,11 +501,11 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               1,
-					selectorItemKeys: sets.NewString(selectorItemA.getKey(), selectorItemB.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
 				},
 				labelC: {
 					id:               3,
-					selectorItemKeys: sets.NewString(selectorItemC.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemC.getKey()),
 				},
 			},
 		},
@@ -516,11 +516,11 @@ func TestDeleteLabelIdentity(t *testing.T) {
 			expLabelIdenities: map[string]*labelIdentityMatch{
 				labelA: {
 					id:               1,
-					selectorItemKeys: sets.NewString(selectorItemA.getKey(), selectorItemB.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemA.getKey(), selectorItemB.getKey()),
 				},
 				labelB: {
 					id:               2,
-					selectorItemKeys: sets.NewString(selectorItemC.getKey(), selectorItemD.getKey()),
+					selectorItemKeys: sets.New[string](selectorItemC.getKey(), selectorItemD.getKey()),
 				},
 			},
 		},

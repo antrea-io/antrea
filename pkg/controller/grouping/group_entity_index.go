@@ -122,9 +122,9 @@ type labelItem struct {
 	// The type of the entities that share the labelItem.
 	entityType entityType
 	// The keys of the entityItems that share the labelItem.
-	entityItemKeys sets.String
+	entityItemKeys sets.Set[string]
 	// The keys of the selectorItems that match the labelItem.
-	selectorItemKeys sets.String
+	selectorItemKeys sets.Set[string]
 }
 
 // groupItem contains a group's metadata and its selector.
@@ -146,9 +146,9 @@ type selectorItem struct {
 	// The label selector that will be used for matching.
 	selector *types.GroupSelector
 	// The keys of the groupItems that share the selectorItem.
-	groupItemKeys sets.String
+	groupItemKeys sets.Set[string]
 	// The keys of the labelItems that match the selectorItem.
-	labelItemKeys sets.String
+	labelItemKeys sets.Set[string]
 }
 
 var _ Interface = &GroupEntityIndex{}
@@ -175,7 +175,7 @@ type GroupEntityIndex struct {
 	labelItems map[string]*labelItem
 	// labelItemIndex is nested map from entityType to Namespace to keys of labelItems.
 	// It's used to filter potential labelItems when matching a Namespace scoped selectorItem.
-	labelItemIndex map[entityType]map[string]sets.String
+	labelItemIndex map[entityType]map[string]sets.Set[string]
 
 	// groupItems stores all groupItems.
 	groupItems map[string]*groupItem
@@ -185,7 +185,7 @@ type GroupEntityIndex struct {
 	// selectorItemIndex is nested map from entityType to Namespace to keys of selectorItems.
 	// It's used to filter potential selectorItems when matching an labelItem.
 	// Cluster scoped selectorItems are stored under empty Namespace "".
-	selectorItemIndex map[entityType]map[string]sets.String
+	selectorItemIndex map[entityType]map[string]sets.Set[string]
 
 	// namespaceLabels stores label sets of all Namespaces.
 	namespaceLabels map[string]labels.Set
@@ -210,9 +210,9 @@ func NewGroupEntityIndex() *GroupEntityIndex {
 		entityItems:       map[string]*entityItem{},
 		groupItems:        map[string]*groupItem{},
 		labelItems:        map[string]*labelItem{},
-		labelItemIndex:    map[entityType]map[string]sets.String{podEntityType: {}, externalEntityType: {}},
+		labelItemIndex:    map[entityType]map[string]sets.Set[string]{podEntityType: {}, externalEntityType: {}},
 		selectorItems:     map[string]*selectorItem{},
-		selectorItemIndex: map[entityType]map[string]sets.String{podEntityType: {}, externalEntityType: {}},
+		selectorItemIndex: map[entityType]map[string]sets.Set[string]{podEntityType: {}, externalEntityType: {}},
 		namespaceLabels:   map[string]labels.Set{},
 		eventHandlers:     map[GroupType][]eventHandler{},
 		eventChan:         make(chan string, eventChanSize),
@@ -367,21 +367,21 @@ func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityI
 		labels:           labels,
 		namespace:        eItem.entity.GetNamespace(),
 		entityType:       entityType,
-		entityItemKeys:   sets.NewString(),
-		selectorItemKeys: sets.NewString(),
+		entityItemKeys:   sets.New[string](),
+		selectorItemKeys: sets.New[string](),
 	}
 	// Create the labelItem.
 	i.labelItems[eItem.labelItemKey] = lItem
 	// Add it to the labelItemIndex.
 	labelItemKeys, exists := i.labelItemIndex[entityType][lItem.namespace]
 	if !exists {
-		labelItemKeys = sets.NewString()
+		labelItemKeys = sets.New[string]()
 		i.labelItemIndex[entityType][lItem.namespace] = labelItemKeys
 	}
 	labelItemKeys.Insert(eItem.labelItemKey)
 
 	// Scan potential selectorItems and associate the new labelItem with the matched ones.
-	scanSelectorItems := func(selectorItemKeys sets.String) {
+	scanSelectorItems := func(selectorItemKeys sets.Set[string]) {
 		for sKey := range selectorItemKeys {
 			sItem := i.selectorItems[sKey]
 			matched := i.match(lItem.entityType, lItem.labels, lItem.namespace, sItem.selector)
@@ -459,7 +459,7 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 	lItem.entityItemKeys.Insert(eKey)
 
 	// Notify group updates.
-	var affectedSelectorItemKeys sets.String
+	var affectedSelectorItemKeys sets.Set[string]
 	if oldLabelItem != nil {
 		// If entity is updated, all previously and currently matched selectors are affected. Otherwise only the
 		// difference portion are affected.
@@ -540,8 +540,8 @@ func (i *GroupEntityIndex) deleteGroupFromSelectorItem(sKey, gKey string) *selec
 func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 	sItem := &selectorItem{
 		selector:      gItem.selector,
-		groupItemKeys: sets.NewString(),
-		labelItemKeys: sets.NewString(),
+		groupItemKeys: sets.New[string](),
+		labelItemKeys: sets.New[string](),
 	}
 	// Create the selectorItem.
 	i.selectorItems[gItem.selectorItemKey] = sItem
@@ -552,7 +552,7 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 	}
 	selectorItemKeys, exists := i.selectorItemIndex[entityType][sItem.selector.Namespace]
 	if !exists {
-		selectorItemKeys = sets.NewString()
+		selectorItemKeys = sets.New[string]()
 		i.selectorItemIndex[entityType][sItem.selector.Namespace] = selectorItemKeys
 	}
 	selectorItemKeys.Insert(gItem.selectorItemKey)
@@ -580,7 +580,7 @@ func (i *GroupEntityIndex) createSelectorItem(gItem *groupItem) *selectorItem {
 }
 
 // scanLabelItems scans potential labelItems and updates their association.
-func (i *GroupEntityIndex) scanLabelItems(labelItemKeys sets.String, sItem *selectorItem) bool {
+func (i *GroupEntityIndex) scanLabelItems(labelItemKeys sets.Set[string], sItem *selectorItem) bool {
 	updated := false
 	for lKey := range labelItemKeys {
 		lItem := i.labelItems[lKey]

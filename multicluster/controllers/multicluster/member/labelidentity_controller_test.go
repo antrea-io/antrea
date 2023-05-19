@@ -107,7 +107,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 		eventType            int
 		expLabelsQueued      bool
 		expNormalizedLabels  []string
-		expLabelsToPodsCache map[string]sets.String
+		expLabelsToPodsCache map[string]sets.Set[string]
 		expPodLabelCache     map[string]string
 	}{
 		{
@@ -118,7 +118,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			eventType:            addEvent,
 			expLabelsQueued:      true,
 			expNormalizedLabels:  []string{normalizedLabel},
-			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName)},
+			expLabelsToPodsCache: map[string]sets.Set[string]{normalizedLabel: sets.New[string](podAName)},
 			expPodLabelCache:     map[string]string{podANamespacedName.String(): normalizedLabel},
 		},
 		{
@@ -129,7 +129,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			eventType:            addEvent,
 			expLabelsQueued:      false,
 			expNormalizedLabels:  []string{normalizedLabel},
-			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName, podBName)},
+			expLabelsToPodsCache: map[string]sets.Set[string]{normalizedLabel: sets.New[string](podAName, podBName)},
 			expPodLabelCache:     map[string]string{podAName: normalizedLabel, podBName: normalizedLabel},
 		},
 		{
@@ -140,7 +140,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			eventType:            updateEvent,
 			expLabelsQueued:      true,
 			expNormalizedLabels:  []string{normalizedLabelDB},
-			expLabelsToPodsCache: map[string]sets.String{normalizedLabelDB: sets.NewString(podAName)},
+			expLabelsToPodsCache: map[string]sets.Set[string]{normalizedLabelDB: sets.New[string](podAName)},
 			expPodLabelCache:     map[string]string{podAName: normalizedLabelDB},
 		},
 		{
@@ -151,7 +151,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			eventType:            deleteEvent,
 			expLabelsQueued:      true,
 			expNormalizedLabels:  []string{},
-			expLabelsToPodsCache: map[string]sets.String{},
+			expLabelsToPodsCache: map[string]sets.Set[string]{},
 			expPodLabelCache:     map[string]string{},
 		},
 		{
@@ -162,7 +162,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			eventType:            deleteEvent,
 			expLabelsQueued:      false,
 			expNormalizedLabels:  []string{normalizedLabel},
-			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName)},
+			expLabelsToPodsCache: map[string]sets.Set[string]{normalizedLabel: sets.New[string](podAName)},
 			expPodLabelCache:     map[string]string{podAName: normalizedLabel},
 		},
 	}

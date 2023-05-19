@@ -590,7 +590,7 @@ func (o *Options) validatePolicyBypassRulesConfig() error {
 	if len(o.config.ExternalNode.PolicyBypassRules) == 0 {
 		return nil
 	}
-	allowedProtocols := sets.NewString("tcp", "udp", "icmp", "ip")
+	allowedProtocols := sets.New[string]("tcp", "udp", "icmp", "ip")
 	for _, rule := range o.config.ExternalNode.PolicyBypassRules {
 		if rule.Direction != "ingress" && rule.Direction != "egress" {
 			return fmt.Errorf("direction %s for policyBypassRule is invalid", rule.Direction)

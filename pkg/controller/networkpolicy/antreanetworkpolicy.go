@@ -90,7 +90,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	// During policy peer processing, any ClusterSet-scoped selector will be registered with the
 	// labelIdentityInterface and added to this set. By the end of the function, this set will
 	// be used to remove any stale selector from the policy in the labelIdentityInterface.
-	var clusterSetScopeSelectorKeys sets.String
+	var clusterSetScopeSelectorKeys sets.Set[string]
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
 	atgs := n.processAppliedTo(np.Namespace, np.Spec.AppliedTo)
 	appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
@@ -130,7 +130,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			peer = n.svcRefToPeerForCRD(egressRule.ToServices, np.Namespace)
 		} else {
 			var ags []*antreatypes.AddressGroup
-			var selKeys sets.String
+			var selKeys sets.Set[string]
 			peer, ags, selKeys = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
 			if selKeys != nil {
@@ -160,7 +160,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		Name:             internalNetworkPolicyKeyFunc(np),
 		UID:              np.UID,
 		Generation:       np.Generation,
-		AppliedToGroups:  sets.StringKeySet(appliedToGroups).List(),
+		AppliedToGroups:  sets.List(sets.KeySet(appliedToGroups)),
 		Rules:            rules,
 		Priority:         &np.Spec.Priority,
 		TierPriority:     &tierPriority,

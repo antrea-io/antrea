@@ -59,7 +59,7 @@ type BaseEndpointInfo struct {
 
 	// ZoneHints represent the zone hints for the endpoint. This is based on
 	// endpoint.hints.forZones[*].name in the EndpointSlice API.
-	ZoneHints sets.String
+	ZoneHints sets.Set[string]
 	// Ready indicates whether this endpoint is ready and NOT terminating.
 	// For pods, this is true if a pod has a ready status and a nil deletion timestamp.
 	// This is only set when watching EndpointSlices. If using Endpoints, this is always
@@ -113,7 +113,7 @@ func (info *BaseEndpointInfo) IsTerminating() bool {
 }
 
 // GetZoneHints returns the zone hint for the endpoint.
-func (info *BaseEndpointInfo) GetZoneHints() sets.String {
+func (info *BaseEndpointInfo) GetZoneHints() sets.Set[string] {
 	return info.ZoneHints
 }
 
@@ -145,7 +145,7 @@ func (info *BaseEndpointInfo) GetZone() string {
 }
 
 func NewBaseEndpointInfo(IP, nodeName, zone string, port int, isLocal bool,
-	ready, serving, terminating bool, zoneHints sets.String) *BaseEndpointInfo {
+	ready, serving, terminating bool, zoneHints sets.Set[string]) *BaseEndpointInfo {
 	return &BaseEndpointInfo{
 		Endpoint:    net.JoinHostPort(IP, strconv.Itoa(port)),
 		IsLocal:     isLocal,

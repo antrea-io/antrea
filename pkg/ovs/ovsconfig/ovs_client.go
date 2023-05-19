@@ -821,7 +821,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 // the returned port number is cached locally but not saved in OVSDB yet before the real port is created, so it might
 // introduce an issue of conflict if the OFPort is occupied by another port creation.
 func (br *OVSBridge) AllocateOFPort(startPort int) (int32, error) {
-	existingOFPorts := sets.NewInt32()
+	existingOFPorts := sets.New[int32]()
 	for _, allocatedOFPort := range br.allocatedOFPorts {
 		existingOFPorts.Insert(allocatedOFPort)
 	}

@@ -77,10 +77,10 @@ var (
 	// The priority 250 is reserved for default Tier but not part of this set in order to be
 	// able to create the Tier by Antrea. Same for priority 253 which is reserved for the
 	// baseline tier.
-	reservedTierPriorities = sets.NewInt32(int32(251), int32(252), int32(254), int32(255))
+	reservedTierPriorities = sets.New[int32](int32(251), int32(252), int32(254), int32(255))
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
-	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
+	reservedTierNames = sets.New[string]("baseline", "application", "platform", "networkops", "securityops", "emergency")
 	// allowedFQDNChars validates that the matchPattern field contains only valid DNS characters
 	// and the wildcard '*' character.
 	allowedFQDNChars = regexp.MustCompile("^[-0-9a-zA-Z.*]+$")
@@ -468,7 +468,7 @@ func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 
 // validateRuleName validates if the name of each rule is unique within a policy
 func (v *antreaPolicyValidator) validateRuleName(ingress, egress []crdv1alpha1.Rule) bool {
-	uniqueRuleName := sets.NewString()
+	uniqueRuleName := sets.New[string]()
 	isUnique := func(rules []crdv1alpha1.Rule) bool {
 		for _, rule := range rules {
 			if uniqueRuleName.Has(rule.Name) {

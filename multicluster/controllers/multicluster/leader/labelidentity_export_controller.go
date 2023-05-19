@@ -56,8 +56,8 @@ type (
 		Scheme           *runtime.Scheme
 		mutex            sync.RWMutex
 		namespace        string
-		clusterToLabels  map[string]sets.String
-		labelsToClusters map[string]sets.String
+		clusterToLabels  map[string]sets.Set[string]
+		labelsToClusters map[string]sets.Set[string]
 		hashToLabels     map[string]string
 		labelQueue       workqueue.RateLimitingInterface
 		labelsToID       map[string]uint32
@@ -73,8 +73,8 @@ func NewLabelIdentityExportReconciler(
 		Client:           client,
 		Scheme:           scheme,
 		namespace:        namespace,
-		clusterToLabels:  map[string]sets.String{},
-		labelsToClusters: map[string]sets.String{},
+		clusterToLabels:  map[string]sets.Set[string]{},
+		labelsToClusters: map[string]sets.Set[string]{},
 		hashToLabels:     map[string]string{},
 		labelQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter()),
 		labelsToID:       map[string]uint32{},
@@ -155,11 +155,11 @@ func (r *LabelIdentityExportReconciler) onLabelExportAdd(clusterID, labelHash, l
 	if labels, ok := r.clusterToLabels[clusterID]; ok {
 		labels.Insert(labelHash)
 	} else {
-		r.clusterToLabels[clusterID] = sets.NewString(labelHash)
+		r.clusterToLabels[clusterID] = sets.New[string](labelHash)
 	}
 	if clusters, ok := r.labelsToClusters[labelHash]; !ok {
 		// This is a new label identity in the entire ClusterSet.
-		r.labelsToClusters[labelHash] = sets.NewString(clusterID)
+		r.labelsToClusters[labelHash] = sets.New[string](clusterID)
 		r.hashToLabels[labelHash] = label
 		r.labelQueue.Add(labelHash)
 	} else {

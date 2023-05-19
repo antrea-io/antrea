@@ -153,7 +153,7 @@ func (c *Client) initServiceIPRoutes() error {
 // Reconcile removes the orphaned routes and related configuration based on the desired podCIDRs and Service IPs. Only
 // the route entries on the host gateway interface are stored in the cache.
 func (c *Client) Reconcile(podCIDRs []string) error {
-	desiredPodCIDRs := sets.NewString(podCIDRs...)
+	desiredPodCIDRs := sets.New[string](podCIDRs...)
 	routes, err := c.listIPRoutesOnGW()
 	if err != nil {
 		return err

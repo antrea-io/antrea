@@ -328,7 +328,7 @@ func (s *egressIPScheduler) getMaxEgressIPsByNode(nodeName string) int {
 func (s *egressIPScheduler) schedule() {
 	var egressesToUpdate []string
 	newResults := map[string]*scheduleResult{}
-	nodeToIPs := map[string]sets.String{}
+	nodeToIPs := map[string]sets.Set[string]{}
 	egresses, _ := s.egressLister.List(labels.Everything())
 	// Sort Egresses by creation timestamp to make the result deterministic and prioritize objected created earlier
 	// when the total capacity is insufficient.
@@ -366,7 +366,7 @@ func (s *egressIPScheduler) schedule() {
 
 		ips, exists := nodeToIPs[node]
 		if !exists {
-			ips = sets.NewString()
+			ips = sets.New[string]()
 			nodeToIPs[node] = ips
 		}
 		ips.Insert(egress.Spec.EgressIP)
