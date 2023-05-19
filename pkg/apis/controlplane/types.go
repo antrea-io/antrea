@@ -260,6 +260,8 @@ type NetworkPolicyRule struct {
 	AppliedToGroups []string
 	// L7Protocols is a list of application layer protocols which should be matched.
 	L7Protocols []L7Protocol
+	// LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.
+	LogLabel string
 }
 
 // Protocol defines network protocols supported for things like container ports.

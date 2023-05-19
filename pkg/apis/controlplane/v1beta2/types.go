@@ -258,6 +258,8 @@ type NetworkPolicyRule struct {
 	Name string `json:"name,omitempty" protobuf:"bytes,9,opt,name=name"`
 	// L7Protocols is a list of application layer protocols which should be matched.
 	L7Protocols []L7Protocol `json:"l7Protocols,omitempty" protobuf:"bytes,10,rep,name=l7Protocols"`
+	// LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.
+	LogLabel string `json:"logLabel,omitempty" protobuf:"bytes,11,opt,name=logLabel"`
 }
 
 // Protocol defines network protocols supported for things like container ports.

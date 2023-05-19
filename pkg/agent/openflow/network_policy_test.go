@@ -1308,50 +1308,48 @@ func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 	flow := EgressRuleTable.ofTable.BuildFlow(priority100).MatchCTSrcIP(net.ParseIP("1.1.1.10")).Action().Drop().Done()
 	msg := getFlowModMessage(flow, binding.AddMessage)
 	conj2 := &policyRuleConjunction{
-		id:          ruleID2,
-		actionFlows: []*openflow15.FlowMod{msg},
-		npRef:       npRef,
-		ruleName:    fmt.Sprint(ruleID2),
+		id:           ruleID2,
+		actionFlows:  []*openflow15.FlowMod{msg},
+		npRef:        npRef,
+		ruleName:     fmt.Sprint(ruleID2),
+		ruleLogLabel: "test-log-label",
 	}
 	c.featureNetworkPolicy.policyCache.Add(conj1)
 	c.featureNetworkPolicy.policyCache.Add(conj2)
 
 	tests := []struct {
-		name         string
-		ruleID       uint32
-		wantNpRef    string
-		wantPriority string
-		wantRuleName string
+		name             string
+		ruleID           uint32
+		wantNpRef        string
+		wantPriority     string
+		wantRuleName     string
+		wantRuleLogLabel string
 	}{
 		{
-			name:         "conjunction not found",
-			ruleID:       uint32(100),
-			wantNpRef:    "",
-			wantPriority: "",
-			wantRuleName: "",
+			name:   "conjunction not found",
+			ruleID: uint32(100),
 		},
 		{
-			name:         "conjunction empty priorities",
-			ruleID:       ruleID1,
-			wantNpRef:    "",
-			wantPriority: "",
-			wantRuleName: "",
+			name:   "conjunction empty priorities",
+			ruleID: ruleID1,
 		},
 		{
-			name:         "conjunction no error",
-			ruleID:       ruleID2,
-			wantNpRef:    "K8sNetworkPolicy:ns1/np1",
-			wantPriority: "100",
-			wantRuleName: fmt.Sprint(ruleID2),
+			name:             "conjunction no error",
+			ruleID:           ruleID2,
+			wantNpRef:        "K8sNetworkPolicy:ns1/np1",
+			wantPriority:     "100",
+			wantRuleName:     fmt.Sprint(ruleID2),
+			wantRuleLogLabel: "test-log-label",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotNpRef, gotPriority, gotRuleName := c.GetPolicyInfoFromConjunction(tc.ruleID)
+			gotNpRef, gotPriority, gotRuleName, gotRuleLogLabel := c.GetPolicyInfoFromConjunction(tc.ruleID)
 			assert.Equal(t, tc.wantNpRef, gotNpRef)
 			assert.Equal(t, tc.wantPriority, gotPriority)
 			assert.Equal(t, tc.wantRuleName, gotRuleName)
+			assert.Equal(t, tc.wantRuleLogLabel, gotRuleLogLabel)
 		})
 	}
 }

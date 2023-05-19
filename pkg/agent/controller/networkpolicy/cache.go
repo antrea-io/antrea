@@ -98,6 +98,8 @@ type rule struct {
 	SourceRef *v1beta.NetworkPolicyReference
 	// EnableLogging is a boolean indicating whether logging is required for Antrea Policies. Always false for K8s NetworkPolicy.
 	EnableLogging bool
+	// LogLabel is a string associated to the NetworkPolicy rule. Used for logging.
+	LogLabel string
 }
 
 func (r *rule) Less(r2 *rule) bool {
@@ -687,6 +689,7 @@ func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriori
 		PolicyUID:       policy.UID,
 		SourceRef:       policy.SourceRef,
 		EnableLogging:   r.EnableLogging,
+		LogLabel:        r.LogLabel,
 	}
 	rule.ID = hashRule(rule)
 	rule.PolicyName = policy.Name

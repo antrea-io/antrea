@@ -68,6 +68,7 @@ type logInfo struct {
 	tableName   string // name of the table sending packetin
 	npRef       string // Network Policy name reference
 	ruleName    string // Network Policy rule name for Antrea-native policies
+	logLabel    string // Network Policy user-defined log label
 	disposition string // Allow/Drop of the rule sending packetin
 	ofPriority  string // openflow priority of the flow sending packetin
 	srcIP       string // source IP of the traffic logged
@@ -135,7 +136,7 @@ func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Durat
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
 func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
-	logMsg := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d", ob.tableName, ob.npRef, ob.ruleName, ob.disposition, ob.ofPriority, ob.srcIP, ob.srcPort, ob.destIP, ob.destPort, ob.protocolStr, ob.pktLength)
+	logMsg := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d %s", ob.tableName, ob.npRef, ob.ruleName, ob.disposition, ob.ofPriority, ob.srcIP, ob.srcPort, ob.destIP, ob.destPort, ob.protocolStr, ob.pktLength, ob.logLabel)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		l.anpLogger.Printf(logMsg)
 	} else {
@@ -215,7 +216,8 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 		isK8sDefaultDeny := (cnpDenyRegVal == 0) && (disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej)
 		if isK8sDefaultDeny {
 			// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
-			ob.npRef, ob.ofPriority, ob.ruleName = string(v1beta2.K8sNetworkPolicy), "<nil>", "<nil>"
+			ob.npRef = string(v1beta2.K8sNetworkPolicy)
+			fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
 			return nil
 		}
 	}
@@ -228,14 +230,13 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	if err != nil {
 		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
 	}
-	ob.npRef, ob.ofPriority, ob.ruleName = c.ofClient.GetPolicyInfoFromConjunction(conjID)
+	ob.npRef, ob.ofPriority, ob.ruleName, ob.logLabel = c.ofClient.GetPolicyInfoFromConjunction(conjID)
 	if ob.npRef == "" || ob.ofPriority == "" {
 		return fmt.Errorf("networkpolicy not found for conjunction id: %v", conjID)
 	}
-	// Placeholder for K8s NetworkPolicies without rule names.
-	if ob.ruleName == "" {
-		ob.ruleName = "<nil>"
-	}
+	// Fill in placeholders for Antrea native policies without log labels,
+	// K8s NetworkPolicies without rule names or log labels.
+	fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
 	return nil
 }
 
@@ -250,7 +251,15 @@ func getPacketInfo(packet *binding.Packet, ob *logInfo) {
 		ob.destPort = strconv.Itoa(int(packet.DestinationPort))
 	} else {
 		// Placeholders for ICMP packets without port numbers.
-		ob.srcPort, ob.destPort = "<nil>", "<nil>"
+		fillLogInfoPlaceholders([]*string{&ob.srcPort, &ob.destPort})
+	}
+}
+
+func fillLogInfoPlaceholders(logItems []*string) {
+	for i, v := range logItems {
+		if *v == "" {
+			*logItems[i] = "<nil>"
+		}
 	}
 }
 

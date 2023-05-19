@@ -538,6 +538,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			TableID:       table,
 			PolicyRef:     rule.SourceRef,
 			EnableLogging: rule.EnableLogging,
+			LogLabel:      rule.LogLabel,
 		}
 		return ofRuleByServicesMap, lastRealized
 	} else if isIGMP {
@@ -580,6 +581,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				TableID:       table,
 				PolicyRef:     rule.SourceRef,
 				EnableLogging: rule.EnableLogging,
+				LogLabel:      rule.LogLabel,
 			}
 		}
 	} else {
@@ -610,6 +612,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				TableID:       table,
 				PolicyRef:     rule.SourceRef,
 				EnableLogging: rule.EnableLogging,
+				LogLabel:      rule.LogLabel,
 			}
 		}
 
@@ -634,6 +637,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 					TableID:       table,
 					PolicyRef:     rule.SourceRef,
 					EnableLogging: rule.EnableLogging,
+					LogLabel:      rule.LogLabel,
 				}
 				ofRuleByServicesMap[svcKey] = ofRule
 			}
@@ -733,6 +737,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				TableID:       table,
 				PolicyRef:     newRule.SourceRef,
 				EnableLogging: newRule.EnableLogging,
+				LogLabel:      newRule.LogLabel,
 			}
 			err := r.idAllocator.allocateForRule(ofRule)
 			if err != nil {
@@ -790,6 +795,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					TableID:       table,
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
+					LogLabel:      newRule.LogLabel,
 				}
 				err := r.idAllocator.allocateForRule(ofRule)
 				if err != nil {
@@ -861,6 +867,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					TableID:       table,
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
+					LogLabel:      newRule.LogLabel,
 				}
 				// If the PolicyRule for the original services doesn't exist and IPBlocks is present, it means the
 				// reconciler hasn't installed flows for IPBlocks, then it must be added to the new PolicyRule.

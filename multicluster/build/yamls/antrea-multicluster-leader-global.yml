@@ -1100,6 +1100,10 @@ spec:
                                 type: object
                             type: object
                           type: array
+                        logLabel:
+                          description: LogLabel is a user-defined arbitrary string
+                            which will be printed in the NetworkPolicy logs.
+                          type: string
                         name:
                           description: Name describes the intention of this rule.
                             Name should be unique within the policy.
@@ -2000,6 +2004,10 @@ spec:
                                 type: object
                             type: object
                           type: array
+                        logLabel:
+                          description: LogLabel is a user-defined arbitrary string
+                            which will be printed in the NetworkPolicy logs.
+                          type: string
                         name:
                           description: Name describes the intention of this rule.
                             Name should be unique within the policy.
@@ -3837,6 +3845,10 @@ spec:
                                 type: object
                             type: object
                           type: array
+                        logLabel:
+                          description: LogLabel is a user-defined arbitrary string
+                            which will be printed in the NetworkPolicy logs.
+                          type: string
                         name:
                           description: Name describes the intention of this rule.
                             Name should be unique within the policy.
@@ -4737,6 +4749,10 @@ spec:
                                 type: object
                             type: object
                           type: array
+                        logLabel:
+                          description: LogLabel is a user-defined arbitrary string
+                            which will be printed in the NetworkPolicy logs.
+                          type: string
                         name:
                           description: Name describes the intention of this rule.
                             Name should be unique within the policy.

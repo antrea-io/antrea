@@ -369,6 +369,9 @@ message NetworkPolicyRule {
 
   // L7Protocols is a list of application layer protocols which should be matched.
   repeated L7Protocol l7Protocols = 10;
+
+  // LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.
+  optional string logLabel = 11;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
