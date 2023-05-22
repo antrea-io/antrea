@@ -171,9 +171,9 @@ COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/antrea/perftool")
 
 FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.6.1" \
-                            "projects.registry.vmware.com/antrea/theia-clickhouse-operator:0.18.2" \
-                            "projects.registry.vmware.com/antrea/theia-metrics-exporter:0.18.2" \
-                            "projects.registry.vmware.com/antrea/theia-clickhouse-server:21.11")
+                            "projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0" \
+                            "projects.registry.vmware.com/antrea/metrics-exporter:0.21.0" \
+                            "projects.registry.vmware.com/antrea/clickhouse-server:23.4")
 if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
@@ -245,7 +245,10 @@ function run_test {
           $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
       fi
       cat $FLOW_VISIBILITY_YML | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
-      curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/antrea-io/theia/main/build/charts/theia/crds/clickhouse-operator-install-bundle.yaml
+      curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
+      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"projects.registry.vmware.com/antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
+      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
+      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: projects.registry.vmware.com/antrea/metrics-exporter:0.21.0|g" $CH_OPERATOR_YML
       cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
   fi
 

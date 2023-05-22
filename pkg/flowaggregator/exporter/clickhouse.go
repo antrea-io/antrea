@@ -16,6 +16,7 @@ package exporter
 
 import (
 	"os"
+	"reflect"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/client-go/kubernetes"
@@ -26,12 +27,12 @@ import (
 )
 
 type ClickHouseExporter struct {
-	chInput         *clickhouseclient.ClickHouseInput
+	chConfig        *clickhouseclient.ClickHouseConfig
 	chExportProcess *clickhouseclient.ClickHouseExportProcess
 }
 
-func buildClickHouseInput(opt *options.Options) clickhouseclient.ClickHouseInput {
-	return clickhouseclient.ClickHouseInput{
+func buildClickHouseConfig(opt *options.Options) clickhouseclient.ClickHouseConfig {
+	return clickhouseclient.ClickHouseConfig{
 		Username:       os.Getenv("CH_USERNAME"),
 		Password:       os.Getenv("CH_PASSWORD"),
 		Database:       opt.Config.ClickHouse.Database,
@@ -43,18 +44,18 @@ func buildClickHouseInput(opt *options.Options) clickhouseclient.ClickHouseInput
 }
 
 func NewClickHouseExporter(k8sClient kubernetes.Interface, opt *options.Options) (*ClickHouseExporter, error) {
-	chInput := buildClickHouseInput(opt)
-	klog.InfoS("ClickHouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
+	chConfig := buildClickHouseConfig(opt)
+	klog.InfoS("ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug, "compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval)
 	clusterUUID, err := getClusterUUID(k8sClient)
 	if err != nil {
 		return nil, err
 	}
-	chExportProcess, err := clickhouseclient.NewClickHouseClient(chInput, clusterUUID.String())
+	chExportProcess, err := clickhouseclient.NewClickHouseClient(chConfig, clusterUUID.String())
 	if err != nil {
 		return nil, err
 	}
 	return &ClickHouseExporter{
-		chInput:         &chInput,
+		chConfig:        &chConfig,
 		chExportProcess: chExportProcess,
 	}, nil
 }
@@ -73,21 +74,24 @@ func (e *ClickHouseExporter) Stop() {
 }
 
 func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
-	chInput := buildClickHouseInput(opt)
-	dsn, connect, err := clickhouseclient.PrepareClickHouseConnection(chInput)
+	chConfig := buildClickHouseConfig(opt)
+	connect, err := clickhouseclient.PrepareClickHouseConnection(chConfig)
 	if err != nil {
 		klog.ErrorS(err, "Error when checking new connection")
 		return
 	}
-	if dsn == e.chExportProcess.GetDsn() && chInput.CommitInterval == e.chExportProcess.GetCommitInterval() {
+	if reflect.DeepEqual(chConfig, e.chExportProcess.GetClickHouseConfig()) {
 		return
 	}
 	klog.InfoS("Updating ClickHouse")
-	if chInput.CommitInterval != e.chExportProcess.GetCommitInterval() {
-		e.chExportProcess.SetCommitInterval(chInput.CommitInterval)
+	if chConfig.CommitInterval != e.chExportProcess.GetCommitInterval() {
+		e.chExportProcess.SetCommitInterval(chConfig.CommitInterval)
 	}
-	if dsn != e.chExportProcess.GetDsn() {
-		e.chExportProcess.UpdateCH(dsn, connect)
+	// When a new commitInterval was updated through
+	// e.chExportProcess.SetCommitInterval, the following
+	// e.chExportProcess.UpdateCH will not be called.
+	if !reflect.DeepEqual(chConfig, e.chExportProcess.GetClickHouseConfig()) {
+		e.chExportProcess.UpdateCH(chConfig, connect)
 	}
-	klog.InfoS("New ClickHouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
+	klog.InfoS("New ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug, "compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval)
 }
