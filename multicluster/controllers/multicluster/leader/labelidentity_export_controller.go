@@ -60,7 +60,8 @@ type (
 		labelsToClusters map[string]sets.Set[string]
 		hashToLabels     map[string]string
 		labelQueue       workqueue.RateLimitingInterface
-		labelsToID       map[string]uint32
+		numWorkers       int
+		labelsToID       sync.Map
 		allocator        *idAllocator
 	}
 )
@@ -77,7 +78,8 @@ func NewLabelIdentityExportReconciler(
 		labelsToClusters: map[string]sets.Set[string]{},
 		hashToLabels:     map[string]string{},
 		labelQueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultItemBasedRateLimiter()),
-		labelsToID:       map[string]uint32{},
+		numWorkers:       common.DefaultWorkerCount,
+		labelsToID:       sync.Map{},
 		allocator:        newIDAllocator(1, maxIDForAllocation),
 	}
 }
@@ -237,13 +239,14 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityDelete(ctx context.Co
 			Namespace: r.namespace,
 		},
 	}
-	if err := r.Client.Delete(ctx, labelIdentityImport, &client.DeleteOptions{}); err != nil {
+	if err := r.Client.Delete(ctx, labelIdentityImport, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 	// Delete caches for the label ID mapping and release the ID assigned for the label
-	id := r.labelsToID[deletedLabelHash]
-	r.allocator.release(id)
-	delete(r.labelsToID, deletedLabelHash)
+	if id, ok := r.labelsToID.Load(deletedLabelHash); ok {
+		r.allocator.release(id.(uint32))
+		r.labelsToID.Delete(deletedLabelHash)
+	}
 	return nil
 }
 
@@ -260,7 +263,7 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Conte
 		// for the label hash.
 		idPreviouslyAllocated := labelIdentityResImport.Spec.LabelIdentity.ID
 		if err := r.allocator.setAllocated(idPreviouslyAllocated); err == nil {
-			r.labelsToID[labelHash] = idPreviouslyAllocated
+			r.labelsToID.Store(labelHash, idPreviouslyAllocated)
 			return nil
 		} else {
 			if err := r.Client.Delete(ctx, labelIdentityResImport, &client.DeleteOptions{}); err != nil {
@@ -281,7 +284,7 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Conte
 		r.allocator.release(id)
 		return err
 	}
-	r.labelsToID[labelHash] = id
+	r.labelsToID.Store(labelHash, id)
 	return nil
 }
 
@@ -310,7 +313,7 @@ func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName)
 	return clusterID, labelHash
 }
 
-// idAllocator allocates an unqiue uint32 ID for each label identity.
+// idAllocator allocates an unique uint32 ID for each label identity.
 type idAllocator struct {
 	sync.Mutex
 	maxID                  uint32
