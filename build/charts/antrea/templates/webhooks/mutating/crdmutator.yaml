@@ -4,6 +4,7 @@ metadata:
   name: "crdmutator.antrea.io"
   labels:
     app: antrea
+    served-by: antrea-controller
 webhooks:
   - name: "acnpmutator.antrea.io"
     clientConfig:

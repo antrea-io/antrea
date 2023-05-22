@@ -130,6 +130,9 @@ func TestSyncAPIServices(t *testing.T) {
 	existingAPIService := &apiregistrationv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "v1alpha1.stats.antrea.io",
+			Labels: map[string]string{
+				"app": "antrea",
+			},
 		},
 		Spec: apiregistrationv1.APIServiceSpec{
 			Service: &apiregistrationv1.ServiceReference{
@@ -151,9 +154,13 @@ func TestSyncAPIServices(t *testing.T) {
 			prepareReactor:     func(clientset *fakeaggregatorclientset.Clientset) {},
 		},
 		{
-			name:           "fail to get API Service",
-			prepareReactor: func(clientset *fakeaggregatorclientset.Clientset) {},
-			expectedErrMsg: "error getting APIService v1alpha1.stats.antrea.io: apiservices.apiregistration.k8s.io \"v1alpha1.stats.antrea.io\" not found",
+			name: "fail to list API Service",
+			prepareReactor: func(clientset *fakeaggregatorclientset.Clientset) {
+				clientset.PrependReactor("list", "apiservices", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &apiregistrationv1.APIServiceList{}, errors.New("internal error")
+				})
+			},
+			expectedErrMsg: "error listing Antrea APIService: internal error",
 		},
 		{
 			name:               "fail to update API Service",
@@ -163,15 +170,15 @@ func TestSyncAPIServices(t *testing.T) {
 					return true, &apiregistrationv1.APIService{}, errors.New("error updating APIService")
 				})
 			},
-			expectedErrMsg: "error updating antrea CA cert of APIService v1alpha1.stats.antrea.io: error updating APIService",
+			expectedErrMsg: "error updating Antrea CA cert of APIService v1alpha1.stats.antrea.io: error updating APIService",
 		},
 	}
 	caConfig := &CAConfig{
 		ServiceName:     AntreaServiceName,
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
-		APIServiceNames: []string{
-			"v1alpha1.stats.antrea.io",
+		APIServiceSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "antrea"},
 		},
 	}
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
@@ -202,7 +209,7 @@ func TestSyncAPIServices(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			apiService, err := aggregatorClientset.ApiregistrationV1().APIServices().Get(context.Background(), "v1alpha1.stats.antrea.io", metav1.GetOptions{})
+			apiService, err := aggregatorClientset.ApiregistrationV1().APIServices().Get(context.Background(), tt.existingAPIService.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			require.Equal(t, caBundle, apiService.Spec.CABundle)
 		})
@@ -213,6 +220,9 @@ func TestSyncValidatingWebhooks(t *testing.T) {
 	existingWebhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "crdvalidator.antrea.io",
+			Labels: map[string]string{
+				"app": "antrea",
+			},
 		},
 		Webhooks: []admissionregistrationv1.ValidatingWebhook{
 			{
@@ -233,9 +243,13 @@ func TestSyncValidatingWebhooks(t *testing.T) {
 			prepareReactor:  func(clientset *fakeclientset.Clientset) {},
 		},
 		{
-			name:           "fail to get webhook",
-			prepareReactor: func(clientset *fakeclientset.Clientset) {},
-			expectedErrMsg: "error getting ValidatingWebhookConfiguration crdvalidator.antrea.io: validatingwebhookconfigurations.admissionregistration.k8s.io \"crdvalidator.antrea.io\" not found",
+			name: "fail to list webhook",
+			prepareReactor: func(clientset *fakeclientset.Clientset) {
+				clientset.PrependReactor("list", "validatingwebhookconfigurations", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &admissionregistrationv1.ValidatingWebhookConfigurationList{}, errors.New("internal error")
+				})
+			},
+			expectedErrMsg: "error listing Antrea ValidatingWebhookConfiguration: internal error",
 		},
 		{
 			name:            "fail to update webhook",
@@ -245,15 +259,15 @@ func TestSyncValidatingWebhooks(t *testing.T) {
 					return true, &admissionregistrationv1.ValidatingWebhookConfiguration{}, errors.New("error updating validatingwebhookconfigurations")
 				})
 			},
-			expectedErrMsg: "error updating antrea CA cert of ValidatingWebhookConfiguration crdvalidator.antrea.io: error updating validatingwebhookconfigurations",
+			expectedErrMsg: "error updating Antrea CA cert of ValidatingWebhookConfiguration crdvalidator.antrea.io: error updating validatingwebhookconfigurations",
 		},
 	}
 	caConfig := &CAConfig{
 		ServiceName:     AntreaServiceName,
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
-		ValidatingWebhooks: []string{
-			"crdvalidator.antrea.io",
+		ValidatingWebhookSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "antrea"},
 		},
 	}
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
@@ -283,7 +297,7 @@ func TestSyncValidatingWebhooks(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			vWebhook, err := clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.Background(), "crdvalidator.antrea.io", metav1.GetOptions{})
+			vWebhook, err := clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.Background(), tt.existingWebhook.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			for _, webhook := range vWebhook.Webhooks {
 				assert.Equal(t, caBundle, webhook.ClientConfig.CABundle)
@@ -296,6 +310,9 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 	existingWebhook := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "crdmutator.antrea.io",
+			Labels: map[string]string{
+				"app": "antrea",
+			},
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
@@ -306,6 +323,9 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 	existingOptionalWebhook := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "labelsmutator.antrea.io",
+			Labels: map[string]string{
+				"app": "antrea",
+			},
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
@@ -319,7 +339,6 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 		existingWebhooks []*admissionregistrationv1.MutatingWebhookConfiguration
 		prepareReactor   func(clientset *fakeclientset.Clientset)
 		expectedErrMsg   string
-		skipOptional     bool
 	}{
 		{
 			name:             "sync webhook successfully",
@@ -327,28 +346,18 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 			prepareReactor:   func(clientset *fakeclientset.Clientset) {},
 		},
 		{
-			name:           "fail to get mutating webhook",
-			prepareReactor: func(clientset *fakeclientset.Clientset) {},
-			expectedErrMsg: "error getting MutatingWebhookConfiguration crdmutator.antrea.io: mutatingwebhookconfigurations.admissionregistration.k8s.io \"crdmutator.antrea.io\" not found",
+			name: "fail to list mutating webhook",
+			prepareReactor: func(clientset *fakeclientset.Clientset) {
+				clientset.PrependReactor("list", "mutatingwebhookconfigurations", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &admissionregistrationv1.MutatingWebhookConfigurationList{}, errors.New("internal error")
+				})
+			},
+			expectedErrMsg: "error listing Antrea MutatingWebhookConfiguration: internal error",
 		},
 		{
 			name:             "skip sync optional mutating webhook",
 			existingWebhooks: []*admissionregistrationv1.MutatingWebhookConfiguration{existingWebhook},
 			prepareReactor:   func(clientset *fakeclientset.Clientset) {},
-			skipOptional:     true,
-		},
-		{
-			name:             "fail to get optional webhook",
-			existingWebhooks: []*admissionregistrationv1.MutatingWebhookConfiguration{existingWebhook},
-			prepareReactor: func(clientset *fakeclientset.Clientset) {
-				clientset.PrependReactor("get", "mutatingwebhookconfigurations", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
-					if action.(cgtesting.GetAction).GetName() == "labelsmutator.antrea.io" {
-						err = errors.New("error getting mutatingwebhookconfigurations labelsmutator.antrea.io")
-					}
-					return true, &admissionregistrationv1.MutatingWebhookConfiguration{}, err
-				})
-			},
-			expectedErrMsg: "error getting MutatingWebhookConfiguration labelsmutator.antrea.io: error getting mutatingwebhookconfigurations labelsmutator.antrea.io",
 		},
 		{
 			name:             "fail to update webhook",
@@ -358,7 +367,7 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 					return true, &admissionregistrationv1.MutatingWebhookConfiguration{}, errors.New("error updating mutatingwebhookconfigurations crdmutator.antrea.io")
 				})
 			},
-			expectedErrMsg: "error updating antrea CA cert of MutatingWebhookConfiguration crdmutator.antrea.io: error updating mutatingwebhookconfigurations crdmutator.antrea.io",
+			expectedErrMsg: "error updating Antrea CA cert of MutatingWebhookConfiguration crdmutator.antrea.io: error updating mutatingwebhookconfigurations crdmutator.antrea.io",
 		},
 		{
 			name:             "fail to update optional webhook",
@@ -372,18 +381,15 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 					return true, &admissionregistrationv1.MutatingWebhookConfiguration{}, err
 				})
 			},
-			expectedErrMsg: "error updating antrea CA cert of MutatingWebhookConfiguration labelsmutator.antrea.io: error updating mutatingwebhookconfigurations labelsmutator.antrea.io",
+			expectedErrMsg: "error updating Antrea CA cert of MutatingWebhookConfiguration labelsmutator.antrea.io: error updating mutatingwebhookconfigurations labelsmutator.antrea.io",
 		},
 	}
 	caConfig := &CAConfig{
 		ServiceName:     AntreaServiceName,
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
-		MutationWebhooks: []string{
-			"crdmutator.antrea.io",
-		},
-		OptionalMutationWebhooks: []string{
-			"labelsmutator.antrea.io",
+		MutationWebhookSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "antrea"},
 		},
 	}
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
@@ -415,11 +421,8 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			webhooks := []string{"crdmutator.antrea.io", "labelsmutator.antrea.io"}
-			if tt.skipOptional {
-				webhooks = []string{"crdmutator.antrea.io"}
-			}
-			for _, name := range webhooks {
+			for _, obj := range tt.existingWebhooks {
+				name := obj.Name
 				vWebhook, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.Background(), name, metav1.GetOptions{})
 				require.NoError(t, err)
 				for _, webhook := range vWebhook.Webhooks {
@@ -432,7 +435,12 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 
 func TestSyncConversionWebhooks(t *testing.T) {
 	existingCRD := &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: "clustergroups.crd.antrea.io"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "clustergroups.crd.antrea.io",
+			Labels: map[string]string{
+				"app": "antrea",
+			},
+		},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 			Conversion: &apiextensionsv1.CustomResourceConversion{
 				Strategy: apiextensionsv1.WebhookConverter,
@@ -457,14 +465,23 @@ func TestSyncConversionWebhooks(t *testing.T) {
 			prepareReactor: func(clientset *fakeapiextensionclientset.Clientset) {},
 		},
 		{
-			name:           "fail to get crd webhook",
-			prepareReactor: func(clientset *fakeapiextensionclientset.Clientset) {},
-			expectedErrMsg: "error getting CRD definition for clustergroups.crd.antrea.io: customresourcedefinitions.apiextensions.k8s.io \"clustergroups.crd.antrea.io\" not found",
+			name: "fail to list crd webhook",
+			prepareReactor: func(clientset *fakeapiextensionclientset.Clientset) {
+				clientset.PrependReactor("list", "customresourcedefinitions", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &apiextensionsv1.CustomResourceDefinitionList{}, errors.New("internal error")
+				})
+			},
+			expectedErrMsg: "error listing Antrea CRD definition: internal error",
 		},
 		{
 			name: "fail to sync crd webhook with empty webhook",
 			existingCRD: &apiextensionsv1.CustomResourceDefinition{
-				ObjectMeta: metav1.ObjectMeta{Name: "clustergroups.crd.antrea.io"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clustergroups.crd.antrea.io",
+					Labels: map[string]string{
+						"app": "antrea",
+					},
+				},
 			},
 			prepareReactor: func(clientset *fakeapiextensionclientset.Clientset) {},
 			expectedErrMsg: "CRD clustergroups.crd.antrea.io does not have webhook conversion registered",
@@ -477,14 +494,16 @@ func TestSyncConversionWebhooks(t *testing.T) {
 					return true, &apiextensionsv1.CustomResourceDefinition{}, errors.New("error updating customresourcedefinitions")
 				})
 			},
-			expectedErrMsg: "error updating antrea CA cert of CustomResourceDefinition clustergroups.crd.antrea.io: error updating customresourcedefinitions",
+			expectedErrMsg: "error updating Antrea CA cert of CustomResourceDefinition clustergroups.crd.antrea.io: error updating customresourcedefinitions",
 		},
 	}
 	caConfig := &CAConfig{
-		ServiceName:                AntreaServiceName,
-		PairName:                   "antrea-controller",
-		CAConfigMapName:            "antrea-ca",
-		CRDsWithConversionWebhooks: []string{"clustergroups.crd.antrea.io"},
+		ServiceName:     AntreaServiceName,
+		PairName:        "antrea-controller",
+		CAConfigMapName: "antrea-ca",
+		CRDConversionWebhookSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": "antrea"},
+		},
 	}
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	var err error
@@ -513,7 +532,7 @@ func TestSyncConversionWebhooks(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			crd, err := apiExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), "clustergroups.crd.antrea.io", metav1.GetOptions{})
+			crd, err := apiExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), tt.existingCRD.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, caBundle, crd.Spec.Conversion.Webhook.ClientConfig.CABundle)
 		})
