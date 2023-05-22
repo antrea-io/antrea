@@ -18,6 +18,7 @@ package leader
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -79,8 +80,8 @@ var (
 func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 	tests := []struct {
 		name                     string
-		existResExp              *mcsv1alpha1.ResourceExportList
-		existResImp              *mcsv1alpha1.ResourceImportList
+		existingResExp           *mcsv1alpha1.ResourceExportList
+		existingResImp           *mcsv1alpha1.ResourceImportList
 		resExpNamespacedName     types.NamespacedName
 		expNormalizedLabel       string
 		originalLabelsToClusters map[string]sets.Set[string]
@@ -91,10 +92,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 	}{
 		{
 			name: "create LabelIdentity kind of ResImp",
-			existResExp: &mcsv1alpha1.ResourceExportList{
+			existingResExp: &mcsv1alpha1.ResourceExportList{
 				Items: []mcsv1alpha1.ResourceExport{*labelIdentityResExp},
 			},
-			existResImp:           &mcsv1alpha1.ResourceImportList{},
+			existingResImp:        &mcsv1alpha1.ResourceImportList{},
 			resExpNamespacedName:  resExpNamespacedName,
 			expNormalizedLabel:    normalizedLabel,
 			expLabelsToClusters:   map[string]sets.Set[string]{labelHash: sets.New[string](common.LocalClusterID)},
@@ -103,10 +104,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 		},
 		{
 			name: "LabelIdentity kind of ResImp already exist",
-			existResExp: &mcsv1alpha1.ResourceExportList{
+			existingResExp: &mcsv1alpha1.ResourceExportList{
 				Items: []mcsv1alpha1.ResourceExport{*labelIdentityResExp},
 			},
-			existResImp: &mcsv1alpha1.ResourceImportList{
+			existingResImp: &mcsv1alpha1.ResourceImportList{
 				Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
 			},
 			resExpNamespacedName:  resExpNamespacedName,
@@ -117,10 +118,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 		},
 		{
 			name: "ResExport delete LabelIdentity not stale in ClusterSet",
-			existResExp: &mcsv1alpha1.ResourceExportList{
+			existingResExp: &mcsv1alpha1.ResourceExportList{
 				Items: []mcsv1alpha1.ResourceExport{*labelIdentityResExp},
 			},
-			existResImp: &mcsv1alpha1.ResourceImportList{
+			existingResImp: &mcsv1alpha1.ResourceImportList{
 				Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
 			},
 			resExpNamespacedName:     resExpNamespacedNameClusterB,
@@ -132,9 +133,9 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			expLabelResImpDeleted:    false,
 		},
 		{
-			name:        "delete LabelIdentity kind of ResImp",
-			existResExp: &mcsv1alpha1.ResourceExportList{},
-			existResImp: &mcsv1alpha1.ResourceImportList{
+			name:           "delete LabelIdentity kind of ResImp",
+			existingResExp: &mcsv1alpha1.ResourceExportList{},
+			existingResImp: &mcsv1alpha1.ResourceImportList{
 				Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
 			},
 			resExpNamespacedName:     resExpNamespacedName,
@@ -152,7 +153,7 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existResExp, tt.existResImp).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResExp, tt.existingResImp).Build()
 			r := NewLabelIdentityExportReconciler(fakeClient, common.TestScheme, common.LeaderNamespace)
 			if len(tt.originalLabelsToClusters) > 0 {
 				r.clusterToLabels = tt.originalClusterToLabels
@@ -165,10 +166,10 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(r.labelsToClusters, tt.expLabelsToClusters) {
-				t.Errorf("LabelIdentityExport Reconciler operated labelsToClusters incorrectly. Exp: %s, Act: %s", tt.expLabelsToClusters, r.labelsToClusters)
+				t.Errorf("LabelIdentityExport Reconciler yield incorrect labelsToClusters. Exp: %s, Act: %s", tt.expLabelsToClusters, r.labelsToClusters)
 			}
 			if !reflect.DeepEqual(r.clusterToLabels, tt.expClusterToLabels) {
-				t.Errorf("LabelIdentityExport Reconciler operated clusterToLabels incorrectly. Exp: %s, Act: %s", tt.expClusterToLabels, r.clusterToLabels)
+				t.Errorf("LabelIdentityExport Reconciler yield incorrect clusterToLabels. Exp: %s, Act: %s", tt.expClusterToLabels, r.clusterToLabels)
 			}
 
 			time.Sleep(100 * time.Millisecond)
@@ -183,6 +184,54 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConcurrentProcessLabelForResourceImport(t *testing.T) {
+	existingResImpList := &mcsv1alpha1.ResourceImportList{
+		Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
+	}
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(existingResImpList).Build()
+	r := NewLabelIdentityExportReconciler(fakeClient, common.TestScheme, common.LeaderNamespace)
+	r.hashToLabels = map[string]string{
+		labelHash: normalizedLabel,
+	}
+	r.labelQueue.Add(labelHash)
+	for i := 2; i <= 40; i++ {
+		l := normalizedLabel + strconv.Itoa(i)
+		lHash := common.HashLabelIdentity(l)
+		r.labelQueue.Add(lHash)
+		// Simulate 20 LabelIdentity ResourceImport add events and 20 delete events
+		if i <= 20 {
+			// When label hash is present in the reconciler, it means the corresponding
+			// ResourceExport exists.
+			r.hashToLabels[lHash] = l
+		}
+	}
+	// Mock the state of the reconciler where id 1 was allocated for labelHash
+	r.labelsToID.Store(labelHash, uint32(1))
+	r.allocator.setAllocated(1)
+	// Spin off more workers to bump up concurrency
+	r.numWorkers = common.DefaultWorkerCount * 2
+	go r.Run(stopCh)
+
+	// The ResourceImport corresponding to label 21-40 should be deleted as the mocked hashToLabels
+	// map indicates its ResourceExport has been deleted. ResourceImport for label1 should not change
+	// and ResourceImport for label 2-20 should be created.
+	assert.Eventually(t, func() bool {
+		actLabelIdentityResImpList := &mcsv1alpha1.ResourceImportList{}
+		fakeClient.List(common.TestCtx, actLabelIdentityResImpList)
+		if len(actLabelIdentityResImpList.Items) != 20 {
+			return false
+		}
+		for _, resImp := range actLabelIdentityResImpList.Items {
+			id, ok := r.labelsToID.Load(resImp.Name)
+			assert.Truef(t, ok, "ResourceImport's label hash should be stored")
+			assert.Equalf(t, id, resImp.Spec.LabelIdentity.ID, "Cached ID for label should match")
+		}
+		return true
+	}, time.Millisecond*200, time.Millisecond*10, "Unexpected number of ResourceImport after test is executed")
 }
 
 func TestIDAllocatorBasic(t *testing.T) {
