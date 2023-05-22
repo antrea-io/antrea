@@ -245,6 +245,41 @@ func TestPreparePacket(t *testing.T) {
 			},
 		},
 		{
+			name: "tcp packet without flag",
+			tf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1alpha1.Destination{
+						Namespace: pod2.Namespace,
+						Pod:       pod2.Name,
+					},
+					Packet: crdv1alpha1.Packet{
+						TransportHeader: crdv1alpha1.TransportHeader{
+							TCP: &crdv1alpha1.TCPHeader{
+								SrcPort: 80,
+								DstPort: 81,
+							},
+						},
+					},
+				},
+			},
+			expectedPacket: &binding.Packet{
+				SourceIP:        net.ParseIP(pod1IPv4),
+				SourceMAC:       pod1MAC,
+				DestinationIP:   net.ParseIP(pod2IPv4),
+				DestinationMAC:  pod2MAC,
+				IPProto:         protocol.Type_TCP,
+				SourcePort:      80,
+				DestinationPort: 81,
+				TCPFlags:        2,
+				TTL:             64,
+			},
+		},
+		{
 			name: "udp packet",
 			tf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf5", UID: "uid5"},
