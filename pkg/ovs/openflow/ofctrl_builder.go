@@ -26,17 +26,6 @@ type ofFlowBuilder struct {
 	ofFlow
 }
 
-func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
-	rng := openflow15.NewNXRange(0, 31)
-	tm := &ofctrl.NXTunMetadata{
-		ID:    index,
-		Data:  data,
-		Range: rng,
-	}
-	b.ofFlow.Match.TunMetadatas = append(b.ofFlow.Match.TunMetadatas, tm)
-	return b
-}
-
 // MatchVLAN can be used as follows:
 // - to match the packets of a specific VLAN, there are two cases:
 //   - to match VLAN 0, nonVLAN should be false, vlanID should be 0, value of vlanMask must be 0x1fff.

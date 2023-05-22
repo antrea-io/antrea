@@ -382,12 +382,6 @@ func (a *ofFlowAction) copyField(srcOxmId, dstOxmId *openflow15.OxmId, fromRange
 	return a.builder
 }
 
-func (a *ofFlowAction) MoveFromTunMetadata(fromTunMetadataID int, toField string, fromRange, toRange Range, tlvLength uint8) FlowBuilder {
-	dstOxmID, _ := openflow15.FindOxmIdByName(toField, false)
-	srcOxmID := getTunMetadataOxmId(fromTunMetadataID, tlvLength)
-	return a.copyField(srcOxmID, dstOxmID, fromRange, toRange)
-}
-
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
 // the in_port field is not changed.
 func (a *ofFlowAction) Resubmit(ofPort uint16, tableID uint8) FlowBuilder {
@@ -692,11 +686,4 @@ func (a *ofFlowAction) GotoStage(stage StageID) FlowBuilder {
 	table := pipeline.GetFirstTableInStage(stage)
 	a.builder.ofFlow.Goto(table.GetID())
 	return a.builder
-}
-
-func getTunMetadataOxmId(id int, tlvLength uint8) *openflow15.OxmId {
-	field := fmt.Sprintf("%s%d", NxmFieldTunMetadata, id)
-	oxmID, _ := openflow15.FindOxmIdByName(field, false)
-	oxmID.Length = tlvLength
-	return oxmID
 }

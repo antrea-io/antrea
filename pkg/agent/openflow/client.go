@@ -210,9 +210,6 @@ type Client interface {
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
 
-	// Initial tun_metadata0 in TLV map for Traceflow.
-	InitialTLVMap() error
-
 	// Find Network Policy reference and OFpriority by conjunction ID.
 	GetPolicyInfoFromConjunction(ruleID uint32) (string, string, string, string)
 
@@ -1138,13 +1135,6 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedO
 func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	return c.deleteFlows(c.featureTraceflow.cachedFlows, cacheKey)
-}
-
-// InitialTLVMap adds TLV map optClass 0x0104, optType 0x80 optLength 4 tunMetadataIndex 0 to store data plane tag
-// in tunnel. Data plane tag will be stored to NXM_NX_TUN_METADATA0[28..31] when packet get encapsulated
-// into geneve, and will be stored back to NXM_NX_REG9[28..31] when packet get decapsulated.
-func (c *client) InitialTLVMap() error {
-	return c.bridge.AddTLVMap(0x0104, 0x80, 4, 0)
 }
 
 // setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
