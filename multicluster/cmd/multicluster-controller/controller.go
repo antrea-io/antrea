@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -45,9 +46,6 @@ import (
 )
 
 var (
-	validationWebhooksNamePattern = "%s%santrea-mc-validating-webhook-configuration"
-	mutationWebhooksNamePattern   = "%s%santrea-mc-mutating-webhook-configuration"
-
 	// The unit test code will change the function to set up a mock manager.
 	setupManagerAndCertControllerFunc = setupManagerAndCertController
 )
@@ -57,6 +55,16 @@ const (
 	certDir           = "/var/run/antrea/multicluster-controller-tls"
 	serviceName       = "antrea-mc-webhook-service"
 	configMapName     = "antrea-mc-ca"
+	leaderRole        = "leader"
+	memberRole        = "member"
+)
+
+var (
+	// mcDefaultServedLabels contains the labels added on the Webhooks which are needed by both leader and member controllers.
+	mcDefaultServedLabels = map[string]string{
+		"app":       "antrea",
+		"served-by": "antrea-mc-controller",
+	}
 )
 
 func init() {
@@ -88,36 +96,39 @@ func createClients(kubeConfig *rest.Config) (
 	return client, aggregatorClient, apiExtensionClient, nil
 }
 
-func getCaConfig(controllerNs string) *certificate.CAConfig {
+func getCaConfig(isLeader bool, controllerNs string) *certificate.CAConfig {
 	return &certificate.CAConfig{
 		CAConfigMapName: configMapName,
 		// the key pair name has to be "tls" https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/manager/manager.go#L221
-		PairName:           "tls",
-		CertDir:            certDir,
-		ServiceName:        serviceName,
-		SelfSignedCertDir:  selfSignedCertDir,
-		MutationWebhooks:   getMutationWebhooks(controllerNs),
-		ValidatingWebhooks: getValidationWebhooks(controllerNs),
-		CertReadyTimeout:   2 * time.Minute,
-		MaxRotateDuration:  time.Hour * (24 * 365),
+		PairName:                  "tls",
+		CertDir:                   certDir,
+		ServiceName:               serviceName,
+		SelfSignedCertDir:         selfSignedCertDir,
+		MutationWebhookSelector:   getWebhookLabel(isLeader, controllerNs),
+		ValidatingWebhookSelector: getWebhookLabel(isLeader, controllerNs),
+		CertReadyTimeout:          2 * time.Minute,
+		MaxRotateDuration:         time.Hour * (24 * 365),
 	}
 }
 
-func getValidationWebhooks(controllerNs string) []string {
-	if controllerNs != "" {
-		return []string{fmt.Sprintf(validationWebhooksNamePattern, controllerNs, "-")}
+func getWebhookLabel(isLeader bool, controllerNs string) *metav1.LabelSelector {
+	labels := mcDefaultServedLabels
+	if isLeader {
+		labels["role"] = leaderRole
+	} else {
+		labels["role"] = memberRole
 	}
-	return []string{fmt.Sprintf(validationWebhooksNamePattern, "", "")}
+	// It is allowed that multiple leader controllers running in different Namespace in the same cluster.
+	// "served-in: $controllerNS" is useful to select the Webhooks managed by the current mc-controller.
+	if len(controllerNs) > 0 {
+		labels["served-in"] = controllerNs
+	}
+	return &metav1.LabelSelector{
+		MatchLabels: labels,
+	}
 }
 
-func getMutationWebhooks(controllerNs string) []string {
-	if controllerNs != "" {
-		return []string{fmt.Sprintf(mutationWebhooksNamePattern, controllerNs, "-")}
-	}
-	return []string{fmt.Sprintf(mutationWebhooksNamePattern, "", "")}
-}
-
-func setupManagerAndCertController(o *Options) (manager.Manager, error) {
+func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, error) {
 	ctrl.SetLogger(klog.NewKlogr())
 
 	// build up cert controller to manage certificate for MC Controller
@@ -129,7 +140,7 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient,
-		secureServing, getCaConfig(o.options.Namespace))
+		secureServing, getCaConfig(isLeader, o.options.Namespace))
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}

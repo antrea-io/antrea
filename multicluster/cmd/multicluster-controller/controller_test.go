@@ -50,44 +50,46 @@ func TestCreateClients(t *testing.T) {
 func TestGetCAConfig(t *testing.T) {
 	testCases := []struct {
 		name         string
+		isLeader     bool
 		controllerNS string
 		expectedRes  *certificate.CAConfig
 	}{
 		{
-			name:         "controllerNS is empty",
-			controllerNS: "",
+			name:     "member cluster",
+			isLeader: false,
 			expectedRes: &certificate.CAConfig{
-				CAConfigMapName:    configMapName,
-				PairName:           "tls",
-				CertDir:            certDir,
-				ServiceName:        serviceName,
-				SelfSignedCertDir:  selfSignedCertDir,
-				MutationWebhooks:   getMutationWebhooks(""),
-				ValidatingWebhooks: getValidationWebhooks(""),
-				CertReadyTimeout:   2 * time.Minute,
-				MaxRotateDuration:  time.Hour * (24 * 365),
+				CAConfigMapName:           configMapName,
+				PairName:                  "tls",
+				CertDir:                   certDir,
+				ServiceName:               serviceName,
+				SelfSignedCertDir:         selfSignedCertDir,
+				MutationWebhookSelector:   getWebhookLabel(false, ""),
+				ValidatingWebhookSelector: getWebhookLabel(false, ""),
+				CertReadyTimeout:          2 * time.Minute,
+				MaxRotateDuration:         time.Hour * (24 * 365),
 			},
 		},
 		{
-			name:         "controllerNS is not empty",
+			name:         "leader cluster",
+			isLeader:     true,
 			controllerNS: "testNS",
 			expectedRes: &certificate.CAConfig{
-				CAConfigMapName:    configMapName,
-				PairName:           "tls",
-				CertDir:            certDir,
-				ServiceName:        serviceName,
-				SelfSignedCertDir:  selfSignedCertDir,
-				MutationWebhooks:   getMutationWebhooks("testNS"),
-				ValidatingWebhooks: getValidationWebhooks("testNS"),
-				CertReadyTimeout:   2 * time.Minute,
-				MaxRotateDuration:  time.Hour * (24 * 365),
+				CAConfigMapName:           configMapName,
+				PairName:                  "tls",
+				CertDir:                   certDir,
+				ServiceName:               serviceName,
+				SelfSignedCertDir:         selfSignedCertDir,
+				MutationWebhookSelector:   getWebhookLabel(true, "testNS"),
+				ValidatingWebhookSelector: getWebhookLabel(true, "testNS"),
+				CertReadyTimeout:          2 * time.Minute,
+				MaxRotateDuration:         time.Hour * (24 * 365),
 			},
 		},
 	}
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedRes, getCaConfig(tt.controllerNS))
+			assert.Equal(t, tt.expectedRes, getCaConfig(tt.isLeader, tt.controllerNS))
 		})
 	}
 }

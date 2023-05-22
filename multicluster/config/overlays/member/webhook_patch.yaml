@@ -14,6 +14,14 @@ webhooks:
   $patch: delete
 ---
 apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+  labels:
+    served-by: antrea-mc-controller
+    role: member
+---
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: mutating-webhook-configuration
@@ -24,6 +32,14 @@ webhooks:
 - admissionReviewVersions:
   name: mresourceimport.kb.io
   $patch: delete
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: mutating-webhook-configuration
+  labels:
+    served-by: antrea-mc-controller
+    role: member
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration

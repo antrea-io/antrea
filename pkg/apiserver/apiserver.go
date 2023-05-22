@@ -80,6 +80,12 @@ var (
 	parameterCodec = runtime.NewParameterCodec(Scheme)
 	// #nosec G101: false positive triggered by variable name which includes "token"
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
+
+	// antreaServedLabel includes the labels used to select resources served by antrea-controller
+	antreaServedLabel = map[string]string{
+		"app":       "antrea",
+		"served-by": "antrea-controller",
+	}
 )
 
 func init() {
@@ -330,22 +336,17 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 func DefaultCAConfig() *certificate.CAConfig {
 	return &certificate.CAConfig{
 		CAConfigMapName: certificate.AntreaCAConfigMapName,
-		APIServiceNames: []string{
-			"v1alpha1.stats.antrea.io",
-			"v1beta1.system.antrea.io",
-			"v1beta2.controlplane.antrea.io",
+		APIServiceSelector: &metav1.LabelSelector{
+			MatchLabels: antreaServedLabel,
 		},
-		ValidatingWebhooks: []string{
-			"crdvalidator.antrea.io",
+		ValidatingWebhookSelector: &metav1.LabelSelector{
+			MatchLabels: antreaServedLabel,
 		},
-		MutationWebhooks: []string{
-			"crdmutator.antrea.io",
+		MutationWebhookSelector: &metav1.LabelSelector{
+			MatchLabels: antreaServedLabel,
 		},
-		OptionalMutationWebhooks: []string{
-			"labelsmutator.antrea.io",
-		},
-		CRDsWithConversionWebhooks: []string{
-			"clustergroups.crd.antrea.io",
+		CRDConversionWebhookSelector: &metav1.LabelSelector{
+			MatchLabels: antreaServedLabel,
 		},
 		CertDir:           "/var/run/antrea/antrea-controller-tls",
 		SelfSignedCertDir: "/var/run/antrea/antrea-controller-self-signed",

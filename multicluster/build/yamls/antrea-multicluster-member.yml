@@ -788,14 +788,11 @@ rules:
   - watch
 - apiGroups:
   - admissionregistration.k8s.io
-  resourceNames:
-  - antrea-mc-mutating-webhook-configuration
-  - antrea-mc-validating-webhook-configuration
   resources:
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
   verbs:
-  - get
+  - list
   - update
 - apiGroups:
   - ""
@@ -1164,6 +1161,8 @@ kind: MutatingWebhookConfiguration
 metadata:
   labels:
     app: antrea
+    role: member
+    served-by: antrea-mc-controller
   name: antrea-mc-mutating-webhook-configuration
 webhooks: []
 ---
@@ -1172,6 +1171,8 @@ kind: ValidatingWebhookConfiguration
 metadata:
   labels:
     app: antrea
+    role: member
+    served-by: antrea-mc-controller
   name: antrea-mc-validating-webhook-configuration
 webhooks:
 - admissionReviewVersions:

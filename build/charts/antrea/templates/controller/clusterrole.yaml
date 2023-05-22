@@ -57,6 +57,7 @@ rules:
       - customresourcedefinitions
     verbs:
       - get
+      - list
       - update
   # This is the content of built-in role kube-system/extension-apiserver-authentication-reader.
   # But it doesn't have list/watch permission before K8s v1.17.0 so the extension apiserver (antrea-controller) will
@@ -106,12 +107,8 @@ rules:
       - apiregistration.k8s.io
     resources:
       - apiservices
-    resourceNames:
-      - v1alpha1.stats.antrea.io
-      - v1beta1.system.antrea.io
-      - v1beta2.controlplane.antrea.io
     verbs:
-      - get
+      - list
       - update
   - apiGroups:
       - apiregistration.k8s.io
@@ -130,15 +127,8 @@ rules:
     resources:
       - mutatingwebhookconfigurations
       - validatingwebhookconfigurations
-    resourceNames:
-      # always give permissions for labelsmutator.antrea.io, even when the
-      # feature is disabled, to avoid errors in antrea-controller when updating
-      # the CA cert.
-      - labelsmutator.antrea.io
-      - crdmutator.antrea.io
-      - crdvalidator.antrea.io
     verbs:
-      - get
+      - list
       - update
   - apiGroups:
     - certificates.k8s.io
