@@ -133,43 +133,20 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
 	EnablePrometheusMetrics *bool `yaml:"enablePrometheusMetrics,omitempty"`
-	// Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
-	// HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
-	// using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be
-	// wrapped with []. When the collector is running in-cluster as a Service, set
-	// <HOST> to <Service namespace>/<Service name>. For example,
-	// "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
-	// Flow Aggregator Service.
-	// If PORT is empty, we default to 4739, the standard IPFIX port.
-	// If no PROTO is given, we consider "tcp" as default. We support "tcp" and
-	// "udp" L4 transport protocols.
-	// Defaults to "flow-aggregator/flow-aggregator:4739:tcp".
+	// Deprecated. Use the FlowExporter config options instead.
 	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
-	// Provide flow poll interval in format "0s". This determines how often flow
-	// exporter dumps connections in conntrack module. Flow poll interval should
-	// be greater than or equal to 1s(one second).
-	// Defaults to "5s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// Deprecated. Use the FlowExporter config options instead.
 	FlowPollInterval string `yaml:"flowPollInterval,omitempty"`
-	// Provide the active flow export timeout, which is the timeout after which
-	// a flow record is sent to the collector for active flows. Thus, for flows
-	// with a continuous stream of packets, a flow record will be exported to the
-	// collector once the elapsed time since the last export event is equal to the
-	// value of this timeout.
-	// Defaults to "30s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// Deprecated. Use the FlowExporter config options instead.
 	ActiveFlowExportTimeout string `yaml:"activeFlowExportTimeout,omitempty"`
-	// Provide the idle flow export timeout, which is the timeout after which a
-	// flow record is sent to the collector for idle flows. A flow is considered
-	// idle if no packet matching this flow has been observed since the last export
-	// event.
-	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// Deprecated. Use the FlowExporter config options instead.
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
 	// Deprecated. Use the NodePortLocal config options instead.
 	NPLPortRange string `yaml:"nplPortRange,omitempty"`
 	// NodePortLocal (NPL) configuration options.
 	NodePortLocal NodePortLocalConfig `yaml:"nodePortLocal,omitempty"`
+	// FlowExporter configuration options.
+	FlowExporter FlowExporterConfig `yaml:"flowExporter,omitempty"`
 	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
@@ -258,6 +235,47 @@ type NodePortLocalConfig struct {
 	// pod.spec.containers[].ports), and all Node traffic directed to that port will be
 	// forwarded to the Pod.
 	PortRange string `yaml:"portRange,omitempty"`
+}
+
+type FlowExporterConfig struct {
+	// Enable FlowExporter, a feature used to export polled conntrack connections as
+	// IPFIX flow records from each agent to a configured collector. To enable this
+	// feature, you need to set "enable" to true, and ensure that the FlowExporter
+	// feature gate is also enabled.
+	Enable bool `yaml:"enable,omitempty"`
+	// Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+	// HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
+	// using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be
+	// wrapped with []. When the collector is running in-cluster as a Service, set
+	// <HOST> to <Service namespace>/<Service name>. For example,
+	// "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
+	// Flow Aggregator Service.
+	// If PORT is empty, we default to 4739, the standard IPFIX port.
+	// If no PROTO is given, we consider "tcp" as default. We support "tcp" and
+	// "udp" L4 transport protocols.
+	// Defaults to "flow-aggregator/flow-aggregator:4739:tcp".
+	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
+	// Provide flow poll interval in format "0s". This determines how often flow
+	// exporter dumps connections in conntrack module. Flow poll interval should
+	// be greater than or equal to 1s(one second).
+	// Defaults to "5s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	FlowPollInterval string `yaml:"flowPollInterval,omitempty"`
+	// Provide the active flow export timeout, which is the timeout after which
+	// a flow record is sent to the collector for active flows. Thus, for flows
+	// with a continuous stream of packets, a flow record will be exported to the
+	// collector once the elapsed time since the last export event is equal to the
+	// value of this timeout.
+	// Defaults to "30s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	ActiveFlowExportTimeout string `yaml:"activeFlowExportTimeout,omitempty"`
+	// Provide the idle flow export timeout, which is the timeout after which a
+	// flow record is sent to the collector for idle flows. A flow is considered
+	// idle if no packet matching this flow has been observed since the last export
+	// event.
+	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
 }
 
 type MulticastConfig struct {
