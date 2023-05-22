@@ -239,3 +239,93 @@ func TestAppendPortIfMissing(t *testing.T) {
 		})
 	}
 }
+
+func TestIPNetEqual(t *testing.T) {
+	tests := []struct {
+		name   string
+		ipNet1 *net.IPNet
+		ipNet2 *net.IPNet
+		want   bool
+	}{
+		{
+			name:   "equal",
+			ipNet1: MustParseCIDR("1.1.1.0/30"),
+			ipNet2: MustParseCIDR("1.1.1.0/30"),
+			want:   true,
+		},
+		{
+			name:   "different mask",
+			ipNet1: MustParseCIDR("1.1.1.0/30"),
+			ipNet2: MustParseCIDR("1.1.1.0/29"),
+			want:   false,
+		},
+		{
+			name:   "different prefix",
+			ipNet1: MustParseCIDR("1.1.1.4/30"),
+			ipNet2: MustParseCIDR("1.1.1.0/30"),
+			want:   false,
+		},
+		{
+			name:   "different family",
+			ipNet1: MustParseCIDR("1.1.1.4/30"),
+			ipNet2: MustParseCIDR("1:1:1:4::/30"),
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IPNetEqual(tt.ipNet1, tt.ipNet2))
+		})
+	}
+}
+
+func TestIPNetContains(t *testing.T) {
+	tests := []struct {
+		name   string
+		ipNet1 *net.IPNet
+		ipNet2 *net.IPNet
+		want   bool
+	}{
+		{
+			name:   "equal",
+			ipNet1: MustParseCIDR("10.0.0.0/24"),
+			ipNet2: MustParseCIDR("10.0.0.0/24"),
+			want:   true,
+		},
+		{
+			name:   "contain smaller subnet",
+			ipNet1: MustParseCIDR("10.0.0.0/24"),
+			ipNet2: MustParseCIDR("10.0.0.0/25"),
+			want:   true,
+		},
+		{
+			name:   "contain smaller subnet with different prefix",
+			ipNet1: MustParseCIDR("10.0.0.0/24"),
+			ipNet2: MustParseCIDR("10.0.0.128/25"),
+			want:   true,
+		},
+		{
+			name:   "not contain larger subnet",
+			ipNet1: MustParseCIDR("10.0.0.0/24"),
+			ipNet2: MustParseCIDR("10.0.0.0/23"),
+			want:   false,
+		},
+		{
+			name:   "not contain smaller subnet with different prefix",
+			ipNet1: MustParseCIDR("10.0.0.0/24"),
+			ipNet2: MustParseCIDR("10.0.1.0/25"),
+			want:   false,
+		},
+		{
+			name:   "not contain subnet of different family",
+			ipNet1: MustParseCIDR("1.1.1.4/30"),
+			ipNet2: MustParseCIDR("1:1:1:4::/30"),
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IPNetContains(tt.ipNet1, tt.ipNet2))
+		})
+	}
+}

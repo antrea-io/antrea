@@ -67,6 +67,7 @@ func TestServiceCIDRProvider(t *testing.T) {
 	defer close(stopCh)
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
+	go serviceCIDRProvider.Run(stopCh)
 
 	check := func(expectedServiceCIDR string, isServiceCIDRUpdated, isIPv6 bool) {
 		if isServiceCIDRUpdated {
@@ -84,15 +85,18 @@ func TestServiceCIDRProvider(t *testing.T) {
 			}
 		}
 		serviceCIDR, err := serviceCIDRProvider.GetServiceCIDR(isIPv6)
-		assert.NoError(t, err)
-		assert.Equal(t, expectedServiceCIDR, serviceCIDR.String())
+		if expectedServiceCIDR != "" {
+			assert.NoError(t, err)
+			assert.Equal(t, expectedServiceCIDR, serviceCIDR.String())
+		} else {
+			assert.ErrorContains(t, err, "CIDR is not available yet")
+		}
 	}
 
 	svc := makeService("ns1", "svc0", "None", corev1.ProtocolTCP)
 	_, err := client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	_, err = serviceCIDRProvider.GetServiceCIDR(false)
-	assert.ErrorContains(t, err, "Service IPv4 CIDR is not available yet")
+	check("", false, false)
 
 	svc = makeService("ns1", "svc1", "10.10.0.1", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
@@ -121,8 +125,7 @@ func TestServiceCIDRProvider(t *testing.T) {
 	svc = makeService("ns1", "svc60", "None", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	_, err = serviceCIDRProvider.GetServiceCIDR(true)
-	assert.ErrorContains(t, err, "Service IPv6 CIDR is not available yet")
+	check("", false, true)
 
 	svc = makeService("ns1", "svc61", "10::1", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})

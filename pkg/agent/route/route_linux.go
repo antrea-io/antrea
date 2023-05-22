@@ -41,6 +41,7 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -1389,7 +1390,22 @@ func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
 			return fmt.Errorf("error listing ip routes: %w", err)
 		}
 		for i := 0; i < len(routes); i++ {
-			if routes[i].Gw.Equal(gw) && !routes[i].Dst.IP.Equal(serviceCIDR.IP) && routes[i].Dst.Contains(serviceCIDR.IP) {
+			// Not the routes we are interested in.
+			if !routes[i].Gw.Equal(gw) {
+				continue
+			}
+			// It's the latest route we just installed.
+			if utilip.IPNetEqual(routes[i].Dst, serviceCIDR) {
+				continue
+			}
+			// The route covers the desired route. It was installed when the calculated ServiceCIDR was larger than the
+			// current one, which could happen after some Services are deleted.
+			if utilip.IPNetContains(routes[i].Dst, serviceCIDR) {
+				staleRoutes = append(staleRoutes, &routes[i])
+			}
+			// The desired route covers the route. It was installed when the calculated ServiceCIDR was smaller than the
+			// current one, which could happen after some Services are added.
+			if utilip.IPNetContains(serviceCIDR, routes[i].Dst) {
 				staleRoutes = append(staleRoutes, &routes[i])
 			}
 		}
