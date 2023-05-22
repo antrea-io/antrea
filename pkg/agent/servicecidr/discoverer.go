@@ -21,10 +21,15 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/pkg/agent/util"
 )
@@ -42,17 +47,22 @@ type Interface interface {
 	AddEventHandler(handler EventHandler)
 }
 
-type discoverer struct {
+type Discoverer struct {
 	serviceInformer cache.SharedIndexInformer
+	serviceLister   corelisters.ServiceLister
 	sync.RWMutex
 	serviceIPv4CIDR *net.IPNet
 	serviceIPv6CIDR *net.IPNet
 	eventHandlers   []EventHandler
+	// queue maintains the Service objects that need to be synced.
+	queue workqueue.Interface
 }
 
-func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) Interface {
-	d := &discoverer{
+func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) *Discoverer {
+	d := &Discoverer{
 		serviceInformer: serviceInformer.Informer(),
+		serviceLister:   serviceInformer.Lister(),
+		queue:           workqueue.New(),
 	}
 	d.serviceInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -64,7 +74,37 @@ func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) Int
 	return d
 }
 
-func (d *discoverer) GetServiceCIDR(isIPv6 bool) (*net.IPNet, error) {
+func (d *Discoverer) Run(stopCh <-chan struct{}) {
+	defer d.queue.ShutDown()
+
+	klog.Info("Starting ServiceCIDRDiscoverer")
+	defer klog.Info("Stopping ServiceCIDRDiscoverer")
+	if !cache.WaitForCacheSync(stopCh, d.serviceInformer.HasSynced) {
+		return
+	}
+	svcs, _ := d.serviceLister.List(labels.Everything())
+	d.updateServiceCIDR(svcs...)
+
+	go func() {
+		for {
+			obj, quit := d.queue.Get()
+			if quit {
+				return
+			}
+			nn := obj.(types.NamespacedName)
+
+			svc, _ := d.serviceLister.Services(nn.Namespace).Get(nn.Name)
+			// Ignore it if not found.
+			if svc != nil {
+				d.updateServiceCIDR(svc)
+			}
+			d.queue.Done(obj)
+		}
+	}()
+	<-stopCh
+}
+
+func (d *Discoverer) GetServiceCIDR(isIPv6 bool) (*net.IPNet, error) {
 	d.RLock()
 	defer d.RUnlock()
 	if isIPv6 {
@@ -79,32 +119,37 @@ func (d *discoverer) GetServiceCIDR(isIPv6 bool) (*net.IPNet, error) {
 	return d.serviceIPv4CIDR, nil
 }
 
-func (d *discoverer) AddEventHandler(handler EventHandler) {
+func (d *Discoverer) AddEventHandler(handler EventHandler) {
 	d.eventHandlers = append(d.eventHandlers, handler)
 }
 
-func (d *discoverer) addService(obj interface{}) {
+func (d *Discoverer) addService(obj interface{}) {
 	svc := obj.(*corev1.Service)
-	d.updateServiceCIDR(svc)
+	klog.V(2).InfoS("Processing Service ADD event", "Service", klog.KObj(svc))
+	d.queue.Add(types.NamespacedName{Namespace: svc.Namespace, Name: svc.Name})
 }
 
-func (d *discoverer) updateService(_, obj interface{}) {
-	svc := obj.(*corev1.Service)
-	d.updateServiceCIDR(svc)
-}
-
-func (d *discoverer) updateServiceCIDR(svc *corev1.Service) {
-	clusterIPs := svc.Spec.ClusterIPs
-	if len(clusterIPs) == 0 {
-		return
+func (d *Discoverer) updateService(old, obj interface{}) {
+	oldSvc := old.(*corev1.Service)
+	curSvc := obj.(*corev1.Service)
+	klog.V(2).InfoS("Processing Service UPDATE event", "Service", klog.KObj(curSvc))
+	if !slices.Equal(oldSvc.Spec.ClusterIPs, curSvc.Spec.ClusterIPs) {
+		d.queue.Add(types.NamespacedName{Namespace: curSvc.Namespace, Name: curSvc.Name})
 	}
+}
 
+func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 	var newServiceCIDRs []*net.IPNet
-	klog.V(2).InfoS("Processing Service ADD or UPDATE event", "Service", klog.KObj(svc))
-	func() {
-		d.Lock()
-		defer d.Unlock()
-		for _, clusterIPStr := range clusterIPs {
+
+	curServiceIPv4CIDR, curServiceIPv6CIDR := func() (*net.IPNet, *net.IPNet) {
+		d.RLock()
+		defer d.RUnlock()
+		return d.serviceIPv4CIDR, d.serviceIPv6CIDR
+	}()
+
+	updated := false
+	for _, svc := range svcs {
+		for _, clusterIPStr := range svc.Spec.ClusterIPs {
 			clusterIP := net.ParseIP(clusterIPStr)
 			if clusterIP == nil {
 				klog.V(2).InfoS("Skip invalid ClusterIP", "ClusterIP", clusterIPStr)
@@ -112,10 +157,10 @@ func (d *discoverer) updateServiceCIDR(svc *corev1.Service) {
 			}
 			isIPv6 := utilnet.IsIPv6(clusterIP)
 
-			curServiceCIDR := d.serviceIPv4CIDR
+			curServiceCIDR := curServiceIPv4CIDR
 			mask := net.IPv4len * 8
 			if isIPv6 {
-				curServiceCIDR = d.serviceIPv6CIDR
+				curServiceCIDR = curServiceIPv6CIDR
 				mask = net.IPv6len * 8
 			}
 
@@ -138,16 +183,31 @@ func (d *discoverer) updateServiceCIDR(svc *corev1.Service) {
 			}
 
 			if isIPv6 {
-				d.serviceIPv6CIDR = newServiceCIDR
-				klog.V(4).InfoS("Service IPv6 CIDR was updated", "ServiceCIDR", newServiceCIDR)
+				curServiceIPv6CIDR = newServiceCIDR
 			} else {
-				d.serviceIPv4CIDR = newServiceCIDR
-				klog.V(4).InfoS("Service IPv4 CIDR was updated", "ServiceCIDR", newServiceCIDR)
+				curServiceIPv4CIDR = newServiceCIDR
 			}
-			newServiceCIDRs = append(newServiceCIDRs, newServiceCIDR)
+			updated = true
+		}
+	}
+
+	if !updated {
+		return
+	}
+	func() {
+		d.Lock()
+		defer d.Unlock()
+		if d.serviceIPv4CIDR != curServiceIPv4CIDR {
+			d.serviceIPv4CIDR = curServiceIPv4CIDR
+			klog.InfoS("Service IPv4 CIDR was updated", "ServiceCIDR", curServiceIPv4CIDR)
+			newServiceCIDRs = append(newServiceCIDRs, curServiceIPv4CIDR)
+		}
+		if d.serviceIPv6CIDR != curServiceIPv6CIDR {
+			d.serviceIPv6CIDR = curServiceIPv6CIDR
+			klog.InfoS("Service IPv6 CIDR was updated", "ServiceCIDR", curServiceIPv6CIDR)
+			newServiceCIDRs = append(newServiceCIDRs, curServiceIPv6CIDR)
 		}
 	}()
-
 	for _, handler := range d.eventHandlers {
 		handler(newServiceCIDRs)
 	}

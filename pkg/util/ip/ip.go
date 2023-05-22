@@ -195,6 +195,49 @@ func MustParseCIDR(cidr string) *net.IPNet {
 	return ipNet
 }
 
+// IPNetEqual returns if the provided IPNets are the same subnet.
+func IPNetEqual(ipNet1, ipNet2 *net.IPNet) bool {
+	if ipNet1 == nil && ipNet2 == nil {
+		return true
+	}
+	if ipNet1 == nil || ipNet2 == nil {
+		return false
+	}
+	if !bytes.Equal(ipNet1.Mask, ipNet2.Mask) {
+		return false
+	}
+	if !ipNet1.IP.Equal(ipNet2.IP) {
+		return false
+	}
+	return true
+}
+
+// IPNetContains returns if the first IPNet contains the second IPNet.
+// For example:
+//
+// 10.0.0.0/24 contains 10.0.0.0/24.
+// 10.0.0.0/24 contains 10.0.0.0/25.
+// 10.0.0.0/24 contains 10.0.0.128/25.
+// 10.0.0.0/24 does not contain 10.0.0.0/23.
+// 10.0.0.0/24 does not contain 10.0.1.0/25.
+func IPNetContains(ipNet1, ipNet2 *net.IPNet) bool {
+	if ipNet1 == nil || ipNet2 == nil {
+		return false
+	}
+	ones1, bits1 := ipNet1.Mask.Size()
+	ones2, bits2 := ipNet2.Mask.Size()
+	if bits1 != bits2 {
+		return false
+	}
+	if ones1 > ones2 {
+		return false
+	}
+	if !ipNet1.Contains(ipNet2.IP) {
+		return false
+	}
+	return true
+}
+
 func MustIPv6(s string) net.IP {
 	ip := net.ParseIP(s)
 	if !utilnet.IsIPv6(ip) {

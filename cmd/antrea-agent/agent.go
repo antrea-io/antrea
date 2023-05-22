@@ -222,6 +222,9 @@ func run(o *Options) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Must start after registering all event handlers.
+	go serviceCIDRProvider.Run(stopCh)
+
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
 	if o.config.AntreaProxy.ProxyAll {
