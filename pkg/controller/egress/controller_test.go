@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
@@ -136,6 +138,51 @@ type egressController struct {
 func newController(objects, crdObjects []runtime.Object) *egressController {
 	client := fake.NewSimpleClientset(objects...)
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
+	// These reactors are in charge of incrementing Generation for Egress resources, so that
+	// changes done through crdClient are not ignored by the EgressController.
+	// Unfortunately, it seems that we have no choice but accessing the ObjectTracker directly.
+	egressUpdateReactor := k8stesting.ReactionFunc(
+		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			ua := action.(k8stesting.UpdateAction)
+			tracker := crdClient.Tracker()
+			gvr := ua.GetResource()
+			ns := ua.GetNamespace()
+			egress := ua.GetObject().(*v1alpha2.Egress)
+			// we cannot just increment the Generation in egress, we have to make sure
+			// we get the latest value from the tracker
+			obj, err := tracker.Get(gvr, ns, egress.Name)
+			if err != nil {
+				return true, nil, err
+			}
+			accessor, err := meta.Accessor(obj)
+			if err != nil {
+				return true, nil, err
+			}
+			egress.Generation = accessor.GetGeneration() + 1
+			return false, egress, nil
+		})
+	egressPatchReactor := k8stesting.ReactionFunc(
+		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+
+			pa := action.(k8stesting.PatchAction)
+			tracker := crdClient.Tracker()
+			gvr := pa.GetResource()
+			ns := pa.GetNamespace()
+			name := pa.GetName()
+			obj, err := tracker.Get(gvr, ns, name)
+			if err != nil {
+				return true, nil, err
+			}
+			egress := obj.(*v1alpha2.Egress)
+			egress.Generation += 1
+			err = tracker.Update(gvr, egress, ns)
+			if err != nil {
+				return true, nil, err
+			}
+			return false, nil, nil
+		})
+	crdClient.PrependReactor("update", "egresses", egressUpdateReactor)
+	crdClient.PrependReactor("patch", "egresses", egressPatchReactor)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
 	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1alpha2().ExternalIPPools())
@@ -402,7 +449,7 @@ func TestUpdateEgress(t *testing.T) {
 		}
 	}
 
-	gotEgressIP := func() string {
+	getEgressIP := func() string {
 		var err error
 		egress, err = controller.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 		if err != nil {
@@ -420,7 +467,7 @@ func TestUpdateEgress(t *testing.T) {
 			},
 		},
 	}, getEvent())
-	assert.Equal(t, "1.1.1.1", gotEgressIP())
+	assert.Equal(t, "1.1.1.1", getEgressIP())
 	checkExternalIPPoolUsed(t, controller, eipFoo1.Name, 1)
 
 	// Add a Pod matching the Egress's selector and running on this Node.
@@ -455,7 +502,6 @@ func TestUpdateEgress(t *testing.T) {
 	}
 	egress.Spec.ExternalIPPool = eipFoo2.Name
 	egress.Spec.EgressIP = ""
-	egress.Generation += 1
 	controller.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
 	assert.Equal(t, &watch.Event{
 		Type: watch.Deleted,
@@ -463,7 +509,7 @@ func TestUpdateEgress(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 		},
 	}, getEvent())
-	assert.Equal(t, "2.2.2.10", gotEgressIP())
+	assert.Equal(t, "2.2.2.10", getEgressIP())
 	checkExternalIPPoolUsed(t, controller, eipFoo1.Name, 0)
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
 
@@ -474,7 +520,7 @@ func TestUpdateEgress(t *testing.T) {
 		if exists {
 			return false
 		}
-		ip := gotEgressIP()
+		ip := getEgressIP()
 		if ip != "" {
 			return false
 		}
@@ -701,13 +747,13 @@ func TestSyncEgressIP(t *testing.T) {
 			go controller.externalIPAllocator.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 			controller.restoreIPAllocations(tt.existingEgresses)
-			gotEgressIP, err := controller.syncEgressIP(tt.inputEgress)
+			getEgressIP, err := controller.syncEgressIP(tt.inputEgress)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), gotEgressIP)
+			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
 	}

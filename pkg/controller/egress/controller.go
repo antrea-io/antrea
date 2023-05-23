@@ -147,8 +147,8 @@ func NewEgressController(crdClient clientset.Interface,
 func (c *EgressController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
-	klog.Infof("Starting %s", controllerName)
-	defer klog.Infof("Shutting down %s", controllerName)
+	klog.InfoS("Starting", "controller", controllerName)
+	defer klog.InfoS("Shutting down", "controller", controllerName)
 
 	cacheSyncs := []cache.InformerSynced{c.egressListerSynced, c.groupingInterfaceSynced, c.externalIPAllocator.HasSynced}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
@@ -204,7 +204,7 @@ func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	if err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		c.queue.AddRateLimited(key)
-		klog.Errorf("Failed to sync EgressGroup %s: %v", key, err)
+		klog.ErrorS(err, "Failed to sync EgressGroup %s: %v", "key", key)
 		return true
 	}
 	// If no error occurs we Forget this item so it does not get queued again until
@@ -264,7 +264,7 @@ func (c *EgressController) syncEgressIP(egress *egressv1alpha2.Egress) (net.IP, 
 				return nil, err
 			}
 		}
-		return nil, fmt.Errorf("ExternalIPPool %s not exists", egress.Spec.ExternalIPPool)
+		return nil, fmt.Errorf("ExternalIPPool %s does not exist", egress.Spec.ExternalIPPool)
 	}
 
 	var ip net.IP
@@ -318,7 +318,7 @@ func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, p
 	if err := c.externalIPAllocator.ReleaseIP(poolName, egressIP); err != nil {
 		if err == externalippool.ErrExternalIPPoolNotFound {
 			// Ignore the error since the external IP Pool could be deleted.
-			klog.Warningf("Failed to release IP %s because IP Pool %s does not exist", egressIP, poolName)
+			klog.InfoS("Failed to release EgressIP because IP Pool does not exist", "egress", egressName, "ip", egressIP, "pool", poolName)
 		} else {
 			klog.ErrorS(err, "Failed to release IP", "ip", egressIP, "pool", poolName)
 			return err
@@ -334,7 +334,7 @@ func (c *EgressController) syncEgress(key string) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		klog.V(2).Infof("Finished syncing Egress %s. (%v)", key, d)
+		klog.V(2).InfoS("Finished syncing Egress", "egress", key, "duration", d)
 	}()
 
 	egress, err := c.egressLister.Get(key)
@@ -352,7 +352,7 @@ func (c *EgressController) syncEgress(key string) error {
 
 	egressGroupObj, found, _ := c.egressGroupStore.Get(key)
 	if !found {
-		klog.V(2).Infof("EgressGroup %s not found", key)
+		klog.V(2).InfoS("EgressGroup %s not found", "name", key)
 		return nil
 	}
 
@@ -389,20 +389,20 @@ func (c *EgressController) syncEgress(key string) error {
 		GroupMemberByNode: memberSetByNode,
 		SpanMeta:          antreatypes.SpanMeta{NodeNames: nodeNames},
 	}
-	klog.V(2).Infof("Updating existing EgressGroup %s with %d Pods on %d Nodes", key, podNum, nodeNames.Len())
+	klog.V(2).InfoS("Updating existing EgressGroup", "name", key, "podNum", podNum, "nodeNum", nodeNames.Len())
 	c.egressGroupStore.Update(updatedEgressGroup)
 	return nil
 }
 
 func (c *EgressController) enqueueEgressGroup(key string) {
-	klog.V(4).Infof("Adding new key %s to EgressGroup queue", key)
+	klog.V(4).InfoS("Adding new key to EgressGroup queue", "key", key)
 	c.queue.Add(key)
 }
 
 // addEgress processes Egress ADD events and creates corresponding EgressGroup.
 func (c *EgressController) addEgress(obj interface{}) {
 	egress := obj.(*egressv1alpha2.Egress)
-	klog.Infof("Processing Egress %s ADD event with selector (%s)", egress.Name, egress.Spec.AppliedTo)
+	klog.InfoS("Processing Egress ADD event", "egress", egress.Name, "selector", egress.Spec.AppliedTo)
 	// Create an EgressGroup object corresponding to this Egress and enqueue task to the workqueue.
 	egressGroup := &antreatypes.EgressGroup{
 		Name: egress.Name,
@@ -419,7 +419,7 @@ func (c *EgressController) addEgress(obj interface{}) {
 func (c *EgressController) updateEgress(old, cur interface{}) {
 	oldEgress := old.(*egressv1alpha2.Egress)
 	curEgress := cur.(*egressv1alpha2.Egress)
-	klog.Infof("Processing Egress %s UPDATE event with selector (%s)", curEgress.Name, curEgress.Spec.AppliedTo)
+	klog.InfoS("Processing Egress UPDATE event", "egress", curEgress.Name, "selector", curEgress.Spec.AppliedTo)
 	// TODO: Define custom Equal function to be more efficient.
 	if !reflect.DeepEqual(oldEgress.Spec.AppliedTo, curEgress.Spec.AppliedTo) {
 		// Update the group's selector in the grouping interface.
@@ -434,7 +434,7 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 // deleteEgress processes Egress DELETE events and deletes corresponding EgressGroup.
 func (c *EgressController) deleteEgress(obj interface{}) {
 	egress := obj.(*egressv1alpha2.Egress)
-	klog.Infof("Processing Egress %s DELETE event", egress.Name)
+	klog.InfoS("Processing Egress DELETE event", "egress", egress.Name)
 	c.egressGroupStore.Delete(egress.Name)
 	// Unregister the group from the grouping interface.
 	c.groupingInterface.DeleteGroup(egressGroupType, egress.Name)
