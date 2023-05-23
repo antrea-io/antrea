@@ -1333,6 +1333,30 @@ func TestAddServiceCIDRRoute(t *testing.T) {
 			},
 		},
 		{
+			name:               "Add route for Service IPv4 CIDR and clean up stale routes",
+			curServiceIPv4CIDR: nil,
+			newServiceIPv4CIDR: ip.MustParseCIDR("10.96.0.0/28"),
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.0").To4(), Mask: net.CIDRMask(28, 32)},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{
+					{Dst: ip.MustParseCIDR("10.96.0.0/24"), Gw: config.VirtualServiceIPv4},
+					{Dst: ip.MustParseCIDR("10.96.0.0/30"), Gw: config.VirtualServiceIPv4},
+				}, nil)
+				mockNetlink.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{}, nil)
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: ip.MustParseCIDR("10.96.0.0/24"), Gw: config.VirtualServiceIPv4,
+				})
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: ip.MustParseCIDR("10.96.0.0/30"), Gw: config.VirtualServiceIPv4,
+				})
+			},
+		},
+		{
 			name:               "Update route for Service IPv4 CIDR",
 			curServiceIPv4CIDR: serviceIPv4CIDR1,
 			newServiceIPv4CIDR: serviceIPv4CIDR2,
