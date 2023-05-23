@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -134,6 +135,40 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 				require.ErrorContains(t, err, tt.expectedErr)
 			}
 			assert.Equal(t, tt.expectedEnableEgress, o.enableEgress)
+		})
+	}
+}
+
+func TestOptionsValidateMulticastConfig(t *testing.T) {
+	tests := []struct {
+		name              string
+		igmpQueryVersions []int
+		expectedErr       error
+		expectedVersions  []uint8
+	}{
+		{
+			name:              "wrong versions",
+			igmpQueryVersions: []int{1, 3, 4},
+			expectedErr:       fmt.Errorf("igmpQueryVersions should be a subset of [1 2 3]"),
+			expectedVersions:  nil,
+		},
+		{
+			name:              "no error",
+			igmpQueryVersions: []int{1, 2},
+			expectedErr:       nil,
+			expectedVersions:  []uint8{1, 2},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, true)()
+			o := &Options{config: &agentconfig.AgentConfig{
+				Multicast: agentconfig.MulticastConfig{
+					IGMPQueryVersions: tt.igmpQueryVersions},
+			}}
+			err := o.validateMulticastConfig()
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Equal(t, tt.expectedVersions, o.igmpQueryVersions)
 		})
 	}
 }

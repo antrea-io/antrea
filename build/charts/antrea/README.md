@@ -84,6 +84,7 @@ Kubernetes: `>= 1.16.0-0`
 | kubeAPIServerOverride | string | `""` | Address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig. |
 | logVerbosity | int | `0` | Global log verbosity switch for all Antrea components. |
 | multicast.igmpQueryInterval | string | `"125s"` | The interval at which the antrea-agent sends IGMP queries to Pods. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
+| multicast.igmpQueryVersions | list | `[1,2,3]` | The versions of IGMP queries antrea-agent sends to Pods. Valid versions are 1, 2 and 3. |
 | multicast.multicastInterfaces | list | `[]` | Names of the interfaces on Nodes that are used to forward multicast traffic. |
 | multicluster.enableGateway | bool | `false` | Enable Antrea Multi-cluster Gateway to support cross-cluster traffic. This feature is supported only with encap mode. |
 | multicluster.enablePodToPodConnectivity | bool | `false` | Enable Multi-cluster Pod to Pod connectivity. |

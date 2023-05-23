@@ -29,8 +29,8 @@ Antrea supports multicast traffic in the following scenarios:
 
 Multicast support is introduced in Antrea v1.5.0 as an alpha feature. The feature gate
 `Multicast` must be enabled in the `antrea-controller` and `antrea-agent`
-configuration to use the feature, and two new configuration options -
-`multicastInterfaces` and `igmpQueryInterval` parameters are added for `antrea-agent`.
+configuration to use the feature, and three new configuration options -
+`multicastInterfaces`, `igmpQueryVersions` and `igmpQueryInterval` parameters are added for `antrea-agent`.
 
 ```yaml
   antrea-controller.conf: |
@@ -44,7 +44,12 @@ configuration to use the feature, and two new configuration options -
     # The names of the interfaces on Nodes that are used to forward multicast traffic.
     # Defaults to transport interface if not set.
       multicastInterfaces: 
-
+    # The versions of IGMP queries antrea-agent sends to Pods.
+    # Valid versions are 1, 2 and 3.
+      igmpQueryVersions:
+      - 1
+      - 2
+      - 3
     # The interval at which the antrea-agent sends IGMP queries to Pods.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       igmpQueryInterval: "125s"

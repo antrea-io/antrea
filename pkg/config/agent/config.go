@@ -267,6 +267,9 @@ type MulticastConfig struct {
 	// The interval for antrea-agent to send IGMP queries to Pods.
 	// Defaults to 125 seconds.
 	IGMPQueryInterval string `yaml:"igmpQueryInterval"`
+	// The versions of IGMP queries antrea-agent sends to Pods.
+	// Defaults to [1, 2, 3].
+	IGMPQueryVersions []int `yaml:"igmpQueryVersions"`
 }
 
 type EgressConfig struct {

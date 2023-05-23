@@ -3233,7 +3233,12 @@ data:
     # The names of the interfaces on Nodes that are used to forward multicast traffic.
     # Defaults to transport interface if not set.
       multicastInterfaces:
-
+    # The versions of IGMP queries antrea-agent sends to Pods.
+    # Valid versions are 1, 2 and 3.
+      igmpQueryVersions:
+      - 1
+      - 2
+      - 3
     # The interval at which the antrea-agent sends IGMP queries to Pods.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
       igmpQueryInterval: "125s"
@@ -4353,7 +4358,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1deeecf01f782d7520200f50723554203d03b1130dc698488aea43ff6588e522
+        checksum/config: 7240f8d038a3365cd3167184c2d2df87d689002074cdb38db8e8b48cb4c6794b
       labels:
         app: antrea
         component: antrea-agent
@@ -4594,7 +4599,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1deeecf01f782d7520200f50723554203d03b1130dc698488aea43ff6588e522
+        checksum/config: 7240f8d038a3365cd3167184c2d2df87d689002074cdb38db8e8b48cb4c6794b
       labels:
         app: antrea
         component: antrea-controller
