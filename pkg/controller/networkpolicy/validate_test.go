@@ -30,11 +30,15 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
-func TestValidateAntreaPolicy(t *testing.T) {
-	allowAction := crdv1alpha1.RuleActionAllow
-	passAction := crdv1alpha1.RuleActionPass
-	int32For80 := int32(80)
+var (
+	query       = crdv1alpha1.IGMPQuery
+	report      = crdv1alpha1.IGMPReportV1
+	allowAction = crdv1alpha1.RuleActionAllow
+	passAction  = crdv1alpha1.RuleActionPass
+	portNum80   = int32(80)
+)
 
+func TestValidateAntreaPolicy(t *testing.T) {
 	tests := []struct {
 		name           string
 		featureGates   map[featuregate.Feature]bool
@@ -884,7 +888,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 							Action: &allowAction,
 							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
-									EndPort: &int32For80,
+									EndPort: &portNum80,
 								},
 							},
 						},
@@ -941,7 +945,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port:    &int81,
-									EndPort: &int32For80,
+									EndPort: &portNum80,
 								},
 							},
 						},
@@ -999,7 +1003,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port:    &strHTTP,
-									EndPort: &int32For80,
+									EndPort: &portNum80,
 								},
 							},
 						},
@@ -1493,16 +1497,107 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			},
 			expectedReason: "layer 7 protocols can only be used when L7NetworkPolicy is enabled",
 		},
+		{
+			name: "igmp-icmp-both-specified",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{
+										ICMPType: &icmpType8,
+										ICMPCode: &icmpCode0,
+									},
+									IGMP: &crdv1alpha1.IGMPProtocol{
+										IGMPType:     &query,
+										GroupAddress: "224.0.0.1",
+									},
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedReason: "protocol IGMP can not be used with other protocols or other properties like from, to",
+		},
+		{
+			name: "only-icmp-specified",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Name: "ingressType8",
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{
+										ICMPType: &icmpType8,
+										ICMPCode: &icmpCode0,
+									},
+								},
+							},
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Name: "egressWithICMP",
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "icmp-specified-and-action-set-to-pass",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									IGMP: &crdv1alpha1.IGMPProtocol{
+										IGMPType:     &report,
+										GroupAddress: "225.1.2.3",
+									},
+								},
+							},
+							Action: &passAction,
+						},
+					},
+				},
+			},
+			expectedReason: "protocol IGMP does not support Pass or Reject",
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for feature, value := range tt.featureGates {
 				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
 			}
-
-			_, c := newController()
-			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
-			actualReason, allowed := v.validateAntreaPolicy(tt.policy, nil, admv1.Create, authenticationv1.UserInfo{})
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", admv1.Create, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -1550,9 +1645,9 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
-			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
-			actualReason, allowed := v.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -1566,12 +1661,14 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 func TestValidateAntreaGroup(t *testing.T) {
 	tests := []struct {
 		name           string
-		group          *crdv1alpha3.Group
+		curGroup       *crdv1alpha3.Group
+		oldGroup       *crdv1alpha3.Group
+		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
 			name: "anp-group-set-with-podselector-and-ipblock",
-			group: &crdv1alpha3.Group{
+			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "anp-group-set-with-podselector-and-ipblock",
 					Namespace: "x",
@@ -1585,14 +1682,193 @@ func TestValidateAntreaGroup(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
+		},
+		{
+			name: "anp-group-set-with-ipblock",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-ipblock",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "anp-group-with-childGroup",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-ipblock",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA", "cgB"},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "anp-group-to-delete",
+			oldGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-specified",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+				},
+			},
+			operation: admv1.Delete,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
-			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
-			actualReason, allowed := v.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaGroup(tt.curGroup, tt.oldGroup, tt.operation, authenticationv1.UserInfo{})
+			assert.Equal(t, tt.expectedReason, actualReason)
+			if tt.expectedReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateTier(t *testing.T) {
+	tests := []struct {
+		name           string
+		curTier        *crdv1alpha1.Tier
+		oldTier        *crdv1alpha1.Tier
+		operation      admv1.Operation
+		user           authenticationv1.UserInfo
+		expectedReason string
+	}{
+		{
+			name: "create-tier-pass",
+			curTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-3",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			operation: admv1.Create,
+			user: authenticationv1.UserInfo{
+				Username: "default",
+			},
+		},
+		{
+			name: "create-tier-failed-with-reserved-priority",
+			curTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-251",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 251,
+				},
+			},
+			operation: admv1.Create,
+			user: authenticationv1.UserInfo{
+				Username: "default",
+			},
+			expectedReason: "tier tier-priority-251 priority 251 is reserved",
+		},
+		{
+			name: "update-tier-not-allowed",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-3",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			curTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-3",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 5,
+				},
+			},
+			operation: admv1.Update,
+			user: authenticationv1.UserInfo{
+				Username: "default",
+			},
+			expectedReason: "update to Tier priority is not allowed",
+		},
+		{
+			name: "update-tier-allowed",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-3",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			curTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-3",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 5,
+				},
+			},
+			operation: admv1.Update,
+			user: authenticationv1.UserInfo{
+				Username: "system:serviceaccount:kube-system:antrea-controller",
+			},
+		},
+		{
+			name: "delete-tier-pass",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-3",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			operation: admv1.Delete,
+			user: authenticationv1.UserInfo{
+				Username: "default",
+			},
+		},
+		{
+			name: "delete-reserved-tier",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "baseline",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 3,
+				},
+			},
+			operation: admv1.Delete,
+			user: authenticationv1.UserInfo{
+				Username: "default",
+			},
+			expectedReason: "cannot delete reserved tier baseline",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, controller := newController()
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateTier(tt.curTier, tt.oldTier, tt.operation, tt.user)
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
