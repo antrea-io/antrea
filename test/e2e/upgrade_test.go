@@ -94,7 +94,7 @@ func TestUpgrade(t *testing.T) {
 	}
 	if *controllerOnly == false {
 		t.Logf("Restarting all Antrea DaemonSet Pods")
-		if err := data.restartAntreaAgentPods(defaultTimeout); err != nil {
+		if err := data.RestartAntreaAgentPods(defaultTimeout); err != nil {
 			t.Fatalf("Error when restarting Antrea: %v", err)
 		}
 	}

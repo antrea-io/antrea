@@ -596,6 +596,15 @@ func (data *TestData) GetService(namespace, name string) (*v1.Service, error) {
 	return data.clientset.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
+func (data *TestData) GetConfigMap(namespace, name string) (*v1.ConfigMap, error) {
+	return data.clientset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+func (data *TestData) UpdateConfigMap(configMap *v1.ConfigMap) error {
+	_, err := data.clientset.CoreV1().ConfigMaps(configMap.Namespace).Update(context.TODO(), configMap, metav1.UpdateOptions{})
+	return err
+}
+
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
 func (data *TestData) DeleteService(ns, name string) error {
 	log.Infof("Deleting Service %s in ns %s", name, ns)
