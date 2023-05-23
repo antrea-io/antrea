@@ -58,6 +58,8 @@ const (
 	defaultMaxEgressIPsPerNode     = 255
 )
 
+var defaultIGMPQueryVersions = []int{1, 2, 3}
+
 type Options struct {
 	// The path of configuration file.
 	configFile string
@@ -78,6 +80,7 @@ type Options struct {
 	// Stale connection timeout to delete connections if they are not exported.
 	staleConnectionTimeout time.Duration
 	igmpQueryInterval      time.Duration
+	igmpQueryVersions      []uint8
 	nplStartPort           int
 	nplEndPort             int
 	dnsServerOverride      string
@@ -287,6 +290,12 @@ func (o *Options) validateMulticastConfig() error {
 				return err
 			}
 		}
+		if !sets.NewInt(defaultIGMPQueryVersions...).HasAll(o.config.Multicast.IGMPQueryVersions...) {
+			return fmt.Errorf("igmpQueryVersions should be a subset of %v", defaultIGMPQueryVersions)
+		}
+		for _, version := range o.config.Multicast.IGMPQueryVersions {
+			o.igmpQueryVersions = append(o.igmpQueryVersions, uint8(version))
+		}
 		if len(o.config.Multicast.MulticastInterfaces) == 0 && len(o.config.MulticastInterfaces) > 0 {
 			klog.InfoS("The multicastInterfaces option is deprecated, please use multicast.multicastInterfaces instead")
 			o.config.Multicast.MulticastInterfaces = o.config.MulticastInterfaces
@@ -411,6 +420,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if features.DefaultFeatureGate.Enabled(features.Multicast) {
 		if o.config.Multicast.IGMPQueryInterval == "" {
 			o.igmpQueryInterval = defaultIGMPQueryInterval
+		}
+		if len(o.config.Multicast.IGMPQueryVersions) == 0 {
+			o.config.Multicast.IGMPQueryVersions = defaultIGMPQueryVersions
 		}
 	}
 

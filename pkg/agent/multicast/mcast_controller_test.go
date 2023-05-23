@@ -127,7 +127,7 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 		iface: if1,
 	}
 	mctrl.addGroupMemberStatus(event)
-	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, uint32(0), gomock.Any()).Times(len(queryVersions))
+	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, uint32(0), gomock.Any()).Times(len(mctrl.igmpSnooper.queryVersions))
 	for _, e := range []struct {
 		name       string
 		groupEvent mcastGroupEvent
@@ -1257,7 +1257,7 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 
 	clientset = fake.NewSimpleClientset()
 	informerFactory = informers.NewSharedInformerFactory(clientset, 12*time.Hour)
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), ovsClient, podUpdateSubscriber, time.Second*5, mockMulticastValidator, isEncap, informerFactory)
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), ovsClient, podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, informerFactory)
 	return mctrl
 }
 

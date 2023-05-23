@@ -63,11 +63,7 @@ const (
 	nodeUpdateKey = "nodeUpdate"
 )
 
-var (
-	workerCount uint8 = 2
-	// Use IGMP v1, v2, and v3 query messages to snoop the multicast groups in which local Pods have joined.
-	queryVersions = []uint8{1, 2, 3}
-)
+var workerCount uint8 = 2
 
 type mcastGroupEvent struct {
 	group net.IP
@@ -173,7 +169,7 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 // checkLastMember sends out a query message on the group to check if there are still members in the group. If no new
 // membership report is received in the max response time, the group is removed from groupCache.
 func (c *Controller) checkLastMember(group net.IP) {
-	err := c.igmpSnooper.queryIGMP(group, queryVersions)
+	err := c.igmpSnooper.queryIGMP(group)
 	if err != nil {
 		klog.ErrorS(err, "Failed to send IGMP query message", "group", group.String())
 		return
@@ -282,11 +278,12 @@ func NewMulticastController(ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	podUpdateSubscriber channel.Subscriber,
 	igmpQueryInterval time.Duration,
+	igmpQueryVersions []uint8,
 	validator types.McastNetworkPolicyController,
 	isEncap bool,
 	informerFactory informers.SharedInformerFactory) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
-	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, validator, isEncap)
+	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
@@ -360,7 +357,7 @@ func (c *Controller) Initialize() error {
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	// Periodically query Multicast Groups on OVS.
 	go wait.NonSlidingUntil(func() {
-		if err := c.igmpSnooper.queryIGMP(net.IPv4zero, queryVersions); err != nil {
+		if err := c.igmpSnooper.queryIGMP(net.IPv4zero); err != nil {
 			klog.ErrorS(err, "Failed to send IGMP query")
 		}
 	}, c.queryInterval, stopCh)

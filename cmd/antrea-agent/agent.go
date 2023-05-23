@@ -767,6 +767,7 @@ func run(o *Options) error {
 			ovsBridgeClient,
 			podUpdateChannel,
 			o.igmpQueryInterval,
+			o.igmpQueryVersions,
 			validator,
 			networkConfig.TrafficEncapMode.SupportsEncap(),
 			informerFactory)

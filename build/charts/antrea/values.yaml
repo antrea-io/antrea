@@ -50,6 +50,9 @@ transportInterfaceCIDRs: []
 multicast:
   # -- Names of the interfaces on Nodes that are used to forward multicast traffic.
   multicastInterfaces: []
+  # -- The versions of IGMP queries antrea-agent sends to Pods.
+  # Valid versions are 1, 2 and 3.
+  igmpQueryVersions: [1,2,3]
   # -- The interval at which the antrea-agent sends IGMP queries to Pods.
   # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
   igmpQueryInterval: "125s"
