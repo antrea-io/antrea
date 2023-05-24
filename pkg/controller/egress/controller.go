@@ -204,7 +204,7 @@ func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	if err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		c.queue.AddRateLimited(key)
-		klog.ErrorS(err, "Failed to sync EgressGroup %s: %v", "key", key)
+		klog.ErrorS(err, "Failed to sync EgressGroup", "key", key)
 		return true
 	}
 	// If no error occurs we Forget this item so it does not get queued again until

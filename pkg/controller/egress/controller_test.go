@@ -16,6 +16,7 @@ package egress
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"testing"
@@ -24,10 +25,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
@@ -140,47 +141,39 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	// These reactors are in charge of incrementing Generation for Egress resources, so that
 	// changes done through crdClient are not ignored by the EgressController.
-	// Unfortunately, it seems that we have no choice but accessing the ObjectTracker directly.
-	egressUpdateReactor := k8stesting.ReactionFunc(
-		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+	egressUpdateReactor, egressPatchReactor := func() (k8stesting.ReactionFunc, k8stesting.ReactionFunc) {
+		// We use a map to ensure different generation counters for different Egress
+		// resources. We do not reset the map when a resource is deleted and re-created with
+		// the same name as it is not necessary for tests (it could easily be done with
+		// delete & create reactors).
+		generation := map[string]int64{}
+		updateReactor := func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			ua := action.(k8stesting.UpdateAction)
-			tracker := crdClient.Tracker()
-			gvr := ua.GetResource()
-			ns := ua.GetNamespace()
 			egress := ua.GetObject().(*v1alpha2.Egress)
-			// we cannot just increment the Generation in egress, we have to make sure
-			// we get the latest value from the tracker
-			obj, err := tracker.Get(gvr, ns, egress.Name)
-			if err != nil {
-				return true, nil, err
-			}
-			accessor, err := meta.Accessor(obj)
-			if err != nil {
-				return true, nil, err
-			}
-			egress.Generation = accessor.GetGeneration() + 1
+			generation[egress.Name] += 1
+			egress.Generation = generation[egress.Name]
 			return false, egress, nil
-		})
-	egressPatchReactor := k8stesting.ReactionFunc(
-		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-
-			pa := action.(k8stesting.PatchAction)
-			tracker := crdClient.Tracker()
-			gvr := pa.GetResource()
-			ns := pa.GetNamespace()
-			name := pa.GetName()
-			obj, err := tracker.Get(gvr, ns, name)
-			if err != nil {
-				return true, nil, err
+		}
+		patchReactor := func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			// We need to access the actual PatchActionImpl object to overwrite the
+			// Patch field.
+			ua := action.(k8stesting.PatchActionImpl)
+			patchType := ua.GetPatchType()
+			// This is the only patch type we support, and the only one used in the
+			// Egress controller.
+			if patchType != types.MergePatchType {
+				return true, nil, fmt.Errorf("unsupported patch type: %v", patchType)
 			}
-			egress := obj.(*v1alpha2.Egress)
-			egress.Generation += 1
-			err = tracker.Update(gvr, egress, ns)
-			if err != nil {
-				return true, nil, err
-			}
+			patch := map[string]interface{}{}
+			json.Unmarshal(ua.GetPatch(), &patch)
+			name := ua.GetName()
+			generation[name] += 1
+			patch["generation"] = generation[name]
+			ua.Patch, _ = json.Marshal(patch)
 			return false, nil, nil
-		})
+		}
+		return updateReactor, patchReactor
+	}()
 	crdClient.PrependReactor("update", "egresses", egressUpdateReactor)
 	crdClient.PrependReactor("patch", "egresses", egressPatchReactor)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
