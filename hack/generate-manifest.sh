@@ -264,7 +264,11 @@ if $FLEXIBLE_IPAM; then
 fi
 
 if $MULTICAST; then
-    HELM_VALUES+=("trafficEncapMode=noEncap" "featureGates.Multicast=true" "multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
+    HELM_VALUES+=("multicast.enable=true")
+fi
+
+if $MULTICAST_INTERFACES; then
+    HELM_VALUES+=("multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
 fi
 
 IFS=',' read -r -a feature_gates <<< "$FEATURE_GATES"
@@ -344,6 +348,9 @@ if [ "$MODE" == "dev" ]; then
     if $ON_DELETE; then
         HELM_VALUES+=("agent.updateStrategy.type=OnDelete")
     fi
+
+    # To reduce test wait time.
+    HELM_VALUES+=("multicast.igmpQueryInterval=10s")
 fi
 
 if [ "$MODE" == "release" ]; then

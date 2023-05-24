@@ -34,6 +34,7 @@ PROXY=true
 KUBE_PROXY_MODE="iptables"
 PROMETHEUS=false
 K8S_VERSION=""
+KUBE_NODE_IPAM=true
 positional_args=()
 options=()
 
@@ -56,6 +57,7 @@ where:
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
   --no-kube-proxy: disable Kube proxy
+  --no-kube-node-ipam: disable NodeIPAM in kube-controller-manager
   --antrea-cni: install Antrea CNI in Kind cluster; by default the cluster is created without a CNI installed
   --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
@@ -274,7 +276,16 @@ networking:
 nodes:
 - role: control-plane
 EOF
-
+  if [[ $KUBE_NODE_IPAM == false ]]; then
+    cat <<EOF >> $config_file
+  kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    controllerManager:
+      extraArgs:
+        controllers: "*,bootstrapsigner,tokencleaner,-nodeipam"
+EOF
+  fi
   for (( i=0; i<$NUM_WORKERS; i++ )); do
     echo -e "- role: worker" >> $config_file
   done
@@ -419,6 +430,11 @@ while [[ $# -gt 0 ]]
     --no-kube-proxy)
       add_option "--no-kube-proxy" "create"
       KUBE_PROXY_MODE="none"
+      shift
+      ;;
+    --no-kube-node-ipam)
+      add_option "--no-kube-node-ipam" "create"
+      KUBE_NODE_IPAM=false
       shift
       ;;
     --prometheus)

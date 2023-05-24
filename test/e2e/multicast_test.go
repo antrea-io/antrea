@@ -33,12 +33,16 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/multicast"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
 )
 
-func skipIfMulticastDisabled(tb testing.TB) {
-	skipIfFeatureDisabled(tb, features.Multicast, true, false)
+func skipIfMulticastDisabled(tb testing.TB, data *TestData) {
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		tb.Fatalf("Error getting option multicast.enable value")
+	}
+	if !agentConf.Multicast.Enable {
+		tb.Skipf("Skipping test because option multicast.enable is false")
+	}
 }
 
 var igmpQueryType = int32(0x11)
@@ -46,31 +50,25 @@ var igmpQueryType = int32(0x11)
 func TestMulticast(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
-	skipIfMulticastDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfMulticastDisabled(t, data)
 
 	nodeMulticastInterfaces, err := computeMulticastInterfaces(t, data)
 	if err != nil {
 		t.Fatalf("Error computing multicast interfaces: %v", err)
 	}
-	t.Run("testMulticastWithNoEncap", func(t *testing.T) {
-		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeNoEncap)
-		runMulticastTestCases(t, data, nodeMulticastInterfaces, true)
-	})
-	t.Run("testMulticastWithEncap", func(t *testing.T) {
-		ac := func(config *agentconfig.AgentConfig) {
-			config.TrafficEncapMode = "encap"
-		}
-		if err := data.mutateAntreaConfigMap(nil, ac, true, true); err != nil {
-			t.Fatalf("Failed to deploy cluster with encap mode: %v", err)
-		}
-		runMulticastTestCases(t, data, nodeMulticastInterfaces, false)
-	})
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to get encap mode: %v", err)
+	}
+	// Only check receiver router in noEncap mode.
+	checkReceiverRoute := encapMode == config.TrafficEncapModeNoEncap
+	runMulticastTestCases(t, data, nodeMulticastInterfaces, checkReceiverRoute)
 }
 
 func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces map[int][]string, checkReceiverRoute bool) {
@@ -607,7 +605,11 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
 		if !senderReady {
 			// Sender pods should add an outbound multicast route except running as HostNetwork.
-			_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s | grep '%s'", mc.group.String(), gatewayInterface, strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " ")))
+			cmd := fmt.Sprintf("ip mroute show iif %s | grep %s | grep '%s'", gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))
+			if testOptions.providerName == "kind" {
+				cmd = "/bin/sh -c " + cmd
+			}
+			_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), cmd)
 			if err != nil {
 				return false, err
 			}
@@ -630,7 +632,11 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			}
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
 				if checkReceiverRoute {
-					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s ", mc.group.String(), receiverMulticastInterface))
+					cmd := fmt.Sprintf("ip mroute show iif %s | grep %s", receiverMulticastInterface, mc.group.String())
+					if testOptions.providerName == "kind" {
+						cmd = "/bin/sh -c " + cmd
+					}
+					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), cmd)
 					if err != nil {
 						return false, err
 					}
@@ -646,7 +652,11 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 						}
 					}
 				}
-				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String()))
+				cmd := fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String())
+				if testOptions.providerName == "kind" {
+					cmd = "/bin/sh -c " + cmd
+				}
+				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), cmd)
 				if err != nil {
 					return false, err
 				}

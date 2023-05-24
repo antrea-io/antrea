@@ -261,6 +261,9 @@ type NodePortLocalConfig struct {
 }
 
 type MulticastConfig struct {
+	// To enable Multicast, you need to set "enable" to true, and ensure that the
+	// Multicast feature gate is also enabled (which is the default).
+	Enable bool `yaml:"enable,omitempty"`
 	// The names of the interfaces on Nodes that are used to forward multicast traffic.
 	// Defaults to transport interface if not set.
 	MulticastInterfaces []string `yaml:"multicastInterfaces,omitempty"`

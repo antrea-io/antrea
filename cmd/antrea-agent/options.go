@@ -300,6 +300,8 @@ func (o *Options) validateMulticastConfig() error {
 			klog.InfoS("The multicastInterfaces option is deprecated, please use multicast.multicastInterfaces instead")
 			o.config.Multicast.MulticastInterfaces = o.config.MulticastInterfaces
 		}
+	} else if o.config.Multicast.Enable {
+		klog.InfoS("The multicast.enable config option is set to true, but it will be ignored because the Multicast feature gate is disabled")
 	}
 	return nil
 }

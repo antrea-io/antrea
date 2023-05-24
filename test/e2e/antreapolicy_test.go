@@ -4461,7 +4461,7 @@ func TestAntreaPolicy(t *testing.T) {
 	})
 
 	t.Run("TestMulticastNP", func(t *testing.T) {
-		skipIfMulticastDisabled(t)
+		skipIfMulticastDisabled(t, data)
 		t.Run("Case=MulticastNPIGMPQueryAllow", func(t *testing.T) { testACNPIGMPQueryAllow(t, data) })
 		t.Run("Case=MulticastNPIGMPQueryDrop", func(t *testing.T) { testACNPIGMPQueryDrop(t, data) })
 		t.Run("Case=MulticastNPPolicyEgressAllow", func(t *testing.T) { testACNPMulticastEgressAllow(t, data) })

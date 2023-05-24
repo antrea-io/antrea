@@ -47,20 +47,19 @@ cluster. Valid range is 16 to 30. Default is 24.
 - `nodeCIDRMaskSizeIPv6`: Mask size for IPv6 Node CIDR in IPv6 or dual-stack
 cluster. Valid range is 64 to 126. Default is 64.
 
-To enable NodeIPAM, you need to enable the `NodeIPAM` feature gate for
-`antrea-controller` with necessary configurations. Below is a sample of needed
-changes in the Antrea deployment YAML:
+Below is a sample of needed changes in the Antrea deployment YAML:
 
 ```yaml
   antrea-controller.conf: |
     ...
-    featureGates:
-      NodeIPAM: true
     nodeIPAM:
       enableNodeIPAM: true
       clusterCIDRs: [172.100.0.0/16]
     ...
 ```
+
+Note that, prior to v1.12, a feature gate, `NodeIPAM` must also be enabled for
+`antrea-controller`.
 
 ## Antrea Flexible IPAM
 
