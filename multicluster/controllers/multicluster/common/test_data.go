@@ -67,7 +67,7 @@ var (
 		IP:       "192.168.17.12",
 		Hostname: "pod1",
 	}
-	epPorts80 = []corev1.EndpointPort{
+	EPPorts80 = []corev1.EndpointPort{
 		{
 			Name:     "http",
 			Port:     80,
@@ -79,7 +79,7 @@ var (
 			Addresses: []corev1.EndpointAddress{
 				addr1,
 			},
-			Ports: epPorts80,
+			Ports: EPPorts80,
 		},
 	}
 	EPNginxSubset2 = []corev1.EndpointSubset{
@@ -87,7 +87,7 @@ var (
 			Addresses: []corev1.EndpointAddress{
 				addr2,
 			},
-			Ports: epPorts80,
+			Ports: EPPorts80,
 		},
 	}
 	EPNginx = &corev1.Endpoints{

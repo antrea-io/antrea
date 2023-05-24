@@ -64,6 +64,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - multicluster.crd.antrea.io
   resources:
   - clusterclaims

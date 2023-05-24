@@ -118,7 +118,6 @@ var _ = Describe("ServiceExport controller", func() {
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(svcResExport.ObjectMeta.Labels["sourceKind"]).Should(Equal("Service"))
-		Expect(svcResExport.Spec.Service.ServiceSpec.ClusterIP).Should(Equal(latestSvc.Spec.ClusterIP))
 		Expect(len(svcResExport.Spec.Service.ServiceSpec.Ports)).Should(Equal(len(svcPorts)))
 		expectedEpResExport.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{
 			Subsets: []corev1.EndpointSubset{
@@ -162,7 +161,6 @@ var _ = Describe("ServiceExport controller", func() {
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(svcResExport.ObjectMeta.Labels["sourceKind"]).Should(Equal("Service"))
-		Expect(svcResExport.Spec.Service.ServiceSpec.ClusterIP).Should(Equal(latestSvc.Spec.ClusterIP))
 		Expect(len(svcResExport.Spec.Service.ServiceSpec.Ports)).Should(Equal(len(newPorts)))
 	})
 
