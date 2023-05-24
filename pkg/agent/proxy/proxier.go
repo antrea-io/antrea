@@ -28,7 +28,6 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -46,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 	"antrea.io/antrea/third_party/proxy/config"
 	"antrea.io/antrea/third_party/proxy/healthcheck"
@@ -1117,7 +1117,7 @@ func NewProxier(
 
 	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
 	if endpointSliceEnabled {
-		apiAvailable, err := endpointSliceAPIAvailable(k8sClient)
+		apiAvailable, err := k8sutil.EndpointSliceAPIAvailable(k8sClient)
 		if err != nil {
 			return nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
 		}
@@ -1182,23 +1182,6 @@ func NewProxier(
 		p.endpointsConfig.RegisterEventHandler(p)
 	}
 	return p, nil
-}
-
-func endpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {
-	resources, err := k8sClient.Discovery().ServerResourcesForGroupVersion(discovery.SchemeGroupVersion.String())
-	if err != nil {
-		// The group version doesn't exist.
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("error getting server resources for GroupVersion %s: %v", discovery.SchemeGroupVersion.String(), err)
-	}
-	for _, resource := range resources.APIResources {
-		if resource.Kind == "EndpointSlice" {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // metaProxierWrapper wraps metaProxier, and implements the extra methods added

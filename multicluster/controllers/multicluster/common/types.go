@@ -31,4 +31,7 @@ const (
 	InvalidClusterSetID = ClusterSetID("invalid")
 
 	DefaultWorkerCount = 5
+
+	EndpointIPTypeClusterIP = "ClusterIP"
+	EndpointIPTypePodIP     = "PodIP"
 )

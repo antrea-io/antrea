@@ -121,7 +121,7 @@ Assuming you are following the steps we [documented](windows.md) to add Windows
 Nodes to your K8s cluster with Antrea, you will simply need to skip running
 kube-proxy:
 
-* Do not install or start the `kube-proxy` service [when using containderd as
+* Do not install or start the `kube-proxy` service [when using containerd as
   the container runtime](windows.md#installation-as-a-service-containerd-based-runtimes)
 * Do not create the `kube-proxy-windows` DaemonSet [when using Docker as the
   container runtime](windows.md#installation-via-wins-docker-based-runtimes)

@@ -68,6 +68,19 @@ func TestComplete(t *testing.T) {
 			},
 			exceptdErr: fmt.Errorf("failed to parse podCIDRs, invalid CIDR string 10.10a.0.0/16"),
 		},
+		{
+			name: "options with invalid endpointIPType",
+			o: Options{
+				configFile:          "./testdata/antrea-mc-config-with-invalid-endpointiptype.yml",
+				SelfSignedCert:      false,
+				options:             ctrl.Options{},
+				ServiceCIDR:         "10.100.0.0/16",
+				PodCIDRs:            nil,
+				GatewayIPPrecedence: "",
+				EndpointIPType:      "",
+			},
+			exceptdErr: fmt.Errorf("invalid endpointIPType: None, only 'PodIP' or 'ClusterIP' is allowed"),
+		},
 	}
 
 	for _, tt := range testCases {

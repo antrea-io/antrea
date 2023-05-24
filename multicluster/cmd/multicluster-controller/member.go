@@ -77,7 +77,9 @@ func runMember(o *Options) error {
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		commonAreaGetter,
-		o.EndpointIPType)
+		o.EndpointIPType,
+		o.EnableEndpointSlice,
+	)
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}

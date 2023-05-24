@@ -188,7 +188,7 @@ Here are the trigger phrases for individual checks:
 Here are the trigger phrases for groups of checks:
 
 * `/test-all`: Linux IPv4 tests
-* `/test-windows-all`: Windows IPv4 tests, including e2e tests with proxyAll enabled. It also includes all Containderd runtime based Windows tests since 1.10.0.
+* `/test-windows-all`: Windows IPv4 tests, including e2e tests with proxyAll enabled. It also includes all containerd runtime based Windows tests since 1.10.0.
 * `/test-ipv6-all`: Linux dual stack tests
 * `/test-ipv6-only-all`: Linux IPv6 only tests
 
