@@ -267,8 +267,8 @@ if $MULTICAST; then
     HELM_VALUES+=("multicast.enable=true")
 fi
 
-if $MULTICAST_INTERFACES; then
-    HELM_VALUES+=("multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
+if [ -n "$MULTICAST_INTERFACES" ]; then
+    HELM_VALUES+=("multicast.multicastInterfaces=${MULTICAST_INTERFACES}")
 fi
 
 IFS=',' read -r -a feature_gates <<< "$FEATURE_GATES"
