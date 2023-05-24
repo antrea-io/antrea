@@ -44,6 +44,8 @@ release=""
 from_release=""
 all="no"
 limit=500
+# PRs authored by them will not be collected in Unlabelled section.
+ignored_authors=("app/dependabot" "antrea-bot")
 # Disable the pager of gh command to print the output to stdout.
 export PAGER=""
 
@@ -149,10 +151,14 @@ echo "### Fixed"
 echo ""
 
 if [ "$all" == "yes" ]; then
+  author_filter=""
+  for author in "${ignored_authors[@]}"; do
+    author_filter="${author_filter} -author:${author}"
+  done
   # There may be some changes not being labelled properly, release manager needs to move them to appropriate sections manually.
   echo "### Unlabelled (Remove this section eventually)"
   echo ""
-  gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc -label:action/release-note" -L $limit --json number,title,author,labels --template \
+  gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc -label:action/release-note $author_filter" -L $limit --json number,title,author,labels --template \
   '{{range .}}{{tablerow (printf "- %s. ([#%v](https://github.com/antrea-io/antrea/pull/%v), [@%s])" .title .number .number .author.login)}}{{end}}'
 fi
 
