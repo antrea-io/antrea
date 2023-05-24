@@ -50,6 +50,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubectl/pkg/util/podutils"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/pointer"
 
@@ -988,8 +989,9 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 		if len(pods.Items) != int(desiredNum) {
 			return false, nil
 		}
-		for _, pod := range pods.Items {
-			if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning {
+		for i := range pods.Items {
+			pod := pods.Items[i]
+			if pod.DeletionTimestamp != nil || !podutils.IsPodReady(&pod) {
 				return false, nil
 			}
 		}
