@@ -155,22 +155,24 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 			return false, egress, nil
 		}
 		patchReactor := func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			// We need to access the actual PatchActionImpl object to overwrite the
-			// Patch field.
-			ua := action.(k8stesting.PatchActionImpl)
-			patchType := ua.GetPatchType()
+			pa := action.(k8stesting.PatchActionImpl)
+			patchType := pa.GetPatchType()
 			// This is the only patch type we support, and the only one used in the
 			// Egress controller.
 			if patchType != types.MergePatchType {
 				return true, nil, fmt.Errorf("unsupported patch type: %v", patchType)
 			}
 			patch := map[string]interface{}{}
-			json.Unmarshal(ua.GetPatch(), &patch)
-			name := ua.GetName()
+			json.Unmarshal(pa.GetPatch(), &patch)
+			name := pa.GetName()
 			generation[name] += 1
-			patch["generation"] = generation[name]
-			ua.Patch, _ = json.Marshal(patch)
-			return false, nil, nil
+			patch["metadata"] = map[string]interface{}{
+				"generation": generation[name],
+			}
+			pa.Patch, _ = json.Marshal(patch)
+			// Because action is an object and not a pointer, we cannot mutate it
+			// directly. So we need the following to apply our updated patch.
+			return k8stesting.ObjectReaction(crdClient.Tracker())(pa)
 		}
 		return updateReactor, patchReactor
 	}()
