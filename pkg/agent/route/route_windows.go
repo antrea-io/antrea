@@ -285,23 +285,34 @@ func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
 	// a new route with a newly calculated destination CIDR has been installed.
 	if serviceCIDRRouteExists {
 		staleRoutes = append(staleRoutes, oldServiceCIDRRoute.(*util.Route))
-	}
-	routes, err := c.listIPRoutesOnGW()
-	if err != nil {
-		return fmt.Errorf("error listing ip routes: %w", err)
-	}
-	// Collect stale per-IP routes for ClusterIPs before this patch.
-	for _, rt := range routes {
-		ones, _ := rt.DestinationSubnet.Mask.Size()
-		if ones == net.IPv4len*8 && serviceCIDR.Contains(rt.DestinationSubnet.IP) {
-			staleRoutes = append(staleRoutes, rt)
+	} else {
+		routes, err := c.listIPRoutesOnGW()
+		if err != nil {
+			return fmt.Errorf("error listing ip routes: %w", err)
+		}
+		for _, rt := range routes {
+			if !rt.GatewayAddress.Equal(gw) {
+				continue
+			}
+			// It's the latest route we just installed.
+			if iputil.IPNetEqual(rt.DestinationSubnet, serviceCIDR) {
+				continue
+			}
+			// The route covers the desired route. It was installed when the calculated ServiceCIDR is larger than the current one, which could happen after some Services are deleted.
+			if iputil.IPNetContains(rt.DestinationSubnet, serviceCIDR) {
+				staleRoutes = append(staleRoutes, rt)
+			}
+			// The desired route covers the route. It was either installed when the calculated ServiceCIDR is smaller than the current one, or a per-IP route generated before v1.12.0.
+			if iputil.IPNetContains(serviceCIDR, rt.DestinationSubnet) {
+				staleRoutes = append(staleRoutes, rt)
+			}
 		}
 	}
 
 	// Remove stale routes.
 	for _, rt := range staleRoutes {
 		if err := util.RemoveNetRoute(rt); err != nil {
-			if err.Error() == "No matching MSFT_NetRoute objects" {
+			if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects") {
 				klog.InfoS("Failed to delete stale Service CIDR route since the route has been deleted", "route", rt)
 			} else {
 				return fmt.Errorf("failed to delete stale Service CIDR route %s: %w", rt.String(), err)
@@ -383,7 +394,7 @@ func (c *Client) syncRoute() error {
 	gwAutoconfRoute := &util.Route{
 		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
 		DestinationSubnet: c.nodeConfig.PodIPv4CIDR,
-		GatewayAddress:    c.nodeConfig.GatewayConfig.IPv4,
+		GatewayAddress:    net.IPv4zero,
 		RouteMetric:       util.MetricDefault,
 	}
 	restoreRoute(gwAutoconfRoute)
