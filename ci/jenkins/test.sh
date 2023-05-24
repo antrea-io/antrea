@@ -1057,7 +1057,7 @@ if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
 fi
 
 if [[ $TESTCASE =~ "multicast" ]]; then
-    ./hack/generate-manifest.sh --multicast --multicast-interfaces "ens224" --extra-helm-values "multicast.igmpQueryInterval=10s" --verbose-log > build/yamls/antrea.yml
+    ./hack/generate-manifest.sh --encap-mode noEncap --multicast --multicast-interfaces "ens224" --verbose-log > build/yamls/antrea.yml
 fi
 
 clean_tmp

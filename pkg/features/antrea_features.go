@@ -43,6 +43,7 @@ const (
 	EndpointSlice featuregate.Feature = "EndpointSlice"
 
 	// alpha: v1.8
+	// beta: v1.12
 	// Enable TopologyAwareHints in AntreaProxy. If EndpointSlice is not enabled, this
 	// flag will not take effect.
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
@@ -79,6 +80,7 @@ const (
 	Egress featuregate.Feature = "Egress"
 
 	// alpha: v1.4
+	// beta: v1.12
 	// Run Kubernetes NodeIPAM with Antrea.
 	NodeIPAM featuregate.Feature = "NodeIPAM"
 
@@ -87,6 +89,7 @@ const (
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
 
 	// alpha: v1.5
+	// beta: v1.12
 	// Enable Multicast.
 	Multicast featuregate.Feature = "Multicast"
 
@@ -140,14 +143,14 @@ var (
 		AntreaProxy:             {Default: true, PreRelease: featuregate.Beta},
 		Egress:                  {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:           {Default: true, PreRelease: featuregate.Beta},
-		TopologyAwareHints:      {Default: false, PreRelease: featuregate.Alpha},
+		TopologyAwareHints:      {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:               {Default: true, PreRelease: featuregate.Beta},
 		AntreaIPAM:              {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:            {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:      {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:           {Default: true, PreRelease: featuregate.Beta},
-		NodeIPAM:                {Default: false, PreRelease: featuregate.Alpha},
-		Multicast:               {Default: false, PreRelease: featuregate.Alpha},
+		NodeIPAM:                {Default: true, PreRelease: featuregate.Beta},
+		Multicast:               {Default: true, PreRelease: featuregate.Beta},
 		Multicluster:            {Default: false, PreRelease: featuregate.Alpha},
 		SecondaryNetwork:        {Default: false, PreRelease: featuregate.Alpha},
 		ServiceExternalIP:       {Default: false, PreRelease: featuregate.Alpha},

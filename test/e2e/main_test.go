@@ -123,6 +123,11 @@ func testMain(m *testing.M) int {
 	if err != nil {
 		log.Fatalf("Error when deploying Antrea: %v", err)
 	}
+	// Collect PodCIDRs after Antrea is running as Antrea is responsible for allocating PodCIDRs in some cases.
+	// Polling is not needed here because antrea-agents won't be up and running if PodCIDRs of their Nodes are not set.
+	if err = testData.collectPodCIDRs(); err != nil {
+		log.Fatalf("Error collecting PodCIDRs: %v", err)
+	}
 	AntreaConfigMap, err = testData.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
 		log.Fatalf("Error when getting antrea-config configmap: %v", err)

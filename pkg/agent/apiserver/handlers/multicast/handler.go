@@ -17,11 +17,11 @@ package multicast
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strconv"
 
 	"antrea.io/antrea/pkg/agent/multicast"
 	"antrea.io/antrea/pkg/antctl/transform/common"
-	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/querier"
 )
 
@@ -45,7 +45,7 @@ func generateResponse(podName string, podNamespace string, trafficStats *multica
 // It will return Pod multicast traffic statistics for the local Node.
 func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !features.DefaultFeatureGate.Enabled(features.Multicast) {
+		if mq == nil || reflect.ValueOf(mq).IsNil() {
 			http.Error(w, "Multicast is not enabled", http.StatusServiceUnavailable)
 			return
 		}

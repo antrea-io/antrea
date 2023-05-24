@@ -28,6 +28,8 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--coverage] [--he
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --run                         Run only tests matching the regexp.
         --proxy-all                   Enables Antrea proxy with all Service support.
+        --node-ipam                   Enables Antrea NodeIPAN.
+        --multicast                   Enables Multicast.
         --flow-visibility             Only run flow visibility related e2e tests.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
@@ -62,6 +64,8 @@ mode=""
 ipfamily="v4"
 feature_gates=""
 proxy_all=false
+node_ipam=false
+multicast=false
 flow_visibility=false
 coverage=false
 skiplist=""
@@ -84,6 +88,14 @@ case $key in
     ;;
     --proxy-all)
     proxy_all=true
+    shift
+    ;;
+    --node-ipam)
+    node_ipam=true
+    shift
+    ;;
+    --multicast)
+    multicast=true
     shift
     ;;
     --ip-family)
@@ -143,6 +155,12 @@ fi
 if $proxy_all; then
     manifest_args="$manifest_args --proxy-all"
 fi
+if $node_ipam; then
+    manifest_args="$manifest_args --extra-helm-values nodeIPAM.enable=true,nodeIPAM.clusterCIDRs={10.244.0.0/16}"
+fi
+if $multicast; then
+    manifest_args="$manifest_args --multicast"
+fi
 if $flow_visibility; then
     manifest_args="$manifest_args --feature-gates FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
@@ -193,6 +211,9 @@ function setup_cluster {
   fi
   if $proxy_all; then
     args="$args --no-kube-proxy"
+  fi
+  if $node_ipam; then
+    args="$args --no-kube-node-ipam"
   fi
 
   echo "creating test bed with args $args"
