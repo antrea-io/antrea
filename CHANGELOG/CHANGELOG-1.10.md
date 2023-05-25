@@ -1,5 +1,32 @@
 # Changelog 1.10
 
+## 1.10.1 - 2023-05-29
+
+### Changed
+
+- Decrease log verbosity value for antrea-agent specified in the Windows manifest for containerd from 4 to 0. ([#4676](https://github.com/antrea-io/antrea/pull/4676), [@XinShuYang])
+- Ensure cni folders are created when starting antrea-agent with containerd on Windows. ([#4685](https://github.com/antrea-io/antrea/pull/4685), [@XinShuYang])
+- Document the limit of maximum receiver group number on a Linux Node for multicast. ([#4850](https://github.com/antrea-io/antrea/pull/4850), [@ceclinux])
+- Update Open vSwitch to 2.17.6 ([#4959](https://github.com/antrea-io/antrea/pull/4959), [@tnqn])
+- Bump up whereabouts to v0.6.1. ([#4988](https://github.com/antrea-io/antrea/pull/4988), [@hjiajing])
+
+### Fixed
+
+- Ensure NO_FLOOD is always set for IPsec tunnel ports and TrafficControl ports. ([#4419](https://github.com/antrea-io/antrea/pull/4419) [#4654](https://github.com/antrea-io/antrea/pull/4654) [#4674](https://github.com/antrea-io/antrea/pull/4674), [@xliuxu] [@tnqn])
+- Fix Service routes being deleted on Agent startup on Windows. ([#4470](https://github.com/antrea-io/antrea/pull/4470), [@hongliangl])
+- Fix route deletion for Service ClusterIP and LoadBalancerIP when AntreaProxy is enabled. ([#4711](https://github.com/antrea-io/antrea/pull/4711), [@tnqn])
+- Fix OpenFlow Group being reused with wrong type because groupDb cache was not cleaned up. ([#4592](https://github.com/antrea-io/antrea/pull/4592), [@ceclinux])
+- Fix antctl not being able to talk with GCP kube-apiserver due to missing platforms specific imports. ([#4494](https://github.com/antrea-io/antrea/pull/4494), [@luolanzone])
+- Fix Agent crash in dual-stack clusters when any Node is not configured with an IP address for each address family. ([#4480](https://github.com/antrea-io/antrea/pull/4480), [@hongliangl])
+- Fix Service not being updated correctly when stickyMaxAgeSeconds or InternalTrafficPolicy is updated. ([#4845](https://github.com/antrea-io/antrea/pull/4845), [@tnqn])
+- Fix the Antrea Agent crash issue when large amount of multicast receivers with different multicast IPs on one Node start together. ([#4870](https://github.com/antrea-io/antrea/pull/4870), [@ceclinux])
+- Fix the Antrea Agent crash issue which is caused by a concurrency bug in Multicast feature with encap mode. ([#4903](https://github.com/antrea-io/antrea/pull/4903), [@ceclinux])
+- Fix the Antrea Agent crash issue on Windows by running modules that rely on Services after AntreaProxy is ready. ([#4946](https://github.com/antrea-io/antrea/pull/4946), [@tnqn])
+- Make FQDN NetworkPolicy work for upper case DNS. ([#4934](https://github.com/antrea-io/antrea/pull/4934), [@GraysonWu])
+- Fix a bug that a deleted NetworkPolicy is still enforced when a new NetworkPolicy with the same name exists. ([#4986](https://github.com/antrea-io/antrea/pull/4986), [@tnqn])
+- Fix a race condition between stale controller and ResourceImport reconcilers in Antrea Multi-cluster controller. ([#4853](https://github.com/antrea-io/antrea/pull/4853), [@Dyanngg])
+- Recover ovsdb-server and ovs-vswitched service if they do not exist when running the Windows cleanup script. ([#4722](https://github.com/antrea-io/antrea/pull/4722), [@wenyingd])
+
 ## 1.10.0 - 2022-12-23
 
 ### Added
