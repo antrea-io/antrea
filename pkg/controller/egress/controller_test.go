@@ -16,6 +16,7 @@ package egress
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"testing"
@@ -27,11 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
@@ -136,6 +139,45 @@ type egressController struct {
 func newController(objects, crdObjects []runtime.Object) *egressController {
 	client := fake.NewSimpleClientset(objects...)
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
+	// These reactors are in charge of incrementing Generation for Egress resources, so that
+	// changes done through crdClient are not ignored by the EgressController.
+	egressUpdateReactor, egressPatchReactor := func() (k8stesting.ReactionFunc, k8stesting.ReactionFunc) {
+		// We use a map to ensure different generation counters for different Egress
+		// resources. We do not reset the map when a resource is deleted and re-created with
+		// the same name as it is not necessary for tests (it could easily be done with
+		// delete & create reactors).
+		generation := map[string]int64{}
+		updateReactor := func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			ua := action.(k8stesting.UpdateAction)
+			egress := ua.GetObject().(*v1alpha2.Egress)
+			generation[egress.Name] += 1
+			egress.Generation = generation[egress.Name]
+			return false, egress, nil
+		}
+		patchReactor := func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			pa := action.(k8stesting.PatchActionImpl)
+			patchType := pa.GetPatchType()
+			// This is the only patch type we support, and the only one used in the
+			// Egress controller.
+			if patchType != types.MergePatchType {
+				return true, nil, fmt.Errorf("unsupported patch type: %v", patchType)
+			}
+			patch := map[string]interface{}{}
+			json.Unmarshal(pa.GetPatch(), &patch)
+			name := pa.GetName()
+			generation[name] += 1
+			patch["metadata"] = map[string]interface{}{
+				"generation": generation[name],
+			}
+			pa.Patch, _ = json.Marshal(patch)
+			// Because action is an object and not a pointer, we cannot mutate it
+			// directly. So we need the following to apply our updated patch.
+			return k8stesting.ObjectReaction(crdClient.Tracker())(pa)
+		}
+		return updateReactor, patchReactor
+	}()
+	crdClient.PrependReactor("update", "egresses", egressUpdateReactor)
+	crdClient.PrependReactor("patch", "egresses", egressPatchReactor)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
 	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1alpha2().ExternalIPPools())
@@ -402,7 +444,7 @@ func TestUpdateEgress(t *testing.T) {
 		}
 	}
 
-	gotEgressIP := func() string {
+	getEgressIP := func() string {
 		var err error
 		egress, err = controller.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 		if err != nil {
@@ -420,7 +462,7 @@ func TestUpdateEgress(t *testing.T) {
 			},
 		},
 	}, getEvent())
-	assert.Equal(t, "1.1.1.1", gotEgressIP())
+	assert.Equal(t, "1.1.1.1", getEgressIP())
 	checkExternalIPPoolUsed(t, controller, eipFoo1.Name, 1)
 
 	// Add a Pod matching the Egress's selector and running on this Node.
@@ -455,7 +497,6 @@ func TestUpdateEgress(t *testing.T) {
 	}
 	egress.Spec.ExternalIPPool = eipFoo2.Name
 	egress.Spec.EgressIP = ""
-	egress.Generation += 1
 	controller.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
 	assert.Equal(t, &watch.Event{
 		Type: watch.Deleted,
@@ -463,7 +504,7 @@ func TestUpdateEgress(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 		},
 	}, getEvent())
-	assert.Equal(t, "2.2.2.10", gotEgressIP())
+	assert.Equal(t, "2.2.2.10", getEgressIP())
 	checkExternalIPPoolUsed(t, controller, eipFoo1.Name, 0)
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
 
@@ -474,7 +515,7 @@ func TestUpdateEgress(t *testing.T) {
 		if exists {
 			return false
 		}
-		ip := gotEgressIP()
+		ip := getEgressIP()
 		if ip != "" {
 			return false
 		}
@@ -701,13 +742,13 @@ func TestSyncEgressIP(t *testing.T) {
 			go controller.externalIPAllocator.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 			controller.restoreIPAllocations(tt.existingEgresses)
-			gotEgressIP, err := controller.syncEgressIP(tt.inputEgress)
+			getEgressIP, err := controller.syncEgressIP(tt.inputEgress)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), gotEgressIP)
+			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
 	}
