@@ -73,7 +73,7 @@ func (e *ExecError) CommandExecuted() bool {
 	return ok && exit.ExitCode() != exitCodeCommandNotFound
 }
 
-// GetErrorOutput returns the command's output to stderr if it has ben executed
+// GetErrorOutput returns the command's output to stderr if it has been executed
 // and exited with an error.
 func (e *ExecError) GetErrorOutput() string {
 	if !e.CommandExecuted() {

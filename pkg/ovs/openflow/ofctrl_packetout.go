@@ -330,7 +330,7 @@ func (b *ofPacketOutBuilder) SetEthPacket(packet *protocol.Ethernet) PacketOutBu
 	return b
 }
 
-// AddSetIPToSAction sets the IP_TOS field in the packet-out message. The action clears the two ECN bits as 0,
+// AddSetIPTOSAction sets the IP_TOS field in the packet-out message. The action clears the two ECN bits as 0,
 // and only 2-7 bits of the DSCP field in IP header is set.
 func (b *ofPacketOutBuilder) AddSetIPTOSAction(data uint8) PacketOutBuilder {
 	field, _ := openflow15.FindFieldHeaderByName(NxmFieldIPToS, true)
