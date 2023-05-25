@@ -62,20 +62,20 @@ function get_metrics_url() {
 function format_metrics() {
         sorted_metrics=$1
         # Gather list of metric names
-        metrics_types_unarranged=$(awk '/# TYPE/{print $3}' <<< $sorted_metrics)
+        metrics_types_unarranged=$(awk '/# TYPE/{print $3}' <<< "$sorted_metrics")
         # Put Antrea-specific metrics at the beginning, push 3rd parties after
-        metrics_types=$(grep antrea <<< $metrics_types_unarranged)$'\n'$(grep -v antrea <<< $metrics_types_unarranged)
+        metrics_types=$(grep antrea <<< "$metrics_types_unarranged")$'\n'$(grep -v antrea <<< "$metrics_types_unarranged")
         # Gather metrics descriptions
-        metrics_help=$(grep '# HELP' <<< $sorted_metrics | $SED_CMD 's/\[.*\] //i')
+        metrics_help=$(grep '# HELP' <<< "$sorted_metrics" | $SED_CMD 's/\[.*\] //i')
         last_pfx=""
         echo 'Below is a list of metrics, provided by the components and by 3rd parties.'
         echo
         echo "### Antrea Metrics"
         for metric in $metrics_types; do
-                metric_pfx=$($SED_CMD 's/_/ /g' <<< $metric | awk '{print $1}')
+                metric_pfx=$($SED_CMD 's/_/ /g' <<< "$metric" | awk '{print $1}')
                 if [ "$metric_pfx" == 'antrea' ]; then
                         # For Antrea metrics, add Agent, Controller to title
-                        metric_pfx=$($SED_CMD 's/_/ /g' <<< $metric | awk '{print $1" "$2}')
+                        metric_pfx=$($SED_CMD 's/_/ /g' <<< "$metric" | awk '{print $1" "$2}')
                 fi
                 if [ "$last_pfx" != "$metric_pfx" ]; then
                         echo
@@ -87,11 +87,11 @@ function format_metrics() {
                         fi
                         # Ouptut metrics title
                         # Capitalize the first letter of each word.
-                        echo "#### "$($SED_CMD "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
+                        echo "#### "$($SED_CMD "s/\b\(.\)/\u\1/g" <<< "$metric_pfx")" Metrics"
                         echo
                         last_pfx=$metric_pfx
                 fi
-                metric_help=$(grep " $metric " <<< $metrics_help | $SED_CMD "s/.*$metric //")
+                metric_help=$(grep " $metric " <<< "$metrics_help" | $SED_CMD "s/.*$metric //")
                 echo "- **$metric:** $metric_help"
         done
 }
@@ -158,8 +158,8 @@ sorted_metrics=$(sort -u <<< "${agent_metrics}"$'\n'"${controller_metrics}")
 formatted_metrics=$(format_metrics "$sorted_metrics")
 
 if [ "$metrics_doc" == "" ]; then
-        $FMT_CMD -w 80 -s <<< $formatted_metrics
+        $FMT_CMD -w 80 -s <<< "$formatted_metrics"
 else
         $SED_CMD -i '/^Below is a list of metrics, provided by the components and by 3rd parties.$/,$d' $metrics_doc
-        $FMT_CMD -w 80 -s <<< $formatted_metrics >> $metrics_doc
+        $FMT_CMD -w 80 -s <<< "$formatted_metrics" >> $metrics_doc
 fi
