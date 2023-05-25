@@ -299,9 +299,11 @@ func TestRESTGet(t *testing.T) {
 	eeInformer.Informer().AddIndexers(cache.Indexers{grouping.ExternalEntityIPsIndex: grouping.ExternalEntityIPsIndexFunc})
 
 	stopCh := make(chan struct{})
+	defer close(stopCh)
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
-	time.Sleep(10 * time.Millisecond)
+	informerFactory.WaitForCacheSync(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
 
 	rest := NewREST(podInformer, eeInformer, fakeIPBQuerier{ipGroupMap: ipGroups}, fakeQuerier{groups: groups})
 	for _, tt := range tests {
