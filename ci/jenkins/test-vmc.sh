@@ -502,6 +502,7 @@ function run_e2e {
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
 
     set +e
+    kubectl taint nodes --selector='!node-role.kubernetes.io/control-plane' node.cluster.x-k8s.io/uninitialized-
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/e2e-coverage
@@ -567,6 +568,10 @@ function run_conformance {
     echo "=== Move kubeconfig to control-plane Node ==="
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+
+    set +e
+    kubectl taint nodes --selector='!node-role.kubernetes.io/control-plane' node.cluster.x-k8s.io/uninitialized-
+    set -e
 
     if [[ "$TESTCASE" == "conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-sig-network --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
