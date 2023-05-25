@@ -27,6 +27,7 @@ function echoerr {
 }
 
 FMT_CMD="fmt"
+SED_CMD="sed"
 if [[ "$OSTYPE" == "darwin"* ]]; then
     if ! command -v gfmt > /dev/null; then
         echoerr "This script requires the GNU fmt utility"
@@ -34,10 +35,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         exit 1
     fi
     FMT_CMD="gfmt"
-fi
 
-SED_CMD="sed"
-if [[ "$OSTYPE" == "darwin"* ]]; then
     if ! command -v gsed > /dev/null; then
         echoerr "This script requires the GNU sed utility"
         echoerr "On MacOS, you can install it with 'brew install gnu-sed'"
