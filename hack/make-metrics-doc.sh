@@ -22,8 +22,32 @@
 set -eo pipefail
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
+function echoerr {
+    >&2 echo "$@"
+}
+
+FMT_CMD="fmt"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if ! command -v gfmt > /dev/null; then
+        echoerr "This script requires the GNU fmt utility"
+        echoerr "On MacOS, you can install it with 'brew install coreutils'"
+        exit 1
+    fi
+    FMT_CMD="gfmt"
+fi
+
+SED_CMD="sed"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if ! command -v gsed > /dev/null; then
+        echoerr "This script requires the GNU sed utility"
+        echoerr "On MacOS, you can install it with 'brew install gnu-sed'"
+        exit 1
+    fi
+    SED_CMD="gsed"
+fi
+
 function exit_handler() {
-    echo "Cleaning up..."
+    echoerr "Cleaning up..."
     if [ -f $certfile ]; then
         rm -rf certfile
         $THIS_DIR/../ci/kind/kind-setup.sh destroy kind
@@ -44,16 +68,16 @@ function format_metrics() {
         # Put Antrea-specific metrics at the beginning, push 3rd parties after
         metrics_types=$(grep antrea <<< $metrics_types_unarranged)$'\n'$(grep -v antrea <<< $metrics_types_unarranged)
         # Gather metrics descriptions
-        metrics_help=$(grep '# HELP' <<< $sorted_metrics | sed 's/\[.*\] //i')
+        metrics_help=$(grep '# HELP' <<< $sorted_metrics | $SED_CMD 's/\[.*\] //i')
         last_pfx=""
         echo 'Below is a list of metrics, provided by the components and by 3rd parties.'
         echo
         echo "### Antrea Metrics"
         for metric in $metrics_types; do
-                metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1}')
+                metric_pfx=$($SED_CMD 's/_/ /g' <<< $metric | awk '{print $1}')
                 if [ "$metric_pfx" == 'antrea' ]; then
                         # For Antrea metrics, add Agent, Controller to title
-                        metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1" "$2}')
+                        metric_pfx=$($SED_CMD 's/_/ /g' <<< $metric | awk '{print $1" "$2}')
                 fi
                 if [ "$last_pfx" != "$metric_pfx" ]; then
                         echo
@@ -64,18 +88,18 @@ function format_metrics() {
                                 echo
                         fi
                         # Ouptut metrics title
-                        echo "#### "$(sed -e "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
+                        # Capitalize the first letter of each word.
+                        echo "#### "$($SED_CMD "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
                         echo
                         last_pfx=$metric_pfx
                 fi
-                metric_help=$(grep " $metric " <<< $metrics_help | sed "s/.*$metric //")
+                metric_help=$(grep " $metric " <<< $metrics_help | $SED_CMD "s/.*$metric //")
                 echo "- **$metric:** $metric_help"
         done
 }
 
 function print_usage {
-    echo 'Usage: make-metrics-doc.sh [-h|--help|<metrics_document>]'
-    exit 0
+    echoerr 'Usage: make-metrics-doc.sh [-h|--help|<metrics_document>]'
 }
 
 metrics_doc=""
@@ -96,7 +120,7 @@ esac
 done
 
 if [ "$metrics_doc" != "" ] && [ ! -f $metrics_doc ]; then
-        echo "Metrics document not found at $metrics_doc"
+        echoerr "Metrics document not found at $metrics_doc"
         exit 1
 fi
 
@@ -136,8 +160,8 @@ sorted_metrics=$(sort -u <<< "${agent_metrics}"$'\n'"${controller_metrics}")
 formatted_metrics=$(format_metrics "$sorted_metrics")
 
 if [ "$metrics_doc" == "" ]; then
-        fmt -w 80 -s <<< $formatted_metrics
+        $FMT_CMD -w 80 -s <<< $formatted_metrics
 else
-        sed -i '/^Below is a list of metrics, provided by the components and by 3rd parties.$/,$d' $metrics_doc
-        fmt -w 80 -s <<< $formatted_metrics >> $metrics_doc
+        $SED_CMD -i '/^Below is a list of metrics, provided by the components and by 3rd parties.$/,$d' $metrics_doc
+        $FMT_CMD -w 80 -s <<< $formatted_metrics >> $metrics_doc
 fi
