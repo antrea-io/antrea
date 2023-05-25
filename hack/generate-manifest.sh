@@ -267,7 +267,7 @@ if $MULTICAST; then
     HELM_VALUES+=("multicast.enable=true")
 fi
 
-if $MULTICAST_INTERFACES; then
+if [ -n "$MULTICAST_INTERFACES" ]; then
     HELM_VALUES+=("multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
 fi
 
