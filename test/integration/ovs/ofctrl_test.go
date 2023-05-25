@@ -979,7 +979,6 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	mark0 := binding.NewRegMark(regField0, 0x0fff)
 	regField1 := binding.NewRegField(0, 16, 31)
 	mark1 := binding.NewRegMark(regField1, 0x0ffe)
-	//gatewayCTMark := binding.NewCTMark()
 	flows = append(flows,
 		table.BuildFlow(priorityNormal-10).
 			Cookie(getCookieID()).
@@ -1021,7 +1020,9 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Cookie(getCookieID()).
 			Action().Learn(table.GetID(), priorityNormal-10, 10, 0, 1).
 			DeleteLearned().
-			MatchLearnedTCPDstPort().
+			MatchEthernetProtocol(false).
+			MatchIPProtocol(binding.ProtocolTCP).
+			MatchLearnedDstPort(binding.ProtocolTCP).
 			MatchRegMark(mark0).
 			LoadFieldToField(regField0, regField0).
 			LoadRegMark(mark1).

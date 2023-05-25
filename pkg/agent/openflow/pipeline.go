@@ -27,6 +27,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -2297,22 +2298,20 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 	// OVS after that time regarding of whether traffic is still hitting the flow. This is the
 	// desired behavior based on the K8s spec. Note that existing connections will keep going to
 	// the same endpoint because of connection tracking; and that is also the desired behavior.
+	isIPv6 := netutils.IsIPv6(svcIP)
 	learnFlowBuilderLearnAction := flowBuilder.
 		Action().Learn(SessionAffinityTable.GetID(), priorityNormal, 0, affinityTimeout, cookieID).
-		DeleteLearned()
-	switch protocol {
-	case binding.ProtocolTCP:
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedTCPDstPort()
-	case binding.ProtocolUDP:
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedUDPDstPort()
-	case binding.ProtocolSCTP:
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPDstPort()
-	case binding.ProtocolTCPv6:
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedTCPv6DstPort()
-	case binding.ProtocolUDPv6:
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedUDPv6DstPort()
-	case binding.ProtocolSCTPv6:
-		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.MatchLearnedSCTPv6DstPort()
+		DeleteLearned().
+		MatchEthernetProtocol(isIPv6).
+		MatchIPProtocol(protocol).
+		MatchLearnedDstPort(protocol).
+		MatchLearnedDstIP(isIPv6).
+		MatchLearnedSrcIP(isIPv6).
+		LoadFieldToField(EndpointPortField, EndpointPortField)
+	if isIPv6 {
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field)
+	} else {
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadFieldToField(EndpointIPField, EndpointIPField)
 	}
 
 	// Loading the EpSelectedRegMark indicates that the Endpoint selection is completed. RewriteMACRegMark must be loaded
@@ -2323,32 +2322,11 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 	if externalAddress {
 		regMarksToLoad = append(regMarksToLoad, ToExternalAddressRegMark)
 	}
-
-	ipProtocol := getIPProtocol(svcIP)
-	if ipProtocol == binding.ProtocolIP {
-		return learnFlowBuilderLearnAction.
-			MatchLearnedDstIP().
-			MatchLearnedSrcIP().
-			LoadFieldToField(EndpointIPField, EndpointIPField).
-			LoadFieldToField(EndpointPortField, EndpointPortField).
-			LoadRegMark(regMarksToLoad...).
-			Done().
-			Action().LoadRegMark(EpSelectedRegMark).
-			Action().NextTable().
-			Done()
-	} else if ipProtocol == binding.ProtocolIPv6 {
-		return learnFlowBuilderLearnAction.
-			MatchLearnedDstIPv6().
-			MatchLearnedSrcIPv6().
-			LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field).
-			LoadFieldToField(EndpointPortField, EndpointPortField).
-			LoadRegMark(regMarksToLoad...).
-			Done().
-			Action().LoadRegMark(EpSelectedRegMark).
-			Action().NextTable().
-			Done()
-	}
-	return nil
+	return learnFlowBuilderLearnAction.LoadRegMark(regMarksToLoad...).
+		Done().
+		Action().LoadRegMark(EpSelectedRegMark).
+		Action().NextTable().
+		Done()
 }
 
 // serviceLBFlow generates the flow which uses the specific group to do Endpoint selection.
