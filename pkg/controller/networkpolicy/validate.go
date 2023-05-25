@@ -925,9 +925,9 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 		return fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name), false
 	}
 	// Tier with existing ACNPs/ANPs cannot be deleted.
-	cnps, err := t.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
-	if err != nil || len(cnps) > 0 {
-		return fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(cnps)), false
+	acnps, err := t.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+	if err != nil || len(acnps) > 0 {
+		return fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(acnps)), false
 	}
 	anps, err := t.networkPolicyController.anpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
 	if err != nil || len(anps) > 0 {
@@ -940,30 +940,19 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 // podSelector. Similarly, ExternalEntitySelector cannot be set with PodSelector.
 func validateAntreaClusterGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 	errMsg := "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup"
-	if s.PodSelector != nil && s.ExternalEntitySelector != nil {
+	setFieldNum := numFieldsSetInStruct(s)
+	if setFieldNum > 2 {
 		return errMsg, false
+	} else if setFieldNum == 2 {
+		// If two fields are set, only nsSel+pSel and nsSel+eeSel are valid.
+		if !(s.NamespaceSelector != nil && (s.PodSelector != nil || s.ExternalEntitySelector != nil)) {
+			return errMsg, false
+		}
 	}
-	selector, serviceRef, ipBlock, ipBlocks, childGroups := 0, 0, 0, 0, 0
 	if s.NamespaceSelector != nil || s.ExternalEntitySelector != nil || s.PodSelector != nil {
 		if reason, allowed := checkSelectorsLabels(s.PodSelector, s.NamespaceSelector, s.ExternalEntitySelector); !allowed {
 			return reason, allowed
 		}
-		selector = 1
-	}
-	if s.IPBlock != nil {
-		ipBlock = 1
-	}
-	if len(s.IPBlocks) > 0 {
-		ipBlocks = 1
-	}
-	if s.ServiceReference != nil {
-		serviceRef = 1
-	}
-	if len(s.ChildGroups) > 0 {
-		childGroups = 1
-	}
-	if selector+serviceRef+ipBlock+ipBlocks+childGroups > 1 {
-		return errMsg, false
 	}
 	multicast := false
 	unicast := false
@@ -986,24 +975,19 @@ func validateAntreaClusterGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 
 func validateAntreaGroupSpec(s crdv1alpha3.GroupSpec) (string, bool) {
 	errMsg := "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group"
-	if s.PodSelector != nil && s.ExternalEntitySelector != nil {
+	setFieldNum := numFieldsSetInStruct(s)
+	if setFieldNum > 2 {
 		return errMsg, false
+	} else if setFieldNum == 2 {
+		// If two fields are set, only nsSel+pSel and nsSel+eeSel are valid.
+		if !(s.NamespaceSelector != nil && (s.PodSelector != nil || s.ExternalEntitySelector != nil)) {
+			return errMsg, false
+		}
 	}
-	selector, serviceRef, ipBlocks, childGroups := 0, 0, 0, 0
 	if s.NamespaceSelector != nil || s.ExternalEntitySelector != nil || s.PodSelector != nil {
-		selector = 1
-	}
-	if len(s.IPBlocks) > 0 {
-		ipBlocks = 1
-	}
-	if s.ServiceReference != nil {
-		serviceRef = 1
-	}
-	if len(s.ChildGroups) > 0 {
-		childGroups = 1
-	}
-	if selector+serviceRef+ipBlocks+childGroups > 1 {
-		return errMsg, false
+		if reason, allowed := checkSelectorsLabels(s.PodSelector, s.NamespaceSelector, s.ExternalEntitySelector); !allowed {
+			return reason, allowed
+		}
 	}
 	return "", true
 }
