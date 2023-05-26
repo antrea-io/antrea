@@ -407,7 +407,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	}
 
 	writeVMAgentLog := func(cmd string, targetVMs string) {
-		vms := strings.Split(targetVMs, ",")
+		vms := strings.Split(targetVMs, " ")
 		for _, vm := range vms {
 			tb.Logf("Exporting logs from %s", vm)
 			_, stdout, _, err := data.RunCommandOnNode(vm, cmd)
@@ -428,7 +428,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		writeVMAgentLog(cmd, testOptions.linuxVMs)
 	}
 	if testOptions.windowsVMs != "" {
-		cmd := "cat c:/antrea-agent/antrea-agent.log"
+		cmd := "cat c:/antrea-agent/logs/antrea-agent.log"
 		writeVMAgentLog(cmd, testOptions.windowsVMs)
 	}
 }
