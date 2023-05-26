@@ -18,7 +18,8 @@
 
 set -eo pipefail
 
-METRICS_TMP_DOC=$(mktemp /tmp/metricsdoc.XXXXXX.md)
+# mktemp on macOS does not not support a suffix (file extension in the template)
+METRICS_TMP_DOC=$(mktemp /tmp/metricsdoc.XXXXXX)
 
 function exit_handler() {
     echo "Cleaning up..."
