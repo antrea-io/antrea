@@ -214,10 +214,8 @@ endif
 docker-tidy: $(DOCKER_CACHE)
 	@rm -f go.sum
 	@$(DOCKER_ENV) $(GO) mod tidy
-	@rm -f plugins/octant/go.sum
-	@$(DOCKER_ENV) bash -c "cd plugins/octant && $(GO) mod tidy"
 	@chmod -R 0755 $<
-	@chmod 0644 go.sum plugins/octant/go.sum
+	@chmod 0644 go.sum
 
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
@@ -263,8 +261,6 @@ add-copyright:
 tidy:
 	@rm -f go.sum
 	@$(GO) mod tidy
-	@rm -f plugins/octant/go.sum
-	@cd plugins/octant && $(GO) mod tidy
 
 .PHONY: .linux-test-integration
 .linux-test-integration: .coverage
@@ -277,8 +273,6 @@ test-tidy:
 	@echo
 	@echo "===> Checking go.mod tidiness <==="
 	@GO=$(GO) $(CURDIR)/hack/tidy-check.sh
-	@echo "===> Checking octant plugins go.mod tidiness <==="
-	@GO=$(GO) $(CURDIR)/hack/tidy-check.sh plugins/octant
 
 .PHONY: fmt
 fmt:
@@ -297,10 +291,6 @@ golangci: $(GOLANGCI_LINT_BIN)
 	@GOOS=linux $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
 	@echo "===> Running golangci (windows) <==="
 	@GOOS=windows $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
-	@echo "===> Running golangci for Octant plugin (linux) <==="
-	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
-	@echo "===> Running golangci for Octant plugin (windows) <==="
-	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
 
 .PHONY: golangci-fix
 golangci-fix: $(GOLANGCI_LINT_BIN)
@@ -308,10 +298,6 @@ golangci-fix: $(GOLANGCI_LINT_BIN)
 	@GOOS=linux $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci (windows) <==="
 	@GOOS=windows $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
-	@echo "===> Running golangci for Octant plugin (linux) <==="
-	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
-	@echo "===> Running golangci for Octant plugin (windows) <==="
-	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
 
 .PHONY: clean
 clean:
@@ -395,7 +381,6 @@ build-scale-simulator:
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
 	$(CURDIR)/hack/generate-standard-manifests.sh --mode dev --out build/yamls
-	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
 
@@ -409,12 +394,6 @@ manifest-coverage:
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --coverage > build/yamls/antrea-coverage.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec --coverage > build/yamls/antrea-ipsec-coverage.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev --coverage > build/yamls/flow-aggregator-coverage.yml
-
-.PHONY: octant-antrea-ubuntu
-octant-antrea-ubuntu:
-	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
-	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu $(DOCKER_BUILD_ARGS) .
-	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
 
 .PHONY: antrea-mc-controller
 antrea-mc-controller:

@@ -23,9 +23,7 @@ graph.
   - [Live-traffic Traceflow](#live-traffic-traceflow)
   - [Using antctl](#using-antctl)
   - [Using the Antrea web UI](#using-the-antrea-web-ui)
-  - [Using Octant with antrea-octant-plugin (DEPRECATED)](#using-octant-with-antrea-octant-plugin-deprecated)
 - [View Traceflow Result and Graph](#view-traceflow-result-and-graph)
-- [View Traceflow CRDs](#view-traceflow-crds)
 - [RBAC](#rbac)
 <!-- /toc -->
 
@@ -55,7 +53,7 @@ is enabled in the Agent configuration:
 ## Start a New Traceflow
 
 You can choose to use `kubectl` together with a YAML file, the `antctl traceflow`
-command, or the Octant UI to start a new trace.
+command, or the Antrea UI to start a new trace.
 
 When starting a new trace, you can provide the following information which will be used to build the trace packet:
 
@@ -178,50 +176,11 @@ Please refer to the [Antrea UI documentation](https://github.com/antrea-io/antre
 for installation instructions. Once you can access the UI in your browser,
 navigate to the `Traceflow` page.
 
-### Using Octant with antrea-octant-plugin (DEPRECATED)
-
-***Octant is no longer maintained and the antrea-octant-plugin is deprecated as
-   of Antrea v1.12. It will be removed completely in subsequent
-   releases. Please refer to [#4640](https://github.com/antrea-io/antrea/issues/4640)
-   for more information, and check out the [Antrea web UI](https://github.com/antrea-io/antrea-ui)
-   for an alternative.***
-
-<img src="https://downloads.antrea.io/static/tf_create.1.png" width="600" alt="Start a New Trace">
-
-From Octant dashboard, you need to click on left navigation bar named "Antrea" and then
-choose category named "Traceflow" to lead you to the Traceflow UI displayed on the right side.
-
-Now, you can start a new trace by clicking on the button named "Start New Trace" and submitting the form with trace details.
-It helps you create a Traceflow CRD and generates a corresponding Traceflow Graph.
-
 ## View Traceflow Result and Graph
 
 You can always view Traceflow result directly via Traceflow CRD status and see if the packet is successfully delivered
 or somehow dropped by certain packet-processing stage. Antrea also provides a more user-friendly way by showing the
-Traceflow result via a trace graph on UI.
-
-<img src="https://downloads.antrea.io/static/tf_graph_success.png" width="600" alt="Show Successful Trace">
-
-From the graph above, we can see the inter-node traffic between two Pods has been successfully delivered.
-Sometimes the traffic may not be successfully delivered and we can always easily identify where the traffic is dropped
-via a trace graph like below.
-
-<img src="https://downloads.antrea.io/static/tf_graph_failure.png" width="600" alt="Show Failing Trace">
-
-You can also generate a historical trace graph by providing a specific Traceflow CRD name (assuming the CRD has not been deleted yet)
-as shown below.
-
-<img src="https://downloads.antrea.io/static/tf_historical_graph.png" width="600" alt="Generate Historical Trace">
-
-## View Traceflow CRDs
-
-<img src="https://downloads.antrea.io/static/tf_overview.png" width="600" alt="Antrea Overview">
-
-As shown above, you can check the existing Traceflow CRDs in the "Traceflow Info" table of the Antrea Overview web page
-in the Octant UI. You can generate a trace graph for any of these CRDs, as explained in the previous section.
-Also, you can view all the Traceflow CRDs from the Traceflow page by clicking the right tab named "Traceflow Info" like below.
-
-<img src="https://downloads.antrea.io/static/tf_table.png" width="600" alt="Traceflow CRDs">
+Traceflow result via a trace graph when using the Antrea UI.
 
 ## RBAC
 
