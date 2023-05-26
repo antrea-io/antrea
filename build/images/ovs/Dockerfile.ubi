@@ -53,7 +53,6 @@ RUN rm -f /etc/yum.repos.d/* && mv /tmp/CentOS.repo /etc/yum.repos.d/CentOS.repo
     # Disable the default redhat.repo. This substitutes `subscription-manager config --rhsm.manage_repos=0`
     # as subscription-manager is not supported running in containers.
     sed -i.bak "s/^manage_repos = .$/manage_repos = 0/g" /etc/rhsm/rhsm.conf && \
-    yum clean all -y && yum reinstall yum -y && \
     yum install /tmp/ovs-rpms/* -y && yum install epel-release -y && \
     yum install iptables logrotate -y && \
     mv /etc/logrotate.d/openvswitch /etc/logrotate.d/openvswitch-switch && \
