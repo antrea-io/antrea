@@ -250,7 +250,6 @@ func TestFlowModMatchString(t *testing.T) {
 				return fb.MatchProtocol(ProtocolIP).
 					MatchTunnelDst(tunDst).
 					MatchTunnelID(62346).
-					MatchTunMetadata(0, 0x1234).
 					Done()
 			},
 			expectedMatch: "table=1,priority=100,ip,tun_dst=192.10.20.30,tun_id=62346,in_port=3",
@@ -260,7 +259,6 @@ func TestFlowModMatchString(t *testing.T) {
 				return fb.MatchProtocol(ProtocolIPv6).
 					MatchTunnelDst(tun6Dst).
 					MatchTunnelID(62346).
-					MatchTunMetadata(0, 0x1234).
 					Done()
 			},
 			expectedMatch: "table=1,priority=100,ipv6,tun_ipv6_dst=fe::c0a:141e,tun_id=62346,in_port=3",

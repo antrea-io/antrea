@@ -131,10 +131,6 @@ type Bridge interface {
 	// Bridge receives a PacketIn message with the specified reason, it sends the message to the consumer using the
 	// provided channel.
 	SubscribePacketIn(category uint8, pktInQueue *PacketInQueue) error
-	// AddTLVMap adds a TLV mapping with OVS field tun_metadataX. The value loaded in tun_metadataX is transported by
-	// Geneve header with the specified <optClass, optType, optLength>. The value of OptLength must be a multiple of 4.
-	// The value loaded into field tun_metadataX must fit within optLength bytes.
-	AddTLVMap(optClass uint16, optType uint8, optLength uint8, tunMetadataIndex uint16) error
 	// SendPacketOut sends a packetOut message to the OVS Bridge.
 	SendPacketOut(packetOut *ofctrl.PacketOut) error
 	// ResumePacket resumes a paused packetIn.
@@ -218,7 +214,6 @@ type Action interface {
 	LoadIPDSCP(value uint8) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
-	MoveFromTunMetadata(fromTunMetadataID int, toField string, fromRange, toRange Range, tlvLength uint8) FlowBuilder
 	ResubmitToTables(tables ...uint8) FlowBuilder
 	CT(commit bool, tableID uint8, zone int, zoneSrcField *RegField) CTAction
 	Drop() FlowBuilder
@@ -293,7 +288,6 @@ type FlowBuilder interface {
 	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunnelDst(dstIP net.IP) FlowBuilder
 	MatchTunnelID(tunnelID uint64) FlowBuilder
-	MatchTunMetadata(index int, data uint32) FlowBuilder
 	MatchVLAN(nonVLAN bool, vlanId uint16, vlanMask *uint16) FlowBuilder
 	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
 	MatchCTSrcIP(ip net.IP) FlowBuilder

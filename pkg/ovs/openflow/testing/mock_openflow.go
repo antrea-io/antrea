@@ -81,20 +81,6 @@ func (mr *MockBridgeMockRecorder) AddOFEntriesInBundle(arg0, arg1, arg2 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOFEntriesInBundle", reflect.TypeOf((*MockBridge)(nil).AddOFEntriesInBundle), arg0, arg1, arg2)
 }
 
-// AddTLVMap mocks base method
-func (m *MockBridge) AddTLVMap(arg0 uint16, arg1, arg2 byte, arg3 uint16) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddTLVMap", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddTLVMap indicates an expected call of AddTLVMap
-func (mr *MockBridgeMockRecorder) AddTLVMap(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTLVMap", reflect.TypeOf((*MockBridge)(nil).AddTLVMap), arg0, arg1, arg2, arg3)
-}
-
 // BuildPacketOut mocks base method
 func (m *MockBridge) BuildPacketOut() openflow.PacketOutBuilder {
 	m.ctrl.T.Helper()
@@ -917,20 +903,6 @@ func (m *MockAction) Move(arg0, arg1 string) openflow.FlowBuilder {
 func (mr *MockActionMockRecorder) Move(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Move", reflect.TypeOf((*MockAction)(nil).Move), arg0, arg1)
-}
-
-// MoveFromTunMetadata mocks base method
-func (m *MockAction) MoveFromTunMetadata(arg0 int, arg1 string, arg2, arg3 openflow.Range, arg4 byte) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MoveFromTunMetadata", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// MoveFromTunMetadata indicates an expected call of MoveFromTunMetadata
-func (mr *MockActionMockRecorder) MoveFromTunMetadata(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveFromTunMetadata", reflect.TypeOf((*MockAction)(nil).MoveFromTunMetadata), arg0, arg1, arg2, arg3, arg4)
 }
 
 // MoveRange mocks base method
@@ -2085,20 +2057,6 @@ func (m *MockFlowBuilder) MatchTCPFlags(arg0, arg1 uint16) openflow.FlowBuilder 
 func (mr *MockFlowBuilderMockRecorder) MatchTCPFlags(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTCPFlags", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTCPFlags), arg0, arg1)
-}
-
-// MatchTunMetadata mocks base method
-func (m *MockFlowBuilder) MatchTunMetadata(arg0 int, arg1 uint32) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchTunMetadata", arg0, arg1)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// MatchTunMetadata indicates an expected call of MatchTunMetadata
-func (mr *MockFlowBuilderMockRecorder) MatchTunMetadata(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunMetadata", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunMetadata), arg0, arg1)
 }
 
 // MatchTunnelDst mocks base method
