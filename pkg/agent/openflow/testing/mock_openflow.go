@@ -243,20 +243,6 @@ func (mr *MockClientMockRecorder) GetTunnelVirtualMAC() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTunnelVirtualMAC", reflect.TypeOf((*MockClient)(nil).GetTunnelVirtualMAC))
 }
 
-// InitialTLVMap mocks base method
-func (m *MockClient) InitialTLVMap() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InitialTLVMap")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// InitialTLVMap indicates an expected call of InitialTLVMap
-func (mr *MockClientMockRecorder) InitialTLVMap() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitialTLVMap", reflect.TypeOf((*MockClient)(nil).InitialTLVMap))
-}
-
 // Initialize mocks base method
 func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 *config.NetworkConfig, arg3 *config.EgressConfig, arg4 *config.ServiceConfig, arg5 *config.L7NetworkPolicyConfig) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()

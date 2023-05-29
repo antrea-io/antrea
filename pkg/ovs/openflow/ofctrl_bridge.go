@@ -697,14 +697,6 @@ func (b *OFBridge) SubscribePacketIn(category uint8, pktInQueue *PacketInQueue) 
 	return nil
 }
 
-func (b *OFBridge) AddTLVMap(optClass uint16, optType uint8, optLength uint8, tunMetadataIndex uint16) error {
-	if err := b.ofSwitch.AddTunnelTLVMap(optClass, optType, optLength, tunMetadataIndex); err != nil {
-		return err
-	}
-	b.tunMetadataLengthMap[tunMetadataIndex] = optLength
-	return nil
-}
-
 func (b *OFBridge) SendPacketOut(packetOut *ofctrl.PacketOut) error {
 	return b.ofSwitch.Send(packetOut.GetMessage())
 }
