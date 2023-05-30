@@ -334,6 +334,7 @@ type Group interface {
 	OFEntry
 	ResetBuckets() Group
 	Bucket() BucketBuilder
+	GetID() GroupIDType
 }
 
 type BucketBuilder interface {

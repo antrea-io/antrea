@@ -374,7 +374,8 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.connectUplinkToBridge,
 		o.enableMulticast,
 		o.enableTrafficControl,
-		o.enableMulticluster)
+		o.enableMulticluster,
+		NewGroupAllocator())
 	client := cli.(*client)
 
 	var egressExceptCIDRs []net.IPNet
@@ -677,7 +678,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -690,7 +691,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:PipelineIPClassifier",
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 				"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=200,ip,nw_src=10.10.0.66 actions=goto_table:MulticastRouting",
 				"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=200,ip,reg1=0x64 actions=goto_table:MulticastOutput",
 			},
@@ -703,7 +704,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -718,7 +719,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -732,7 +733,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.0.66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -745,7 +746,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,ipv6_dst=fec0:10:10::66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -763,7 +764,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,ipv6_dst=fec0:10:10::66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.0.66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -779,7 +780,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,set_field:0x100000/0x100000->reg4,set_field:0x200/0x200->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=192.168.77.200 actions=set_field:0x1000/0xf000->reg8,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg8=0x0/0xfff,nw_dst=192.168.77.200 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -795,7 +796,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,set_field:0x100000/0x100000->reg4,set_field:0x200/0x200->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=192.168.77.200 actions=set_field:0x1000/0xf000->reg8,set_field:0x1/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg8=0x1/0xfff,nw_dst=192.168.77.200 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 				"cookie=0x1010000000000, table=VLAN, priority=190,reg1=0x4,in_port=100 actions=push_vlan:0x8100,set_field:4097->vlan_vid,goto_table:Output",
 			},
 		},
@@ -870,14 +871,14 @@ func Test_client_UpdatePodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 			expectedNewFlows: []string{
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=100,arp_spa=10.10.0.88,arp_sha=00:00:10:10:00:66 actions=goto_table:ARPResponder",
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.88 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.88 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -889,13 +890,13 @@ func Test_client_UpdatePodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 			expectedNewFlows: []string{
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::88 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::88 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			},
 		},
 	}
@@ -1814,7 +1815,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
@@ -2279,32 +2280,32 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 			name:           "Local Receivers",
 			localReceivers: localReceivers,
 			expectedGroup: "group_id=101,type=all," +
-				"bucket=bucket_id:0,actions=set_field:0x100/0x100->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
-				"bucket=bucket_id:1,actions=set_field:0x100/0x100->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule",
+				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
+				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule",
 		},
 		{
 			name:                "Remote Node Receivers",
 			remoteNodeReceivers: remoteNodeReceivers,
 			expectedGroup: "group_id=101,type=all," +
-				"bucket=bucket_id:0,actions=set_field:0x100/0x100->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
-				"bucket=bucket_id:1,actions=set_field:0x100/0x100->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
+				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
+				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
 		},
 		{
 			name:                "Local and Remote Node Receivers",
 			localReceivers:      localReceivers,
 			remoteNodeReceivers: remoteNodeReceivers,
 			expectedGroup: "group_id=101,type=all," +
-				"bucket=bucket_id:0,actions=set_field:0x100/0x100->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
-				"bucket=bucket_id:1,actions=set_field:0x100/0x100->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule," +
-				"bucket=bucket_id:2,actions=set_field:0x100/0x100->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
-				"bucket=bucket_id:3,actions=set_field:0x100/0x100->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
+				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
+				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule," +
+				"bucket=bucket_id:2,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
+				"bucket=bucket_id:3,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
 		},
 		{
 			name:           "DeleteOFEntries Failed",
 			localReceivers: localReceivers,
 			expectedGroup: "group_id=101,type=all," +
-				"bucket=bucket_id:0,actions=set_field:0x100/0x100->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
-				"bucket=bucket_id:1,actions=set_field:0x100/0x100->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule",
+				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
+				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule",
 			deleteOFEntriesError: fmt.Errorf("error when deleting Openflow entries for Multicast receiver Group 101"),
 		},
 	}
@@ -2449,7 +2450,7 @@ func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 	tunnelOFPort := uint32(200)
 	expectedFlows := []string{
 		"cookie=0x1060000000000, table=Classifier, priority=210,in_port=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
-		"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0xc8->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+		"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0xc8->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 		"cookie=0x1060000000000, table=Output, priority=210,reg1=0xc8,in_port=200 actions=IN_PORT",
 	}
 
@@ -2465,6 +2466,7 @@ func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 
 func Test_client_RegisterPacketInHandler(t *testing.T) {
 	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
 	ctrl := gomock.NewController(t)
 	bridge := ovsoftest.NewMockBridge(ctrl)
 	bridge.EXPECT().ResumePacket(gomock.Any()).Times(1)
@@ -2482,7 +2484,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 
 	expectedFlows := append(pipelineDefaultFlows(false, true, true), egressInitFlows(true)...)
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
-	expectedFlows = append(expectedFlows, networkPolicyInitFlows(false, false)...)
+	expectedFlows = append(expectedFlows, networkPolicyInitFlows(fc.ovsMetersAreSupported, false, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
 
@@ -2521,11 +2523,20 @@ func Test_client_ReplayFlows(t *testing.T) {
 		"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x2000/0x2000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 	)
 	// Feature Network Policy replays flows.
+	fc.featureNetworkPolicy.initGroups()
+	expectedGroups := []string{
+		"group_id=1,type=all,bucket=bucket_id:0,actions=resubmit:EgressRule,bucket=bucket_id:1,actions=set_field:0x400000/0x600000->reg0,resubmit:Output",
+		"group_id=2,type=all,bucket=bucket_id:0,actions=resubmit:EgressMetric,bucket=bucket_id:1,actions=set_field:0x400000/0x600000->reg0,resubmit:Output",
+		"group_id=3,type=all,bucket=bucket_id:0,actions=resubmit:IngressRule,bucket=bucket_id:1,actions=set_field:0x400000/0x600000->reg0,resubmit:Output",
+		"group_id=4,type=all,bucket=bucket_id:0,actions=resubmit:IngressMetric,bucket=bucket_id:1,actions=set_field:0x400000/0x600000->reg0,resubmit:Output",
+		"group_id=5,type=all,bucket=bucket_id:0,actions=resubmit:MulticastEgressMetric,bucket=bucket_id:1,actions=set_field:0x400000/0x600000->reg0,resubmit:Output",
+		"group_id=6,type=all,bucket=bucket_id:0,actions=resubmit:MulticastIngressMetric,bucket=bucket_id:1,actions=set_field:0x400000/0x600000->reg0,resubmit:Output",
+	}
 	ruleID := uint32(15)
 	priority200 = uint16(200)
 	conj := &policyRuleConjunction{
 		id:          ruleID,
-		actionFlows: []*openflow15.FlowMod{getFlowModMessage(fc.featureNetworkPolicy.conjunctionActionDenyFlow(ruleID, IngressRuleTable.ofTable, &priority200, DispositionDrop, false), binding.AddMessage)},
+		actionFlows: []*openflow15.FlowMod{getFlowModMessage(fc.featureNetworkPolicy.conjunctionActionDenyFlow(ruleID, IngressRuleTable.ofTable, &priority200, DispositionDrop, true), binding.AddMessage)},
 		metricFlows: []*openflow15.FlowMod{getFlowModMessage(fc.featureNetworkPolicy.denyRuleMetricFlow(ruleID, true, IngressMetricTable.GetID()), binding.AddMessage)},
 	}
 	assert.NoError(t, fc.featureNetworkPolicy.policyCache.Add(conj))
@@ -2536,9 +2547,9 @@ func Test_client_ReplayFlows(t *testing.T) {
 	}
 	fc.featureNetworkPolicy.globalConjMatchFlowCache["npMatch"] = context
 	replayedFlows = append(replayedFlows,
-		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,goto_table:IngressMetric",
+		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1a/0xff->reg2,group:4",
 		"cookie=0x1020000000000, table=IngressRule, priority=200,reg1=0x64 actions=conjunction(15,2/2)",
-		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,controller(id=32776,reason=no_match,userdata=01.01,max_len=128)",
+		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1b/0xff->reg2,goto_table:Output",
 		"cookie=0x1020000000000, table=IngressMetric, priority=200,reg0=0x400/0x400,reg3=0xf actions=drop",
 	)
 
@@ -2568,14 +2579,55 @@ func Test_client_ReplayFlows(t *testing.T) {
 
 	expectedFlows = append(expectedFlows, replayedFlows...)
 
+	actualGroups := make([]string, 0)
+	m.EXPECT().AddOFEntries(gomock.Any()).Do(func(ofEntries []binding.OFEntry) {
+		for _, entry := range ofEntries {
+			switch entry.Type() {
+			case binding.GroupEntry:
+				groupString := getGroupFromCache(entry.(binding.Group))
+				actualGroups = append(actualGroups, groupString)
+			case binding.MeterEntry:
+
+			}
+
+		}
+	}).AnyTimes()
+
 	actualFlows := make([]string, 0)
 	m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
 		flowStrings := getFlowStrings(flowMessages)
 		actualFlows = append(actualFlows, flowStrings...)
 	}).Return(nil).AnyTimes()
 
+	if fc.ovsMetersAreSupported {
+		// Use mock for the unit test on meter is because the current implementation in ofnet does not support
+		// sending Meter modification message in a bundle message. The "Add" meter actions is dependent on a valid
+		// connection to OVS, hence it may return timeout error without a mock which is possibly block the comparation
+		// on the flows and groups.
+		bridge := ovsoftest.NewMockBridge(ctrl)
+		fc.bridge = bridge
+		for _, meterCfg := range []struct {
+			id   binding.MeterIDType
+			rate uint32
+		}{
+			{id: PacketInMeterIDNP, rate: PacketInMeterRateNP},
+			{id: PacketInMeterIDTF, rate: PacketInMeterRateTF},
+		} {
+			meter := ovsoftest.NewMockMeter(ctrl)
+			meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)
+			bridge.EXPECT().NewMeter(meterCfg.id, ofctrl.MeterBurst|ofctrl.MeterPktps).Return(meter).Times(1)
+			meter.EXPECT().MeterBand().Return(meterBuilder).Times(1)
+			meterBuilder.EXPECT().MeterType(ofctrl.MeterDrop).Return(meterBuilder).Times(1)
+			meterBuilder.EXPECT().Rate(meterCfg.rate).Return(meterBuilder).Times(1)
+			meterBuilder.EXPECT().Burst(2 * meterCfg.rate).Return(meterBuilder).Times(1)
+			meterBuilder.EXPECT().Done().Return(meter).Times(1)
+			meter.EXPECT().Add().Return(nil).Times(1)
+		}
+	}
+
 	fc.ReplayFlows()
 	assert.ElementsMatch(t, expectedFlows, actualFlows)
+	assert.ElementsMatch(t, expectedGroups, actualGroups)
 }
 
 func TestCachedFlowIsDrop(t *testing.T) {

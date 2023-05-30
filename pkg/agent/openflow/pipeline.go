@@ -177,8 +177,8 @@ var (
 	ConntrackCommitTable = newTable("ConntrackCommit", stageConntrack, pipelineIP)
 
 	// Tables in stageOutput:
-	VLANTable            = newTable("VLAN", stageOutput, pipelineIP)
-	L2ForwardingOutTable = newTable("Output", stageOutput, pipelineIP)
+	VLANTable   = newTable("VLAN", stageOutput, pipelineIP)
+	OutputTable = newTable("Output", stageOutput, pipelineIP)
 
 	// Tables of pipelineMulticast are declared below. Do don't declare any tables of other pipelines here!
 	// Tables in stageEgressSecurity:
@@ -433,6 +433,7 @@ type client struct {
 	roundInfo             types.RoundInfo
 	cookieAllocator       cookie.Allocator
 	bridge                binding.Bridge
+	groupIDAllocator      GroupAllocator
 
 	featurePodConnectivity          *featurePodConnectivity
 	featureService                  *featureService
@@ -829,7 +830,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 			// ServiceCTMark (loaded in DNAT / SNAT CT zone) is used to bypass ConntrackCommitTable which is used to commit
 			// non-Service connections. For hairpin connections, HairpinCTMark is also loaded in SNAT CT zone when performing
 			// SNAT since HairpinCTMark loaded in DNAT CT zone also cannot be read in SNAT CT zone. HairpinCTMark is used
-			// to output packets of hairpin connections in L2ForwardingOutTable.
+			// to output packets of hairpin connections in OutputTable.
 
 			// This generates the flow to match the first packet of hairpin Service connection initiated through the Antrea
 			// gateway with ConnSNATCTMark and HairpinCTMark, then perform SNAT in SNAT CT zone with a virtual IP.
@@ -1000,7 +1001,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 				MatchCTStateTrk(true).
 				MatchDstMAC(packet.DestinationMAC).
 				Action().LoadToRegField(TargetOFPortField, ofPort).
-				Action().LoadRegMark(OFPortFoundRegMark).
+				Action().LoadRegMark(OutputToOFPortRegMark).
 				Action().LoadIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				Action().GotoStage(stageIngressSecurity)
@@ -1064,11 +1065,11 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	for _, ipProtocol := range f.ipProtocols {
 		if f.networkConfig.TrafficEncapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+3).
+			fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, f.tunnelPort).
 				MatchProtocol(ipProtocol).
-				MatchRegMark(OFPortFoundRegMark).
+				MatchRegMark(OutputToOFPortRegMark).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				Action().OutputToRegField(TargetOFPortField)
@@ -1077,11 +1078,11 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			// For injected packets, only SendToController if output port is local gateway. In encapMode, a Traceflow
 			// packet going out of the gateway port (i.e. exiting the overlay) essentially means that the Traceflow
 			// request is complete.
-			fb = L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+2).
+			fb = OutputTable.ofTable.BuildFlow(priorityNormal+2).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).
-				MatchRegMark(OFPortFoundRegMark).
+				MatchRegMark(OutputToOFPortRegMark).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout)
 			fb = ifDroppedOnly(fb)
@@ -1090,11 +1091,11 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		} else {
 			// SendToController and Output if output port is local gateway. Unlike in encapMode, inter-Node Pod-to-Pod
 			// traffic is expected to go out of the gateway port on the way to its destination.
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+2).
+			fb := OutputTable.ofTable.BuildFlow(priorityNormal+2).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).
-				MatchRegMark(OFPortFoundRegMark).
+				MatchRegMark(OutputToOFPortRegMark).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				Action().OutputToRegField(TargetOFPortField)
@@ -1104,12 +1105,12 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		// Only SendToController if output port is local gateway and destination IP is gateway.
 		gatewayIP := f.gatewayIPs[ipProtocol]
 		if gatewayIP != nil {
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+3).
+			fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).
 				MatchDstIP(gatewayIP).
-				MatchRegMark(OFPortFoundRegMark).
+				MatchRegMark(OutputToOFPortRegMark).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout)
 			fb = ifDroppedOnly(fb)
@@ -1117,10 +1118,10 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			flows = append(flows, fb.Done())
 		}
 		// Only SendToController if output port is Pod port.
-		fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal + 2).
+		fb := OutputTable.ofTable.BuildFlow(priorityNormal + 2).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
-			MatchRegMark(OFPortFoundRegMark).
+			MatchRegMark(OutputToOFPortRegMark).
 			MatchIPDSCP(dataplaneTag).
 			SetHardTimeout(timeout)
 		fb = ifDroppedOnly(fb)
@@ -1167,7 +1168,7 @@ func (f *featureService) flowsToTrace(dataplaneTag uint8,
 		if f.enableProxy {
 			// Only SendToController for hairpin traffic.
 			// This flow must have higher priority than the one installed by l2ForwardOutputHairpinServiceFlow.
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh + 2).
+			fb := OutputTable.ofTable.BuildFlow(priorityHigh + 2).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTMark(HairpinCTMark).
@@ -1201,7 +1202,7 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 				klog.ErrorS(err, "Failed to get OpenFlow table by tableID", "id", ctx.dropFlow.TableId)
 				continue
 			}
-			dropFlow := f.defaultDropFlow(table, ctx.matchPairs, ctx.dropFlowEnableLogging)
+			dropFlow := f.defaultDropFlow(table, ctx.matchPairs, false)
 			copyFlowBuilder := dropFlow.CopyToBuilder(priorityNormal+2, false)
 			if dropFlow.FlowProtocol() == "" {
 				copyFlowBuilderIPv6 := dropFlow.CopyToBuilder(priorityNormal+2, false)
@@ -1275,7 +1276,7 @@ func (f *featurePodConnectivity) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPo
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchDstMAC(dstMAC).
 		Action().LoadToRegField(TargetOFPortField, ofPort).
-		Action().LoadRegMark(OFPortFoundRegMark).
+		Action().LoadRegMark(OutputToOFPortRegMark).
 		Action().NextTable().
 		Done()
 }
@@ -1283,7 +1284,7 @@ func (f *featurePodConnectivity) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPo
 // l2ForwardOutputHairpinServiceFlow generates the flow to output the packet of hairpin Service connection with IN_PORT
 // action.
 func (f *featureService) l2ForwardOutputHairpinServiceFlow() binding.Flow {
-	return L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
+	return OutputTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchCTMark(HairpinCTMark).
 		Action().OutputInPort().
@@ -1292,9 +1293,9 @@ func (f *featureService) l2ForwardOutputHairpinServiceFlow() binding.Flow {
 
 // l2ForwardOutputFlow generates the flow to output the packets to target OVS port according to the value of TargetOFPortField.
 func (f *featurePodConnectivity) l2ForwardOutputFlow() binding.Flow {
-	return L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal).
+	return OutputTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchRegMark(OFPortFoundRegMark).
+		MatchRegMark(OutputToOFPortRegMark).
 		Action().OutputToRegField(TargetOFPortField).
 		Done()
 }
@@ -1664,7 +1665,7 @@ func (f *featureService) serviceCIDRDNATFlows() []binding.Flow {
 			MatchProtocol(ipProtocol).
 			MatchDstIPNet(serviceCIDR).
 			Action().LoadToRegField(TargetOFPortField, f.gatewayPort).
-			Action().LoadRegMark(OFPortFoundRegMark).
+			Action().LoadRegMark(OutputToOFPortRegMark).
 			Action().GotoStage(stageConntrack).
 			Done())
 	}
@@ -1826,29 +1827,30 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 		if enableLogging {
 			fb := table.BuildFlow(ofPriority).MatchProtocol(proto).
 				MatchConjID(conjunctionID)
-			if f.ovsMetersAreSupported {
-				fb = fb.Action().Meter(PacketInMeterIDNP)
-			}
 			if l7RuleVlanID != nil {
 				return fb.
-					Action().LoadToRegField(conjReg, conjunctionID).                                                 // Traceflow.
-					Action().LoadRegMark(DispositionAllowRegMark, L7NPRedirectRegMark).                              // AntreaPolicy.
-					Action().SendToController([]byte{uint8(PacketInCategoryNP), PacketInNPLoggingOperation}, false). // Enable logging.
-					Action().CT(true, nextTable, ctZone, f.ctZoneSrcField).                                          // CT action requires commit flag if actions other than NAT without arguments are specified.
+					Action().LoadToRegField(conjReg, conjunctionID).        // Traceflow.
+					Action().CT(true, nextTable, ctZone, f.ctZoneSrcField). // CT action requires commit flag if actions other than NAT without arguments are specified.
 					LoadToLabelField(uint64(conjunctionID), labelField).
 					LoadToCtMark(L7NPRedirectCTMark).                               // Mark the packets of the connection should be redirected to an application-aware engine.
 					LoadToLabelField(uint64(*l7RuleVlanID), L7NPRuleVlanIDCTLabel). // Load the VLAN ID allocated for L7 NetworkPolicy rule to CT mark field L7NPRuleVlanIDCTMarkField.
 					CTDone().
+					Action().LoadRegMark(DispositionAllowRegMark, L7NPRedirectRegMark, OutputToControllerRegMark). // AntreaPolicy.
+					Action().LoadToRegField(PacketInOperationField, PacketInNPLoggingOperation).
+					Action().LoadToRegField(PacketInTableField, uint32(tableID)).
+					Action().GotoTable(OutputTable.GetID()).
 					Cookie(cookieID).
 					Done()
 			}
 			return fb.
-				Action().LoadToRegField(conjReg, conjunctionID).                                                 // Traceflow.
-				Action().LoadRegMark(DispositionAllowRegMark).                                                   // AntreaPolicy.
-				Action().SendToController([]byte{uint8(PacketInCategoryNP), PacketInNPLoggingOperation}, false). // Enable logging.
-				Action().CT(true, nextTable, ctZone, f.ctZoneSrcField).                                          // CT action requires commit flag if actions other than NAT without arguments are specified.
+				Action().LoadToRegField(conjReg, conjunctionID).        // Traceflow.
+				Action().CT(true, nextTable, ctZone, f.ctZoneSrcField). // CT action requires commit flag if actions other than NAT without arguments are specified.
 				LoadToLabelField(uint64(conjunctionID), labelField).
 				CTDone().
+				Action().LoadRegMark(DispositionAllowRegMark, OutputToControllerRegMark). // AntreaPolicy.
+				Action().LoadToRegField(PacketInOperationField, PacketInNPLoggingOperation).
+				Action().LoadToRegField(PacketInTableField, uint32(tableID)).
+				Action().GotoTable(OutputTable.GetID()).
 				Cookie(cookieID).
 				Done()
 		}
@@ -1911,6 +1913,7 @@ func (f *featureNetworkPolicy) conjunctionActionDenyFlow(conjunctionID uint32, t
 		metricTable = MulticastIngressMetricTable
 	}
 	flowBuilder := table.BuildFlow(ofPriority).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchConjID(conjunctionID).
 		Action().LoadToRegField(APConjIDField, conjunctionID).
 		Action().LoadRegMark(APDenyRegMark)
@@ -1931,16 +1934,15 @@ func (f *featureNetworkPolicy) conjunctionActionDenyFlow(conjunctionID uint32, t
 	}
 
 	if enableLogging || f.enableDenyTracking || disposition == DispositionRej {
-		if f.ovsMetersAreSupported {
-			flowBuilder = flowBuilder.Action().Meter(PacketInMeterIDNP)
-		}
-		flowBuilder = flowBuilder.
-			Action().SendToController([]byte{uint8(PacketInCategoryNP), packetInOperations}, false)
+		groupID := f.getLoggingAndResubmitGroupID(metricTable.GetID())
+		return flowBuilder.Action().LoadToRegField(PacketInOperationField, uint32(packetInOperations)).
+			Action().LoadToRegField(PacketInTableField, uint32(tableID)).
+			Action().Group(groupID).
+			Done()
 	}
 
 	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
 	return flowBuilder.Action().GotoTable(metricTable.GetID()).
-		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		Done()
 }
 
@@ -1953,16 +1955,21 @@ func (f *featureNetworkPolicy) conjunctionActionPassFlow(conjunctionID uint32, t
 		conjReg = TFEgressConjIDField
 		nextTable = EgressRuleTable
 	}
-	flowBuilder := table.BuildFlow(ofPriority).MatchConjID(conjunctionID).
+	flowBuilder := table.BuildFlow(ofPriority).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchConjID(conjunctionID).
 		Action().LoadToRegField(conjReg, conjunctionID)
 
 	if enableLogging {
-		flowBuilder = flowBuilder.
+		groupID := f.getLoggingAndResubmitGroupID(nextTable.GetID())
+		return flowBuilder.
 			Action().LoadRegMark(DispositionPassRegMark).
-			Action().SendToController([]byte{uint8(PacketInCategoryNP), PacketInNPLoggingOperation}, false)
+			Action().LoadToRegField(PacketInOperationField, PacketInNPLoggingOperation).
+			Action().LoadToRegField(PacketInTableField, uint32(tableID)).
+			Action().Group(groupID).
+			Done()
 	}
 	return flowBuilder.Action().GotoTable(nextTable.GetID()).
-		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		Done()
 }
 
@@ -2117,7 +2124,7 @@ func (f *featureNetworkPolicy) conjunctiveMatchFlow(tableID uint8, matchPairs []
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
 func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs []matchPair, enableLogging bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	fb := table.BuildFlow(priorityNormal)
+	fb := table.BuildFlow(priorityNormal).Cookie(cookieID)
 	for _, eachMatchPair := range matchPairs {
 		fb = f.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
 	}
@@ -2132,12 +2139,13 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 
 	if enableLogging || f.enableDenyTracking {
 		return fb.Action().LoadRegMark(DispositionDropRegMark).
-			Action().SendToController([]byte{uint8(PacketInCategoryNP), packetInOperations}, false).
-			Cookie(cookieID).
+			Action().LoadToRegField(PacketInOperationField, uint32(packetInOperations)).
+			Action().LoadRegMark(OutputToControllerRegMark).
+			Action().LoadToRegField(PacketInTableField, uint32(table.GetID())).
+			Action().GotoTable(OutputTable.GetID()).
 			Done()
 	}
 	return fb.Action().Drop().
-		Cookie(cookieID).
 		Done()
 }
 
@@ -2842,7 +2850,7 @@ func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
 	return MulticastRoutingTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(binding.ProtocolIP).
-		Action().LoadRegMark(OFPortFoundRegMark).
+		Action().LoadRegMark(OutputToOFPortRegMark).
 		Action().LoadToRegField(TargetOFPortField, f.gatewayPort).
 		Action().GotoStage(stageOutput).
 		Done()
@@ -2862,7 +2870,8 @@ func NewClient(bridgeName string,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	enableTrafficControl bool,
-	enableMulticluster bool) Client {
+	enableMulticluster bool,
+	groupIDAllocator GroupAllocator) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
 		bridge:                bridge,
@@ -2882,6 +2891,7 @@ func NewClient(bridgeName string,
 		packetInHandlers:      map[uint8]PacketInHandler{},
 		ovsctlClient:          ovsctl.NewClient(bridgeName),
 		ovsMetersAreSupported: ovsMetersAreSupported(),
+		groupIDAllocator:      groupIDAllocator,
 	}
 	c.ofEntryOperations = c
 	return c

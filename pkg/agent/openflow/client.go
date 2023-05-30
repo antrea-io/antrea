@@ -789,12 +789,6 @@ func (c *client) initialize() error {
 		return fmt.Errorf("failed to install default flows: %v", err)
 	}
 
-	for _, activeFeature := range c.activatedFeatures {
-		if err := c.ofEntryOperations.AddAll(activeFeature.initFlows()); err != nil {
-			return fmt.Errorf("failed to install feature %v initial flows: %v", activeFeature.getFeatureName(), err)
-		}
-	}
-
 	if c.ovsMetersAreSupported {
 		if err := c.genPacketInMeter(PacketInMeterIDNP, PacketInMeterRateNP).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, PacketInMeterRateNP, err)
@@ -803,6 +797,16 @@ func (c *client) initialize() error {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, PacketInMeterRateTF, err)
 		}
 	}
+
+	for _, activeFeature := range c.activatedFeatures {
+		if err := c.ofEntryOperations.AddOFEntries(activeFeature.initGroups()); err != nil {
+			return fmt.Errorf("failed to install feature %v initial groups: %v", activeFeature.getFeatureName(), err)
+		}
+		if err := c.ofEntryOperations.AddAll(activeFeature.initFlows()); err != nil {
+			return fmt.Errorf("failed to install feature %v initial flows: %v", activeFeature.getFeatureName(), err)
+		}
+	}
+
 	return nil
 }
 
@@ -909,7 +913,8 @@ func (c *client) generatePipelines() {
 		c.enableMulticast,
 		c.proxyAll,
 		c.connectUplinkToBridge,
-		c.nodeType)
+		c.nodeType,
+		c.groupIDAllocator)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
 
@@ -1018,14 +1023,10 @@ func (c *client) ReplayFlows() {
 		klog.Errorf("Error during flow replay: %v", err)
 	}
 
-	if c.featureService != nil {
-		c.featureService.replayGroups()
-	}
-	if c.enableMulticast {
-		c.featureMulticast.replayGroups()
-	}
-
 	for _, activeFeature := range c.activatedFeatures {
+		if err := c.ofEntryOperations.AddOFEntries(activeFeature.replayGroups()); err != nil {
+			klog.ErrorS(err, "Error when replaying feature groups", "feature", activeFeature.getFeatureName())
+		}
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {
 			klog.ErrorS(err, "Error when replaying feature flows", "feature", activeFeature.getFeatureName())
 		}
@@ -1484,7 +1485,7 @@ func (c *client) InstallMulticlusterGatewayFlows(clusterID string,
 //     to set its target output port as 'antrea-tun0'. This flow will be on both Gateway and regular Node.
 //   - One flow in ClassifierTable for the tunnel traffic if it's not Encap mode.
 //   - One flow to match MC virtual MAC 'aa:bb:cc:dd:ee:f0' in ClassifierTable for Gateway only.
-//   - One flow in L2ForwardingOutTable to allow multicluster hairpin traffic for Gateway only.
+//   - One flow in OutputTable to allow multicluster hairpin traffic for Gateway only.
 func (c *client) InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGateway bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()

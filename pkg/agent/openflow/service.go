@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"antrea.io/libOpenflow/openflow15"
-	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/nodeip"
@@ -184,7 +183,7 @@ func (f *featureService) replayFlows() []*openflow15.FlowMod {
 	return getCachedFlowMessages(f.cachedFlows)
 }
 
-func (f *featureService) replayGroups() {
+func (f *featureService) replayGroups() []binding.OFEntry {
 	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
 		group := value.(binding.Group)
@@ -192,7 +191,9 @@ func (f *featureService) replayGroups() {
 		groups = append(groups, group)
 		return true
 	})
-	if err := f.bridge.AddOFEntriesInBundle(groups, nil, nil); err != nil {
-		klog.ErrorS(err, "error when replaying cached groups for Service")
-	}
+	return groups
+}
+
+func (f *featureService) initGroups() []binding.OFEntry {
+	return nil
 }
