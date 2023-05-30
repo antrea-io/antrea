@@ -63,7 +63,7 @@ func prepareMockTables() {
 			openflow.IngressRuleTable:             uint8(13),
 			openflow.IngressDefaultTable:          uint8(14),
 			openflow.IngressMetricTable:           uint8(15),
-			openflow.L2ForwardingOutTable:         uint8(17),
+			openflow.OutputTable:                  uint8(17),
 		})
 }
 
@@ -94,7 +94,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		{
 			name: "ingress accept",
 			args: args{
-				tableID: openflow.L2ForwardingOutTable.GetID(),
+				tableID: openflow.OutputTable.GetID(),
 				ingress: true,
 			},
 			want: &crdv1alpha1.Observation{
@@ -118,7 +118,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		{
 			name: "egress accept",
 			args: args{
-				tableID: openflow.L2ForwardingOutTable.GetID(),
+				tableID: openflow.OutputTable.GetID(),
 				ingress: false,
 			},
 			want: &crdv1alpha1.Observation{
@@ -282,7 +282,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 			pktIn: &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.L2ForwardingOutTable.GetID(),
+					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
 						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark},
 					},
@@ -321,7 +321,7 @@ func TestParsePacketIn(t *testing.T) {
 					},
 					{
 						Component:     crdv1alpha1.ComponentForwarding,
-						ComponentInfo: openflow.L2ForwardingOutTable.GetName(),
+						ComponentInfo: openflow.OutputTable.GetName(),
 						Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
 					},
 				},
@@ -345,7 +345,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 			pktIn: &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.L2ForwardingOutTable.GetID(),
+					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
 						Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
 					},
@@ -384,7 +384,7 @@ func TestParsePacketIn(t *testing.T) {
 					},
 					{
 						Component:     crdv1alpha1.ComponentForwarding,
-						ComponentInfo: openflow.L2ForwardingOutTable.GetName(),
+						ComponentInfo: openflow.OutputTable.GetName(),
 						Action:        crdv1alpha1.ActionForwarded,
 						TunnelDstIP:   egressIP,
 					},
@@ -408,7 +408,7 @@ func TestParsePacketIn(t *testing.T) {
 			},
 			pktIn: &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.L2ForwardingOutTable.GetID(),
+					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
 						Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark},
 					},
@@ -446,7 +446,7 @@ func TestParsePacketIn(t *testing.T) {
 					},
 					{
 						Component:     crdv1alpha1.ComponentForwarding,
-						ComponentInfo: openflow.L2ForwardingOutTable.GetName(),
+						ComponentInfo: openflow.OutputTable.GetName(),
 						Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
 					},
 				},
@@ -490,7 +490,7 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 	}
 	pktIn := &ofctrl.PacketIn{
 		PacketIn: &openflow15.PacketIn{
-			TableId: openflow.L2ForwardingOutTable.GetID(),
+			TableId: openflow.OutputTable.GetID(),
 			Data:    util.NewBuffer(getTestPacketBytes()),
 		},
 	}

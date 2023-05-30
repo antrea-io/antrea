@@ -29,20 +29,20 @@ func multicastInitFlows(isEncap bool) []string {
 			"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=210,igmp actions=goto_table:MulticastRouting",
 			"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=controller(id=32776,reason=no_match,userdata=03,max_len=128)",
 			"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x1/0xf actions=controller(id=32776,reason=no_match,userdata=03,max_len=128)",
-			"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=set_field:0x100/0x100->reg0,set_field:0x2->reg1,goto_table:MulticastOutput",
+			"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=set_field:0x200000/0x600000->reg0,set_field:0x2->reg1,goto_table:MulticastOutput",
 			"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=210,igmp actions=goto_table:MulticastOutput",
-			"cookie=0x1050000000000, table=MulticastOutput, priority=210,reg0=0x101/0x10f,reg1=0x2 actions=drop",
-			"cookie=0x1050000000000, table=MulticastOutput, priority=210,reg0=0x102/0x10f,reg1=0x1 actions=drop",
-			"cookie=0x1050000000000, table=MulticastOutput, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+			"cookie=0x1050000000000, table=MulticastOutput, priority=210,reg0=0x200001/0x60000f,reg1=0x2 actions=drop",
+			"cookie=0x1050000000000, table=MulticastOutput, priority=210,reg0=0x200002/0x60000f,reg1=0x1 actions=drop",
+			"cookie=0x1050000000000, table=MulticastOutput, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 		}
 	}
 	return []string{
 		"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=210,igmp actions=goto_table:MulticastOutput",
 		"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=controller(id=32776,reason=no_match,userdata=03,max_len=128)",
-		"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=set_field:0x100/0x100->reg0,set_field:0x2->reg1,goto_table:MulticastOutput",
+		"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=set_field:0x200000/0x600000->reg0,set_field:0x2->reg1,goto_table:MulticastOutput",
 		"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=210,igmp actions=goto_table:MulticastRouting",
 		"cookie=0x1050000000000, table=MulticastEgressRule, priority=64990,igmp,reg0=0x3/0xf actions=goto_table:MulticastRouting",
-		"cookie=0x1050000000000, table=MulticastOutput, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+		"cookie=0x1050000000000, table=MulticastOutput, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 	}
 }
 

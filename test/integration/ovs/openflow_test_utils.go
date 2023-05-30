@@ -203,3 +203,8 @@ func OfCtlDumpGroups(ovsCtlClient ovsctl.OVSCtlClient) ([][]string, error) {
 	}
 	return groupList, nil
 }
+
+func OfctlDeleteGroups(ovsCtlClient ovsctl.OVSCtlClient) error {
+	_, err := ovsCtlClient.RunOfctlCmd("del-groups")
+	return err
+}

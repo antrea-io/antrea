@@ -57,8 +57,12 @@ type feature interface {
 	getFeatureName() string
 	// getRequiredTables returns a slice of required tables of the feature.
 	getRequiredTables() []*Table
+	// initGroups returns the OpenFlow groups of the feature needed in the initialization.
+	initGroups() []binding.OFEntry
 	// initFlows returns the Openflow messages of initial flows of the feature.
 	initFlows() []*openflow15.FlowMod
+	// replayGroups returns the fixed and cached Openflow groups that need to be replayed after OVS is reconnected.
+	replayGroups() []binding.OFEntry
 	// replayFlows returns the Openflow messages of fixed and cached flows that need to be replayed after OVS is reconnected.
 	replayFlows() []*openflow15.FlowMod
 }
@@ -174,7 +178,7 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 		L3DecTTLTable,
 		L2ForwardingCalcTable,
 		ConntrackCommitTable,
-		L2ForwardingOutTable,
+		OutputTable,
 	}
 
 	for _, ipProtocol := range f.ipProtocols {
@@ -251,7 +255,7 @@ func (f *featureService) getRequiredTables() []*Table {
 		SNATMarkTable,
 		SNATTable,
 		ConntrackCommitTable,
-		L2ForwardingOutTable,
+		OutputTable,
 	}
 	if f.proxyAll {
 		tables = append(tables, NodePortMarkTable)
@@ -284,7 +288,7 @@ func (f *featureMulticluster) getRequiredTables() []*Table {
 		SNATTable,
 		UnSNATTable,
 		SNATMarkTable,
-		L2ForwardingOutTable,
+		OutputTable,
 	}
 }
 
@@ -298,7 +302,7 @@ func (f *featureExternalNodeConnectivity) getRequiredTables() []*Table {
 		ConntrackStateTable,
 		L2ForwardingCalcTable,
 		ConntrackCommitTable,
-		L2ForwardingOutTable,
+		OutputTable,
 		NonIPTable,
 	}
 }

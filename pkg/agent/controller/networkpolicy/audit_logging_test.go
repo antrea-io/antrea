@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -31,8 +32,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -250,11 +253,17 @@ func TestRedirectPacketLog(t *testing.T) {
 func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
 	generateMatch := func(regID int, data []byte) openflow15.MatchField {
+		baseData := make([]byte, 8, 8)
+		if regID%2 == 0 {
+			copy(baseData[0:4], data)
+		} else {
+			copy(baseData[4:8], data)
+		}
 		return openflow15.MatchField{
 			Class:   openflow15.OXM_CLASS_PACKET_REGS,
 			Field:   uint8(regID / 2),
 			HasMask: false,
-			Value:   &openflow15.ByteArrayField{Data: data},
+			Value:   &openflow15.ByteArrayField{Data: baseData},
 		}
 	}
 	testANPRef := "AntreaNetworkPolicy:default/test-anp"
@@ -264,7 +273,29 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
 	dropK8sDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
 	redirectDispositionData := []byte{0x11, 0x10, 0x00, 0x11}
-	ingressData := []byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}
+	// use 4 bytes of data for the conjunction identifier, this will be used for one of
+	// the following registers depending on the test case:
+	// openflow.APConjIDField, openflow.TFEgressConjIDField, openflow.TFIngressConjIDField
+	// the data itself is not relevant
+	conjunctionData := []byte{0x11, 0x11, 0x11, 0x11}
+	srcIP := net.ParseIP("192.168.1.1")
+	destIP := net.ParseIP("192.168.1.2")
+
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("srcPod", "default", "c1"),
+		IPs:                      []net.IP{srcIP},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "srcPod", PodNamespace: "default", ContainerID: "c1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("destPod", "default", "c2"),
+		IPs:                      []net.IP{destIP},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "destPod", PodNamespace: "default", ContainerID: "c2"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 2},
+	})
+
+	antreaIngressRuleTableID := openflow.AntreaPolicyIngressRuleTable.GetID()
 	tests := []struct {
 		name            string
 		tableID         uint8
@@ -273,6 +304,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		ob              *logInfo
 		wantOb          *logInfo
 		wantErr         error
+		tableIDInReg    *uint8
 	}{
 		{
 			name:    "ANP Allow",
@@ -355,6 +387,42 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				logLabel:    testLogLabel,
 			},
 		},
+		{
+			name:    "Antrea-native Policy Allow from output table",
+			tableID: openflow.OutputTable.GetID(),
+			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					testANPRef, testPriority, testRule, testLogLabel)
+			},
+			dispositionData: allowDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition: actionAllow,
+				npRef:       testANPRef,
+				ofPriority:  testPriority,
+				ruleName:    testRule,
+				logLabel:    testLogLabel,
+			},
+			tableIDInReg: &antreaIngressRuleTableID,
+		},
+		{
+			name:    "Antrea-native Policy Drop from output table",
+			tableID: openflow.OutputTable.GetID(),
+			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					testANPRef, testPriority, testRule, testLogLabel)
+			},
+			dispositionData: dropCNPDispositionData,
+			wantOb: &logInfo{
+				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition: actionDrop,
+				npRef:       testANPRef,
+				ofPriority:  testPriority,
+				ruleName:    testRule,
+				logLabel:    testLogLabel,
+			},
+			tableIDInReg: &antreaIngressRuleTableID,
+		},
 	}
 
 	for _, tc := range tests {
@@ -368,8 +436,25 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				if tc.wantOb.disposition == actionDrop {
 					regID = openflow.APConjIDField.GetRegID()
 				}
-				ingressMatch := generateMatch(regID, ingressData)
+				ingressMatch := generateMatch(regID, conjunctionData)
 				matchers = append(matchers, ingressMatch)
+			}
+			if tc.tableIDInReg != nil {
+				tableMatchRegID := openflow.PacketInTableField.GetRegID()
+				tableRegData := make([]byte, 4, 4)
+				binary.BigEndian.PutUint32(tableRegData[0:], uint32(*tc.tableIDInReg))
+				found := false
+				for _, m := range matchers {
+					if m.Class == openflow15.OXM_CLASS_PACKET_REGS && m.Field == uint8(tableMatchRegID/2) {
+						copy(m.Value.(*openflow15.ByteArrayField).Data[0:4], tableRegData)
+						found = true
+						break
+					}
+				}
+				if !found {
+					tableMatch := generateMatch(tableMatchRegID, tableRegData)
+					matchers = append(matchers, tableMatch)
+				}
 			}
 			pktIn := &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{

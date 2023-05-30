@@ -96,7 +96,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net
 				Cookie(cookieID).
 				MatchDstMAC(remoteGatewayMAC).
 				Action().LoadToRegField(TargetOFPortField, f.uplinkPort).
-				Action().LoadRegMark(OFPortFoundRegMark).
+				Action().LoadRegMark(OutputToOFPortRegMark).
 				Action().GotoStage(stageConntrack).
 				Done(),
 		)
