@@ -22,6 +22,10 @@ Install OVS
 .PARAMETER NodeIP
 The node ip used by kubelet
 
+.PARAMETER InstallOVSUserspace
+Specifies whether OVS userspace processes is included in the installation. If false, these processes will not 
+be installed as Windows service on the host.
+
 .EXAMPLE
 PS> .\Prepare-Node.ps1 -KubernetesVersion v1.18.0 -InstallOVS -NodeIP 192.168.1.10
 
@@ -32,6 +36,7 @@ Param(
     [parameter(Mandatory = $true, HelpMessage="Node IP")] [string] $NodeIP,
     [parameter(Mandatory = $false)] [switch] $InstallOVS = $false,
     [parameter(Mandatory = $false, HelpMessage="Kubernetes download")] [string] $KubernetesURL="dl.k8s.io"
+    [parameter(Mandatory = $false)] [bool] $InstallOVSUserspace = $true 
 )
 $ErrorActionPreference = 'Stop'
 
@@ -127,5 +132,5 @@ New-NetFirewallRule -Name kubelet -DisplayName 'kubelet' -Enabled True -Directio
 
 if ($InstallOVS) {
     Write-Host "Installing OVS"
-    & .\Install-OVS.ps1
+    & .\Install-OVS.ps1 -InstallUserspace $InstallOVSUserspace
 }

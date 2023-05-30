@@ -21,6 +21,10 @@
   .PARAMETER ImportCertificate
   Specifies if a certificate file is needed for OVS package. If true, certificate
   will be retrieved from OVSExt.sys and a package.cer file will be generated.
+
+  .PARAMETER InstallUserspace
+  Specifies whether OVS userspace processes are included in the installation. If false, these processes will not 
+  be installed as Windows service on the host.
 #>
 Param(
     [parameter(Mandatory = $false)] [string] $DownloadDir,
@@ -28,13 +32,14 @@ Param(
     [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
     [parameter(Mandatory = $false)] [bool] $CheckFileHash = $true,
     [parameter(Mandatory = $false)] [string] $LocalFile,
-    [parameter(Mandatory = $false)] [bool] $ImportCertificate = $true
+    [parameter(Mandatory = $false)] [bool] $ImportCertificate = $true,
+    [parameter(Mandatory = $false)] [bool] $InstallUserspace = $true
 )
 
 $ErrorActionPreference = "Stop"
-$OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-2.16.7-antrea.0-win64.zip"
+$OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-3.0.5-antrea.0-win64.zip"
 # Use a SHA256 hash to ensure that the downloaded archive is correct.
-$OVSPublishedHash = '17d23ca0fbf84e1eac9a392f67ee4315edffd1d5233a729655e04e1332a9f565'
+$OVSPublishedHash = 'fd27703ef7314b26b98cffb7aea27d569530ebd3ac3c98daa981ca2654373032'
 $WorkDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 $OVSDownloadDir = $WorkDir
 $PowerShellModuleBase = "C:\Windows\System32\WindowsPowerShell\v1.0\Modules"
@@ -259,8 +264,10 @@ DownloadOVS
 
 InstallOVS
 
-InstallDependency
+if ($InstallUserspace -eq $true) {
+    InstallDependency
 
-ConfigOVS
+    ConfigOVS
+} 
 
 Log "OVS Installation Complete!"
