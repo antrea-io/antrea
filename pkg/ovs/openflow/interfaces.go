@@ -98,14 +98,11 @@ var VLANVIDRange = &Range{0, 11}
 
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
-	CreateTable(table Table, next uint8, missAction MissActionType) Table
-	DeleteTable(id uint8) bool
+	NewTable(table Table, next uint8, missAction MissActionType) Table
 	GetTableByID(id uint8) (Table, error)
-	CreateGroupTypeAll(id GroupIDType) Group
-	CreateGroup(id GroupIDType) Group
-	DeleteGroup(id GroupIDType) error
-	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
-	DeleteMeter(id MeterIDType) bool
+	NewGroupTypeAll(id GroupIDType) Group
+	NewGroup(id GroupIDType) Group
+	NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	DeleteMeterAll() error
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is

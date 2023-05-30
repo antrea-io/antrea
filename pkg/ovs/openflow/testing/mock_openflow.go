@@ -109,62 +109,6 @@ func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0, arg1)
 }
 
-// CreateGroup mocks base method
-func (m *MockBridge) CreateGroup(arg0 openflow.GroupIDType) openflow.Group {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateGroup", arg0)
-	ret0, _ := ret[0].(openflow.Group)
-	return ret0
-}
-
-// CreateGroup indicates an expected call of CreateGroup
-func (mr *MockBridgeMockRecorder) CreateGroup(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroup", reflect.TypeOf((*MockBridge)(nil).CreateGroup), arg0)
-}
-
-// CreateGroupTypeAll mocks base method
-func (m *MockBridge) CreateGroupTypeAll(arg0 openflow.GroupIDType) openflow.Group {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateGroupTypeAll", arg0)
-	ret0, _ := ret[0].(openflow.Group)
-	return ret0
-}
-
-// CreateGroupTypeAll indicates an expected call of CreateGroupTypeAll
-func (mr *MockBridgeMockRecorder) CreateGroupTypeAll(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroupTypeAll", reflect.TypeOf((*MockBridge)(nil).CreateGroupTypeAll), arg0)
-}
-
-// CreateMeter mocks base method
-func (m *MockBridge) CreateMeter(arg0 openflow.MeterIDType, arg1 ofctrl.MeterFlag) openflow.Meter {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateMeter", arg0, arg1)
-	ret0, _ := ret[0].(openflow.Meter)
-	return ret0
-}
-
-// CreateMeter indicates an expected call of CreateMeter
-func (mr *MockBridgeMockRecorder) CreateMeter(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMeter", reflect.TypeOf((*MockBridge)(nil).CreateMeter), arg0, arg1)
-}
-
-// CreateTable mocks base method
-func (m *MockBridge) CreateTable(arg0 openflow.Table, arg1 byte, arg2 openflow.MissActionType) openflow.Table {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTable", arg0, arg1, arg2)
-	ret0, _ := ret[0].(openflow.Table)
-	return ret0
-}
-
-// CreateTable indicates an expected call of CreateTable
-func (mr *MockBridgeMockRecorder) CreateTable(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTable", reflect.TypeOf((*MockBridge)(nil).CreateTable), arg0, arg1, arg2)
-}
-
 // DeleteFlowsByCookie mocks base method
 func (m *MockBridge) DeleteFlowsByCookie(arg0, arg1 uint64) error {
 	m.ctrl.T.Helper()
@@ -179,34 +123,6 @@ func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowsByCookie", reflect.TypeOf((*MockBridge)(nil).DeleteFlowsByCookie), arg0, arg1)
 }
 
-// DeleteGroup mocks base method
-func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteGroup", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteGroup indicates an expected call of DeleteGroup
-func (mr *MockBridgeMockRecorder) DeleteGroup(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGroup", reflect.TypeOf((*MockBridge)(nil).DeleteGroup), arg0)
-}
-
-// DeleteMeter mocks base method
-func (m *MockBridge) DeleteMeter(arg0 openflow.MeterIDType) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteMeter", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// DeleteMeter indicates an expected call of DeleteMeter
-func (mr *MockBridgeMockRecorder) DeleteMeter(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMeter", reflect.TypeOf((*MockBridge)(nil).DeleteMeter), arg0)
-}
-
 // DeleteMeterAll mocks base method
 func (m *MockBridge) DeleteMeterAll() error {
 	m.ctrl.T.Helper()
@@ -219,20 +135,6 @@ func (m *MockBridge) DeleteMeterAll() error {
 func (mr *MockBridgeMockRecorder) DeleteMeterAll() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMeterAll", reflect.TypeOf((*MockBridge)(nil).DeleteMeterAll))
-}
-
-// DeleteTable mocks base method
-func (m *MockBridge) DeleteTable(arg0 byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTable", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// DeleteTable indicates an expected call of DeleteTable
-func (mr *MockBridgeMockRecorder) DeleteTable(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTable", reflect.TypeOf((*MockBridge)(nil).DeleteTable), arg0)
 }
 
 // Disconnect mocks base method
@@ -305,6 +207,62 @@ func (m *MockBridge) IsConnected() bool {
 func (mr *MockBridgeMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockBridge)(nil).IsConnected))
+}
+
+// NewGroup mocks base method
+func (m *MockBridge) NewGroup(arg0 openflow.GroupIDType) openflow.Group {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewGroup", arg0)
+	ret0, _ := ret[0].(openflow.Group)
+	return ret0
+}
+
+// NewGroup indicates an expected call of NewGroup
+func (mr *MockBridgeMockRecorder) NewGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewGroup", reflect.TypeOf((*MockBridge)(nil).NewGroup), arg0)
+}
+
+// NewGroupTypeAll mocks base method
+func (m *MockBridge) NewGroupTypeAll(arg0 openflow.GroupIDType) openflow.Group {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewGroupTypeAll", arg0)
+	ret0, _ := ret[0].(openflow.Group)
+	return ret0
+}
+
+// NewGroupTypeAll indicates an expected call of NewGroupTypeAll
+func (mr *MockBridgeMockRecorder) NewGroupTypeAll(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewGroupTypeAll", reflect.TypeOf((*MockBridge)(nil).NewGroupTypeAll), arg0)
+}
+
+// NewMeter mocks base method
+func (m *MockBridge) NewMeter(arg0 openflow.MeterIDType, arg1 ofctrl.MeterFlag) openflow.Meter {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewMeter", arg0, arg1)
+	ret0, _ := ret[0].(openflow.Meter)
+	return ret0
+}
+
+// NewMeter indicates an expected call of NewMeter
+func (mr *MockBridgeMockRecorder) NewMeter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMeter", reflect.TypeOf((*MockBridge)(nil).NewMeter), arg0, arg1)
+}
+
+// NewTable mocks base method
+func (m *MockBridge) NewTable(arg0 openflow.Table, arg1 byte, arg2 openflow.MissActionType) openflow.Table {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewTable", arg0, arg1, arg2)
+	ret0, _ := ret[0].(openflow.Table)
+	return ret0
+}
+
+// NewTable indicates an expected call of NewTable
+func (mr *MockBridgeMockRecorder) NewTable(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTable", reflect.TypeOf((*MockBridge)(nil).NewTable), arg0, arg1, arg2)
 }
 
 // ResumePacket mocks base method

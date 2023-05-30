@@ -29,16 +29,23 @@ func (m *ofMeter) Reset() {
 	m.ofctrl.Switch = m.bridge.ofSwitch
 }
 
+// Note: use OFSwitch to directly send MeterModification message rather than bundle message is because the
+// current ofnet implementation for OpenFlow bundle does not support adding MeterModification.
 func (m *ofMeter) Add() error {
-	return m.ofctrl.Install()
+	msg := m.ofctrl.GetBundleMessage(openflow15.MC_ADD)
+	return m.ofctrl.Switch.Send(msg.GetMessage())
 }
 
 func (m *ofMeter) Modify() error {
-	return m.ofctrl.Install()
+	msg := m.ofctrl.GetBundleMessage(openflow15.MC_MODIFY)
+	return m.ofctrl.Switch.Send(msg.GetMessage())
 }
 
 func (m *ofMeter) Delete() error {
-	return m.ofctrl.Delete()
+	meterMod := openflow15.NewMeterMod()
+	meterMod.MeterId = m.ofctrl.ID
+	meterMod.Command = openflow15.MC_DELETE
+	return m.ofctrl.Switch.Send(meterMod)
 }
 
 func (m *ofMeter) Type() EntryType {

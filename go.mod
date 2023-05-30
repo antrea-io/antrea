@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	antrea.io/libOpenflow v0.10.2
-	antrea.io/ofnet v0.7.1
+	antrea.io/ofnet v0.7.2
 	github.com/ClickHouse/clickhouse-go/v2 v2.6.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Mellanox/sriovnet v1.1.0

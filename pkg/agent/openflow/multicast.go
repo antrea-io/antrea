@@ -93,7 +93,7 @@ func (f *featureMulticast) replayFlows() []*openflow15.FlowMod {
 }
 
 func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) binding.Group {
-	group := f.bridge.CreateGroupTypeAll(groupID).ResetBuckets()
+	group := f.bridge.NewGroupTypeAll(groupID)
 	for i := range ports {
 		group = group.Bucket().
 			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).

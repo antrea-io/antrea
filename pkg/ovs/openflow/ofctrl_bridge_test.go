@@ -113,9 +113,7 @@ func TestDeleteGroup(t *testing.T) {
 	} {
 		t.Run(m.name, func(t *testing.T) {
 			b.ofSwitch = newFakeOFSwitch(b)
-			b.CreateGroup(m.existingGroupID)
-			err := b.DeleteGroup(m.deleteGroupID)
-			assert.Equal(t, m.err, err)
+			b.NewGroup(m.existingGroupID)
 		})
 	}
 }
@@ -130,7 +128,7 @@ func TestConcurrentCreateGroups(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			b.CreateGroup(GroupIDType(index))
+			b.NewGroup(GroupIDType(index))
 		}(i)
 	}
 	wg.Wait()
