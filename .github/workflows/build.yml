@@ -112,23 +112,6 @@ jobs:
         docker push antrea/antrea-windows:latest
       shell: bash
 
-  build-octant-antrea-ubuntu:
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v3
-    - name: Build octant-antrea-ubuntu Docker image
-      run: make octant-antrea-ubuntu
-    - name: Push octant-antrea-ubuntu Docker image to registry
-      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/octant-antrea-ubuntu:latest
-
   build-antrea-mc-controller:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}

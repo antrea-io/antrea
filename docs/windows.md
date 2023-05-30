@@ -32,9 +32,9 @@ section for details.
 
 Watch this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
 Antrea in a Kubernetes cluster with both Linux and Windows Nodes. The demo also
-shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
-enforcement for Windows Pods, and Antrea Traceflow from Octant. Note, OVS driver
-and daemons are pre-installed on the Windows Nodes in the demo.
+shows the Antrea OVS bridge configuration on a Windows Node, and NetworkPolicy
+enforcement for Windows Pods. Note, OVS driver and daemons are pre-installed on
+the Windows Nodes in the demo.
 
 ## Deploying Antrea on Windows Worker Node
 

@@ -30,7 +30,7 @@ failed_binaries=""
 
 for f in "$1"/*; do
     [ -e "$f" ] || continue
-    if [[ $f =~ antrea-agent || $f =~ antrea-controller || $f =~ antrea-cni || $f =~ antctl || $f =~ antrea-octant-plugin ]]; then
+    if [[ $f =~ antrea-agent || $f =~ antrea-controller || $f =~ antrea-cni || $f =~ antctl ]]; then
         base=$(basename $f)
         echo "Processing $base"
         echo "****************"
@@ -41,8 +41,7 @@ done
 
 echo "Merging all files as $REPORTS_DIR/ALL.deps.txt"
 echo "****************"
-# The 'grep -v' is to remove the dependency of the Antrea Octant plugin to Antrea
-cat "$REPORTS_DIR"/*.deps.txt | grep -v "\.\./\.\." | sort | uniq | tee "$REPORTS_DIR/ALL.deps.txt"
+cat "$REPORTS_DIR"/*.deps.txt | sort | uniq | tee "$REPORTS_DIR/ALL.deps.txt"
 echo "****************"
 
 rc=
