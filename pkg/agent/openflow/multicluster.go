@@ -68,7 +68,19 @@ func (f *featureMulticluster) replayFlows() []binding.Flow {
 	return getCachedFlows(f.cachedFlows)
 }
 
+<<<<<<< HEAD
 func (f *featureMulticluster) l3FwdFlowToRemoteViaTun(
+=======
+func (f *featureMulticluster) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureMulticluster) replayGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureMulticluster) l3FwdFlowToRemoteGateway(
+>>>>>>> Use OpenFlow group for Network Policy logging
 	localGatewayMAC net.HardwareAddr,
 	peerServiceCIDR net.IPNet,
 	tunnelPeer net.IP,
@@ -137,7 +149,7 @@ func (f *featureMulticluster) tunnelClassifierFlow(tunnelOFPort uint32) binding.
 }
 
 func (f *featureMulticluster) outputHairpinTunnelFlow(tunnelOFPort uint32) binding.Flow {
-	return L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
+	return OutputTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchRegFieldWithValue(TargetOFPortField, tunnelOFPort).
 		MatchInPort(tunnelOFPort).

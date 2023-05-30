@@ -18,7 +18,11 @@ import (
 	"net"
 	"sync"
 
+<<<<<<< HEAD
 	"k8s.io/klog/v2"
+=======
+	"antrea.io/libOpenflow/openflow15"
+>>>>>>> Use OpenFlow group for Network Policy logging
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -169,7 +173,7 @@ func (f *featureService) replayFlows() []binding.Flow {
 	return flows
 }
 
-func (f *featureService) replayGroups() {
+func (f *featureService) replayGroups() []binding.OFEntry {
 	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
 		group := value.(binding.Group)
@@ -177,7 +181,9 @@ func (f *featureService) replayGroups() {
 		groups = append(groups, group)
 		return true
 	})
-	if err := f.bridge.AddOFEntriesInBundle(groups, nil, nil); err != nil {
-		klog.ErrorS(err, "error when replaying cached groups for Service")
-	}
+	return groups
+}
+
+func (f *featureService) initGroups() []binding.OFEntry {
+	return nil
 }

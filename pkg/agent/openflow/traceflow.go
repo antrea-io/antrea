@@ -15,6 +15,11 @@
 package openflow
 
 import (
+<<<<<<< HEAD
+=======
+	"antrea.io/libOpenflow/openflow15"
+
+>>>>>>> Use OpenFlow group for Network Policy logging
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -38,4 +43,12 @@ func (f *featureTraceflow) initFlows() []binding.Flow {
 
 func (f *featureTraceflow) replayFlows() []binding.Flow {
 	return []binding.Flow{}
+}
+
+func (f *featureTraceflow) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureTraceflow) replayGroups() []binding.OFEntry {
+	return nil
 }

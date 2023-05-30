@@ -249,7 +249,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Get output table.
-	if tableID == openflow.L2ForwardingOutTable.GetID() {
+	if tableID == openflow.OutputTable.GetID() {
 		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
 		// decide according to packet.
@@ -323,7 +323,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 			// Output port is Pod port, packet is delivered.
 			ob.Action = crdv1alpha1.ActionDelivered
 		}
-		ob.ComponentInfo = openflow.L2ForwardingOutTable.GetName()
+		ob.ComponentInfo = openflow.OutputTable.GetName()
 		ob.Component = crdv1alpha1.ComponentForwarding
 		obs = append(obs, *ob)
 	}

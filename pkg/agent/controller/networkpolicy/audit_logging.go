@@ -184,7 +184,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table name.
-	tableID := pktIn.TableId
+	tableID := getPacketInTableID(pktIn)
 	ob.tableName = openflow.GetFlowTableName(tableID)
 
 	// Get disposition Allow or Drop.

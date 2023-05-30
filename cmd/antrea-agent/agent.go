@@ -144,8 +144,16 @@ func run(o *Options) error {
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
+<<<<<<< HEAD
 	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast)
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+=======
+	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable
+	groupIDAllocator := openflow.NewGroupAllocator()
+	ofClient := openflow.NewClient(o.config.OVSBridge,
+		ovsBridgeMgmtAddr,
+		nodeIPTracker,
+>>>>>>> Use OpenFlow group for Network Policy logging
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
@@ -156,6 +164,7 @@ func run(o *Options) error {
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
 		enableMulticlusterGW,
+		groupIDAllocator,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -373,10 +382,22 @@ func run(o *Options) error {
 
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
+<<<<<<< HEAD
 	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
 	v4GroupCounter := proxytypes.NewGroupCounter(v4GroupIDAllocator, groupIDUpdates)
 	v6GroupIDAllocator := openflow.NewGroupAllocator(true)
 	v6GroupCounter := proxytypes.NewGroupCounter(v6GroupIDAllocator, groupIDUpdates)
+=======
+	var v4GroupCounter, v6GroupCounter proxytypes.GroupCounter
+	if v4Enabled {
+		v4GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)
+		groupCounters = append(groupCounters, v4GroupCounter)
+	}
+	if v6Enabled {
+		v6GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)
+		groupCounters = append(groupCounters, v6GroupCounter)
+	}
+>>>>>>> Use OpenFlow group for Network Policy logging
 
 	v4Enabled := networkConfig.IPv4Enabled
 	v6Enabled := networkConfig.IPv6Enabled

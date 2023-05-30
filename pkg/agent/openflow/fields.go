@@ -27,6 +27,9 @@ var (
 	bridgeVal   = uint32(5)
 	tcReturnVal = uint32(6)
 
+	outputToPortVal       = uint32(1)
+	outputToControllerVal = uint32(2)
+
 	// reg0 (NXM_NX_REG0)
 	// reg0[0..3]: Field to store the packet source. Marks in this field include:
 	//   - 1: from tunnel port.
@@ -52,8 +55,6 @@ var (
 	ToTunnelRegMark     = binding.NewRegMark(PktDestinationField, tunnelVal)
 	ToGatewayRegMark    = binding.NewRegMark(PktDestinationField, gatewayVal)
 	ToUplinkRegMark     = binding.NewRegMark(PktDestinationField, uplinkVal)
-	// reg0[8]: Mark to indicate the ofPort number of an interface is found.
-	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 8)
 	// reg0[9]: Field to indicate whether the packet's source / destination MAC address needs to be rewritten.
 	RewriteMACRegMark    = binding.NewOneBitRegMark(0, 9)
 	NotRewriteMACRegMark = binding.NewOneBitZeroRegMark(0, 9)
@@ -87,6 +88,14 @@ var (
 	// reg0[20]: Field to indicate redirect action of layer 7 NetworkPolicy.
 	L7NPRegField        = binding.NewRegField(0, 20, 20)
 	L7NPRedirectRegMark = binding.NewRegMark(L7NPRegField, DispositionL7NPRedirect)
+	// reg0[21..22]: Field to indicate how the packet leaves OVS pipeline. Marks in this field include:
+	//   - 1: Output to an OVS port.
+	//   - 2: Send packet to Antrea Agent.
+	OutputRegField            = binding.NewRegField(0, 21, 22)
+	OutputToOFPortRegMark     = binding.NewRegMark(OutputRegField, outputToPortVal)
+	OutputToControllerRegMark = binding.NewRegMark(OutputRegField, outputToControllerVal)
+	// reg0[25..32]: Field to indicate Antrea-native policy packetIn operations
+	PacketInOperationField = binding.NewRegField(0, 25, 32)
 
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
@@ -96,6 +105,10 @@ var (
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func
 	// `arpResponderStaticFlow`.
 	SwapField = binding.NewRegField(2, 0, 31)
+	// Field to store the OVS table where the packet is decided to be sent to controller. This may be different from
+	// packetIn.TableId where the flow with "SendToController" action is located as we may install the packetIn flows
+	// in a single table, e.g., Antrea-native policy logging flows.
+	PacketInTableField = binding.NewRegField(2, 0, 7)
 
 	// reg3(NXM_NX_REG3)
 	// Field to store the selected Service Endpoint IP

@@ -84,3 +84,11 @@ func (f *featureEgress) replayFlows() []binding.Flow {
 
 	return flows
 }
+
+func (f *featureEgress) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureEgress) replayGroups() []binding.OFEntry {
+	return nil
+}

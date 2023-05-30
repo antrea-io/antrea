@@ -2069,6 +2069,12 @@ type featureNetworkPolicy struct {
 	// egressTables map records all IDs of tables related to egress rules.
 	egressTables map[uint8]struct{}
 
+	// loggingGroupCache is a storage for the logging groups, each one includes 2 buckets: one is to send the packet
+	// to antrea-agent using the packetIn mechanism, the other is to force the packet to continue forwardingin the
+	// OVS pipeline. The key is the next table used in the second bucket, and the value is the Openflow group.
+	loggingGroupCache sync.Map
+	groupAllocator    GroupAllocator
+
 	ovsMetersAreSupported bool
 	enableDenyTracking    bool
 	enableAntreaPolicy    bool
@@ -2100,7 +2106,8 @@ func newFeatureNetworkPolicy(
 	enableMulticast bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
-	nodeType config.NodeType) *featureNetworkPolicy {
+	nodeType config.NodeType,
+	grpAllocator GroupAllocator) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
 		cookieAllocator:          cookieAllocator,
 		ipProtocols:              ipProtocols,
@@ -2117,6 +2124,8 @@ func newFeatureNetworkPolicy(
 		proxyAll:                 proxyAll,
 		category:                 cookie.NetworkPolicy,
 		ctZoneSrcField:           getZoneSrcField(connectUplinkToBridge),
+		loggingGroupCache:        sync.Map{},
+		groupAllocator:           grpAllocator,
 	}
 }
 
@@ -2136,7 +2145,12 @@ func (f *featureNetworkPolicy) initFlows() []binding.Flow {
 		}
 	}
 	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
+<<<<<<< HEAD
 	return flows
+=======
+	flows = append(flows, f.initLoggingFlows()...)
+	return GetFlowModMessages(flows, binding.AddMessage)
+>>>>>>> Use OpenFlow group for Network Policy logging
 }
 
 // skipPolicyRuleCheckFlows generates the flows to forward the packets in an established or related
@@ -2195,9 +2209,9 @@ func (f *featureNetworkPolicy) l7NPTrafficControlFlows() []binding.Flow {
 		// This generates the flow to output the packets marked with L7NPRedirectCTMark to an application-aware engine
 		// via the target ofPort. Note that, before outputting the packets, VLAN ID stored on field L7NPRuleVlanIDCTMarkField
 		// will be copied to VLAN ID register (OXM_OF_VLAN_VID) to set VLAN ID of the packets.
-		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh+1).
+		OutputTable.ofTable.BuildFlow(priorityHigh+1).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark).
+			MatchRegMark(OutputToOFPortRegMark).
 			MatchCTMark(L7NPRedirectCTMark).
 			Action().PushVLAN(EtherTypeDot1q).
 			Action().MoveRange(binding.NxmFieldCtLabel, binding.OxmFieldVLANVID, *L7NPRuleVlanIDCTLabel.GetRange(), *binding.VLANVIDRange).
@@ -2218,8 +2232,72 @@ func (f *featureNetworkPolicy) l7NPTrafficControlFlows() []binding.Flow {
 		// after loading output port number to reg1 in L2ForwardingCalcTable.
 		TrafficControlTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark, FromTCReturnRegMark).
+			MatchRegMark(OutputToOFPortRegMark, FromTCReturnRegMark).
 			Action().GotoStage(stageOutput).
 			Done(),
 	}
+}
+
+func (f *featureNetworkPolicy) loggingNPPacketFlowWithOperations(cookieID uint64, operations uint8) binding.Flow {
+	loggingOperations := binding.NewRegMark(PacketInOperationField, uint32(operations))
+	fb := OutputTable.ofTable.BuildFlow(priorityNormal).
+		MatchRegMark(OutputToControllerRegMark, loggingOperations)
+	if f.ovsMetersAreSupported {
+		fb = fb.Action().Meter(PacketInMeterIDNP)
+	}
+	return fb.Action().SendToController([]byte{uint8(PacketInCategoryNP), operations}, false).
+		Cookie(cookieID).
+		Done()
+}
+
+func (f *featureNetworkPolicy) initLoggingFlows() []binding.Flow {
+	maxOperationValue := PacketInNPLoggingOperation + PacketInNPStoreDenyOperation + PacketInNPRejectOperation
+	flows := make([]binding.Flow, 0, maxOperationValue)
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	for operation := 1; operation <= maxOperationValue; operation++ {
+		flows = append(flows, f.loggingNPPacketFlowWithOperations(cookieID, uint8(operation)))
+	}
+	return flows
+}
+
+func (f *featureNetworkPolicy) initGroups() []binding.OFEntry {
+	var groups []binding.OFEntry
+	candidateTables := []*Table{EgressRuleTable, EgressMetricTable, IngressRuleTable, IngressMetricTable}
+	if f.enableMulticast {
+		candidateTables = append(candidateTables, MulticastEgressMetricTable, MulticastIngressMetricTable)
+	}
+	for _, nextTable := range candidateTables {
+		groupKey := fmt.Sprintf("%d", nextTable.GetID())
+		obj, ok := f.loggingGroupCache.Load(groupKey)
+		if ok {
+			groups = append(groups, obj.(binding.Group))
+			continue
+		}
+		// Create OpenFlow group to both log Antrea-native policy events and resubmit the packet to nextTable.
+		groupID := f.groupAllocator.Allocate()
+		// There are two buckets in this type All group which have generated two copies of the packet: 1) resubmit
+		// the first one back to the next table of which the original packet consumes the group, then it is able to
+		// continue with the previous forwarding logic; 2) set packetIn marks in the second one and resubmit it to
+		// OutputTable.
+		group := f.bridge.NewGroupTypeAll(groupID).Bucket().
+			ResubmitToTable(nextTable.GetID()).
+			Done().
+			Bucket().
+			LoadRegMark(OutputToControllerRegMark).
+			ResubmitToTable(OutputTable.GetID()).
+			Done()
+		f.loggingGroupCache.Store(groupKey, group)
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func (f *featureNetworkPolicy) getLoggingAndResubmitGroupID(nextTable uint8) binding.GroupIDType {
+	groupKey := fmt.Sprintf("%d", nextTable)
+	group, _ := f.loggingGroupCache.Load(groupKey)
+	return group.(binding.Group).GetID()
+}
+
+func (f *featureNetworkPolicy) replayGroups() []binding.OFEntry {
+	return nil
 }
