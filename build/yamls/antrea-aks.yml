@@ -3210,6 +3210,7 @@ data:
       portRange: "61000-62000"
 
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+    # It is typically used when kube-proxy is not deployed (replaced by AntreaProxy).
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
     kubeAPIServerOverride: ""
 
@@ -3422,6 +3423,12 @@ data:
     # File path of the certificate bundle for all the signers that is recognized for incoming client
     # certificates.
     clientCAFile: ""
+
+    # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+    # It is typically used when kube-proxy is not deployed (replaced by AntreaProxy) and kube-controller-manager
+    # does not run NodeIPAMController (replaced by Antrea NodeIPAM).
+    # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
+    kubeAPIServerOverride: ""
 
     nodeIPAM:
       # Enable the integrated Node IPAM controller within the Antrea controller.
@@ -4371,7 +4378,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: abf7cb1c21b730664510e8a762d967df5c620467f12bf3e0bae41df73489de65
+        checksum/config: 994e75167f0126a535cea63fc65a5ab86361648a20bcacb06d3c588f06f6e5f6
       labels:
         app: antrea
         component: antrea-agent
@@ -4612,7 +4619,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: abf7cb1c21b730664510e8a762d967df5c620467f12bf3e0bae41df73489de65
+        checksum/config: 994e75167f0126a535cea63fc65a5ab86361648a20bcacb06d3c588f06f6e5f6
       labels:
         app: antrea
         component: antrea-controller

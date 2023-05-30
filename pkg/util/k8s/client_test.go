@@ -15,6 +15,7 @@
 package k8s
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,5 +63,65 @@ func TestEndpointSliceAPIAvailable(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedAvailable, available)
 		})
+	}
+}
+
+func TestOverrideKubeAPIServer(t *testing.T) {
+	originalHost := "10.96.0.1"
+	originalPort := "6443"
+	tests := []struct {
+		name                  string
+		kubeAPIServerOverride string
+		expectHost            string
+		expectPort            string
+	}{
+		{
+			name:                  "empty",
+			kubeAPIServerOverride: "",
+			expectHost:            originalHost,
+			expectPort:            originalPort,
+		},
+		{
+			name:                  "url",
+			kubeAPIServerOverride: "https://192.168.0.1",
+			expectHost:            "192.168.0.1",
+			expectPort:            "443",
+		},
+		{
+			name:                  "url with port",
+			kubeAPIServerOverride: "https://192.168.0.1:10443",
+			expectHost:            "192.168.0.1",
+			expectPort:            "10443",
+		},
+		{
+			name:                  "host",
+			kubeAPIServerOverride: "192.168.0.1",
+			expectHost:            "192.168.0.1",
+			expectPort:            "443",
+		},
+		{
+			name:                  "host with port",
+			kubeAPIServerOverride: "192.168.0.1:10443",
+			expectHost:            "192.168.0.1",
+			expectPort:            "10443",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer setEnvDuringTest(kubeServiceHostEnvKey, originalHost)()
+			defer setEnvDuringTest(kubeServicePortEnvKey, originalPort)()
+
+			OverrideKubeAPIServer(tt.kubeAPIServerOverride)
+			assert.Equal(t, tt.expectHost, os.Getenv(kubeServiceHostEnvKey))
+			assert.Equal(t, tt.expectPort, os.Getenv(kubeServicePortEnvKey))
+		})
+	}
+}
+
+func setEnvDuringTest(key, value string) func() {
+	originalValue := os.Getenv(key)
+	os.Setenv(key, value)
+	return func() {
+		os.Setenv(key, originalValue)
 	}
 }

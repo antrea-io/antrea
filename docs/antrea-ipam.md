@@ -58,8 +58,15 @@ Below is a sample of needed changes in the Antrea deployment YAML:
     ...
 ```
 
-Note that, prior to v1.12, a feature gate, `NodeIPAM` must also be enabled for
-`antrea-controller`.
+When running Antrea NodeIPAM in a particular version or scenario, you may need to
+be aware of the following:
+
+* Prior to v1.12, a feature gate, `NodeIPAM` must also be enabled for
+  `antrea-controller`.
+* Prior to v1.13, running Antrea NodeIPAM without kube-proxy is not supported.
+  Starting with v1.13, the `kubeAPIServerOverride` option in the `antrea-controller`
+  configuration must be set to the address of Kubernetes apiserver when kube-proxy
+  is not deployed.
 
 ## Antrea Flexible IPAM
 

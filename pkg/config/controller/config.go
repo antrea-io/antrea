@@ -66,6 +66,11 @@ type ControllerConfig struct {
 	ClientCAFile string `yaml:"clientCAFile,omitempty"`
 	// Legacy CRD mirroring (deprecated).
 	LegacyCRDMirroring *bool `yaml:"legacyCRDMirroring,omitempty"`
+	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+	// It is typically used when kube-proxy is not deployed (replaced by AntreaProxy) and kube-controller-manager
+	// does not run NodeIPAMController (replaced by Antrea NodeIPAM).
+	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
+	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
 	// NodeIPAM Configuration
 	NodeIPAM NodeIPAMConfig `yaml:"nodeIPAM"`
 	// IPsec CSR signer configuration
