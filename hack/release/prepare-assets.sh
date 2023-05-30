@@ -66,7 +66,6 @@ for build in "${ANTREA_BUILDS[@]}"; do
     # all "*-release" targets disable cgo, which is appropriate when
     # distributing release assets, for portability.
     GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR" make antctl-release
-    cd ./plugins/octant && GOOS=$os GOARCH=$arch BINDIR="$OUTPUT_DIR" ANTREA_OCTANT_PLUGIN_BINARY_NAME="antrea-octant-plugin-$suffix" make antrea-octant-plugin-release && cd ../..
 done
 
 ANTREA_AGENT_BUILDS=(
@@ -107,9 +106,6 @@ export IMG_TAG=$VERSION
 
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu
 ./hack/generate-standard-manifests.sh --mode release --out "$OUTPUT_DIR"
-
-export IMG_NAME=projects.registry.vmware.com/antrea/octant-antrea-ubuntu
-./hack/generate-manifest-octant.sh --mode release > "$OUTPUT_DIR"/antrea-octant.yml
 
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
 ./hack/generate-manifest-windows.sh --mode release > "$OUTPUT_DIR"/antrea-windows.yml

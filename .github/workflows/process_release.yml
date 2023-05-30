@@ -15,8 +15,6 @@ jobs:
         go-version-file: 'go.mod'
         # make sure the latest patch version is used
         check-latest: true
-        # release assets include Octant plugin
-        cache-dependency-path: '**/go.sum'
     - name: Build assets
       env:
         TAG: ${{ github.ref }}
