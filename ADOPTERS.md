@@ -12,6 +12,10 @@ height="50"></a>&nbsp; &nbsp; &nbsp;
 <img alt="https://www.terasky.com" src="docs/assets/adopters/terasky-logo.png"
 height="50"></a>&nbsp; &nbsp; &nbsp;
 
+<a href="http://www.pitsdatarecovery.net" border="0" target="_blank">
+<img alt="PITS Global Data Recovery Services" src="docs/assets/adopters/pits-logo.svg"
+height="50"></a>&nbsp; &nbsp; &nbsp;
+
 ## Success Stories
 
 Below is a list of adopters of Antrea that have publicly shared the details
