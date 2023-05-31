@@ -604,7 +604,8 @@ function deliver_antrea {
     echo  "=== Append antrea-prometheus.yml to antrea.yml ==="
     echo "---" >> build/yamls/antrea.yml
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
-
+     echo "testbed type!!!!!!!!!!!!!!!!!!!!" 
+    echo $TESTBED_TYPE 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:~
@@ -619,6 +620,8 @@ function deliver_antrea {
     echo "====== Delivering Antrea to all Nodes ======"
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
+    ctr -n k8s.io images import antrea-ubuntu.tar
+    ctr -n k8s.io images import flow-aggregator.tar
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
@@ -639,7 +642,7 @@ function deliver_antrea {
         kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar;ctr -n k8s.io images import ${WORKDIR}/antrea-ubuntu.tar;ctr -n k8s.io images import ${WORKDIR}/flow-aggregator.tar" || true
             if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
                 ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
             fi
