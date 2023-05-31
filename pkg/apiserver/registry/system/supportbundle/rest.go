@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
+	clockutils "k8s.io/utils/clock"
 	"k8s.io/utils/exec"
 
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
@@ -49,6 +50,8 @@ var (
 	defaultFS       = afero.NewOsFs()
 	defaultExecutor = exec.New()
 	newAgentDumper  = support.NewAgentDumper
+
+	clock clockutils.Clock = &clockutils.RealClock{}
 )
 
 // NewControllerStorage creates a support bundle storage for working on antrea controller.
@@ -284,7 +287,7 @@ func (r *supportBundleREST) collectController(ctx context.Context, since string)
 func (r *supportBundleREST) clean(ctx context.Context, bundlePath string, duration time.Duration) {
 	select {
 	case <-ctx.Done():
-	case <-time.After(duration):
+	case <-clock.After(duration):
 		func() {
 			r.statusLocker.Lock()
 			defer r.statusLocker.Unlock()
