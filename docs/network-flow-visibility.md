@@ -6,6 +6,7 @@
 - [Overview](#overview)
 - [Flow Exporter](#flow-exporter)
   - [Configuration](#configuration)
+    - [Configuration pre Antrea v1.13](#configuration-pre-antrea-v113)
   - [IPFIX Information Elements (IEs) in a Flow Record](#ipfix-information-elements-ies-in-a-flow-record)
     - [IEs from IANA-assigned IE Registry](#ies-from-iana-assigned-ie-registry)
     - [IEs from Reverse IANA-assigned IE Registry](#ies-from-reverse-iana-assigned-ie-registry)
@@ -61,8 +62,11 @@ library.
 
 ### Configuration
 
-To enable the Flow Exporter feature at the Antrea Agent, the following config
-parameters have to be set in the Antrea Agent ConfigMap:
+In addition to enabling the Flow Exporter feature gate (if needed), you need to
+ensure that the `flowExporter.enable` flag is set to true in the Antrea Agent
+configuration.
+
+your `antrea-agent` ConfigMap should look like this:
 
 ```yaml
   antrea-agent.conf: |
@@ -71,48 +75,65 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
       FlowExporter: true
 
-    # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
-    # HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
-    # using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be
-    # wrapped with []. When the collector is running in-cluster as a Service, set
-    # <HOST> to <Service namespace>/<Service name>. For example,
-    # "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
-    # Flow Aggregator Service.
-    # If PORT is empty, we default to 4739, the standard IPFIX port.
-    # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
-    # "udp" protocols. "tls" is used for securing communication between flow exporter and
-    # flow aggregator.
-    #flowCollectorAddr: "flow-aggregator/flow-aggregator:4739:tls"
-    
-    # Provide flow poll interval as a duration string. This determines how often the
-    # flow exporter dumps connections from the conntrack module. Flow poll interval
-    # should be greater than or equal to 1s (one second).
-    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    #flowPollInterval: "5s"
+    flowExporter:
+      # Enable FlowExporter, a feature used to export polled conntrack connections as
+      # IPFIX flow records from each agent to a configured collector. To enable this
+      # feature, you need to set "enable" to true, and ensure that the FlowExporter
+      # feature gate is also enabled.
+      enable: true
+      # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+      # HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
+      # using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be
+      # wrapped with []. When the collector is running in-cluster as a Service, set
+      # <HOST> to <Service namespace>/<Service name>. For example,
+      # "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
+      # Flow Aggregator Service.
+      # If PORT is empty, we default to 4739, the standard IPFIX port.
+      # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
+      # "udp" protocols. "tls" is used for securing communication between flow exporter and
+      # flow aggregator.
+      flowCollectorAddr: "flow-aggregator/flow-aggregator:4739:tls"
 
-    # Provide the active flow export timeout, which is the timeout after which a flow
-    # record is sent to the collector for active flows. Thus, for flows with a continuous
-    # stream of packets, a flow record will be exported to the collector once the elapsed
-    # time since the last export event is equal to the value of this timeout.
-    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    #activeFlowExportTimeout: "60s"
+      # Provide flow poll interval as a duration string. This determines how often the
+      # flow exporter dumps connections from the conntrack module. Flow poll interval
+      # should be greater than or equal to 1s (one second).
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      flowPollInterval: "5s"
 
-    # Provide the idle flow export timeout, which is the timeout after which a flow
-    # record is sent to the collector for idle flows. A flow is considered idle if no
-    # packet matching this flow has been observed since the last export event.
-    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    #idleFlowExportTimeout: "15s"
+      # Provide the active flow export timeout, which is the timeout after which a flow
+      # record is sent to the collector for active flows. Thus, for flows with a continuous
+      # stream of packets, a flow record will be exported to the collector once the elapsed
+      # time since the last export event is equal to the value of this timeout.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      activeFlowExportTimeout: "5s"
+
+      # Provide the idle flow export timeout, which is the timeout after which a flow
+      # record is sent to the collector for idle flows. A flow is considered idle if no
+      # packet matching this flow has been observed since the last export event.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      idleFlowExportTimeout: "15s"
 ```
 
-Please note that the default value for `flowCollectorAddr` is `"flow-aggregator/flow-aggregator:4739:tls"`,
-which enables the Flow Exporter to connect the Flow Aggregator Service, assuming it is running in
-the same K8 cluster with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow
-Aggregator Service with a different Name and Namespace, then set `flowCollectorAddr` appropriately.
+Please note that the default value for `flowExporter.flowCollectorAddr` is
+`"flow-aggregator/flow-aggregator:4739:tls"`, which enables the Flow Exporter to connect
+the Flow Aggregator Service, assuming it is running in the same K8 cluster with the Name
+and Namespace set to `flow-aggregator`. If you deploy the Flow Aggregator Service with
+a different Name and Namespace, then set `flowExporter.flowCollectorAddr` appropriately.
 
 Please note that the default values for
-`flowPollInterval`, `activeFlowExportTimeout`, and `idleFlowExportTimeout` parameters are set to 5s, 60s, and 15s, respectively.
+`flowExporter.flowPollInterval`, `flowExporter.activeFlowExportTimeout`, and
+`flowExporter.idleFlowExportTimeout` parameters are set to 5s, 5s, and 15s, respectively.
 TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default.
 Please modify them as per your requirements.
+
+#### Configuration pre Antrea v1.13
+
+Prior to the Antrea v1.13 release, the `flowExporter` option group in the
+Antrea Agent configuration did not exist. To enable the Flow Exporter feature,
+one simply needed to enable the feature gate, and the Flow Exporter related
+configuration could be configured using the (now deprecated) `flowCollectorAddr`,
+`flowPollInterval`, `activeFlowExportTimeout`, `idleFlowExportTimeout`
+parameters.
 
 ### IPFIX Information Elements (IEs) in a Flow Record
 

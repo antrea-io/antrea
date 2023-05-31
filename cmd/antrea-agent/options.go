@@ -48,9 +48,9 @@ const (
 	defaultFlowCollectorAddress    = "flow-aggregator/flow-aggregator:4739:tls"
 	defaultFlowCollectorTransport  = "tls"
 	defaultFlowCollectorPort       = "4739"
-	defaultFlowPollInterval        = 5 * time.Second
-	defaultActiveFlowExportTimeout = 30 * time.Second
-	defaultIdleFlowExportTimeout   = 15 * time.Second
+	defaultFlowPollInterval        = "5s"
+	defaultActiveFlowExportTimeout = "5s"
+	defaultIdleFlowExportTimeout   = "15s"
 	defaultIGMPQueryInterval       = 125 * time.Second
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
@@ -231,7 +231,7 @@ func (o *Options) validateAntreaProxyConfig() error {
 
 func (o *Options) validateFlowExporterConfig() error {
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
+		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowExporter.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
 		if err != nil {
 			return err
 		}
@@ -239,16 +239,16 @@ func (o *Options) validateFlowExporterConfig() error {
 		o.flowCollectorProto = proto
 
 		// Parse the given flowPollInterval config
-		if o.config.FlowPollInterval != "" {
-			flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowPollInterval)
+		if o.config.FlowExporter.FlowPollInterval != "" {
+			flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowExporter.FlowPollInterval)
 			if err != nil {
 				return err
 			}
 			o.pollInterval = flowPollInterval
 		}
 		// Parse the given activeFlowExportTimeout config
-		if o.config.ActiveFlowExportTimeout != "" {
-			o.activeFlowTimeout, err = time.ParseDuration(o.config.ActiveFlowExportTimeout)
+		if o.config.FlowExporter.ActiveFlowExportTimeout != "" {
+			o.activeFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.ActiveFlowExportTimeout)
 			if err != nil {
 				return fmt.Errorf("ActiveFlowExportTimeout is not provided in right format")
 			}
@@ -258,8 +258,8 @@ func (o *Options) validateFlowExporterConfig() error {
 			}
 		}
 		// Parse the given inactiveFlowExportTimeout config
-		if o.config.IdleFlowExportTimeout != "" {
-			o.idleFlowTimeout, err = time.ParseDuration(o.config.IdleFlowExportTimeout)
+		if o.config.FlowExporter.IdleFlowExportTimeout != "" {
+			o.idleFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.IdleFlowExportTimeout)
 			if err != nil {
 				return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
 			}
@@ -277,6 +277,8 @@ func (o *Options) validateFlowExporterConfig() error {
 		} else {
 			o.staleConnectionTimeout = defaultStaleConnectionTimeout
 		}
+	} else if o.config.FlowExporter.Enable {
+		klog.InfoS("The FlowExporter.enable config option is set to true, but it will be ignored because the FlowExporter feature gate is disabled")
 	}
 	return nil
 }
@@ -394,17 +396,33 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		if o.config.FlowCollectorAddr == "" {
-			o.config.FlowCollectorAddr = defaultFlowCollectorAddress
+		if o.config.FlowExporter.FlowCollectorAddr == "" {
+			o.config.FlowExporter.FlowCollectorAddr = defaultFlowCollectorAddress
+			if o.config.FlowCollectorAddr != "" {
+				klog.InfoS("The flowCollectorAddr option is deprecated, please use flowExporter.flowCollectorAddr instead")
+				o.config.FlowExporter.FlowCollectorAddr = o.config.FlowCollectorAddr
+			}
 		}
-		if o.config.FlowPollInterval == "" {
-			o.pollInterval = defaultFlowPollInterval
+		if o.config.FlowExporter.FlowPollInterval == "" {
+			o.config.FlowExporter.FlowPollInterval = defaultFlowPollInterval
+			if o.config.FlowPollInterval != "" {
+				klog.InfoS("The flowPollInterval option is deprecated, please use flowExporter.flowPollInterval instead")
+				o.config.FlowExporter.FlowPollInterval = o.config.FlowPollInterval
+			}
 		}
-		if o.config.ActiveFlowExportTimeout == "" {
-			o.activeFlowTimeout = defaultActiveFlowExportTimeout
+		if o.config.FlowExporter.ActiveFlowExportTimeout == "" {
+			o.config.FlowExporter.ActiveFlowExportTimeout = defaultActiveFlowExportTimeout
+			if o.config.ActiveFlowExportTimeout != "" {
+				klog.InfoS("The activeFlowExportTimeout option is deprecated, please use flowExporter.activeFlowExportTimeout instead")
+				o.config.FlowExporter.ActiveFlowExportTimeout = o.config.ActiveFlowExportTimeout
+			}
 		}
-		if o.config.IdleFlowExportTimeout == "" {
-			o.idleFlowTimeout = defaultIdleFlowExportTimeout
+		if o.config.FlowExporter.IdleFlowExportTimeout == "" {
+			o.config.FlowExporter.IdleFlowExportTimeout = defaultIdleFlowExportTimeout
+			if o.config.IdleFlowExportTimeout != "" {
+				klog.InfoS("The idleFlowExportTimeout option is deprecated, please use flowExporter.idleFlowExportTimeout instead")
+				o.config.FlowExporter.IdleFlowExportTimeout = o.config.IdleFlowExportTimeout
+			}
 		}
 	}
 

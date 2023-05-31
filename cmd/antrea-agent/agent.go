@@ -150,7 +150,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
-		features.DefaultFeatureGate.Enabled(features.FlowExporter),
+		features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable,
 		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge,
 		multicastEnabled,
@@ -596,7 +596,7 @@ func run(o *Options) error {
 	}
 
 	var flowExporter *exporter.FlowExporter
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
 		flowExporterOptions := &flowexporter.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,
@@ -859,7 +859,7 @@ func run(o *Options) error {
 	go ofClient.StartPacketInHandler(stopCh)
 
 	// Start the goroutine to periodically export IPFIX flow records.
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
 		go flowExporter.Run(stopCh)
 	}
 
