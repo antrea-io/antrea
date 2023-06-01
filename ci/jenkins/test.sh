@@ -64,7 +64,7 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
         --registry               The docker registry to use instead of dockerhub.
         --proxyall               Enable proxyAll to test AntreaProxy.
-        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
+        --testbed-type           The testbed type to run tests. It can be flexible-ipam, containerd or legacy.
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
         --win-image-node         Name of the windows image node in containerd cluster. Images are built by docker on this node.
         --kind-cluster-name      Name of the kind Cluster." 
@@ -623,12 +623,15 @@ function deliver_antrea {
     echo "---" >> build/yamls/antrea.yml
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
 
+    private_key="${WORKDIR}/.ssh/id_rsa"
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
+        # TODO: Flexible-ipam testbed doesn't require a special private key. Remove this line after the testbed changes its private key.
+        private_key="${WORKDIR}/jenkins_id_rsa"
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:~
-    elif [[ $TESTBED_TYPE == "jumper" ]]; then
+        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${private_key}" build/yamls/*.yml jenkins@[${control_plane_ip}]:~
+    elif [[ $TESTBED_TYPE == "containerd" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:${WORKDIR}/
+        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${private_key}" build/yamls/*.yml jenkins@${control_plane_ip}:${WORKDIR}/
     else
         cp -f build/yamls/*.yml $WORKDIR
     fi
@@ -638,25 +641,18 @@ function deliver_antrea {
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
 
-    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
+    if [[ $TESTBED_TYPE == "kind" ]]; then
+        kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
+        kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}
+    elif [[ $TESTBED_TYPE == "containerd" || $TESTBED_TYPE == "flexible-ipam"  ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
-        done
-    elif [[ $TESTBED_TYPE == "kind" ]]; then
-            kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
-            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}
-    elif [[ $TESTBED_TYPE == "jumper" ]]; then
-        kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+            rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no -i ${private_key}" antrea-ubuntu.tar flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}
+            ssh -o StrictHostKeyChecking=no -i "${private_key}" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${WORKDIR}/flow-aggregator.tar" || true
         done
     else
+        # It should match the case where nodes are using Docker as the container runtime.
         kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $6}' | while read IP; do
-            rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
-            rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
+            rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
             if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
                 ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
