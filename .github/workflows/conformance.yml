@@ -7,6 +7,9 @@ on:
       antrea-version:
         description: The Antrea version to test. It could be a SHA-1 value, a branch, or a tag (e.g. a7b012b, release-1.12, v1.12.0). The main branch will be used if empty.
         required: false
+      antrea-values:
+        description: The Antrea Chart values. Multiple values can be separated with commas (e.g. key1=val1,key2=val2). Default configuration will be tested if empty.
+        required: false
       k8s-version:
         description: The K8s version (e.g. v1.27.1) to test. Kind's default K8s version will be used if empty.
         required: false
@@ -62,6 +65,7 @@ jobs:
           sudo mv kind /usr/local/bin
       - name: Create K8s cluster
         run: |
+          # The command also loads local antrea/antrea-ubuntu:latest into Nodes if it exists.
           ./ci/kind/kind-setup.sh create kind \
             --k8s-version "${{ inputs.k8s-version }}"
       - name: Install Antrea
@@ -69,9 +73,11 @@ jobs:
           if [ ${{ steps.check-release.outputs.released }} == 'true' ]; then
             helm repo add antrea https://charts.antrea.io
             helm repo update
-            helm install --namespace kube-system antrea antrea/antrea --version "${{ inputs.antrea-version }}"
+            helm install --namespace kube-system antrea antrea/antrea --version "${{ inputs.antrea-version }}" \
+              --set "${{ inputs.antrea-values }}"
           else
-            kubectl apply -f build/yamls/antrea.yml
+            helm install --namespace kube-system antrea ./build/charts/antrea \
+              --set "${{ inputs.antrea-values }}"
           fi
           kubectl rollout status -n kube-system ds/antrea-agent --timeout=5m
       - name: Run e2e tests
