@@ -104,36 +104,19 @@ func probeClientIPFromNode(node string, baseUrl string, data *TestData) (string,
 }
 
 func probeFromPod(data *TestData, pod, container string, url string) error {
-	var err error
-	if container == busyboxContainerName {
-		_, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
-	} else {
-		_, _, err = data.RunCommandFromPod(data.testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
-	}
+	_, _, err := data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
 	return err
 }
 
 func probeHostnameFromPod(data *TestData, pod, container string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "hostname")
-	var err error
-	var hostname string
-	if container == busyboxContainerName {
-		hostname, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
-	} else {
-		hostname, _, err = data.RunCommandFromPod(data.testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
-	}
+	hostname, _, err := data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
 	return hostname, err
 }
 
 func probeClientIPFromPod(data *TestData, pod, container string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "clientip")
-	var err error
-	var hostPort string
-	if container == busyboxContainerName {
-		hostPort, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
-	} else {
-		hostPort, _, err = data.RunCommandFromPod(data.testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
-	}
+	hostPort, _, err := data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
 	if err != nil {
 		return "", err
 	}
