@@ -22,12 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
 )
 
@@ -42,47 +40,22 @@ The metrics are not accurate under the race detector, and will be skipped when t
 */
 func TestLargeScaleEndpointQueryManyPolicies(t *testing.T) {
 	namespace := rand.String(8)
-	getObjects := func() ([]*v1.Namespace, []*networkingv1.NetworkPolicy, []*v1.Pod) {
-		namespaces := []*v1.Namespace{
+	getObjects := func() (namespaces []*v1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
+		namespaces = []*v1.Namespace{
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: map[string]string{"app": namespace}},
 			},
 		}
 		uid := rand.String(8)
-		networkPolicies := []*networkingv1.NetworkPolicy{
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "np-1" + uid, UID: types.UID(uuid.New().String())},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app-1": "scale-1"}},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-					Ingress: []networkingv1.NetworkPolicyIngressRule{
-						{
-							From: []networkingv1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{"app-1": "scale-1"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-		pods := []*v1.Pod{
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod1" + uid, UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       v1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     v1.PodStatus{PodIP: getRandomIP()},
-			},
-		}
+		networkPolicies = []runtime.Object{newNetworkPolicy(namespace, "np-1"+uid, map[string]string{"app-1": "scale-1"}, map[string]string{"app-1": "scale-1"}, nil, nil, nil)}
+		pods = []runtime.Object{newPod(namespace, "pod1"+uid, map[string]string{"app-1": "scale-1"})}
 		return namespaces, networkPolicies, pods
 	}
 	namespaces, networkPolicies, pods := getXObjects(10000, getObjects)
 	testQueryEndpoint(t, 25*time.Second, namespaces[0:1], networkPolicies, pods, 10000)
 }
 
-func testQueryEndpoint(t *testing.T, maxExecutionTime time.Duration, namespaces []*v1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*v1.Pod, responseLength int) {
+func testQueryEndpoint(t *testing.T, maxExecutionTime time.Duration, namespaces []*v1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object, responseLength int) {
 	// Stat the maximum heap allocation.
 	var wg sync.WaitGroup
 	stopCh := make(chan struct{})
@@ -93,13 +66,15 @@ func testQueryEndpoint(t *testing.T, maxExecutionTime time.Duration, namespaces 
 		wg.Done()
 	}()
 	// create controller
-	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
+	objs := toRunTimeObjects(namespaces)
+	objs = append(objs, networkPolicies...)
+	objs = append(objs, pods...)
 	querier := makeControllerAndEndpointQuerier(objs...)
 	// Everything is ready, now start timing.
 	start := time.Now()
 	// track execution time by calling query endpoint 1000 times on random pods
 	for i := 0; i < 1000; i++ {
-		pod, namespace := pods[i].Name, pods[i].Namespace
+		pod, namespace := pods[i].(*v1.Pod).Name, pods[i].(*v1.Pod).Namespace
 		response, err := querier.QueryNetworkPolicies(namespace, pod)
 		require.Equal(t, err, nil)
 		require.Equal(t, len(response.Endpoints[0].Policies), responseLength)

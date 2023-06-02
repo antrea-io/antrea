@@ -168,7 +168,7 @@ func TestProcessClusterGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
+			_, c := newController(nil, nil)
 			actualGroup := c.processClusterGroup(tt.inputGroup)
 			assert.Equal(t, tt.expectedGroup, actualGroup)
 		})
@@ -270,7 +270,7 @@ func TestAddClusterGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			npc.addClusterGroup(tt.inputGroup)
 			key := tt.inputGroup.Name
 			actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
@@ -419,7 +419,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			},
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.addClusterGroup(&testCG)
 	key := testCG.Name
 	for _, tt := range tests {
@@ -441,7 +441,7 @@ func TestDeleteCG(t *testing.T) {
 		},
 	}
 	key := testCG.Name
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.addClusterGroup(&testCG)
 	npc.deleteClusterGroup(&testCG)
 	_, found, _ := npc.internalGroupStore.Get(key)
@@ -585,7 +585,7 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 			sets.New[string]("cgC"),
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.internalGroupStore.Create(grp1)
 	npc.internalGroupStore.Create(grp2)
 	npc.internalGroupStore.Create(grp3)
@@ -689,7 +689,7 @@ func TestServiceToGroupSelector(t *testing.T) {
 			nil,
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.serviceStore.Add(svc1)
 	npc.serviceStore.Add(svc2)
 	npc.serviceStore.Add(svc3)
@@ -859,7 +859,7 @@ func TestGetAssociatedGroups(t *testing.T) {
 			[]antreatypes.Group{},
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	for i := range testPods {
 		npc.groupingInterface.AddPod(testPods[i])
 	}
@@ -907,7 +907,7 @@ func TestGetGroupMembers(t *testing.T) {
 			controlplane.GroupMemberSet{},
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	for i := range testPods {
 		npc.groupingInterface.AddPod(testPods[i])
 	}

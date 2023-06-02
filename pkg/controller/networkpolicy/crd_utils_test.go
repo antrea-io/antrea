@@ -465,7 +465,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			npc.addClusterGroup(&cgA)
 			npc.cgStore.Add(&cgA)
 			if tt.clusterSetScope {
@@ -516,7 +516,7 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
 		Spec:       crdv1alpha3.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.addClusterGroup(clusterGroupWithSelector)
 	npc.addClusterGroup(clusterGroupWithIPBlock)
 	npc.addGroup(groupWithSelector)

@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
-
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -39,6 +37,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 /*
@@ -57,16 +59,16 @@ func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
 	testComputeNetworkPolicy(t, 10*time.Second, namespaces, networkPolicies, pods)
 }
 
-func getXLargeScaleWithSmallNamespaces() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+func getXLargeScaleWithSmallNamespaces() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
+	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 		namespace := rand.String(8)
-		namespaces := []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
-		networkPolicies := []*networkingv1.NetworkPolicy{
+		namespaces = []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
+		networkPolicies = []runtime.Object{
 			newNetworkPolicy(namespace, "default-deny-all", nil, nil, nil, nil, nil),
 			newNetworkPolicy(namespace, "np-1", map[string]string{"app-1": "scale-1"}, map[string]string{"app-1": "scale-1"}, nil, nil, nil),
 			newNetworkPolicy(namespace, "np-2", map[string]string{"app-2": "scale-2"}, map[string]string{"app-2": "scale-2"}, nil, nil, nil),
 		}
-		pods := []*corev1.Pod{
+		pods = []runtime.Object{
 			newPod(namespace, "pod1", map[string]string{"app-1": "scale-1"}),
 			newPod(namespace, "pod2", map[string]string{"app-1": "scale-1"}),
 			newPod(namespace, "pod3", map[string]string{"app-2": "scale-2"}),
@@ -74,7 +76,7 @@ func getXLargeScaleWithSmallNamespaces() ([]*corev1.Namespace, []*networkingv1.N
 		}
 		return namespaces, networkPolicies, pods
 	}
-	namespaces, networkPolicies, pods := getXObjects(25000, getObjects)
+	namespaces, networkPolicies, pods = getXObjects(25000, getObjects)
 	return namespaces, networkPolicies, pods
 }
 
@@ -83,16 +85,15 @@ func TestInitXLargeScaleWithLargeNamespaces(t *testing.T) {
 	testComputeNetworkPolicy(t, 10*time.Second, namespaces, networkPolicies, pods)
 }
 
-func getXLargeScaleWithLargeNamespaces() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+func getXLargeScaleWithLargeNamespaces() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
+	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 		namespace := rand.String(8)
-		namespaces := []*corev1.Namespace{
+		namespaces = []*corev1.Namespace{
 			newNamespace(namespace, map[string]string{"app": namespace}),
 		}
-		networkPolicies := []*networkingv1.NetworkPolicy{
+		networkPolicies = []runtime.Object{
 			newNetworkPolicy(namespace, "default-deny-all", nil, nil, nil, nil, nil),
 		}
-		var pods []*corev1.Pod
 		for i := 0; i < 100; i++ {
 			labels := map[string]string{fmt.Sprintf("app-%d", i): fmt.Sprintf("scale-%d", i)}
 			networkPolicies = append(networkPolicies, newNetworkPolicy(namespace, fmt.Sprintf("np-%d", i), labels, labels, nil, nil, nil))
@@ -102,7 +103,7 @@ func getXLargeScaleWithLargeNamespaces() ([]*corev1.Namespace, []*networkingv1.N
 		}
 		return namespaces, networkPolicies, pods
 	}
-	namespaces, networkPolicies, pods := getXObjects(100, getObjects)
+	namespaces, networkPolicies, pods = getXObjects(100, getObjects)
 	return namespaces, networkPolicies, pods
 }
 
@@ -116,49 +117,76 @@ NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    E
 The metrics are not accurate under the race detector, and will be skipped when testing with "-race".
 */
 func TestInitXLargeScaleWithOneNamespace(t *testing.T) {
-	namespaces, networkPolicies, pods := getXLargeScaleWithOneNamespace()
-	testComputeNetworkPolicy(t, 15*time.Second, namespaces, networkPolicies, pods)
+	namespace, networkPolicies, pods := getXLargeScaleWithOneNamespace()
+	testComputeNetworkPolicy(t, 15*time.Second, namespace, networkPolicies, pods)
 }
 
-func getXLargeScaleWithOneNamespace() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+func getXLargeScaleWithOneNamespace() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 	namespace := rand.String(8)
-	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-		namespaces := []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
-		networkPolicies := []*networkingv1.NetworkPolicy{newNetworkPolicy(namespace, "", map[string]string{"app-1": "scale-1"}, map[string]string{"app-1": "scale-1"}, nil, nil, nil)}
-		pods := []*corev1.Pod{newPod(namespace, "", map[string]string{"app-1": "scale-1"})}
+	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
+		namespaces = []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
+		networkPolicies = []runtime.Object{newNetworkPolicy(namespace, "", map[string]string{"app-1": "scale-1"}, map[string]string{"app-1": "scale-1"}, nil, nil, nil)}
+		pods = []runtime.Object{newPod(namespace, "", map[string]string{"app-1": "scale-1"})}
 		return namespaces, networkPolicies, pods
 	}
-	namespaces, networkPolicies, pods := getXObjects(10000, getObjects)
+	namespaces, networkPolicies, pods = getXObjects(10000, getObjects)
 	return namespaces[0:1], networkPolicies, pods
 }
 
 func TestInitXLargeScaleWithNetpolPerPod(t *testing.T) {
-	namespaces, networkPolicies, pods := getXLargeScaleWithNetpolPerPod()
-	testComputeNetworkPolicy(t, 300*time.Second, namespaces[0:1], networkPolicies, pods)
+	namespace, networkPolicies, pods := getXLargeScaleWithNetpolPerPod()
+	testComputeNetworkPolicy(t, 300*time.Second, namespace, networkPolicies, pods)
 }
 
 // getXLargeScaleWithNetpolPerPod returns 1 Namespace, 10k Pods, 10k NetworkPolicies.
 // 1 NP per Pod, with one ingress rule: each Pod can receive traffic from a single other Pod.
-func getXLargeScaleWithNetpolPerPod() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+func getXLargeScaleWithNetpolPerPod() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 	namespace := rand.String(8)
-	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-		namespaces := []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
+	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
+		namespaces = []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
 		app1 := rand.String(8)
 		labels1 := map[string]string{"app": fmt.Sprintf("scale-%v", app1)}
 		app2 := rand.String(8)
 		labels2 := map[string]string{"app": fmt.Sprintf("scale-%v", app2)}
-		networkPolicies := []*networkingv1.NetworkPolicy{
+		networkPolicies = []runtime.Object{
 			newNetworkPolicy(namespace, "", labels1, labels2, nil, nil, nil),
 			newNetworkPolicy(namespace, "", labels2, labels1, nil, nil, nil),
 		}
-		pods := []*corev1.Pod{
+		pods = []runtime.Object{
 			newPod(namespace, "", labels1),
 			newPod(namespace, "", labels2),
 		}
 		return namespaces, networkPolicies, pods
 	}
-	namespaces, networkPolicies, pods := getXObjects(5000, getObjects)
+	namespaces, networkPolicies, pods = getXObjects(5000, getObjects)
 	return namespaces[0:1], networkPolicies, pods
+}
+
+func TestInitXLargeScaleWithANPPerExternalEntity(t *testing.T) {
+	namespace, anps, externalEntities := getXLargeScaleWithANPPerExternalEntity()
+	testComputeNetworkPolicy(t, 10*time.Second, namespace, anps, externalEntities)
+}
+
+func getXLargeScaleWithANPPerExternalEntity() (namespaces []*corev1.Namespace, anps []runtime.Object, externalEntities []runtime.Object) {
+	namespace := rand.String(8)
+	getObjects := func() (namespaces []*corev1.Namespace, anps []runtime.Object, externalEntities []runtime.Object) {
+		namespaces = []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
+		ee1 := rand.String(8)
+		labels1 := map[string]string{"ee": fmt.Sprintf("scale-%v", ee1)}
+		ee2 := rand.String(8)
+		labels2 := map[string]string{"ee": fmt.Sprintf("scale-%v", ee2)}
+		anps = []runtime.Object{
+			newANPAppliedToExternalEntity(namespace, "", labels1, labels2, nil, nil, nil),
+			newANPAppliedToExternalEntity(namespace, "", labels2, labels1, nil, nil, nil),
+		}
+		externalEntities = []runtime.Object{
+			newExternalEntity(namespace, "", labels1),
+			newExternalEntity(namespace, "", labels2),
+		}
+		return namespaces, anps, externalEntities
+	}
+	namespaces, anps, externalEntities = getXObjects(5000, getObjects)
+	return namespaces[0:1], anps, externalEntities
 }
 
 func TestInitXLargeScaleWithClusterScopedNetpol(t *testing.T) {
@@ -169,17 +197,15 @@ func TestInitXLargeScaleWithClusterScopedNetpol(t *testing.T) {
 // getXLargeScaleWithClusterScopedNetpol returns 1k Namespace, 100k Pods, 10k NetworkPolicies.
 // - 100 Pods, 10 NetworkPolicies per Namespace
 // - Each NetworkPolicy selects 100 Pods from 10 Namespaces as peers.
-func getXLargeScaleWithClusterScopedNetpol() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+func getXLargeScaleWithClusterScopedNetpol() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 	i := 0
-	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
 		// There are 100 different namespace labels in total.
 		company := fmt.Sprintf("company-%d", i%100)
 		i += 1
 		namespace := fmt.Sprintf("%v-%v", company, rand.String(8))
 		namespaceLabels := map[string]string{"company": company}
-		namespaces := []*corev1.Namespace{newNamespace(namespace, namespaceLabels)}
-		var networkPolicies []*networkingv1.NetworkPolicy
-		var pods []*corev1.Pod
+		namespaces = []*corev1.Namespace{newNamespace(namespace, namespaceLabels)}
 		for j := 0; j < 10; j++ {
 			labels := map[string]string{"app": fmt.Sprintf("scale-%d", j)}
 			networkPolicies = append(networkPolicies, newNetworkPolicy(namespace, fmt.Sprintf("np-%d", j), labels, labels, namespaceLabels, nil, nil))
@@ -189,15 +215,33 @@ func getXLargeScaleWithClusterScopedNetpol() ([]*corev1.Namespace, []*networking
 		}
 		return namespaces, networkPolicies, pods
 	}
-	namespaces, networkPolicies, pods := getXObjects(1000, getObjects)
+	namespaces, networkPolicies, pods = getXObjects(1000, getObjects)
 	return namespaces, networkPolicies, pods
 }
 
-func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, namespaces []*corev1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*corev1.Pod) {
+func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object) {
 	disableLogToStderr()
 
-	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
-	_, c := newController(objs...)
+	var k8sObjs, crdObjs []runtime.Object
+	for _, obj := range networkPolicies {
+		switch policy := obj.(type) {
+		case *networkingv1.NetworkPolicy:
+			k8sObjs = append(k8sObjs, policy)
+		case *v1alpha1.NetworkPolicy:
+			crdObjs = append(crdObjs, policy)
+		}
+	}
+	for _, obj := range entities {
+		switch entity := obj.(type) {
+		case *corev1.Pod:
+			k8sObjs = append(k8sObjs, entity)
+		case *v1alpha2.ExternalEntity:
+			crdObjs = append(crdObjs, entity)
+		}
+	}
+
+	k8sObjs = append(k8sObjs, toRunTimeObjects(namespaces)...)
+	_, c := newController(k8sObjs, crdObjs)
 	c.heartbeatCh = make(chan heartbeat, 1000)
 
 	stopCh := make(chan struct{})
@@ -279,9 +323,9 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 	wg.Wait()
 
 	t.Logf(`Summary metrics:
-NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    EVENTS(ag, atg, np)
-%-12d %-7d %-19d %-10.2f %-12d %-13d %d %d %d
-`, len(namespaces), len(pods), len(networkPolicies), float64(executionTime)/float64(time.Second), maxAlloc/1024/1024, totalExecution, networkPolicyEvents, appliedToGroupEvents, networkPolicyEvents)
+NAMESPACES   ENTITIES    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    EVENTS(ag, atg, np)
+%-12d %-11d %-19d %-10.2f %-12d %-13d %d %d %d
+`, len(namespaces), len(entities), len(networkPolicies), float64(executionTime)/float64(time.Second), maxAlloc/1024/1024, totalExecution, networkPolicyEvents, appliedToGroupEvents, networkPolicyEvents)
 }
 
 func statEvents(c *networkPolicyController, addressGroupEvents, appliedToGroupEvents, networkPolicyEvents *int32, stopCh chan struct{}) {
@@ -328,29 +372,20 @@ func getRandomNodeName() string {
 }
 
 // getXObjects calls the provided getObjectsFunc x times and aggregate the objects.
-func getXObjects(x int, getObjectsFunc func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod)) ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-	var namespaces []*corev1.Namespace
-	var networkPolicies []*networkingv1.NetworkPolicy
-	var pods []*corev1.Pod
+func getXObjects(x int, getObjectsFunc func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object)) (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object) {
 	for i := 0; i < x; i++ {
-		newNamespaces, newNetworkPolicies, newPods := getObjectsFunc()
+		newNamespaces, newNetworkPolicies, newEntities := getObjectsFunc()
 		namespaces = append(namespaces, newNamespaces...)
 		networkPolicies = append(networkPolicies, newNetworkPolicies...)
-		pods = append(pods, newPods...)
+		entities = append(entities, newEntities...)
 	}
-	return namespaces, networkPolicies, pods
+	return namespaces, networkPolicies, entities
 }
 
-func toRunTimeObjects(namespaces []*corev1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*corev1.Pod) []runtime.Object {
-	objs := make([]runtime.Object, 0, len(namespaces)+len(networkPolicies)+len(pods))
+func toRunTimeObjects(namespaces []*corev1.Namespace) []runtime.Object {
+	objs := make([]runtime.Object, 0, len(namespaces))
 	for i := range namespaces {
 		objs = append(objs, namespaces[i])
-	}
-	for i := range networkPolicies {
-		objs = append(objs, networkPolicies[i])
-	}
-	for i := range pods {
-		objs = append(objs, pods[i])
 	}
 	return objs
 }
@@ -375,6 +410,29 @@ func newPod(namespace, name string, labels map[string]string) *corev1.Pod {
 		Status: corev1.PodStatus{PodIP: podIP, PodIPs: []corev1.PodIP{{IP: podIP}}},
 	}
 	return pod
+}
+
+func newExternalEntity(namespace, name string, labels map[string]string) *v1alpha2.ExternalEntity {
+	if name == "" {
+		name = "ee-" + rand.String(8)
+	}
+	externalEntity := &v1alpha2.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String()), Labels: labels},
+		Spec: v1alpha2.ExternalEntitySpec{
+			Endpoints: []v1alpha2.Endpoint{
+				{
+					IP: getRandomIP(),
+				},
+			},
+			Ports: []v1alpha2.NamedPort{
+				{
+					Protocol: corev1.ProtocolTCP,
+					Port:     8080,
+				},
+			},
+		},
+	}
+	return externalEntity
 }
 
 func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, ingressNamespaceSelector, egressPodSelector, egressNamespaceSelector map[string]string) *networkingv1.NetworkPolicy {
@@ -411,21 +469,71 @@ func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, i
 	return policy
 }
 
+func newANPAppliedToExternalEntity(namespace, name string, externalEntitySelector, ingressExternalEntitySelector, ingressNamespaceSelector, egressExternalEntitySelector, egressNamespaceSelector map[string]string) *v1alpha1.NetworkPolicy {
+	if name == "" {
+		name = "anp-" + rand.String(8)
+	}
+	anp := &v1alpha1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String())},
+		Spec: v1alpha1.NetworkPolicySpec{
+			AppliedTo: []v1alpha1.AppliedTo{
+				{
+					ExternalEntitySelector: &metav1.LabelSelector{MatchLabels: externalEntitySelector},
+				},
+			},
+		},
+	}
+	allowAction := v1alpha1.RuleActionAllow
+	if ingressExternalEntitySelector != nil || ingressNamespaceSelector != nil {
+		peer := v1alpha1.NetworkPolicyPeer{}
+		if ingressExternalEntitySelector != nil {
+			peer.ExternalEntitySelector = &metav1.LabelSelector{MatchLabels: ingressExternalEntitySelector}
+		}
+		if ingressNamespaceSelector != nil {
+			peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: ingressNamespaceSelector}
+		}
+		anp.Spec.Ingress = []v1alpha1.Rule{
+			{
+				Action: &allowAction,
+				From:   []v1alpha1.NetworkPolicyPeer{peer},
+			},
+		}
+	}
+	if egressExternalEntitySelector != nil || egressNamespaceSelector != nil {
+		peer := v1alpha1.NetworkPolicyPeer{}
+		if egressExternalEntitySelector != nil {
+			peer.ExternalEntitySelector = &metav1.LabelSelector{MatchLabels: egressExternalEntitySelector}
+		}
+		if egressNamespaceSelector != nil {
+			peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: egressNamespaceSelector}
+		}
+		anp.Spec.Egress = []v1alpha1.Rule{
+			{
+				Action: &allowAction,
+				To:     []v1alpha1.NetworkPolicyPeer{peer},
+			},
+		}
+	}
+	return anp
+}
+
 func BenchmarkSyncAddressGroup(b *testing.B) {
 	disableLogToStderr()
 	namespace := "default"
 	labels := map[string]string{"app-1": "scale-1"}
-	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-		namespaces := []*corev1.Namespace{newNamespace(namespace, nil)}
-		networkPolicies := []*networkingv1.NetworkPolicy{newNetworkPolicy(namespace, "", labels, labels, nil, nil, nil)}
-		pods := []*corev1.Pod{newPod(namespace, "", labels)}
+	getObjects := func() (namespaces []*corev1.Namespace, networkPolicies []runtime.Object, pods []runtime.Object) {
+		namespaces = []*corev1.Namespace{newNamespace(namespace, nil)}
+		networkPolicies = []runtime.Object{newNetworkPolicy(namespace, "", labels, labels, nil, nil, nil)}
+		pods = []runtime.Object{newPod(namespace, "", labels)}
 		return namespaces, networkPolicies, pods
 	}
 	namespaces, networkPolicies, pods := getXObjects(1000, getObjects)
-	objs := toRunTimeObjects(namespaces[0:1], networkPolicies, pods)
+	objs := toRunTimeObjects(namespaces[0:1])
+	objs = append(objs, networkPolicies...)
+	objs = append(objs, pods...)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	_, c := newController(objs...)
+	_, c := newController(objs, nil)
 	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	go c.groupingController.Run(stopCh)
@@ -467,8 +575,8 @@ func BenchmarkInitXLargeScaleWithLargeNamespaces(b *testing.B) {
 }
 
 func BenchmarkInitXLargeScaleWithOneNamespace(b *testing.B) {
-	namespaces, networkPolicies, pods := getXLargeScaleWithOneNamespace()
-	benchmarkInit(b, namespaces, networkPolicies, pods)
+	namespace, networkPolicies, pods := getXLargeScaleWithOneNamespace()
+	benchmarkInit(b, namespace, networkPolicies, pods)
 }
 
 func BenchmarkInitXLargeScaleWithNetpolPerPod(b *testing.B) {
@@ -476,15 +584,38 @@ func BenchmarkInitXLargeScaleWithNetpolPerPod(b *testing.B) {
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
 
+func BenchmarkInitXLargeScaleWithANPPerExternalEntity(b *testing.B) {
+	namespace, anps, externalEntities := getXLargeScaleWithANPPerExternalEntity()
+	benchmarkInit(b, namespace, anps, externalEntities)
+}
+
 func BenchmarkInitXLargeScaleWithClusterScopedNetpol(b *testing.B) {
 	namespaces, networkPolicies, pods := getXLargeScaleWithClusterScopedNetpol()
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
 
-func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*corev1.Pod) {
+func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies []runtime.Object, entities []runtime.Object) {
 	disableLogToStderr()
 
-	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
+	var k8sObjs, crdObjs []runtime.Object
+	for _, obj := range networkPolicies {
+		switch policy := obj.(type) {
+		case *networkingv1.NetworkPolicy:
+			k8sObjs = append(k8sObjs, policy)
+		case *v1alpha1.NetworkPolicy:
+			crdObjs = append(crdObjs, policy)
+		}
+	}
+	for _, obj := range entities {
+		switch entity := obj.(type) {
+		case *corev1.Pod:
+			k8sObjs = append(k8sObjs, entity)
+		case *v1alpha2.ExternalEntity:
+			crdObjs = append(crdObjs, entity)
+		}
+	}
+	k8sObjs = append(k8sObjs, toRunTimeObjects(namespaces)...)
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -492,7 +623,7 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		b.StopTimer()
 		stopCh := make(chan struct{})
 		defer close(stopCh)
-		_, c := newControllerWithoutEventHandler(objs, nil)
+		_, c := newControllerWithoutEventHandler(k8sObjs, crdObjs)
 		c.informerFactory.Start(stopCh)
 		c.crdInformerFactory.Start(stopCh)
 		go c.groupingInterface.Run(stopCh)
@@ -509,11 +640,21 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		for _, namespace := range namespaces {
 			c.groupingInterface.AddNamespace(namespace)
 		}
-		for _, pod := range pods {
-			c.groupingInterface.AddPod(pod)
+		for _, obj := range entities {
+			switch entity := obj.(type) {
+			case *corev1.Pod:
+				c.groupingInterface.AddPod(entity)
+			case *v1alpha2.ExternalEntity:
+				c.groupingInterface.AddExternalEntity(entity)
+			}
 		}
-		for _, networkPolicy := range networkPolicies {
-			c.addNetworkPolicy(networkPolicy)
+		for _, obj := range networkPolicies {
+			switch policy := obj.(type) {
+			case *networkingv1.NetworkPolicy:
+				c.addNetworkPolicy(policy)
+			case *v1alpha1.NetworkPolicy:
+				c.addANP(policy)
+			}
 		}
 		for c.appliedToGroupQueue.Len() > 0 {
 			key, _ := c.appliedToGroupQueue.Get()

@@ -102,9 +102,9 @@ type networkPolicyController struct {
 }
 
 // objects is an initial set of K8s objects that is exposed through the client.
-func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
-	client := newClientset(objects...)
-	crdClient := fakeversioned.NewSimpleClientset()
+func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *networkPolicyController) {
+	client := newClientset(k8sObjects...)
+	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	mcsClient := fakemcsversioned.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
@@ -262,7 +262,7 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 }
 
 func TestAddNetworkPolicy(t *testing.T) {
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	np := getK8sNetworkPolicyObj()
 	npc.addNetworkPolicy(np)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -273,7 +273,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 }
 
 func TestDeleteNetworkPolicy(t *testing.T) {
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	np := getK8sNetworkPolicyObj()
 	npc.addNetworkPolicy(np)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -284,7 +284,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 }
 
 func TestUpdateNetworkPolicy(t *testing.T) {
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	np := getK8sNetworkPolicyObj()
 	newNP := np.DeepCopy()
 	newNP.Spec.Ingress = nil
@@ -720,7 +720,7 @@ func TestAddPod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			npc.networkPolicyStore.Add(testNPObj)
 			npc.syncInternalNetworkPolicy(getKNPReference(testNPObj))
 			groupKey := testCG.Name
@@ -811,7 +811,7 @@ func TestDeletePod(t *testing.T) {
 	p2 := getPod("p2", ns, "", p2IP, false)
 	// Ensure Pod p2 matches AddressGroup.
 	p2.Labels = ruleLabels
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.networkPolicyStore.Add(matchNPObj)
 	npc.syncInternalNetworkPolicy(getKNPReference(matchNPObj))
 	npc.addClusterGroup(testCG)
@@ -964,7 +964,7 @@ func TestAddNamespace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			npc.networkPolicyStore.Add(testNPObj)
 			npc.syncInternalNetworkPolicy(getKNPReference(testNPObj))
 			npc.addClusterGroup(testCG)
@@ -1123,7 +1123,7 @@ func TestDeleteNamespace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			npc.networkPolicyStore.Add(testNPObj)
 			npc.syncInternalNetworkPolicy(getKNPReference(testNPObj))
 			npc.addClusterGroup(testCG)
@@ -1254,7 +1254,7 @@ func TestAddAndUpdateService(t *testing.T) {
 			Selector: map[string]string{"app": "test-2"},
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.cgStore.Add(testCG1)
 	npc.cgStore.Add(testCG2)
 	npc.addClusterGroup(testCG1)
@@ -1333,7 +1333,7 @@ func TestDeleteService(t *testing.T) {
 			Selector: map[string]string{"app": "test"},
 		},
 	}
-	_, npc := newController()
+	_, npc := newController(nil, nil)
 	npc.cgStore.Add(testCG)
 	npc.addClusterGroup(testCG)
 	npc.groupingInterface.AddPod(testPod)
@@ -1770,7 +1770,7 @@ func TestToAntreaPeer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			actualPeer, _ := npc.toAntreaPeer(tt.inPeers, testNPObj, tt.direction, tt.namedPortExist)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, (*actualPeer).AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, (*actualPeer).AddressGroups)
@@ -2186,7 +2186,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(tt.existingObjects...)
+			_, c := newController(tt.existingObjects, nil)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
@@ -2459,7 +2459,7 @@ func TestIPStrToIPAddress(t *testing.T) {
 }
 
 func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.heartbeatCh = make(chan heartbeat, 2)
 	np := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
@@ -2605,7 +2605,7 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			expEEs:  emptyEEs,
 		},
 	}
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
 	clusterGroups := []v1alpha3.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
@@ -2726,7 +2726,7 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 			expMemberSet: podABMemberSet,
 		},
 	}
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
 	clusterGroups := []v1alpha3.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
@@ -2749,7 +2749,7 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 func TestAddressGroupWithNodeSelector(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	go c.groupingController.Run(stopCh)
@@ -2980,7 +2980,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	}
 
 	// Add a new policy, it should create an internal NetworkPolicy, AddressGroups and AppliedToGroups used by it.
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.cnpStore.Add(inputPolicy)
 	networkPolicyRef := getACNPReference(inputPolicy)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRef))
@@ -3088,7 +3088,7 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 	}
 
 	// Add and sync policyA first, it should create an AppliedToGroup.
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.networkPolicyStore.Add(policyA)
 	networkPolicyRefA := getKNPReference(policyA)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefA))
@@ -3200,7 +3200,7 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 	}
 
 	// Add and sync policyA first, it should create an AddressGroup and AppliedToGroups.
-	_, c := newController()
+	_, c := newController(nil, nil)
 	c.networkPolicyStore.Add(policyA)
 	networkPolicyRefA := getKNPReference(policyA)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefA))
@@ -3448,7 +3448,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(podA, podB)
+			_, c := newController([]runtime.Object{podA, podB}, nil)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
@@ -3555,7 +3555,7 @@ func TestSyncAppliedToGroupWithExternalEntity(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
+			_, npc := newController(nil, nil)
 			npc.groupingInterface.AddExternalEntity(tt.addedExternalEntity)
 			groupSelector := antreatypes.NewGroupSelector("nsA", nil, nil, &selectorSpec, nil)
 			appGroupID := getNormalizedUID(groupSelector.NormalizedName)
