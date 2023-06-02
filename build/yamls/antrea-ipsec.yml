@@ -3223,6 +3223,7 @@ data:
       portRange: "61000-62000"
 
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+    # It is typically used when kube-proxy is not deployed (replaced by AntreaProxy).
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
     kubeAPIServerOverride: ""
 
@@ -3435,6 +3436,12 @@ data:
     # File path of the certificate bundle for all the signers that is recognized for incoming client
     # certificates.
     clientCAFile: ""
+
+    # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+    # It is typically used when kube-proxy is not deployed (replaced by AntreaProxy) and kube-controller-manager
+    # does not run NodeIPAMController (replaced by Antrea NodeIPAM).
+    # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
+    kubeAPIServerOverride: ""
 
     nodeIPAM:
       # Enable the integrated Node IPAM controller within the Antrea controller.
@@ -4384,7 +4391,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 373bbb8d6a42a8f3e546ea446fd078c04e947093e68e0c1c973f4c696bf8d607
+        checksum/config: 6b902d5d6e9a2c0e2fde41aedf349eeee38d4530330381b01849815211ad1dd8
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -4669,7 +4676,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 373bbb8d6a42a8f3e546ea446fd078c04e947093e68e0c1c973f4c696bf8d607
+        checksum/config: 6b902d5d6e9a2c0e2fde41aedf349eeee38d4530330381b01849815211ad1dd8
       labels:
         app: antrea
         component: antrea-controller
