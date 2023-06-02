@@ -214,8 +214,13 @@ jobs:
         run: |
           mkdir log
           mkdir test-e2e-encap-all-features-enabled-coverage
-          # FlowExporter requires the FlowAggregator, so we keep it disabled.
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --feature-gates AllAlpha=true,AllBeta=true,FlowExporter=false --proxy-all --multicast
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage ./ci/kind/test-e2e-kind.sh \
+            --encap-mode encap \
+            --coverage \
+            --feature-gates AllAlpha=true,AllBeta=true \
+            --proxy-all \
+            --node-ipam \
+            --multicast
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
       - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage

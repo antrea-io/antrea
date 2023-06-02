@@ -16,6 +16,9 @@ package k8s
 
 import (
 	"fmt"
+	"net"
+	"os"
+	"strings"
 
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -30,6 +33,11 @@ import (
 
 	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+)
+
+const (
+	kubeServiceHostEnvKey = "KUBERNETES_SERVICE_HOST"
+	kubeServicePortEnvKey = "KUBERNETES_SERVICE_PORT"
 )
 
 // CreateClients creates kube clients from the given config.
@@ -80,7 +88,6 @@ func CreateNetworkAttachDefClient(config componentbaseconfig.ClientConnectionCon
 		return nil, err
 	}
 	return netAttachDefClient, nil
-
 }
 
 func createRestConfig(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (*rest.Config, error) {
@@ -110,7 +117,25 @@ func createRestConfig(config componentbaseconfig.ClientConnectionConfiguration, 
 	kubeConfig.Burst = int(config.Burst)
 
 	return kubeConfig, nil
+}
 
+// OverrideKubeAPIServer overrides the env vars related to the kubernetes service used by InClusterConfig.
+// It's required because some K8s libraries like DelegatingAuthenticationOptions and DelegatingAuthorizationOptions
+// read the information from env vars and don't support overriding via parameters.
+func OverrideKubeAPIServer(kubeAPIServerOverride string) {
+	if len(kubeAPIServerOverride) == 0 {
+		return
+	}
+	hostPort := strings.Replace(kubeAPIServerOverride, "https://", "", -1)
+	var host, port string
+	var err error
+	if host, port, err = net.SplitHostPort(hostPort); err != nil {
+		// if SplitHostPort returns an error, the entire hostport is considered as host
+		host = hostPort
+		port = "443"
+	}
+	os.Setenv(kubeServiceHostEnvKey, host)
+	os.Setenv(kubeServicePortEnvKey, port)
 }
 
 func EndpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {
