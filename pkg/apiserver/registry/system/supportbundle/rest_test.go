@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clockutils "k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/exec"
 	exectesting "k8s.io/utils/exec/testing"
 
@@ -72,13 +74,18 @@ func TestClean(t *testing.T) {
 	}{
 		"CleanByCancellation": {
 			needCancel: true,
-			duration:   time.Hour,
+			duration:   1 * time.Hour,
 		},
 		"CleanByTimeout": {
-			duration: 10 * time.Millisecond,
+			duration: 1 * time.Second,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			fakeClock := clocktesting.NewFakeClock(time.Now())
+			clock = fakeClock
+			defer func() {
+				clock = &clockutils.RealClock{}
+			}()
 			f, err := defaultFS.Create("test.tar.gz")
 			require.NoError(t, err)
 			defer defaultFS.Remove(f.Name())
@@ -86,15 +93,24 @@ func TestClean(t *testing.T) {
 			storage := NewControllerStorage()
 			ctx, cancelFunc := context.WithCancel(context.Background())
 			defer cancelFunc()
+			require.False(t, fakeClock.HasWaiters())
+			go storage.SupportBundle.clean(ctx, f.Name(), tc.duration)
+			// Wait for the clean function to have called clock.After:
+			// until it does, we cannot advance the fake clock.
+			require.Eventually(t, func() bool {
+				return fakeClock.HasWaiters()
+			}, 1*time.Second, 10*time.Millisecond)
 			if tc.needCancel {
 				cancelFunc()
+			} else {
+				fakeClock.Step(tc.duration)
 			}
-			go storage.SupportBundle.clean(ctx, f.Name(), tc.duration)
-			time.Sleep(200 * time.Millisecond)
-			exist, err := afero.Exists(defaultFS, f.Name())
-			require.NoError(t, err)
-			require.False(t, exist)
-			require.Equal(t, system.SupportBundleStatusNone, storage.SupportBundle.cache.Status)
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				exist, err := afero.Exists(defaultFS, f.Name())
+				require.NoError(t, err)
+				assert.False(c, exist)
+			}, 1*time.Second, 10*time.Millisecond, "Supportbundle file was not deleted")
+			assert.Equal(t, system.SupportBundleStatusNone, storage.SupportBundle.cache.Status)
 		})
 	}
 }
