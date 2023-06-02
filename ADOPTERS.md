@@ -12,6 +12,10 @@ height="50"></a>&nbsp; &nbsp; &nbsp;
 <img alt="https://www.terasky.com" src="docs/assets/adopters/terasky-logo.png"
 height="50"></a>&nbsp; &nbsp; &nbsp;
 
+<a href="http://www.pitsdatarecovery.net" border="0" target="_blank">
+<img alt="PITS Global Data Recovery Services" src="docs/assets/adopters/pits-logo.svg"
+height="50"></a>&nbsp; &nbsp; &nbsp;
+
 ## Success Stories
 
 Below is a list of adopters of Antrea that have publicly shared the details
@@ -51,6 +55,17 @@ We are very heavily utilizing Antrea Cluster Network Policies, Antrea Network Po
 and the Egress functionality.
 
 We are @TeraSkycom1 on Twitter.  
+
+**[PITS Global Data Recovery Services](https://www.pitsdatarecovery.net/)**
+
+PITS Global Data Recovery Services is a leading data recovery company based in the 
+United States. With a team of highly skilled and experienced data recovery experts, 
+they are dedicated to providing top-notch data recovery services to businesses and 
+individuals across the country. Antrea is used in a Kubernetes-native networking 
+solution that extends the Kubernetes APIs and offers familiar abstractions to users, 
+along with Open vSwitch, a powerful network virtualization tool, to implement all 
+networking functions, including Kubernetes Service load-balancing and hardware 
+offloading for demanding workloads. 
 
 ## Adding yourself as an Adopter
 
