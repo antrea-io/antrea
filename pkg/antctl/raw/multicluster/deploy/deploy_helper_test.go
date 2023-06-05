@@ -28,7 +28,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/restmapper"
 
 	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
@@ -98,13 +100,14 @@ func TestGenerateManifests(t *testing.T) {
 func TestCreateResources(t *testing.T) {
 	fakeDynamicClient := dynamicfake.NewSimpleDynamicClient(mcscheme.Scheme)
 	fakeClient := fake.NewSimpleClientset()
+	apiGroupResources, _ := restmapper.GetAPIGroupResources(fakeClient.Discovery())
 	cmd := &cobra.Command{}
 	file := filepath.Join("..", "..", "..", "..", "..", "multicluster", "build", "yamls", "antrea-multicluster-leader-global.yml")
 	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Errorf("Failed to open the file %s", file)
 	}
-	err = createResources(cmd, fakeClient, fakeDynamicClient, content)
+	err = createResources(cmd, apiGroupResources, fakeDynamicClient, content)
 	if err != nil {
 		assert.Contains(t, err.Error(), "no matches for kind \"CustomResourceDefinition\"")
 	}
@@ -135,6 +138,8 @@ kind: Config`)
 	kubeconfig := ""
 	cmd := &cobra.Command{}
 	cmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", fakeKubeconfig.Name(), "path of kubeconfig")
+	fakeClient := fake.NewSimpleClientset()
+
 	tests := []struct {
 		name        string
 		body        string
@@ -156,8 +161,12 @@ kind: Config`)
 			httpGet = func(url string) (resp *http.Response, err error) {
 				return &http.Response{Body: io.NopCloser(strings.NewReader(tt.body))}, tt.err
 			}
+			getAPIGroupResources = func(k8sClient kubernetes.Interface) ([]*restmapper.APIGroupResources, error) {
+				return restmapper.GetAPIGroupResources(fakeClient.Discovery())
+			}
 			defer func() {
 				httpGet = http.Get
+				getAPIGroupResources = getAPIGroupResourcesWrapper
 			}()
 			gotErr := deploy(cmd, "leader", "latest", "kube-system", "")
 			if tt.expectedErr != "" {
