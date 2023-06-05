@@ -458,7 +458,7 @@ function deliver_antrea_windows {
 }
 
 function deliver_antrea_windows_containerd {
-    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows Containerd ======"
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows containerd ======"
     clean_up_one_ns "antrea-test"
     kubectl delete -f ${WORKDIR}/antrea-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows-containerd.yml --ignore-not-found=true || true

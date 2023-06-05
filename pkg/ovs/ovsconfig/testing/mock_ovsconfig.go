@@ -414,20 +414,6 @@ func (mr *MockOVSBridgeClientMockRecorder) IsHardwareOffloadEnabled() *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHardwareOffloadEnabled", reflect.TypeOf((*MockOVSBridgeClient)(nil).IsHardwareOffloadEnabled))
 }
 
-// SetBridgeMcastSnooping mocks base method
-func (m *MockOVSBridgeClient) SetBridgeMcastSnooping(arg0 bool) ovsconfig.Error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetBridgeMcastSnooping", arg0)
-	ret0, _ := ret[0].(ovsconfig.Error)
-	return ret0
-}
-
-// SetBridgeMcastSnooping indicates an expected call of SetBridgeMcastSnooping
-func (mr *MockOVSBridgeClientMockRecorder) SetBridgeMcastSnooping(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBridgeMcastSnooping", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetBridgeMcastSnooping), arg0)
-}
-
 // SetDatapathID mocks base method
 func (m *MockOVSBridgeClient) SetDatapathID(arg0 string) ovsconfig.Error {
 	m.ctrl.T.Helper()

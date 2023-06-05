@@ -76,7 +76,7 @@ iptables-save | grep -v KUBE | iptables-restore
 # Option 2 (any mode), restart all Nodes
 # Option 3 (any mode), run the following on each Node:
 kube-proxy --cleanup
-# You can create a DeamonSet to easily run the above command on all Nodes, using
+# You can create a DaemonSet to easily run the above command on all Nodes, using
 # the kube-proxy container image
 ```
 

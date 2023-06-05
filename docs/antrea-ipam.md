@@ -316,7 +316,7 @@ additional static IP addresses. It also includes static routes and DNS settings.
     "cniVersion": "0.3.0",
     "name": "pool-and-static-net-1",
     "type": "bridge",
-    "bridge": "br0"
+    "bridge": "br0",
     "ipam": {
         "type": "antrea",
         "ippools": [ "ipv4-pool-1" ],

@@ -51,7 +51,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
         --host-type           The host type of worker node. Defaults to UBUNTU.
         --machine-type        The machine type of worker node. Defaults to e2-standard-4.
         --gcloud-sdk-path     The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
-        --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
+        --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --setup-only          Only perform setting up the cluster and run test.
         --cleanup-only        Only perform cleaning up the cluster."
 
