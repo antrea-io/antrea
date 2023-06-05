@@ -295,6 +295,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related mutation
 		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/acnp", webhook.HandleMutationNetworkPolicy(m))
+		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/annp", webhook.HandleMutationNetworkPolicy(m))
 		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/anp", webhook.HandleMutationNetworkPolicy(m))
 
 		// Get new NetworkPolicyValidator
@@ -302,6 +303,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		// Install handlers for NetworkPolicy related validation
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandlerForValidateFunc(v.Validate))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/annp", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/group", webhook.HandlerForValidateFunc(v.Validate))

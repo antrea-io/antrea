@@ -299,7 +299,7 @@ func (c *NetworkPolicyController) triggerDerivedGroupUpdates(grp string) {
 // triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
 func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
-	cnps, err := c.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg)
+	cnps, err := c.acnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg)
 	if err != nil {
 		klog.Errorf("Error retrieving ClusterNetworkPolicies corresponding to ClusterGroup %s", cg)
 		return

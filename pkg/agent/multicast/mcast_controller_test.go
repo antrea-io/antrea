@@ -575,7 +575,7 @@ func TestProcessPacketIn(t *testing.T) {
 		return ips
 	}
 	allow := v1alpha1.RuleActionAllow
-	anp := v1beta2.AntreaNetworkPolicy
+	annp := v1beta2.AntreaNetworkPolicy
 	acnp := v1beta2.AntreaClusterNetworkPolicy
 	drop := v1alpha1.RuleActionDrop
 	for _, tc := range []struct {
@@ -585,7 +585,7 @@ func TestProcessPacketIn(t *testing.T) {
 		joinedGroups     sets.Set[string]
 		joinedGroupItems map[string]*types.IGMPNPRuleInfo
 		leftGroups       sets.Set[string]
-		igmpANPStats     map[apitypes.UID]map[string]*types.RuleMetric
+		igmpANNPStats    map[apitypes.UID]map[string]*types.RuleMetric
 		igmpACNPStats    map[apitypes.UID]map[string]*types.RuleMetric
 		expGroups        sets.Set[string]
 	}{
@@ -598,14 +598,14 @@ func TestProcessPacketIn(t *testing.T) {
 				"224.1.101.3": nil,
 				"224.1.101.4": {
 					RuleAction: allow,
-					UUID:       "anp",
-					NPType:     &anp,
+					UUID:       "annp",
+					NPType:     &annp,
 					Name:       "allow_1014",
 				},
 			},
 			leftGroups:    sets.New[string](),
 			expGroups:     sets.New[string]("224.1.101.2", "224.1.101.3", "224.1.101.4"),
-			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpANNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"annp": {"allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{},
 			version:       1,
 		},
@@ -616,15 +616,15 @@ func TestProcessPacketIn(t *testing.T) {
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.101.20": {
 					RuleAction: drop,
-					UUID:       "anp",
-					NPType:     &anp,
+					UUID:       "annp",
+					NPType:     &annp,
 					Name:       "block10120",
 				},
 				"224.1.101.2": nil,
 				"224.1.101.22": {
 					RuleAction: allow,
-					UUID:       "anp",
-					NPType:     &anp,
+					UUID:       "annp",
+					NPType:     &annp,
 					Name:       "allow_10122",
 				},
 				"224.1.101.23": {
@@ -634,7 +634,7 @@ func TestProcessPacketIn(t *testing.T) {
 					Name:       "allow_10123",
 				},
 			},
-			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpANNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"annp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
 			expGroups:     sets.New[string]("224.1.101.21", "224.1.101.22", "224.1.101.23"),
 			version:       1,
@@ -649,7 +649,7 @@ func TestProcessPacketIn(t *testing.T) {
 				"224.1.102.4": nil,
 			},
 			leftGroups:    sets.New[string]("224.1.102.3"),
-			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpANNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"annp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
 			expGroups:     sets.New[string]("224.1.102.2", "224.1.102.4"),
 			version:       2,
@@ -664,14 +664,14 @@ func TestProcessPacketIn(t *testing.T) {
 				"224.1.102.23": nil,
 				"224.1.102.24": {
 					RuleAction: drop,
-					UUID:       "anp",
-					NPType:     &anp,
+					UUID:       "annp",
+					NPType:     &annp,
 					Name:       "block10120",
 				},
 			},
 			leftGroups:    sets.New[string]("224.1.102.23"),
 			version:       2,
-			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpANNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"annp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
 			expGroups:     sets.New[string]("224.1.102.21", "224.1.102.22"),
 		},
@@ -695,7 +695,7 @@ func TestProcessPacketIn(t *testing.T) {
 				},
 			},
 			leftGroups:    sets.New[string]("224.1.103.2", "224.1.103.3"),
-			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpANNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"annp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
 			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp2": {"test": {Packets: 1, Bytes: 58}, "test2": {Packets: 1, Bytes: 66}}, "acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
 			expGroups:     sets.New[string]("224.1.103.4"),
 			version:       3,
@@ -721,7 +721,7 @@ func TestProcessPacketIn(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.igmpACNPStats, snooper.igmpReportACNPStats)
-			assert.Equal(t, tc.igmpANPStats, snooper.igmpReportANPStats)
+			assert.Equal(t, tc.igmpANNPStats, snooper.igmpReportANNPStats)
 
 			time.Sleep(time.Second)
 			statuses := mockController.getGroupMemberStatusesByPod(tc.iface.InterfaceName)

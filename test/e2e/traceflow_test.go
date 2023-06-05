@@ -64,9 +64,9 @@ func TestTraceflow(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Run("testTraceflowIntraNodeANP", func(t *testing.T) {
+	t.Run("testTraceflowIntraNodeANNP", func(t *testing.T) {
 		skipIfAntreaPolicyDisabled(t)
-		testTraceflowIntraNodeANP(t, data)
+		testTraceflowIntraNodeANNP(t, data)
 	})
 	t.Run("testTraceflowIntraNode", func(t *testing.T) {
 		skipIfAntreaPolicyDisabled(t)
@@ -100,8 +100,8 @@ var (
 	protocolICMPv6 = int32(58)
 )
 
-// testTraceflowIntraNodeANP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
-func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
+// testTraceflowIntraNodeANNP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
+func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
@@ -118,8 +118,8 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 	time.Sleep(time.Second * 1)
 
 	var denyIngress *v1alpha1.NetworkPolicy
-	denyIngressName := "test-anp-deny-ingress"
-	if denyIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName, false); err != nil {
+	denyIngressName := "test-annp-deny-ingress"
+	if denyIngress, err = data.createANNPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName, false); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
 	}
 	defer func() {
@@ -127,12 +127,12 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
 		}
 	}()
-	if err = data.waitForANPRealized(t, data.testNamespace, denyIngressName, policyRealizedTimeout); err != nil {
+	if err = data.waitForANNPRealized(t, data.testNamespace, denyIngressName, policyRealizedTimeout); err != nil {
 		t.Fatal(err)
 	}
 	var rejectIngress *v1alpha1.NetworkPolicy
-	rejectIngressName := "test-anp-reject-ingress"
-	if rejectIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[2], rejectIngressName, true); err != nil {
+	rejectIngressName := "test-annp-reject-ingress"
+	if rejectIngress, err = data.createANNPDenyIngress("antrea-e2e", node1Pods[2], rejectIngressName, true); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
 	}
 	defer func() {
@@ -140,13 +140,13 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
 		}
 	}()
-	if err = data.waitForANPRealized(t, data.testNamespace, rejectIngressName, policyRealizedTimeout); err != nil {
+	if err = data.waitForANNPRealized(t, data.testNamespace, rejectIngressName, policyRealizedTimeout); err != nil {
 		t.Fatal(err)
 	}
 
 	testcases := []testcase{
 		{
-			name:      "ANPDenyIngressIPv4",
+			name:      "ANNPDenyIngressIPv4",
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -194,7 +194,7 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			},
 		},
 		{
-			name:      "ANPRejectIngressIPv4",
+			name:      "ANNPRejectIngressIPv4",
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -242,7 +242,7 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			},
 		},
 		{
-			name:      "ANPDenyIngressIPv6",
+			name:      "ANNPDenyIngressIPv6",
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -290,7 +290,7 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			},
 		},
 	}
-	t.Run("traceflowANPGroupTest", func(t *testing.T) {
+	t.Run("traceflowANNPGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
@@ -2280,13 +2280,13 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 	return nil
 }
 
-// createANPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
-func (data *TestData) createANPDenyIngress(key string, value string, name string, isReject bool) (*v1alpha1.NetworkPolicy, error) {
+// createANNPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
+func (data *TestData) createANNPDenyIngress(key string, value string, name string, isReject bool) (*v1alpha1.NetworkPolicy, error) {
 	dropACT := v1alpha1.RuleActionDrop
 	if isReject {
 		dropACT = v1alpha1.RuleActionReject
 	}
-	anp := v1alpha1.NetworkPolicy{
+	annp := v1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
@@ -2316,11 +2316,11 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 			Egress: []v1alpha1.Rule{},
 		},
 	}
-	anpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
+	annpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Create(context.TODO(), &annp, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
-	return anpCreated, nil
+	return annpCreated, nil
 }
 
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
@@ -2360,7 +2360,7 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 func (data *TestData) waitForNetworkpolicyRealized(pod string, node string, isWindows bool, networkpolicy string, npType v1beta2.NetworkPolicyType) error {
 	npOption := "K8sNP"
 	if npType == v1beta2.AntreaNetworkPolicy {
-		npOption = "ANP"
+		npOption = "ANNP"
 	}
 	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
 		var stdout, stderr string

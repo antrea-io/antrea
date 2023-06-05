@@ -26,36 +26,36 @@ import (
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
-func getANPReference(anp *crdv1alpha1.NetworkPolicy) *controlplane.NetworkPolicyReference {
+func getANNPReference(annp *crdv1alpha1.NetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type:      controlplane.AntreaNetworkPolicy,
-		Namespace: anp.Namespace,
-		Name:      anp.Name,
-		UID:       anp.UID,
+		Namespace: annp.Namespace,
+		Name:      annp.Name,
+		UID:       annp.UID,
 	}
 }
 
-// addANP receives AntreaNetworkPolicy ADD events and enqueues a reference of
+// addANNP receives AntreaNetworkPolicy ADD events and enqueues a reference of
 // the AntreaNetworkPolicy to trigger its process.
-func (n *NetworkPolicyController) addANP(obj interface{}) {
-	defer n.heartbeat("addANP")
+func (n *NetworkPolicyController) addANNP(obj interface{}) {
+	defer n.heartbeat("addANNP")
 	np := obj.(*crdv1alpha1.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
-	n.enqueueInternalNetworkPolicy(getANPReference(np))
+	n.enqueueInternalNetworkPolicy(getANNPReference(np))
 }
 
-// updateANP receives AntreaNetworkPolicy UPDATE events and enqueues a reference
+// updateANNP receives AntreaNetworkPolicy UPDATE events and enqueues a reference
 // of the AntreaNetworkPolicy to trigger its process.
-func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
-	defer n.heartbeat("updateANP")
+func (n *NetworkPolicyController) updateANNP(old, cur interface{}) {
+	defer n.heartbeat("updateANNP")
 	curNP := cur.(*crdv1alpha1.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
-	n.enqueueInternalNetworkPolicy(getANPReference(curNP))
+	n.enqueueInternalNetworkPolicy(getANNPReference(curNP))
 }
 
-// deleteANP receives AntreaNetworkPolicy DELETE events and enqueues a reference
+// deleteANNP receives AntreaNetworkPolicy DELETE events and enqueues a reference
 // of the AntreaNetworkPolicy to trigger its process.
-func (n *NetworkPolicyController) deleteANP(old interface{}) {
+func (n *NetworkPolicyController) deleteANNP(old interface{}) {
 	np, ok := old.(*crdv1alpha1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
@@ -69,9 +69,9 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 			return
 		}
 	}
-	defer n.heartbeat("deleteANP")
+	defer n.heartbeat("deleteANNP")
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s DELETE event", np.Namespace, np.Name)
-	n.enqueueInternalNetworkPolicy(getANPReference(np))
+	n.enqueueInternalNetworkPolicy(getANNPReference(np))
 }
 
 // processAntreaNetworkPolicy creates an internal NetworkPolicy instance

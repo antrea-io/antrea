@@ -28,7 +28,7 @@ benchmarks:
   - name: "BenchmarkSyncAddressGroup"
     package: "./pkg/controller/networkpolicy"
     versionRequirement: ">1.3.0"
-  - name: "BenchmarkInitXLargeScaleWithANPPerExternalEntity"
+  - name: "BenchmarkInitXLargeScaleWithANNPPerExternalEntity"
     package: "./pkg/controller/networkpolicy"
     versionRequirement: ">1.3.0"
   - name: "BenchmarkCluster_ShouldSelect/Select_Node_from_1000_alive_Nodes-nodeSelectedForEgress"

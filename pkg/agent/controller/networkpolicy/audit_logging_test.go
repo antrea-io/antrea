@@ -51,7 +51,7 @@ var (
 	actionAllow    = openflow.DispositionToString[openflow.DispositionAllow]
 	actionDrop     = openflow.DispositionToString[openflow.DispositionDrop]
 	actionRedirect = "Redirect"
-	testANPRef     = &v1beta2.NetworkPolicyReference{
+	testANNPRef    = &v1beta2.NetworkPolicyReference{
 		Type:      v1beta2.AntreaNetworkPolicy,
 		Namespace: "default",
 		Name:      "test",
@@ -94,7 +94,7 @@ func newTestAntreaPolicyLogger(bufferLength time.Duration, clock clock.Clock) (*
 func newLogInfo(disposition string) (*logInfo, string) {
 	testLogInfo := &logInfo{
 		tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
-		npRef:       testANPRef.ToString(),
+		npRef:       testANNPRef.ToString(),
 		ruleName:    "test-rule",
 		logLabel:    "test-label",
 		ofPriority:  "0",
@@ -261,17 +261,17 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		wantErr         error
 	}{
 		{
-			name:    "ANP Allow Ingress",
+			name:    "ANNP Allow Ingress",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					true, testANPRef, testPriority, testRule, testLogLabel)
+					true, testANNPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: allowDispositionData,
 			wantOb: &logInfo{
 				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
 				disposition:  actionAllow,
-				npRef:        testANPRef.ToString(),
+				npRef:        testANNPRef.ToString(),
 				ofPriority:   testPriority,
 				ruleName:     testRule,
 				direction:    "Ingress",
@@ -284,13 +284,13 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.AntreaPolicyEgressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					true, testANPRef, testPriority, testRule, testLogLabel)
+					true, testANNPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: allowDispositionData,
 			wantOb: &logInfo{
 				tableName:    openflow.AntreaPolicyEgressRuleTable.GetName(),
 				disposition:  actionAllow,
-				npRef:        testANPRef.ToString(),
+				npRef:        testANNPRef.ToString(),
 				ofPriority:   testPriority,
 				ruleName:     testRule,
 				direction:    "Egress",
@@ -318,17 +318,17 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			},
 		},
 		{
-			name:    "ANP Drop",
+			name:    "ANNP Drop",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					true, testANPRef, testPriority, testRule, testLogLabel)
+					true, testANNPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: dropCNPDispositionData,
 			wantOb: &logInfo{
 				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
 				disposition:  actionDrop,
-				npRef:        testANPRef.ToString(),
+				npRef:        testANNPRef.ToString(),
 				ofPriority:   testPriority,
 				ruleName:     testRule,
 				direction:    "Ingress",
@@ -352,17 +352,17 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			},
 		},
 		{
-			name:    "ANP Redirect",
+			name:    "ANNP Redirect",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					true, testANPRef, testPriority, testRule, testLogLabel)
+					true, testANNPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: redirectDispositionData,
 			wantOb: &logInfo{
 				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
 				disposition:  actionRedirect,
-				npRef:        testANPRef.ToString(),
+				npRef:        testANNPRef.ToString(),
 				ofPriority:   testPriority,
 				ruleName:     testRule,
 				direction:    "Ingress",

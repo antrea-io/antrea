@@ -740,9 +740,9 @@ The rules are logged in the following format:
     <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp test-rule Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label
-    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp test-rule Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label [3 packets in 1.011379442s]
-    2023/03/29 02:21:25.879364 AntreaPolicyIngressRule AntreaNetworkPolicy:default/test-anp AllowFromFrontend Allow 44900 10.10.1.14 <nil> 10.10.1.15 <nil> ICMP 84 frontend-allowed
+    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-annp test-rule Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label
+    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-annp test-rule Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label [3 packets in 1.011379442s]
+    2023/03/29 02:21:25.879364 AntreaPolicyIngressRule AntreaNetworkPolicy:default/test-annp AllowFromFrontend Allow 44900 10.10.1.14 <nil> 10.10.1.15 <nil> ICMP 84 frontend-allowed
 ```
 
 Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
@@ -892,7 +892,7 @@ All the above commands produce output similar to what is shown below:
 
 ## Antrea NetworkPolicy
 
-Antrea NetworkPolicy (ANP) is another policy CRD, which is similar to the
+Antrea NetworkPolicy (ANNP) is another policy CRD, which is similar to the
 ClusterNetworkPolicy CRD, however its scope is limited to a Namespace.
 The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
@@ -907,7 +907,7 @@ An example Antrea NetworkPolicy might look like this:
 apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
-  name: test-anp
+  name: test-annp
   namespace: default
 spec:
   priority: 5
@@ -977,7 +977,7 @@ that selects `ipblock` "10.0.10.0/24".
 apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
-  name: anp-with-groups
+  name: annp-with-groups
   namespace: default
 spec:
   priority: 5
@@ -1005,24 +1005,24 @@ spec:
 
 ### *kubectl* commands for Antrea NetworkPolicy
 
-The following `kubectl` commands can be used to retrieve ANP resources:
+The following `kubectl` commands can be used to retrieve ANNP resources:
 
 ```bash
     # Use long name with API Group
     kubectl get networkpolicies.crd.antrea.io
 
     # Use short name
-    kubectl get anp
+    kubectl get annp
 
     # Use short name with API Group
-    kubectl get anp.crd.antrea.io
+    kubectl get annp.crd.antrea.io
 ```
 
 All the above commands produce output similar to what is shown below:
 
 ```text
     NAME       TIER          PRIORITY   AGE
-    test-anp   securityops   5          5s
+    test-annp   securityops   5          5s
 ```
 
 ## Antrea-native Policy ordering based on priorities
@@ -1054,7 +1054,7 @@ Within a policy, rules are enforced in the order in which they are set. For exam
 consider the following:
 
 - ACNP1{tier: application, priority: 10, ingressRules: [ir1.1, ir1.2], egressRules: [er1.1, er1.2]}
-- ANP1{tier: application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
+- ANNP1{tier: application, priority: 15, ingressRules: [ir2.1, ir2.2], egressRules: [er2.1, er2.2]}
 - ACNP3{tier: emergency, priority: 20, ingressRules: [ir3.1, ir3.2], egressRules: [er3.1, er3.2]}
 
 This translates to the following order:
@@ -1076,7 +1076,7 @@ antctl get netpol --sort-by=effectivePriority
 NAME                                 APPLIED-TO                           RULES SOURCE                                 TIER-PRIORITY PRIORITY
 4c504456-9158-4838-bfab-f81665dfae12 85b88ddb-b474-5b44-93d3-c9192c09085e 1     AntreaClusterNetworkPolicy:acnp-1      250           1
 41e510e0-e430-4606-b4d9-261424184fba e36f8beb-9b0b-5b49-b1b7-5c5307cddd83 1     AntreaClusterNetworkPolicy:acnp-2      250           2
-819b8482-ede5-4423-910c-014b731fdba6 bb6711a1-87c7-5a15-9a4a-71bf49a78056 2     AntreaNetworkPolicy:anp-10             250           10
+819b8482-ede5-4423-910c-014b731fdba6 bb6711a1-87c7-5a15-9a4a-71bf49a78056 2     AntreaNetworkPolicy:annp-10             250           10
 4d18e031-f05a-48f6-bd91-0197b556ccca e216c104-770c-5731-bfd3-ff4ccbc38c39 2     K8sNetworkPolicy:default/test-1        <NONE>        <NONE>
 c547002a-d8c7-40f1-bdd1-8eb6d0217a67 e216c104-770c-5731-bfd3-ff4ccbc38c39 1     K8sNetworkPolicy:default/test-2        <NONE>        <NONE>
 aac8b8bc-f3bf-4c41-b6e0-2af1863204eb bb6711a1-87c7-5a15-9a4a-71bf49a78056 3     AntreaClusterNetworkPolicy:baseline    253           10
@@ -1107,7 +1107,7 @@ to select Namespaces directly by their `name` in `namespaceSelectors` as follows
 apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
-  name: test-anp-by-name
+  name: test-annp-by-name
   namespace: default
 spec:
   priority: 5
@@ -1178,7 +1178,7 @@ use this reserved label to select Namespaces by name as follows:
 apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
-  name: test-anp-by-name
+  name: test-annp-by-name
   namespace: default
 spec:
   priority: 5
@@ -1752,7 +1752,7 @@ Similar RBAC is applied to the ClusterGroup resource.
   supported. But for optimal performance, it is recommended that the number of
   Tiers in a cluster be less than or equal to 10.
 - In order to reduce the churn in the agent, it is recommended to set the policy
-  priority (acnp/anp.spec.priority) within the range 1.0 to 100.0.
+  priority (acnp/annp.spec.priority) within the range 1.0 to 100.0.
 - The v1alpha1 policy CRDs support up to 10,000 unique priorities at policy level,
   and up to 50,000 unique priorities at rule level, across all Tiers except for
   the "baseline" Tier. For any two Antrea-native policy rules, their rule level

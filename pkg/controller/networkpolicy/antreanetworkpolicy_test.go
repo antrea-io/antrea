@@ -749,44 +749,44 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	}
 }
 
-func TestAddANP(t *testing.T) {
+func TestAddANNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	anp := getANP()
-	npc.addANP(anp)
+	annp := getANNP()
+	npc.addANNP(annp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
-	expectedKey := getANPReference(anp)
+	expectedKey := getANNPReference(annp)
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
 
-func TestUpdateANP(t *testing.T) {
+func TestUpdateANNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	anp := getANP()
-	newANP := anp.DeepCopy()
-	// Make a change to the ANP.
-	newANP.Annotations = map[string]string{"foo": "bar"}
-	npc.updateANP(anp, newANP)
+	annp := getANNP()
+	newANNP := annp.DeepCopy()
+	// Make a change to the ANNP.
+	newANNP.Annotations = map[string]string{"foo": "bar"}
+	npc.updateANNP(annp, newANNP)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
-	expectedKey := getANPReference(anp)
+	expectedKey := getANNPReference(annp)
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
 
-func TestDeleteANP(t *testing.T) {
+func TestDeleteANNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	anp := getANP()
-	npc.deleteANP(anp)
+	annp := getANNP()
+	npc.deleteANNP(annp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
-	expectedKey := getANPReference(anp)
+	expectedKey := getANNPReference(annp)
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
 
 // util functions for testing.
-func getANP() *crdv1alpha1.NetworkPolicy {
+func getANNP() *crdv1alpha1.NetworkPolicy {
 	p10 := float64(10)
 	allowAction := crdv1alpha1.RuleActionAllow
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -813,7 +813,7 @@ func getANP() *crdv1alpha1.NetworkPolicy {
 		},
 	}
 	npObj := &crdv1alpha1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-anp"},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-annp"},
 		Spec: crdv1alpha1.NetworkPolicySpec{
 			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorA},

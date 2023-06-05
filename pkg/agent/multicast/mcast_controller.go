@@ -723,7 +723,7 @@ func getGroupEventKey(obj interface{}) (string, error) {
 	return groupState.group.String(), nil
 }
 
-func (c *Controller) CollectIGMPReportNPStats() (igmpANPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
+func (c *Controller) CollectIGMPReportNPStats() (igmpANNPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
 	return c.igmpSnooper.collectStats()
 }
 

@@ -216,12 +216,12 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	return err
 }
 
-// triggerANPUpdates triggers processing of Antrea NetworkPolicies associated with the input Group.
-func (n *NetworkPolicyController) triggerANPUpdates(g string) {
+// triggerANNPUpdates triggers processing of Antrea NetworkPolicies associated with the input Group.
+func (n *NetworkPolicyController) triggerANNPUpdates(g string) {
 	// If a Group is added/updated, it might have a reference in Antrea NetworkPolicy.
-	anps, _ := n.anpInformer.Informer().GetIndexer().ByIndex(GroupIndex, g)
-	for _, obj := range anps {
-		n.enqueueInternalNetworkPolicy(getANPReference(obj.(*crdv1alpha1.NetworkPolicy)))
+	annps, _ := n.annpInformer.Informer().GetIndexer().ByIndex(GroupIndex, g)
+	for _, obj := range annps {
+		n.enqueueInternalNetworkPolicy(getANNPReference(obj.(*crdv1alpha1.NetworkPolicy)))
 	}
 }
 

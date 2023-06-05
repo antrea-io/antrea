@@ -159,7 +159,7 @@ func TestConnectivity(t *testing.T) {
 		initializeForServiceExportsTest(t, data)
 		t.Run("Case=MCServiceConnectivity", func(t *testing.T) { testMCServiceConnectivity(t, data) })
 		t.Run("Case=ScaleDownMCServiceEndpoints", func(t *testing.T) { testScaleDownMCServiceEndpoints(t, data) })
-		t.Run("Case=ANPToServices", func(t *testing.T) { testANPToServices(t, data) })
+		t.Run("Case=ANNPToServices", func(t *testing.T) { testANNPToServices(t, data) })
 		t.Run("Case=StretchedNetworkPolicy", func(t *testing.T) { testStretchedNetworkPolicy(t, data) })
 		t.Run("Case=StretchedNetworkPolicyReject", func(t *testing.T) { testStretchedNetworkPolicyReject(t, data) })
 		t.Run("Case=StretchedNetworkPolicyUpdatePod", func(t *testing.T) { testStretchedNetworkPolicyUpdatePod(t, data) })

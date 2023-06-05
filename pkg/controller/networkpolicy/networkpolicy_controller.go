@@ -164,19 +164,19 @@ type NetworkPolicyController struct {
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
-	cnpInformer secinformers.ClusterNetworkPolicyInformer
-	// cnpLister is able to list/get AntreaClusterNetworkPolicies and is populated by the shared informer passed to
+	acnpInformer secinformers.ClusterNetworkPolicyInformer
+	// acnpLister is able to list/get AntreaClusterNetworkPolicies and is populated by the shared informer passed to
 	// NewClusterNetworkPolicyController.
-	cnpLister seclisters.ClusterNetworkPolicyLister
-	// cnpListerSynced is a function which returns true if the AntreaClusterNetworkPolicies shared informer has been synced at least once.
-	cnpListerSynced cache.InformerSynced
+	acnpLister seclisters.ClusterNetworkPolicyLister
+	// acnpListerSynced is a function which returns true if the AntreaClusterNetworkPolicies shared informer has been synced at least once.
+	acnpListerSynced cache.InformerSynced
 
-	anpInformer secinformers.NetworkPolicyInformer
-	// anpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
+	annpInformer secinformers.NetworkPolicyInformer
+	// annpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
-	anpLister seclisters.NetworkPolicyLister
-	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
-	anpListerSynced cache.InformerSynced
+	annpLister seclisters.NetworkPolicyLister
+	// annpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
+	annpListerSynced cache.InformerSynced
 
 	tierInformer secinformers.TierInformer
 	// tierLister is able to list/get Tiers and is populated by the shared informer passed to
@@ -263,26 +263,26 @@ var tierIndexers = cache.Indexers{
 	},
 }
 
-var cnpIndexers = cache.Indexers{
+var acnpIndexers = cache.Indexers{
 	TierIndex: func(obj interface{}) ([]string, error) {
-		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
-		return []string{cnp.Spec.Tier}, nil
+		return []string{acnp.Spec.Tier}, nil
 	},
 	ClusterGroupIndex: func(obj interface{}) ([]string, error) {
-		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
 		groupNames := sets.Set[string]{}
-		for _, appTo := range cnp.Spec.AppliedTo {
+		for _, appTo := range acnp.Spec.AppliedTo {
 			if appTo.Group != "" {
 				groupNames.Insert(appTo.Group)
 			}
 		}
-		if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
+		if len(acnp.Spec.Ingress) == 0 && len(acnp.Spec.Egress) == 0 {
 			return sets.List(groupNames), nil
 		}
 		appendGroups := func(rule secv1alpha1.Rule) {
@@ -302,20 +302,20 @@ var cnpIndexers = cache.Indexers{
 				}
 			}
 		}
-		for _, rule := range cnp.Spec.Egress {
+		for _, rule := range acnp.Spec.Egress {
 			appendGroups(rule)
 		}
-		for _, rule := range cnp.Spec.Ingress {
+		for _, rule := range acnp.Spec.Ingress {
 			appendGroups(rule)
 		}
 		return sets.List(groupNames), nil
 	},
 	perNamespaceRuleIndex: func(obj interface{}) ([]string, error) {
-		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
-		has := hasPerNamespaceRule(cnp)
+		has := hasPerNamespaceRule(acnp)
 		if has {
 			return []string{HasPerNamespaceRule}, nil
 		}
@@ -323,27 +323,27 @@ var cnpIndexers = cache.Indexers{
 	},
 }
 
-var anpIndexers = cache.Indexers{
+var annpIndexers = cache.Indexers{
 	TierIndex: func(obj interface{}) ([]string, error) {
-		anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		annp, ok := obj.(*secv1alpha1.NetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
-		return []string{anp.Spec.Tier}, nil
+		return []string{annp.Spec.Tier}, nil
 	},
 	GroupIndex: func(obj interface{}) ([]string, error) {
-		anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		annp, ok := obj.(*secv1alpha1.NetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
-		ns := anp.Namespace + "/"
+		ns := annp.Namespace + "/"
 		groupNames := sets.Set[string]{}
-		for _, appTo := range anp.Spec.AppliedTo {
+		for _, appTo := range annp.Spec.AppliedTo {
 			if appTo.Group != "" {
 				groupNames.Insert(ns + appTo.Group)
 			}
 		}
-		if len(anp.Spec.Ingress) == 0 && len(anp.Spec.Egress) == 0 {
+		if len(annp.Spec.Ingress) == 0 && len(annp.Spec.Egress) == 0 {
 			return sets.List(groupNames), nil
 		}
 		appendGroups := func(rule secv1alpha1.Rule) {
@@ -363,10 +363,10 @@ var anpIndexers = cache.Indexers{
 				}
 			}
 		}
-		for _, rule := range anp.Spec.Egress {
+		for _, rule := range annp.Spec.Egress {
 			appendGroups(rule)
 		}
-		for _, rule := range anp.Spec.Ingress {
+		for _, rule := range annp.Spec.Ingress {
 			appendGroups(rule)
 		}
 		return sets.List(groupNames), nil
@@ -382,8 +382,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	nodeInformer coreinformers.NodeInformer,
-	cnpInformer secinformers.ClusterNetworkPolicyInformer,
-	anpInformer secinformers.NetworkPolicyInformer,
+	acnpInformer secinformers.ClusterNetworkPolicyInformer,
+	annpInformer secinformers.NetworkPolicyInformer,
 	tierInformer secinformers.TierInformer,
 	cgInformer crdv1a3informers.ClusterGroupInformer,
 	grpInformer crdv1a3informers.GroupInformer,
@@ -435,12 +435,12 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.nodeInformer = nodeInformer
 		n.nodeLister = nodeInformer.Lister()
 		n.nodeListerSynced = nodeInformer.Informer().HasSynced
-		n.cnpInformer = cnpInformer
-		n.cnpLister = cnpInformer.Lister()
-		n.cnpListerSynced = cnpInformer.Informer().HasSynced
-		n.anpInformer = anpInformer
-		n.anpLister = anpInformer.Lister()
-		n.anpListerSynced = anpInformer.Informer().HasSynced
+		n.acnpInformer = acnpInformer
+		n.acnpLister = acnpInformer.Lister()
+		n.acnpListerSynced = acnpInformer.Informer().HasSynced
+		n.annpInformer = annpInformer
+		n.annpLister = annpInformer.Lister()
+		n.annpListerSynced = annpInformer.Informer().HasSynced
 		n.tierInformer = tierInformer
 		n.tierLister = tierInformer.Lister()
 		n.tierListerSynced = tierInformer.Informer().HasSynced
@@ -477,8 +477,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			resyncPeriod,
 		)
 		tierInformer.Informer().AddIndexers(tierIndexers)
-		cnpInformer.Informer().AddIndexers(cnpIndexers)
-		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+		acnpInformer.Informer().AddIndexers(acnpIndexers)
+		acnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addCNP,
 				UpdateFunc: n.updateCNP,
@@ -486,12 +486,12 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
-		anpInformer.Informer().AddIndexers(anpIndexers)
-		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
+		annpInformer.Informer().AddIndexers(annpIndexers)
+		annpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addANP,
-				UpdateFunc: n.updateANP,
-				DeleteFunc: n.deleteANP,
+				AddFunc:    n.addANNP,
+				UpdateFunc: n.updateANNP,
+				DeleteFunc: n.deleteANNP,
 			},
 			resyncPeriod,
 		)
@@ -896,9 +896,9 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer klog.Infof("Shutting down %s", controllerName)
 
 	cacheSyncs := []cache.InformerSynced{n.networkPolicyListerSynced, n.groupingInterfaceSynced}
-	// Only wait for cnpListerSynced and anpListerSynced when AntreaPolicy feature gate is enabled.
+	// Only wait for acnpListerSynced and annpListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		cacheSyncs = append(cacheSyncs, n.cnpListerSynced, n.anpListerSynced, n.cgListerSynced)
+		cacheSyncs = append(cacheSyncs, n.acnpListerSynced, n.annpListerSynced, n.cgListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
@@ -1424,22 +1424,22 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 
 	switch key.Type {
 	case controlplane.AntreaClusterNetworkPolicy:
-		cnp, err := n.cnpLister.Get(key.Name)
+		acnp, err := n.acnpLister.Get(key.Name)
 		// We need to check if the UID matches because it's possible another policy is created with the same name after
 		// the policy is deleted. It's safe to just delete the internal NetworkPolicy associated with the old policy as
 		// the two policies are different items in the workqueue and internalNetworkPolicyStore due to different UIDs.
-		if err != nil || cnp.UID != key.UID {
+		if err != nil || acnp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
-		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processClusterNetworkPolicy(cnp)
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processClusterNetworkPolicy(acnp)
 	case controlplane.AntreaNetworkPolicy:
-		anp, err := n.anpLister.NetworkPolicies(key.Namespace).Get(key.Name)
-		if err != nil || anp.UID != key.UID {
+		annp, err := n.annpLister.NetworkPolicies(key.Namespace).Get(key.Name)
+		if err != nil || annp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
-		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processAntreaNetworkPolicy(anp)
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processAntreaNetworkPolicy(annp)
 	case controlplane.K8sNetworkPolicy:
 		knp, err := n.networkPolicyLister.NetworkPolicies(key.Namespace).Get(key.Name)
 		if err != nil || knp.UID != key.UID {

@@ -522,7 +522,7 @@ func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string
 		err = runCurlCommandOnVM(data, appliedToVM, url, *action)
 		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
 	}
-	err = data.DeleteANP(anp.Namespace, anp.Name)
+	err = data.DeleteANNP(anp.Namespace, anp.Name)
 	require.Nil(t, err)
 	for _, url := range allURLs {
 		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
@@ -543,7 +543,7 @@ func testANPProtocolICMP(t *testing.T, data *TestData, name string, namespace st
 	err = runPingCommandOnVM(data, appliedToVM, false)
 	assert.NoError(t, err, "Failed to verify connectivity after applying ANP")
 
-	err = data.DeleteANP(anp.Namespace, anp.Name)
+	err = data.DeleteANNP(anp.Namespace, anp.Name)
 	require.NoError(t, err, "Failed to remove ANP %s", name)
 	t.Logf("ANP test with nameE %s is done", name)
 }
@@ -571,7 +571,7 @@ func testANPProtocolTCPOrUDP(t *testing.T, data *TestData, name string, namespac
 	err = runIperfCommandOnVMs(t, data, srcVM, dstVM, false, proto == ProtocolUDP, ruleAction)
 	assert.NoError(t, err, "Failed to verify connectivity after applying ANP")
 
-	err = data.DeleteANP(anp.Namespace, anp.Name)
+	err = data.DeleteANNP(anp.Namespace, anp.Name)
 	require.NoError(t, err, "Failed to remove ANP %s", name)
 	t.Logf("ANP test with name %s is done", name)
 }
@@ -583,7 +583,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 	builder = builder.
 		SetName(namespace, name).
 		SetPriority(1.0).
-		SetAppliedToGroup([]ANPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
+		SetAppliedToGroup([]ANNPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
 
 	ruleFunc := builder.AddIngress
 	if !ingress {
@@ -614,9 +614,9 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 	}
 	anpRule := builder.Get()
 
-	anp, err := data.CreateOrUpdateANP(anpRule)
+	anp, err := data.CreateOrUpdateANNP(anpRule)
 	assert.Nil(t, err, "Failed to create Antrea NetworkPolicy")
-	assert.Nil(t, data.waitForANPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), "Failed to realize Antrea NetworkPolicy")
+	assert.Nil(t, data.waitForANNPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), "Failed to realize Antrea NetworkPolicy")
 	return anp
 }
 
@@ -626,7 +626,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	builder = builder.
 		SetName(namespace, name).
 		SetPriority(3.0).
-		SetAppliedToGroup([]ANPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
+		SetAppliedToGroup([]ANNPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
 	anpRule := builder.Get()
 	i := 0
 	for fqdn, action := range fqdnSettings {
@@ -643,9 +643,9 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 		i += 1
 	}
 
-	anp, err := data.CreateOrUpdateANP(anpRule)
+	anp, err := data.CreateOrUpdateANNP(anpRule)
 	require.NoError(t, err, "Failed to create Antrea NetworkPolicy")
-	require.NoError(t, data.waitForANPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), "Failed to realize Antrea NetworkPolicy")
+	require.NoError(t, data.waitForANNPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), "Failed to realize Antrea NetworkPolicy")
 	return anp
 }
 

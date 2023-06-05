@@ -62,6 +62,7 @@ var mapToNetworkPolicyType = map[string]cpv1beta.NetworkPolicyType{
 	"NP":    cpv1beta.K8sNetworkPolicy,
 	"K8SNP": cpv1beta.K8sNetworkPolicy,
 	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
+	"ANNP":  cpv1beta.AntreaNetworkPolicy,
 	"ANP":   cpv1beta.AntreaNetworkPolicy,
 }
 
@@ -78,7 +79,7 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 	strSourceType := strings.ToUpper(query.Get("type"))
 	npSourceType, ok := mapToNetworkPolicyType[strSourceType]
 	if strSourceType != "" && !ok {
-		return nil, "", fmt.Errorf("invalid policy source type. Valid values are K8sNP, ACNP and ANP")
+		return nil, "", fmt.Errorf("invalid policy source type. Valid values are K8sNP, ACNP, ANNP and ANP (deprecated)")
 	}
 	source := query.Get("source")
 	name := query.Get("name")

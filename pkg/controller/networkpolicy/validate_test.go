@@ -1692,7 +1692,7 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 		expectedReason string
 	}{
 		{
-			name: "anp-non-existent-tier",
+			name: "annp-non-existent-tier",
 			policy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "non-existent-tier",
@@ -1713,7 +1713,7 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 			expectedReason: "tier non-existent-tier does not exist",
 		},
 		{
-			name: "anp-non-existent-tier",
+			name: "annp-non-existent-tier",
 			policy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "non-existent-tier",
@@ -1834,7 +1834,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 			name: "cg-set-with-nssel-and-eesel",
 			curCG: &crdv1alpha2.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "anp-group-set-with-podselector-and-namespaceselector",
+					Name: "annp-group-set-with-podselector-and-namespaceselector",
 				},
 				Spec: crdv1alpha2.GroupSpec{
 					NamespaceSelector: &metav1.LabelSelector{
@@ -2050,10 +2050,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 		expectedReason string
 	}{
 		{
-			name: "anp-group-three-fields-set",
+			name: "annp-group-three-fields-set",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-three-fields-set",
+					Name:      "annp-group-three-fields-set",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2072,10 +2072,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 		{
-			name: "anp-group-set-with-psel-and-nssel",
+			name: "annp-group-set-with-psel-and-nssel",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-podselector-and-namespaceselector",
+					Name:      "annp-group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2090,10 +2090,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "anp-group-set-with-nssel-and-eesel",
+			name: "annp-group-set-with-nssel-and-eesel",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-podselector-and-namespaceselector",
+					Name:      "annp-group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2108,10 +2108,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "anp-group-set-with-psel-and-eesel",
+			name: "annp-group-set-with-psel-and-eesel",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-podselector-and-namespaceselector",
+					Name:      "annp-group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2127,10 +2127,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 		{
-			name: "anp-group-set-with-podselector-and-ipblock",
+			name: "annp-group-set-with-podselector-and-ipblock",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-podselector-and-ipblock",
+					Name:      "annp-group-set-with-podselector-and-ipblock",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2146,10 +2146,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 		{
-			name: "anp-group-set-with-ipblock",
+			name: "annp-group-set-with-ipblock",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-ipblock",
+					Name:      "annp-group-set-with-ipblock",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2161,10 +2161,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "anp-group-set-with-invalid-psel",
+			name: "annp-group-set-with-invalid-psel",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-invalid-psel",
+					Name:      "annp-group-set-with-invalid-psel",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2177,10 +2177,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
-			name: "anp-group-with-childGroup",
+			name: "annp-group-with-childGroup",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-with-childGroup",
+					Name:      "annp-group-with-childGroup",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2237,10 +2237,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		// Update using the same func as creation. Only put one case here.
 		{
-			name: "anp-group-update",
+			name: "annp-group-update",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-update",
+					Name:      "annp-group-update",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2251,7 +2251,7 @@ func TestValidateAntreaGroup(t *testing.T) {
 			},
 			oldGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-update",
+					Name:      "annp-group-update",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2263,10 +2263,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Update,
 		},
 		{
-			name: "anp-group-to-delete",
+			name: "annp-group-to-delete",
 			oldGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-to-delete",
+					Name:      "annp-group-to-delete",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -2304,7 +2304,7 @@ func TestValidateTier(t *testing.T) {
 		oldTier        *crdv1alpha1.Tier
 		existTierNum   int
 		existACNP      *crdv1alpha1.ClusterNetworkPolicy
-		existANP       *crdv1alpha1.NetworkPolicy
+		existANNP      *crdv1alpha1.NetworkPolicy
 		operation      admv1.Operation
 		user           authenticationv1.UserInfo
 		expectedReason string
@@ -2447,23 +2447,23 @@ func TestValidateTier(t *testing.T) {
 			expectedReason: "cannot delete reserved tier baseline",
 		},
 		{
-			name: "delete-anp-ref-tier",
+			name: "delete-annp-ref-tier",
 			oldTier: &crdv1alpha1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "tier-anp-ref",
+					Name: "tier-annp-ref",
 				},
 				Spec: crdv1alpha1.TierSpec{
 					Priority: 0,
 				},
 			},
-			existANP: &crdv1alpha1.NetworkPolicy{
+			existANNP: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					Tier: "tier-anp-ref",
+					Tier: "tier-annp-ref",
 				},
 			},
 			operation:      admv1.Delete,
-			expectedReason: "tier tier-anp-ref is referenced by 1 Antrea NetworkPolicies",
+			expectedReason: "tier tier-annp-ref is referenced by 1 Antrea NetworkPolicies",
 		},
 		{
 			name: "delete-acnp-ref-tier",
@@ -2500,10 +2500,10 @@ func TestValidateTier(t *testing.T) {
 				})
 			}
 			if tt.existACNP != nil {
-				controller.cnpStore.Add(tt.existACNP)
+				controller.acnpStore.Add(tt.existACNP)
 			}
-			if tt.existANP != nil {
-				controller.anpStore.Add(tt.existANP)
+			if tt.existANNP != nil {
+				controller.annpStore.Add(tt.existANNP)
 			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateTier(tt.curTier, tt.oldTier, tt.operation, tt.user)
