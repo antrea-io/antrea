@@ -1381,6 +1381,7 @@ func networkPolicyInitFlows(externalNodeEnabled, l7NetworkPolicyEnabled bool) []
 	}
 	return initFlows
 }
+
 func Test_featureNetworkPolicy_initFlows(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -1413,6 +1414,73 @@ func Test_featureNetworkPolicy_initFlows(t *testing.T) {
 			defer resetPipelines()
 
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.featureNetworkPolicy.initFlows()))
+		})
+	}
+}
+
+func Test_NewDNSPacketInConjunction(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		enableIPv4    bool
+		enableIPv6    bool
+		conjID        uint32
+		expectedFlows []string
+	}{
+		{
+			name:       "IPv4 only",
+			enableIPv4: true,
+			enableIPv6: false,
+			conjID:     1,
+			expectedFlows: []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
+			},
+		},
+		{
+			name:       "IPv6 only",
+			enableIPv4: false,
+			enableIPv6: true,
+			conjID:     1,
+			expectedFlows: []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp6,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp6,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
+			},
+		},
+		{
+			name:       "dual stack",
+			enableIPv4: true,
+			enableIPv6: true,
+			conjID:     1,
+			expectedFlows: []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp6,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp6,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+			bridge := mocks.NewMockBridge(ctrl)
+			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, config.TrafficEncapModeEncap)
+			defer resetPipelines()
+			fc.featureNetworkPolicy.bridge = bridge
+			actualFlows := make([]string, 0)
+			m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
+				flowStrings := getFlowStrings(flowMessages)
+				actualFlows = append(actualFlows, flowStrings...)
+			}).Return(nil).AnyTimes()
+			bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(addflows, modFlows, delFlows []*openflow15.FlowMod) {
+				flowStrings := getFlowStrings(addflows)
+				actualFlows = append(actualFlows, flowStrings...)
+			}).Return(nil).Times(1)
+			err := fc.NewDNSPacketInConjunction(tc.conjID)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tc.expectedFlows, actualFlows)
 		})
 	}
 }
