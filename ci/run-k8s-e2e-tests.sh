@@ -61,7 +61,7 @@ least one failed) and 2 (internal error when running tests, not a test failure).
         --e2e-skip TestRegex                                      Skip some tests matching a specific regex.
         --kubeconfig Kubeconfig                                   Explicit path to Kubeconfig file. You may also set the KUBECONFIG environment variable.
         --kubernetes-version ConformanceImageVersion              Use specific version of the Conformance tests container image. Default is $KUBE_CONFORMANCE_IMAGE_VERSION.
-        --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
+        --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --image-pull-policy                                       The ImagePullPolicy Sonobuoy should use for the aggregators and workers. (default Always)
         --sonobuoy-image SonobuoyImage                            Sonobuoy image to use. Default is $SONOBUOY_IMAGE.
         --help, -h                                                Print this message and exit

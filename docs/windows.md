@@ -61,9 +61,9 @@ the Windows Nodes in the demo.
 * Some manifests are from [sig-windows-tool](https://github.com/kubernetes-sigs/sig-windows-tools)
   repo. Release version v0.1.5 has been verified.
 
-### Installation as a Service (Containerd based runtimes)
+### Installation as a Service (containerd based runtimes)
 
-First install Antrea (v0.13.0+ is required for Containerd).
+First install Antrea (v0.13.0+ is required for containerd).
 
 ```bash
 # Example:
@@ -109,7 +109,7 @@ Start-Service kube-proxy
 Start-Service antrea-agent
 ```
 
-### Installation as a Pod (Docker/Containerd based runtimes)
+### Installation as a Pod (Docker/containerd based runtimes)
 
 Installing Antrea using [wins](https://github.com/rancher/wins) gives you a lot
 of flexibility to manage it as a Pod if you are using Docker on Windows, this is
@@ -162,7 +162,7 @@ metadata:
   namespace: kube-system
 ```
 
-For Containerd runtime, replace the content of `run-script.ps1` with following:
+For containerd runtime, replace the content of `run-script.ps1` with following:
 
 ```yaml
 apiVersion: v1
@@ -205,7 +205,7 @@ spec:
       hostNetwork: true
 ```
 
-For Containerd runtime, Set `hostNetwork` as true and add options in spec and command.
+For containerd runtime, Set `hostNetwork` as true and add options in spec and command.
 
 ```yaml
 apiVersion: apps/v1
@@ -255,7 +255,7 @@ Download and apply `antrea-windows.yml`.
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows.yml
 ```
 
-Since Antrea 1.10, you can also deploy antrea-agent Windows DaemonSet with Containerd runtime by
+Since Antrea 1.10, you can also deploy antrea-agent Windows DaemonSet with containerd runtime by
 applying file `antrea-windows-containerd.yml`.
 
 Download and apply `antrea-windows-containerd.yml`.

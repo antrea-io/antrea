@@ -53,7 +53,7 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --aws-service-user            AWS Service User Name for logging in to awscli.
         --aws-region                  The AWS region where the cluster will be initiated. Defaults to us-east-2.
         --ssh-key                     The path of key to be used for ssh access to worker nodes.
-        --log-mode                    Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
+        --log-mode                    Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
         --skip-eksctl-install         Do not install the latest eksctl version. Eksctl must be installed already."
