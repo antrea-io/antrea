@@ -43,39 +43,6 @@ func init() {
 
 var fakeClusterUUID = uuid.New().String()
 
-func TestGetDataSourceName(t *testing.T) {
-	chInput := ClickHouseInput{
-		Username:       "username",
-		Password:       "password",
-		Database:       "default",
-		DatabaseURL:    "tcp://click-house-svc:9000",
-		Debug:          true,
-		Compress:       new(bool),
-		CommitInterval: 1 * time.Second,
-	}
-	*chInput.Compress = true
-	dsn := "tcp://click-house-svc:9000?username=username&password=password&database=default&debug=true&compress=true"
-
-	chInputInvalid := ClickHouseInput{}
-
-	testcases := []struct {
-		input       ClickHouseInput
-		expectedDSN string
-		expectedErr bool
-	}{
-		{chInput, dsn, false},
-		{chInputInvalid, "", true},
-	}
-
-	for _, tc := range testcases {
-		dsn, err := tc.input.GetDataSourceName()
-		if tc.expectedErr {
-			assert.Errorf(t, err, "ClickHouseInput %v unexpectedly returns no error when getting DSN", tc.input)
-		}
-		assert.Equal(t, tc.expectedDSN, dsn)
-	}
-}
-
 func TestCacheRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -284,10 +251,10 @@ func TestFlushCacheOnStop(t *testing.T) {
 	const commitInterval = time.Hour
 
 	chExportProc := ClickHouseExportProcess{
-		db:             db,
-		deque:          deque.New(),
-		queueSize:      maxQueueSize,
-		commitInterval: commitInterval,
+		db:        db,
+		config:    ClickHouseConfig{CommitInterval: commitInterval},
+		deque:     deque.New(),
+		queueSize: maxQueueSize,
 	}
 
 	recordRow := flowrecordtesting.PrepareTestFlowRecord()
@@ -319,10 +286,10 @@ func TestUpdateCH(t *testing.T) {
 	const commitInterval = 100 * time.Millisecond
 
 	chExportProc := ClickHouseExportProcess{
-		db:             db1,
-		deque:          deque.New(),
-		queueSize:      maxQueueSize,
-		commitInterval: commitInterval,
+		db:        db1,
+		config:    ClickHouseConfig{CommitInterval: commitInterval},
+		deque:     deque.New(),
+		queueSize: maxQueueSize,
 	}
 
 	recordRow := flowrecordtesting.PrepareTestFlowRecord()
@@ -351,7 +318,7 @@ func TestUpdateCH(t *testing.T) {
 	mock2.ExpectCommit()
 
 	t.Logf("Calling UpdateCH to update DB connection")
-	chExportProc.UpdateCH("", db2)
+	chExportProc.UpdateCH(ClickHouseConfig{CommitInterval: commitInterval}, db2)
 
 	func() {
 		chExportProc.dequeMutex.Lock()
@@ -363,4 +330,50 @@ func TestUpdateCH(t *testing.T) {
 		err := mock2.ExpectationsWereMet()
 		return (err == nil), nil
 	}), "timeout while waiting for second flow record to be committed (after DB connection update)")
+}
+
+func TestParseDatabaseURL(t *testing.T) {
+	testcases := []struct {
+		url            string
+		expectedProto  protocol
+		expectedAddr   string
+		expectedErrMsg string
+	}{
+		{
+			url:            "tcp://127.0.0.1:9000",
+			expectedProto:  protocolTCP,
+			expectedAddr:   "127.0.0.1:9000",
+			expectedErrMsg: "",
+		},
+		{
+			url:            "abc://127.0.0.1:9000",
+			expectedErrMsg: "connection over abc transport protocol is not supported",
+		},
+		{
+			url:            "127.0.0.1:9000",
+			expectedErrMsg: "failed to parse ClickHouse database URL",
+		},
+		{
+			url:            "tcp://user:password@127.0.0.1:9000",
+			expectedErrMsg: "invalid ClickHouse database URL",
+		},
+		{
+			url:            "tcp://127.0.0.1:9000/path",
+			expectedErrMsg: "invalid ClickHouse database URL",
+		},
+		{
+			url:            "tcp://127.0.0.1:9000?key=value",
+			expectedErrMsg: "invalid ClickHouse database URL",
+		},
+	}
+	for _, tc := range testcases {
+		proto, addr, err := parseDatabaseURL(tc.url)
+		if tc.expectedErrMsg != "" {
+			assert.Contains(t, err.Error(), tc.expectedErrMsg)
+		} else {
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedProto, proto)
+			assert.Equal(t, tc.expectedAddr, addr)
+		}
+	}
 }
