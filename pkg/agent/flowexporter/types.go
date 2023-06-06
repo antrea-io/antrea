@@ -78,6 +78,9 @@ type Connection struct {
 	PrevReversePackets, PrevReverseBytes uint64
 	TCPState                             string
 	PrevTCPState                         string
+	FlowType                             uint8
+	EgressName                           string
+	EgressIP                             string
 }
 
 type ItemToExpire struct {

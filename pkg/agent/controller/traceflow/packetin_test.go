@@ -44,8 +44,8 @@ type fakeEgressQuerier struct {
 	egressIP   string
 }
 
-func (f *fakeEgressQuerier) GetEgress(podNamespace, podName string) (string, error) {
-	return f.egressName, nil
+func (f *fakeEgressQuerier) GetEgress(podNamespace, podName string) (string, string, error) {
+	return f.egressName, f.egressIP, nil
 }
 
 func (f *fakeEgressQuerier) GetEgressIPByMark(mark uint32) (string, error) {

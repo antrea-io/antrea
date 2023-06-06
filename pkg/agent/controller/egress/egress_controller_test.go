@@ -1049,6 +1049,7 @@ func TestGetEgress(t *testing.T) {
 		name               string
 		args               args
 		expectedEgressName string
+		expectedEgressIP   string
 		expectedErr        string
 	}{
 		{
@@ -1058,6 +1059,7 @@ func TestGetEgress(t *testing.T) {
 				podName: "pod1",
 			},
 			expectedEgressName: "egressA",
+			expectedEgressIP:   fakeLocalEgressIP1,
 		},
 		{
 			name: "no local egress applied on a pod",
@@ -1070,13 +1072,14 @@ func TestGetEgress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotEgressName, err := c.GetEgress(tt.args.ns, tt.args.podName)
+			gotEgressName, gotEgressIP, err := c.GetEgress(tt.args.ns, tt.args.podName)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
 				require.EqualError(t, err, tt.expectedErr)
 			}
 			assert.Equal(t, tt.expectedEgressName, gotEgressName)
+			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
 		})
 	}
 }

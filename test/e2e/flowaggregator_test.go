@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/antctl"
 	"antrea.io/antrea/pkg/antctl/runtime"
@@ -82,6 +84,8 @@ DATA SET:
     egressNetworkPolicyRuleAction: 1
     tcpState: TIME_WAIT
     flowType: 1
+    egressName: test-egressbkclk
+    egressIP: 172.18.0.2
     destinationClusterIPv4: 0.0.0.0
     octetDeltaCountFromSourceNode: 8982624938
     octetDeltaCountFromDestinationNode: 8982624938
@@ -139,6 +143,7 @@ const (
 	antreaIngressTableInitFlowCount = 6
 	ingressTableInitFlowCount       = 1
 	egressTableInitFlowCount        = 1
+	serverPodPort                   = int32(80)
 )
 
 var (
@@ -456,26 +461,103 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		}
 	})
 
-	// ToExternalFlows tests the export of IPFIX flow records when a source Pod
-	// sends traffic to an external IP
-	t.Run("ToExternalFlows", func(t *testing.T) {
-		// Creating an agnhost server as a host network Pod
-		serverPodPort := int32(80)
-		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
-			return data.createServerPod(name, data.testNamespace, "", serverPodPort, false, true)
-		}, "test-server-", "", data.testNamespace, false)
-		defer cleanupFunc()
+	// Creating test server Pod for ToExternal tests
+	serverIPs := createToExternalTestServer(t, data)
 
-		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
-		defer cleanupFunc()
+	// ToExternalEgressOnSourceNode tests the export of IPFIX flow records when
+	// a source Pod sends traffic to an external IP and an Egress is applied on
+	// the source Pod. In this case, the Egress Node is the same as the Source Node.
+	t.Run("ToExternalEgressOnSourceNode", func(t *testing.T) {
+		// Skip the test if Egress doesn't work on the cluster
+		// Reference: TestEgress function in test/e2e/egress_test.go
+		skipIfNumNodesLessThan(t, 2)
+		skipIfEgressDisabled(t)
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+
+		// Deploy the client Pod on the control-plane node
+		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
+		defer clientCleanupFunc()
+
+		// Create an Egress and the Egress IP is assigned to the Node running the client Pods
+		var egressNodeIP string
+		if !isIPv6 {
+			egressNodeIP = nodeIPv4(0)
+		} else {
+			egressNodeIP = nodeIPv6(0)
+		}
+		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP)
+		egress, err := data.waitForEgressRealized(egress)
+		if err != nil {
+			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
+		}
+		t.Logf("Egress %s is realized with Egress IP %s", egress.Name, egressNodeIP)
+		defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 		if !isIPv6 {
 			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
 			}
 		} else {
 			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			}
+		}
+	})
+
+	// ToExternalEgressOnOtherNode tests the export of IPFIX flow records when
+	// a source Pod sends traffic to an external IP and an Egress applied on
+	// the source Pod. In this case, the Egress Node is different from the Source Node.
+	t.Run("ToExternalEgressOnOtherNode", func(t *testing.T) {
+		// Skip the test if Egress doesn't work on the cluster
+		// Reference: TestEgress function in test/e2e/egress_test.go
+		skipIfNumNodesLessThan(t, 2)
+		skipIfEgressDisabled(t)
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+
+		// Deploy the client Pod on the control-plane node
+		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
+		defer clientCleanupFunc()
+
+		// Create an Egress and the Egress IP is assigned to the Node not running the client Pods
+		var egressNodeIP string
+		if !isIPv6 {
+			egressNodeIP = nodeIPv4(1)
+		} else {
+			egressNodeIP = nodeIPv6(1)
+		}
+		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP)
+		egress, err := data.waitForEgressRealized(egress)
+		if err != nil {
+			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
+		}
+		t.Logf("Egress %s is realized with Egress IP %s", egress.Name, egressNodeIP)
+		defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+		if !isIPv6 {
+			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			}
+		} else {
+			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP)
+			}
+		}
+	})
+
+	// ToExternalFlows tests the export of IPFIX flow records when a source Pod
+	// sends traffic to an external IP
+	t.Run("ToExternalFlows", func(t *testing.T) {
+		// Deploy the client Pod on the control-plane node
+		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
+		defer clientCleanupFunc()
+
+		if !isIPv6 {
+			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, "", "")
+			}
+		} else {
+			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6, "", "")
 			}
 		}
 	})
@@ -776,7 +858,7 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 	assert.GreaterOrEqualf(t, len(clickHouseRecords), expectedNumDataRecords, "ClickHouse should receive expected number of flow records. Considered records: %s", clickHouseRecords)
 }
 
-func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool) {
+func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool, egressName, egressIP string) {
 	var cmd string
 	if !isIPv6 {
 		cmd = fmt.Sprintf("wget -O- %s:%d", dstIP, dstPort)
@@ -792,6 +874,9 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "", data.testNamespace)
 			checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
 			assert.NotContains(t, record, "octetDeltaCount: 0", "octetDeltaCount should be non-zero")
+			if egressName != "" {
+				checkEgressInfo(t, record, egressName, egressIP)
+			}
 		}
 	}
 
@@ -800,6 +885,9 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		checkPodAndNodeDataClickHouse(data, t, record, srcPodName, srcNodeName, "", "")
 		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeToExternal)
 		assert.Greater(t, record.OctetDeltaCount, uint64(0), "octetDeltaCount should be non-zero")
+		if egressName != "" {
+			checkEgressInfoClickHouse(t, record, egressName, egressIP)
+		}
 	}
 }
 
@@ -984,6 +1072,16 @@ func checkFlowType(t *testing.T, record string, flowType uint8) {
 
 func checkFlowTypeClickHouse(t *testing.T, record *ClickHouseFullRow, flowType uint8) {
 	assert.Equal(t, record.FlowType, flowType, "Record does not have correct flowType")
+}
+
+func checkEgressInfo(t *testing.T, record, egressName, egressIP string) {
+	assert.Containsf(t, record, fmt.Sprintf("egressName: %s", egressName), "Record does not have correct egressName")
+	assert.Containsf(t, record, fmt.Sprintf("egressIP: %s", egressIP), "Record does not have correct egressIP")
+}
+
+func checkEgressInfoClickHouse(t *testing.T, record *ClickHouseFullRow, egressName, egressIP string) {
+	assert.Equal(t, egressName, record.EgressName, "Record does not have correct egressName")
+	assert.Equal(t, egressIP, record.EgressIP, "Record does not have correct egressIP")
 }
 
 func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 {
@@ -1400,6 +1498,20 @@ func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6
 	return srcField, dstField
 }
 
+func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
+	// Creating an agnhost server as a hostNetwork Pod
+	// Egress will be applied to the traffic when the destination is a hostNetwork Pod.
+	_, serverIPs, serverCleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
+		return data.createServerPod(name, data.testNamespace, "", serverPodPort, false, true)
+	}, "test-server-", "", data.testNamespace, false)
+
+	t.Cleanup(func() {
+		serverCleanupFunc()
+	})
+
+	return serverIPs
+}
+
 type ClickHouseFullRow struct {
 	TimeInserted                         time.Time `json:"timeInserted"`
 	FlowStartSeconds                     time.Time `json:"flowStartSeconds"`
@@ -1451,4 +1563,6 @@ type ClickHouseFullRow struct {
 	ReverseThroughputFromDestinationNode uint64    `json:"reverseThroughputFromDestinationNode,string"`
 	ClusterUUID                          string    `json:"clusterUUID"`
 	Trusted                              uint8     `json:"trusted"`
+	EgressName                           string    `json:"egressName"`
+	EgressIP                             string    `json:"egressIP"`
 }

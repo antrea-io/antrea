@@ -128,7 +128,7 @@ const (
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.6.1"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.6.2"
 	ipfixCollectorPort  = "4739"
 	clickHouseHTTPPort  = "8123"
 
@@ -362,6 +362,26 @@ func nodeName(idx int) string {
 		return ""
 	}
 	return node.name
+}
+
+// nodeIPv4 returns an empty string if there is no Node with the provided idx. If idx is 0, the IPv4
+// Address of the control-plane Node will be returned.
+func nodeIPv4(idx int) string {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
+		return ""
+	}
+	return node.ipv4Addr
+}
+
+// nodeIPv6 returns an empty string if there is no Node with the provided idx. If idx is 0, the IPv6
+// Address of the control-plane Node will be returned.
+func nodeIPv6(idx int) string {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
+		return ""
+	}
+	return node.ipv6Addr
 }
 
 // nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
