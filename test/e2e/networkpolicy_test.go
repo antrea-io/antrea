@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -936,6 +937,7 @@ func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc f
 		cleanupFunc()
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
 	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
 	return name, podIP, cleanupFunc
 }
 
@@ -952,6 +954,7 @@ func createAndWaitForPodWithServiceAccount(t *testing.T, data *TestData, createF
 		cleanupFunc()
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
 	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
 	return name, podIP, cleanupFunc
 }
 
