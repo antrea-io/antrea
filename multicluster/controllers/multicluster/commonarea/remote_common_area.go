@@ -150,6 +150,8 @@ func GetRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common
 	config.BearerToken = string(token)
 	config.CAData = crtData
 
+	config.QPS = common.ResourceExchangeQPS
+	config.Burst = common.ResourceExchangeBurst
 	remoteCommonAreaMgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: "0",
