@@ -80,7 +80,7 @@ func (e *S3Exporter) UpdateOptions(opt *options.Options) {
 	}
 	if config.BucketName != e.s3UploadProcess.GetBucketName() ||
 		config.BucketPrefix != e.s3UploadProcess.GetBucketPrefix() ||
-		config.Region == e.s3UploadProcess.GetRegion() {
+		config.Region != e.s3UploadProcess.GetRegion() {
 		err := e.s3UploadProcess.UpdateS3Uploader(config.BucketName, config.BucketPrefix, config.Region)
 		if err != nil {
 			klog.ErrorS(err, "Error when updating S3Uploader config")
