@@ -310,7 +310,8 @@ function prepare_env {
 function revert_snapshot_windows {
     WIN_NAME=$1
     echo "==== Reverting Windows VM ${WIN_NAME} ====="
-    govc snapshot.revert -vm ${WIN_NAME} win-initial
+    SNAPSHOT=$2
+    govc snapshot.revert -vm ${WIN_NAME} $SNAPSHOT
     # If Windows VM fails to power on correctly in time, retry several times.
     winVMIPs=""
     for i in `seq 10`; do
@@ -398,7 +399,7 @@ function deliver_antrea_windows {
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
-        revert_snapshot_windows ${WORKER_NAME}
+        revert_snapshot_windows ${WORKER_NAME} "win-initial"
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-busybox:1.29-windows-amd64-1809")
@@ -516,7 +517,7 @@ function deliver_antrea_windows_containerd {
 
     echo "===== Build Antrea Windows on Windows Jumper Node ====="
     echo "==== Reverting Windows VM ${WIN_IMAGE_NODE} ====="
-    revert_snapshot_windows ${WIN_IMAGE_NODE}
+    revert_snapshot_windows ${WIN_IMAGE_NODE} "win-initial"
     rm -f antrea-windows.tar.gz
     # Compress antrea repo and copy it to a Windows node
     mkdir -p jenkins
@@ -533,7 +534,7 @@ function deliver_antrea_windows_containerd {
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
-        revert_snapshot_windows ${WORKER_NAME}
+        revert_snapshot_windows ${WORKER_NAME} "win-initial-ovs3"
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
