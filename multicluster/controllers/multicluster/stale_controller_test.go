@@ -37,6 +37,8 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
+var ctx = context.Background()
+
 func TestStaleController_CleanupService(t *testing.T) {
 	mcSvcNginx := common.SvcNginx.DeepCopy()
 	mcSvcNginx.Name = "antrea-mc-nginx"
@@ -99,7 +101,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(); err != nil {
+			if err := c.cleanup(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale Service and ServiceImport but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -194,7 +196,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(); err != nil {
+			if err := c.cleanup(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -389,7 +391,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(); err != nil {
+			if err := c.cleanup(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ResourceExports but got err = %v", err)
 			}
 			resExpList := &mcsv1alpha1.ResourceExportList{}
@@ -466,7 +468,7 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(commonarea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(); err != nil {
+			if err := c.cleanup(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ClusterInfoImport but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -587,7 +589,7 @@ func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
 
 			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, LeaderCluster)
-			assert.Equal(t, nil, c.cleanup())
+			assert.Equal(t, nil, c.cleanup(ctx))
 
 			memberClusterAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
 			if err := fakeClient.List(context.TODO(), memberClusterAnnounceList, &client.ListOptions{}); err != nil {
@@ -664,7 +666,7 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(ca)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(); err != nil {
+			if err := c.cleanup(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale LabelIdentities but got err = %v", err)
 			}
 			ctx := context.TODO()
