@@ -18,11 +18,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
+	"net/url"
 	"sync"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go"
+	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/gammazero/deque"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -90,23 +90,27 @@ const (
 // PrepareClickHouseConnection is used for unit testing
 var PrepareClickHouseConnection = prepareConnection
 
+type protocol string
+
+const (
+	protocolTCP     = "tcp"
+	protocolUnknown = ""
+)
+
 type stopPayload struct {
 	flushQueue bool
 }
 
 type ClickHouseExportProcess struct {
 	// db holds sql connection struct to clickhouse db.
-	db *sql.DB
-	// dsn is data source name used for connection to clickhouse db.
-	dsn string
+	db     *sql.DB
+	config ClickHouseConfig
 	// deque buffers flows records between batch commits.
 	deque *deque.Deque
 	// dequeMutex is for concurrency between adding and removing records from deque.
 	dequeMutex sync.Mutex
 	// queueSize is the max size of deque
 	queueSize int
-	// commitInterval is the interval between batch commits
-	commitInterval time.Duration
 	// stopCh is the channel to receive stop message
 	stopCh chan stopPayload
 	// exportWg is to ensure that all messages have been flushed from the queue when we stop
@@ -119,7 +123,7 @@ type ClickHouseExportProcess struct {
 	clusterUUID string
 }
 
-type ClickHouseInput struct {
+type ClickHouseConfig struct {
 	Username       string
 	Password       string
 	Database       string
@@ -129,44 +133,22 @@ type ClickHouseInput struct {
 	CommitInterval time.Duration
 }
 
-func (ci *ClickHouseInput) GetDataSourceName() (string, error) {
-	if len(ci.DatabaseURL) == 0 || len(ci.Username) == 0 || len(ci.Password) == 0 {
-		return "", fmt.Errorf("URL, Username or Password missing for clickhouse DSN")
-	}
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s?username=%s&password=%s", ci.DatabaseURL, ci.Username, ci.Password))
-
-	if len(ci.Database) > 0 {
-		sb.WriteString("&database=")
-		sb.WriteString(ci.Database)
-	}
-	if ci.Debug {
-		sb.WriteString("&debug=true")
-	} else {
-		sb.WriteString("&debug=false")
-	}
-	if *ci.Compress {
-		sb.WriteString("&compress=true")
-	} else {
-		sb.WriteString("&compress=false")
+func NewClickHouseClient(config ClickHouseConfig, clusterUUID string) (*ClickHouseExportProcess, error) {
+	if len(config.DatabaseURL) == 0 || len(config.Username) == 0 || len(config.Password) == 0 {
+		return nil, fmt.Errorf("DatabaseURL, Username or Password missing in ClickHouse config")
 	}
 
-	return sb.String(), nil
-}
-
-func NewClickHouseClient(input ClickHouseInput, clusterUUID string) (*ClickHouseExportProcess, error) {
-	dsn, connect, err := PrepareClickHouseConnection(input)
+	connect, err := PrepareClickHouseConnection(config)
 	if err != nil {
 		return nil, err
 	}
 
 	chClient := &ClickHouseExportProcess{
-		db:             connect,
-		dsn:            dsn,
-		deque:          deque.New(),
-		queueSize:      maxQueueSize,
-		commitInterval: input.CommitInterval,
-		clusterUUID:    clusterUUID,
+		db:          connect,
+		config:      config,
+		deque:       deque.New(),
+		queueSize:   maxQueueSize,
+		clusterUUID: clusterUUID,
 	}
 	return chClient, nil
 }
@@ -197,7 +179,7 @@ func (ch *ClickHouseExportProcess) startExportProcess() {
 		return
 	}
 	ch.exportProcessRunning = true
-	ch.commitTicker = time.NewTicker(ch.commitInterval)
+	ch.commitTicker = time.NewTicker(ch.config.CommitInterval)
 	ch.stopCh = make(chan stopPayload, 1)
 	ch.exportWg.Add(1)
 	go func() {
@@ -376,14 +358,10 @@ func (ch *ClickHouseExportProcess) pushRecordsToFrontOfQueue(records []*flowreco
 	}
 }
 
-func prepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
-	dsn, err := input.GetDataSourceName()
+func prepareConnection(config ClickHouseConfig) (*sql.DB, error) {
+	connect, err := ConnectClickHouse(&config)
 	if err != nil {
-		return "", nil, fmt.Errorf("error when parsing ClickHouse DSN: %v", err)
-	}
-	connect, err := ConnectClickHouse(dsn)
-	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	// Test open Transaction
 	tx, err := connect.Begin()
@@ -391,54 +369,47 @@ func prepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
 		_, err = tx.Prepare(insertQuery)
 	}
 	if err != nil {
-		return "", nil, fmt.Errorf("error when preparing insert statement, %v", err)
+		return nil, fmt.Errorf("error when preparing insert statement, %v", err)
 	}
 	_ = tx.Commit()
-	return dsn, connect, err
+	return connect, err
 }
 
-func (ch *ClickHouseExportProcess) GetDsnMap() map[string]string {
-	parseURL := strings.Split(ch.dsn, "?")
-	m := make(map[string]string)
-	m["databaseURL"] = parseURL[0]
-	for _, v := range strings.Split(parseURL[1], "&") {
-		pair := strings.Split(v, "=")
-		m[pair[0]] = pair[1]
-	}
-	return m
-}
-
-func (ch *ClickHouseExportProcess) UpdateCH(dsn string, connect *sql.DB) {
+func (ch *ClickHouseExportProcess) UpdateCH(config ClickHouseConfig, connect *sql.DB) {
 	ch.stopExportProcess(false) // do not flush the queue
 	defer ch.startExportProcess()
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
-	ch.dsn = dsn
+	ch.config = config
 	ch.db = connect
 }
 
 func (ch *ClickHouseExportProcess) GetCommitInterval() time.Duration {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
-	return ch.commitInterval
+	return ch.config.CommitInterval
 }
 
 func (ch *ClickHouseExportProcess) SetCommitInterval(commitInterval time.Duration) {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
-	ch.commitInterval = commitInterval
+	ch.config.CommitInterval = commitInterval
 	if ch.commitTicker != nil {
-		ch.commitTicker.Reset(ch.commitInterval)
+		ch.commitTicker.Reset(ch.config.CommitInterval)
 	}
 }
 
-func (ch *ClickHouseExportProcess) GetDsn() string {
+func (ch *ClickHouseExportProcess) GetClickHouseConfig() ClickHouseConfig {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
-	return ch.dsn
+	return ch.config
 }
 
-func ConnectClickHouse(url string) (*sql.DB, error) {
+func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
+	_, addr, err := parseDatabaseURL(config.DatabaseURL)
+	if err != nil {
+		return nil, err
+	}
 	var connect *sql.DB
 	var connErr error
 	connRetryInterval := 1 * time.Second
@@ -447,12 +418,23 @@ func ConnectClickHouse(url string) (*sql.DB, error) {
 	// Connect to ClickHouse in a loop
 	if err := wait.PollImmediate(connRetryInterval, connTimeout, func() (bool, error) {
 		// Open the database and ping it
-		var err error
-		connect, err = sql.Open("clickhouse", url)
-		if err != nil {
-			connErr = fmt.Errorf("error when opening DB connection: %v", err)
-			return false, nil
+		opt := clickhouse.Options{
+			Addr: []string{addr},
+			Auth: clickhouse.Auth{
+				Username: config.Username,
+				Password: config.Password,
+				Database: config.Database,
+			},
 		}
+		var compression clickhouse.CompressionMethod
+		if *config.Compress {
+			compression = clickhouse.CompressionLZ4
+		}
+		opt.Compression = &clickhouse.Compression{
+			Method: compression,
+		}
+
+		connect = clickhouse.OpenDB(&opt)
 		if err := connect.Ping(); err != nil {
 			if exception, ok := err.(*clickhouse.Exception); ok {
 				connErr = fmt.Errorf("failed to ping ClickHouse: %v", exception.Message)
@@ -467,4 +449,21 @@ func ConnectClickHouse(url string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to connect to ClickHouse after %s: %v", connTimeout, connErr)
 	}
 	return connect, nil
+}
+
+func parseDatabaseURL(dbUrl string) (protocol, string, error) {
+	u, err := url.Parse(dbUrl)
+	if err != nil {
+		return protocolUnknown, "", fmt.Errorf("failed to parse ClickHouse database URL: %w", err)
+	}
+	if u.Path != "" || u.RawQuery != "" || u.User != nil {
+		return protocolUnknown, "", fmt.Errorf("invalid ClickHouse database URL '%s': path, query string or user info should not be set", dbUrl)
+	}
+	proto := u.Scheme
+	switch proto {
+	case protocolTCP:
+		return protocolTCP, u.Host, nil
+	default:
+		return protocolUnknown, "", fmt.Errorf("connection over %s transport protocol is not supported", proto)
+	}
 }
