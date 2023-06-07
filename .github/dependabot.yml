@@ -17,7 +17,6 @@ updates:
     - dependency-name: "antrea.io/ofnet"
     - dependency-name: "antrea.io/libOpenflow"
     - dependency-name: "github.com/ClickHouse/clickhouse-go/v2" # auto-upgrade involves dependency conflicts
-      update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: "github-actions"
     # Workflow files stored in the default location of `.github/workflows`
     directory: "/"
