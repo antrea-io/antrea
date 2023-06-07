@@ -12,35 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
+// +build windows
+
 package support
 
 import (
-	"fmt"
+	"os"
 	"path"
-	"strings"
+	"path/filepath"
 	"testing"
+
+	"antrea.io/antrea/pkg/util/logdir"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/exec"
-	exectesting "k8s.io/utils/exec/testing"
 
 	"antrea.io/antrea/pkg/agent/config"
 	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
 )
 
-type testExec struct {
-	exectesting.FakeExec
-}
+func TestDumpLog(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	logDir := logdir.GetLogDir()
 
-func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
-	f := new(exectesting.FakeCmd)
-	f.CombinedOutputScript = append(f.CombinedOutputScript, func() ([]byte, []byte, error) {
-		return []byte(fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))), nil, nil
-	})
-	return f
+	fs.MkdirAll(logDir, os.ModePerm)
+	fs.MkdirAll(antreaWindowsOVSLogDir, os.ModePerm)
+	fs.MkdirAll(antreaWindowsKubeletLogDir, os.ModePerm)
+	fs.Create(filepath.Join(logDir, "rancher-wins-antrea-agent.log"))
+	fs.Create(filepath.Join(antreaWindowsOVSLogDir, "ovs.log"))
+	fs.Create(filepath.Join(antreaWindowsKubeletLogDir, "kubelet.log"))
+
+	dumper := NewAgentDumper(fs, nil, nil, nil, nil, "7s", true, true)
+	err := dumper.DumpLog(baseDir)
+	require.NoError(t, err)
+
+	ok, err := afero.Exists(fs, filepath.Join(baseDir, "logs", "agent", "rancher-wins-antrea-agent.log"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+	ok, err = afero.Exists(fs, filepath.Join(baseDir, "logs", "ovs", "ovs.log"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+	ok, err = afero.Exists(fs, filepath.Join(baseDir, "logs", "kubelet", "kubelet.log"))
+	require.NoError(t, err)
+	assert.True(t, ok)
 }
 
 func TestDumpHostNetworkInfo(t *testing.T) {
