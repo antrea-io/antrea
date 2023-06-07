@@ -142,16 +142,16 @@ func TestWebhookClusterClaimEvents(t *testing.T) {
 
 	deleteCC1Req := validCC1Req.DeepCopy()
 	deleteCC1Req.Operation = v1.Delete
-	deleteCC1Req.Object.Raw = validCC1
+	deleteCC1Req.OldObject.Raw = validCC1
 
 	deleteCC2Req := validCC1Req.DeepCopy()
 	deleteCC2Req.Operation = v1.Delete
 	deleteCC2Req.Name = "clusterset.k8s.io"
-	deleteCC2Req.Object.Raw = validCC2
+	deleteCC2Req.OldObject.Raw = validCC2
 
 	deleteCC3Req := validCC1Req.DeepCopy()
 	deleteCC3Req.Operation = v1.Delete
-	deleteCC3Req.Object.Raw = validCC3
+	deleteCC3Req.OldObject.Raw = validCC3
 
 	tests := []struct {
 		name                 string
