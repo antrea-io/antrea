@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,10 +134,27 @@ func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Durat
 	return exists
 }
 
+func buildLogMsg(ob *logInfo) string {
+	return strings.Join([]string{
+		ob.tableName,
+		ob.npRef,
+		ob.ruleName,
+		ob.disposition,
+		ob.ofPriority,
+		ob.srcIP,
+		ob.srcPort,
+		ob.destIP,
+		ob.destPort,
+		ob.protocolStr,
+		strconv.FormatUint(uint64(ob.pktLength), 10),
+		ob.logLabel,
+	}, " ")
+}
+
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
 func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
-	logMsg := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d %s", ob.tableName, ob.npRef, ob.ruleName, ob.disposition, ob.ofPriority, ob.srcIP, ob.srcPort, ob.destIP, ob.destPort, ob.protocolStr, ob.pktLength, ob.logLabel)
+	logMsg := buildLogMsg(ob)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		l.anpLogger.Printf(logMsg)
 	} else {
