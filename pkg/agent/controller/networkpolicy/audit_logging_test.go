@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -141,10 +142,7 @@ func newLogInfo(disposition string) (*logInfo, string) {
 		protocolStr: "TCP",
 		pktLength:   60,
 	}
-	expected := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d %s", testLogInfo.tableName, testLogInfo.npRef, testLogInfo.ruleName,
-		testLogInfo.disposition, testLogInfo.ofPriority, testLogInfo.srcIP, testLogInfo.srcPort, testLogInfo.destIP, testLogInfo.destPort,
-		testLogInfo.protocolStr, testLogInfo.pktLength, testLogInfo.logLabel)
-	return testLogInfo, expected
+	return testLogInfo, buildLogMsg(testLogInfo)
 }
 
 func expectedLogWithCount(msg string, count int) string {
@@ -448,4 +446,19 @@ func TestGetPacketInfo(t *testing.T) {
 func prepareMockOFTablesWithCache() {
 	openflow.InitMockTables(mockOFTables)
 	openflow.InitOFTableCache(mockOFTables)
+}
+
+func BenchmarkLogDedupPacketAllow(b *testing.B) {
+	// In the allow case, there is actually no buffering.
+	antreaLogger := &AntreaPolicyLogger{
+		bufferLength:     testBufferLength,
+		clock:            &realClock{},
+		anpLogger:        log.New(io.Discard, "", log.Ldate),
+		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
+	}
+	ob, _ := newLogInfo(actionAllow)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		antreaLogger.LogDedupPacket(ob)
+	}
 }
