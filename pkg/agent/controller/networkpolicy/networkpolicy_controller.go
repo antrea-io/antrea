@@ -252,11 +252,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					policy.SourceRef.ToString())
 				return nil
 			}
-			anyRuleUpdate := c.ruleCache.UpdateNetworkPolicy(policy)
-			// If there is any rule update, we ensure statusManager will resync the policy's status once, in case that
-			// the added/deleted/updated rule is not effective, in which case the rule's realization status is not
-			// changed but the whole policy's generation is changed.
-			if c.statusManagerEnabled && anyRuleUpdate && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+			updated := c.ruleCache.UpdateNetworkPolicy(policy)
+			// If any rule or the generation changes, we ensure statusManager will resync the policy's status once, in
+			// case the changes don't cause any actual rule update but the whole policy's generation is changed.
+			if c.statusManagerEnabled && updated && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 				c.statusManager.Resync(policy.UID)
 			}
 			return nil
