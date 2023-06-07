@@ -755,7 +755,7 @@ func (c *ruleCache) AddNetworkPolicy(policy *v1beta.NetworkPolicy) {
 	c.updateNetworkPolicyLocked(policy)
 }
 
-// UpdateNetworkPolicy updates a cached *v1beta.NetworkPolicy and returns whether there is any rule change.
+// UpdateNetworkPolicy updates a cached *v1beta.NetworkPolicy and returns whether any rule or the generation changes.
 // The added rules and removed rules will be regarded as dirty.
 func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta.NetworkPolicy) bool {
 	c.policyMapLock.Lock()
@@ -763,8 +763,10 @@ func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta.NetworkPolicy) bool {
 	return c.updateNetworkPolicyLocked(policy)
 }
 
-// updateNetworkPolicyLocked returns whether there is any rule change.
+// updateNetworkPolicyLocked returns whether any rule or the generation changes.
 func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) bool {
+	oldPolicy, exists := c.policyMap[string(policy.UID)]
+	generationUpdated := !exists || oldPolicy.Generation != policy.Generation
 	c.policyMap[string(policy.UID)] = policy
 	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
 	ruleByID := map[string]interface{}{}
@@ -807,7 +809,7 @@ func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) bool
 		c.dirtyRuleHandler(ruleID)
 		anyRuleUpdate = true
 	}
-	return anyRuleUpdate
+	return anyRuleUpdate || generationUpdated
 }
 
 // DeleteNetworkPolicy deletes a cached *v1beta.NetworkPolicy.
