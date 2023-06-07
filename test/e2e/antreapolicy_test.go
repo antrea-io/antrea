@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -142,7 +141,7 @@ func initialize(t *testing.T, data *TestData) {
 	failOnError(err, t)
 	ips, err := k8sUtils.Bootstrap(namespaces, pods, true)
 	failOnError(err, t)
-	podIPs = *ips
+	podIPs = ips
 }
 
 func skipIfAntreaPolicyDisabled(tb testing.TB) {
@@ -2625,26 +2624,119 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	failOnError(k8sUtils.DeleteANP(builder.Namespace, builder.Name), t)
 }
 
+// auditLogMatcher is used to validate that audit logs are as expected. It converts input parameters
+// provided by test cases into regexes that are used to match the content of the audit logs file.
+type auditLogMatcher struct {
+	npRef       string
+	ruleName    string
+	direction   string
+	disposition string
+	logLabel    string
+	priorityRe  string
+
+	matchers []*regexp.Regexp
+}
+
+func NewAuditLogMatcher(npRef, ruleName, direction, disposition string) *auditLogMatcher {
+	priorityRe := `[0-9]+`
+	if npRef == "K8sNetworkPolicy" {
+		// K8s NP default drop (isolated behavior): there is no priority
+		priorityRe = "<nil>"
+	}
+	return &auditLogMatcher{
+		npRef:       npRef,
+		ruleName:    ruleName,
+		direction:   direction,
+		disposition: disposition,
+		logLabel:    "<nil>",
+		priorityRe:  priorityRe,
+		matchers:    make([]*regexp.Regexp, 0),
+	}
+}
+
+func (m *auditLogMatcher) WithLogLabel(logLabel string) *auditLogMatcher {
+	m.logLabel = logLabel
+	return m
+}
+
+func (m *auditLogMatcher) add(appliedToRef, srcIP, destIP string, destPort int32) {
+	re := regexp.MustCompile(strings.Join([]string{
+		m.npRef,
+		m.ruleName,
+		m.direction,
+		m.disposition,
+		m.priorityRe,
+		appliedToRef,
+		srcIP,
+		`[0-9]+`, // srcPort
+		destIP,
+		strconv.Itoa(int(destPort)),
+		"TCP",    // all AuditLogging tests use TCP
+		`[0-9]+`, // pktLength
+		m.logLabel,
+	}, " "))
+	m.matchers = append(m.matchers, re)
+}
+
+func (m *auditLogMatcher) AddProbe(appliedToRef, ns1, pod1, ns2, pod2 string, destPort int32) {
+	srcIPs, _ := podIPs[fmt.Sprintf("%s/%s", ns1, pod1)]
+	destIPs, _ := podIPs[fmt.Sprintf("%s/%s", ns2, pod2)]
+	for _, srcIP := range srcIPs {
+		for _, destIP := range destIPs {
+			// only look for an entry in the audit log file if srcIP and dstIP are of the same family
+			if IPFamily(srcIP) != IPFamily(destIP) {
+				continue
+			}
+			m.add(appliedToRef, srcIP, destIP, destPort)
+		}
+	}
+}
+
+func (m *auditLogMatcher) AddProbeAddr(appliedToRef, ns, pod, destIP string, destPort int32) {
+	srcIPs, _ := podIPs[fmt.Sprintf("%s/%s", ns, pod)]
+	for _, srcIP := range srcIPs {
+		// only look for an entry in the audit log file if srcIP and dstIP are of the same family
+		if IPFamily(srcIP) != IPFamily(destIP) {
+			continue
+		}
+		m.add(appliedToRef, srcIP, destIP, destPort)
+	}
+}
+
+func (m *auditLogMatcher) Matchers() []*regexp.Regexp {
+	return m.matchers
+}
+
 // testAuditLoggingBasic tests that audit logs are generated when egress drop applied
 func testAuditLoggingBasic(t *testing.T, data *TestData) {
-	npRef := "test-log-acnp-deny"
+	npName := "test-log-acnp-deny"
 	ruleName := "DropToZ"
 	logLabel := "testLogLabel"
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName(npRef).
+	builder = builder.SetName(npName).
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": namespaces["x"]}}})
 	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"ns": namespaces["z"]},
 		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", ruleName, nil)
 	builder.AddEgressLogging(logLabel)
+	npRef := fmt.Sprintf("AntreaClusterNetworkPolicy:%s", npName)
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
 	failOnError(data.waitForACNPRealized(t, acnp.Name, policyRealizedTimeout), t)
 
+	podXA, err := k8sUtils.GetPodByLabel(namespaces["x"], "a")
+	if err != nil {
+		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
+	}
+
+	matcher := NewAuditLogMatcher(npRef, ruleName, "Egress", "Drop").WithLogLabel(logLabel)
+	appliedToRef := fmt.Sprintf("%s/%s", podXA.Namespace, podXA.Name)
+
 	// generate some traffic that will be dropped by test-log-acnp-deny
 	var wg sync.WaitGroup
 	oneProbe := func(ns1, pod1, ns2, pod2 string) {
+		matcher.AddProbe(appliedToRef, ns1, pod1, ns2, pod2, p80)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -2656,18 +2748,9 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	oneProbe(namespaces["x"], "a", namespaces["z"], "c")
 	wg.Wait()
 
-	podXA, err := k8sUtils.GetPodByLabel(namespaces["x"], "a")
-	if err != nil {
-		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
-	}
 	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
 	nodeName := podXA.Spec.NodeName
-	srcIPs, _ := podIPs[namespaces["x"]+"/a"]
-	destIPs := append(podIPs[namespaces["z"]+"/a"], append(podIPs[namespaces["z"]+"/b"], podIPs[namespaces["z"]+"/c"]...)...)
-	expectedLogPrefix := func(_ string) string {
-		return npRef + ` ` + ruleName + ` Drop [0-9]+ `
-	}
-	checkAuditLoggingResult(t, data, nodeName, npRef, srcIPs, destIPs, expectedLogPrefix)
+	checkAuditLoggingResult(t, data, nodeName, npRef, matcher.Matchers())
 
 	failOnError(k8sUtils.CleanACNPs(), t)
 }
@@ -2678,48 +2761,48 @@ func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 	failOnError(data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"}), t)
 	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
 	// Pod x/b to x/a which default denies other ingress including from Pod x/c to x/a
-	npRef := "allow-x-b-to-x-a"
+	npName := "allow-x-b-to-x-a"
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
-	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], npRef).
+	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], npName).
 		SetPodSelector(map[string]string{"pod": "a"}).
 		SetTypeIngress().
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
 			map[string]string{"pod": "b"}, nil, nil, nil)
+	npRef := fmt.Sprintf("K8sNetworkPolicy:%s/%s", namespaces["x"], npName)
 
 	knp, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder.Get())
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, timeout, knp), t)
 
+	podXA, err := k8sUtils.GetPodByLabel(namespaces["x"], "a")
+	if err != nil {
+		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
+	}
+
+	// matcher1 is for connections allowed by the K8s NP
+	matcher1 := NewAuditLogMatcher(npRef, "<nil>", "Ingress", "Allow")
+	// matcher2 is for connections dropped by the isolated behavior of the K8s NP
+	matcher2 := NewAuditLogMatcher("K8sNetworkPolicy", "<nil>", "Ingress", "Drop")
+
+	appliedToRef := fmt.Sprintf("%s/%s", podXA.Namespace, podXA.Name)
+
 	// generate some traffic that will be dropped by implicit K8s policy drop
 	var wg sync.WaitGroup
-	oneProbe := func(ns1, pod1, ns2, pod2 string) {
+	oneProbe := func(ns1, pod1, ns2, pod2 string, matcher *auditLogMatcher) {
+		matcher.AddProbe(appliedToRef, ns1, pod1, ns2, pod2, p80)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP, nil, nil)
 		}()
 	}
-	oneProbe(namespaces["x"], "b", namespaces["x"], "a")
-	oneProbe(namespaces["x"], "c", namespaces["x"], "a")
+	oneProbe(namespaces["x"], "b", namespaces["x"], "a", matcher1)
+	oneProbe(namespaces["x"], "c", namespaces["x"], "a", matcher2)
 	wg.Wait()
 
-	podXA, err := k8sUtils.GetPodByLabel(namespaces["x"], "a")
-	if err != nil {
-		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
-	}
 	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
 	nodeName := podXA.Spec.NodeName
-	srcIPs := append(podIPs[namespaces["x"]+"/b"], podIPs[namespaces["x"]+"/c"]...)
-	destIPs, _ := podIPs[namespaces["x"]+"/a"]
-	expectedLogPrefix := func(srcIP string) string {
-		if slices.Contains(podIPs[namespaces["x"]+"/b"], srcIP) {
-			return npRef + " <nil> Allow [0-9]+ "
-		} else if slices.Contains(podIPs[namespaces["x"]+"/c"], srcIP) {
-			return "K8sNetworkPolicy <nil> Drop <nil> "
-		}
-		return ""
-	}
-	checkAuditLoggingResult(t, data, nodeName, "K8sNetworkPolicy", srcIPs, destIPs, expectedLogPrefix)
+	checkAuditLoggingResult(t, data, nodeName, "K8sNetworkPolicy", append(matcher1.Matchers(), matcher2.Matchers()...))
 
 	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], "allow-x-b-to-x-a"), t)
 	failOnError(data.UpdateNamespace(namespaces["x"], func(namespace *v1.Namespace) {
@@ -2739,11 +2822,11 @@ func testAuditLoggingK8sService(t *testing.T, data *TestData) {
 	}
 	serverNode := podXA.Spec.NodeName
 	serviceName := "nginx"
-	_, serverIP, nginxCleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, namespaces["x"], false)
+	serverPodName, serverIP, nginxCleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, namespaces["x"], false)
 	defer nginxCleanupFunc()
 	serverPort := int32(80)
 	ipFamily := v1.IPv4Protocol
-	if !strings.Contains(podIPs[namespaces["x"]+"/a"][0], ".") {
+	if IPFamily(podIPs[namespaces["x"]+"/a"][0]) == "v6" {
 		ipFamily = v1.IPv6Protocol
 	}
 	service, err := data.CreateService(serviceName, namespaces["x"], serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, v1.ServiceTypeClusterIP, &ipFamily)
@@ -2754,48 +2837,46 @@ func testAuditLoggingK8sService(t *testing.T, data *TestData) {
 
 	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
 	// Pod x/a to service nginx which default denies other ingress including from Pod x/b to service nginx
-	npRef := "allow-xa-to-service"
+	npName := "allow-xa-to-service"
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
-	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], npRef).
+	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], npName).
 		SetPodSelector(map[string]string{"app": serviceName}).
 		SetTypeIngress().
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
 			map[string]string{"pod": "a"}, nil, nil, nil)
+	npRef := fmt.Sprintf("K8sNetworkPolicy:%s/%s", namespaces["x"], npName)
 
 	knp, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder.Get())
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, timeout, knp), t)
 
+	// matcher1 is for connections allowed by the K8s NP
+	matcher1 := NewAuditLogMatcher(npRef, "<nil>", "Ingress", "Allow")
+	// matcher2 is for connections dropped by the isolated behavior of the K8s NP
+	matcher2 := NewAuditLogMatcher("K8sNetworkPolicy", "<nil>", "Ingress", "Drop")
+
+	appliedToRef := fmt.Sprintf("%s/%s", namespaces["x"], serverPodName)
+
 	// generate some traffic that wget the nginx service
 	var wg sync.WaitGroup
-	oneProbe := func(pod *v1.Pod) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			data.runWgetCommandFromTestPodWithRetry(pod.Name, pod.Namespace, pod.Spec.Containers[0].Name, serviceName, 5)
-		}()
+	oneProbe := func(ns, pod string, matcher *auditLogMatcher) {
+		for _, ip := range serverIP.ipStrings {
+			ip := ip
+			matcher.AddProbeAddr(appliedToRef, ns, pod, ip, serverPort)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				k8sUtils.ProbeAddr(ns, "pod", pod, ip, serverPort, ProtocolTCP, nil)
+			}()
+		}
 	}
-	oneProbe(podXA)
-	podXB, err := k8sUtils.GetPodByLabel(namespaces["x"], "b")
-	if err != nil {
-		t.Errorf("Failed to get Pod in Namespace x with label 'pod=b': %v", err)
-	}
-	oneProbe(podXB)
+	oneProbe(namespaces["x"], "a", matcher1)
+	oneProbe(namespaces["x"], "b", matcher2)
 	wg.Wait()
 
-	srcIPs := []string{podIPs[namespaces["x"]+"/a"][0], podIPs[namespaces["x"]+"/b"][0]}
-	destIPs := serverIP.ipStrings
-	expectedLogPrefix := func(srcIP string) string {
-		if slices.Contains(podIPs[namespaces["x"]+"/a"], srcIP) {
-			return npRef + " <nil> Allow [0-9]+ "
-		} else if slices.Contains(podIPs[namespaces["x"]+"/b"], srcIP) {
-			return "K8sNetworkPolicy <nil> Drop <nil> "
-		}
-		return ""
-	}
-	checkAuditLoggingResult(t, data, serverNode, "K8sNetworkPolicy", srcIPs, destIPs, expectedLogPrefix)
+	checkAuditLoggingResult(t, data, serverNode, "K8sNetworkPolicy", append(matcher1.Matchers(), matcher2.Matchers()...))
 
-	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], npRef), t)
+	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], npName), t)
 	failOnError(data.UpdateNamespace(namespaces["x"], func(namespace *v1.Namespace) {
 		delete(namespace.Annotations, networkpolicy.EnableNPLoggingAnnotationKey)
 	}), t)
@@ -3046,10 +3127,14 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	podXAIP, _ := podIPs[namespaces["x"]+"/a"]
 	podXBIP, _ := podIPs[namespaces["x"]+"/b"]
 	genCIDR := func(ip string) string {
-		if strings.Contains(ip, ".") {
+		switch IPFamily(ip) {
+		case "v4":
 			return ip + "/32"
+		case "v6":
+			return ip + "/128"
+		default:
+			return ""
 		}
-		return ip + "/128"
 	}
 	cg1Name, cg2Name, cg3Name := "cg-x-a-ipb", "cg-x-b-ipb", "cg-select-x-c"
 	cgParentName := "cg-parent"
@@ -4055,7 +4140,8 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	}
 }
 
-func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator string, srcIPs, destIPs []string, expectedLogPrefix func(string) string) {
+// the logMatcher parameter takes as input the srcIP and destIP of the connection and returns a regex that should match the log entry
+func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator string, matchers []*regexp.Regexp) {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
 		t.Errorf("Error occurred when trying to get the Antrea Agent Pod running on Node %s: %v", nodeName, err)
@@ -4074,27 +4160,17 @@ func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator 
 			return false, nil
 		}
 
-		var expectedNumEntries, actualNumEntries int
-		for _, srcIP := range srcIPs {
-			for _, destIP := range destIPs {
-				// only look for an entry in the audit log file if srcIP and
-				// dstIP are of the same family
-				if strings.Contains(srcIP, ".") != strings.Contains(destIP, ".") {
-					continue
-				}
-				expectedNumEntries += 1
-				// The audit log should contain log entry `... <disposition> <ofPriority> <src IP> <dest IP> ...`
-				re := regexp.MustCompile(expectedLogPrefix(srcIP) + srcIP + ` [0-9]+ ` + destIP + ` ` + strconv.Itoa(int(p80)))
-				if re.MatchString(stdout) {
-					actualNumEntries += 1
-				} else {
-					t.Logf("Audit log does not contain expected entry from client (%s) to server (%s)", srcIP, destIP)
-				}
-				break
+		var numEntries int
+		for _, re := range matchers {
+			t.Logf("Checking for expected entry: %s", re.String())
+			if re.MatchString(stdout) {
+				numEntries += 1
+			} else {
+				t.Logf("Audit log does not contain expected entry: %s", re.String())
 			}
 		}
-		if actualNumEntries != expectedNumEntries {
-			t.Logf("Missing entries in audit log: expected %d but found %d", expectedNumEntries, actualNumEntries)
+		if numEntries != len(matchers) {
+			t.Logf("Missing entries in audit log: expected %d but found %d", len(matchers), numEntries)
 			return false, nil
 		}
 		return true, nil

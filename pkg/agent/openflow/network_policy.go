@@ -1537,16 +1537,16 @@ func (f *featureNetworkPolicy) getPolicyRuleConjunction(ruleID uint32) *policyRu
 	return conj.(*policyRuleConjunction)
 }
 
-func (c *client) GetPolicyInfoFromConjunction(ruleID uint32) (string, string, string, string) {
+func (c *client) GetPolicyInfoFromConjunction(ruleID uint32) (bool, *v1beta2.NetworkPolicyReference, string, string, string) {
 	conjunction := c.featureNetworkPolicy.getPolicyRuleConjunction(ruleID)
-	if conjunction == nil {
-		return "", "", "", ""
+	if conjunction == nil || conjunction.npRef == nil {
+		return false, nil, "", "", ""
 	}
 	priorities := conjunction.ActionFlowPriorities()
 	if len(priorities) == 0 {
-		return "", "", "", ""
+		return false, nil, "", "", ""
 	}
-	return conjunction.npRef.ToString(), priorities[0], conjunction.ruleName, conjunction.ruleLogLabel
+	return true, conjunction.npRef, priorities[0], conjunction.ruleName, conjunction.ruleLogLabel
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.

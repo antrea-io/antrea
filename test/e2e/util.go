@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"io"
+	"net"
 	"os"
 	"time"
 
@@ -42,5 +43,16 @@ func timeCost() func(string) {
 	return func(status string) {
 		tc := time.Since(start)
 		klog.Infof("Confirming %s status costs %v", status, tc)
+	}
+}
+
+func IPFamily(ip string) string {
+	switch {
+	case net.ParseIP(ip).To4() != nil:
+		return "v4"
+	case net.ParseIP(ip).To16() != nil:
+		return "v6"
+	default:
+		return ""
 	}
 }
