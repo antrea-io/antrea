@@ -1,5 +1,23 @@
 # Changelog 1.11
 
+## 1.11.2 - 2023-06-07
+
+### Changed
+
+- Update Open vSwitch to 2.17.6. ([#4959](https://github.com/antrea-io/antrea/pull/4959), [@tnqn])
+- Bump up whereabouts to v0.6.1. ([#4988](https://github.com/antrea-io/antrea/pull/4988), [@hjiajing])
+
+### Fixed
+
+- In Antrea Agent Service CIDR discovery, prevent headless Services from updating the discovered Service CIDR to avoid overwriting the default route of host network unexpectedly. ([#5008](https://github.com/antrea-io/antrea/pull/5008), [@hongliangl])
+- Use LOCAL instead of CONTROLLER as the in_port of packet-out messages to fix a Windows agent crash issue. ([#4992](https://github.com/antrea-io/antrea/pull/4992), [@tnqn])
+- Fix a bug that a deleted NetworkPolicy is still enforced when a new NetworkPolicy with the same name exists. ([#4986](https://github.com/antrea-io/antrea/pull/4986), [@tnqn])
+- Improve Windows cleanup scripts to avoid unexpected failures. ([#4722](https://github.com/antrea-io/antrea/pull/4722), [@wenyingd])
+- Fix a race condition between stale controller and ResourceImport reconcilers in Antrea Multi-cluster controller. ([#4853](https://github.com/antrea-io/antrea/pull/4853), [@Dyanngg])
+- Make FQDN NetworkPolicy work for upper case FQDNs. ([#4934](https://github.com/antrea-io/antrea/pull/4934), [@GraysonWu])
+- Run agent modules that rely on Services access after AntreaProxy is ready to fix a Windows agent crash issue. ([#4946](https://github.com/antrea-io/antrea/pull/4946), [@tnqn])
+- Fix the Antrea Agent crash issue which is caused by a concurrency bug in Multicast feature with encap mode. ([#4903](https://github.com/antrea-io/antrea/pull/4903), [@ceclinux])
+
 ## 1.11.1 - 2023-04-20
 
 ### Changed
