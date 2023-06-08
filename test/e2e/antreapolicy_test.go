@@ -3778,17 +3778,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 	defer deletePodWrapper(t, data, serverNamespace, backendPodName)
 
 	// Create another netns to fake an external network on the host network Pod.
-	testNetns := "test-ns"
-	cmd := fmt.Sprintf(`ip netns add %[1]s && \
-ip link add dev %[1]s-a type veth peer name %[1]s-b && \
-ip link set dev %[1]s-a netns %[1]s && \
-ip addr add %[3]s/%[4]d dev %[1]s-b && \
-ip link set dev %[1]s-b up && \
-ip netns exec %[1]s ip addr add %[2]s/%[4]d dev %[1]s-a && \
-ip netns exec %[1]s ip link set dev %[1]s-a up && \
-ip netns exec %[1]s ip route replace default via %[3]s && \
-sleep 3600
-`, testNetns, "1.1.1.1", "1.1.1.254", 24)
+	cmd, testNetns := getCommandInFakeExternalNetwork("sleep 3600", 24, "1.1.1.1", "1.1.1.254")
 	clientNames := []string{"client0", "client1"}
 	for idx, clientName := range clientNames {
 		if err := NewPodBuilder(clientName, data.testNamespace, agnhostImage).OnNode(nodeName(idx)).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {

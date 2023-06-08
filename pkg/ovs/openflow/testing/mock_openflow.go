@@ -748,17 +748,17 @@ func (mr *MockActionMockRecorder) Group(arg0 interface{}) *gomock.Call {
 }
 
 // Learn mocks base method
-func (m *MockAction) Learn(arg0 byte, arg1, arg2, arg3 uint16, arg4 uint64) openflow.LearnAction {
+func (m *MockAction) Learn(arg0 byte, arg1, arg2, arg3, arg4, arg5 uint16, arg6 uint64) openflow.LearnAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Learn", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "Learn", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(openflow.LearnAction)
 	return ret0
 }
 
 // Learn indicates an expected call of Learn
-func (mr *MockActionMockRecorder) Learn(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockActionMockRecorder) Learn(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Learn", reflect.TypeOf((*MockAction)(nil).Learn), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Learn", reflect.TypeOf((*MockAction)(nil).Learn), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // LoadARPOperation mocks base method

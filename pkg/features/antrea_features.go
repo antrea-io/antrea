@@ -125,6 +125,10 @@ const (
 	// Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
 	// into account application context.
 	L7NetworkPolicy featuregate.Feature = "L7NetworkPolicy"
+
+	// alpha: v1.13
+	// Allow users to specify the load balancer mode as DSR (Direct Server Return).
+	LoadBalancerModeDSR featuregate.Feature = "LoadBalancerModeDSR"
 )
 
 var (
@@ -159,6 +163,7 @@ var (
 		ExternalNode:            {Default: false, PreRelease: featuregate.Alpha},
 		SupportBundleCollection: {Default: false, PreRelease: featuregate.Alpha},
 		L7NetworkPolicy:         {Default: false, PreRelease: featuregate.Alpha},
+		LoadBalancerModeDSR:     {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -180,8 +185,9 @@ var (
 		IPsecCertAuth:     {},
 		// Multicluster feature is not validated on Windows yet. This can removed
 		// in the future if it's fully tested on Windows.
-		Multicluster:    {},
-		L7NetworkPolicy: {},
+		Multicluster:        {},
+		L7NetworkPolicy:     {},
+		LoadBalancerModeDSR: {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

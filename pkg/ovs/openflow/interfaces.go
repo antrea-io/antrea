@@ -243,7 +243,7 @@ type Action interface {
 	Normal() FlowBuilder
 	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
 	Group(id GroupIDType) FlowBuilder
-	Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
+	Learn(id uint8, priority uint16, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout uint16, cookieID uint64) LearnAction
 	GotoTable(table uint8) FlowBuilder
 	NextTable() FlowBuilder
 	GotoStage(stage StageID) FlowBuilder

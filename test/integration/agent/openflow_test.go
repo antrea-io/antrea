@@ -33,6 +33,7 @@ import (
 
 	agentconfig "antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
+	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
 	ofClient "antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	k8stypes "antrea.io/antrea/pkg/agent/proxy/types"
@@ -117,7 +118,7 @@ func TestConnectivityFlows(t *testing.T) {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -173,7 +174,7 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, true, false, false, true, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, true, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -236,7 +237,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -278,7 +279,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -461,7 +462,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -575,7 +576,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -611,19 +612,12 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	})
 }
 
-type svcConfig struct {
-	ip                  net.IP
-	port                uint16
-	protocol            ofconfig.Protocol
-	withSessionAffinity bool
-}
-
 func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -648,59 +642,59 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
 			Endpoint: net.JoinHostPort("10.20.1.11", "8081"),
 			IsLocal:  false,
+			NodeName: "node1",
 		}),
 	}
 
 	stickyMaxAgeSeconds := uint16(30)
 
 	tcs := []struct {
-		svc       svcConfig
-		gid       uint32
+		svc       *types.ServiceConfig
 		endpoints []k8sproxy.Endpoint
 		stickyAge uint16
 	}{
 		{
-			svc: svcConfig{
-				protocol: ofconfig.ProtocolTCP,
-				ip:       net.ParseIP("10.20.30.41"),
-				port:     uint16(8000),
+			svc: &types.ServiceConfig{
+				Protocol:        ofconfig.ProtocolTCP,
+				ServiceIP:       net.ParseIP("10.20.30.41"),
+				ServicePort:     uint16(8000),
+				ClusterGroupID:  2,
+				AffinityTimeout: stickyMaxAgeSeconds,
 			},
-			gid:       2,
 			endpoints: endpoints,
-			stickyAge: stickyMaxAgeSeconds,
 		},
 		{
-			svc: svcConfig{
-				protocol: ofconfig.ProtocolUDP,
-				ip:       net.ParseIP("10.20.30.42"),
-				port:     uint16(8000),
+			svc: &types.ServiceConfig{
+				Protocol:        ofconfig.ProtocolUDP,
+				ServiceIP:       net.ParseIP("10.20.30.42"),
+				ServicePort:     uint16(8000),
+				ClusterGroupID:  3,
+				AffinityTimeout: stickyMaxAgeSeconds,
 			},
-			gid:       3,
 			endpoints: endpoints,
-			stickyAge: stickyMaxAgeSeconds,
 		},
 		{
-			svc: svcConfig{
-				protocol: ofconfig.ProtocolSCTP,
-				ip:       net.ParseIP("10.20.30.43"),
-				port:     uint16(8000),
+			svc: &types.ServiceConfig{
+				Protocol:        ofconfig.ProtocolSCTP,
+				ServiceIP:       net.ParseIP("10.20.30.43"),
+				ServicePort:     uint16(8000),
+				ClusterGroupID:  4,
+				AffinityTimeout: stickyMaxAgeSeconds,
 			},
-			gid:       4,
 			endpoints: endpoints,
-			stickyAge: stickyMaxAgeSeconds,
 		},
 	}
 
 	for _, tc := range tcs {
-		groupID := ofconfig.GroupIDType(tc.gid)
-		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.gid, tc.svc, tc.endpoints, tc.stickyAge, false)
-		installServiceFlows(t, tc.gid, tc.svc, tc.endpoints, tc.stickyAge)
+		groupID := tc.svc.ClusterGroupID
+		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.svc, tc.endpoints, false)
+		installServiceFlows(t, tc.svc, tc.endpoints)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 		}
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, true)
 
-		uninstallServiceFlowsFunc(t, tc.gid, tc.svc, tc.endpoints)
+		uninstallServiceFlowsFunc(t, tc.svc, tc.endpoints)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
 		}
@@ -713,7 +707,7 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -738,39 +732,39 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
 			Endpoint: net.JoinHostPort("10.20.1.11", "8081"),
 			IsLocal:  false,
+			NodeName: "node1",
 		}),
 	}
 
 	stickyMaxAgeSeconds := uint16(30)
 
 	tcs := []struct {
-		svc       svcConfig
-		gid       uint32
+		svc       *types.ServiceConfig
 		endpoints []k8sproxy.Endpoint
 		stickyAge uint16
 	}{
 		{
-			svc: svcConfig{
-				protocol: ofconfig.ProtocolTCP,
-				ip:       net.ParseIP("10.20.30.41"),
-				port:     uint16(8000),
+			svc: &types.ServiceConfig{
+				Protocol:        ofconfig.ProtocolTCP,
+				ServiceIP:       net.ParseIP("10.20.30.41"),
+				ServicePort:     uint16(8000),
+				ClusterGroupID:  2,
+				AffinityTimeout: stickyMaxAgeSeconds,
 			},
-			gid:       2,
 			endpoints: endpoints,
-			stickyAge: stickyMaxAgeSeconds,
 		},
 	}
 
 	for _, tc := range tcs {
-		groupID := ofconfig.GroupIDType(tc.gid)
-		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.gid, tc.svc, tc.endpoints, tc.stickyAge, true)
-		installServiceFlows(t, tc.gid, tc.svc, tc.endpoints, tc.stickyAge)
+		groupID := ofconfig.GroupIDType(tc.svc.ClusterGroupID)
+		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.svc, tc.endpoints, true)
+		installServiceFlows(t, tc.svc, tc.endpoints)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 		}
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, true)
 
-		uninstallServiceFlowsFunc(t, tc.gid, tc.svc, tc.endpoints)
+		uninstallServiceFlowsFunc(t, tc.svc, tc.endpoints)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
 		}
@@ -778,38 +772,36 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 	}
 }
 
-func installServiceFlows(t *testing.T, gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyMaxAgeSeconds uint16) {
-	groupID := ofconfig.GroupIDType(gid)
-	err := c.InstallEndpointFlows(svc.protocol, endpointList)
+func installServiceFlows(t *testing.T, svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint) {
+	err := c.InstallEndpointFlows(svc.Protocol, endpointList)
 	assert.NoError(t, err, "no error should return when installing flows for Endpoints")
-	err = c.InstallServiceGroup(groupID, svc.withSessionAffinity, endpointList)
+	err = c.InstallServiceGroup(svc.ClusterGroupID, svc.AffinityTimeout != 0, endpointList)
 	assert.NoError(t, err, "no error should return when installing groups for Service")
-	err = c.InstallServiceFlows(groupID, ofconfig.GroupIDType(0), svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds, false, false)
+	err = c.InstallServiceFlows(svc)
 	assert.NoError(t, err, "no error should return when installing flows for Service")
 }
 
-func uninstallServiceFlowsFunc(t *testing.T, gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint) {
-	groupID := ofconfig.GroupIDType(gid)
-	err := c.UninstallServiceFlows(svc.ip, svc.port, svc.protocol)
+func uninstallServiceFlowsFunc(t *testing.T, svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint) {
+	err := c.UninstallServiceFlows(svc.ServiceIP, svc.ServicePort, svc.Protocol)
 	assert.Nil(t, err)
-	err = c.UninstallServiceGroup(groupID)
+	err = c.UninstallServiceGroup(svc.ClusterGroupID)
 	assert.Nil(t, err)
-	assert.NoError(t, c.UninstallEndpointFlows(svc.protocol, endpointList))
+	assert.NoError(t, c.UninstallEndpointFlows(svc.Protocol, endpointList))
 }
 
-func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyAge uint16, antreaPolicyEnabled bool) (tableFlows []expectTableFlows, groupBuckets []string) {
+func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []k8sproxy.Endpoint, antreaPolicyEnabled bool) (tableFlows []expectTableFlows, groupBuckets []string) {
 	nw_proto := 6
 	learnProtoField := "NXM_OF_TCP_DST[]"
-	if svc.protocol == ofconfig.ProtocolUDP {
+	if svc.Protocol == ofconfig.ProtocolUDP {
 		nw_proto = 17
 		learnProtoField = "NXM_OF_UDP_DST[]"
-	} else if svc.protocol == ofconfig.ProtocolSCTP {
+	} else if svc.Protocol == ofconfig.ProtocolSCTP {
 		nw_proto = 132
 		learnProtoField = "OXM_OF_SCTP_DST[]"
 	}
 
 	serviceLearnReg := 2
-	if stickyAge != 0 {
+	if svc.AffinityTimeout != 0 {
 		serviceLearnReg = 3
 	}
 	cookieAllocator := cookie.NewAllocator(roundInfo.RoundNum)
@@ -817,17 +809,17 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 	loadGourpID := ""
 	ctTable := "EgressRule"
 	if antreaPolicyEnabled {
-		loadGourpID = fmt.Sprintf("set_field:0x%x->reg7,", gid)
+		loadGourpID = fmt.Sprintf("set_field:0x%x->reg7,", svc.ClusterGroupID)
 		ctTable = "AntreaPolicyEgressRule"
 	}
 	svcFlows := expectTableFlows{tableName: "ServiceLB", flows: []*ofTestUtils.ExpectFlow{
 		{
-			MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x10000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
-			ActStr:   fmt.Sprintf("set_field:0x200/0x200->reg0,set_field:0x%x/0x70000->reg4,%sgroup:%d", serviceLearnReg<<16, loadGourpID, gid),
+			MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x10000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.Protocol), svc.ServiceIP.String(), svc.ServicePort),
+			ActStr:   fmt.Sprintf("set_field:0x200/0x200->reg0,set_field:0x%x/0x70000->reg4,%sgroup:%d", serviceLearnReg<<16, loadGourpID, svc.ClusterGroupID),
 		},
 		{
-			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
-			ActStr:   fmt.Sprintf("learn(table=SessionAffinity,hard_timeout=%d,priority=200,delete_learned,cookie=0x%x,eth_type=0x800,nw_proto=%d,%s,NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT", stickyAge, cookieAllocator.RequestWithObjectID(cookie.Service, gid).Raw(), nw_proto, learnProtoField),
+			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.Protocol), svc.ServiceIP.String(), svc.ServicePort),
+			ActStr:   fmt.Sprintf("learn(table=SessionAffinity,hard_timeout=%d,priority=200,delete_learned,cookie=0x%x,eth_type=0x800,nw_proto=%d,%s,NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT", svc.AffinityTimeout, cookieAllocator.RequestWithObjectID(cookie.Service, uint32(svc.ClusterGroupID)).Raw(), nw_proto, learnProtoField),
 		},
 	}}
 	epDNATFlows := expectTableFlows{tableName: "EndpointDNAT", flows: []*ofTestUtils.ExpectFlow{}}
@@ -836,12 +828,17 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 	for _, ep := range endpointList {
 		epIP := ipToHexString(net.ParseIP(ep.IP()))
 		epPort, _ := ep.Port()
-		bucket := fmt.Sprintf("weight:100,actions=set_field:%s->reg3,set_field:0x%x/0xffff->reg4,resubmit(,%d)", epIP, epPort, ofClient.EndpointDNATTable.GetID())
+		var bucket string
+		if ep.GetIsLocal() {
+			bucket = fmt.Sprintf("weight:100,actions=set_field:%s->reg3,set_field:0x%x/0xffff->reg4,resubmit(,%d)", epIP, epPort, ofClient.ServiceLBTable.GetID())
+		} else {
+			bucket = fmt.Sprintf("weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:%s->reg3,set_field:0x%x/0xffff->reg4,resubmit(,%d)", epIP, epPort, ofClient.ServiceLBTable.GetID())
+		}
 		groupBuckets = append(groupBuckets, bucket)
 
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
-			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.protocol), epIP, unionVal),
+			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.Protocol), epIP, unionVal),
 			ActStr:   fmt.Sprintf("ct(commit,table=%s,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ctTable, ep.IP(), epPort),
 		})
 
@@ -1257,7 +1254,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,in_port=%d", agentconfig.HostGatewayOFPort),
-					ActStr:   "set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+					ActStr:   "set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 				},
 			},
 		},
@@ -1315,6 +1312,15 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			nwDstStr = "ipv6_dst"
 		}
 		flows = append(flows,
+			expectTableFlows{
+				"Classifier",
+				[]*ofTestUtils.ExpectFlow{
+					{
+						MatchStr: fmt.Sprintf("priority=210,%s,in_port=%d,%s=%s", ipProtoStr, agentconfig.HostGatewayOFPort, nwSrcStr, gwIP),
+						ActStr:   "set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+					},
+				},
+			},
 			expectTableFlows{
 				tableName: "IngressSecurityClassifier",
 				flows: []*ofTestUtils.ExpectFlow{
@@ -1484,7 +1490,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZone)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ip", ActStr: "drop"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", outputStageTable, ctZone)},
@@ -1513,7 +1519,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))", ctZone)},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x200000", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark))", ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark))", ctZone)},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x2/0xf", ActStr: "goto_table:SNATMark"},
@@ -1529,7 +1535,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZoneV6)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ipv6", ActStr: "drop"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=Output,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
@@ -1558,7 +1564,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x200000", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x2200000", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark))"},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x2/0xf", ActStr: "goto_table:SNATMark"},
@@ -1779,7 +1785,7 @@ func TestEgressMarkFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, false, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1836,7 +1842,7 @@ func TestTrafficControlFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, false, false, false, false, false, false, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, false, false, false, false, false, false, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 

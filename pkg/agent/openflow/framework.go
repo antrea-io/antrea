@@ -256,6 +256,9 @@ func (f *featureService) getRequiredTables() []*Table {
 	if f.proxyAll {
 		tables = append(tables, NodePortMarkTable)
 	}
+	if f.enableDSR {
+		tables = append(tables, DSRServiceMarkTable)
+	}
 	return tables
 }
 

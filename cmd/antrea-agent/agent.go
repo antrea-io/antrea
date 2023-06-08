@@ -51,6 +51,7 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/multicast"
 	mcroute "antrea.io/antrea/pkg/agent/multicluster"
+	"antrea.io/antrea/pkg/agent/nodeip"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -139,6 +140,7 @@ func run(o *Options) error {
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 
+	nodeIPTracker := nodeip.NewTracker(nodeInformer)
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
@@ -146,13 +148,16 @@ func run(o *Options) error {
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+	ofClient := openflow.NewClient(o.config.OVSBridge,
+		ovsBridgeMgmtAddr,
+		nodeIPTracker,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
 		features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable,
 		o.config.AntreaProxy.ProxyAll,
+		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
 		connectUplinkToBridge,
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
@@ -396,11 +401,13 @@ func run(o *Options) error {
 			k8sClient,
 			ofClient,
 			routeClient,
+			nodeIPTracker,
 			v4Enabled,
 			v6Enabled,
 			nodePortAddressesIPv4,
 			nodePortAddressesIPv6,
 			o.config.AntreaProxy,
+			o.defaultLoadBalancerMode,
 			v4GroupCounter,
 			v6GroupCounter,
 			enableMulticlusterGW,

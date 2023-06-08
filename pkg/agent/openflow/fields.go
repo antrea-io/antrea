@@ -123,6 +123,17 @@ var (
 	TrafficControlRedirectRegMark = binding.NewRegMark(TrafficControlActionField, 0b10)
 	// reg4[24]: Mark to indicate that whether the Service is backed by Service IPs of other Services.
 	NestedServiceRegMark = binding.NewOneBitRegMark(4, 24)
+	// reg4[25]: Mark to indicate that whether the Service traffic works in DSR mode.
+	DSRServiceRegMark    = binding.NewOneBitRegMark(4, 25)
+	NotDSRServiceRegMark = binding.NewOneBitZeroRegMark(4, 25)
+	// reg4[26]: Mark to indicate that whether a remote non-hostNetwork Endpoint is selected.
+	RemoteEndpointRegMark = binding.NewOneBitRegMark(4, 26)
+	// reg4[27]: Mark to indicate that whether the traffic's source is an external IP.
+	// If a packet is from gateway but its source IP is not the gateway IP, it's considered external sourced traffic.
+	// The masquerade rule in iptables nat table guarantees the other IPs of the Node won't be used as source IP when
+	// the Node's traffic is forwarded to OVS. And even if there is no masquerade rule, there should be no problem to
+	// consider the packet external sourced as the other IPs are routable externally anyway.
+	FromExternalRegMark = binding.NewOneBitRegMark(4, 27)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

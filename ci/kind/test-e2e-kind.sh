@@ -28,6 +28,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--coverage] [--he
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --run                         Run only tests matching the regexp.
         --proxy-all                   Enables Antrea proxy with all Service support.
+        --load-balancer-mode          LoadBalancer mode.
         --node-ipam                   Enables Antrea NodeIPAN.
         --multicast                   Enables Multicast.
         --flow-visibility             Only run flow visibility related e2e tests.
@@ -64,6 +65,7 @@ mode=""
 ipfamily="v4"
 feature_gates=""
 proxy_all=false
+load_balancer_mode=""
 node_ipam=false
 multicast=false
 flow_visibility=false
@@ -89,6 +91,10 @@ case $key in
     --proxy-all)
     proxy_all=true
     shift
+    ;;
+    --load-balancer-mode)
+    load_balancer_mode="$2"
+    shift 2
     ;;
     --node-ipam)
     node_ipam=true
@@ -154,6 +160,9 @@ if [ -n "$feature_gates" ]; then
 fi
 if $proxy_all; then
     manifest_args="$manifest_args --proxy-all"
+fi
+if [ -n "$load_balancer_mode" ]; then
+    manifest_args="$manifest_args --extra-helm-values antreaProxy.defaultLoadBalancerMode=$load_balancer_mode"
 fi
 if $node_ipam; then
     manifest_args="$manifest_args --extra-helm-values nodeIPAM.enable=true,nodeIPAM.clusterCIDRs={10.244.0.0/16}"

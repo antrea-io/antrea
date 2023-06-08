@@ -31,6 +31,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/nodeip"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
@@ -140,6 +141,7 @@ var (
 	NodePortMarkTable         = newTable("NodePortMark", stagePreRouting, pipelineIP)
 	SessionAffinityTable      = newTable("SessionAffinity", stagePreRouting, pipelineIP)
 	ServiceLBTable            = newTable("ServiceLB", stagePreRouting, pipelineIP)
+	DSRServiceMarkTable       = newTable("DSRServiceMark", stagePreRouting, pipelineIP)
 	EndpointDNATTable         = newTable("EndpointDNAT", stagePreRouting, pipelineIP)
 	// When proxy is disabled.
 	DNATTable = newTable("DNAT", stagePreRouting, pipelineIP)
@@ -353,6 +355,14 @@ const (
 
 	// EtherTypeDot1q is used when adding 802.1Q VLAN header in OVS action
 	EtherTypeDot1q = 0x8100
+
+	// dsrServiceConnectionIdleTimeout represents the idle timeout of the flows learned for DSR Service.
+	// 160 means the learned flows will be deleted if the flow is not used in 160s.
+	// It tolerates 1 keep-alive drop (net.ipv4.tcp_keepalive_intvl defaults to 75) and a deviation of 10s for long connections.
+	dsrServiceConnectionIdleTimeout = 160
+	// dsrServiceConnectionFinIdleTimeout represents the idle timeout of the flows learned for DSR Service after a TCP
+	// packet with the FIN or RST flag is received.
+	dsrServiceConnectionFinIdleTimeout = 5
 )
 
 var DispositionToString = map[uint32]string{
@@ -410,6 +420,7 @@ type flowCategoryCache struct {
 type client struct {
 	enableProxy           bool
 	proxyAll              bool
+	enableDSR             bool
 	enableAntreaPolicy    bool
 	enableL7NetworkPolicy bool
 	enableDenyTracking    bool
@@ -456,6 +467,8 @@ type client struct {
 	ipProtocols []binding.Protocol
 	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
 	ovsctlClient ovsctl.OVSCtlClient
+
+	nodeIPChecker nodeip.Checker
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -604,14 +617,27 @@ func (f *featurePodConnectivity) tunnelClassifierFlow(tunnelOFPort uint32) bindi
 		Done()
 }
 
-// gatewayClassifierFlow generates the flow to mark the packets from the Antrea gateway port.
-func (f *featurePodConnectivity) gatewayClassifierFlow() binding.Flow {
-	return ClassifierTable.ofTable.BuildFlow(priorityNormal).
+// gatewayClassifierFlows generates the flow to mark the packets from the Antrea gateway port.
+func (f *featurePodConnectivity) gatewayClassifierFlows() []binding.Flow {
+	var flows []binding.Flow
+	for ipProtocol, gatewayIP := range f.gatewayIPs {
+		flows = append(flows, ClassifierTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchInPort(f.gatewayPort).
+			MatchProtocol(ipProtocol).
+			MatchSrcIP(gatewayIP).
+			Action().LoadRegMark(FromGatewayRegMark).
+			Action().GotoStage(stageValidation).
+			Done())
+	}
+	// If the packet is from gateway but its source IP is not the gateway IP, it's considered external sourced traffic.
+	flows = append(flows, ClassifierTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchInPort(f.gatewayPort).
-		Action().LoadRegMark(FromGatewayRegMark).
+		Action().LoadRegMark(FromGatewayRegMark, FromExternalRegMark).
 		Action().GotoStage(stageValidation).
-		Done()
+		Done())
+	return flows
 }
 
 // podClassifierFlow generates the flow to mark the packets from a local Pod port.
@@ -702,10 +728,11 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(false).
 				MatchCTStateTrk(true).
+				MatchCTMark(NotServiceCTMark).
 				Action().GotoStage(stageEgressSecurity).
 				Done(),
 			// This generates the flow to drop invalid packets.
-			ConntrackStateTable.ofTable.BuildFlow(priorityHigh).
+			ConntrackStateTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateInv(true).
@@ -744,7 +771,7 @@ func (f *featureService) conntrackFlows() []binding.Flow {
 		flows = append(flows,
 			// This generates the flow to mark tracked DNATed Service connection with RewriteMACRegMark (load-balanced by
 			// AntreaProxy) and forward the packets to stageEgressSecurity directly to bypass stagePreRouting.
-			ConntrackStateTable.ofTable.BuildFlow(priorityNormal).
+			ConntrackStateTable.ofTable.BuildFlow(priorityLow).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTMark(ServiceCTMark).
@@ -752,6 +779,27 @@ func (f *featureService) conntrackFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				Action().LoadRegMark(RewriteMACRegMark).
 				Action().GotoStage(stageEgressSecurity).
+				Done(),
+		)
+	}
+	// If DSR is enabled, traffic working in DSR mode will be in invalid state on ingress Node.
+	// We forward externally originated packets of invalid connections to stagePreRouting to see if it could be
+	// marked as DSR traffic. If not, they will be dropped in DSRServiceMarkTable.
+	if f.enableDSR {
+		flows = append(flows,
+			ConntrackStateTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchRegMark(FromExternalRegMark).
+				MatchCTStateInv(true).
+				MatchCTStateTrk(true).
+				Action().GotoStage(stagePreRouting).
+				Done(),
+			DSRServiceMarkTable.ofTable.BuildFlow(priorityLow).
+				Cookie(cookieID).
+				MatchRegMark(NotDSRServiceRegMark).
+				MatchCTStateInv(true).
+				MatchCTStateTrk(true).
+				Action().Drop().
 				Done(),
 		)
 	}
@@ -1362,19 +1410,44 @@ func (f *featurePodConnectivity) l3FwdFlowToGateway() []binding.Flow {
 	return flows
 }
 
-// l3FwdFlowToRemoteViaTun generates the flow to match the packets destined for remote Pods via tunnel.
-func (f *featurePodConnectivity) l3FwdFlowToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
+// l3FwdFlowsToRemoteViaTun generates the flows to match the packets destined for remote Pods via tunnel.
+func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) []binding.Flow {
 	ipProtocol := getIPProtocol(peerSubnet.IP)
-	return L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
-		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchProtocol(ipProtocol).
-		MatchDstIPNet(peerSubnet).
-		Action().SetSrcMAC(localGatewayMAC).  // Rewrite src MAC to local gateway MAC.
-		Action().SetDstMAC(GlobalVirtualMAC). // Rewrite dst MAC to virtual MAC.
-		Action().SetTunnelDst(tunnelPeer).    // Flow based tunnel. Set tunnel destination.
-		Action().LoadRegMark(ToTunnelRegMark).
-		Action().GotoTable(L3DecTTLTable.GetID()).
-		Done()
+	buildFlow := func(matcher func(b binding.FlowBuilder) binding.FlowBuilder) binding.Flow {
+		builder := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchProtocol(ipProtocol)
+		builder = matcher(builder)
+		return builder.
+			Action().SetSrcMAC(localGatewayMAC).  // Rewrite src MAC to local gateway MAC.
+			Action().SetDstMAC(GlobalVirtualMAC). // Rewrite dst MAC to virtual MAC.
+			Action().SetTunnelDst(tunnelPeer).    // Flow based tunnel. Set tunnel destination.
+			Action().LoadRegMark(ToTunnelRegMark).
+			Action().GotoTable(L3DecTTLTable.GetID()).
+			Done()
+	}
+	flows := []binding.Flow{
+		// The flow handles packets whose destination IP is in the peer subnet.
+		buildFlow(func(b binding.FlowBuilder) binding.FlowBuilder {
+			return b.MatchDstIPNet(peerSubnet)
+		}),
+	}
+	// If DSR is enabled, packets accessing a DSR Service will not be DNATed on the ingress Node, but EndpointIPField
+	// holds the selected backend Pod IP, we match it and DSRServiceRegMark to send these packets to corresponding Nodes.
+	if f.enableDSR {
+		// Like matching destination IP, we only check if the prefix of the EndpointIP stored in EndpointIPField is in
+		// the subnet. For example, if the peerSubnet is 10.10.1.0/24, we will check reg3=0xa0a0100/0xffffff00.
+		ones, bits := peerSubnet.Mask.Size()
+		if ipProtocol == binding.ProtocolIP {
+			maskedEndpointIPField := binding.NewRegField(EndpointIPField.GetRegID(), uint32(bits-ones), 31)
+			maskedEndpointIPValue := binary.BigEndian.Uint32(peerSubnet.IP.To4()) >> (bits - ones)
+			flows = append(flows, buildFlow(func(b binding.FlowBuilder) binding.FlowBuilder {
+				return b.MatchRegMark(DSRServiceRegMark).MatchRegFieldWithValue(maskedEndpointIPField, maskedEndpointIPValue)
+			}))
+		}
+		// TODO: MatchXXReg must support mask to support IPv6.
+	}
+	return flows
 }
 
 // l3FwdFlowToRemoteViaGW generates the flow to match the packets destined for remote Pods via the Antrea gateway. It is
@@ -2269,28 +2342,22 @@ func (f *featureService) nodePortMarkFlows() []binding.Flow {
 
 // serviceLearnFlow generates the flow with learn action which adds new flows in SessionAffinityTable according to the
 // Endpoint selection decision.
-func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
-	svcIP net.IP,
-	svcPort uint16,
-	protocol binding.Protocol,
-	affinityTimeout uint16,
-	externalAddress bool,
-	nodePortAddress bool) binding.Flow {
+func (f *featureService) serviceLearnFlow(config *types.ServiceConfig) binding.Flow {
 	// Using unique cookie ID here to avoid learned flow cascade deletion.
-	cookieID := f.cookieAllocator.RequestWithObjectID(f.category, uint32(groupID)).Raw()
+	cookieID := f.cookieAllocator.RequestWithObjectID(f.category, uint32(config.TrafficPolicyGroupID())).Raw()
 	flowBuilder := ServiceLBTable.ofTable.BuildFlow(priorityLow).
 		Cookie(cookieID).
-		MatchProtocol(protocol).
-		MatchDstPort(svcPort, nil)
+		MatchProtocol(config.Protocol).
+		MatchDstPort(config.ServicePort, nil)
 
 	// EpToLearnRegMark is required to match the packets that have done Endpoint selection.
 	regMarksToMatch := []*binding.RegMark{EpToLearnRegMark}
 	// ToNodePortAddressRegMark is required to match the packets if the flow is for NodePort address, otherwise Service IP
 	// is used.
-	if nodePortAddress {
+	if config.IsNodePort {
 		regMarksToMatch = append(regMarksToMatch, ToNodePortAddressRegMark)
 	} else {
-		flowBuilder = flowBuilder.MatchDstIP(svcIP)
+		flowBuilder = flowBuilder.MatchDstIP(config.ServiceIP)
 	}
 	flowBuilder = flowBuilder.MatchRegMark(regMarksToMatch...)
 
@@ -2298,16 +2365,17 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 	// OVS after that time regarding of whether traffic is still hitting the flow. This is the
 	// desired behavior based on the K8s spec. Note that existing connections will keep going to
 	// the same endpoint because of connection tracking; and that is also the desired behavior.
-	isIPv6 := netutils.IsIPv6(svcIP)
+	isIPv6 := netutils.IsIPv6(config.ServiceIP)
 	learnFlowBuilderLearnAction := flowBuilder.
-		Action().Learn(SessionAffinityTable.GetID(), priorityNormal, 0, affinityTimeout, cookieID).
+		Action().Learn(SessionAffinityTable.GetID(), priorityNormal, 0, config.AffinityTimeout, 0, 0, cookieID).
 		DeleteLearned().
 		MatchEthernetProtocol(isIPv6).
-		MatchIPProtocol(protocol).
-		MatchLearnedDstPort(protocol).
+		MatchIPProtocol(config.Protocol).
+		MatchLearnedDstPort(config.Protocol).
 		MatchLearnedDstIP(isIPv6).
 		MatchLearnedSrcIP(isIPv6).
-		LoadFieldToField(EndpointPortField, EndpointPortField)
+		LoadFieldToField(EndpointPortField, EndpointPortField).
+		LoadFieldToField(RemoteEndpointRegMark.GetField(), RemoteEndpointRegMark.GetField())
 	if isIPv6 {
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field)
 	} else {
@@ -2319,7 +2387,7 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 	regMarksToLoad := []*binding.RegMark{EpSelectedRegMark, RewriteMACRegMark}
 	// If the flow is for external Service IP, which means the Service is accessible externally, the ToExternalAddressRegMark
 	// should be loaded to determine whether SNAT is required for the connection.
-	if externalAddress {
+	if config.IsExternal {
 		regMarksToLoad = append(regMarksToLoad, ToExternalAddressRegMark)
 	}
 	return learnFlowBuilderLearnAction.LoadRegMark(regMarksToLoad...).
@@ -2329,87 +2397,130 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 		Done()
 }
 
-// serviceLBFlow generates the flow which uses the specific group to do Endpoint selection.
-func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
-	svcIP net.IP,
-	svcPort uint16,
-	protocol binding.Protocol,
-	withSessionAffinity bool,
-	externalAddress bool,
-	nodePortAddress bool,
-	nested bool,
-	isShortCircuiting bool) binding.Flow {
-	var flowBuilder binding.FlowBuilder
-	if isShortCircuiting {
+// serviceLBFlows generates the flows which use the specific groups to do Endpoint selection.
+func (f *featureService) serviceLBFlows(config *types.ServiceConfig) []binding.Flow {
+	buildFlow := func(priority uint16, groupID binding.GroupIDType, extraMatcher func(b binding.FlowBuilder) binding.FlowBuilder) binding.Flow {
+		flowBuilder := ServiceLBTable.ofTable.BuildFlow(priority).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchProtocol(config.Protocol).
+			MatchDstPort(config.ServicePort, nil).
+			MatchRegMark(EpToSelectRegMark) // EpToSelectRegMark is required to match the packets that haven't undergone Endpoint selection yet.
+		// ToNodePortAddressRegMark is required to match the packets if the flow is for NodePort address, otherwise Service IP
+		// is used.
+		if config.IsNodePort {
+			flowBuilder = flowBuilder.MatchRegMark(ToNodePortAddressRegMark)
+		} else {
+			flowBuilder = flowBuilder.MatchDstIP(config.ServiceIP)
+		}
+		if extraMatcher != nil {
+			flowBuilder = extraMatcher(flowBuilder)
+		}
+
+		// RewriteMACRegMark must be loaded for Service packets.
+		regMarksToLoad := []*binding.RegMark{RewriteMACRegMark}
+		if config.AffinityTimeout != 0 {
+			regMarksToLoad = append(regMarksToLoad, EpToLearnRegMark)
+		} else {
+			regMarksToLoad = append(regMarksToLoad, EpSelectedRegMark)
+		}
+		// If the flow is for external Service IP, which means the Service is accessible externally, the ToExternalAddressRegMark
+		// should be loaded to determine whether SNAT is required for the connection.
+		if config.IsExternal {
+			regMarksToLoad = append(regMarksToLoad, ToExternalAddressRegMark)
+		}
+		if f.enableAntreaPolicy {
+			regMarksToLoad = append(regMarksToLoad, binding.NewRegMark(ServiceGroupIDField, uint32(groupID)))
+		}
+		if config.IsNested {
+			regMarksToLoad = append(regMarksToLoad, NestedServiceRegMark)
+		}
+		return flowBuilder.
+			Action().LoadRegMark(regMarksToLoad...).
+			Action().Group(groupID).Done()
+	}
+	flows := []binding.Flow{
+		buildFlow(priorityNormal, config.TrafficPolicyGroupID(), nil),
+	}
+	if config.IsExternal && config.TrafficPolicyLocal {
 		// For short-circuiting flow, an extra match condition matching packet from local Pod CIDR is added.
-		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchProtocol(protocol).
-			MatchDstPort(svcPort, nil).
-			MatchSrcIPNet(f.localCIDRs[getIPProtocol(svcIP)])
-	} else {
-		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchProtocol(protocol).
-			MatchDstPort(svcPort, nil)
+		flows = append(flows, buildFlow(priorityHigh, config.ClusterGroupID, func(b binding.FlowBuilder) binding.FlowBuilder {
+			return b.MatchSrcIPNet(f.localCIDRs[getIPProtocol(config.ServiceIP)])
+		}))
 	}
+	if config.IsDSR {
+		// For DSR Service, we add a flow to match packets received from tunnel device, which means it has been
+		// load-balanced once in ingress Node, and we must select a local Endpoint on this Node.
+		flows = append(flows, buildFlow(priorityHigh, config.LocalGroupID, func(b binding.FlowBuilder) binding.FlowBuilder {
+			return b.MatchRegMark(FromTunnelRegMark)
+		}))
+	}
+	return flows
+}
 
-	// EpToSelectRegMark is required to match the packets that haven't undergone Endpoint selection yet.
-	regMarksToMatch := []*binding.RegMark{EpToSelectRegMark}
-	// ToNodePortAddressRegMark is required to match the packets if the flow is for NodePort address, otherwise Service IP
-	// is used.
-	if nodePortAddress {
-		regMarksToMatch = append(regMarksToMatch, ToNodePortAddressRegMark)
+// dsrServiceMarkFlow generates the flow which matches the packets with the following attributes:
+//  1. It's accessing the DSR Service's IP and port.
+//  2. It's externally originated.
+//  3. It's going to be sent to a remote Endpoint.
+//  4. It doesn't already have the DSRServiceRegMark.
+//
+// And it will perform the following actions:
+//  1. Load DSRServiceRegMark to indicate this packet uses DSR mode.
+//  2. Generate a learned flow which matches the 5-tuple of the connection, to ensure the same Endpoint will be selected
+//     for subsequent packets of the connection.
+func (f *featureService) dsrServiceMarkFlow(config *types.ServiceConfig) binding.Flow {
+	// Using unique cookie ID here to avoid learned flow cascade deletion.
+	cookieID := f.cookieAllocator.RequestWithObjectID(f.category, uint32(config.ClusterGroupID)).Raw()
+	isIPv6 := netutils.IsIPv6(config.ServiceIP)
+	learnFlowBuilderLearnAction := DSRServiceMarkTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(cookieID).
+		MatchProtocol(config.Protocol).
+		MatchDstIP(config.ServiceIP).
+		MatchDstPort(config.ServicePort, nil).
+		MatchRegMark(FromExternalRegMark, RemoteEndpointRegMark, NotDSRServiceRegMark).
+		// This learned flow has higher priority than the learned flow generated for ClientIP session affinity because
+		// we need this connection's traffic to hit this flow to reset the idle duration and its FIN/RST packet to reset
+		// the idle timeout.
+		Action().Learn(SessionAffinityTable.GetID(), priorityHigh, dsrServiceConnectionIdleTimeout, 0, dsrServiceConnectionFinIdleTimeout, 0, cookieID).
+		DeleteLearned().
+		MatchEthernetProtocol(isIPv6).
+		MatchIPProtocol(config.Protocol).
+		MatchLearnedSrcPort(config.Protocol).
+		MatchLearnedDstPort(config.Protocol).
+		MatchLearnedSrcIP(isIPv6).
+		MatchLearnedDstIP(isIPv6).
+		LoadFieldToField(EndpointPortField, EndpointPortField).
+		LoadRegMark(EpSelectedRegMark, DSRServiceRegMark)
+	if isIPv6 {
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field)
 	} else {
-		flowBuilder = flowBuilder.MatchDstIP(svcIP)
+		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadFieldToField(EndpointIPField, EndpointIPField)
 	}
-
-	// RewriteMACRegMark must be loaded for Service packets.
-	regMarksToLoad := []*binding.RegMark{RewriteMACRegMark}
-	// If SessionAffinity is set, the result of Endpoint selection should be cached by loading the EpToLearnRegMark.
-	// If SessionAffinity is not set, loading the EpSelectedRegMark indicates that the Endpoint selection is complete.
-	if withSessionAffinity {
-		regMarksToLoad = append(regMarksToLoad, EpToLearnRegMark)
-	} else {
-		regMarksToLoad = append(regMarksToLoad, EpSelectedRegMark)
-	}
-	// If the flow is for external Service IP, which means the Service is accessible externally, the ToExternalAddressRegMark
-	// should be loaded to determine whether SNAT is required for the connection.
-	if externalAddress {
-		regMarksToLoad = append(regMarksToLoad, ToExternalAddressRegMark)
-	}
-	if f.enableAntreaPolicy {
-		regMarksToLoad = append(regMarksToLoad, binding.NewRegMark(ServiceGroupIDField, uint32(groupID)))
-	}
-	if nested {
-		regMarksToLoad = append(regMarksToLoad, NestedServiceRegMark)
-	}
-
-	return flowBuilder.MatchRegMark(regMarksToMatch...).
-		Action().LoadRegMark(regMarksToLoad...).
-		Action().Group(groupID).Done()
+	return learnFlowBuilderLearnAction.Done().
+		Action().LoadRegMark(DSRServiceRegMark).
+		Action().NextTable().
+		Done()
 }
 
 // endpointRedirectFlowForServiceIP generates the flow which uses the specific group for a Service's ClusterIP
 // to do final Endpoint selection.
-func (f *featureService) endpointRedirectFlowForServiceIP(clusterIP net.IP, svcPort uint16, protocol binding.Protocol, groupID binding.GroupIDType) binding.Flow {
-	unionVal := (EpSelectedRegMark.GetValue() << EndpointPortField.GetRange().Length()) + uint32(svcPort)
+func (f *featureService) endpointRedirectFlowForServiceIP(config *types.ServiceConfig) binding.Flow {
+	unionVal := (EpSelectedRegMark.GetValue() << EndpointPortField.GetRange().Length()) + uint32(config.ServicePort)
 	flowBuilder := EndpointDNATTable.ofTable.BuildFlow(priorityHigh).
-		MatchProtocol(protocol).
+		MatchProtocol(config.Protocol).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchRegFieldWithValue(EpUnionField, unionVal).
 		MatchRegMark(NestedServiceRegMark)
-	ipProtocol := getIPProtocol(clusterIP)
+	ipProtocol := getIPProtocol(config.ServiceIP)
 
 	if ipProtocol == binding.ProtocolIP {
-		ipVal := binary.BigEndian.Uint32(clusterIP.To4())
+		ipVal := binary.BigEndian.Uint32(config.ServiceIP.To4())
 		flowBuilder = flowBuilder.MatchRegFieldWithValue(EndpointIPField, ipVal)
 	} else {
-		ipVal := []byte(clusterIP)
+		ipVal := []byte(config.ServiceIP)
 		flowBuilder = flowBuilder.MatchXXReg(EndpointIP6Field.GetRegID(), ipVal)
 	}
 	return flowBuilder.Action().
-		Group(groupID).
+		Group(config.TrafficPolicyGroupID()).
 		Done()
 }
 
@@ -2443,6 +2554,25 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 		Done()
 }
 
+// dsrServiceNoDNATFlows generates the flows which prevent traffic in DSR mode from being DNATed on the ingress Node.
+func (f *featureService) dsrServiceNoDNATFlows() []binding.Flow {
+	var flows []binding.Flow
+	for _, ipProtocol := range f.ipProtocols {
+		flows = append(flows, EndpointDNATTable.ofTable.BuildFlow(priorityHigh).
+			MatchProtocol(ipProtocol).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchRegMark(DSRServiceRegMark).
+			Action().
+			CT(true, EndpointDNATTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
+			// Note that the ct mark cannot be read from conntrack by ct action because the connection is in invalid state.
+			// We load it more for consistency.
+			MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
+			CTDone().
+			Done())
+	}
+	return flows
+}
+
 // serviceEndpointGroup creates/modifies the group/buckets of Endpoints. If the withSessionAffinity is true, then buckets
 // will resubmit packets back to ServiceLBTable to trigger the learn flow, the learn flow will then send packets to
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
@@ -2460,29 +2590,29 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 	if withSessionAffinity {
 		resubmitTableID = ServiceLBTable.GetID()
 	} else {
-		resubmitTableID = EndpointDNATTable.GetID()
+		resubmitTableID = ServiceLBTable.GetNext() // It will be EndpointDNATTable if DSR is not enabled, otherwise DSRServiceMarkTable.
 	}
 	for _, endpoint := range endpoints {
 		endpointPort, _ := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
 		portVal := util.PortToUint16(endpointPort)
 		ipProtocol := getIPProtocol(endpointIP)
-
+		bucketBuilder := group.Bucket().Weight(100)
+		// Load RemoteEndpointRegMark for remote non-hostNetwork Endpoints.
+		if !endpoint.GetIsLocal() && endpoint.GetNodeName() != "" && !f.nodeIPChecker.IsNodeIP(endpoint.IP()) {
+			bucketBuilder = bucketBuilder.LoadRegMark(RemoteEndpointRegMark)
+		}
 		if ipProtocol == binding.ProtocolIP {
 			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
-			group = group.Bucket().Weight(100).
-				LoadToRegField(EndpointIPField, ipVal).
-				LoadToRegField(EndpointPortField, uint32(portVal)).
-				ResubmitToTable(resubmitTableID).
-				Done()
+			bucketBuilder = bucketBuilder.LoadToRegField(EndpointIPField, ipVal)
 		} else if ipProtocol == binding.ProtocolIPv6 {
 			ipVal := []byte(endpointIP)
-			group = group.Bucket().Weight(100).
-				LoadXXReg(EndpointIP6Field.GetRegID(), ipVal).
-				LoadToRegField(EndpointPortField, uint32(portVal)).
-				ResubmitToTable(resubmitTableID).
-				Done()
+			bucketBuilder = bucketBuilder.LoadXXReg(EndpointIP6Field.GetRegID(), ipVal)
 		}
+		group = bucketBuilder.
+			LoadToRegField(EndpointPortField, uint32(portVal)).
+			ResubmitToTable(resubmitTableID).
+			Done()
 	}
 	return group
 }
@@ -2721,12 +2851,14 @@ func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string,
 	mgmtAddr string,
+	nodeIPCheck nodeip.Checker,
 	enableProxy bool,
 	enableAntreaPolicy bool,
 	enableL7NetworkPolicy bool,
 	enableEgress bool,
 	enableDenyTracking bool,
 	proxyAll bool,
+	enableDSR bool,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	enableTrafficControl bool,
@@ -2734,8 +2866,10 @@ func NewClient(bridgeName string,
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
 		bridge:                bridge,
+		nodeIPChecker:         nodeIPCheck,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
+		enableDSR:             enableDSR,
 		enableAntreaPolicy:    enableAntreaPolicy,
 		enableL7NetworkPolicy: enableL7NetworkPolicy,
 		enableDenyTracking:    enableDenyTracking,
@@ -2984,7 +3118,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark).
+				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToExternalAddressRegMark, NotDSRServiceRegMark). // Do not SNAT DSR traffic.
 				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 				LoadToCtMark(ConnSNATCTMark).
 				CTDone().

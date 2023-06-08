@@ -141,6 +141,9 @@ antreaProxy:
   # will only handle Services without the "service.kubernetes.io/service-proxy-name"
   # label, but ignore Services with the label no matter what is the value.
   serviceProxyName: ""
+  # -- Determines how external traffic is processed when it's load balanced across Nodes by default. It must be one of "nat" or
+  # "dsr".
+  defaultLoadBalancerMode: "nat"
 
 nodeIPAM:
   # -- Enable Node IPAM in Antrea

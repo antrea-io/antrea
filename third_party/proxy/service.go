@@ -53,6 +53,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/features"
 	utilproxy "antrea.io/antrea/third_party/proxy/util"
 )
 
@@ -173,7 +174,19 @@ func (info *BaseServiceInfo) UsesClusterEndpoints() bool {
 
 // UsesLocalEndpoints is part of ServicePort interface.
 func (info *BaseServiceInfo) UsesLocalEndpoints() bool {
-	return info.internalPolicyLocal || (info.externalPolicyLocal && info.ExternallyAccessible())
+	if info.internalPolicyLocal {
+		return true
+	}
+	if info.externalPolicyLocal && info.ExternallyAccessible() {
+		return true
+	}
+	// When DSR is enabled, local group could be used by DSR traffic on backend Node.
+	// As the Service's own information is not enough to determine its load balancer mode, we just ensure the local group
+	// exist as long as it can potentially work in DSR mode.
+	if features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && (len(info.loadBalancerStatus.Ingress) != 0 || len(info.externalIPs) != 0) {
+		return true
+	}
+	return false
 }
 
 // NewBaseServiceInfo is for testing purposes only.

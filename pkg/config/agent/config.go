@@ -222,6 +222,13 @@ type AntreaProxyConfig struct {
 	// AntreaProxy only handles the Service objects matching this label. The default value is empty string, which
 	// means that AntreaProxy will manage all Service objects without the mentioned label.
 	ServiceProxyName string `yaml:"serviceProxyName,omitempty"`
+	// Determines how external traffic is processed when it's load balanced across Nodes by default.
+	// It has the following options:
+	// - nat (default): External traffic is SNAT'd when it's load balanced across Nodes to ensure symmetric path.
+	// - dsr:           External traffic is never SNAT'd. Backend Pods running on Nodes that are not the ingress Node
+	//                  can reply to clients directly, bypassing the ingress Node.
+	// A Service's load balancer mode can be overridden by annotating it with `service.antrea.io/load-balancer-mode`.
+	DefaultLoadBalancerMode string `yaml:"defaultLoadBalancerMode,omitempty"`
 }
 
 type WireGuardConfig struct {
