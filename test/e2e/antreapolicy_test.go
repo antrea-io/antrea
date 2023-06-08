@@ -4560,9 +4560,35 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	anp.Spec.Ingress = anp.Spec.Ingress[0:1]
 	_, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
 	assert.NoError(t, err)
-	checkANPStatus(t, data, anp, crdv1alpha1.NetworkPolicyStatus{
+	anp = checkANPStatus(t, data, anp, crdv1alpha1.NetworkPolicyStatus{
 		Phase:                crdv1alpha1.NetworkPolicyRealized,
 		ObservedGeneration:   2,
+		CurrentNodesRealized: 1,
+		DesiredNodesRealized: 1,
+		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(nil),
+	})
+
+	// Add a non-existing group.
+	// Although nothing will be changed in datapath, the policy's status should be realized with the latest generation.
+	anp.Spec.Ingress[0].AppliedTo = append(anp.Spec.Ingress[0].AppliedTo, crdv1alpha1.AppliedTo{Group: "foo"})
+	_, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	anp = checkANPStatus(t, data, anp, crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealized,
+		ObservedGeneration:   3,
+		CurrentNodesRealized: 1,
+		DesiredNodesRealized: 1,
+		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(nil),
+	})
+
+	// Delete the non-existing group.
+	// Although nothing will be changed in datapath, the policy's status should be realized with the latest generation.
+	anp.Spec.Ingress[0].AppliedTo = anp.Spec.Ingress[0].AppliedTo[0:1]
+	_, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	checkANPStatus(t, data, anp, crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealized,
+		ObservedGeneration:   4,
 		CurrentNodesRealized: 1,
 		DesiredNodesRealized: 1,
 		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(nil),
