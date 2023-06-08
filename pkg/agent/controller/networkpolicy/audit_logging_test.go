@@ -31,9 +31,11 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/pkg/agent/openflow"
-	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	openflowtesting "antrea.io/antrea/pkg/agent/openflow/testing"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -65,58 +67,7 @@ func (l *mockLogger) Write(p []byte) (n int, err error) {
 	return len(msg), nil
 }
 
-type timer struct {
-	ch    chan time.Time
-	when  time.Time
-	fired bool
-}
-
-type virtualClock struct {
-	currentTime time.Time
-	timers      []*timer
-}
-
-func NewVirtualClock(startTime time.Time) *virtualClock {
-	return &virtualClock{
-		currentTime: startTime,
-	}
-}
-
-func (c *virtualClock) fireTimers() {
-	for _, t := range c.timers {
-		if !t.fired && c.currentTime.After(t.when) {
-			t.ch <- t.when
-			t.fired = true
-		}
-	}
-}
-
-func (c *virtualClock) Advance(d time.Duration) {
-	c.currentTime = c.currentTime.Add(d)
-	c.fireTimers()
-}
-
-func (c *virtualClock) Stop() {
-	for _, t := range c.timers {
-		close(t.ch)
-	}
-}
-
-func (c *virtualClock) Now() time.Time {
-	return c.currentTime
-}
-
-func (c *virtualClock) After(d time.Duration) <-chan time.Time {
-	ch := make(chan time.Time, 1)
-	c.timers = append(c.timers, &timer{
-		ch:    ch,
-		when:  c.currentTime.Add(d),
-		fired: false,
-	})
-	return ch
-}
-
-func newTestAntreaPolicyLogger(bufferLength time.Duration, clock Clock) (*AntreaPolicyLogger, *mockLogger) {
+func newTestAntreaPolicyLogger(bufferLength time.Duration, clock clock.Clock) (*AntreaPolicyLogger, *mockLogger) {
 	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
 	antreaLogger := &AntreaPolicyLogger{
 		bufferLength:     bufferLength,
@@ -150,7 +101,7 @@ func expectedLogWithCount(msg string, count int) string {
 }
 
 func TestAllowPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &clock.RealClock{})
 	ob, expected := newLogInfo(actionAllow)
 
 	antreaLogger.LogDedupPacket(ob)
@@ -159,7 +110,7 @@ func TestAllowPacketLog(t *testing.T) {
 }
 
 func TestDropPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &clock.RealClock{})
 	ob, expected := newLogInfo(actionDrop)
 
 	antreaLogger.LogDedupPacket(ob)
@@ -168,17 +119,16 @@ func TestDropPacketLog(t *testing.T) {
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
-	clock := NewVirtualClock(time.Now())
-	defer clock.Stop()
+	clock := clocktesting.NewFakeClock(time.Now())
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
 	ob, expected := newLogInfo(actionDrop)
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
 	antreaLogger.LogDedupPacket(ob)
-	clock.Advance(time.Millisecond)
+	clock.Step(time.Millisecond)
 	antreaLogger.LogDedupPacket(ob)
-	clock.Advance(testBufferLength)
+	clock.Step(testBufferLength)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
@@ -189,8 +139,7 @@ func TestDropPacketDedupLog(t *testing.T) {
 // while ensuring that the test can run fast, we use a virtual clock and advance
 // the time manually.
 func TestDropPacketMultiDedupLog(t *testing.T) {
-	clock := NewVirtualClock(time.Now())
-	defer clock.Stop()
+	clock := clocktesting.NewFakeClock(time.Now())
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
 	ob, expected := newLogInfo(actionDrop)
 
@@ -218,18 +167,18 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 
 	// t=0ms
 	antreaLogger.LogDedupPacket(ob)
-	clock.Advance(60 * time.Millisecond)
+	clock.Step(60 * time.Millisecond)
 	// t=60ms
 	antreaLogger.LogDedupPacket(ob)
-	clock.Advance(50 * time.Millisecond)
+	clock.Step(50 * time.Millisecond)
 	// t=110ms, buffer is logged 100ms after the first packet
 	c1, err := consumeLog()
 	require.NoError(t, err)
 	assert.Equal(t, 2, c1)
-	clock.Advance(10 * time.Millisecond)
+	clock.Step(10 * time.Millisecond)
 	// t=120ms
 	antreaLogger.LogDedupPacket(ob)
-	clock.Advance(110 * time.Millisecond)
+	clock.Step(110 * time.Millisecond)
 	// t=230ms, buffer is logged
 	c2, err := consumeLog()
 	require.NoError(t, err)
@@ -237,7 +186,7 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 }
 
 func TestRedirectPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &clock.RealClock{})
 	ob, expected := newLogInfo(actionRedirect)
 
 	antreaLogger.LogDedupPacket(ob)
@@ -266,7 +215,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	tests := []struct {
 		name            string
 		tableID         uint8
-		expectedCalls   func(mockClient *openflowtest.MockClientMockRecorder)
+		expectedCalls   func(mockClient *openflowtesting.MockClientMockRecorder)
 		dispositionData []byte
 		ob              *logInfo
 		wantOb          *logInfo
@@ -275,7 +224,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		{
 			name:    "ANP Allow",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
-			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
 					testANPRef, testPriority, testRule, testLogLabel)
 			},
@@ -292,7 +241,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		{
 			name:    "K8s Allow",
 			tableID: openflow.IngressRuleTable.GetID(),
-			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
 					testK8sRef, testPriority, "", "")
 			},
@@ -309,7 +258,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		{
 			name:    "ANP Drop",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
-			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
 					testANPRef, testPriority, testRule, testLogLabel)
 			},
@@ -339,7 +288,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		{
 			name:    "ANP Redirect",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
-			expectedCalls: func(mockClient *openflowtest.MockClientMockRecorder) {
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
 					testANPRef, testPriority, testRule, testLogLabel)
 			},
@@ -378,7 +327,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				},
 			}
 			ctrl := gomock.NewController(t)
-			testClientInterface := openflowtest.NewMockClient(ctrl)
+			testClientInterface := openflowtesting.NewMockClient(ctrl)
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(testClientInterface.EXPECT())
 			}
@@ -452,7 +401,7 @@ func BenchmarkLogDedupPacketAllow(b *testing.B) {
 	// In the allow case, there is actually no buffering.
 	antreaLogger := &AntreaPolicyLogger{
 		bufferLength:     testBufferLength,
-		clock:            &realClock{},
+		clock:            &clock.RealClock{},
 		anpLogger:        log.New(io.Discard, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
