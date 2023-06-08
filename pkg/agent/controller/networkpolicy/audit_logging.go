@@ -27,6 +27,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -40,26 +41,11 @@ const (
 	logfileName   string = "np.log"
 )
 
-type Clock interface {
-	Now() time.Time
-	After(d time.Duration) <-chan time.Time
-}
-
-type realClock struct{}
-
-func (c realClock) Now() time.Time {
-	return time.Now()
-}
-
-func (c realClock) After(d time.Duration) <-chan time.Time {
-	return time.After(d)
-}
-
 // AntreaPolicyLogger is used for Antrea policy audit logging.
 // Includes a lumberjack logger and a map used for log deduplication.
 type AntreaPolicyLogger struct {
 	bufferLength     time.Duration
-	clock            Clock // enable the use of a "virtual" clock for unit tests
+	clock            clock.Clock // enable the use of a "virtual" clock for unit tests
 	anpLogger        *log.Logger
 	logDeduplication logRecordDedupMap
 }
@@ -190,7 +176,7 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 
 	antreaPolicyLogger := &AntreaPolicyLogger{
 		bufferLength:     time.Second,
-		clock:            &realClock{},
+		clock:            &clock.RealClock{},
 		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
