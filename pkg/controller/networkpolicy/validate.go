@@ -404,6 +404,11 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 
 // createValidate validates the CREATE events of Antrea-native policies,
 func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+	return v.validatePolicy(curObj)
+}
+
+// validatePolicy validates the CREATE and UPDATE events of Antrea-native policies,
+func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) (string, bool) {
 	var tier string
 	var ingress, egress []crdv1alpha1.Rule
 	var specAppliedTo []crdv1alpha1.AppliedTo
@@ -822,58 +827,7 @@ func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.
 
 // updateValidate validates the UPDATE events of Antrea-native policies.
 func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	var tier string
-	var ingress, egress []crdv1alpha1.Rule
-	var specAppliedTo []crdv1alpha1.AppliedTo
-	switch curObj.(type) {
-	case *crdv1alpha1.ClusterNetworkPolicy:
-		curCNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
-		tier = curCNP.Spec.Tier
-		ingress = curCNP.Spec.Ingress
-		egress = curCNP.Spec.Egress
-		specAppliedTo = curCNP.Spec.AppliedTo
-	case *crdv1alpha1.NetworkPolicy:
-		curANP := curObj.(*crdv1alpha1.NetworkPolicy)
-		tier = curANP.Spec.Tier
-		ingress = curANP.Spec.Ingress
-		egress = curANP.Spec.Egress
-		specAppliedTo = curANP.Spec.AppliedTo
-	}
-	reason, allowed := v.validateAppliedTo(ingress, egress, specAppliedTo)
-	if !allowed {
-		return reason, allowed
-	}
-	if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
-		return "rules names must be unique within the policy", false
-	}
-	reason, allowed = v.validatePeers(ingress, egress)
-	if !allowed {
-		return reason, allowed
-	}
-	reason, allowed = v.validateFQDNSelectors(egress)
-	if !allowed {
-		return reason, allowed
-	}
-	reason, allowed = v.validateEgressMulticastAddress(egress)
-	if !allowed {
-		return reason, allowed
-	}
-	reason, allowed = v.validateMulticastIGMP(ingress, egress)
-	if !allowed {
-		return reason, allowed
-	}
-	reason, allowed = v.validateL7Protocols(ingress, egress)
-	if !allowed {
-		return reason, allowed
-	}
-	if err := v.validatePort(ingress, egress); err != nil {
-		return err.Error(), false
-	}
-	reason, allowed = v.validateTierForPassAction(tier, ingress, egress)
-	if !allowed {
-		return reason, allowed
-	}
-	return v.validateTierForPolicy(tier)
+	return v.validatePolicy(curObj)
 }
 
 // deleteValidate validates the DELETE events of Antrea-native policies.
@@ -1060,23 +1014,16 @@ func (g *groupValidator) validateG(grp *crdv1alpha3.Group) (string, bool) {
 
 // createValidate validates the CREATE events of Group, ClusterGroup resources.
 func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	var curCG *crdv1alpha2.ClusterGroup
-	var curG *crdv1alpha3.Group
-	var reason string
-	var allowed bool
-	switch curObj.(type) {
-	case *crdv1alpha2.ClusterGroup:
-		curCG = curObj.(*crdv1alpha2.ClusterGroup)
-		reason, allowed = g.validateCG(curCG)
-	case *crdv1alpha3.Group:
-		curG = curObj.(*crdv1alpha3.Group)
-		reason, allowed = g.validateG(curG)
-	}
-	return reason, allowed
+	return g.validateGroup(curObj)
 }
 
 // updateValidate validates the UPDATE events of Group, ClusterGroup resources.
 func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+	return g.validateGroup(curObj)
+}
+
+// validateGroup validates the CREATE and UPDATE events of Group, ClusterGroup resources.
+func (g *groupValidator) validateGroup(curObj interface{}) (string, bool) {
 	var curCG *crdv1alpha2.ClusterGroup
 	var curG *crdv1alpha3.Group
 	var reason string
