@@ -4140,7 +4140,8 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	}
 }
 
-// the logMatcher parameter takes as input the srcIP and destIP of the connection and returns a regex that should match the log entry
+// the matchers parameter is a list of regular expressions which will be matched against the
+// contents of the audit logs. The call will "succeed" if all matches are successful.
 func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator string, matchers []*regexp.Regexp) {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
