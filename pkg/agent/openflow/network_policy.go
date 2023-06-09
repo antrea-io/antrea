@@ -710,36 +710,46 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 		Protocol: &protocolUDP,
 		SrcPort:  &dnsPort,
 	}
-	tcpService := v1beta2.Service{
-		Protocol: &protocolTCP,
-		SrcPort:  &dnsPort,
-	}
 	dnsPriority := priorityDNSIntercept
 	conj.serviceClause = conj.newClause(1, 2, getTableByID(conj.ruleTableID), nil)
 	conj.toClause = conj.newClause(2, 2, getTableByID(conj.ruleTableID), nil)
 	c.featureNetworkPolicy.conjMatchFlowLock.Lock()
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
 	ctxChanges := conj.serviceClause.addServiceFlows(c.featureNetworkPolicy, []v1beta2.Service{udpService}, &dnsPriority, false)
-	dnsTCPMatchPairs := getServiceMatchPairs(tcpService, c.featureNetworkPolicy.ipProtocols)
-	for _, dnsTCPMatchPair := range dnsTCPMatchPairs {
-		tcpFlagsMatchPair := matchPair{
-			matchKey: MatchTCPFlags,
-			matchValue: TCPFlags{
-				// URG|ACK|PSH|RST|SYN|FIN|
-				Flag: 0b011000,
-				Mask: 0b011000,
-			},
-		}
-		if dnsTCPMatchPair[0].matchKey.GetOFProtocol() == binding.ProtocolTCPv6 {
-			tcpFlagsMatchPair.matchKey = MatchTCPv6Flags
-		}
+
+	tcpFlags := TCPFlags{
+		// URG|ACK|PSH|RST|SYN|FIN|
+		Flag: 0b011000,
+		Mask: 0b011000,
+	}
+	tcpDNSPort := types.BitRange{Value: uint16(dnsPort)}
+	for _, proto := range c.featureNetworkPolicy.ipProtocols {
 		tcpServiceMatch := &conjunctiveMatch{
-			tableID: conj.serviceClause.ruleTable.GetID(),
-			matchPairs: []matchPair{
-				dnsTCPMatchPair[0],
-				tcpFlagsMatchPair,
-			},
+			tableID:  conj.serviceClause.ruleTable.GetID(),
 			priority: &dnsPriority,
+		}
+		if proto == binding.ProtocolIP {
+			tcpServiceMatch.matchPairs = []matchPair{
+				{
+					matchKey:   MatchTCPSrcPort,
+					matchValue: tcpDNSPort,
+				},
+				{
+					matchKey:   MatchTCPFlags,
+					matchValue: tcpFlags,
+				},
+			}
+		} else if proto == binding.ProtocolIPv6 {
+			tcpServiceMatch.matchPairs = []matchPair{
+				{
+					matchKey:   MatchTCPv6SrcPort,
+					matchValue: tcpDNSPort,
+				},
+				{
+					matchKey:   MatchTCPv6Flags,
+					matchValue: tcpFlags,
+				},
+			}
 		}
 		ctxChange := conj.serviceClause.addConjunctiveMatchFlow(c.featureNetworkPolicy, tcpServiceMatch, false, false)
 		ctxChanges = append(ctxChanges, ctxChange)
