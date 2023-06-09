@@ -106,6 +106,21 @@ func (mr *MockInterfaceMockRecorder) AddrReplace(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddrReplace", reflect.TypeOf((*MockInterface)(nil).AddrReplace), arg0, arg1)
 }
 
+// GetNetNsIdByFd mocks base method
+func (m *MockInterface) GetNetNsIdByFd(arg0 int) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetNsIdByFd", arg0)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNetNsIdByFd indicates an expected call of GetNetNsIdByFd
+func (mr *MockInterfaceMockRecorder) GetNetNsIdByFd(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetNsIdByFd", reflect.TypeOf((*MockInterface)(nil).GetNetNsIdByFd), arg0)
+}
+
 // LinkByIndex mocks base method
 func (m *MockInterface) LinkByIndex(arg0 int) (netlink.Link, error) {
 	m.ctrl.T.Helper()

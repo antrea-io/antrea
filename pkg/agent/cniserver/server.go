@@ -669,7 +669,7 @@ func (s *CNIServer) Initialize(
 	s.podConfigurator, err = newPodConfigurator(
 		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
 		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(), podUpdateNotifier,
-		podInfoStore, s.disableTXChecksumOffload,
+		podInfoStore, s.disableTXChecksumOffload, s.networkConfig.InterfaceMTU, s.hostProcPathPrefix,
 	)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
@@ -704,7 +704,7 @@ func (s *CNIServer) Run(stopCh <-chan struct{}) {
 // be called prior to Antrea CNI to allocate IP and ports. Antrea takes allocated port
 // and hooks it to OVS br-int.
 func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	klog.Infof("CNI Chaining: add for container %s", cniConfig.ContainerId)
+	klog.Infof("CNI Chaining: add for container %s", cniConfig.ContainerId, "config", cniConfig)
 	prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig)
 	if response != nil {
 		klog.Infof("Failed to parse prev result for container %s", cniConfig.ContainerId)
@@ -729,7 +729,8 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		if err := s.podConfigurator.ifConfigurator.changeContainerMTU(
 			s.hostNetNsPath(cniConfig.Netns),
 			cniConfig.Ifname,
-			s.networkConfig.MTUDeduction,
+			-s.networkConfig.MTUDeduction,
+			MTUAdd,
 		); err != nil {
 			return &cnipb.CniCmdResponse{CniResult: []byte("")}, fmt.Errorf("failed to change container %s's MTU: %w", cniConfig.ContainerId, err)
 		}

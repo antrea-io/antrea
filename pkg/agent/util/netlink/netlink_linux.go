@@ -59,4 +59,6 @@ type Interface interface {
 	LinkSetName(link netlink.Link, name string) error
 
 	LinkSetUp(link netlink.Link) error
+
+	GetNetNsIdByFd(fd int) (int, error)
 }

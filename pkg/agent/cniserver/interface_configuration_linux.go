@@ -19,7 +19,10 @@ package cniserver
 
 import (
 	"fmt"
+	"io/fs"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -66,16 +69,52 @@ var (
 )
 
 type ifConfigurator struct {
+	hostProcPathPrefix          string
 	ovsDatapathType             ovsconfig.OVSDatapathType
 	isOvsHardwareOffloadEnabled bool
 	disableTXChecksumOffload    bool
 	netlink                     netlinkutil.Interface
 	sriovnet                    SriovNet
+	nsIDNameMapping             map[int]string
 }
 
-func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool, disableTXChecksumOffload bool) (*ifConfigurator, error) {
-	configurator := &ifConfigurator{ovsDatapathType: ovsDatapathType, isOvsHardwareOffloadEnabled: isOvsHardwareOffloadEnabled, disableTXChecksumOffload: disableTXChecksumOffload, netlink: &netlink.Handle{}, sriovnet: newSriovNet()}
+func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool, disableTXChecksumOffload bool, hostProcPathPrefix string) (*ifConfigurator, error) {
+	configurator := &ifConfigurator{ovsDatapathType: ovsDatapathType, isOvsHardwareOffloadEnabled: isOvsHardwareOffloadEnabled, disableTXChecksumOffload: disableTXChecksumOffload, netlink: &netlink.Handle{}, sriovnet: newSriovNet(), hostProcPathPrefix: hostProcPathPrefix}
+	configurator.getNsIDNameMapping()
 	return configurator, nil
+}
+
+const containerdNetNSFolder = "/var/run/netns"
+const dockerNetNSFolder = "/var/run/docker/netns"
+
+func (ic *ifConfigurator) getNsIDNameMapping() {
+	mapping := make(map[int]string)
+	for _, ns := range []string{containerdNetNSFolder, dockerNetNSFolder} {
+		filepath.WalkDir(filepath.Join(ic.hostProcPathPrefix, ns), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			f, err := os.Open(path)
+			if err != nil {
+				klog.ErrorS(err, "error opening file", "path", path)
+				return nil
+			}
+			defer f.Close()
+			nsID, err := ic.netlink.GetNetNsIdByFd(int(f.Fd()))
+			if err != nil {
+				klog.ErrorS(err, "error getting ns id for file", "path", path)
+				return nil
+			}
+			if nsID != -1 {
+				mapping[nsID] = path
+			}
+			return nil
+		})
+	}
+	ic.nsIDNameMapping = mapping
 }
 
 func (ic *ifConfigurator) moveIfToNetns(ifname string, netns ns.NetNS) error {
@@ -373,7 +412,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	}
 }
 
-func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error {
+func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtu int, mtuOp MTUOperation) error {
 	var peerIdx int
 	if err := nsWithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
 		link, err := ic.netlink.LinkByName(containerIFDev)
@@ -384,7 +423,14 @@ func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFD
 		if err != nil {
 			return fmt.Errorf("failed to get peer index for dev %s in container netns %s: %w", containerIFDev, containerNetNS, err)
 		}
-		err = ic.netlink.LinkSetMTU(link, link.Attrs().MTU-mtuDeduction)
+		switch mtuOp {
+		case MTUSet:
+			err = ic.netlink.LinkSetMTU(link, mtu)
+		case MTUAdd:
+			err = ic.netlink.LinkSetMTU(link, link.Attrs().MTU+mtu)
+		default:
+			err = fmt.Errorf("unknown MTU operation %v", mtuOp)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to set MTU for interface %s in container netns %s: %v", containerIFDev, containerNetNS, err)
 		}
@@ -403,11 +449,49 @@ func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFD
 	if err != nil {
 		return fmt.Errorf("failed to find host interface %s: %v", hostInterfaceName, err)
 	}
-	err = ic.netlink.LinkSetMTU(link, link.Attrs().MTU-mtuDeduction)
+	switch mtuOp {
+	case MTUSet:
+		err = ic.netlink.LinkSetMTU(link, mtu)
+	case MTUAdd:
+		err = ic.netlink.LinkSetMTU(link, link.Attrs().MTU+mtu)
+	default:
+		err = fmt.Errorf("unknown MTU operation %v", mtuOp)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to set MTU for interface %s in container netns %s: %v", containerIFDev, containerNetNS, err)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to set MTU for host interface %s: %v", hostInterfaceName, err)
 	}
 	return nil
+}
+
+func (ic *ifConfigurator) changeContainerMTUByHostInterfaceName(hostInterfaceName string, mtu int, mtuOp MTUOperation) error {
+	hostLink, err := ic.netlink.LinkByName(hostInterfaceName)
+	if err != nil {
+		return fmt.Errorf("failed to find host interface %s: %v", hostInterfaceName, err)
+	}
+	var nsName string
+	var ok bool
+	if nsName, ok = ic.nsIDNameMapping[hostLink.Attrs().NetNsID]; !ok {
+		return fmt.Errorf("failed to find netns name for link %s with ns ID %d", hostInterfaceName, hostLink.Attrs().NetNsID)
+	}
+	_, peerIdx, err := ipGetVethPeerIfindex(hostInterfaceName)
+	if err != nil {
+		return fmt.Errorf("failed to get peer index for dev %s", hostInterfaceName)
+	}
+	var containerLinkName string
+	if err := nsWithNetNSPath(nsName, func(_ ns.NetNS) error {
+		containerLink, err := ic.netlink.LinkByIndex(peerIdx)
+		if err != nil {
+			return fmt.Errorf("failed to find interface of id %d in container netns %s: %v", peerIdx, nsName, err)
+		}
+		containerLinkName = containerLink.Attrs().Name
+		return nil
+	}); err != nil {
+		return err
+	}
+	return ic.changeContainerMTU(nsName, containerLinkName, mtu, mtuOp)
 }
 
 func (ic *ifConfigurator) removeContainerLink(containerID, hostInterfaceName string) error {

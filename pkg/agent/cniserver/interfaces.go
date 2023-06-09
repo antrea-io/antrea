@@ -21,6 +21,13 @@ import (
 
 type postInterfaceCreateHook func() error
 
+type MTUOperation int
+
+const (
+	MTUSet MTUOperation = iota
+	MTUAdd
+)
+
 // podInterfaceConfigurator is for testing.
 type podInterfaceConfigurator interface {
 	configureContainerLink(podName string, podNamespace string, containerID string, containerNetNS string, containerIfaceName string, mtu int, brSriovVFDeviceID string, podSriovVFDeviceID string, result *current.Result, containerAccess *containerAccessArbitrator) error
@@ -31,7 +38,8 @@ type podInterfaceConfigurator interface {
 	getInterceptedInterfaces(sandbox string, containerNetNS string, containerIFDev string) (*current.Interface, *current.Interface, error)
 	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route, sriovVFDeviceID string) (interface{}, error)
 	addPostInterfaceCreateHook(containerID, endpointName string, containerAccess *containerAccessArbitrator, hook postInterfaceCreateHook) error
-	changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error
+	changeContainerMTU(containerNetNS string, containerIFDev string, mtu int, mtuOp MTUOperation) error
+	changeContainerMTUByHostInterfaceName(hostInterfaceName string, mtu int, mtuOp MTUOperation) error
 }
 
 type SriovNet interface {

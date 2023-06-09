@@ -191,8 +191,12 @@ func (ic *ifConfigurator) configureContainerLink(
 
 // changeContainerMTU is only used for Antrea Multi-cluster with networkPolicyOnly
 // mode, and this mode doesn't support Windows platform yet.
-func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtuDeduction int) error {
+func (ic *ifConfigurator) changeContainerMTU(containerNetNS string, containerIFDev string, mtu int, mtuOp MTUOperation) error {
 	return errors.New("changeContainerMTU is unsupported on Windows")
+}
+
+func (ic *ifConfigurator) changeContainerMTUByHostInterfaceName(hostInterfaceName string, mtu int, mtuOp MTUOperation) error {
+	return errors.New("changeContainerMTUByHostInterfaceName is unsupported on Windows")
 }
 
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.

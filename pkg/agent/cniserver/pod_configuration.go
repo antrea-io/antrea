@@ -74,6 +74,7 @@ type podConfigurator struct {
 	podUpdateNotifier channel.Notifier
 	// consumed by secondary network creation.
 	podInfoStore cnipodcache.CNIPodInfoStore
+	interfaceMTU int
 }
 
 func newPodConfigurator(
@@ -87,8 +88,10 @@ func newPodConfigurator(
 	podUpdateNotifier channel.Notifier,
 	podInfoStore cnipodcache.CNIPodInfoStore,
 	disableTXChecksumOffload bool,
+	interfaceMTU int,
+	hostProcPathPrefix string,
 ) (*podConfigurator, error) {
-	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled, disableTXChecksumOffload)
+	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled, disableTXChecksumOffload, hostProcPathPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +104,7 @@ func newPodConfigurator(
 		ifConfigurator:    ifConfigurator,
 		podUpdateNotifier: podUpdateNotifier,
 		podInfoStore:      podInfoStore,
+		interfaceMTU:      interfaceMTU,
 	}, nil
 }
 
@@ -455,6 +459,9 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				nil,
 			); err != nil {
 				klog.Errorf("Error when re-installing flows for Pod %s", namespacedName)
+			}
+			if err := pc.ifConfigurator.changeContainerMTUByHostInterfaceName(containerConfig.InterfaceName, pc.interfaceMTU, MTUSet); err != nil {
+				klog.Errorf("Error when setting MTU for Pod %s: %v", namespacedName, err)
 			}
 		} else {
 			// clean-up and delete interface
