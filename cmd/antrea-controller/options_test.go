@@ -23,7 +23,7 @@ import (
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
-func TestOptions(t *testing.T) {
+func TestNewOptions(t *testing.T) {
 	op := newOptions()
 	op.setDefaults()
 	assert.Equal(t, apis.AntreaControllerAPIPort, op.config.APIPort, "")
@@ -63,7 +63,7 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 				NodeCIDRMaskSizeIPv4: 24,
 				NodeCIDRMaskSizeIPv6: 100,
 			},
-			expectedErr: "the node IPv6 CIDR size is too big, the cluster CIDR mask size cannot be greater than 16 more than the Node IPv6 CIDR mask size",
+			expectedErr: "the Node IPv6 CIDR size is too big, the cluster CIDR mask size cannot be greater than 16 more than the Node IPv6 CIDR mask size",
 		},
 		{
 			name: "invalid ClusterCIDRs",
@@ -78,7 +78,7 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 			expectedErr: "cluster CIDRs [10.10.0.0 a:b::0/64] is invalid",
 		},
 		{
-			name: "invalid ClusterCIDRs num",
+			name: "invalid empty ClusterCIDRs",
 			nodeIPAMConfig: controllerconfig.NodeIPAMConfig{
 				EnableNodeIPAM:       true,
 				ClusterCIDRs:         []string{},
@@ -90,7 +90,7 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 			expectedErr: "at least one cluster CIDR must be specified",
 		},
 		{
-			name: "invalid ClusterCIDRs num",
+			name: "too many ClusterCIDRs",
 			nodeIPAMConfig: controllerconfig.NodeIPAMConfig{
 				EnableNodeIPAM:       true,
 				ClusterCIDRs:         []string{"10.10.0.0/16", "a:b::0/64", "20.20.0.0/24"},
@@ -114,8 +114,7 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 			expectedErr: "at most one cluster CIDR may be specified for each IP family",
 		},
 		{
-			// 	ipamIPv4MaskLo is 16, ipamIPv4MaskHi is 30
-			name: "invalid node IPv4 CIDR mask size",
+			name: "invalid Node IPv4 CIDR mask size",
 			nodeIPAMConfig: controllerconfig.NodeIPAMConfig{
 				EnableNodeIPAM:       true,
 				ClusterCIDRs:         []string{"10.10.0.0/16", "a:b::0/64"},
@@ -124,11 +123,10 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 				NodeCIDRMaskSizeIPv4: 15,
 				NodeCIDRMaskSizeIPv6: 80,
 			},
-			expectedErr: "node IPv4 CIDR mask size 15 is invalid, should be between 16 and 30",
+			expectedErr: "Node IPv4 CIDR mask size 15 is invalid, should be between 16 and 30",
 		},
 		{
-			//	ipamIPv6MaskLo is 64, ipamIPv6MaskHi is 126
-			name: "invalid node IPv6 CIDR mask size",
+			name: "invalid Node IPv6 CIDR mask size",
 			nodeIPAMConfig: controllerconfig.NodeIPAMConfig{
 				EnableNodeIPAM:       true,
 				ClusterCIDRs:         []string{"10.10.0.0/16", "a:b::0/64"},
@@ -137,10 +135,10 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 				NodeCIDRMaskSizeIPv4: 24,
 				NodeCIDRMaskSizeIPv6: 63,
 			},
-			expectedErr: "node IPv6 CIDR mask size 63 is invalid, should be between 64 and 126",
+			expectedErr: "Node IPv6 CIDR mask size 63 is invalid, should be between 64 and 126",
 		},
 		{
-			name: "invalid service CIDR",
+			name: "invalid Service CIDR",
 			nodeIPAMConfig: controllerconfig.NodeIPAMConfig{
 				EnableNodeIPAM:       true,
 				ClusterCIDRs:         []string{"10.10.0.0/16", "a:b::0/64"},
@@ -149,10 +147,10 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 				NodeCIDRMaskSizeIPv4: 24,
 				NodeCIDRMaskSizeIPv6: 80,
 			},
-			expectedErr: "service CIDR 1 is invalid",
+			expectedErr: "Service CIDR 1 is invalid",
 		},
 		{
-			name: "invalid secondary service CIDR",
+			name: "invalid secondary Service CIDR",
 			nodeIPAMConfig: controllerconfig.NodeIPAMConfig{
 				EnableNodeIPAM:       true,
 				ClusterCIDRs:         []string{"10.10.0.0/16", "a:b::0/64"},
@@ -161,7 +159,7 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 				NodeCIDRMaskSizeIPv4: 24,
 				NodeCIDRMaskSizeIPv6: 80,
 			},
-			expectedErr: "secondary service CIDR 2 is invalid",
+			expectedErr: "secondary Service CIDR 2 is invalid",
 		},
 	}
 	for _, tc := range testCases {
@@ -171,7 +169,7 @@ func TestValidateNodeIPAMControllerOptions(t *testing.T) {
 			if tc.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.ErrorContains(t, err, tc.expectedErr, "validate NodeIPAMControllerOptions error is not as expected")
+				assert.ErrorContains(t, err, tc.expectedErr)
 			}
 		})
 	}

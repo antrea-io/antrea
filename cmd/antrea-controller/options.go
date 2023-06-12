@@ -124,24 +124,20 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 
 	if hasIP4 {
 		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 < ipamIPv4MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 > ipamIPv4MaskHi {
-			return fmt.Errorf("node IPv4 CIDR mask size %d is invalid, should be between %d and %d",
+			return fmt.Errorf("the Node IPv4 CIDR mask size %d is invalid, should be between %d and %d",
 				o.config.NodeIPAM.NodeCIDRMaskSizeIPv4, ipamIPv4MaskLo, ipamIPv4MaskHi)
 		}
 	}
 
 	if hasIP6 {
 		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 < ipamIPv6MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 > ipamIPv6MaskHi {
-			return fmt.Errorf("node IPv6 CIDR mask size %d is invalid, should be between %d and %d",
+			return fmt.Errorf("the Node IPv6 CIDR mask size %d is invalid, should be between %d and %d",
 				o.config.NodeIPAM.NodeCIDRMaskSizeIPv6, ipamIPv6MaskLo, ipamIPv6MaskHi)
 		}
-		// The subnet mask size cannot be greater than 16 more than the cluster mask size
-		// clusterSubnetMaxDiff limited to 16 due to the uncompressed bitmap
-		// Due to this limitation the subnet mask for IPv6 cluster cidr needs to be >= 48
-		// as default mask size for IPv6 is 64.
-		//	clusterSubnetMaxDiff = 16
-		// see also: third_party/ipam/nodeipam/ipam/cidrset/cidr_set.go:84, https://github.com/kubernetes/kubernetes/issues/44918
+		// The subnet mask size cannot be greater than 16 more than the cluster mask size.
+		// See https://github.com/kubernetes/kubernetes/issues/44918 for more information.
 		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6-ipv6Mask > 16 {
-			return fmt.Errorf("the node IPv6 CIDR size is too big, the cluster CIDR mask size cannot be greater than 16 more than the Node IPv6 CIDR mask size")
+			return fmt.Errorf("the Node IPv6 CIDR size is too big, the cluster CIDR mask size cannot be greater than 16 more than the Node IPv6 CIDR mask size")
 		}
 	}
 
@@ -149,13 +145,13 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 	if o.config.NodeIPAM.ServiceCIDR != "" {
 		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
 		if err != nil {
-			return fmt.Errorf("service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDR)
+			return fmt.Errorf("the Service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDR)
 		}
 	}
 	if o.config.NodeIPAM.ServiceCIDRv6 != "" {
 		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDRv6)
 		if err != nil {
-			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDRv6)
+			return fmt.Errorf("secondary Service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDRv6)
 		}
 	}
 
