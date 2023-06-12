@@ -21,7 +21,7 @@ ARG OVS_VERSION
 # Install dependencies for building OVS deb packages
 # We only install python3 packages and we only support building OVS >= 2.13.0.
 RUN apt-get update && \
-    DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends wget curl git ca-certificates build-essential fakeroot graphviz \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends wget curl git ca-certificates build-essential fakeroot \
             bzip2 autoconf automake debhelper dh-python dh-autoreconf libssl-dev libtool openssl procps \
             python3-all python3-twisted python3-zope.interface python3-sphinx \
             libunbound-dev
