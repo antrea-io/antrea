@@ -1591,6 +1591,44 @@ func (c *Client) DeleteRouteForLink(cidr *net.IPNet, linkIndex int) error {
 	return nil
 }
 
+func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error {
+	var protoVar uint8
+	var ipFamily netlink.InetFamily
+	switch protocol {
+	case binding.ProtocolTCP:
+		ipFamily = unix.AF_INET
+		protoVar = unix.IPPROTO_TCP
+	case binding.ProtocolTCPv6:
+		ipFamily = unix.AF_INET6
+		protoVar = unix.IPPROTO_TCP
+	case binding.ProtocolUDP:
+		ipFamily = unix.AF_INET
+		protoVar = unix.IPPROTO_UDP
+	case binding.ProtocolUDPv6:
+		ipFamily = unix.AF_INET6
+		protoVar = unix.IPPROTO_UDP
+	case binding.ProtocolSCTP:
+		ipFamily = unix.AF_INET
+		protoVar = unix.IPPROTO_SCTP
+	case binding.ProtocolSCTPv6:
+		ipFamily = unix.AF_INET6
+		protoVar = unix.IPPROTO_SCTP
+	}
+	filter := &netlink.ConntrackFilter{}
+	filter.AddProtocol(protoVar)
+	if svcIP != nil {
+		filter.AddIP(netlink.ConntrackOrigDstIP, svcIP)
+	}
+	if svcPort != 0 {
+		filter.AddPort(netlink.ConntrackOrigDstPort, svcPort)
+	}
+	if endpointIP != nil {
+		filter.AddIP(netlink.ConntrackReplySrcIP, endpointIP)
+	}
+	_, err := c.netlink.ConntrackDeleteFilter(netlink.ConntrackTable, ipFamily, filter)
+	return err
+}
+
 func getTransProtocolStr(protocol binding.Protocol) string {
 	if protocol == binding.ProtocolTCP || protocol == binding.ProtocolTCPv6 {
 		return "tcp"

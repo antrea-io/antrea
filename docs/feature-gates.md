@@ -32,28 +32,29 @@ edit the Agent configuration in the
 
 ## List of Available Features
 
-| Feature Name              | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
-|---------------------------|--------------------|---------|-------|---------------|--------------| ---------- |--------------------| ----- |
-| `AntreaProxy`             | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
-| `EndpointSlice`           | Agent              | `true`  | Beta  | v0.13.0       | v1.11        | N/A        | Yes                |       |
-| `TopologyAwareHints`      | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |       |
-| `LoadBalancerModeDSR`     | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |       |
-| `AntreaPolicy`            | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
-| `Traceflow`               | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
-| `FlowExporter`            | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
-| `NetworkPolicyStats`      | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
-| `NodePortLocal`           | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
-| `Egress`                  | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |       |
-| `NodeIPAM`                | Controller         | `true`  | Beta  | v1.4          | v1.12        | N/A        | Yes                |       |
-| `AntreaIPAM`              | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
-| `Multicast`               | Agent + Controller | `true`  | Beta  | v1.5          | v1.12        | N/A        | Yes                |       |
-| `SecondaryNetwork`        | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
-| `ServiceExternalIP`       | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
-| `TrafficControl`          | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
-| `Multicluster`            | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
-| `ExternalNode`            | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
-| `SupportBundleCollection` | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
-| `L7NetworkPolicy`         | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
+| Feature Name                  | Component           | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
+|-------------------------------|---------------------|---------|-------|---------------|--------------| ---------- |--------------------| ----- |
+| `AntreaProxy`                 | Agent               | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
+| `EndpointSlice`               | Agent               | `true`  | Beta  | v0.13.0       | v1.11        | N/A        | Yes                |       |
+| `TopologyAwareHints`          | Agent               | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |       |
+| `CleanupStaleUDPSvcConntrack` | Agent               | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |       |
+| `LoadBalancerModeDSR`         | Agent               | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |       |
+| `AntreaPolicy`                | Agent + Controller  | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
+| `Traceflow`                   | Agent + Controller  | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
+| `FlowExporter`                | Agent               | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
+| `NetworkPolicyStats`          | Agent + Controller  | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
+| `NodePortLocal`               | Agent               | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
+| `Egress`                      | Agent + Controller  | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |       |
+| `NodeIPAM`                    | Controller          | `true`  | Beta  | v1.4          | v1.12        | N/A        | Yes                |       |
+| `AntreaIPAM`                  | Agent + Controller  | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
+| `Multicast`                   | Agent + Controller  | `true`  | Beta  | v1.5          | v1.12        | N/A        | Yes                |       |
+| `SecondaryNetwork`            | Agent               | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `ServiceExternalIP`           | Agent + Controller  | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `TrafficControl`              | Agent               | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
+| `Multicluster`                | Agent + Controller  | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
+| `ExternalNode`                | Agent               | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
+| `SupportBundleCollection`     | Agent + Controller  | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
+| `L7NetworkPolicy`             | Agent + Controller  | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -116,6 +117,14 @@ antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more in
 - IPv4 only.
 - Linux Nodes only.
 - Encap mode only.
+
+### CleanupStaleUDPSvcConntrack
+
+`CleanupStaleUDPSvcConntrack` enables support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
+
+#### Requirements for this Feature
+
+- `AntreaProxy` is enabled.
 
 ### AntreaPolicy
 

@@ -106,6 +106,21 @@ func (mr *MockInterfaceMockRecorder) AddrReplace(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddrReplace", reflect.TypeOf((*MockInterface)(nil).AddrReplace), arg0, arg1)
 }
 
+// ConntrackDeleteFilter mocks base method
+func (m *MockInterface) ConntrackDeleteFilter(arg0 netlink.ConntrackTableType, arg1 netlink.InetFamily, arg2 netlink.CustomConntrackFilter) (uint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConntrackDeleteFilter", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConntrackDeleteFilter indicates an expected call of ConntrackDeleteFilter
+func (mr *MockInterfaceMockRecorder) ConntrackDeleteFilter(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConntrackDeleteFilter", reflect.TypeOf((*MockInterface)(nil).ConntrackDeleteFilter), arg0, arg1, arg2)
+}
+
 // LinkByIndex mocks base method
 func (m *MockInterface) LinkByIndex(arg0 int) (netlink.Link, error) {
 	m.ctrl.T.Helper()

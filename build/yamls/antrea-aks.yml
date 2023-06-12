@@ -3111,6 +3111,10 @@ data:
     # enabled, otherwise this flag will not take effect.
     #  TopologyAwareHints: true
 
+    # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
+    # be enabled, otherwise this flag will not take effect.
+    #  CleanupStaleUDPSvcConntrack: false
+
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
@@ -4553,7 +4557,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4ebea7300356a753d716270575de36dd3584f67dd62607cd6c9c2a115ac92e62
+        checksum/config: e3208d24eb3232bd1fa2936e6b7a265c2ff3b462b5091828467c88f9df0e0b42
       labels:
         app: antrea
         component: antrea-agent
@@ -4794,7 +4798,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4ebea7300356a753d716270575de36dd3584f67dd62607cd6c9c2a115ac92e62
+        checksum/config: e3208d24eb3232bd1fa2936e6b7a265c2ff3b462b5091828467c88f9df0e0b42
       labels:
         app: antrea
         component: antrea-controller
