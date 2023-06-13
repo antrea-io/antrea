@@ -29,7 +29,8 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/third_party/proxy"
@@ -210,8 +211,10 @@ type Client interface {
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
 
-	// Find Network Policy reference and OFpriority by conjunction ID.
-	GetPolicyInfoFromConjunction(ruleID uint32) (string, string, string, string)
+	// GetPolicyInfoFromConjunction returns the following policy information for the provided conjunction ID:
+	// NetworkPolicy reference, OF priority, rule name, label
+	// The boolean return value indicates whether the policy information was found.
+	GetPolicyInfoFromConjunction(ruleID uint32) (bool, *v1beta2.NetworkPolicyReference, string, string, string)
 
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handler.
@@ -307,7 +310,7 @@ type Client interface {
 		igmp ofutil.Message) error
 
 	// InstallTrafficControlMarkFlows installs the flows to mark the packets for a traffic control rule.
-	InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction v1alpha2.Direction, action v1alpha2.TrafficControlAction) error
+	InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction crdv1alpha2.Direction, action crdv1alpha2.TrafficControlAction) error
 
 	// UninstallTrafficControlMarkFlows removes the flows for a traffic control rule.
 	UninstallTrafficControlMarkFlows(name string) error
@@ -1358,7 +1361,7 @@ func (c *client) SendIGMPQueryPacketOut(
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction v1alpha2.Direction, action v1alpha2.TrafficControlAction) error {
+func (c *client) InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction crdv1alpha2.Direction, action crdv1alpha2.TrafficControlAction) error {
 	flows := c.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, direction, action)
 	cacheKey := fmt.Sprintf("tc_%s", name)
 	c.replayMutex.RLock()

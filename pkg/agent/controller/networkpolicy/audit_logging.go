@@ -29,6 +29,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -37,8 +38,9 @@ import (
 )
 
 const (
-	logfileSubdir string = "networkpolicy"
-	logfileName   string = "np.log"
+	logfileSubdir   string = "networkpolicy"
+	logfileName     string = "np.log"
+	nullPlaceholder        = "<nil>"
 )
 
 // AntreaPolicyLogger is used for Antrea policy audit logging.
@@ -52,18 +54,20 @@ type AntreaPolicyLogger struct {
 
 // logInfo will be set by retrieving info from packetin and register.
 type logInfo struct {
-	tableName   string // name of the table sending packetin
-	npRef       string // Network Policy name reference
-	ruleName    string // Network Policy rule name for Antrea-native policies
-	logLabel    string // Network Policy user-defined log label
-	disposition string // Allow/Drop of the rule sending packetin
-	ofPriority  string // openflow priority of the flow sending packetin
-	srcIP       string // source IP of the traffic logged
-	srcPort     string // source port of the traffic logged
-	destIP      string // destination IP of the traffic logged
-	destPort    string // destination port of the traffic logged
-	pktLength   uint16 // packet length of packetin
-	protocolStr string // protocol of the traffic logged
+	tableName    string // name of the table sending packetin
+	npRef        string // Network Policy name reference
+	ruleName     string // Network Policy rule name for Antrea-native policies
+	direction    string // Direction of the Network Policy rule (Ingress / Egress)
+	logLabel     string // Network Policy user-defined log label
+	disposition  string // Allow/Drop of the rule sending packetin
+	ofPriority   string // openflow priority of the flow sending packetin
+	appliedToRef string // namespace and name of the Pod to which the Network Policy is applied
+	srcIP        string // source IP of the traffic logged
+	srcPort      string // source port of the traffic logged
+	destIP       string // destination IP of the traffic logged
+	destPort     string // destination port of the traffic logged
+	pktLength    string // packet length of packetin
+	protocolStr  string // protocol of the traffic logged
 }
 
 // logDedupRecord will be used as 1 sec buffer for log deduplication.
@@ -125,14 +129,16 @@ func buildLogMsg(ob *logInfo) string {
 		ob.tableName,
 		ob.npRef,
 		ob.ruleName,
+		ob.direction,
 		ob.disposition,
 		ob.ofPriority,
+		ob.appliedToRef,
 		ob.srcIP,
 		ob.srcPort,
 		ob.destIP,
 		ob.destPort,
 		ob.protocolStr,
-		strconv.FormatUint(uint64(ob.pktLength), 10),
+		ob.pktLength,
 		ob.logLabel,
 	}, " ")
 }
@@ -185,12 +191,38 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 }
 
 // getNetworkPolicyInfo fills in tableName, npName, ofPriority, disposition of logInfo ob.
-func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) error {
+func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Controller, ob *logInfo) error {
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table name.
 	tableID := pktIn.TableId
 	ob.tableName = openflow.GetFlowTableName(tableID)
+
+	var localIP string
+	// We use the tableID to determine the direction of the NP rule.
+	// The advantage of this method is that it should work for all NP types.
+	if isAntreaPolicyIngressTable(tableID) || tableID == openflow.IngressRuleTable.GetID() {
+		ob.direction = "Ingress"
+		localIP = packet.DestinationIP.String()
+	} else if isAntreaPolicyEgressTable(tableID) || tableID == openflow.EgressRuleTable.GetID() {
+		ob.direction = "Egress"
+		localIP = packet.SourceIP.String()
+	} else {
+		// this case should not be possible
+		klog.InfoS("Cannot determine direction of NetworkPolicy rule")
+		ob.direction = nullPlaceholder
+	}
+
+	if localIP != "" {
+		iface, ok := c.ifaceStore.GetInterfaceByIP(localIP)
+		if ok && iface.Type == interfacestore.ContainerInterface {
+			ob.appliedToRef = fmt.Sprintf("%s/%s", iface.ContainerInterfaceConfig.PodNamespace, iface.ContainerInterfaceConfig.PodName)
+		}
+	}
+	if ob.appliedToRef == "" {
+		klog.InfoS("Cannot determine namespace/name of appliedTo Pod", "ip", localIP)
+		ob.appliedToRef = nullPlaceholder
+	}
 
 	// Get disposition Allow or Drop.
 	match = getMatchRegField(matchers, openflow.APDispositionField)
@@ -234,10 +266,14 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	if err != nil {
 		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
 	}
-	ob.npRef, ob.ofPriority, ob.ruleName, ob.logLabel = c.ofClient.GetPolicyInfoFromConjunction(conjID)
-	if ob.npRef == "" || ob.ofPriority == "" {
+	ok, npRef, ofPriority, ruleName, logLabel := c.ofClient.GetPolicyInfoFromConjunction(conjID)
+	if !ok {
 		return fmt.Errorf("networkpolicy not found for conjunction id: %v", conjID)
 	}
+	ob.npRef = npRef.ToString()
+	ob.ofPriority = ofPriority
+	ob.ruleName = ruleName
+	ob.logLabel = logLabel
 	// Fill in placeholders for Antrea native policies without log labels,
 	// K8s NetworkPolicies without rule names or log labels.
 	fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
@@ -248,11 +284,11 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 func getPacketInfo(packet *binding.Packet, ob *logInfo) {
 	ob.srcIP = packet.SourceIP.String()
 	ob.destIP = packet.DestinationIP.String()
-	ob.pktLength = packet.IPLength
+	ob.pktLength = strconv.FormatUint(uint64(packet.IPLength), 10)
 	ob.protocolStr = ip.IPProtocolNumberToString(packet.IPProto, "UnknownProtocol")
 	if ob.protocolStr == "TCP" || ob.protocolStr == "UDP" {
-		ob.srcPort = strconv.Itoa(int(packet.SourcePort))
-		ob.destPort = strconv.Itoa(int(packet.DestinationPort))
+		ob.srcPort = strconv.FormatUint(uint64(packet.SourcePort), 10)
+		ob.destPort = strconv.FormatUint(uint64(packet.DestinationPort), 10)
 	} else {
 		// Placeholders for ICMP packets without port numbers.
 		fillLogInfoPlaceholders([]*string{&ob.srcPort, &ob.destPort})
@@ -262,7 +298,7 @@ func getPacketInfo(packet *binding.Packet, ob *logInfo) {
 func fillLogInfoPlaceholders(logItems []*string) {
 	for i, v := range logItems {
 		if *v == "" {
-			*logItems[i] = "<nil>"
+			*logItems[i] = nullPlaceholder
 		}
 	}
 }
@@ -278,7 +314,7 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// Set Network Policy and packet info to log.
-	err = getNetworkPolicyInfo(pktIn, c, ob)
+	err = getNetworkPolicyInfo(pktIn, packet, c, ob)
 	if err != nil {
 		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
 	}

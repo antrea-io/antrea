@@ -34,8 +34,11 @@ import (
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtesting "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -48,6 +51,16 @@ var (
 	actionAllow    = openflow.DispositionToString[openflow.DispositionAllow]
 	actionDrop     = openflow.DispositionToString[openflow.DispositionDrop]
 	actionRedirect = "Redirect"
+	testANPRef     = &v1beta2.NetworkPolicyReference{
+		Type:      v1beta2.AntreaNetworkPolicy,
+		Namespace: "default",
+		Name:      "test",
+	}
+	testK8sNPRef = &v1beta2.NetworkPolicyReference{
+		Type:      v1beta2.K8sNetworkPolicy,
+		Namespace: "default",
+		Name:      "test",
+	}
 )
 
 // mockLogger implements io.Writer.
@@ -81,7 +94,7 @@ func newTestAntreaPolicyLogger(bufferLength time.Duration, clock clock.Clock) (*
 func newLogInfo(disposition string) (*logInfo, string) {
 	testLogInfo := &logInfo{
 		tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
-		npRef:       "AntreaNetworkPolicy:default/test",
+		npRef:       testANPRef.ToString(),
 		ruleName:    "test-rule",
 		logLabel:    "test-label",
 		ofPriority:  "0",
@@ -91,7 +104,7 @@ func newLogInfo(disposition string) (*logInfo, string) {
 		destIP:      "1.1.1.1",
 		destPort:    "80",
 		protocolStr: "TCP",
-		pktLength:   60,
+		pktLength:   "60",
 	}
 	return testLogInfo, buildLogMsg(testLogInfo)
 }
@@ -198,20 +211,46 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
 	generateMatch := func(regID int, data []byte) openflow15.MatchField {
 		return openflow15.MatchField{
-			Class:   openflow15.OXM_CLASS_PACKET_REGS,
+			Class: openflow15.OXM_CLASS_PACKET_REGS,
+			// convert reg (4-byte) ID to xreg (8-byte) ID
 			Field:   uint8(regID / 2),
 			HasMask: false,
 			Value:   &openflow15.ByteArrayField{Data: data},
 		}
 	}
-	testANPRef := "AntreaNetworkPolicy:default/test-anp"
-	testK8sRef := "K8sNetworkPolicy:default/test-anp"
-	testPriority, testRule, testLogLabel, defaultLog := "61800", "test-rule", "test-log-label", "<nil>"
+	testPriority, testRule, testLogLabel := "61800", "test-rule", "test-log-label"
+	// only need 4 bytes of register data for the disposition
+	// this will go into the openflow.APDispositionField register
 	allowDispositionData := []byte{0x11, 0x00, 0x00, 0x11}
 	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
 	dropK8sDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
 	redirectDispositionData := []byte{0x11, 0x10, 0x00, 0x11}
-	ingressData := []byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}
+	// need 8 bytes (full register) of data for the conjunction
+	// this will be used for one of the following registers depending on the test case:
+	// openflow.APConjIDField, openflow.TFEgressConjIDField, openflow.TFIngressConjIDField
+	// the data itself is not relevant
+	conjunctionData := []byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}
+	srcIP := net.ParseIP("192.168.1.1")
+	destIP := net.ParseIP("192.168.1.2")
+	testPacket := &binding.Packet{
+		SourceIP:      srcIP,
+		DestinationIP: destIP,
+	}
+
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("srcPod", "default", "c1"),
+		IPs:                      []net.IP{srcIP},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "srcPod", PodNamespace: "default", ContainerID: "c1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("destPod", "default", "c2"),
+		IPs:                      []net.IP{destIP},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "destPod", PodNamespace: "default", ContainerID: "c2"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 2},
+	})
+
 	tests := []struct {
 		name            string
 		tableID         uint8
@@ -222,20 +261,41 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		wantErr         error
 	}{
 		{
-			name:    "ANP Allow",
+			name:    "ANP Allow Ingress",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testANPRef, testPriority, testRule, testLogLabel)
+					true, testANPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: allowDispositionData,
 			wantOb: &logInfo{
-				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
-				disposition: actionAllow,
-				npRef:       testANPRef,
-				ofPriority:  testPriority,
-				ruleName:    testRule,
-				logLabel:    testLogLabel,
+				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition:  actionAllow,
+				npRef:        testANPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     testRule,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     testLogLabel,
+			},
+		},
+		{
+			name:    "ANP Allow Egress",
+			tableID: openflow.AntreaPolicyEgressRuleTable.GetID(),
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					true, testANPRef, testPriority, testRule, testLogLabel)
+			},
+			dispositionData: allowDispositionData,
+			wantOb: &logInfo{
+				tableName:    openflow.AntreaPolicyEgressRuleTable.GetName(),
+				disposition:  actionAllow,
+				npRef:        testANPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     testRule,
+				direction:    "Egress",
+				appliedToRef: "default/srcPod",
+				logLabel:     testLogLabel,
 			},
 		},
 		{
@@ -243,16 +303,18 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.IngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testK8sRef, testPriority, "", "")
+					true, testK8sNPRef, testPriority, "", "")
 			},
 			dispositionData: allowDispositionData,
 			wantOb: &logInfo{
-				tableName:   openflow.IngressRuleTable.GetName(),
-				disposition: actionAllow,
-				npRef:       testK8sRef,
-				ofPriority:  testPriority,
-				ruleName:    defaultLog,
-				logLabel:    defaultLog,
+				tableName:    openflow.IngressRuleTable.GetName(),
+				disposition:  actionAllow,
+				npRef:        testK8sNPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     nullPlaceholder,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     nullPlaceholder,
 			},
 		},
 		{
@@ -260,16 +322,18 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testANPRef, testPriority, testRule, testLogLabel)
+					true, testANPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: dropCNPDispositionData,
 			wantOb: &logInfo{
-				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
-				disposition: actionDrop,
-				npRef:       testANPRef,
-				ofPriority:  testPriority,
-				ruleName:    testRule,
-				logLabel:    testLogLabel,
+				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition:  actionDrop,
+				npRef:        testANPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     testRule,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     testLogLabel,
 			},
 		},
 		{
@@ -277,12 +341,14 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID:         openflow.IngressDefaultTable.GetID(),
 			dispositionData: dropK8sDispositionData,
 			wantOb: &logInfo{
-				tableName:   openflow.IngressDefaultTable.GetName(),
-				disposition: actionDrop,
-				npRef:       "K8sNetworkPolicy",
-				ofPriority:  defaultLog,
-				ruleName:    defaultLog,
-				logLabel:    defaultLog,
+				tableName:    openflow.IngressDefaultTable.GetName(),
+				disposition:  actionDrop,
+				npRef:        "K8sNetworkPolicy",
+				ofPriority:   nullPlaceholder,
+				ruleName:     nullPlaceholder,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     nullPlaceholder,
 			},
 		},
 		{
@@ -290,16 +356,18 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
 				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
-					testANPRef, testPriority, testRule, testLogLabel)
+					true, testANPRef, testPriority, testRule, testLogLabel)
 			},
 			dispositionData: redirectDispositionData,
 			wantOb: &logInfo{
-				tableName:   openflow.AntreaPolicyIngressRuleTable.GetName(),
-				disposition: actionRedirect,
-				npRef:       testANPRef,
-				ofPriority:  testPriority,
-				ruleName:    testRule,
-				logLabel:    testLogLabel,
+				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition:  actionRedirect,
+				npRef:        testANPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     testRule,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     testLogLabel,
 			},
 		},
 	}
@@ -311,11 +379,15 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			matchers := []openflow15.MatchField{dispositionMatch}
 			// Inject ingress/egress match when case is not K8s default drop.
 			if tc.expectedCalls != nil {
-				regID := openflow.TFIngressConjIDField.GetRegID()
+				var regID int
 				if tc.wantOb.disposition == actionDrop {
 					regID = openflow.APConjIDField.GetRegID()
+				} else if tc.wantOb.direction == "Ingress" {
+					regID = openflow.TFIngressConjIDField.GetRegID()
+				} else {
+					regID = openflow.TFEgressConjIDField.GetRegID()
 				}
-				ingressMatch := generateMatch(regID, ingressData)
+				ingressMatch := generateMatch(regID, conjunctionData)
 				matchers = append(matchers, ingressMatch)
 			}
 			pktIn := &ofctrl.PacketIn{
@@ -331,9 +403,12 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(testClientInterface.EXPECT())
 			}
-			c := &Controller{ofClient: testClientInterface}
+			c := &Controller{
+				ofClient:   testClientInterface,
+				ifaceStore: ifaceStore,
+			}
 			tc.ob = new(logInfo)
-			gotErr := getNetworkPolicyInfo(pktIn, c, tc.ob)
+			gotErr := getNetworkPolicyInfo(pktIn, testPacket, c, tc.ob)
 			assert.Equal(t, tc.wantOb, tc.ob)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
@@ -363,7 +438,7 @@ func TestGetPacketInfo(t *testing.T) {
 				destIP:      "1.1.1.1",
 				destPort:    "80",
 				protocolStr: "TCP",
-				pktLength:   60,
+				pktLength:   "60",
 			},
 		},
 		{
@@ -380,7 +455,7 @@ func TestGetPacketInfo(t *testing.T) {
 				destIP:      "1.1.1.1",
 				destPort:    "<nil>",
 				protocolStr: "ICMP",
-				pktLength:   60,
+				pktLength:   "60",
 			},
 		},
 	}

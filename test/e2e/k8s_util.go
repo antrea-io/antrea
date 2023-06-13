@@ -1202,7 +1202,7 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool) (*map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool) (map[string][]string, error) {
 	for _, ns := range namespaces {
 		if createNamespaces {
 			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
@@ -1240,7 +1240,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 		return nil, err
 	}
 
-	return &podIPs, nil
+	return podIPs, nil
 }
 
 func (k *KubernetesUtils) Cleanup(namespaces map[string]string) {

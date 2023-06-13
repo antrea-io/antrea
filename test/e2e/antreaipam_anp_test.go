@@ -65,7 +65,7 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	failOnError(err, t)
 	ips, err := k8sUtils.Bootstrap(namespaces, pods, false)
 	failOnError(err, t)
-	podIPs = *ips
+	podIPs = ips
 }
 
 func TestAntreaIPAMAntreaPolicy(t *testing.T) {
