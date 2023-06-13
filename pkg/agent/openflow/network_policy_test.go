@@ -1320,6 +1320,7 @@ func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 	tests := []struct {
 		name             string
 		ruleID           uint32
+		valid            bool
 		wantNpRef        string
 		wantPriority     string
 		wantRuleName     string
@@ -1328,14 +1329,17 @@ func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 		{
 			name:   "conjunction not found",
 			ruleID: uint32(100),
+			valid:  false,
 		},
 		{
 			name:   "conjunction empty priorities",
 			ruleID: ruleID1,
+			valid:  false,
 		},
 		{
 			name:             "conjunction no error",
 			ruleID:           ruleID2,
+			valid:            true,
 			wantNpRef:        "K8sNetworkPolicy:ns1/np1",
 			wantPriority:     "100",
 			wantRuleName:     fmt.Sprint(ruleID2),
@@ -1345,11 +1349,14 @@ func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotNpRef, gotPriority, gotRuleName, gotRuleLogLabel := c.GetPolicyInfoFromConjunction(tc.ruleID)
-			assert.Equal(t, tc.wantNpRef, gotNpRef)
-			assert.Equal(t, tc.wantPriority, gotPriority)
-			assert.Equal(t, tc.wantRuleName, gotRuleName)
-			assert.Equal(t, tc.wantRuleLogLabel, gotRuleLogLabel)
+			ok, gotNpRef, gotPriority, gotRuleName, gotRuleLogLabel := c.GetPolicyInfoFromConjunction(tc.ruleID)
+			require.Equal(t, tc.valid, ok)
+			if tc.valid {
+				assert.Equal(t, tc.wantNpRef, gotNpRef.ToString())
+				assert.Equal(t, tc.wantPriority, gotPriority)
+				assert.Equal(t, tc.wantRuleName, gotRuleName)
+				assert.Equal(t, tc.wantRuleLogLabel, gotRuleLogLabel)
+			}
 		})
 	}
 }

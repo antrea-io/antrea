@@ -22,6 +22,7 @@ package testing
 import (
 	config "antrea.io/antrea/pkg/agent/config"
 	types "antrea.io/antrea/pkg/agent/types"
+	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
@@ -199,14 +200,15 @@ func (mr *MockClientMockRecorder) GetPodFlowKeys(arg0 interface{}) *gomock.Call 
 }
 
 // GetPolicyInfoFromConjunction mocks base method
-func (m *MockClient) GetPolicyInfoFromConjunction(arg0 uint32) (string, string, string, string) {
+func (m *MockClient) GetPolicyInfoFromConjunction(arg0 uint32) (bool, *v1beta2.NetworkPolicyReference, string, string, string) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPolicyInfoFromConjunction", arg0)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(string)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(*v1beta2.NetworkPolicyReference)
 	ret2, _ := ret[2].(string)
 	ret3, _ := ret[3].(string)
-	return ret0, ret1, ret2, ret3
+	ret4, _ := ret[4].(string)
+	return ret0, ret1, ret2, ret3, ret4
 }
 
 // GetPolicyInfoFromConjunction indicates an expected call of GetPolicyInfoFromConjunction
