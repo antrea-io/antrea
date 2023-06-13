@@ -98,13 +98,13 @@ func TestNetworkPolicyReferenceToString(t *testing.T) {
 			out: "AntreaClusterNetworkPolicy:acnpA",
 		},
 		{
-			name: "anp-ref",
+			name: "annp-ref",
 			inNPRef: &NetworkPolicyReference{
 				Type:      AntreaNetworkPolicy,
 				Namespace: "nsA",
-				Name:      "anpA",
+				Name:      "annpA",
 			},
-			out: "AntreaNetworkPolicy:nsA/anpA",
+			out: "AntreaNetworkPolicy:nsA/annpA",
 		},
 	}
 	for _, tt := range tests {

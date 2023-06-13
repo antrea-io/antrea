@@ -162,31 +162,31 @@ func getXLargeScaleWithNetpolPerPod() (namespaces []*corev1.Namespace, networkPo
 	return namespaces[0:1], networkPolicies, pods
 }
 
-func TestInitXLargeScaleWithANPPerExternalEntity(t *testing.T) {
-	namespace, anps, externalEntities := getXLargeScaleWithANPPerExternalEntity()
-	testComputeNetworkPolicy(t, 10*time.Second, namespace, anps, externalEntities)
+func TestInitXLargeScaleWithANNPPerExternalEntity(t *testing.T) {
+	namespace, annps, externalEntities := getXLargeScaleWithANNPPerExternalEntity()
+	testComputeNetworkPolicy(t, 10*time.Second, namespace, annps, externalEntities)
 }
 
-func getXLargeScaleWithANPPerExternalEntity() (namespaces []*corev1.Namespace, anps []runtime.Object, externalEntities []runtime.Object) {
+func getXLargeScaleWithANNPPerExternalEntity() (namespaces []*corev1.Namespace, annps []runtime.Object, externalEntities []runtime.Object) {
 	namespace := rand.String(8)
-	getObjects := func() (namespaces []*corev1.Namespace, anps []runtime.Object, externalEntities []runtime.Object) {
+	getObjects := func() (namespaces []*corev1.Namespace, annps []runtime.Object, externalEntities []runtime.Object) {
 		namespaces = []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
 		ee1 := rand.String(8)
 		labels1 := map[string]string{"ee": fmt.Sprintf("scale-%v", ee1)}
 		ee2 := rand.String(8)
 		labels2 := map[string]string{"ee": fmt.Sprintf("scale-%v", ee2)}
-		anps = []runtime.Object{
-			newANPAppliedToExternalEntity(namespace, "", labels1, labels2, nil, nil, nil),
-			newANPAppliedToExternalEntity(namespace, "", labels2, labels1, nil, nil, nil),
+		annps = []runtime.Object{
+			newANNPAppliedToExternalEntity(namespace, "", labels1, labels2, nil, nil, nil),
+			newANNPAppliedToExternalEntity(namespace, "", labels2, labels1, nil, nil, nil),
 		}
 		externalEntities = []runtime.Object{
 			newExternalEntity(namespace, "", labels1),
 			newExternalEntity(namespace, "", labels2),
 		}
-		return namespaces, anps, externalEntities
+		return namespaces, annps, externalEntities
 	}
-	namespaces, anps, externalEntities = getXObjects(5000, getObjects)
-	return namespaces[0:1], anps, externalEntities
+	namespaces, annps, externalEntities = getXObjects(5000, getObjects)
+	return namespaces[0:1], annps, externalEntities
 }
 
 func TestInitXLargeScaleWithClusterScopedNetpol(t *testing.T) {
@@ -469,11 +469,11 @@ func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, i
 	return policy
 }
 
-func newANPAppliedToExternalEntity(namespace, name string, externalEntitySelector, ingressExternalEntitySelector, ingressNamespaceSelector, egressExternalEntitySelector, egressNamespaceSelector map[string]string) *v1alpha1.NetworkPolicy {
+func newANNPAppliedToExternalEntity(namespace, name string, externalEntitySelector, ingressExternalEntitySelector, ingressNamespaceSelector, egressExternalEntitySelector, egressNamespaceSelector map[string]string) *v1alpha1.NetworkPolicy {
 	if name == "" {
-		name = "anp-" + rand.String(8)
+		name = "annp-" + rand.String(8)
 	}
-	anp := &v1alpha1.NetworkPolicy{
+	annp := &v1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String())},
 		Spec: v1alpha1.NetworkPolicySpec{
 			AppliedTo: []v1alpha1.AppliedTo{
@@ -492,7 +492,7 @@ func newANPAppliedToExternalEntity(namespace, name string, externalEntitySelecto
 		if ingressNamespaceSelector != nil {
 			peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: ingressNamespaceSelector}
 		}
-		anp.Spec.Ingress = []v1alpha1.Rule{
+		annp.Spec.Ingress = []v1alpha1.Rule{
 			{
 				Action: &allowAction,
 				From:   []v1alpha1.NetworkPolicyPeer{peer},
@@ -507,14 +507,14 @@ func newANPAppliedToExternalEntity(namespace, name string, externalEntitySelecto
 		if egressNamespaceSelector != nil {
 			peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: egressNamespaceSelector}
 		}
-		anp.Spec.Egress = []v1alpha1.Rule{
+		annp.Spec.Egress = []v1alpha1.Rule{
 			{
 				Action: &allowAction,
 				To:     []v1alpha1.NetworkPolicyPeer{peer},
 			},
 		}
 	}
-	return anp
+	return annp
 }
 
 func BenchmarkSyncAddressGroup(b *testing.B) {
@@ -584,9 +584,9 @@ func BenchmarkInitXLargeScaleWithNetpolPerPod(b *testing.B) {
 	benchmarkInit(b, namespaces, networkPolicies, pods)
 }
 
-func BenchmarkInitXLargeScaleWithANPPerExternalEntity(b *testing.B) {
-	namespace, anps, externalEntities := getXLargeScaleWithANPPerExternalEntity()
-	benchmarkInit(b, namespace, anps, externalEntities)
+func BenchmarkInitXLargeScaleWithANNPPerExternalEntity(b *testing.B) {
+	namespace, annps, externalEntities := getXLargeScaleWithANNPPerExternalEntity()
+	benchmarkInit(b, namespace, annps, externalEntities)
 }
 
 func BenchmarkInitXLargeScaleWithClusterScopedNetpol(b *testing.B) {
@@ -653,7 +653,7 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 			case *networkingv1.NetworkPolicy:
 				c.addNetworkPolicy(policy)
 			case *v1alpha1.NetworkPolicy:
-				c.addANP(policy)
+				c.addANNP(policy)
 			}
 		}
 		for c.appliedToGroupQueue.Len() > 0 {

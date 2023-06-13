@@ -54,8 +54,8 @@ const (
 //  1. If a rule's selector/services/direction changes, it becomes "another" rule.
 //  2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
 //     can know the existing rules don't change and skip processing them. Note that
-//     if a CNP/ANP rule's position (from top down) within a networkpolicy changes, it
-//     affects the Priority of the rule.
+//     if an ACNP/ANNP rule's position (from top down) within a networkpolicy changes,
+//     it affects the Priority of the rule.
 type rule struct {
 	// ID is calculated from the hash value of all other fields.
 	ID string

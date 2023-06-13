@@ -70,20 +70,20 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 		msg, allowed, patch = m.mutateAntreaPolicy(op, curACNP.Spec.Ingress, curACNP.Spec.Egress, curACNP.Spec.Tier)
 	case "NetworkPolicy":
 		klog.V(2).Info("Mutating Antrea NetworkPolicy CRD")
-		var curANP, oldANP crdv1alpha1.NetworkPolicy
+		var curANNP, oldANNP crdv1alpha1.NetworkPolicy
 		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curANP); err != nil {
+			if err := json.Unmarshal(curRaw, &curANNP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea NetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
 		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldANP); err != nil {
+			if err := json.Unmarshal(oldRaw, &oldANNP); err != nil {
 				klog.Errorf("Error de-serializing old Antrea NetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed, patch = m.mutateAntreaPolicy(op, curANP.Spec.Ingress, curANP.Spec.Egress, curANP.Spec.Tier)
+		msg, allowed, patch = m.mutateAntreaPolicy(op, curANNP.Spec.Ingress, curANNP.Spec.Egress, curANNP.Spec.Tier)
 	}
 
 	if msg != "" {

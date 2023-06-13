@@ -206,36 +206,36 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 		msg, allowed = v.validateAntreaGroup(&curG, &oldG, op, ui)
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
-		var curCNP, oldCNP crdv1alpha1.ClusterNetworkPolicy
+		var curACNP, oldACNP crdv1alpha1.ClusterNetworkPolicy
 		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curCNP); err != nil {
+			if err := json.Unmarshal(curRaw, &curACNP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea ClusterNetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
 		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldCNP); err != nil {
+			if err := json.Unmarshal(oldRaw, &oldACNP); err != nil {
 				klog.Errorf("Error de-serializing old Antrea ClusterNetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(&curCNP, &oldCNP, op, ui)
+		msg, allowed = v.validateAntreaPolicy(&curACNP, &oldACNP, op, ui)
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
-		var curANP, oldANP crdv1alpha1.NetworkPolicy
+		var curANNP, oldANNP crdv1alpha1.NetworkPolicy
 		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curANP); err != nil {
+			if err := json.Unmarshal(curRaw, &curANNP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea NetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
 		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldANP); err != nil {
+			if err := json.Unmarshal(oldRaw, &oldANNP); err != nil {
 				klog.Errorf("Error de-serializing old Antrea NetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed = v.validateAntreaPolicy(&curANP, &oldANP, op, ui)
+		msg, allowed = v.validateAntreaPolicy(&curANNP, &oldANNP, op, ui)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -414,17 +414,17 @@ func (v *antreaPolicyValidator) validatePolicy(curObj interface{}) (string, bool
 	var specAppliedTo []crdv1alpha1.AppliedTo
 	switch curObj.(type) {
 	case *crdv1alpha1.ClusterNetworkPolicy:
-		curCNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
-		tier = curCNP.Spec.Tier
-		ingress = curCNP.Spec.Ingress
-		egress = curCNP.Spec.Egress
-		specAppliedTo = curCNP.Spec.AppliedTo
+		curACNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
+		tier = curACNP.Spec.Tier
+		ingress = curACNP.Spec.Ingress
+		egress = curACNP.Spec.Egress
+		specAppliedTo = curACNP.Spec.AppliedTo
 	case *crdv1alpha1.NetworkPolicy:
-		curANP := curObj.(*crdv1alpha1.NetworkPolicy)
-		tier = curANP.Spec.Tier
-		ingress = curANP.Spec.Ingress
-		egress = curANP.Spec.Egress
-		specAppliedTo = curANP.Spec.AppliedTo
+		curANNP := curObj.(*crdv1alpha1.NetworkPolicy)
+		tier = curANNP.Spec.Tier
+		ingress = curANNP.Spec.Ingress
+		egress = curANNP.Spec.Egress
+		specAppliedTo = curANNP.Spec.AppliedTo
 	}
 	reason, allowed := v.validateTierForPolicy(tier)
 	if !allowed {
@@ -878,14 +878,14 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 	if reservedTierNames.Has(oldTier.Name) {
 		return fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name), false
 	}
-	// Tier with existing ACNPs/ANPs cannot be deleted.
-	acnps, err := t.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+	// Tier with existing ACNPs/ANNPs cannot be deleted.
+	acnps, err := t.networkPolicyController.acnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
 	if err != nil || len(acnps) > 0 {
 		return fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(acnps)), false
 	}
-	anps, err := t.networkPolicyController.anpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
-	if err != nil || len(anps) > 0 {
-		return fmt.Sprintf("tier %s is referenced by %d Antrea NetworkPolicies", oldTier.Name, len(anps)), false
+	annps, err := t.networkPolicyController.annpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+	if err != nil || len(annps) > 0 {
+		return fmt.Sprintf("tier %s is referenced by %d Antrea NetworkPolicies", oldTier.Name, len(annps)), false
 	}
 	return "", true
 }

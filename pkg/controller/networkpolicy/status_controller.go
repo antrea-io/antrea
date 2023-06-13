@@ -71,24 +71,24 @@ type StatusController struct {
 	statuses     map[string]map[string]*controlplane.NetworkPolicyNodeStatus
 	statusesLock sync.RWMutex
 
-	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
-	cnpListerSynced cache.InformerSynced
-	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
-	anpListerSynced cache.InformerSynced
+	// acnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
+	acnpListerSynced cache.InformerSynced
+	// annpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
+	annpListerSynced cache.InformerSynced
 }
 
-func NewStatusController(antreaClient antreaclientset.Interface, internalNetworkPolicyStore storage.Interface, cnpInformer crdinformers.ClusterNetworkPolicyInformer, anpInformer crdinformers.NetworkPolicyInformer) *StatusController {
+func NewStatusController(antreaClient antreaclientset.Interface, internalNetworkPolicyStore storage.Interface, acnpInformer crdinformers.ClusterNetworkPolicyInformer, annpInformer crdinformers.NetworkPolicyInformer) *StatusController {
 	c := &StatusController{
 		npControlInterface: &networkPolicyControl{
 			antreaClient: antreaClient,
-			anpLister:    anpInformer.Lister(),
-			cnpLister:    cnpInformer.Lister(),
+			annpLister:   annpInformer.Lister(),
+			acnpLister:   acnpInformer.Lister(),
 		},
 		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicy"),
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
 		statuses:                   map[string]map[string]*controlplane.NetworkPolicyNodeStatus{},
-		cnpListerSynced:            cnpInformer.Informer().HasSynced,
-		anpListerSynced:            anpInformer.Informer().HasSynced,
+		acnpListerSynced:           acnpInformer.Informer().HasSynced,
+		annpListerSynced:           annpInformer.Informer().HasSynced,
 	}
 	// To save a "GET" query before each update, UpdateAntreaClusterNetworkPolicyStatus treats the cache of Lister as
 	// the state of kube-apiserver. In some cases the cache may not be in sync, then we might skip updating a policy's
@@ -97,38 +97,38 @@ func NewStatusController(antreaClient antreaclientset.Interface, internalNetwork
 	// However, a normal update made by the controller itself will trigger resync as well, which could lead to duplicate
 	// computation.
 	// TODO: Evaluate if we can avoid the duplicate computation by comparing the updated status with some internal state.
-	cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+	acnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			UpdateFunc: c.updateCNP,
+			UpdateFunc: c.updateACNP,
 		},
 		resyncPeriod,
 	)
-	anpInformer.Informer().AddEventHandlerWithResyncPeriod(
+	annpInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			UpdateFunc: c.updateANP,
+			UpdateFunc: c.updateANNP,
 		},
 		resyncPeriod,
 	)
 	return c
 }
 
-func (c *StatusController) updateCNP(old, cur interface{}) {
-	curCNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
-	oldCNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
-	if NetworkPolicyStatusEqual(oldCNP.Status, curCNP.Status) {
+func (c *StatusController) updateACNP(old, cur interface{}) {
+	curACNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
+	oldACNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
+	if NetworkPolicyStatusEqual(oldACNP.Status, curACNP.Status) {
 		return
 	}
-	key := internalNetworkPolicyKeyFunc(oldCNP)
+	key := internalNetworkPolicyKeyFunc(oldACNP)
 	c.queue.Add(key)
 }
 
-func (c *StatusController) updateANP(old, cur interface{}) {
-	curANP := cur.(*crdv1alpha1.NetworkPolicy)
-	oldANP := old.(*crdv1alpha1.NetworkPolicy)
-	if NetworkPolicyStatusEqual(oldANP.Status, curANP.Status) {
+func (c *StatusController) updateANNP(old, cur interface{}) {
+	curANNP := cur.(*crdv1alpha1.NetworkPolicy)
+	oldANNP := old.(*crdv1alpha1.NetworkPolicy)
+	if NetworkPolicyStatusEqual(oldANNP.Status, curANNP.Status) {
 		return
 	}
-	key := internalNetworkPolicyKeyFunc(oldANP)
+	key := internalNetworkPolicyKeyFunc(oldANNP)
 	c.queue.Add(key)
 }
 
@@ -192,7 +192,7 @@ func (c *StatusController) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", statusControllerName)
 	defer klog.Infof("Shutting down %s", statusControllerName)
 
-	if !cache.WaitForNamedCacheSync(statusControllerName, stopCh, c.cnpListerSynced, c.anpListerSynced) {
+	if !cache.WaitForNamedCacheSync(statusControllerName, stopCh, c.acnpListerSynced, c.annpListerSynced) {
 		return
 	}
 
@@ -352,21 +352,21 @@ type networkPolicyControlInterface interface {
 
 type networkPolicyControl struct {
 	antreaClient antreaclientset.Interface
-	cnpLister    crdlisters.ClusterNetworkPolicyLister
-	anpLister    crdlisters.NetworkPolicyLister
+	acnpLister   crdlisters.ClusterNetworkPolicyLister
+	annpLister   crdlisters.NetworkPolicyLister
 }
 
 func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha1.NetworkPolicyStatus) error {
-	anp, err := c.anpLister.NetworkPolicies(namespace).Get(name)
+	annp, err := c.annpLister.NetworkPolicies(namespace).Get(name)
 	if err != nil {
 		klog.Infof("Didn't find the original Antrea NetworkPolicy %s/%s, skip updating status", namespace, name)
 		return nil
 	}
-	if NetworkPolicyStatusEqual(anp.Status, *status) {
+	if NetworkPolicyStatusEqual(annp.Status, *status) {
 		return nil
 	}
 
-	toUpdate := anp.DeepCopy()
+	toUpdate := annp.DeepCopy()
 
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -389,17 +389,17 @@ func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name s
 }
 
 func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha1.NetworkPolicyStatus) error {
-	cnp, err := c.cnpLister.Get(name)
+	acnp, err := c.acnpLister.Get(name)
 	if err != nil {
 		klog.Infof("Didn't find the original Antrea ClusterNetworkPolicy %s, skip updating status", name)
 		return nil
 	}
 	// If the current status equals to the desired status, no need to update.
-	if NetworkPolicyStatusEqual(cnp.Status, *status) {
+	if NetworkPolicyStatusEqual(acnp.Status, *status) {
 		return nil
 	}
 
-	toUpdate := cnp.DeepCopy()
+	toUpdate := acnp.DeepCopy()
 
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {

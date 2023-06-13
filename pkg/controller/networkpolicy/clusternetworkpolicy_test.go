@@ -2107,9 +2107,9 @@ func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController(nil, nil)
-			c.cnpStore.Add(cnpWithSpecAppliedTo)
-			c.cnpStore.Add(cnpWithRuleAppliedTo)
-			c.cnpStore.Add(cnpMatchAllNamespaces)
+			c.acnpStore.Add(cnpWithSpecAppliedTo)
+			c.acnpStore.Add(cnpWithRuleAppliedTo)
+			c.acnpStore.Add(cnpMatchAllNamespaces)
 			c.cgStore.Add(group)
 			assert.Equal(t, tt.want, c.filterPerNamespaceRuleACNPsByNSLabels(tt.nsLabels))
 		})

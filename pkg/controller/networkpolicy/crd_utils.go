@@ -255,7 +255,7 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.Networ
 }
 
 // svcRefToPeerForCRD creates an Antrea controlplane NetworkPolicyPeer from ServiceReferences in ToServices
-// or ToMulticlusterServices field of a crdv1alpha1 NetworkPolicyPeer. For ANP NetworkPolicyPeers, if
+// or ToMulticlusterServices field of a crdv1alpha1 NetworkPolicyPeer. For ANNP NetworkPolicyPeers, if
 // Namespace is not provided in the ServiceReference, the policy's Namespace will be assumed.
 func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.PeerService, defaultNamespace string) *controlplane.NetworkPolicyPeer {
 	var controlplaneSvcRefs []controlplane.ServiceReference
@@ -360,7 +360,7 @@ func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
 }
 
 func (n *NetworkPolicyController) syncInternalGroup(key string) error {
-	defer n.triggerANPUpdates(key)
+	defer n.triggerANNPUpdates(key)
 	defer n.triggerCNPUpdates(key)
 	defer n.triggerParentGroupUpdates(key)
 	defer n.triggerDerivedGroupUpdates(key)

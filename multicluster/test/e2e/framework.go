@@ -231,17 +231,17 @@ func (data *MCTestData) createService(clusterName, serviceName, namespace string
 	return nil, fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-func (data *MCTestData) createOrUpdateANP(clusterName string, anp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
+func (data *MCTestData) createOrUpdateANNP(clusterName string, annp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
-		return d.CreateOrUpdateANP(anp)
+		return d.CreateOrUpdateANNP(annp)
 	}
 	return nil, fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-// deleteANP is a convenience function for deleting ANP by name and Namespace.
-func (data *MCTestData) deleteANP(clusterName, namespace, name string) error {
+// deleteANNP is a convenience function for deleting ANNP by name and Namespace.
+func (data *MCTestData) deleteANNP(clusterName, namespace, name string) error {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
-		return d.DeleteANP(namespace, name)
+		return d.DeleteANNP(namespace, name)
 	}
 	return fmt.Errorf("clusterName %s not found", clusterName)
 }

@@ -21,12 +21,12 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
-  - name: "anpmutator.antrea.io"
+  - name: "annpmutator.antrea.io"
     clientConfig:
       service:
         name: "antrea"
         namespace: {{ .Release.Namespace }}
-        path: "/mutate/anp"
+        path: "/mutate/annp"
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]

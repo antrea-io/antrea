@@ -36,12 +36,12 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
-  - name: "anpvalidator.antrea.io"
+  - name: "annpvalidator.antrea.io"
     clientConfig:
       service:
         name: "antrea"
         namespace: {{ .Release.Namespace }}
-        path: "/validate/anp"
+        path: "/validate/annp"
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]

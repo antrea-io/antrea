@@ -87,8 +87,8 @@ type networkPolicyController struct {
 	namespaceStore             cache.Store
 	serviceStore               cache.Store
 	networkPolicyStore         cache.Store
-	cnpStore                   cache.Store
-	anpStore                   cache.Store
+	acnpStore                  cache.Store
+	annpStore                  cache.Store
 	tierStore                  cache.Store
 	cgStore                    cache.Store
 	gStore                     cache.Store
@@ -145,7 +145,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 	npController.namespaceLister = informerFactory.Core().V1().Namespaces().Lister()
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
-	npController.cnpListerSynced = alwaysReady
+	npController.acnpListerSynced = alwaysReady
 	npController.tierLister = crdInformerFactory.Crd().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
 	npController.cgInformer = cgInformer
@@ -187,8 +187,8 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
-	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
-	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	acnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	annpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	groupInformer := crdInformerFactory.Crd().V1alpha3().Groups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
@@ -202,12 +202,12 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		tierInformer:               tierInformer,
 		tierLister:                 tierInformer.Lister(),
 		tierListerSynced:           tierInformer.Informer().HasSynced,
-		cnpInformer:                cnpInformer,
-		cnpLister:                  cnpInformer.Lister(),
-		cnpListerSynced:            cnpInformer.Informer().HasSynced,
-		anpInformer:                anpInformer,
-		anpLister:                  anpInformer.Lister(),
-		anpListerSynced:            anpInformer.Informer().HasSynced,
+		acnpInformer:               acnpInformer,
+		acnpLister:                 acnpInformer.Lister(),
+		acnpListerSynced:           acnpInformer.Informer().HasSynced,
+		annpInformer:               annpInformer,
+		annpLister:                 annpInformer.Lister(),
+		annpListerSynced:           annpInformer.Informer().HasSynced,
 		cgInformer:                 cgInformer,
 		cgLister:                   cgInformer.Lister(),
 		cgListerSynced:             cgInformer.Informer().HasSynced,
@@ -222,15 +222,15 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		groupingInterface:          groupEntityIndex,
 	}
 	npController.tierInformer.Informer().AddIndexers(tierIndexers)
-	npController.cnpInformer.Informer().AddIndexers(cnpIndexers)
-	npController.anpInformer.Informer().AddIndexers(anpIndexers)
+	npController.acnpInformer.Informer().AddIndexers(acnpIndexers)
+	npController.annpInformer.Informer().AddIndexers(annpIndexers)
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
-		cnpInformer.Informer().GetStore(),
-		anpInformer.Informer().GetStore(),
+		acnpInformer.Informer().GetStore(),
+		annpInformer.Informer().GetStore(),
 		tierInformer.Informer().GetStore(),
 		cgInformer.Informer().GetStore(),
 		groupInformer.Informer().GetStore(),
@@ -2981,7 +2981,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 
 	// Add a new policy, it should create an internal NetworkPolicy, AddressGroups and AppliedToGroups used by it.
 	_, c := newController(nil, nil)
-	c.cnpStore.Add(inputPolicy)
+	c.acnpStore.Add(inputPolicy)
 	networkPolicyRef := getACNPReference(inputPolicy)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRef))
 	internalPolicies := c.internalNetworkPolicyStore.List()
@@ -3013,7 +3013,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	// Change selectorA to selectorC
 	updatedInputPolicy.Spec.AppliedTo[0].PodSelector = &selectorC
 	updatedInputPolicy.Spec.Ingress[0].From[0].PodSelector = &selectorC
-	c.cnpStore.Update(updatedInputPolicy)
+	c.acnpStore.Update(updatedInputPolicy)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRef))
 	internalPolicies = c.internalNetworkPolicyStore.List()
 	require.Len(t, internalPolicies, 1)
@@ -3031,7 +3031,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 
 	// Remove the original NetworkPolicy, the internal NetworkPolicy and all AddressGroups and AppliedToGroups should be
 	// removed.
-	c.cnpStore.Delete(updatedInputPolicy)
+	c.acnpStore.Delete(updatedInputPolicy)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRef))
 	internalPolicies = c.internalNetworkPolicyStore.List()
 	require.Len(t, internalPolicies, 0)
@@ -3258,7 +3258,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 		expectedPolicy *antreatypes.NetworkPolicy
 	}{
 		{
-			name: "anp with valid group",
+			name: "annp with valid group",
 			groups: []*v1alpha3.Group{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "groupA"},
@@ -3266,7 +3266,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				},
 			},
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "groupA"},
@@ -3287,7 +3287,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "nsA",
-					Name:      "anpA",
+					Name:      "annpA",
 					UID:       "uidA",
 				},
 				Priority:     &p10,
@@ -3303,7 +3303,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			},
 		},
 		{
-			name: "anp with valid parent group",
+			name: "annp with valid parent group",
 			groups: []*v1alpha3.Group{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "parentGroup"},
@@ -3315,7 +3315,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				},
 			},
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "parentGroup"},
@@ -3336,7 +3336,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "nsA",
-					Name:      "anpA",
+					Name:      "annpA",
 					UID:       "uidA",
 				},
 				Priority:     &p10,
@@ -3352,7 +3352,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			},
 		},
 		{
-			name: "anp with invalid group selecting pods in multiple Namespaces",
+			name: "annp with invalid group selecting pods in multiple Namespaces",
 			groups: []*v1alpha3.Group{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "groupA"},
@@ -3360,7 +3360,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				},
 			},
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "groupA"},
@@ -3380,7 +3380,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "nsA",
-					Name:      "anpA",
+					Name:      "annpA",
 					UID:       "uidA",
 				},
 				Priority:     &p10,
@@ -3397,7 +3397,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			},
 		},
 		{
-			name: "anp with invalid parent group selecting pods in multiple Namespaces",
+			name: "annp with invalid parent group selecting pods in multiple Namespaces",
 			groups: []*v1alpha3.Group{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "parentGroup"},
@@ -3409,7 +3409,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				},
 			},
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "parentGroup"},
@@ -3429,7 +3429,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				SourceRef: &controlplane.NetworkPolicyReference{
 					Type:      controlplane.AntreaNetworkPolicy,
 					Namespace: "nsA",
-					Name:      "anpA",
+					Name:      "annpA",
 					UID:       "uidA",
 				},
 				Priority:     &p10,

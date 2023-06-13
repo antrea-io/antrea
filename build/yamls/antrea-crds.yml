@@ -2154,6 +2154,8 @@ spec:
     singular: networkpolicy
     kind: NetworkPolicy
     shortNames:
+      - annp
+      # Deprecated shortName and shall be removed in Antrea v1.14.0
       - anp
 ---
 apiVersion: apiextensions.k8s.io/v1

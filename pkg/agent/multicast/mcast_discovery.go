@@ -57,12 +57,12 @@ type IGMPSnooper struct {
 	validator     types.McastNetworkPolicyController
 	queryInterval time.Duration
 	queryVersions []uint8
-	// igmpReportANPStats is a map that saves AntreaNetworkPolicyStats of IGMP report packets.
+	// igmpReportANNPStats is a map that saves AntreaNetworkPolicyStats of IGMP report packets.
 	// The map can be interpreted as
 	// map[UID of the AntreaNetworkPolicy]map[name of AntreaNetworkPolicy rule]statistics of rule.
-	igmpReportANPStats      map[apitypes.UID]map[string]*types.RuleMetric
-	igmpReportANPStatsMutex sync.Mutex
-	// Similar to igmpReportANPStats, it stores ACNP stats for IGMP reports.
+	igmpReportANNPStats      map[apitypes.UID]map[string]*types.RuleMetric
+	igmpReportANNPStatsMutex sync.Mutex
+	// Similar to igmpReportANNPStats, it stores ACNP stats for IGMP reports.
 	igmpReportACNPStats      map[apitypes.UID]map[string]*types.RuleMetric
 	igmpReportACNPStatsMutex sync.Mutex
 	encapEnabled             bool
@@ -161,9 +161,9 @@ func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.IGMPNPRuleInfo, packe
 	}
 	ruleType := *item.NPType
 	if ruleType == v1beta2.AntreaNetworkPolicy {
-		s.igmpReportANPStatsMutex.Lock()
-		updateRuleStats(s.igmpReportANPStats, item.UUID, item.Name)
-		s.igmpReportANPStatsMutex.Unlock()
+		s.igmpReportANNPStatsMutex.Lock()
+		updateRuleStats(s.igmpReportANNPStats, item.UUID, item.Name)
+		s.igmpReportANNPStatsMutex.Unlock()
 	} else if ruleType == v1beta2.AntreaClusterNetworkPolicy {
 		s.igmpReportACNPStatsMutex.Lock()
 		updateRuleStats(s.igmpReportACNPStats, item.UUID, item.Name)
@@ -172,16 +172,16 @@ func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.IGMPNPRuleInfo, packe
 }
 
 // WARNING: This func will reset the saved stats.
-func (s *IGMPSnooper) collectStats() (igmpANPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
-	s.igmpReportANPStatsMutex.Lock()
-	igmpANPStats = s.igmpReportANPStats
-	s.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
-	s.igmpReportANPStatsMutex.Unlock()
+func (s *IGMPSnooper) collectStats() (igmpANNPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
+	s.igmpReportANNPStatsMutex.Lock()
+	igmpANNPStats = s.igmpReportANNPStats
+	s.igmpReportANNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
+	s.igmpReportANNPStatsMutex.Unlock()
 	s.igmpReportACNPStatsMutex.Lock()
 	igmpACNPStats = s.igmpReportACNPStats
 	s.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	s.igmpReportACNPStatsMutex.Unlock()
-	return igmpANPStats, igmpACNPStats
+	return igmpANNPStats, igmpACNPStats
 }
 
 func (s *IGMPSnooper) sendIGMPReport(groupRecordType uint8, groups []net.IP) error {
@@ -376,7 +376,7 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, igmpQueryVersions []uint8, multicastValidator types.McastNetworkPolicyController, encapEnabled bool) *IGMPSnooper {
 	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, queryVersions: igmpQueryVersions, encapEnabled: encapEnabled}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
-	snooper.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
+	snooper.igmpReportANNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryIGMP), snooper)
 	return snooper
 }

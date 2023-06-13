@@ -61,8 +61,8 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
-	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	acnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	annpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	grpInformer := crdInformerFactory.Crd().V1alpha3().Groups()
@@ -83,8 +83,8 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 		serviceInformer,
 		networkPolicyInformer,
 		nodeInformer,
-		cnpInformer,
-		anpInformer,
+		acnpInformer,
+		annpInformer,
 		tierInformer,
 		cgInformer,
 		grpInformer,

@@ -216,7 +216,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 						},
 						{
 							name:      "type",
-							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANP",
+							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANNP",
 							shorthand: "T",
 						},
 					}, getSortByFlag()),
