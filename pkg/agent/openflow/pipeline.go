@@ -2469,7 +2469,7 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 // will resubmit packets back to ServiceLBTable to trigger the learn flow, the learn flow will then send packets to
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
 func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
-	group := f.bridge.CreateGroup(groupID).ResetBuckets()
+	group := f.bridge.NewGroup(groupID)
 
 	if len(endpoints) == 0 {
 		return group.Bucket().Weight(100).
@@ -2613,8 +2613,8 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 // `rate` is represented as number of packets per second.
 // Packets which exceed the rate will be dropped.
 func (c *client) genPacketInMeter(meterID binding.MeterIDType, rate uint32) binding.Meter {
-	meter := c.bridge.CreateMeter(meterID, ofctrl.MeterBurst|ofctrl.MeterPktps).ResetMeterBands()
-	meter = meter.MeterBand().
+	meter := c.bridge.NewMeter(meterID, ofctrl.MeterBurst|ofctrl.MeterPktps).
+		MeterBand().
 		MeterType(ofctrl.MeterDrop).
 		Rate(rate).
 		Burst(2 * rate).
@@ -2658,8 +2658,7 @@ func (c *client) realizePipelines() {
 			}
 			tables[i].SetNext(nextID)
 			tables[i].SetMissAction(missAction)
-			// Realize the table on OVS bridge.
-			c.bridge.CreateTable(tables[i], nextID, missAction)
+			c.bridge.NewTable(tables[i], nextID, missAction)
 		}
 	}
 }

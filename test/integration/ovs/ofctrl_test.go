@@ -94,7 +94,7 @@ func TestDeleteFlowStrict(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t3, t4.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t3, t4.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	if err != nil {
@@ -183,8 +183,8 @@ func TestOFctrlFlow(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table1 := bridge.CreateTable(t1, t2.GetID(), binding.TableMissActionNext)
-	table2 := bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table1 := bridge.NewTable(t1, t2.GetID(), binding.TableMissActionNext)
+	table2 := bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	if err != nil {
@@ -290,9 +290,9 @@ func TestOFctrlGroup(t *testing.T) {
 			var group binding.Group
 			gid := binding.GroupIDType(id)
 			if name == "TypeAll" {
-				group = br.CreateGroupTypeAll(gid)
+				group = br.NewGroupTypeAll(gid)
 			} else {
-				group = br.CreateGroup(gid)
+				group = br.NewGroup(gid)
 			}
 			for _, bucket := range buckets {
 				require.NotZero(t, bucket.weight, "Weight value of a bucket must be specified")
@@ -362,7 +362,7 @@ func TestTransactions(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -421,7 +421,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -540,7 +540,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -552,7 +552,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	field1 := binding.NewRegField(1, 0, 31)
 	field2 := binding.NewRegField(2, 0, 31)
 	field3 := binding.NewRegField(3, 0, 31)
-	group := bridge.CreateGroup(groupID).
+	group := bridge.NewGroup(groupID).
 		Bucket().Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0002)).
 		LoadToRegField(field2, uint32(0x35)).
@@ -600,8 +600,8 @@ func TestPacketOutIn(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table0 := bridge.CreateTable(t0, t1.GetID(), binding.TableMissActionNext)
-	table1 := bridge.CreateTable(t1, t2.GetID(), binding.TableMissActionNext)
+	table0 := bridge.NewTable(t0, t1.GetID(), binding.TableMissActionNext)
+	table1 := bridge.NewTable(t1, t2.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -694,7 +694,7 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -783,7 +783,7 @@ func TestNoteAction(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -834,7 +834,7 @@ func TestLoadToLabelFieldAction(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -900,7 +900,7 @@ func TestBundleWithGroupInsertBucket(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+	table = bridge.NewTable(t2, t3.GetID(), binding.TableMissActionNext)
 	// Set the maximum of buckets in a message to test insert_buckets.
 	binding.MaxBucketsPerMessage = 2
 	// In case it affects other tests, set the maximum of buckets in a message back to 800.
@@ -915,7 +915,7 @@ func TestBundleWithGroupInsertBucket(t *testing.T) {
 	ovsCtlClient := ovsctl.NewClient(br)
 	groupID := binding.GroupIDType(4)
 
-	group := bridge.CreateGroup(groupID)
+	group := bridge.NewGroup(groupID)
 	expectedGroupBuckets := []string{}
 	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{group}, nil, nil)
 	require.Nil(t, err)
