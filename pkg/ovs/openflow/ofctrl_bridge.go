@@ -29,10 +29,6 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 )
 
-const (
-	ofTableExistsError = "Table already exists"
-)
-
 // ofTable implements openflow.Table.
 type ofTable struct {
 	// sync.RWMutex protects ofTable status from concurrent modification and reading.
@@ -211,51 +207,24 @@ type OFBridge struct {
 	tunMetadataLengthMap map[uint16]uint8
 }
 
-func (b *OFBridge) CreateGroupTypeAll(id GroupIDType) Group {
-	return b.createGroupWithType(id, ofctrl.GroupAll)
+func (b *OFBridge) NewGroupTypeAll(id GroupIDType) Group {
+	return b.newGroupWithType(id, ofctrl.GroupAll)
 }
 
-func (b *OFBridge) CreateGroup(id GroupIDType) Group {
-	return b.createGroupWithType(id, ofctrl.GroupSelect)
+func (b *OFBridge) NewGroup(id GroupIDType) Group {
+	return b.newGroupWithType(id, ofctrl.GroupSelect)
 }
 
-func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
-	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), groupType)
-	if err != nil { // group already exists
-		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
-	}
+func (b *OFBridge) newGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
+	ofctrlGroup := ofctrl.NewGroup(uint32(id), groupType, b.ofSwitch)
 	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
 	return g
 }
 
-// DeleteGroup deletes a specified group in groupDb.
-func (b *OFBridge) DeleteGroup(id GroupIDType) error {
-	ofctrlGroup := b.ofSwitch.GetGroup(uint32(id))
-	if ofctrlGroup == nil {
-		return nil
-	}
-	return b.ofSwitch.DeleteGroup(uint32(id))
-}
-
-func (b *OFBridge) CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
-	ofctrlMeter, err := b.ofSwitch.NewMeter(uint32(id), flags)
-
-	if err != nil {
-		ofctrlMeter = b.ofSwitch.GetMeter(uint32(id))
-	}
+func (b *OFBridge) NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
+	ofctrlMeter := ofctrl.NewMeter(uint32(id), flags, b.ofSwitch)
 	m := &ofMeter{bridge: b, ofctrl: ofctrlMeter}
 	return m
-}
-
-func (b *OFBridge) DeleteMeter(id MeterIDType) bool {
-	m := b.ofSwitch.GetMeter(uint32(id))
-	if m == nil {
-		return true
-	}
-	if err := m.Delete(); err != nil {
-		return false
-	}
-	return true
 }
 
 func (b *OFBridge) DeleteMeterAll() error {
@@ -271,7 +240,7 @@ func (b *OFBridge) DeleteMeterAll() error {
 	return nil
 }
 
-func (b *OFBridge) CreateTable(table Table, next uint8, missAction MissActionType) Table {
+func (b *OFBridge) NewTable(table Table, next uint8, missAction MissActionType) Table {
 	table.SetNext(next)
 	table.SetMissAction(missAction)
 	t, ok := table.(*ofTable)
@@ -282,20 +251,6 @@ func (b *OFBridge) CreateTable(table Table, next uint8, missAction MissActionTyp
 	defer b.Unlock()
 	b.tableCache[t.id] = t
 	return t
-}
-
-// DeleteTable removes the table from ofctrl.OFSwitch, and remove from local cache.
-func (b *OFBridge) DeleteTable(id uint8) bool {
-	err := b.ofSwitch.DeleteTable(id)
-	if err != nil {
-		return false
-	}
-
-	b.Lock()
-	defer b.Unlock()
-
-	delete(b.tableCache, id)
-	return true
 }
 
 // GetTableByID returns the existing table by the given id. If no table exists, an error is returned.
@@ -373,21 +328,21 @@ func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is disconnected: %v", sw.DPID())
 }
 
+func (b *OFBridge) FlowGraphEnabledOnSwitch() bool {
+	return false
+}
+
+func (b *OFBridge) TLVMapEnabledOnSwitch() bool {
+	return false
+}
+
 // Initialize creates ofctrl.Table for each table in the tableCache.
 func (b *OFBridge) Initialize() {
 	b.Lock()
 	defer b.Unlock()
 
 	for id, table := range b.tableCache {
-		if id == 0 {
-			table.Table = b.ofSwitch.DefaultTable()
-		} else {
-			ofTable, err := b.ofSwitch.NewTable(id)
-			if err != nil && err.Error() == ofTableExistsError {
-				ofTable = b.ofSwitch.GetTable(id)
-			}
-			table.Table = ofTable
-		}
+		table.Table = ofctrl.NewTable(id, b.ofSwitch)
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}

@@ -454,7 +454,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	client.generatePipelines()
 	client.realizePipelines()
 	binding.TableNameCache = getTableNameCache()
-	client.bridge.(*binding.OFBridge).SetOFSwitch(ofctrl.NewSwitch(&util.MessageStream{}, GlobalVirtualMAC, nil, make(chan int), 32776))
+	client.bridge.(*binding.OFBridge).SetOFSwitch(ofctrl.NewSwitch(&util.MessageStream{}, GlobalVirtualMAC, client.bridge.(ofctrl.AppInterface), make(chan int), 32776))
 	client.bridge.(*binding.OFBridge).Initialize()
 	return client
 }
