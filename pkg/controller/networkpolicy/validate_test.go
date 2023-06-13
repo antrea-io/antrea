@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,11 +39,12 @@ var (
 	portNum80   = int32(80)
 )
 
-func TestValidateAntreaPolicy(t *testing.T) {
+func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name           string
 		featureGates   map[featuregate.Feature]bool
 		policy         *crdv1alpha1.ClusterNetworkPolicy
+		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
@@ -62,6 +64,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Tier: "non-existent-tier",
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "tier non-existent-tier does not exist",
 		},
 		{
@@ -81,6 +84,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Tier: "NetworkOps",
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -112,6 +116,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`Pass` action should not be set for Baseline Tier policy rules",
 		},
 		{
@@ -143,6 +148,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`Pass` action should not be set for Baseline Tier policy rules",
 		},
 		{
@@ -174,6 +180,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -216,6 +223,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "rules names must be unique within the policy",
 		},
 		{
@@ -253,6 +261,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "appliedTo should not be set in both spec and rules",
 		},
 		{
@@ -276,6 +285,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "appliedTo needs to be set in either spec or rules",
 		},
 		{
@@ -318,6 +328,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "appliedTo field should either be set in all rules or in none of them",
 		},
 		{
@@ -367,6 +378,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -386,6 +398,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in appliedTo",
 		},
 		{
@@ -405,6 +418,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in appliedTo",
 		},
 		{
@@ -433,6 +447,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -464,6 +479,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -495,6 +511,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -526,6 +543,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -557,6 +575,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -586,6 +605,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -617,6 +637,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "group cannot be set with other peers in rules",
 		},
 		{
@@ -645,6 +666,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -678,6 +700,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer",
 		},
 		{
@@ -714,6 +737,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
@@ -748,6 +772,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
@@ -782,6 +807,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
@@ -811,6 +837,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -839,6 +866,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "invalid characters in egress rule fqdn field: foo!bar",
 		},
 		{
@@ -867,6 +895,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -895,6 +924,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "if `endPort` is specified `port` must be specified",
 		},
 		{
@@ -923,6 +953,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "if `sourceEndPort` is specified `sourcePort` must be specified",
 		},
 		{
@@ -952,6 +983,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`endPort` should be greater than or equal to `port`",
 		},
 		{
@@ -981,6 +1013,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "`sourceEndPort` should be greater than or equal to `sourcePort`",
 		},
 		{
@@ -1010,6 +1043,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "if `port` is a string `endPort` cannot be specified",
 		},
 		{
@@ -1039,6 +1073,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -1057,6 +1092,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
@@ -1087,6 +1123,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label value: bar=: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')",
 		},
 		{
@@ -1117,6 +1154,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
@@ -1139,6 +1177,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "service cannot be set with other peers in appliedTo",
 		},
 		{
@@ -1163,6 +1202,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "a rule/policy cannot be applied to Services and other peers at the same time",
 		},
 		{
@@ -1194,6 +1234,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "egress rule cannot be applied to Services",
 		},
 		{
@@ -1225,6 +1266,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "egress rule cannot be applied to Services",
 		},
 		{
@@ -1256,6 +1298,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "a rule/policy that is applied to Services can only use ipBlock to select workloads",
 		},
 		{
@@ -1287,6 +1330,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -1321,6 +1365,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "",
 		},
 		{
@@ -1354,6 +1399,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "layer 7 protocols only support Allow",
 		},
 		{
@@ -1392,6 +1438,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "HTTP protocol can only be used when layer 4 protocol is TCP or unset",
 		},
 		{
@@ -1430,6 +1477,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "HTTP protocol can not be used with protocol IGMP or ICMP",
 		},
 		{
@@ -1468,6 +1516,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "layer 7 protocols can not be used with toServices",
 		},
 		{
@@ -1495,6 +1544,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "layer 7 protocols can only be used when L7NetworkPolicy is enabled",
 		},
 		{
@@ -1525,6 +1575,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "protocol IGMP can not be used with other protocols or other properties like from, to",
 		},
 		{
@@ -1561,6 +1612,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation: admv1.Create,
 		},
 		{
 			name: "icmp-specified-and-action-set-to-pass",
@@ -1586,7 +1638,100 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "protocol IGMP does not support Pass or Reject",
+		},
+		// Update use same validate function as create. Only provide one update case here.
+		{
+			name: "acnp-non-existent-tier",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-existent-tier",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+					Tier: "non-existent-tier",
+				},
+			},
+			operation:      admv1.Update,
+			expectedReason: "tier non-existent-tier does not exist",
+		}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for feature, value := range tt.featureGates {
+				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
+			}
+			_, controller := newController(nil, nil)
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
+			assert.Equal(t, tt.expectedReason, actualReason)
+			if tt.expectedReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+// Antrea NetworkPolicy use the same validator and has fewer cases to validate than
+// Antrea ClusterNetworkPolicy. Only provide one test case for create and update here.
+func TestValidateAntreaNetworkPolicy(t *testing.T) {
+	tests := []struct {
+		name           string
+		featureGates   map[featuregate.Feature]bool
+		policy         *crdv1alpha1.NetworkPolicy
+		operation      admv1.Operation
+		expectedReason string
+	}{
+		{
+			name: "anp-non-existent-tier",
+			policy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "non-existent-tier",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+					Tier: "non-existent-tier",
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "tier non-existent-tier does not exist",
+		},
+		{
+			name: "anp-non-existent-tier",
+			policy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "non-existent-tier",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+					Tier: "non-existent-tier",
+				},
+			},
+			operation:      admv1.Update,
+			expectedReason: "tier non-existent-tier does not exist",
 		},
 	}
 
@@ -1597,7 +1742,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			}
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", admv1.Create, authenticationv1.UserInfo{})
+			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -1611,12 +1756,15 @@ func TestValidateAntreaPolicy(t *testing.T) {
 func TestValidateAntreaClusterGroup(t *testing.T) {
 	tests := []struct {
 		name           string
-		group          *crdv1alpha2.ClusterGroup
+		curCG          *crdv1alpha2.ClusterGroup
+		oldCG          *crdv1alpha2.ClusterGroup
+		existGroup     *crdv1alpha3.ClusterGroup
+		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
 			name: "cg-invalid-label-key",
-			group: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1alpha2.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-invalid-label-key",
 				},
@@ -1626,11 +1774,12 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
 		{
 			name: "cg-invalid-label-value",
-			group: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1alpha2.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-invalid-label-value",
 				},
@@ -1640,14 +1789,247 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 					},
 				},
 			},
+			operation:      admv1.Create,
 			expectedReason: "Invalid label value: bar=: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')",
+		},
+		{
+			name: "cg-three-fields-set",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-three-fields-set",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					ExternalEntitySelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
+		},
+		{
+			name: "cg-set-with-psel-and-nssel",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-podselector-and-namespaceselector",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "cg-set-with-nssel-and-eesel",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anp-group-set-with-podselector-and-namespaceselector",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					ExternalEntitySelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "cg-set-with-psel-and-eesel",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-podselector-and-namespaceselector",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					ExternalEntitySelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
+		},
+		{
+			name: "cg-set-with-podselector-and-ipblock",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-podselector-and-ipblock",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
+		},
+		{
+			name: "cg-set-with-ipblock",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-ipblock",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "cg-set-with-multicast",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-ipblock",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "224.0.0.0/24"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "cg-set-with-multicast-and-unicast",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-ipblock",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "224.0.0.0/24"},
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "can not set multicast groupAddress together with unicast ip address",
+		},
+		{
+			name: "cg-with-childGroup",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-with-childGroup",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgA", "cgB"},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "already-child-to-be-parent",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "already-child-to-be-parent",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgA"},
+				},
+			},
+			existGroup: &crdv1alpha3.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgParent",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"already-child-to-be-parent"},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "cannot set childGroups for ClusterGroup already-child-to-be-parent, who has 1 parents",
+		},
+		{
+			name: "to-be-parent-of-parent",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "to-be-parent-of-parent",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgParent"},
+				},
+			},
+			existGroup: &crdv1alpha3.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgParent",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA"},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "cannot set ClusterGroup cgParent as childGroup, who has 1 childGroups itself",
+		},
+		// Update using the same func as creation. Only put one case here.
+		{
+			name: "cg-update",
+			curCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-update",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			oldCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-update",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Update,
+		},
+		{
+			name: "cg-to-delete",
+			oldCG: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-to-delete",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Delete,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
+			if tt.existGroup != nil {
+				controller.cgStore.Add(tt.existGroup)
+				controller.addClusterGroup(tt.existGroup)
+			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			actualReason, allowed := validator.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
+			actualReason, allowed := validator.validateAntreaGroup(tt.curCG, tt.oldCG, tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
@@ -1663,9 +2045,87 @@ func TestValidateAntreaGroup(t *testing.T) {
 		name           string
 		curGroup       *crdv1alpha3.Group
 		oldGroup       *crdv1alpha3.Group
+		existGroup     *crdv1alpha3.Group
 		operation      admv1.Operation
 		expectedReason string
 	}{
+		{
+			name: "anp-group-three-fields-set",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-three-fields-set",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					ExternalEntitySelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
+		},
+		{
+			name: "anp-group-set-with-psel-and-nssel",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-and-namespaceselector",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "anp-group-set-with-nssel-and-eesel",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-and-namespaceselector",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					ExternalEntitySelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Create,
+		},
+		{
+			name: "anp-group-set-with-psel-and-eesel",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-and-namespaceselector",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					ExternalEntitySelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
+		},
 		{
 			name: "anp-group-set-with-podselector-and-ipblock",
 			curGroup: &crdv1alpha3.Group{
@@ -1675,7 +2135,7 @@ func TestValidateAntreaGroup(t *testing.T) {
 				},
 				Spec: crdv1alpha3.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"foo=": "bar"},
+						MatchLabels: map[string]string{"foo": "bar"},
 					},
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "10.0.0.10/32"},
@@ -1701,10 +2161,26 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
+			name: "anp-group-set-with-invalid-psel",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-invalid-psel",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
+		},
+		{
 			name: "anp-group-with-childGroup",
 			curGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-ipblock",
+					Name:      "anp-group-with-childGroup",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
@@ -1714,15 +2190,88 @@ func TestValidateAntreaGroup(t *testing.T) {
 			operation: admv1.Create,
 		},
 		{
-			name: "anp-group-to-delete",
+			name: "already-child-to-be-parent",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "already-child-to-be-parent",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA"},
+				},
+			},
+			existGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cgParent",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"already-child-to-be-parent"},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "cannot set childGroups for Group x/already-child-to-be-parent, who has 1 parents",
+		},
+		{
+			name: "to-be-parent-of-parent",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "to-be-parent-of-parent",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgParent"},
+				},
+			},
+			existGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cgParent",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA"},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "cannot set Group x/cgParent as childGroup, who has 1 childGroups itself",
+		},
+		// Update using the same func as creation. Only put one case here.
+		{
+			name: "anp-group-update",
+			curGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-update",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
 			oldGroup: &crdv1alpha3.Group{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "anp-group-set-with-podselector-specified",
+					Name:      "anp-group-update",
 					Namespace: "x",
 				},
 				Spec: crdv1alpha3.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"foo=": "bar"},
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation: admv1.Update,
+		},
+		{
+			name: "anp-group-to-delete",
+			oldGroup: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-to-delete",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
 					},
 				},
 			},
@@ -1732,6 +2281,10 @@ func TestValidateAntreaGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
+			if tt.existGroup != nil {
+				controller.gStore.Add(tt.existGroup)
+				controller.addGroup(tt.existGroup)
+			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAntreaGroup(tt.curGroup, tt.oldGroup, tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
@@ -1749,6 +2302,9 @@ func TestValidateTier(t *testing.T) {
 		name           string
 		curTier        *crdv1alpha1.Tier
 		oldTier        *crdv1alpha1.Tier
+		existTierNum   int
+		existACNP      *crdv1alpha1.ClusterNetworkPolicy
+		existANP       *crdv1alpha1.NetworkPolicy
 		operation      admv1.Operation
 		user           authenticationv1.UserInfo
 		expectedReason string
@@ -1783,6 +2339,34 @@ func TestValidateTier(t *testing.T) {
 				Username: "default",
 			},
 			expectedReason: "tier tier-priority-251 priority 251 is reserved",
+		},
+		{
+			name: "over-max-tier",
+			curTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: int32(maxSupportedTiers) + 1,
+				},
+			},
+			existTierNum:   maxSupportedTiers,
+			operation:      admv1.Create,
+			expectedReason: fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers),
+		},
+		{
+			name: "overlap-tier",
+			curTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-priority-1",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 1,
+				},
+			},
+			existTierNum:   1,
+			operation:      admv1.Create,
+			expectedReason: "tier tier-priority-1 priority 1 overlaps with existing Tier",
 		},
 		{
 			name: "update-tier-not-allowed",
@@ -1862,11 +2446,65 @@ func TestValidateTier(t *testing.T) {
 			},
 			expectedReason: "cannot delete reserved tier baseline",
 		},
+		{
+			name: "delete-anp-ref-tier",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-anp-ref",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 0,
+				},
+			},
+			existANP: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					Tier: "tier-anp-ref",
+				},
+			},
+			operation:      admv1.Delete,
+			expectedReason: "tier tier-anp-ref is referenced by 1 Antrea NetworkPolicies",
+		},
+		{
+			name: "delete-acnp-ref-tier",
+			oldTier: &crdv1alpha1.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tier-acnp-ref",
+				},
+				Spec: crdv1alpha1.TierSpec{
+					Priority: 0,
+				},
+			},
+			existACNP: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "npA", UID: "uidA"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					Tier: "tier-acnp-ref",
+				},
+			},
+			operation:      admv1.Delete,
+			expectedReason: "tier tier-acnp-ref is referenced by 1 Antrea ClusterNetworkPolicies",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
+			for i := 1; i <= tt.existTierNum; i++ {
+				controller.tierStore.Add(&crdv1alpha1.Tier{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("tier-priority-%d", i),
+					},
+					Spec: crdv1alpha1.TierSpec{
+						Priority: int32(i),
+					},
+				})
+			}
+			if tt.existACNP != nil {
+				controller.cnpStore.Add(tt.existACNP)
+			}
+			if tt.existANP != nil {
+				controller.anpStore.Add(tt.existANP)
+			}
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateTier(tt.curTier, tt.oldTier, tt.operation, tt.user)
 			assert.Equal(t, tt.expectedReason, actualReason)

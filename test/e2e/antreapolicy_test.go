@@ -220,61 +220,13 @@ func testMutateANPNoTier(t *testing.T) {
 	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
 }
 
-func testMutateACNPNoRuleName(t *testing.T) {
-	mutateErr := fmt.Errorf("ACNP Rule name not mutated automatically")
+func testCreateValidationInvalidACNP(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with non-exist tier accepted")
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-no-rule-name").
+	builder = builder.SetName("acnp-non-exist-tier").
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		SetPriority(10.0).
-		AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "", "", nil)
-	acnp := builder.Get()
-	log.Debugf("creating ACNP %v", acnp.Name)
-	acnp, err := k8sUtils.CreateOrUpdateACNP(acnp)
-	if err != nil {
-		failOnError(fmt.Errorf("ACNP create failed %v", err), t)
-	}
-	ir := acnp.Spec.Ingress
-	if len(ir) != 1 {
-		failOnError(fmt.Errorf("unexpected number of rules present in ACNP: %d rules present instead of 1", len(ir)), t)
-	}
-	// Here we created a single rule
-	if ir[0].Name == "" {
-		failOnError(mutateErr, t)
-	}
-	failOnError(k8sUtils.CleanACNPs(), t)
-}
-
-func testMutateANPNoRuleName(t *testing.T) {
-	mutateErr := fmt.Errorf("ANP Rule name not mutated automatically")
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespaces["x"], "anp-no-rule-name").
-		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		SetPriority(10.0).
-		AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
-			nil, nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "")
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	anp, err := k8sUtils.CreateOrUpdateANP(anp)
-	if err != nil {
-		failOnError(fmt.Errorf("ANP create failed %v", err), t)
-	}
-	ir := anp.Spec.Ingress
-	if len(ir) != 1 {
-		failOnError(fmt.Errorf("unexpected number of rules present in ANP: %d rules present instead of 1", len(ir)), t)
-	}
-	// Here we created a single rule
-	if ir[0].Name == "" {
-		failOnError(mutateErr, t)
-	}
-	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
-}
-
-func testInvalidACNPNoPriority(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy without a priority accepted")
-	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-no-priority").
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+		SetPriority(1.0).
+		SetTier("no-exist")
 	acnp := builder.Get()
 	log.Debugf("creating ACNP %v", acnp.Name)
 	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
@@ -283,73 +235,36 @@ func testInvalidACNPNoPriority(t *testing.T) {
 	}
 }
 
-func testInvalidANPIngressPeerGroupSetWithPodSelector(t *testing.T) {
-	gA := "gA"
-	namespace := "x"
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	ruleAppTo := ANPAppliedToSpec{
-		PodSelector: map[string]string{"pod": "b"},
-	}
-	k8sUtils.CreateGroup(namespace, gA, &selectorA, nil, nil)
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy with group and podSelector in NetworkPolicyPeer set")
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespace, "anp-ingress-group-podselector-set").
+func testUpdateValidationInvalidACNP(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy appliedTo set in both spec and rules accepted")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-applied-to-update").
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
 		SetPriority(1.0)
-	builder = builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, nil, nil,
-		nil, nil, nil, []ANPAppliedToSpec{ruleAppTo}, crdv1alpha1.RuleActionAllow, gA, "")
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
-		// Above creation of ANP must fail as it is an invalid spec.
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "", "", nil)
+
+	acnp := builder.Get()
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err != nil {
+		failOnError(fmt.Errorf("create ACNP acnp-applied-to-update failed: %v", err), t)
+	}
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, nil,
+		nil, nil, false, []ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}, crdv1alpha1.RuleActionAllow, "", "", nil)
+	acnp = builder.Get()
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above update of ACNP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
-	failOnError(k8sUtils.CleanGroups(namespace), t)
+	failOnError(k8sUtils.DeleteACNP(acnp.Name), t)
 }
 
-func testInvalidANPIngressPeerGroupSetWithIPBlock(t *testing.T) {
-	gA := "gA"
-	namespace := "x"
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	k8sUtils.CreateGroup(namespace, gA, &selectorA, nil, nil)
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy with group and ipBlock in NetworkPolicyPeer set")
-	cidr := "10.0.0.10/32"
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespace, "anp-ingress-group-ipblock-set").
-		SetPriority(1.0).
-		SetAppliedToGroup([]ANPAppliedToSpec{{Group: "gA"}})
-	builder = builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, &cidr, map[string]string{"pod": "b"}, map[string]string{"ns": "x"}, nil,
-		nil, nil, nil, nil, crdv1alpha1.RuleActionAllow, gA, "")
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
-		// Above creation of ANP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-	failOnError(k8sUtils.CleanGroups(namespace), t)
-}
-
-func testInvalidANPNoPriority(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without a priority accepted")
+func testCreateValidationInvalidANP(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy with non-exist tier accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(namespaces["x"], "anp-no-priority").
-		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
-		// Above creation of ANP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
-func testInvalidANPRuleNameNotUnique(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without unique rule names accepted")
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespaces["x"], "anp-rule-name-not-unique").
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
-			nil, nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "not-unique").
-		AddIngress(ProtocolTCP, &p81, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]}, nil,
-			nil, nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "not-unique")
+		SetPriority(1.0).
+		SetTier("non-exist")
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
 	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
@@ -358,55 +273,30 @@ func testInvalidANPRuleNameNotUnique(t *testing.T) {
 	}
 }
 
-func testInvalidANPTierDoesNotExist(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without existing Tier accepted")
+func testUpdateValidationInvalidANP(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy appliedTo set in both spec and rules accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespaces["x"], "anp-tier-not-exist").
+	builder = builder.SetName(namespaces["x"], "anp-applied-to-update").
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		SetTier("i-dont-exist")
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
-		// Above creation of ANP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
-func testInvalidANPPortRangePortUnset(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule with endPort but no port accepted")
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespaces["y"], "anp-egress-port-range-port-unset").
-		SetPriority(1.0).
-		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder.AddEgress(ProtocolTCP, nil, nil, &p8085, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]}, nil,
-		nil, nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "anp-port-range")
+		SetPriority(1.0)
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, nil, nil,
+		nil, nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "")
 
 	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err != nil {
+		failOnError(fmt.Errorf("create ANP anp-applied-to-update failed: %v", err), t)
+	}
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, nil, nil,
+		nil, nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}, crdv1alpha1.RuleActionAllow, "", "")
+	anp = builder.Get()
 	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
-		// Above creation of ANP must fail as it is an invalid spec.
+		// Above update of ANP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
+	failOnError(k8sUtils.DeleteANP(anp.Namespace, anp.Name), t)
 }
 
-func testInvalidANPPortRangeEndPortSmall(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule with endPort smaller than port accepted")
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespaces["y"], "anp-egress-port-range-endport-small").
-		SetPriority(1.0).
-		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder.AddEgress(ProtocolTCP, &p8082, nil, &p8081, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]}, nil,
-		nil, nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "anp-port-range")
-
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
-		// Above creation of ANP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
-func testInvalidTierReservedDelete(t *testing.T) {
+func testDeleteValidationReferencedTier(t *testing.T) {
 	invalidErr := fmt.Errorf("reserved Tier deleted")
 	if err := k8sUtils.DeleteTier("emergency"); err == nil {
 		// Above deletion of reserved Tier must fail.
@@ -414,8 +304,8 @@ func testInvalidTierReservedDelete(t *testing.T) {
 	}
 }
 
-func testInvalidTierPriorityUpdate(t *testing.T) {
-	invalidErr := fmt.Errorf("tier priority updated")
+func testUpdateValidationInvalidTier(t *testing.T) {
+	invalidErr := fmt.Errorf("Tier priority updated")
 	oldTier, err := k8sUtils.CreateNewTier("prio-updated-tier", 21)
 	if err != nil {
 		failOnError(fmt.Errorf("create Tier failed for tier prio-updated-tier: %v", err), t)
@@ -434,8 +324,8 @@ func testInvalidTierPriorityUpdate(t *testing.T) {
 	failOnError(k8sUtils.DeleteTier(oldTier.Name), t)
 }
 
-func testInvalidTierPriorityOverlap(t *testing.T) {
-	invalidErr := fmt.Errorf("tiers created with overlapping priorities")
+func testCreateValidationInvalidTier(t *testing.T) {
+	invalidErr := fmt.Errorf("Tiers created with overlapping priorities")
 	tr, err := k8sUtils.CreateNewTier("tier-prio-20", 20)
 	if err != nil {
 		failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
@@ -448,90 +338,66 @@ func testInvalidTierPriorityOverlap(t *testing.T) {
 	failOnError(k8sUtils.DeleteTier(tr.Name), t)
 }
 
-func testInvalidTierReservedPriority(t *testing.T) {
-	invalidErr := fmt.Errorf("tier created with reserved priority")
-	if _, err := k8sUtils.CreateNewTier("tier-reserved-prio", 251); err == nil {
-		// Above creation of Tier must fail as it is an invalid spec.
+func testCreateValidationInvalidCG(t *testing.T) {
+	invalidErr := fmt.Errorf("ClusterGroup using podSelecter and serviceReference together created")
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName("cg-mix-peer").
+		SetPodSelector(map[string]string{"pod": "a"}, nil).
+		SetServiceReference("svc", namespaces["x"])
+	cg := cgBuilder.Get()
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
+		// Above creation of ClusterGroup must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
 }
 
-func testInvalidTierACNPRefDelete(t *testing.T) {
-	invalidErr := fmt.Errorf("tier deleted with referenced ACNPs")
-	tr, err := k8sUtils.CreateNewTier("tier-acnp", 10)
-	if err != nil {
-		failOnError(fmt.Errorf("create Tier failed for tier tier-acnp: %v", err), t)
+func testUpdateValidationInvalidCG(t *testing.T) {
+	invalidErr := fmt.Errorf("ClusterGroup using podSelecter and serviceReference together updated")
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName("cg-mix-peer-update").
+		SetPodSelector(map[string]string{"pod": "a"}, nil)
+	cg := cgBuilder.Get()
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err != nil {
+		failOnError(fmt.Errorf("create ClusterGroup %s failed: %v", cg.Name, err), t)
 	}
-	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-for-tier").
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		SetTier("tier-acnp").
-		SetPriority(13.0)
-	acnp := builder.Get()
-	log.Debugf("creating ACNP %v", acnp.Name)
-	if _, err = k8sUtils.CreateOrUpdateACNP(acnp); err != nil {
-		failOnError(fmt.Errorf("create ACNP failed for ACNP %s: %v", acnp.Name, err), t)
-	}
-	// Deleting this Tier must fail as it has referenced ACNP
-	if err = k8sUtils.DeleteTier(tr.Name); err == nil {
+	cgBuilder.SetServiceReference("svc", namespaces["x"])
+	cg = cgBuilder.Get()
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
+		// Above update of ClusterGroup must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
-	failOnError(k8sUtils.CleanACNPs(), t)
-	failOnError(k8sUtils.DeleteTier(tr.Name), t)
+	failOnError(k8sUtils.DeleteV1Alpha3CG(cg.Name), t)
 }
 
-func testInvalidTierANPRefDelete(t *testing.T) {
-	invalidErr := fmt.Errorf("tier deleted with referenced ANPs")
-	tr, err := k8sUtils.CreateNewTier("tier-anp-ref", 11)
-	if err != nil {
-		failOnError(fmt.Errorf("create Tier failed for tier tier-anp: %v", err), t)
-	}
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(namespaces["x"], "anp-for-tier").
-		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		SetTier("tier-anp-ref").
-		SetPriority(13.0)
-	anp := builder.Get()
-	log.Debugf("creating ANP %v", anp.Name)
-	if _, err = k8sUtils.CreateOrUpdateANP(anp); err != nil {
-		failOnError(fmt.Errorf("create ANP failed for ANP %s: %v", anp.Name, err), t)
-	}
-	// Deleting this Tier must fail as it has referenced ANP
-	if err = k8sUtils.DeleteTier(tr.Name); err == nil {
+func testCreateValidationInvalidGroup(t *testing.T) {
+	invalidErr := fmt.Errorf("Group using podSelecter and serviceReference together created")
+	gBuilder := &GroupSpecBuilder{}
+	gBuilder = gBuilder.SetName("g-mix-peer").SetNamespace(namespaces["x"]).
+		SetPodSelector(map[string]string{"pod": "a"}, nil).
+		SetServiceReference("svc", namespaces["x"])
+	g := gBuilder.Get()
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3Group(g); err == nil {
+		// Above creation of Group must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
-	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
-	failOnError(k8sUtils.DeleteTier(tr.Name), t)
 }
 
-// testInvalidACNPPodSelectorNsSelectorMatchExpressions tests creating a ClusterNetworkPolicy with invalid LabelSelector(MatchExpressions)
-func testInvalidACNPPodSelectorNsSelectorMatchExpressions(t *testing.T, data *TestData) {
-	invalidLSErr := fmt.Errorf("create Antrea NetworkPolicy with namespaceSelector but matchExpressions invalid")
-
-	allowAction := crdv1alpha1.RuleActionAllow
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"env": "dummy"}}
-	nsSelectA := metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "env", Operator: "xxx", Values: []string{"xxxx"}}}}
-
-	var acnp = &crdv1alpha1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: data.testNamespace, Name: "cnptest", Labels: map[string]string{"antrea-e2e": "cnp1"}},
-		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.AppliedTo{
-				{PodSelector: &selectorA},
-				{NamespaceSelector: &nsSelectA},
-			},
-			Priority: 10,
-			Ingress: []crdv1alpha1.Rule{
-				{
-					Action: &allowAction,
-				},
-			},
-		},
+func testUpdateValidationInvalidGroup(t *testing.T) {
+	invalidErr := fmt.Errorf("Group using podSelecter and serviceReference together updated")
+	gBuilder := &GroupSpecBuilder{}
+	gBuilder = gBuilder.SetName("g-mix-peer").SetNamespace(namespaces["x"]).
+		SetPodSelector(map[string]string{"pod": "a"}, nil)
+	g := gBuilder.Get()
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3Group(g); err != nil {
+		failOnError(fmt.Errorf("create Group %s/%s failed: %v", g.Namespace, g.Name, err), t)
 	}
-
-	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
-		failOnError(invalidLSErr, t)
+	gBuilder.SetServiceReference("svc", namespaces["x"])
+	g = gBuilder.Get()
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3Group(g); err == nil {
+		// Above update of Group must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
 	}
+	failOnError(k8sUtils.DeleteV1Alpha3Group(g.Namespace, g.Name), t)
 }
 
 // testACNPAllowXBtoA tests traffic from X/B to pods with label A, after applying the default deny
@@ -4427,32 +4293,36 @@ func TestAntreaPolicy(t *testing.T) {
 
 	initialize(t, data)
 
-	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
-		t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
-		t.Run("Case=ANPNoPriority", func(t *testing.T) { testInvalidANPNoPriority(t) })
-		t.Run("Case=ANPRuleNameNotUniqueDenied", func(t *testing.T) { testInvalidANPRuleNameNotUnique(t) })
-		t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })
-		t.Run("Case=ANPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidANPPortRangePortUnset(t) })
-		t.Run("Case=ANPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidANPPortRangeEndPortSmall(t) })
-		t.Run("Case=ANPIngressPeerGroupSetWithIPBlock", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithIPBlock(t) })
-		t.Run("Case=ANPIngressPeerGroupSetWithPodSelector", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithPodSelector(t) })
-		t.Run("Case=ACNPInvalidPodSelectorNsSelectorMatchExpressions", func(t *testing.T) { testInvalidACNPPodSelectorNsSelectorMatchExpressions(t, data) })
+	// This test group only provides one case for each CR, including ACNP, ANP, Tier,
+	// ClusterGroup and Group to make sure the corresponding validation webhooks is
+	// called. And for all specific cases/branches inside the validation webhook, we
+	// just use UTs to cover them to reduce the pressure on E2E tests.
+	t.Run("TestGroupValidationWebhook", func(t *testing.T) {
+		// For creation.
+		t.Run("Case=CreateInvalidACNP", func(t *testing.T) { testCreateValidationInvalidACNP(t) })
+		t.Run("Case=CreateInvalidANP", func(t *testing.T) { testCreateValidationInvalidANP(t) })
+		t.Run("Case=CreateInvalidTier", func(t *testing.T) { testCreateValidationInvalidTier(t) })
+		t.Run("Case=CreateInvalidClusterGroup", func(t *testing.T) { testCreateValidationInvalidCG(t) })
+		t.Run("Case=CreateInvalidGroup", func(t *testing.T) { testCreateValidationInvalidGroup(t) })
+
+		// For update.
+		t.Run("Case=UpdateInvalidACNP", func(t *testing.T) { testUpdateValidationInvalidACNP(t) })
+		t.Run("Case=UpdateInvalidANP", func(t *testing.T) { testUpdateValidationInvalidANP(t) })
+		t.Run("Case=UpdateInvalidTier", func(t *testing.T) { testUpdateValidationInvalidTier(t) })
+		t.Run("Case=UpdateInvalidClusterGroup", func(t *testing.T) { testUpdateValidationInvalidCG(t) })
+		t.Run("Case=UpdateInvalidGroup", func(t *testing.T) { testUpdateValidationInvalidGroup(t) })
+
+		// For deletion. ACNP, ANP, ClusterGroup and Group don't have deletion validation.
+		t.Run("Case=DeleteReferencedTier", func(t *testing.T) { testDeleteValidationReferencedTier(t) })
 	})
 
-	t.Run("TestGroupValidateTiers", func(t *testing.T) {
-		t.Run("Case=TierOverlapPriorityDenied", func(t *testing.T) { testInvalidTierPriorityOverlap(t) })
-		t.Run("Case=TierOverlapReservedTierPriorityDenied", func(t *testing.T) { testInvalidTierReservedPriority(t) })
-		t.Run("Case=TierPriorityUpdateDenied", func(t *testing.T) { testInvalidTierPriorityUpdate(t) })
-		t.Run("Case=TierACNPReferencedDeleteDenied", func(t *testing.T) { testInvalidTierACNPRefDelete(t) })
-		t.Run("Case=TierANPRefDeleteDenied", func(t *testing.T) { testInvalidTierANPRefDelete(t) })
-		t.Run("Case=TierReservedDeleteDenied", func(t *testing.T) { testInvalidTierReservedDelete(t) })
-	})
-
-	t.Run("TestGroupMutateAntreaNativePolicies", func(t *testing.T) {
-		t.Run("Case=ACNPNoTierSetDefaultTier", func(t *testing.T) { testMutateACNPNoTier(t) })
-		t.Run("Case=ANPNoTierSetDefaultTier", func(t *testing.T) { testMutateANPNoTier(t) })
-		t.Run("Case=ANPNoRuleNameSetRuleName", func(t *testing.T) { testMutateANPNoRuleName(t) })
-		t.Run("Case=ACNPNoRuleNameSetRuleName", func(t *testing.T) { testMutateACNPNoRuleName(t) })
+	// This test group only provides one case for each CR, including ACNP and ANP to
+	// make sure the corresponding mutation webhooks is called. And for all specific
+	// cases/branches inside the mutation webhook, we just use UTs to cover them to
+	// reduce the pressure on E2E tests.
+	t.Run("TestGroupMutationWebhook", func(t *testing.T) {
+		t.Run("Case=MutateACNPNoTier", func(t *testing.T) { testMutateACNPNoTier(t) })
+		t.Run("Case=MutateANPNoTier", func(t *testing.T) { testMutateANPNoTier(t) })
 	})
 
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
