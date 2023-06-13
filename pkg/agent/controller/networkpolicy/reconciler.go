@@ -346,7 +346,7 @@ func (r *reconciler) getRuleType(rule *CompletedRule) ruleType {
 }
 
 // getOFRuleTable retreives the OpenFlow table to install the CompletedRule.
-// The decision is made based on whether the rule is created for a CNP/ANP, and
+// The decision is made based on whether the rule is created for an ACNP/ANNP, and
 // the Tier of that NetworkPolicy.
 func (r *reconciler) getOFRuleTable(rule *CompletedRule) uint8 {
 	rType := r.getRuleType(rule)

@@ -70,13 +70,13 @@ func (v *snooperValidator) processPackets(expectedPackets int) {
 }
 
 func TestCollectStats(t *testing.T) {
-	curANPStats := map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}}
-	curACNPStats := map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}}}
-	snooper := &IGMPSnooper{igmpReportANPStats: curANPStats, igmpReportACNPStats: curACNPStats}
-	igmpANPStats, igmpACNPStats := snooper.collectStats()
+	curANNPStats := map[apitypes.UID]map[string]*types.RuleMetric{"annp": {"block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}}
+	curACNPStats := map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10122": {Bytes: 42, Packets: 1}}}
+	snooper := &IGMPSnooper{igmpReportANNPStats: curANNPStats, igmpReportACNPStats: curACNPStats}
+	igmpANNPStats, igmpACNPStats := snooper.collectStats()
 	assert.Equal(t, curACNPStats, igmpACNPStats)
-	assert.Equal(t, curANPStats, igmpANPStats)
-	assert.Equal(t, map[apitypes.UID]map[string]*types.RuleMetric{}, snooper.igmpReportANPStats)
+	assert.Equal(t, curANNPStats, igmpANNPStats)
+	assert.Equal(t, map[apitypes.UID]map[string]*types.RuleMetric{}, snooper.igmpReportANNPStats)
 	assert.Equal(t, map[apitypes.UID]map[string]*types.RuleMetric{}, snooper.igmpReportACNPStats)
 }
 

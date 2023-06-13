@@ -69,10 +69,10 @@ func createL7NetworkPolicy(t *testing.T,
 	l4Protocol AntreaPolicyProtocol,
 	port int32,
 	l7Protocols []crdv1alpha1.L7Protocol) {
-	anpBuilder := &AntreaNetworkPolicySpecBuilder{}
-	anpBuilder = anpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
+	annpBuilder := &AntreaNetworkPolicySpecBuilder{}
+	annpBuilder = annpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
 	if isIngress {
-		anpBuilder.AddIngress(l4Protocol,
+		annpBuilder.AddIngress(l4Protocol,
 			&port,
 			nil,
 			nil,
@@ -88,12 +88,12 @@ func createL7NetworkPolicy(t *testing.T,
 			nil,
 			nil,
 			nil,
-			[]ANPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
 			crdv1alpha1.RuleActionAllow,
 			"",
 			"")
 	} else {
-		anpBuilder.AddEgress(l4Protocol,
+		annpBuilder.AddEgress(l4Protocol,
 			&port,
 			nil,
 			nil,
@@ -109,15 +109,15 @@ func createL7NetworkPolicy(t *testing.T,
 			nil,
 			nil,
 			nil,
-			[]ANPAppliedToSpec{{PodSelector: appliedToPodSelector}},
+			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
 			crdv1alpha1.RuleActionAllow,
 			"",
 			"")
 	}
 
-	anp := anpBuilder.Get()
-	t.Logf("Creating ANP %v", anp.Name)
-	_, err := data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Create(context.TODO(), anp, metav1.CreateOptions{})
+	annp := annpBuilder.Get()
+	t.Logf("Creating ANNP %v", annp.Name)
+	_, err := data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 	assert.NoError(t, err)
 }
 

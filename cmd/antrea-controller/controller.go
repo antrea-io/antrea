@@ -100,10 +100,12 @@ var allowedPaths = []string{
 	"/livez",
 	"/readyz",
 	"/mutate/acnp",
+	"/mutate/annp",
 	"/mutate/anp",
 	"/mutate/namespace",
 	"/validate/tier",
 	"/validate/acnp",
+	"/validate/annp",
 	"/validate/anp",
 	"/validate/clustergroup",
 	"/validate/externalippool",
@@ -132,9 +134,9 @@ func run(o *Options) error {
 	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	acnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
 	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
-	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	annpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
@@ -176,8 +178,8 @@ func run(o *Options) error {
 		serviceInformer,
 		networkPolicyInformer,
 		nodeInformer,
-		cnpInformer,
-		anpInformer,
+		acnpInformer,
+		annpInformer,
 		tierInformer,
 		cgInformer,
 		grpInformer,
@@ -201,7 +203,7 @@ func run(o *Options) error {
 
 	var networkPolicyStatusController *networkpolicy.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		networkPolicyStatusController = networkpolicy.NewStatusController(crdClient, networkPolicyStore, cnpInformer, anpInformer)
+		networkPolicyStatusController = networkpolicy.NewStatusController(crdClient, networkPolicyStore, acnpInformer, annpInformer)
 	}
 
 	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
@@ -253,7 +255,7 @@ func run(o *Options) error {
 	// aggregated data. For now it's only used for NetworkPolicy stats.
 	var statsAggregator *stats.Aggregator
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
+		statsAggregator = stats.NewAggregator(networkPolicyInformer, acnpInformer, annpInformer)
 	}
 
 	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)

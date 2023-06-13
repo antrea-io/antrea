@@ -377,14 +377,14 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 				Name:   anp.ruleConfigs[i].name,
 			})
 		}
-		if _, err = k8sUtils.CreateOrUpdateANP(np); err != nil {
+		if _, err = k8sUtils.CreateOrUpdateANNP(np); err != nil {
 			t.Fatalf("Creating ANP %s failed: %v", np.Name, err)
 		}
-		err = data.waitForANPRealized(t, data.testNamespace, np.Name, policyRealizedTimeout)
+		err = data.waitForANNPRealized(t, data.testNamespace, np.Name, policyRealizedTimeout)
 		if err != nil {
 			t.Fatalf("Error when waiting for ANP %s to be realized: %v", np.Name, err)
 		}
-		defer data.DeleteANP(data.testNamespace, anp.name)
+		defer data.DeleteANNP(data.testNamespace, anp.name)
 	}
 
 	for _, anp := range mc.igmpANPConfigs {
@@ -416,14 +416,14 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 				np.Spec.Egress = append(np.Spec.Egress, rule)
 			}
 		}
-		if _, err = k8sUtils.CreateOrUpdateANP(np); err != nil {
+		if _, err = k8sUtils.CreateOrUpdateANNP(np); err != nil {
 			t.Fatalf("Creating ANP %s failed: %v", np.Name, err)
 		}
-		err = data.waitForANPRealized(t, data.testNamespace, np.Name, policyRealizedTimeout)
+		err = data.waitForANNPRealized(t, data.testNamespace, np.Name, policyRealizedTimeout)
 		if err != nil {
 			t.Fatalf("Error when waiting for ANP %s released: %v", np.Name, err)
 		}
-		defer data.DeleteANP(data.testNamespace, anp.name)
+		defer data.DeleteANNP(data.testNamespace, anp.name)
 	}
 
 	for _, receiverConfig := range mc.receiverConfigs {

@@ -115,7 +115,7 @@ func (m *Collector) collect() *statsCollection {
 	ruleStatsMap := m.ofClient.NetworkPolicyMetrics()
 	npStatsMap := map[types.UID]*statsv1alpha1.TrafficStats{}
 	acnpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
-	anpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
+	annpStatsMap := map[types.UID]map[string]*statsv1alpha1.TrafficStats{}
 
 	for ofID, ruleStats := range ruleStatsMap {
 		rule := m.networkPolicyQuerier.GetRuleByFlowID(ofID)
@@ -133,7 +133,7 @@ func (m *Collector) collect() *statsCollection {
 		case cpv1beta.AntreaClusterNetworkPolicy:
 			addRuleStatsUp(acnpStatsMap, ruleStats, rule)
 		case cpv1beta.AntreaNetworkPolicy:
-			addRuleStatsUp(anpStatsMap, ruleStats, rule)
+			addRuleStatsUp(annpStatsMap, ruleStats, rule)
 		}
 	}
 	var multicastGroupMap map[string][]cpv1beta.PodReference
@@ -143,7 +143,7 @@ func (m *Collector) collect() *statsCollection {
 	return &statsCollection{
 		networkPolicyStats:              npStatsMap,
 		antreaClusterNetworkPolicyStats: acnpStatsMap,
-		antreaNetworkPolicyStats:        anpStatsMap,
+		antreaNetworkPolicyStats:        annpStatsMap,
 		multicastGroups:                 multicastGroupMap,
 	}
 }
@@ -204,24 +204,24 @@ func isIdenticalMulticastGroupMap(a, b map[string][]cpv1beta.PodReference) bool 
 	return true
 }
 
-func (m *Collector) calculateNPStats(curStatsCollection *statsCollection) (npStats, acnpStats, anpStats []cpv1beta.NetworkPolicyStats) {
+func (m *Collector) calculateNPStats(curStatsCollection *statsCollection) (npStats, acnpStats, annpStats []cpv1beta.NetworkPolicyStats) {
 	npStats = calculateDiff(curStatsCollection.networkPolicyStats, m.lastStatsCollection.networkPolicyStats)
 	acnpStats = calculateRuleDiff(curStatsCollection.antreaClusterNetworkPolicyStats, m.lastStatsCollection.antreaClusterNetworkPolicyStats)
-	anpStats = calculateRuleDiff(curStatsCollection.antreaNetworkPolicyStats, m.lastStatsCollection.antreaNetworkPolicyStats)
-	return npStats, acnpStats, anpStats
+	annpStats = calculateRuleDiff(curStatsCollection.antreaNetworkPolicyStats, m.lastStatsCollection.antreaNetworkPolicyStats)
+	return npStats, acnpStats, annpStats
 }
 
 func (m *Collector) calculateNodeStatsSummary(curStatsCollection *statsCollection) *cpv1beta.NodeStatsSummary {
 	var multicastGroups []cpv1beta.MulticastGroupInfo
 	multicastGroupsUpdated := false
-	npStats, acnpStats, anpStats := m.calculateNPStats(curStatsCollection)
+	npStats, acnpStats, annpStats := m.calculateNPStats(curStatsCollection)
 	if m.multicastEnabled {
 		multicastGroupsUpdated = !isIdenticalMulticastGroupMap(curStatsCollection.multicastGroups, m.lastStatsCollection.multicastGroups)
-		acnpStats, anpStats = m.mergeStatsWithIGMPReports(acnpStats, anpStats)
+		acnpStats, annpStats = m.mergeStatsWithIGMPReports(acnpStats, annpStats)
 		multicastGroups = m.convertMulticastGroups(curStatsCollection.multicastGroups)
 	}
 	// Semantically, reporting networkpolicy statistics with zero length is equal to reporting the same multicastGroupInfo.
-	if len(npStats) == 0 && len(acnpStats) == 0 && len(anpStats) == 0 && !multicastGroupsUpdated {
+	if len(npStats) == 0 && len(acnpStats) == 0 && len(annpStats) == 0 && !multicastGroupsUpdated {
 		return nil
 	}
 	return &cpv1beta.NodeStatsSummary{
@@ -230,16 +230,16 @@ func (m *Collector) calculateNodeStatsSummary(curStatsCollection *statsCollectio
 		},
 		NetworkPolicies:              npStats,
 		AntreaClusterNetworkPolicies: acnpStats,
-		AntreaNetworkPolicies:        anpStats,
+		AntreaNetworkPolicies:        annpStats,
 		Multicast:                    multicastGroups,
 	}
 }
 
-// mergeStatsWithIGMPReports merges acnpStats or anpStats with IGMP report statistics.
+// mergeStatsWithIGMPReports merges acnpStats or annpStats with IGMP report statistics.
 // Unlike other networkpolicystats collection process, IGMP report statistics is not collected from OVS flows. It was collected during IGMP packetIn process by a local cache.
 // IGMP report statistics collected for a rule should be merged into already defined networkpolicy statistics before reporting.
-func (m *Collector) mergeStatsWithIGMPReports(acnpStats, anpStats []cpv1beta.NetworkPolicyStats) ([]cpv1beta.NetworkPolicyStats, []cpv1beta.NetworkPolicyStats) {
-	multicastANPStatsMap, multicastACNPStatsMap := m.multicastQuerier.CollectIGMPReportNPStats()
+func (m *Collector) mergeStatsWithIGMPReports(acnpStats, annpStats []cpv1beta.NetworkPolicyStats) ([]cpv1beta.NetworkPolicyStats, []cpv1beta.NetworkPolicyStats) {
+	multicastANNPStatsMap, multicastACNPStatsMap := m.multicastQuerier.CollectIGMPReportNPStats()
 	mergeReportStats := func(igmpReportStatsMap map[types.UID]map[string]*agenttypes.RuleMetric, originalStatsList []cpv1beta.NetworkPolicyStats) []cpv1beta.NetworkPolicyStats {
 		uidIndexMap := make(map[types.UID]int)
 		for i, stats := range originalStatsList {
@@ -260,7 +260,7 @@ func (m *Collector) mergeStatsWithIGMPReports(acnpStats, anpStats []cpv1beta.Net
 		return originalStatsList
 	}
 
-	return mergeReportStats(multicastACNPStatsMap, acnpStats), mergeReportStats(multicastANPStatsMap, anpStats)
+	return mergeReportStats(multicastACNPStatsMap, acnpStats), mergeReportStats(multicastANNPStatsMap, annpStats)
 }
 
 // convertMulticastGroups converts multicastGroupMap into a slice of multicastGroups.

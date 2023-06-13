@@ -48,7 +48,7 @@ var (
 		Name:      "baz",
 		UID:       "uid3",
 	}
-	anp1 = cpv1beta.NetworkPolicyReference{
+	annp1 = cpv1beta.NetworkPolicyReference{
 		Type:      cpv1beta.AntreaNetworkPolicy,
 		Namespace: "foo",
 		Name:      "bar",
@@ -127,7 +127,7 @@ func TestCollect(t *testing.T) {
 			ofIDToPolicyMap: map[uint32]*agenttypes.PolicyRule{
 				1: {PolicyRef: &np1},
 				2: {Name: "rule1", PolicyRef: &acnp1},
-				3: {Name: "rule2", PolicyRef: &anp1},
+				3: {Name: "rule2", PolicyRef: &annp1},
 			},
 			expectedStatsCollection: &statsCollection{
 				networkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
@@ -147,7 +147,7 @@ func TestCollect(t *testing.T) {
 					},
 				},
 				antreaNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
-					anp1.UID: {
+					annp1.UID: {
 						"rule2": {
 							Bytes:    30,
 							Packets:  5,
@@ -361,7 +361,7 @@ func TestCalculateNodeStatsSummary(t *testing.T) {
 			expectedSummary: nil,
 		},
 		{
-			name: "anp and multicaststats",
+			name: "annp and multicaststats",
 			lastStatsCollection: &statsCollection{
 				multicastGroups: map[string][]cpv1beta.PodReference{
 					"225.3.4.5": {
@@ -450,16 +450,16 @@ func TestMergeStatsWithIGMPReports(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	tests := []struct {
 		name              string
-		curAnpStats       []cpv1beta.NetworkPolicyStats
+		curAnnpStats      []cpv1beta.NetworkPolicyStats
 		curAcnpStats      []cpv1beta.NetworkPolicyStats
-		curMcastAnpStats  map[types.UID]map[string]*agenttypes.RuleMetric
+		curMcastAnnpStats map[types.UID]map[string]*agenttypes.RuleMetric
 		curMcastAcnpStats map[types.UID]map[string]*agenttypes.RuleMetric
-		expectAnpStats    []cpv1beta.NetworkPolicyStats
+		expectAnnpStats   []cpv1beta.NetworkPolicyStats
 		expectAcnpStats   []cpv1beta.NetworkPolicyStats
 	}{
 		{
-			name: "merge anp stats and acnp stats with igmp reports stats",
-			curAnpStats: []cpv1beta.NetworkPolicyStats{
+			name: "merge annp stats and acnp stats with igmp reports stats",
+			curAnnpStats: []cpv1beta.NetworkPolicyStats{
 				{
 					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
 					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
@@ -505,7 +505,7 @@ func TestMergeStatsWithIGMPReports(t *testing.T) {
 					},
 				},
 			},
-			curMcastAnpStats: map[types.UID]map[string]*agenttypes.RuleMetric{
+			curMcastAnnpStats: map[types.UID]map[string]*agenttypes.RuleMetric{
 				"uid1": {
 					"rule4": {
 						Bytes:   6,
@@ -527,7 +527,7 @@ func TestMergeStatsWithIGMPReports(t *testing.T) {
 					},
 				},
 			},
-			expectAnpStats: []cpv1beta.NetworkPolicyStats{
+			expectAnnpStats: []cpv1beta.NetworkPolicyStats{
 				{
 					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
 					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
@@ -604,11 +604,11 @@ func TestMergeStatsWithIGMPReports(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mcQuerier := queriertest.NewMockAgentMulticastInfoQuerier(ctrl)
-			mcQuerier.EXPECT().CollectIGMPReportNPStats().Return(tt.curMcastAnpStats, tt.curMcastAcnpStats).Times(1)
+			mcQuerier.EXPECT().CollectIGMPReportNPStats().Return(tt.curMcastAnnpStats, tt.curMcastAcnpStats).Times(1)
 			m := &Collector{multicastEnabled: true, multicastQuerier: mcQuerier}
-			acnpStats, anpStats := m.mergeStatsWithIGMPReports(tt.curAcnpStats, tt.curAnpStats)
+			acnpStats, annpStats := m.mergeStatsWithIGMPReports(tt.curAcnpStats, tt.curAnnpStats)
 			assert.Equal(t, tt.expectAcnpStats, acnpStats)
-			assert.Equal(t, tt.expectAnpStats, anpStats)
+			assert.Equal(t, tt.expectAnnpStats, annpStats)
 		})
 	}
 }

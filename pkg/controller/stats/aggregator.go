@@ -63,10 +63,10 @@ type Aggregator struct {
 	dataCh chan *controlplane.NodeStatsSummary
 	// npListerSynced is a function which returns true if the K8s NetworkPolicy shared informer has been synced at least once.
 	npListerSynced cache.InformerSynced
-	// cnpListerSynced is a function which returns true if the Antrea ClusterNetworkPolicy shared informer has been synced at least once.
-	cnpListerSynced cache.InformerSynced
-	// anpListerSynced is a function which returns true if the Antrea NetworkPolicy shared informer has been synced at least once.
-	anpListerSynced cache.InformerSynced
+	// acnpListerSynced is a function which returns true if the Antrea ClusterNetworkPolicy shared informer has been synced at least once.
+	acnpListerSynced cache.InformerSynced
+	// annpListerSynced is a function which returns true if the Antrea NetworkPolicy shared informer has been synced at least once.
+	annpListerSynced cache.InformerSynced
 }
 
 // uidIndexFunc is an index function that indexes based on an object's UID.
@@ -78,7 +78,7 @@ func uidIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(meta.GetUID())}, nil
 }
 
-func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer crdinformers.ClusterNetworkPolicyInformer, anpInformer crdinformers.NetworkPolicyInformer) *Aggregator {
+func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, acnpInformer crdinformers.ClusterNetworkPolicyInformer, annpInformer crdinformers.NetworkPolicyInformer) *Aggregator {
 	aggregator := &Aggregator{
 		networkPolicyStats: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, uidIndex: uidIndexFunc}),
 		dataCh:             make(chan *controlplane.NodeStatsSummary, 1000),
@@ -100,22 +100,22 @@ func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInform
 	// only if the corresponding ClusterNetworkPolicy is present.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		aggregator.antreaClusterNetworkPolicyStats = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{uidIndex: uidIndexFunc})
-		aggregator.cnpListerSynced = cnpInformer.Informer().HasSynced
-		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+		aggregator.acnpListerSynced = acnpInformer.Informer().HasSynced
+		acnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    aggregator.addCNP,
-				DeleteFunc: aggregator.deleteCNP,
+				AddFunc:    aggregator.addACNP,
+				DeleteFunc: aggregator.deleteACNP,
 			},
 			// Set resyncPeriod to 0 to disable resyncing.
 			0,
 		)
 
 		aggregator.antreaNetworkPolicyStats = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, uidIndex: uidIndexFunc})
-		aggregator.anpListerSynced = anpInformer.Informer().HasSynced
-		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
+		aggregator.annpListerSynced = annpInformer.Informer().HasSynced
+		annpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    aggregator.addANP,
-				DeleteFunc: aggregator.deleteANP,
+				AddFunc:    aggregator.addANNP,
+				DeleteFunc: aggregator.deleteANNP,
 			},
 			// Set resyncPeriod to 0 to disable resyncing.
 			0,
@@ -168,13 +168,13 @@ func (a *Aggregator) deleteNetworkPolicy(obj interface{}) {
 	a.networkPolicyStats.Delete(stats)
 }
 
-// addCNP handles ClusterNetworkPolicy ADD events and creates corresponding ClusterNetworkPolicyStats objects.
-func (a *Aggregator) addCNP(obj interface{}) {
-	cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
+// addACNP handles ClusterNetworkPolicy ADD events and creates corresponding ClusterNetworkPolicyStats objects.
+func (a *Aggregator) addACNP(obj interface{}) {
+	acnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 	stats := &statsv1alpha1.AntreaClusterNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cnp.Name,
-			UID:  cnp.UID,
+			Name: acnp.Name,
+			UID:  acnp.UID,
 			// To indicate the duration that the stats covers, the CreationTimestamp is set to the time that the stats
 			// start, instead of the CreationTimestamp of the ClusterNetworkPolicy.
 			CreationTimestamp: metav1.Time{Time: time.Now()},
@@ -183,16 +183,16 @@ func (a *Aggregator) addCNP(obj interface{}) {
 	a.antreaClusterNetworkPolicyStats.Add(stats)
 }
 
-// deleteCNP handles ClusterNetworkPolicy DELETE events and deletes corresponding ClusterNetworkPolicyStats objects.
-func (a *Aggregator) deleteCNP(obj interface{}) {
-	cnp, ok := obj.(*crdv1alpha1.ClusterNetworkPolicy)
+// deleteACNP handles ClusterNetworkPolicy DELETE events and deletes corresponding ClusterNetworkPolicyStats objects.
+func (a *Aggregator) deleteACNP(obj interface{}) {
+	acnp, ok := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea ClusterNetworkPolicy, invalid type: %v", obj)
 			return
 		}
-		cnp, ok = tombstone.Obj.(*crdv1alpha1.ClusterNetworkPolicy)
+		acnp, ok = tombstone.Obj.(*crdv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea ClusterNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -200,21 +200,21 @@ func (a *Aggregator) deleteCNP(obj interface{}) {
 	}
 	stats := &statsv1alpha1.AntreaClusterNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cnp.Name,
-			UID:  cnp.UID,
+			Name: acnp.Name,
+			UID:  acnp.UID,
 		},
 	}
 	a.antreaClusterNetworkPolicyStats.Delete(stats)
 }
 
-// addANP handles Antrea NetworkPolicy ADD events and creates corresponding AntreaNetworkPolicyStats objects.
-func (a *Aggregator) addANP(obj interface{}) {
-	anp := obj.(*crdv1alpha1.NetworkPolicy)
+// addANNP handles Antrea NetworkPolicy ADD events and creates corresponding AntreaNetworkPolicyStats objects.
+func (a *Aggregator) addANNP(obj interface{}) {
+	annp := obj.(*crdv1alpha1.NetworkPolicy)
 	stats := &statsv1alpha1.AntreaNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: anp.Namespace,
-			Name:      anp.Name,
-			UID:       anp.UID,
+			Namespace: annp.Namespace,
+			Name:      annp.Name,
+			UID:       annp.UID,
 			// To indicate the duration that the stats covers, the CreationTimestamp is set to the time that the stats
 			// start, instead of the CreationTimestamp of the Antrea NetworkPolicy.
 			CreationTimestamp: metav1.Time{Time: time.Now()},
@@ -223,16 +223,16 @@ func (a *Aggregator) addANP(obj interface{}) {
 	a.antreaNetworkPolicyStats.Add(stats)
 }
 
-// deleteANP handles Antrea NetworkPolicy DELETE events and deletes corresponding AntreaNetworkPolicyStats objects.
-func (a *Aggregator) deleteANP(obj interface{}) {
-	anp, ok := obj.(*crdv1alpha1.NetworkPolicy)
+// deleteANNP handles Antrea NetworkPolicy DELETE events and deletes corresponding AntreaNetworkPolicyStats objects.
+func (a *Aggregator) deleteANNP(obj interface{}) {
+	annp, ok := obj.(*crdv1alpha1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", obj)
 			return
 		}
-		anp, ok = tombstone.Obj.(*crdv1alpha1.NetworkPolicy)
+		annp, ok = tombstone.Obj.(*crdv1alpha1.NetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -240,9 +240,9 @@ func (a *Aggregator) deleteANP(obj interface{}) {
 	}
 	stats := &statsv1alpha1.AntreaNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: anp.Namespace,
-			Name:      anp.Name,
-			UID:       anp.UID,
+			Namespace: annp.Namespace,
+			Name:      annp.Name,
+			UID:       annp.UID,
 		},
 	}
 	a.antreaNetworkPolicyStats.Delete(stats)
@@ -354,7 +354,7 @@ func (a *Aggregator) Run(stopCh <-chan struct{}) {
 
 	cacheSyncs := []cache.InformerSynced{a.npListerSynced}
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		cacheSyncs = append(cacheSyncs, a.cnpListerSynced, a.anpListerSynced)
+		cacheSyncs = append(cacheSyncs, a.acnpListerSynced, a.annpListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync("stats aggregator", stopCh, cacheSyncs...) {
 		return

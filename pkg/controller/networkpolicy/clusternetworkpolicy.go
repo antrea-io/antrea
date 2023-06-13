@@ -53,7 +53,7 @@ func (n *NetworkPolicyController) addCNP(obj interface{}) {
 // updateCNP receives ClusterNetworkPolicy UPDATE events and enqueues a
 // reference of the ClusterNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) updateCNP(_, cur interface{}) {
-	defer n.heartbeat("updateCNP")
+	defer n.heartbeat("updateACNP")
 	curCNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s UPDATE event", curCNP.Name)
 	n.enqueueInternalNetworkPolicy(getACNPReference(curCNP))
@@ -119,7 +119,7 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 	}
 
 	affectedPolicies := sets.New[string]()
-	objs, _ := n.cnpInformer.Informer().GetIndexer().ByIndex(perNamespaceRuleIndex, HasPerNamespaceRule)
+	objs, _ := n.acnpInformer.Informer().GetIndexer().ByIndex(perNamespaceRuleIndex, HasPerNamespaceRule)
 	for _, obj := range objs {
 		cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 		if affected := func() bool {
@@ -160,7 +160,7 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(namespace.Labels)
 	for cnpName := range affectedACNPs {
 		// Ignore the ClusterNetworkPolicy if it has been removed during the process.
-		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
+		if cnp, err := n.acnpLister.Get(cnpName); err == nil {
 			n.enqueueInternalNetworkPolicy(getACNPReference(cnp))
 		}
 	}
@@ -181,7 +181,7 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 		affectedACNPs := utilsets.SymmetricDifferenceString(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
 		for cnpName := range affectedACNPs {
 			// Ignore the ClusterNetworkPolicy if it has been removed during the process.
-			if cnp, err := n.cnpLister.Get(cnpName); err == nil {
+			if cnp, err := n.acnpLister.Get(cnpName); err == nil {
 				n.enqueueInternalNetworkPolicy(getACNPReference(cnp))
 			}
 		}
@@ -216,7 +216,7 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(namespace.Labels)
 	for _, cnpName := range sets.List(affectedACNPs) {
 		// Ignore the ClusterNetworkPolicy if it has been removed during the process.
-		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
+		if cnp, err := n.acnpLister.Get(cnpName); err == nil {
 			n.enqueueInternalNetworkPolicy(getACNPReference(cnp))
 		}
 	}

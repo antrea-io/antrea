@@ -2173,6 +2173,8 @@ spec:
     singular: networkpolicy
     kind: NetworkPolicy
     shortNames:
+      - annp
+      # Deprecated shortName and shall be removed in Antrea v1.14.0
       - anp
 
 ---
@@ -4852,12 +4854,12 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
-  - name: "anpmutator.antrea.io"
+  - name: "annpmutator.antrea.io"
     clientConfig:
       service:
         name: "antrea"
         namespace: kube-system
-        path: "/mutate/anp"
+        path: "/mutate/annp"
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
@@ -4907,12 +4909,12 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
-  - name: "anpvalidator.antrea.io"
+  - name: "annpvalidator.antrea.io"
     clientConfig:
       service:
         name: "antrea"
         namespace: kube-system
-        path: "/validate/anp"
+        path: "/validate/annp"
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]

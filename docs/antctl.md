@@ -224,7 +224,7 @@ Antrea Agent supports some extra `antctl` commands.
 * Printing NetworkPolicies with a specific source NetworkPolicy type.
 
   ```bash
-  antctl get networkpolicy -T (K8sNP|ACNP|ANP)
+  antctl get networkpolicy -T (K8sNP|ACNP|ANNP|ANP)
   ```
   
 * Printing NetworkPolicies with a specific source NetworkPolicy name.
