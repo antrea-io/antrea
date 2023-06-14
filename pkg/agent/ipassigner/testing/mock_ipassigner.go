@@ -49,17 +49,17 @@ func (m *MockIPAssigner) EXPECT() *MockIPAssignerMockRecorder {
 }
 
 // AssignIP mocks base method
-func (m *MockIPAssigner) AssignIP(arg0 string) error {
+func (m *MockIPAssigner) AssignIP(arg0 string, arg1 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssignIP", arg0)
+	ret := m.ctrl.Call(m, "AssignIP", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AssignIP indicates an expected call of AssignIP
-func (mr *MockIPAssignerMockRecorder) AssignIP(arg0 interface{}) *gomock.Call {
+func (mr *MockIPAssignerMockRecorder) AssignIP(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), arg0, arg1)
 }
 
 // AssignedIPs mocks base method

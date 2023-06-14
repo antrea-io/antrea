@@ -28,6 +28,8 @@ import (
 
 	"antrea.io/antrea/pkg/agent/ipassigner/responder"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/arping"
+	"antrea.io/antrea/pkg/agent/util/ndp"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 )
 
@@ -71,11 +73,11 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (IPAss
 			return nil, err
 		}
 		if dummyDeviceName == "" || arpIgnore > 0 {
-			arpResonder, err := responder.NewARPResponder(externalInterface)
+			arpResponder, err := responder.NewARPResponder(externalInterface)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create ARP responder for link %s: %v", externalInterface.Name, err)
 			}
-			a.arpResponder = arpResonder
+			a.arpResponder = arpResponder
 		}
 	}
 	if ipv6 != nil {
@@ -141,7 +143,7 @@ func (a *ipAssigner) loadIPAddresses() (sets.String, error) {
 }
 
 // AssignIP ensures the provided IP is assigned to the dummy device and the ARP/NDP responders.
-func (a *ipAssigner) AssignIP(ip string) error {
+func (a *ipAssigner) AssignIP(ip string, forceAdvertise bool) error {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return fmt.Errorf("invalid IP %s", ip)
@@ -151,6 +153,9 @@ func (a *ipAssigner) AssignIP(ip string) error {
 
 	if a.assignedIPs.Has(ip) {
 		klog.V(2).InfoS("The IP is already assigned", "ip", ip)
+		if forceAdvertise {
+			a.advertise(parsedIP)
+		}
 		return nil
 	}
 
@@ -177,9 +182,24 @@ func (a *ipAssigner) AssignIP(ip string) error {
 			return fmt.Errorf("failed to assign IP %v to NDP responder: %v", ip, err)
 		}
 	}
-
+	// Always advertise the IP when the IP is newly assigned to this Node.
+	a.advertise(parsedIP)
 	a.assignedIPs.Insert(ip)
 	return nil
+}
+
+func (a *ipAssigner) advertise(ip net.IP) {
+	if utilnet.IsIPv4(ip) {
+		klog.V(2).InfoS("Sending gratuitous ARP", "ip", ip)
+		if err := arping.GratuitousARPOverIface(ip, a.externalInterface); err != nil {
+			klog.ErrorS(err, "Failed to send gratuitous ARP", "ip", ip)
+		}
+	} else {
+		klog.V(2).InfoS("Sending neighbor advertisement", "ip", ip)
+		if err := ndp.NeighborAdvertisement(ip, a.externalInterface); err != nil {
+			klog.ErrorS(err, "Failed to send neighbor advertisement", "ip", ip)
+		}
+	}
 }
 
 // UnassignIP ensures the provided IP is not assigned to the dummy device.
@@ -271,6 +291,7 @@ func (a *ipAssigner) InitIPs(ips sets.String) error {
 		if err != nil {
 			return err
 		}
+		a.advertise(ip)
 	}
 	a.assignedIPs = ips.Union(nil)
 	return nil
