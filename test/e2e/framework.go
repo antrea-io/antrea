@@ -2276,24 +2276,44 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 	return agentConf.Multicast.MulticastInterfaces, nil
 }
 
-func GetTransportInterface(data *TestData) (string, error) {
-	cmd := fmt.Sprintf("ip -br addr show | grep %s", clusterInfo.nodes[0].ipv4Addr)
-	if testOptions.providerName == "kind" {
-		cmd = "/bin/sh -c " + cmd
-	}
-	_, stdout, stderr, err := data.RunCommandOnNode(nodeName(0), cmd)
+func (data *TestData) GetTransportInterface() (string, error) {
+	// It assumes all Nodes have the same transport interface name.
+	nodeName := nodeName(0)
+	nodeIP := nodeIP(0)
+	antreaPod, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get Antrea Pod on Node %s: %v", nodeName, err)
 	}
-	if stdout == "" || stderr != "" {
-		return "", fmt.Errorf("failed to get transport interface, stdout: %s, stderr: %s", stdout, stderr)
+	cmd := []string{"ip", "-br", "addr", "show"}
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
+	if stdout == "" || stderr != "" || err != nil {
+		return "", fmt.Errorf("failed to show ip address, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 	}
 	// Example stdout:
 	// eth0@if461       UP             172.18.0.2/16 fc00:f853:ccd:e793::2/64 fe80::42:acff:fe12:2/64
 	// eno1             UP             10.176.3.138/22 fe80::e643:4bff:fe43:a30e/64
-	fields := strings.Fields(stdout)
-	name, _, _ := strings.Cut(fields[0], "@")
-	return name, nil
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, nodeIP+"/") {
+			fields := strings.Fields(line)
+			name, _, _ := strings.Cut(fields[0], "@")
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
+}
+
+func (data *TestData) GetNodeMACAddress(node, device string) (string, error) {
+	antreaPod, err := data.getAntreaPodOnNode(node)
+	if err != nil {
+		return "", fmt.Errorf("failed to get Antrea Pod on Node %s: %v", node, err)
+	}
+	cmd := []string{"cat", fmt.Sprintf("/sys/class/net/%s/address", device)}
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
+	if stdout == "" || stderr != "" || err != nil {
+		return "", fmt.Errorf("failed to get MAC address, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
+	}
+	return strings.TrimSpace(stdout), nil
 }
 
 // mutateAntreaConfigMap will perform the specified updates on the antrea-agent config and the
