@@ -799,11 +799,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	for _, record := range clickHouseRecords {
 		checkPodAndNodeDataClickHouse(data, t, record, srcPodName, srcNodeName, "", "")
 		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeToExternal)
-		// Since the OVS userspace conntrack implementation doesn't maintain
-		// packet or byte counter statistics, skip the check for Kind clusters
-		if testOptions.providerName != "kind" {
-			assert.Greater(t, record.OctetDeltaCount, uint64(0), "octetDeltaCount should be non-zero")
-		}
+		assert.Greater(t, record.OctetDeltaCount, uint64(0), "octetDeltaCount should be non-zero")
 	}
 }
 
