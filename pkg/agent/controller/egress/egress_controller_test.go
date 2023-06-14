@@ -588,7 +588,9 @@ func TestSyncEgress(t *testing.T) {
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2).Times(2)
+				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2, true)
+				// forceAdvertise depends on how fast the Egress status update is reflected in the informer cache, which doesn't really matter.
+				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2, gomock.Any())
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP2), uint32(2))
@@ -631,7 +633,7 @@ func TestSyncEgress(t *testing.T) {
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1)
+				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, true)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
@@ -673,7 +675,7 @@ func TestSyncEgress(t *testing.T) {
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1)
+				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, true)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))

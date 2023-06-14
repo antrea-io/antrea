@@ -52,60 +52,6 @@ func (c *fakeNDPConn) LeaveGroup(ip net.IP) error {
 	return c.leaveGroup(ip)
 }
 
-func TestNDPResponder_Advertise(t *testing.T) {
-	buffer := bytes.NewBuffer(nil)
-	fakeConn := &fakeNDPConn{
-		writeTo: func(msg ndp.Message, _ *ipv6.ControlMessage, _ net.IP) error {
-			bs, err := ndp.MarshalMessage(msg)
-			assert.NoError(t, err)
-			buffer.Write(bs)
-			return nil
-		},
-	}
-	responder := &ndpResponder{
-		iface: newFakeNetworkInterface(),
-		conn:  fakeConn,
-	}
-	err := responder.advertise(net.ParseIP("fe80::250:56ff:fea7:e29d"))
-	assert.NoError(t, err)
-	//  Neighbor Advertisement Message Format - RFC 4861 Section 4.4.
-	//   0                   1                   2                   3
-	//   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-	//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//  |     Type      |     Code      |          Checksum             |
-	//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//  |R|S|O|                     Reserved                            |
-	//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//  |                                                               |
-	//  +                                                               +
-	//  |                                                               |
-	//  +                       Target Address                          +
-	//  |                                                               |
-	//  +                                                               +
-	//  |                                                               |
-	//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//  |   Options ...
-	//  +-+-+-+-+-+-+-+-+-+-+-+-
-	//
-	//  Options formats - Source/Target Link-layer Address. RFC 4861 Section 4.6.1.
-	//   0                   1                   2                   3
-	//   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-	//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//  |     Type      |    Length     |    Link-Layer Address ...
-	//  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	expectedBytes := []byte{
-		0x88,       // type - 136 for Neighbor Advertisement
-		0x00,       // code
-		0x00, 0x00, // checksum
-		0x20, 0x00, 0x00, 0x00, // flags and reserved bits. Override bit is set.
-		0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x50, 0x56, 0xff, 0xfe, 0xa7, 0xe2, 0x9d, // IPv6 address
-		0x02,                               // option - 2 for Target Link-layer Address
-		0x01,                               // length (units of 8 octets including type and length fields)
-		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // hardware address
-	}
-	assert.Equal(t, expectedBytes, buffer.Bytes())
-}
-
 func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 	tests := []struct {
 		name           string
