@@ -20,6 +20,32 @@
           ignore_post_commit_hooks: false
           publishers: []
           wrappers: []
+      - '{name}-{test_name}-for-period':
+          test_name: jenkins-backup
+          node: 'backup-node'
+          description: 'This is for backing up all jenkins files.'
+          builders:
+            - builder-jenkins-backup
+          branches: []
+          included_regions: []
+          cron: 'H 0 1 * *'
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 30
+              type: absolute
+          - credentials-binding:
+              - text:
+                  credential-id: RDIFF_USERNAME
+                  variable: RDIFF_USERNAME
+              - text:
+                  credential-id: RDIFF_IP
+                  variable: RDIFF_IP
+              - text:
+                  credential-id: RDIFF_PATH
+                  variable: RDIFF_PATH
       - '{name}-{test_name}-no-scm':
           test_name: flexible-ipam-e2e-pending-label
           node: null
