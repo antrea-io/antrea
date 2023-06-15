@@ -58,6 +58,7 @@ type proxyOptions struct {
 
 	controller    bool
 	agentNodeName string
+	insecure      bool
 }
 
 var options *proxyOptions
@@ -131,10 +132,10 @@ func init() {
 		Args:    cobra.NoArgs,
 	}
 
-	// Options are the same as for "kubectl proxy"
-	// https://github.com/kubernetes/kubectl/blob/v0.19.0/pkg/cmd/proxy/proxy.go
 	o := &proxyOptions{}
 	options = o
+	// These options are the same as for "kubectl proxy".
+	// https://github.com/kubernetes/kubectl/blob/v0.19.0/pkg/cmd/proxy/proxy.go
 	Command.Flags().StringVarP(&o.staticDir, "www", "w", "", "Also serve static files from the given directory under the specified prefix.")
 	Command.Flags().StringVarP(&o.staticPrefix, "www-prefix", "P", defaultStaticPrefix, "Prefix to serve static files under, if static file directory is specified.")
 	Command.Flags().StringVarP(&o.apiPrefix, "api-prefix", "", defaultAPIPrefix, "Prefix to serve the proxied API under.")
@@ -147,11 +148,15 @@ func init() {
 	Command.Flags().BoolVar(&o.disableFilter, "disable-filter", false, "If true, disable request filtering in the proxy. This is dangerous, and can leave you vulnerable to XSRF attacks, when used with an accessible port.")
 	Command.Flags().StringVarP(&o.unixSocket, "unix-socket", "u", "", "Unix socket on which to run the proxy.")
 	Command.Flags().DurationVar(&o.keepalive, "keepalive", 0, "keepalive specifies the keep-alive period for an active network connection. Set to 0 to disable keepalive.")
+
+	// These options are specific to "antctl proxy".
 	Command.Flags().BoolVar(&o.controller, "controller", false, "Run proxy for Antrea Controller API. If both --controller and --agent-node are omitted, the proxy will run for the Controller API.")
 	Command.Flags().StringVar(&o.agentNodeName, "agent-node", "", "Run proxy for Antrea Agent API on the provided K8s Node.")
+	Command.Flags().BoolVar(&o.insecure, "insecure", false, "Skip TLS verification when connecting to Antrea API.")
 }
 
 func runE(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
 	if runtime.Mode != runtime.ModeController || runtime.InPod {
 		return fmt.Errorf("only remote mode is supported for this command")
 	}
@@ -164,8 +169,6 @@ func runE(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
 	if server, _ := Command.Flags().GetString("server"); server != "" {
 		kubeconfig.Host = server
 	}
@@ -175,14 +178,15 @@ func runE(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 
+	insecure, _ := Command.Flags().GetBool("insecure")
 	var clientCfg *rest.Config
 	if options.controller {
-		clientCfg, err = raw.CreateControllerClientCfg(k8sClientset, antreaClientset, restconfigTmpl)
+		clientCfg, err = raw.CreateControllerClientCfg(ctx, k8sClientset, antreaClientset, kubeconfig, insecure)
 		if err != nil {
 			return fmt.Errorf("error when creating Controller client config: %w", err)
 		}
 	} else {
-		clientCfg, err = raw.CreateAgentClientCfg(k8sClientset, antreaClientset, restconfigTmpl, options.agentNodeName)
+		clientCfg, err = raw.CreateAgentClientCfg(ctx, k8sClientset, antreaClientset, kubeconfig, options.agentNodeName, insecure)
 		if err != nil {
 			return fmt.Errorf("error when creating Agent client config: %w", err)
 		}

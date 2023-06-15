@@ -2549,9 +2549,16 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 					},
 					"apiPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The port of antrea agent API Server",
+							Description: "The port of Antrea Agent API Server",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"apiCertData": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The self-signed certificate used to serve the Antrea Agent API",
+							Type:        []string{"string"},
+							Format:      "byte",
 						},
 					},
 					"nodePortLocalPortRange": {

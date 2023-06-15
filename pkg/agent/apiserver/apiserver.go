@@ -52,7 +52,7 @@ import (
 	antreaversion "antrea.io/antrea/pkg/version"
 )
 
-const Name = "antrea-agent-api"
+const CertPairName = "antrea-agent-api"
 
 var (
 	scheme = runtime.NewScheme()
@@ -72,6 +72,15 @@ type agentAPIServer struct {
 
 func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+}
+
+func (s *agentAPIServer) GetCertData() []byte {
+	secureServingInfo := s.GenericAPIServer.SecureServingInfo
+	if secureServingInfo == nil {
+		return nil
+	}
+	cert, _ := secureServingInfo.Cert.CurrentCertKeyContent()
+	return cert
 }
 
 func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer) {
@@ -116,7 +125,7 @@ func New(aq agentquerier.AgentQuerier,
 	if err != nil {
 		return nil, err
 	}
-	s, err := cfg.New(Name, genericapiserver.NewEmptyDelegate())
+	s, err := cfg.New(CertPairName, genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +152,7 @@ func newConfig(aq agentquerier.AgentQuerier,
 
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
-	secureServing.ServerCert.PairName = Name
+	secureServing.ServerCert.PairName = CertPairName
 
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)

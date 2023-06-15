@@ -33,7 +33,6 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 
 	"antrea.io/antrea/pkg/antctl/raw"
@@ -137,8 +136,6 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 	if err != nil {
 		return err
 	}
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
 
 	k8sClient, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
