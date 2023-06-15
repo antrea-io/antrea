@@ -163,11 +163,16 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    clean_up_one_ns "monitoring"
-    clean_up_one_ns "antrea-ipam-test-11"
-    clean_up_one_ns "antrea-ipam-test-12"
-    clean_up_one_ns "antrea-ipam-test"
-    clean_up_one_ns "antrea-test"
+    clean_ns "monitoring"
+    clean_ns "antrea-ipam-test"
+    clean_ns "antrea-test"
+    echo "====== Cleanup Conformance Namespaces ======"
+    clean_ns "net"
+    clean_ns "service"
+    clean_ns "x-"
+    clean_ns "y-"
+    clean_ns "z-"
+
     # Delete antrea-prometheus first for k8s>=1.22 to avoid Pod stuck in Terminating state.
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml --ignore-not-found=true || true
     for antrea_yml in ${WORKDIR}/*.yml; do
@@ -287,12 +292,20 @@ function wait_for_antrea_windows_processes_ready {
     done
 }
 
-function clean_up_one_ns {
+function clean_ns {
     ns=$1
-    kubectl get pod -n "${ns}" --no-headers=true | awk '{print $1}' | while read pod_name; do
-        kubectl delete pod "${pod_name}" -n "${ns}" --force --grace-period 0
-    done
-    kubectl delete ns "${ns}" --ignore-not-found=true || true
+    matching_ns=$(kubectl get ns | awk -v ns="${ns}" '$1 ~ ns {print $1}')
+    
+    if [ -n "${matching_ns}" ]; then
+        echo "${matching_ns}" | while read -r ns_name; do
+            kubectl get pod -n "${ns_name}" --no-headers=true | awk '{print $1}' | while read pod_name; do
+                kubectl delete pod "${pod_name}" -n "${ns_name}" --force --grace-period 0
+            done
+            kubectl delete ns "${ns_name}" --ignore-not-found=true || true
+        done
+    else
+        echo "No matching namespaces $ns found."
+    fi
 }
 
 function prepare_env {
@@ -338,7 +351,7 @@ function revert_snapshot_windows {
 
 function deliver_antrea_windows {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows ======"
-    clean_up_one_ns "antrea-test"
+    clean_antrea
     kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
     kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
@@ -458,8 +471,8 @@ function deliver_antrea_windows {
 }
 
 function deliver_antrea_windows_containerd {
-    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows containerd ======"
-    clean_up_one_ns "antrea-test"
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows Containerd ======"
+    clean_antrea
     kubectl delete -f ${WORKDIR}/antrea-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
@@ -562,11 +575,7 @@ function deliver_antrea_windows_containerd {
 
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea ======"
-    clean_up_one_ns "monitoring" || true
-    clean_up_one_ns "antrea-ipam-test-11" || true
-    clean_up_one_ns "antrea-ipam-test-12" || true
-    clean_up_one_ns "antrea-ipam-test" || true
-    clean_up_one_ns "antrea-test" || true
+    clean_antrea
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml || true
     kubectl delete daemonset antrea-agent -n kube-system || true
     kubectl delete -f ${WORKDIR}/antrea.yml || true
