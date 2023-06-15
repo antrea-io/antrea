@@ -30,7 +30,7 @@ require (
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/memberlist v0.5.0
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.3.0
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.2.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/lithammer/dedent v1.1.0
@@ -61,7 +61,7 @@ require (
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.9.0
 	golang.org/x/time v0.3.0
-	golang.org/x/tools v0.9.3
+	golang.org/x/tools v0.10.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
 	google.golang.org/grpc v1.55.0
 	google.golang.org/protobuf v1.30.0
