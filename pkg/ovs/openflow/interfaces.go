@@ -336,11 +336,7 @@ type Group interface {
 
 type BucketBuilder interface {
 	Weight(val uint16) BucketBuilder
-	// Deprecated.
-	LoadReg(regID int, data uint32) BucketBuilder
 	LoadXXReg(regID int, data []byte) BucketBuilder
-	// Deprecated.
-	LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder
 	LoadToRegField(field *RegField, data uint32) BucketBuilder
 	LoadRegMark(mark *RegMark) BucketBuilder
 	ResubmitToTable(tableID uint8) BucketBuilder

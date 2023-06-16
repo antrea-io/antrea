@@ -286,24 +286,6 @@ func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
 	return a.builder
 }
 
-// LoadRange is an action to load data to the target field at specified range.
-func (a *ofFlowAction) LoadRange(name string, value uint64, rng *Range) FlowBuilder {
-	hasMask := rng != nil
-	field, _ := openflow15.FindFieldHeaderByName(name, hasMask)
-	valueBytes := make([]byte, 8)
-	maskBytes := make([]byte, 8)
-	valueData := value
-	if hasMask {
-		mask := ^uint64(0) >> (64 - rng.Length()) << rng.Offset()
-		binary.BigEndian.PutUint64(maskBytes, mask)
-		field.Mask = util.NewBuffer(maskBytes)
-		valueData = valueData << rng.Offset()
-	}
-	binary.BigEndian.PutUint64(valueBytes, valueData)
-	field.Value = util.NewBuffer(valueBytes)
-	return a.setField(field)
-}
-
 func (a *ofFlowAction) LoadToRegField(field *RegField, value uint32) FlowBuilder {
 	valueData := value
 	mask := uint32(0)
