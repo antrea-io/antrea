@@ -99,6 +99,8 @@ var (
 		"egressNetworkPolicyRuleAction",
 		"tcpState",
 		"flowType",
+		"egressName",
+		"egressIP",
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
@@ -126,6 +128,7 @@ type FlowExporter struct {
 	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
 	expiredConns           []flowexporter.Connection
+	egressQuerier          querier.EgressQuerier
 }
 
 func genObservationID(nodeName string) uint32 {
@@ -152,7 +155,8 @@ func prepareExporterInputArgs(collectorProto, nodeName string) exporter.Exporter
 
 func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
-	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions) (*FlowExporter, error) {
+	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions,
+	egressQuerier querier.EgressQuerier) (*FlowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -184,6 +188,7 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
+		egressQuerier:          egressQuerier,
 	}, nil
 }
 
@@ -554,7 +559,11 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 		case "tcpState":
 			ie.SetStringValue(conn.TCPState)
 		case "flowType":
-			ie.SetUnsigned8Value(exp.findFlowType(*conn))
+			ie.SetUnsigned8Value(conn.FlowType)
+		case "egressName":
+			ie.SetStringValue(conn.EgressName)
+		case "egressIP":
+			ie.SetStringValue(conn.EgressIP)
 		}
 	}
 	err := exp.ipfixSet.AddRecord(eL, templateID)
@@ -600,7 +609,27 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	return 0
 }
 
+func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
+	egressName, egressIP, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
+	if err != nil {
+		// Egress is not enabled or no Egress is applied to this Pod
+		return
+	}
+	conn.EgressName = egressName
+	conn.EgressIP = egressIP
+	klog.V(4).InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "SourcePodNamespace", conn.SourcePodNamespace, "SourcePodName", conn.SourcePodName)
+}
+
 func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
+	conn.FlowType = exp.findFlowType(*conn)
+	if conn.FlowType == ipfixregistry.FlowTypeToExternal {
+		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
+			exp.fillEgressInfo(conn)
+		} else {
+			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
+			return nil
+		}
+	}
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	if err := exp.addConnToSet(conn); err != nil {
 		return err

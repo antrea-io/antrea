@@ -82,9 +82,11 @@ const (
                    throughputFromDestinationNode,
                    reverseThroughputFromSourceNode,
                    reverseThroughputFromDestinationNode,
-                   clusterUUID)
+                   clusterUUID,
+                   egressName,
+                   egressIP)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
 // PrepareClickHouseConnection is used for unit testing
@@ -325,7 +327,10 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 			record.ThroughputFromDestinationNode,
 			record.ReverseThroughputFromSourceNode,
 			record.ReverseThroughputFromDestinationNode,
-			ch.clusterUUID)
+			ch.clusterUUID,
+			record.EgressName,
+			record.EgressIP,
+		)
 
 		if err != nil {
 			klog.ErrorS(err, "Error when adding record")

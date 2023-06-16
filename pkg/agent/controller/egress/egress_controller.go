@@ -943,16 +943,29 @@ func (c *EgressController) GetEgressIPByMark(mark uint32) (string, error) {
 	return "", fmt.Errorf("no EgressIP associated with mark %v", mark)
 }
 
-// GetEgress returns effective Egress applied on a Pod.
-func (c *EgressController) GetEgress(ns, podName string) (string, error) {
-	c.egressBindingsMutex.RLock()
-	defer c.egressBindingsMutex.RUnlock()
-	pod := k8s.NamespacedName(ns, podName)
-	binding, exists := c.egressBindings[pod]
-	if !exists {
-		return "", fmt.Errorf("no Egress applied to Pod %v", pod)
+// GetEgress returns effective Egress and Egress IP applied on a Pod.
+func (c *EgressController) GetEgress(ns, podName string) (string, string, error) {
+	if c == nil {
+		return "", "", fmt.Errorf("Egress is not enabled")
 	}
-	return binding.effectiveEgress, nil
+	pod := k8s.NamespacedName(ns, podName)
+	egress, exists := func() (string, bool) {
+		c.egressBindingsMutex.RLock()
+		defer c.egressBindingsMutex.RUnlock()
+		binding, exists := c.egressBindings[pod]
+		if !exists {
+			return "", false
+		}
+		return binding.effectiveEgress, true
+	}()
+	if !exists {
+		return "", "", fmt.Errorf("no Egress applied to Pod %v", pod)
+	}
+	state, exists := c.getEgressState(egress)
+	if !exists {
+		return "", "", fmt.Errorf("no Egress State associated with name %s", egress)
+	}
+	return egress, state.egressIP, nil
 }
 
 // An Egress is schedulable if its Egress IP is allocated from ExternalIPPool.

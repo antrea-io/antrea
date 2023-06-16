@@ -70,5 +70,7 @@ func PrepareTestFlowRecord() *flowrecord.FlowRecord {
 		ThroughputFromDestinationNode:        15902813474,
 		ReverseThroughputFromSourceNode:      12381345,
 		ReverseThroughputFromDestinationNode: 12381346,
+		EgressName:                           "test-egress",
+		EgressIP:                             "172.18.0.1",
 	}
 }
