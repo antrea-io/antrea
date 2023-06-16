@@ -480,4 +480,8 @@ func writeRecord(w io.Writer, r *flowrecord.FlowRecord, clusterUUID string) {
 	io.WriteString(w, clusterUUID)
 	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", time.Now().Unix()))
+	io.WriteString(w, ",")
+	io.WriteString(w, r.EgressName)
+	io.WriteString(w, ",")
+	io.WriteString(w, r.EgressIP)
 }

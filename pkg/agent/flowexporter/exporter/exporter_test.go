@@ -16,6 +16,7 @@ package exporter
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -39,6 +40,7 @@ import (
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
 const (
@@ -796,5 +798,54 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 		}
 		flowType := flowExp.findFlowType(tc.conn)
 		assert.Equal(t, tc.expectedFlowType, flowType)
+	}
+}
+
+func TestFlowExporter_fillEgressInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	testCases := []struct {
+		name               string
+		sourcePodNamespace string
+		sourcePodName      string
+		expectedEgressName string
+		expectedEgressIP   string
+		expectedErr        string
+	}{
+		{
+			name:               "Both EgressName and EgressIP filled",
+			sourcePodNamespace: "namespaceA",
+			sourcePodName:      "podA",
+			expectedEgressName: "test-egress",
+			expectedEgressIP:   "172.18.0.1",
+		},
+		{
+			name:               "No Egress Information filled",
+			sourcePodNamespace: "namespaceA",
+			sourcePodName:      "podC",
+			expectedEgressName: "",
+			expectedEgressIP:   "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
+			exp := &FlowExporter{
+				egressQuerier: egressQuerier,
+			}
+			conn := flowexporter.Connection{
+				SourcePodNamespace: tc.sourcePodNamespace,
+				SourcePodName:      tc.sourcePodName,
+			}
+			if tc.expectedEgressName != "" {
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(tc.expectedEgressName, tc.expectedEgressIP, nil)
+			} else {
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return("", "", fmt.Errorf("no Egress applied to Pod %s", conn.SourcePodName))
+			}
+			exp.fillEgressInfo(&conn)
+			assert.Equal(t, tc.expectedEgressName, conn.EgressName)
+			assert.Equal(t, tc.expectedEgressIP, conn.EgressIP)
+		})
 	}
 }

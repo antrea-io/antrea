@@ -132,7 +132,9 @@ func TestBatchCommitAll(t *testing.T) {
 			15902813474,
 			12381345,
 			12381346,
-			fakeClusterUUID).
+			fakeClusterUUID,
+			"test-egress",
+			"172.18.0.1").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 

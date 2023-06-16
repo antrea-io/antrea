@@ -282,7 +282,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 				}
 			}
 			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
-				egress, err := c.egressQuerier.GetEgress(ns, srcPod)
+				egress, _, err := c.egressQuerier.GetEgress(ns, srcPod)
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -308,7 +308,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 				}
 				egress := ""
 				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
-					egress, err = c.egressQuerier.GetEgress(ns, srcPod)
+					egress, _, err = c.egressQuerier.GetEgress(ns, srcPod)
 					if err != nil {
 						return nil, nil, nil, err
 					}

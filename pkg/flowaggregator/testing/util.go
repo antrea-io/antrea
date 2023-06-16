@@ -207,6 +207,14 @@ func PrepareMockIpfixRecord(mockRecord *ipfixentitiestesting.MockRecord, isIPv4 
 	reverseThroughputFromDestinationNodeElem.SetUnsigned64Value(uint64(12381346))
 	mockRecord.EXPECT().GetInfoElementWithValue("reverseThroughputFromDestinationNode").Return(reverseThroughputFromDestinationNodeElem, 0, true)
 
+	egressNameElem := createElement("egressName", ipfixregistry.AntreaEnterpriseID)
+	egressNameElem.SetStringValue("test-egress")
+	mockRecord.EXPECT().GetInfoElementWithValue("egressName").Return(egressNameElem, 0, true)
+
+	egressIPElem := createElement("egressIP", ipfixregistry.AntreaEnterpriseID)
+	egressIPElem.SetStringValue("172.18.0.1")
+	mockRecord.EXPECT().GetInfoElementWithValue("egressIP").Return(egressIPElem, 0, true)
+
 	if isIPv4 {
 		sourceIPv4Elem := createElement("sourceIPv4Address", ipfixregistry.IANAEnterpriseID)
 		sourceIPv4Elem.SetIPAddressValue(net.ParseIP("10.10.0.79"))

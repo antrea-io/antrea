@@ -68,6 +68,8 @@ type FlowRecord struct {
 	ThroughputFromDestinationNode        uint64
 	ReverseThroughputFromSourceNode      uint64
 	ReverseThroughputFromDestinationNode uint64
+	EgressName                           string
+	EgressIP                             string
 }
 
 // GetFlowRecord converts ipfixentities.Record to FlowRecord
@@ -219,6 +221,12 @@ func GetFlowRecord(record ipfixentities.Record) *FlowRecord {
 	}
 	if revTputFromDstNode, _, ok := record.GetInfoElementWithValue("reverseThroughputFromDestinationNode"); ok {
 		r.ReverseThroughputFromDestinationNode = revTputFromDstNode.GetUnsigned64Value()
+	}
+	if egressName, _, ok := record.GetInfoElementWithValue("egressName"); ok {
+		r.EgressName = egressName.GetStringValue()
+	}
+	if egressIP, _, ok := record.GetInfoElementWithValue("egressIP"); ok {
+		r.EgressIP = egressIP.GetStringValue()
 	}
 	return r
 }

@@ -620,7 +620,8 @@ func run(o *Options) error {
 			ovsDatapathType,
 			features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 			networkPolicyController,
-			flowExporterOptions)
+			flowExporterOptions,
+			egressController)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

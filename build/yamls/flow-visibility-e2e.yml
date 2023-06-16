@@ -91,7 +91,9 @@ data:
             reverseThroughputFromSourceNode UInt64,
             reverseThroughputFromDestinationNode UInt64,
             clusterUUID String,
-            trusted UInt8 DEFAULT 0
+            trusted UInt8 DEFAULT 0,
+            egressName String,
+            egressIP String
         ) engine=MergeTree
         ORDER BY (timeInserted, flowEndSeconds)
         TTL timeInserted + INTERVAL 1 HOUR
