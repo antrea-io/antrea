@@ -233,14 +233,6 @@ func (b *ofFlowBuilder) MatchCTMark(marks ...*CtMark) FlowBuilder {
 	return b
 }
 
-// MatchCTMarkMask sets the mask of ct_mark. The mask is used only if ct_mark is set.
-func (b *ofFlowBuilder) MatchCTMarkMask(mask uint32) FlowBuilder {
-	if b.Flow.Match.CtMark > 0 {
-		b.ofFlow.Match.CtMarkMask = &mask
-	}
-	return b
-}
-
 // MatchPktMark adds match condition for matching pkt_mark. If mask is nil, the mask should be not set in the OpenFlow
 // message which is sent to OVS, and OVS should match the value exactly.
 func (b *ofFlowBuilder) MatchPktMark(value uint32, mask *uint32) FlowBuilder {
@@ -567,12 +559,6 @@ func (b *ofFlowBuilder) MatchCTProtocol(proto Protocol) FlowBuilder {
 // Cookie sets cookie ID for the flow entry.
 func (b *ofFlowBuilder) Cookie(cookieID uint64) FlowBuilder {
 	b.Flow.CookieID = cookieID
-	return b
-}
-
-// CookieMask sets cookie mask for the flow entry.
-func (b *ofFlowBuilder) CookieMask(cookieMask uint64) FlowBuilder {
-	b.Flow.CookieMask = &cookieMask
 	return b
 }
 
