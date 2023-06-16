@@ -2272,20 +2272,6 @@ func (mr *MockBucketBuilderMockRecorder) Done() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Done", reflect.TypeOf((*MockBucketBuilder)(nil).Done))
 }
 
-// LoadReg mocks base method
-func (m *MockBucketBuilder) LoadReg(arg0 int, arg1 uint32) openflow.BucketBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadReg", arg0, arg1)
-	ret0, _ := ret[0].(openflow.BucketBuilder)
-	return ret0
-}
-
-// LoadReg indicates an expected call of LoadReg
-func (mr *MockBucketBuilderMockRecorder) LoadReg(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadReg", reflect.TypeOf((*MockBucketBuilder)(nil).LoadReg), arg0, arg1)
-}
-
 // LoadRegMark mocks base method
 func (m *MockBucketBuilder) LoadRegMark(arg0 *openflow.RegMark) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
@@ -2298,20 +2284,6 @@ func (m *MockBucketBuilder) LoadRegMark(arg0 *openflow.RegMark) openflow.BucketB
 func (mr *MockBucketBuilderMockRecorder) LoadRegMark(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegMark", reflect.TypeOf((*MockBucketBuilder)(nil).LoadRegMark), arg0)
-}
-
-// LoadRegRange mocks base method
-func (m *MockBucketBuilder) LoadRegRange(arg0 int, arg1 uint32, arg2 *openflow.Range) openflow.BucketBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadRegRange", arg0, arg1, arg2)
-	ret0, _ := ret[0].(openflow.BucketBuilder)
-	return ret0
-}
-
-// LoadRegRange indicates an expected call of LoadRegRange
-func (mr *MockBucketBuilderMockRecorder) LoadRegRange(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegRange", reflect.TypeOf((*MockBucketBuilder)(nil).LoadRegRange), arg0, arg1, arg2)
 }
 
 // LoadToRegField mocks base method
