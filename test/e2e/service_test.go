@@ -113,8 +113,8 @@ func testClusterIPCases(t *testing.T, data *TestData, url string, clients, hostN
 }
 
 func testClusterIPFromPod(t *testing.T, data *TestData, url, nodeName, podName string, hostNetwork bool, namespace string, expectedConnectivity PodConnectivityMark) {
-	cmd := fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s --timeout=1s --protocol=tcp; done;", url)
-	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, agnhostContainerName, []string{"sh", "-c", cmd})
+	cmd := ProbeCommand(url, "tcp", "")
+	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, agnhostContainerName, cmd)
 	connectivity := Connected
 	if err != nil || stderr != "" {
 		// If err != nil and stderr == "", then it means this probe failed because of the command instead of connectivity.

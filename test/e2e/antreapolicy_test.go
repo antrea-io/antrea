@@ -3819,8 +3819,8 @@ sleep 3600
 	for idx, clientName := range clientNames {
 		log.Tracef("Probing: 1.1.1.1 -> %s:%d", nodeIP(idx), nodePort)
 		// Connect to NodePort in the fake external network.
-		cmd = fmt.Sprintf("for i in $(seq 1 3); do ip netns exec %s /agnhost connect %s:%d --timeout=1s --protocol=tcp; done;", testNetns, nodeIP(idx), nodePort)
-		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, []string{"sh", "-c", cmd})
+		cmd := ProbeCommand(fmt.Sprintf("%s:%d", nodeIP(idx), nodePort), "tcp", fmt.Sprintf("ip netns exec %s", testNetns))
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, cmd)
 		connectivity := Connected
 		if err != nil || stderr != "" {
 			// log this error as trace since may be an expected failure
