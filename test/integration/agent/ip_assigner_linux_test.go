@@ -40,7 +40,7 @@ func TestIPAssigner(t *testing.T) {
 	require.NoError(t, err, "Failed to find the dummy device")
 	defer netlink.LinkDel(dummyDevice)
 
-	err = ipAssigner.AssignIP("x")
+	err = ipAssigner.AssignIP("x", false)
 	assert.Error(t, err, "Assigning an invalid IP should fail")
 
 	ip1 := "10.10.10.10"
@@ -49,7 +49,7 @@ func TestIPAssigner(t *testing.T) {
 	desiredIPs := sets.New[string](ip1, ip2, ip3)
 
 	for ip := range desiredIPs {
-		errAssign := ipAssigner.AssignIP(ip)
+		errAssign := ipAssigner.AssignIP(ip, false)
 		cmd := exec.Command("ip", "addr")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
