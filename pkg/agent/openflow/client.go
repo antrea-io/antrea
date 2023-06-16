@@ -450,10 +450,10 @@ func (c *client) modifyFlows(cache *flowCategoryCache, flowCacheKey string, flow
 			var msg *openflow15.FlowMod
 			if _, ok := oldFlowCache[matchString]; ok {
 				msg = getFlowModMessage(flow, binding.ModifyMessage)
-				adds = append(adds, msg)
+				mods = append(mods, msg)
 			} else {
 				msg = getFlowModMessage(flow, binding.AddMessage)
-				mods = append(mods, msg)
+				adds = append(adds, msg)
 			}
 			fCache[matchString] = msg
 		}
