@@ -2288,7 +2288,8 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 	}
 	annp := v1beta1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      name,
+			Namespace: data.testNamespace,
 			Labels: map[string]string{
 				"antrea-e2e": name,
 			},
@@ -2310,7 +2311,6 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 					Action: &dropACT,
 					Ports:  []v1beta1.NetworkPolicyPort{},
 					From:   []v1beta1.NetworkPolicyPeer{},
-					To:     []v1beta1.NetworkPolicyPeer{},
 				},
 			},
 			Egress: []v1beta1.Rule{},

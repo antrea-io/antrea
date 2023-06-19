@@ -551,7 +551,7 @@ other external Nodes labeled with `role=front`:
 apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
-  name: anp1
+  name: annp1
   namespace: vm-ns
 spec:
   priority: 9000.0

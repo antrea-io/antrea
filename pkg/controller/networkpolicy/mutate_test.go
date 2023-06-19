@@ -201,7 +201,7 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 		expectPatch []jsonPatch
 	}{
 		{
-			name: "anp-create-mutate",
+			name: "annp-create-mutate",
 			policy: &crdv1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "mutate-rule-name-tier",
@@ -276,7 +276,7 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 			},
 		},
 		{
-			name: "anp-update-mutate",
+			name: "annp-update-mutate",
 			policy: &crdv1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mutate-rule-name-tier",
