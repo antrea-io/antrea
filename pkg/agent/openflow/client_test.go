@@ -813,6 +813,103 @@ func Test_client_InstallPodFlows(t *testing.T) {
 	}
 }
 
+func Test_client_UpdatePodFlows(t *testing.T) {
+	podIPv4 := net.ParseIP("10.10.0.66")
+	podIPv4Updated := net.ParseIP("10.10.0.88")
+	podIPv6 := net.ParseIP("fec0:10:10::66")
+	podIPv6Updated := net.ParseIP("fec0:10:10::88")
+	podMAC, _ := net.ParseMAC("00:00:10:10:00:66")
+	podOfPort := uint32(100)
+	testCases := []struct {
+		name                   string
+		enableIPv4             bool
+		enableIPv6             bool
+		clientOptions          []clientOptionsFn
+		podInterfaceIPs        []net.IP
+		podUpdatedInterfaceIPs []net.IP
+		vlanID                 uint16
+		trafficEncapMode       config.TrafficEncapModeType
+		expectedFlows          []string
+		expectedNewFlows       []string
+	}{
+		{
+			name:                   "IPv4",
+			enableIPv4:             true,
+			podInterfaceIPs:        []net.IP{podIPv4},
+			podUpdatedInterfaceIPs: []net.IP{podIPv4Updated},
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=100,arp_spa=10.10.0.66,arp_sha=00:00:10:10:00:66 actions=goto_table:ARPResponder",
+				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=100,arp_spa=10.10.0.88,arp_sha=00:00:10:10:00:66 actions=goto_table:ARPResponder",
+				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.88 actions=goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.88 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+			},
+		},
+		{
+			name:                   "IPv6",
+			enableIPv6:             true,
+			podInterfaceIPs:        []net.IP{podIPv6},
+			podUpdatedInterfaceIPs: []net.IP{podIPv6Updated},
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::88 actions=goto_table:IPv6",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::88 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+
+			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
+			defer resetPipelines()
+
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+			// When only the Pod IP is updated, the flow change in Classifier and L2ForwardingCalc table should just be mod
+			// messages since no flow matcher has changed. The other flows should be deleted and added as the latest ones.
+			// For IPV4 case there is one additional flow delete and add for the ARPSpoofGuard table.
+			numFlowDelAndAdds := 3
+			if tc.enableIPv6 {
+				numFlowDelAndAdds = 2
+			}
+			m.EXPECT().BundleOps(gomock.Len(numFlowDelAndAdds), gomock.Len(2), gomock.Len(numFlowDelAndAdds)).Return(nil).Times(1)
+			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
+
+			interfaceName := "pod1"
+			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podInterfaceIPs, podMAC, podOfPort, tc.vlanID, nil))
+			fCacheI, ok := fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
+			require.True(t, ok)
+			flows := getFlowStrings(fCacheI)
+			assert.ElementsMatch(t, tc.expectedFlows, flows)
+
+			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podUpdatedInterfaceIPs, podMAC, podOfPort, tc.vlanID, nil))
+			fCacheI, ok = fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
+			require.True(t, ok)
+			flows = getFlowStrings(fCacheI)
+			assert.ElementsMatch(t, tc.expectedNewFlows, flows)
+
+			assert.NoError(t, fc.UninstallPodFlows(interfaceName))
+			_, ok = fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
+			require.False(t, ok)
+		})
+	}
+}
+
 func Test_client_GetPodFlowKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := oftest.NewMockOFEntryOperations(ctrl)
