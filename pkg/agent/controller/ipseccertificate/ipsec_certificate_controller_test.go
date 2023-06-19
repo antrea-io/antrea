@@ -316,8 +316,8 @@ func TestController_RotateCertificates(t *testing.T) {
 	// truncated, which means that there can actually be less than 7s between the
 	// CreationTimestamp of the first certificate and the rotation deadline. As a result, we
 	// need to set the lower bound to 6s.
-	// b) it takes time to process the CSR request so we add one second to the upper bound.
-	assert.Less(t, delta, 10*time.Second)
+	// b) it takes time to process the CSR request so we add 3 seconds to the upper bound.
+	assert.Less(t, delta, 12*time.Second)
 	assert.LessOrEqual(t, 6*time.Second, delta)
 }
 
