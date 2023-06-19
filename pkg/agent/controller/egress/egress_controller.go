@@ -658,8 +658,10 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 
 	if desiredNode == c.nodeName {
-		// Ensure the Egress IP is assigned to the system.
-		if err := c.ipAssigner.AssignIP(desiredEgressIP); err != nil {
+		// Ensure the Egress IP is assigned to the system. Force advertising the IP if it was previously assigned to
+		// another Node in the Egress API. This could force refreshing other peers' neighbor cache when the Egress IP is
+		// obtained by this Node and another Node at the same time in some situations, e.g. split brain.
+		if err := c.ipAssigner.AssignIP(desiredEgressIP, egress.Status.EgressNode != c.nodeName); err != nil {
 			return err
 		}
 	} else {
