@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/mdlayher/arp"
-	"github.com/mdlayher/ethernet"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -47,15 +46,6 @@ func NewARPResponder(iface *net.Interface) (*arpResponder, error) {
 	}, nil
 }
 
-// advertise sends an gratuitous ARP packet for the IP.
-func (r *arpResponder) advertise(ip net.IP) error {
-	pkt, err := arp.NewPacket(arp.OperationRequest, r.iface.HardwareAddr, ip, ethernet.Broadcast, ip)
-	if err != nil {
-		return err
-	}
-	return r.conn.WriteTo(pkt, ethernet.Broadcast)
-}
-
 func (r *arpResponder) InterfaceName() string {
 	return r.iface.Name
 }
@@ -66,10 +56,6 @@ func (r *arpResponder) AddIP(ip net.IP) error {
 	}
 	if r.addIP(ip) {
 		klog.InfoS("Assigned IP to ARP responder", "ip", ip, "interface", r.iface.Name)
-		err := r.advertise(ip)
-		if err != nil {
-			klog.ErrorS(err, "Failed to advertise", "ip", ip, "interface", r.iface.Name)
-		}
 	}
 	return nil
 }

@@ -228,7 +228,7 @@ func TestCreateService(t *testing.T) {
 			serviceToCreate:          servicePolicyCluster,
 			healthyNodes:             []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP1)
+				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP1, true)
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyCluster): {
@@ -269,7 +269,7 @@ func TestCreateService(t *testing.T) {
 			serviceToCreate: servicePolicyLocal,
 			healthyNodes:    []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP1)
+				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP1, true)
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {
@@ -455,7 +455,7 @@ func TestUpdateService(t *testing.T) {
 			healthyNodes: []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP1)
-				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP2)
+				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP2, true)
 			},
 			expectError: false,
 		},
@@ -473,7 +473,7 @@ func TestUpdateService(t *testing.T) {
 			},
 			healthyNodes: []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP2)
+				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP2, true)
 			},
 			expectError: false,
 		},

@@ -77,64 +77,6 @@ func newFakeNetworkInterface() *net.Interface {
 	}
 }
 
-func TestARPResponder_Advertise(t *testing.T) {
-	tests := []struct {
-		name          string
-		iface         *net.Interface
-		ip            net.IP
-		expectError   bool
-		expectedBytes []byte
-	}{
-		{
-			name:        "GratuitousARP for IPv4",
-			iface:       newFakeNetworkInterface(),
-			ip:          net.ParseIP("192.168.10.1").To4(),
-			expectError: false,
-			expectedBytes: []byte{
-				// ethernet header (16 bytes)
-				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 6 bytes: destination hardware address
-				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // 6 bytes: source hardware address
-				0x08, 0x06, // 2 bytes: ethernet type
-				// arp payload (46 bytes)
-				0x00, 0x01, // 2 bytes: hardware type
-				0x08, 0x00, // 2 bytes: protocol type
-				0x06,       // 1 byte : hardware address length
-				0x04,       // 1 byte : protocol length
-				0x00, 0x01, // 2 bytes: operation
-				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // 6 bytes: source hardware address
-				0xc0, 0xa8, 0x0a, 0x01, // 4 bytes: source protocol address
-				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 6 bytes: target hardware address
-				0xc0, 0xa8, 0x0a, 0x01, // 4 bytes: target protocol address
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 18 bytes: padding
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn := &fakePacketConn{
-				buffer: bytes.NewBuffer(nil),
-				addr: raw.Addr{
-					HardwareAddr: tt.iface.HardwareAddr,
-				},
-			}
-			fakeARPClient, err := newFakeARPClient(tt.iface, conn)
-			require.NoError(t, err)
-
-			r := arpResponder{
-				iface: tt.iface,
-				conn:  fakeARPClient,
-			}
-			err = r.advertise(tt.ip)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedBytes, conn.buffer.Bytes())
-			}
-		})
-	}
-}
-
 func TestARPResponder_HandleARPRequest(t *testing.T) {
 	tests := []struct {
 		name                 string

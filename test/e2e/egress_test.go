@@ -643,6 +643,17 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 	if egress.Status.EgressNode != fromNode {
 		fromNode, toNode = nodeName(1), nodeName(0)
 	}
+	var checkIPNeighbor func(string)
+	if observerNode := nodeName(2); observerNode != "" {
+		checkIPNeighbor, err = setupIPNeighborChecker(data, t, observerNode, fromNode, toNode, egress.Spec.EgressIP)
+		require.NoError(t, err)
+	} else {
+		checkIPNeighbor = func(_ string) {
+			t.Logf("The cluster didn't have enough Nodes, skip IP neighbor check")
+		}
+	}
+
+	checkIPNeighbor(fromNode)
 
 	// Trigger Egress IP migration. The EgressIP should be moved to the other Node.
 	triggerFunc(externalIPPoolTwoNodes.Name, fromNode)
@@ -655,11 +666,13 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 	}
 	_, err = data.checkEgressState(egress.Name, egress.Spec.EgressIP, toNode, otherNodeToCheck, timeout)
 	assert.NoError(t, err)
+	checkIPNeighbor(toNode)
 
 	// Revert the operation. The EgressIP should be moved back.
 	revertFunc(externalIPPoolTwoNodes.Name, fromNode)
 	_, err = data.checkEgressState(egress.Name, egress.Spec.EgressIP, fromNode, toNode, timeout)
 	assert.NoError(t, err)
+	checkIPNeighbor(fromNode)
 }
 
 func (data *TestData) checkEgressState(egressName, expectedIP, expectedNode, otherNode string, timeout time.Duration) (*v1alpha2.Egress, error) {
@@ -714,6 +727,62 @@ func hasIP(data *TestData, nodeName string, ip string) (bool, error) {
 		return false, err
 	}
 	return strings.Contains(stdout, ip+"/32") || strings.Contains(stdout, ip+"/128"), nil
+}
+
+func setupIPNeighborChecker(data *TestData, t *testing.T, observerNode, node1, node2, ip string) (checkIPNeighbor func(string), err error) {
+	transportInterface, err := data.GetTransportInterface()
+	require.NoError(t, err)
+
+	macAddress1, err := data.GetNodeMACAddress(node1, transportInterface)
+	require.NoError(t, err)
+	macAddress2, err := data.GetNodeMACAddress(node2, transportInterface)
+	require.NoError(t, err)
+	nodeToMACAddress := map[string]string{node1: macAddress1, node2: macAddress2}
+
+	antreaPodName, err := data.getAntreaPodOnNode(observerNode)
+	require.NoError(t, err)
+
+	// The Egress IP may not be in the same subnet as the primary IP of the transport interface.
+	// Adding a direct route for the Egress IP so the Node will query its MAC address, instead of trying to connect via
+	// its gateway.
+	cmd := []string{"ip", "route", "replace", ip, "dev", transportInterface}
+	_, _, err = data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+	require.NoError(t, err, "Failed to add a direct route for Egress IP %s on Node %s", ip, observerNode)
+
+	t.Cleanup(func() {
+		cmd := []string{"ip", "route", "del", ip, "dev", transportInterface}
+		_, _, err = data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+		require.NoError(t, err, "Failed to delete the direct route for Egress IP %s on Node %s", ip, observerNode)
+	})
+
+	checkIPNeighbor = func(expectNode string) {
+		check := func(allowEmpty bool) {
+			showIPNeighCmd := []string{"ip", "neighbor", "show", ip, "dev", transportInterface}
+			// stdout example:
+			// 172.18.0.1 lladdr 02:42:c2:60:91:66 STALE
+			stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, showIPNeighCmd)
+			require.NoError(t, err, "Failed to query lladdr for Egress IP %s on Node %s", ip, observerNode)
+			if stdout == "" || strings.Contains(stdout, "FAILED") {
+				if !allowEmpty {
+					t.Errorf("Didn't get lladdr for Egress IP %s on Node %s", ip, observerNode)
+				}
+				return
+			}
+			fields := strings.Fields(stdout)
+			require.Len(t, fields, 4)
+			llAddr := fields[2]
+			assert.Equal(t, nodeToMACAddress[expectNode], llAddr, "lladdr for Egress IP %s didn't match the MAC address of Node %s", ip, expectNode)
+		}
+		// Before the Node actually connects to the Egress IP, we expect that the lladdr either matches the Egress Node's MAC address or is empty.
+		check(true)
+		// The protocol must be present when using wget with IPv6 address.
+		cmd := []string{"wget", fmt.Sprintf("http://%s", net.JoinHostPort(ip, "80")), "-T", "1", "-t", "1"}
+		// We don't care whether it succeeds, just make it connect to the Egress IP to learn its MAC address.
+		data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+		// After the Node tries to connect to the Egress IP, we expect that the lladdr matches the Egress Node's MAC address.
+		check(false)
+	}
+	return checkIPNeighbor, nil
 }
 
 func (data *TestData) createExternalIPPool(t *testing.T, generateName string, ipRange v1alpha2.IPRange, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string) *v1alpha2.ExternalIPPool {

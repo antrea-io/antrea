@@ -704,7 +704,7 @@ func computeMulticastInterfaces(t *testing.T, data *TestData) (map[int][]string,
 	if err != nil {
 		return nil, err
 	}
-	transportInterface, err := GetTransportInterface(data)
+	transportInterface, err := data.GetTransportInterface()
 	if err != nil {
 		t.Fatalf("Error getting transport interfaces: %v", err)
 	}
