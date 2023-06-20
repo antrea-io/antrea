@@ -52,6 +52,7 @@ const (
 )
 
 var httpGet = http.Get
+var getAPIGroupResources = getAPIGroupResourcesWrapper
 
 func generateManifests(role string, version string) ([]string, error) {
 	var manifests []string
@@ -82,9 +83,10 @@ func generateManifests(role string, version string) ([]string, error) {
 	return manifests, nil
 }
 
-func createResources(cmd *cobra.Command, k8sClient kubernetes.Interface, dynamicClient dynamic.Interface, content []byte) error {
+func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGroupResources, dynamicClient dynamic.Interface, content []byte) error {
 	var err error
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(content)), 100)
+	unstructuredObjs := map[dynamic.ResourceInterface]*unstructured.Unstructured{}
 	for {
 		var rawObj runtime.RawExtension
 		if err = decoder.Decode(&rawObj); err != nil {
@@ -101,25 +103,21 @@ func createResources(cmd *cobra.Command, k8sClient kubernetes.Interface, dynamic
 		}
 
 		unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
-
-		gr, err := restmapper.GetAPIGroupResources(k8sClient.Discovery())
-		if err != nil {
-			return err
-		}
-
-		mapper := restmapper.NewDiscoveryRESTMapper(gr)
+		mapper := restmapper.NewDiscoveryRESTMapper(apiGroupResources)
 		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
 			return err
 		}
-
 		var dri dynamic.ResourceInterface
 		if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
 			dri = dynamicClient.Resource(mapping.Resource).Namespace(unstructuredObj.GetNamespace())
 		} else {
 			dri = dynamicClient.Resource(mapping.Resource)
 		}
+		unstructuredObjs[dri] = unstructuredObj
+	}
 
+	for dri, unstructuredObj := range unstructuredObjs {
 		if _, err := dri.Create(context.TODO(), unstructuredObj, metav1.CreateOptions{}); err != nil {
 			if !kerrors.IsAlreadyExists(err) {
 				return err
@@ -149,12 +147,17 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 		return err
 	}
 
+	apiGroupResources, err := getAPIGroupResources(k8sClient)
+	if err != nil {
+		return err
+	}
+
 	if filename != "" {
 		content, err := os.ReadFile(filename)
 		if err != nil {
 			return err
 		}
-		if err := createResources(cmd, k8sClient, dynamicClient, content); err != nil {
+		if err := createResources(cmd, apiGroupResources, dynamicClient, content); err != nil {
 			return err
 		}
 	} else {
@@ -180,11 +183,15 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 			if role == memberRole && strings.Contains(manifest, "member") && namespace != common.DefaultMemberNamespace {
 				content = strings.ReplaceAll(content, common.DefaultMemberNamespace, namespace)
 			}
-			if err := createResources(cmd, k8sClient, dynamicClient, []byte(content)); err != nil {
+			if err := createResources(cmd, apiGroupResources, dynamicClient, []byte(content)); err != nil {
 				return err
 			}
 		}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Antrea Multi-cluster successfully deployed\n")
 	return nil
+}
+
+func getAPIGroupResourcesWrapper(k8sClient kubernetes.Interface) ([]*restmapper.APIGroupResources, error) {
+	return restmapper.GetAPIGroupResources(k8sClient.Discovery())
 }
