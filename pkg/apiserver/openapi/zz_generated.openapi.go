@@ -2554,9 +2554,9 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Format:      "int32",
 						},
 					},
-					"apiCertData": {
+					"apiCABundle": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The self-signed certificate used to serve the Antrea Agent API",
+							Description: "APICABundle is a PEM encoded CA bundle which can be used to validate the Antrea Agent API server's certificate.",
 							Type:        []string{"string"},
 							Format:      "byte",
 						},

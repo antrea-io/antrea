@@ -61,8 +61,8 @@ func (in *AntreaAgentInfo) DeepCopyInto(out *AntreaAgentInfo) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.APICertData != nil {
-		in, out := &in.APICertData, &out.APICertData
+	if in.APICABundle != nil {
+		in, out := &in.APICABundle, &out.APICABundle
 		*out = make([]byte, len(*in))
 		copy(*out, *in)
 	}

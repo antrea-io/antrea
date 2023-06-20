@@ -70,7 +70,7 @@ func TestSyncAgentCRD(t *testing.T) {
 			NetworkPolicyNum: 0,
 		},
 		APIPort:     10349,
-		APICertData: fakeCertData,
+		APICABundle: fakeCertData,
 	}
 	t.Run("partial update-success", func(t *testing.T) {
 		clientset := fakeclientset.NewSimpleClientset(existingCRD)
@@ -108,7 +108,7 @@ func TestSyncAgentCRD(t *testing.T) {
 		crd, err := monitor.client.CrdV1beta1().AntreaAgentInfos().Get(ctx, "testAgentCRD", metav1.GetOptions{})
 		require.NoError(t, err)
 		assert.Equal(t, entirelyUpdatedCRD.APIPort, crd.APIPort)
-		assert.Equal(t, entirelyUpdatedCRD.APICertData, crd.APICertData)
+		assert.Equal(t, entirelyUpdatedCRD.APICABundle, crd.APICABundle)
 	})
 	t.Run("entire update-failure", func(t *testing.T) {
 		clientset := fakeclientset.NewSimpleClientset(existingCRD)

@@ -121,10 +121,10 @@ func CreateAgentClientCfgFromObjects(
 		cfg.CAFile = ""
 		cfg.CAData = nil
 	} else {
-		cert := agentInfo.APICertData
+		cert := agentInfo.APICABundle
 		if len(cert) == 0 {
 			fmt.Println("Failed to retrieve certificate for Antrea Agent, which is required to establish a secure connection")
-			// v1.13 is when APICertData was added to the AntreaAgentInfo CRD
+			// v1.13 is when APICABundle was added to the AntreaAgentInfo CRD
 			if semver.Compare(agentInfo.Version, "v1.13") < 0 {
 				fmt.Println("You may be using a version of the Antrea Agent that does not publish certificate data (< v1.13)")
 			}

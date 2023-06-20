@@ -44,8 +44,9 @@ type AntreaAgentInfo struct {
 	AgentConditions []AgentCondition `json:"agentConditions,omitempty"`
 	// The port of Antrea Agent API Server
 	APIPort int `json:"apiPort,omitempty"`
-	// The self-signed certificate used to serve the Antrea Agent API
-	APICertData []byte `json:"apiCertData,omitempty"`
+	// APICABundle is a PEM encoded CA bundle which can be used to validate the Antrea Agent API
+	// server's certificate.
+	APICABundle []byte `json:"apiCABundle,omitempty"`
 	// The port range used by NodePortLocal
 	NodePortLocalPortRange string `json:"nodePortLocalPortRange,omitempty"`
 }

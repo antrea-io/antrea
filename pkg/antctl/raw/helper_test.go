@@ -110,7 +110,7 @@ func TestCreateAgentClientCfg(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			k8sClient := fakeclient.NewSimpleClientset(node)
 			agentInfo := agentInfo.DeepCopy()
-			agentInfo.APICertData = tc.certData
+			agentInfo.APICABundle = tc.certData
 			antreaClient := antreafakeclient.NewSimpleClientset(agentInfo)
 			kubeconfig := &rest.Config{}
 
