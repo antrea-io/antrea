@@ -35,7 +35,7 @@ IMAGE_PULL_POLICY="Always"
 PROXY_ALL=false
 DEFAULT_IP_MODE="ipv4"
 IP_MODE=""
-K8S_VERSION="1.23.6-00"
+K8S_VERSION="1.27.2-00"
 WINDOWS_YAML_SUFFIX="windows"
 WIN_IMAGE_NODE=""
 
@@ -624,7 +624,7 @@ function deliver_antrea {
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
             kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
@@ -990,7 +990,7 @@ function redeploy_k8s_if_ip_mode_changes() {
         APISERVER_IP_STRING=${ADVERTISE_ADDRESS_STRING}
     fi
     cat <<EOF | tee ${WORKDIR}/kubeadm.conf
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 bootstrapTokens:
 - groups:
@@ -1000,7 +1000,7 @@ nodeRegistration:
 localAPIEndpoint:
   advertiseAddress: "${ADVERTISE_ADDRESS_STRING}"
 ---
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 ${FEATURE_GATES_STRING}
 networking:
