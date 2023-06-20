@@ -43,7 +43,12 @@ type clusterClaimValidator struct {
 // Handle handles admission requests.
 func (v *clusterClaimValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	clusterClaim := &mcv1alpha2.ClusterClaim{}
-	err := v.decoder.Decode(req, clusterClaim)
+
+	reqObj := req.Object
+	if req.Operation == admissionv1.Delete {
+		reqObj = req.OldObject
+	}
+	err := v.decoder.DecodeRaw(reqObj, clusterClaim)
 	if err != nil {
 		klog.ErrorS(err, "Error while decoding ClusterClaim", "ClusterClaim", req.Namespace+"/"+req.Name)
 		return admission.Errored(http.StatusBadRequest, err)
