@@ -1,8 +1,7 @@
-antrea.io/libOpenflow v0.10.1/go.mod h1:drWN5iISj7G2J6MnclrFmgy0jHU1Z684WW0DxcrjNP0=
-antrea.io/libOpenflow v0.10.2 h1:HsUHwFX//FsfCxHDf2R+IdmVf7NxVWO7nXYABDkszd4=
-antrea.io/libOpenflow v0.10.2/go.mod h1:drWN5iISj7G2J6MnclrFmgy0jHU1Z684WW0DxcrjNP0=
-antrea.io/ofnet v0.7.2 h1:TuEPc8L1bkSRfpdkK0o0aoYMs9hkRJacgSrbWGur5pM=
-antrea.io/ofnet v0.7.2/go.mod h1:DcRieON1uDeaFiSCZyD1f3Mi7q3nvycyJrt8xZAPP6s=
+antrea.io/libOpenflow v0.10.3 h1:ZLqpwss8wqzLzRPXFV3/A2hDMpcfIPRCQKWebZ6oWRI=
+antrea.io/libOpenflow v0.10.3/go.mod h1:drWN5iISj7G2J6MnclrFmgy0jHU1Z684WW0DxcrjNP0=
+antrea.io/ofnet v0.7.3 h1:Ng0rqX2YW8Qp1x12PSwpIvpEA/WUBLB5sW48fJK3nfo=
+antrea.io/ofnet v0.7.3/go.mod h1:HfBzG4jn8foWPRPuCk574qutPisf5EqAwYhvd4HrwF0=
 bazil.org/fuse v0.0.0-20160811212531-371fbbdaa898/go.mod h1:Xbm+BRKSBEpa4q4hTSxohYNQpsxXPbPry4JJWOB3LB8=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
