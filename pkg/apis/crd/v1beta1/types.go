@@ -154,3 +154,36 @@ type ControllerCondition struct {
 	// Human readable message indicating details
 	Message string `json:"message,omitempty"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type Tier struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of Tier.
+	Spec TierSpec `json:"spec"`
+}
+
+// TierSpec defines the desired state for Tier.
+type TierSpec struct {
+	// Priority specfies the order of the Tier relative to other Tiers.
+	Priority int32 `json:"priority"`
+	// Description is an optional field to add more information regarding
+	// the purpose of this Tier.
+	Description string `json:"description,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type TierList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Tier `json:"items"`
+}

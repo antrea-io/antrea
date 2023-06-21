@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
@@ -311,7 +312,7 @@ func testUpdateValidationInvalidTier(t *testing.T) {
 		failOnError(fmt.Errorf("create Tier failed for tier prio-updated-tier: %v", err), t)
 	}
 	// Update this tier with new priority
-	newTier := crdv1alpha1.Tier{
+	newTier := crdv1beta1.Tier{
 		ObjectMeta: oldTier.ObjectMeta,
 		Spec:       oldTier.Spec,
 	}
@@ -4256,7 +4257,7 @@ func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object
 	case *v1.Service:
 		// The minInterval of AntreaProxy's BoundedFrequencyRunner is 1s, which means a Service may be handled after 1s.
 		time.Sleep(1 * time.Second)
-	case *crdv1alpha1.Tier:
+	case *crdv1beta1.Tier:
 	case *crdv1alpha3.ClusterGroup:
 	case *crdv1alpha3.Group:
 	}

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ type Interface interface {
 	AntreaAgentInfos() AntreaAgentInfoInformer
 	// AntreaControllerInfos returns a AntreaControllerInfoInformer.
 	AntreaControllerInfos() AntreaControllerInfoInformer
+	// Tiers returns a TierInformer.
+	Tiers() TierInformer
 }
 
 type version struct {
@@ -47,4 +49,9 @@ func (v *version) AntreaAgentInfos() AntreaAgentInfoInformer {
 // AntreaControllerInfos returns a AntreaControllerInfoInformer.
 func (v *version) AntreaControllerInfos() AntreaControllerInfoInformer {
 	return &antreaControllerInfoInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Tiers returns a TierInformer.
+func (v *version) Tiers() TierInformer {
+	return &tierInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

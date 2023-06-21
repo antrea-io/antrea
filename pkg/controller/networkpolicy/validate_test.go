@@ -28,6 +28,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -2300,8 +2301,8 @@ func TestValidateAntreaGroup(t *testing.T) {
 func TestValidateTier(t *testing.T) {
 	tests := []struct {
 		name           string
-		curTier        *crdv1alpha1.Tier
-		oldTier        *crdv1alpha1.Tier
+		curTier        *crdv1beta1.Tier
+		oldTier        *crdv1beta1.Tier
 		existTierNum   int
 		existACNP      *crdv1alpha1.ClusterNetworkPolicy
 		existANNP      *crdv1alpha1.NetworkPolicy
@@ -2311,11 +2312,11 @@ func TestValidateTier(t *testing.T) {
 	}{
 		{
 			name: "create-tier-pass",
-			curTier: &crdv1alpha1.Tier{
+			curTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-3",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 3,
 				},
 			},
@@ -2326,11 +2327,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "create-tier-failed-with-reserved-priority",
-			curTier: &crdv1alpha1.Tier{
+			curTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-251",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 251,
 				},
 			},
@@ -2342,11 +2343,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "over-max-tier",
-			curTier: &crdv1alpha1.Tier{
+			curTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: int32(maxSupportedTiers) + 1,
 				},
 			},
@@ -2356,11 +2357,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "overlap-tier",
-			curTier: &crdv1alpha1.Tier{
+			curTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-1",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 1,
 				},
 			},
@@ -2370,19 +2371,19 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "update-tier-not-allowed",
-			oldTier: &crdv1alpha1.Tier{
+			oldTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-3",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 3,
 				},
 			},
-			curTier: &crdv1alpha1.Tier{
+			curTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-3",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 5,
 				},
 			},
@@ -2394,19 +2395,19 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "update-tier-allowed",
-			oldTier: &crdv1alpha1.Tier{
+			oldTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-3",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 3,
 				},
 			},
-			curTier: &crdv1alpha1.Tier{
+			curTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-3",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 5,
 				},
 			},
@@ -2417,11 +2418,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "delete-tier-pass",
-			oldTier: &crdv1alpha1.Tier{
+			oldTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-priority-3",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 3,
 				},
 			},
@@ -2432,11 +2433,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "delete-reserved-tier",
-			oldTier: &crdv1alpha1.Tier{
+			oldTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "baseline",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 3,
 				},
 			},
@@ -2448,11 +2449,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "delete-annp-ref-tier",
-			oldTier: &crdv1alpha1.Tier{
+			oldTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-annp-ref",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 0,
 				},
 			},
@@ -2467,11 +2468,11 @@ func TestValidateTier(t *testing.T) {
 		},
 		{
 			name: "delete-acnp-ref-tier",
-			oldTier: &crdv1alpha1.Tier{
+			oldTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "tier-acnp-ref",
 				},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority: 0,
 				},
 			},
@@ -2490,11 +2491,11 @@ func TestValidateTier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
 			for i := 1; i <= tt.existTierNum; i++ {
-				controller.tierStore.Add(&crdv1alpha1.Tier{
+				controller.tierStore.Add(&crdv1beta1.Tier{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("tier-priority-%d", i),
 					},
-					Spec: crdv1alpha1.TierSpec{
+					Spec: crdv1beta1.TierSpec{
 						Priority: int32(i),
 					},
 				})

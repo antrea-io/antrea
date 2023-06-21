@@ -46,6 +46,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AntreaControllerInfoList{},
 		&AntreaAgentInfo{},
 		&AntreaAgentInfoList{},
+		&Tier{},
+		&TierList{},
 	)
 
 	metav1.AddToGroupVersion(

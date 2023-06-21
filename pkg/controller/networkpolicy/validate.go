@@ -36,6 +36,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
@@ -158,7 +159,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 	switch ar.Request.Kind.Kind {
 	case "Tier":
 		klog.V(2).Info("Validating Tier CRD")
-		var curTier, oldTier crdv1alpha1.Tier
+		var curTier, oldTier crdv1beta1.Tier
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curTier); err != nil {
 				klog.Errorf("Error de-serializing current Tier")
@@ -351,7 +352,7 @@ func (v *NetworkPolicyValidator) validateAntreaGroup(curAG, oldAG interface{}, o
 }
 
 // validateTier validates the admission of a Tier resource
-func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1alpha1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
@@ -840,7 +841,7 @@ func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticati
 	if len(t.networkPolicyController.tierInformer.Informer().GetIndexer().ListIndexFuncValues(PriorityIndex)) >= maxSupportedTiers {
 		return fmt.Sprintf("maximum number of Tiers supported: %d", maxSupportedTiers), false
 	}
-	curTier := curObj.(*crdv1alpha1.Tier)
+	curTier := curObj.(*crdv1beta1.Tier)
 	// Tier priority must not overlap reserved tier's priority.
 	if reservedTierPriorities.Has(curTier.Spec.Priority) {
 		return fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
@@ -857,8 +858,8 @@ func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticati
 func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
 	reason := ""
-	curTier := curObj.(*crdv1alpha1.Tier)
-	oldTier := oldObj.(*crdv1alpha1.Tier)
+	curTier := curObj.(*crdv1beta1.Tier)
+	oldTier := oldObj.(*crdv1beta1.Tier)
 	// Retrieve antrea-controller's Namespace
 	namespace := env.GetAntreaNamespace()
 	// Allow exception of Tier Priority updates performed by the antrea-controller
@@ -874,7 +875,7 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 
 // deleteValidate validates the DELETE events of Tier resources.
 func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	oldTier := oldObj.(*crdv1alpha1.Tier)
+	oldTier := oldObj.(*crdv1beta1.Tier)
 	if reservedTierNames.Has(oldTier.Name) {
 		return fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name), false
 	}

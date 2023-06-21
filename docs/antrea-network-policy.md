@@ -89,7 +89,7 @@ as was the case initially.
 An example Tier might look like this:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: Tier
 metadata:
   name: mytier

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,10 @@ func (c *FakeCrdV1beta1) AntreaAgentInfos() v1beta1.AntreaAgentInfoInterface {
 
 func (c *FakeCrdV1beta1) AntreaControllerInfos() v1beta1.AntreaControllerInfoInterface {
 	return &FakeAntreaControllerInfos{c}
+}
+
+func (c *FakeCrdV1beta1) Tiers() v1beta1.TierInterface {
+	return &FakeTiers{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
