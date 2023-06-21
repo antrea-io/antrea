@@ -180,6 +180,20 @@ func (mr *MockBridgeMockRecorder) DumpTableStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableStatus", reflect.TypeOf((*MockBridge)(nil).DumpTableStatus))
 }
 
+// GetMeterStats mocks base method
+func (m *MockBridge) GetMeterStats(arg0 func(int, int64)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMeterStats", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetMeterStats indicates an expected call of GetMeterStats
+func (mr *MockBridgeMockRecorder) GetMeterStats(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeterStats", reflect.TypeOf((*MockBridge)(nil).GetMeterStats), arg0)
+}
+
 // GetTableByID mocks base method
 func (m *MockBridge) GetTableByID(arg0 byte) (openflow.Table, error) {
 	m.ctrl.T.Helper()

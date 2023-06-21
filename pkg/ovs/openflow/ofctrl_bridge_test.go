@@ -160,3 +160,42 @@ func TestOFBridgePacketRcvd(t *testing.T) {
 		}
 	}
 }
+
+func TestOFMeterStats(t *testing.T) {
+	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
+	sw := newFakeOFSwitch(b)
+	b.SetOFSwitch(sw)
+
+	mpMeterStatsReply := openflow15.NewMpReply(openflow15.MultipartType_MeterStats)
+	newMeterStats := func(meterID uint32, packets uint64) *openflow15.MeterStats {
+		meterStats := openflow15.NewMeterStats(meterID)
+		bandStats := openflow15.NewMeterBandStats()
+		bandStats.PacketBandCount = packets
+		meterStats.AddBandStats(*bandStats)
+		return meterStats
+	}
+	meterStats1 := newMeterStats(1, 100)
+	meterStats2 := newMeterStats(2, 0)
+	mpMeterStatsReply.Body = append(mpMeterStatsReply.Body, meterStats1)
+	mpMeterStatsReply.Body = append(mpMeterStatsReply.Body, meterStats2)
+	packetCounts := make(map[int]int64)
+	packetCountsMutex := sync.RWMutex{}
+	handleMeterStatsReply := func(meterID int, packetCount int64) {
+		packetCountsMutex.Lock()
+		defer packetCountsMutex.Unlock()
+		packetCounts[meterID] = packetCount
+	}
+	b.GetMeterStats(handleMeterStatsReply)
+	// To make reply has the same Xid as request which is constructed with GetMeterStats
+	b.mpReplyChsMutex.RLock()
+	for k := range b.mpReplyChs {
+		mpMeterStatsReply.Xid = k
+	}
+	b.mpReplyChsMutex.RUnlock()
+	b.MultipartReply(sw, mpMeterStatsReply)
+	assert.Eventually(t, func() bool {
+		packetCountsMutex.RLock()
+		defer packetCountsMutex.RUnlock()
+		return packetCounts[1] == int64(100) && packetCounts[2] == int64(0)
+	}, 2*time.Second, 50*time.Millisecond)
+}

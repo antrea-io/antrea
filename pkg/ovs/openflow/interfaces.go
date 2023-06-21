@@ -112,6 +112,7 @@ type Bridge interface {
 	NewGroup(id GroupIDType) Group
 	NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	DeleteMeterAll() error
+	GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.
