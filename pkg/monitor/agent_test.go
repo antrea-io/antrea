@@ -40,6 +40,8 @@ import (
 
 const ovsVersion = "2.10.0"
 
+var fakeCertData = []byte("foobar")
+
 func TestSyncAgentCRD(t *testing.T) {
 	ctx := context.Background()
 	existingCRD := &v1beta1.AntreaAgentInfo{
@@ -67,7 +69,8 @@ func TestSyncAgentCRD(t *testing.T) {
 		NetworkPolicyControllerInfo: v1beta1.NetworkPolicyControllerInfo{
 			NetworkPolicyNum: 0,
 		},
-		APIPort: 10349,
+		APIPort:     10349,
+		APICABundle: fakeCertData,
 	}
 	t.Run("partial update-success", func(t *testing.T) {
 		clientset := fakeclientset.NewSimpleClientset(existingCRD)
@@ -105,6 +108,7 @@ func TestSyncAgentCRD(t *testing.T) {
 		crd, err := monitor.client.CrdV1beta1().AntreaAgentInfos().Get(ctx, "testAgentCRD", metav1.GetOptions{})
 		require.NoError(t, err)
 		assert.Equal(t, entirelyUpdatedCRD.APIPort, crd.APIPort)
+		assert.Equal(t, entirelyUpdatedCRD.APICABundle, crd.APICABundle)
 	})
 	t.Run("entire update-failure", func(t *testing.T) {
 		clientset := fakeclientset.NewSimpleClientset(existingCRD)
@@ -149,5 +153,5 @@ func newAgentMonitor(crdClient *fakeclientset.Clientset, t *testing.T) *agentMon
 
 	querier := querier.NewAgentQuerier(nodeConfig, nil, interfaceStore, client, ofClient, ovsBridgeClient, nil, networkPolicyInfoQuerier, 10349, "", nil, nil)
 
-	return NewAgentMonitor(crdClient, querier)
+	return NewAgentMonitor(crdClient, querier, fakeCertData)
 }

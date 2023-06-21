@@ -16,6 +16,7 @@ package featuregates
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"os"
@@ -305,9 +306,9 @@ func TestGetFeatureGates(t *testing.T) {
 	}
 }
 
-func getFakeFunc(response []byte) func(kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
+func getFakeFunc(response []byte) func(ctx context.Context, kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
 	restClient, _ := rest.RESTClientFor(clientConfig)
-	return func(kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
+	return func(ctx context.Context, kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
 		fakeHttpClient := fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBuffer(response))}, nil
 		})
@@ -349,41 +350,4 @@ kind: Config`)
 	newconfig, _, _, err := getConfigAndClients(Command)
 	require.NoError(t, err)
 	assert.Equal(t, "http://192.168.1.10", newconfig.Host)
-}
-
-func TestGetRestClientByMode(t *testing.T) {
-	k8sClient := k8sfake.NewSimpleClientset(node1.DeepCopyObject())
-	tests := []struct {
-		name            string
-		expectedErr     string
-		antreaClientset antrea.Interface
-		mode            string
-	}{
-		{
-			name: "get rest client by agent mode successfully",
-			mode: "agent",
-		},
-		{
-			name:            "get rest client by remote mode successfully",
-			antreaClientset: antreafakeclient.NewSimpleClientset(controllerInfo.DeepCopyObject()),
-			mode:            "remote",
-		},
-		{
-			name:            "failed to get rest client by remote mode",
-			expectedErr:     "failed to create rest client: error when creating controller client config: antreacontrollerinfos.crd.antrea.io \"antrea-controller\" not found",
-			antreaClientset: antreafakeclient.NewSimpleClientset(),
-			mode:            "remote",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := getRestClientByMode(clientConfig, k8sClient, tt.antreaClientset, tt.mode)
-			if tt.expectedErr == "" {
-				assert.NoError(t, err)
-			} else {
-				assert.EqualError(t, err, tt.expectedErr)
-			}
-		})
-	}
 }

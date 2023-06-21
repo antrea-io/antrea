@@ -21,19 +21,30 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/semver"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
 	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	controllerapiserver "antrea.io/antrea/pkg/apiserver"
+	cert "antrea.io/antrea/pkg/apiserver/certificate"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
+
+func GetNodeAddrs(node *corev1.Node) (*ip.DualStackIPs, error) {
+	// We prioritize the external Node IP to support cases where antctl is run outside of the
+	// cluster, and the internal Node IP may not be reachable.
+	return k8s.GetNodeAddrsWithType(node, []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP})
+}
 
 func SetupClients(kubeconfig *rest.Config) (*kubernetes.Clientset, *antrea.Clientset, error) {
 	k8sClientset, err := kubernetes.NewForConfig(kubeconfig)
@@ -59,40 +70,72 @@ func ResolveKubeconfig(cmd *cobra.Command) (*rest.Config, error) {
 	return kubeconfig, nil
 }
 
-func SetupKubeconfig(kubeconfig *rest.Config) {
+func SetupLocalKubeconfig(kubeconfig *rest.Config) {
+	if !runtime.InPod {
+		// We want to avoid accidental uses of this function
+		panic("SetupLocalKubeconfig can only be called when running in-pod")
+	}
 	// TODO: generate kubeconfig in Antrea agent for antctl in-Pod access.
-	kubeconfig.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	kubeconfig.NegotiatedSerializer = antreascheme.Codecs.WithoutConversion()
 	kubeconfig.Insecure = true
 	kubeconfig.CAFile = ""
 	kubeconfig.CAData = nil
-	if runtime.InPod {
-		if runtime.Mode == runtime.ModeAgent {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaAgentAPIPort))
-			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
-		} else {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaControllerAPIPort))
-			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
-		}
+	if runtime.Mode == runtime.ModeAgent {
+		kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaAgentAPIPort))
+		kubeconfig.BearerTokenFile = agentapiserver.TokenPath
+	} else {
+		kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaControllerAPIPort))
+		kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 	}
 }
 
-func CreateAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nodeName string) (*rest.Config, error) {
-	node, err := k8sClientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("error when looking up Node %s: %w", nodeName, err)
-	}
-	agentInfo, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), nodeName, metav1.GetOptions{})
+func GetControllerCACert(ctx context.Context, client kubernetes.Interface) ([]byte, error) {
+	cm, err := client.CoreV1().ConfigMaps(cert.GetCAConfigMapNamespace()).Get(ctx, cert.AntreaCAConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	if agentInfo.NodeRef.Name == "" {
-		return nil, fmt.Errorf("AntreaAgentInfo is not ready for Node %s", nodeName)
+	ca, ok := cm.Data[cert.CAConfigMapKey]
+	if !ok {
+		return nil, fmt.Errorf("missing key '%s' in ConfigMap", cert.CAConfigMapKey)
 	}
-	nodeIPs, err := k8s.GetNodeAddrs(node)
+	return []byte(ca), nil
+}
+
+func CreateAgentClientCfgFromObjects(
+	ctx context.Context,
+	k8sClientset kubernetes.Interface,
+	kubeconfig *rest.Config,
+	node *corev1.Node,
+	agentInfo *v1beta1.AntreaAgentInfo,
+	insecure bool,
+) (*rest.Config, error) {
+	nodeIPs, err := GetNodeAddrs(node)
 	if err != nil {
-		return nil, fmt.Errorf("error when parsing IP of Node %s", nodeName)
+		return nil, fmt.Errorf("error when getting IP of Node %s", node.Name)
 	}
-	cfg := rest.CopyConfig(cfgTmpl)
+
+	cfg := rest.CopyConfig(kubeconfig)
+	cfg.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	if insecure {
+		cfg.Insecure = true
+		cfg.CAFile = ""
+		cfg.CAData = nil
+	} else {
+		cert := agentInfo.APICABundle
+		if len(cert) == 0 {
+			fmt.Println("Failed to retrieve certificate for Antrea Agent, which is required to establish a secure connection")
+			// v1.13 is when APICABundle was added to the AntreaAgentInfo CRD
+			if semver.Compare(agentInfo.Version, "v1.13") < 0 {
+				fmt.Println("You may be using a version of the Antrea Agent that does not publish certificate data (< v1.13)")
+			}
+			fmt.Println("You can try running the command again with '--insecure'")
+			return nil, fmt.Errorf("no cert available")
+		}
+		cfg.Insecure = false
+		// The self-signed Agent certificate is only valid for localhost / 127.0.0.1
+		cfg.ServerName = "localhost"
+		cfg.CAData = cert
+	}
 
 	var nodeIP string
 	if nodeIPs.IPv4 != nil {
@@ -106,23 +149,68 @@ func CreateAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 	return cfg, nil
 }
 
-func CreateControllerClientCfg(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.Config, error) {
-	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
+func CreateAgentClientCfg(
+	ctx context.Context,
+	k8sClientset kubernetes.Interface,
+	antreaClientset antrea.Interface,
+	kubeconfig *rest.Config,
+	nodeName string,
+	insecure bool,
+) (*rest.Config, error) {
+	node, err := k8sClientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("error when looking up Node %s: %w", nodeName, err)
+	}
+	agentInfo, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if agentInfo.NodeRef.Name == "" {
+		return nil, fmt.Errorf("AntreaAgentInfo is not ready for Node %s", nodeName)
+	}
+
+	return CreateAgentClientCfgFromObjects(ctx, k8sClientset, kubeconfig, node, agentInfo, insecure)
+}
+
+func CreateControllerClientCfg(
+	ctx context.Context,
+	k8sClientset kubernetes.Interface,
+	antreaClientset antrea.Interface,
+	kubeconfig *rest.Config,
+	insecure bool,
+) (*rest.Config, error) {
+	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(ctx, "antrea-controller", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(context.TODO(), controllerInfo.NodeRef.Name, metav1.GetOptions{})
+	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(ctx, controllerInfo.NodeRef.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
 	var controllerNodeIPs *ip.DualStackIPs
-	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
+	controllerNodeIPs, err = GetNodeAddrs(controllerNode)
 	if err != nil {
-		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
+		return nil, fmt.Errorf("error when getting controller IP: %w", err)
 	}
 
-	cfg := rest.CopyConfig(cfgTmpl)
+	cfg := rest.CopyConfig(kubeconfig)
+	cfg.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	if insecure {
+		cfg.Insecure = true
+		cfg.CAFile = ""
+		cfg.CAData = nil
+	} else {
+		caCert, err := GetControllerCACert(ctx, k8sClientset)
+		if err != nil {
+			fmt.Println("Failed to retrieve certificate for Antrea Controller, which is required to establish a secure connection")
+			fmt.Println("You can try running the command again with '--insecure'")
+			return nil, fmt.Errorf("error when getting cert: %w", err)
+		}
+		cfg.Insecure = false
+		cfg.ServerName = cert.GetAntreaServerNames(cert.AntreaServiceName)[0]
+		cfg.CAData = caCert
+	}
 
 	var nodeIP string
 	if controllerNodeIPs.IPv4 != nil {

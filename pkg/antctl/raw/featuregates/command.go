@@ -36,6 +36,10 @@ var Command *cobra.Command
 var getClients = getConfigAndClients
 var getRestClient = getRestClientByMode
 
+var option = &struct {
+	insecure bool
+}{}
+
 func init() {
 	Command = &cobra.Command{
 		Use:   "featuregates",
@@ -49,6 +53,7 @@ func init() {
 		Command.Long = "Print Antrea feature gates info including Controller and Agent"
 	} else if runtime.Mode == runtime.ModeController && !runtime.InPod {
 		Command.Long = "Print Antrea feature gates info including Controller and Agent"
+		Command.Flags().BoolVar(&option.insecure, "insecure", false, "Skip TLS verification when connecting to Antrea API.")
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -66,12 +71,13 @@ func controllerRemoteRunE(cmd *cobra.Command, _ []string) error {
 }
 
 func featureGateRequest(cmd *cobra.Command, mode string) error {
+	ctx := cmd.Context()
 	kubeconfig, k8sClientset, antreaClientset, err := getClients(cmd)
 	if err != nil {
 		return err
 	}
 
-	client, err := getRestClient(kubeconfig, k8sClientset, antreaClientset, mode)
+	client, err := getRestClient(ctx, kubeconfig, k8sClientset, antreaClientset, mode)
 	if err != nil {
 		return err
 	}
@@ -114,17 +120,17 @@ func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface
 	return kubeconfig, k8sClientset, antreaClientset, nil
 }
 
-func getRestClientByMode(kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
-	kubeconfig.GroupVersion = &schema.GroupVersion{Group: "", Version: ""}
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
+func getRestClientByMode(ctx context.Context, kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
+	cfg := rest.CopyConfig(kubeconfig)
+	cfg.GroupVersion = &schema.GroupVersion{Group: "", Version: ""}
 	var err error
 	var client *rest.RESTClient
 	switch mode {
 	case runtime.ModeAgent, runtime.ModeController:
-		client, err = rest.RESTClientFor(restconfigTmpl)
+		raw.SetupLocalKubeconfig(cfg)
+		client, err = rest.RESTClientFor(cfg)
 	case "remote":
-		client, err = getControllerClient(k8sClientset, antreaClientset, restconfigTmpl)
+		client, err = getControllerClient(ctx, k8sClientset, antreaClientset, cfg, option.insecure)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create rest client: %w", err)
@@ -132,8 +138,8 @@ func getRestClientByMode(kubeconfig *rest.Config, k8sClientset kubernetes.Interf
 	return client, nil
 }
 
-func getControllerClient(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.RESTClient, error) {
-	controllerClientCfg, err := raw.CreateControllerClientCfg(k8sClientset, antreaClientset, cfgTmpl)
+func getControllerClient(ctx context.Context, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, kubeconfig *rest.Config, insecure bool) (*rest.RESTClient, error) {
+	controllerClientCfg, err := raw.CreateControllerClientCfg(ctx, k8sClientset, antreaClientset, kubeconfig, insecure)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating controller client config: %w", err)
 	}

@@ -171,7 +171,7 @@ func TestCreateControllerClient(t *testing.T) {
 		},
 		{
 			name:            "failed to create controller client due to error when parsing controller IP",
-			expectedErr:     "error when parsing controller IP: Node node-1 has neither external ip nor internal ip",
+			expectedErr:     "error when getting controller IP: no IP",
 			k8sClientset:    fake.NewSimpleClientset(&node2),
 			antreaClientset: fakeclientset.NewSimpleClientset(&controllerInfo),
 		},
@@ -179,7 +179,7 @@ func TestCreateControllerClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := createControllerClient(ctx, tt.k8sClientset, tt.antreaClientset, clientConfig)
+			_, err := createControllerClient(ctx, tt.k8sClientset, tt.antreaClientset, clientConfig, true /* insecure */)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -238,7 +238,7 @@ func TestCreateAgentClients(t *testing.T) {
 			if tt.prepareReactor != nil {
 				tt.prepareReactor(tt.antreaClientset, tt.k8sClientset)
 			}
-			clients, err := createAgentClients(tt.k8sClientset, tt.antreaClientset, clientConfig, "", nameList)
+			clients, err := createAgentClients(context.Background(), tt.k8sClientset, tt.antreaClientset, clientConfig, "", nameList, true /* insecure */)
 			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)
 			} else {
