@@ -771,10 +771,18 @@ func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
 	}
 
 	// check clickhouse service http port for service connectivity
-	chSvc, err := data.GetService("flow-visibility", "clickhouse-clickhouse")
-	if err != nil {
-		return "", err
+	var chSvc *corev1.Service
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+		chSvc, err = data.GetService(flowVisibilityNamespace, "clickhouse-clickhouse")
+		if err != nil {
+			return false, nil
+		} else {
+			return true, nil
+		}
+	}); err != nil {
+		return "", fmt.Errorf("timeout waiting for ClickHouse Service: %v", err)
 	}
+
 	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
 		rc, stdout, stderr, err := testData.RunCommandOnNode(controlPlaneNodeName(),
 			fmt.Sprintf("curl -Ss %s:%s", chSvc.Spec.ClusterIP, clickHouseHTTPPort))
