@@ -2549,9 +2549,16 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 					},
 					"apiPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The port of antrea agent API Server",
+							Description: "The port of Antrea Agent API Server",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"apiCABundle": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APICABundle is a PEM encoded CA bundle which can be used to validate the Antrea Agent API server's certificate.",
+							Type:        []string{"string"},
+							Format:      "byte",
 						},
 					},
 					"nodePortLocalPortRange": {

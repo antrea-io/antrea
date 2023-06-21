@@ -30,16 +30,20 @@ import (
 type agentMonitor struct {
 	client  clientset.Interface
 	querier agentquerier.AgentQuerier
+	// apiCertData is not provided by the querier to avoid a circular dependency between
+	// apiServer and querier.
+	apiCertData []byte
 	// agentCRD is the desired state of agent monitoring CRD which agentMonitor expects.
 	agentCRD *v1beta1.AntreaAgentInfo
 }
 
 // NewAgentMonitor creates a new agent monitor.
-func NewAgentMonitor(client clientset.Interface, querier agentquerier.AgentQuerier) *agentMonitor {
+func NewAgentMonitor(client clientset.Interface, querier agentquerier.AgentQuerier, apiCertData []byte) *agentMonitor {
 	return &agentMonitor{
-		client:   client,
-		querier:  querier,
-		agentCRD: nil,
+		client:      client,
+		querier:     querier,
+		apiCertData: apiCertData,
+		agentCRD:    nil,
 	}
 }
 
@@ -87,6 +91,7 @@ func (monitor *agentMonitor) getAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
 // updateAgentCRD updates the monitoring CRD.
 func (monitor *agentMonitor) updateAgentCRD(partial bool) (*v1beta1.AntreaAgentInfo, error) {
 	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
+	monitor.agentCRD.APICABundle = monitor.apiCertData
 	klog.V(2).Infof("Updating agent monitoring CRD %+v, partial: %t", monitor.agentCRD, partial)
 	return monitor.client.CrdV1beta1().AntreaAgentInfos().Update(context.TODO(), monitor.agentCRD, metav1.UpdateOptions{})
 }

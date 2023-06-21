@@ -27,24 +27,27 @@ import (
 	"antrea.io/antrea/pkg/util/ip"
 )
 
-// GetNodeAddrs gets the available IP addresses of a Node. GetNodeAddrs will first try to get the NodeInternalIP, then try
-// to get the NodeExternalIP.
+// GetNodeAddrsWithType gets the available IP addresses of a Node. It will consider address types
+// specified in the types slice, in the provided order.
 // If no error is returned, the returned DualStackIPs includes at least one IPv4 or IPv6 address.
-func GetNodeAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
+func GetNodeAddrsWithType(node *v1.Node, types []v1.NodeAddressType) (*ip.DualStackIPs, error) {
+	if len(types) == 0 {
+		return nil, fmt.Errorf("at least one Node address type is required")
+	}
 	addresses := make(map[v1.NodeAddressType][]string)
 	for _, addr := range node.Status.Addresses {
 		addresses[addr.Type] = append(addresses[addr.Type], addr.Address)
 	}
 	var ipAddrStrs []string
-	if internalIP, ok := addresses[v1.NodeInternalIP]; ok {
-		ipAddrStrs = internalIP
-	} else if externalIP, ok := addresses[v1.NodeExternalIP]; ok {
-		ipAddrStrs = externalIP
-	} else {
-		return nil, fmt.Errorf("Node %s has neither external ip nor internal ip", node.Name)
+	for _, t := range types {
+		ips, ok := addresses[t]
+		if ok {
+			ipAddrStrs = ips
+			break
+		}
 	}
 	if len(ipAddrStrs) == 0 {
-		return nil, fmt.Errorf("no IP is found for Node '%s'", node.Name)
+		return nil, fmt.Errorf("no IP with type in %v was found for Node '%s'", types, node.Name)
 	}
 
 	nodeAddrs := new(ip.DualStackIPs)
@@ -60,6 +63,13 @@ func GetNodeAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 		}
 	}
 	return nodeAddrs, nil
+}
+
+// GetNodeAddrs gets the available IP addresses of a Node. GetNodeAddrs will first try to get the
+// NodeInternalIP, then try to get the NodeExternalIP.
+// If no error is returned, the returned DualStackIPs includes at least one IPv4 or IPv6 address.
+func GetNodeAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
+	return GetNodeAddrsWithType(node, []v1.NodeAddressType{v1.NodeInternalIP, v1.NodeExternalIP})
 }
 
 // GetNodeAddrsFromAnnotations gets available IPs from the Node Annotation. The annotations are set by Antrea.

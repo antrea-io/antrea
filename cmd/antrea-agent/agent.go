@@ -798,6 +798,7 @@ func run(o *Options) error {
 		statsCollector := stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController, mcastController)
 		go statsCollector.Run(stopCh)
 	}
+
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
 		networkConfig,
@@ -812,10 +813,6 @@ func run(o *Options) error {
 		memberlistCluster,
 		nodeInformer.Lister(),
 	)
-
-	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
-
-	go agentMonitor.Run(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
 		nodeNamespace := ""
@@ -855,7 +852,21 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
+
+	// The certificate is static and will not be rotated; it will be re-generated if the Agent restarts.
+	agentAPICertData := apiServer.GetCertData()
+	if agentAPICertData == nil {
+		return fmt.Errorf("error when getting generated cert for agent API server")
+	}
+
 	go apiServer.Run(stopCh)
+
+	// The API certificate is passed on directly to the monitor, instead of being provided by
+	// the agentQuerier. This is to avoid a circular dependency between apiServer and
+	// agentQuerier. The apiServer already depends on the agentQuerier to implement some API
+	// handlers. The certificate data is only available after initializing the apiServer.
+	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier, agentAPICertData)
+	go agentMonitor.Run(stopCh)
 
 	// Start PacketIn
 	go ofClient.StartPacketInHandler(stopCh)

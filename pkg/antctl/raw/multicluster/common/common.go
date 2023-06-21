@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
@@ -70,10 +69,8 @@ func NewClient(cmd *cobra.Command) (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	restConfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restConfigTmpl)
 
-	k8sClient, err := client.New(restConfigTmpl, client.Options{Scheme: multiclusterscheme.Scheme})
+	k8sClient, err := client.New(kubeconfig, client.Options{Scheme: multiclusterscheme.Scheme})
 	if err != nil {
 		return nil, err
 	}

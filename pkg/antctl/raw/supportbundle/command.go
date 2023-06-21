@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -42,10 +41,9 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -65,6 +63,7 @@ var option = &struct {
 	controllerOnly bool
 	nodeListFile   string
 	since          string
+	insecure       bool
 }{}
 
 var remoteControllerLongDescription = strings.TrimSpace(`
@@ -111,6 +110,7 @@ func init() {
 		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of Antrea controller")
 		Command.Flags().StringVarP(&option.nodeListFile, "node-list-file", "f", "", "only collect the support bundle of specific nodes filtered by names in a file (one node name per line)")
 		Command.Flags().StringVarP(&option.since, "since", "", "", "only return logs newer than a relative duration like 5s, 2m or 3h. Defaults to all logs")
+		Command.Flags().BoolVar(&option.insecure, "insecure", false, "Skip TLS verification when connecting to Antrea API.")
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -124,10 +124,11 @@ func setupRestClient(cmd *cobra.Command) (rest.Interface, error) {
 	}
 	kubeconfig.APIPath = "/apis"
 	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
-	raw.SetupKubeconfig(kubeconfig)
+	raw.SetupLocalKubeconfig(kubeconfig)
 	client, err := rest.RESTClientFor(kubeconfig)
 	return client, err
 }
+
 func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer) error {
 	client, err := getRestClient(cmd)
 	if err != nil {
@@ -321,15 +322,24 @@ func downloadAll(agentClients map[string]rest.Interface, controllerClient rest.I
 }
 
 // createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
-func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string, nameList []string) (map[string]rest.Interface, error) {
+func createAgentClients(
+	ctx context.Context,
+	k8sClientset kubernetes.Interface,
+	antreaClientset antrea.Interface,
+	kubeconfig *rest.Config,
+	nameFilter string,
+	nameList []string,
+	insecure bool,
+) (map[string]rest.Interface, error) {
 	clients := map[string]rest.Interface{}
-	nodeAgentInfoMap := map[string]string{}
+	nodeAgentInfoMap := map[string]*v1beta1.AntreaAgentInfo{}
 	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
-	for _, agentInfo := range agentInfoList.Items {
-		nodeAgentInfoMap[agentInfo.NodeRef.Name] = fmt.Sprint(agentInfo.APIPort)
+	for idx := range agentInfoList.Items {
+		agentInfo := &agentInfoList.Items[idx]
+		nodeAgentInfoMap[agentInfo.NodeRef.Name] = agentInfo
 	}
 	nodeList, err := k8sClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: option.labelSelector, ResourceVersion: "0"})
 	if err != nil {
@@ -352,30 +362,22 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 		}
 	}
 	for i := range nodeList.Items {
-		node := nodeList.Items[i]
+		node := &nodeList.Items[i]
 		if !matcher(node.Name) {
 			continue
 		}
-		port, ok := nodeAgentInfoMap[node.Name]
+		agentInfo, ok := nodeAgentInfoMap[node.Name]
 		if !ok {
 			continue
 		}
-		ips, err := k8s.GetNodeAddrs(&node)
+		cfg, err := raw.CreateAgentClientCfgFromObjects(ctx, k8sClientset, kubeconfig, node, agentInfo, insecure)
 		if err != nil {
-			klog.Warningf("Error when parsing IP of Node %s", node.Name)
+			klog.ErrorS(err, "Error when creating agent client config", "node", node.Name)
 			continue
 		}
-		cfg := rest.CopyConfig(cfgTmpl)
-		var nodeIP string
-		if ips.IPv4 != nil {
-			nodeIP = ips.IPv4.String()
-		} else {
-			nodeIP = ips.IPv6.String()
-		}
-		cfg.Host = net.JoinHostPort(nodeIP, port)
 		client, err := rest.RESTClientFor(cfg)
 		if err != nil {
-			klog.Warningf("Error when creating agent client for node: %s", node.Name)
+			klog.ErrorS(err, "Error when creating agent client", "node", node.Name)
 			continue
 		}
 		clients[node.Name] = client
@@ -383,33 +385,14 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 	return clients, nil
 }
 
-func createControllerClient(ctx context.Context, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (rest.Interface, error) {
-	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(ctx, "antrea-controller", metav1.GetOptions{})
+func createControllerClient(ctx context.Context, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, insecure bool) (rest.Interface, error) {
+	cfg, err := raw.CreateControllerClientCfg(ctx, k8sClientset, antreaClientset, cfgTmpl, insecure)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error when creating controller client config: %w", err)
 	}
-
-	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(ctx, controllerInfo.NodeRef.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
-	}
-	var controllerNodeIPs *ip.DualStackIPs
-	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
-	if err != nil {
-		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
-	}
-
-	cfg := rest.CopyConfig(cfgTmpl)
-	var nodeIP string
-	if controllerNodeIPs.IPv4 != nil {
-		nodeIP = controllerNodeIPs.IPv4.String()
-	} else {
-		nodeIP = controllerNodeIPs.IPv6.String()
-	}
-	cfg.Host = net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort))
 	controllerClient, err := rest.RESTClientFor(cfg)
 	if err != nil {
-		klog.InfoS("Error when creating controller client for Node", "nodeName", controllerInfo.NodeRef.Name)
+		return nil, fmt.Errorf("error when creating controller client: %w", err)
 	}
 	return controllerClient, nil
 }
@@ -529,8 +512,6 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	}
 	kubeconfig.APIPath = "/apis"
 	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
 	if server, _ := Command.Flags().GetString("server"); server != "" {
 		kubeconfig.Host = server
 	}
@@ -546,7 +527,7 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	// Collect controller bundle when no Node name or label filter is specified, or
 	// when --controller-only is set.
 	if (len(args) == 0 && len(option.nodeListFile) == 0 && option.labelSelector == "") || option.controllerOnly {
-		controllerClient, err = createControllerClient(ctx, k8sClientset, antreaClientset, restconfigTmpl)
+		controllerClient, err = createControllerClient(ctx, k8sClientset, antreaClientset, kubeconfig, option.insecure)
 		if err != nil {
 			return fmt.Errorf("error when creating controller client: %w", err)
 		}
@@ -574,7 +555,7 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		} else if len(args) > 1 {
 			nameList = args
 		}
-		agentClients, err = createAgentClients(k8sClientset, antreaClientset, restconfigTmpl, nameFilter, nameList)
+		agentClients, err = createAgentClients(ctx, k8sClientset, antreaClientset, kubeconfig, nameFilter, nameList, option.insecure)
 		if err != nil {
 			return fmt.Errorf("error when creating agent clients: %w", err)
 		}
