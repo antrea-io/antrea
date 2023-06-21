@@ -27,7 +27,6 @@ rules:
       - system.antrea.io
     resources:
       - controllerinfos
-      - agentinfos
     verbs:
       - get
   - apiGroups:
@@ -35,8 +34,8 @@ rules:
     resources:
       - supportbundles
     verbs:
+      - create
       - get
-      - post
   - apiGroups:
       - system.antrea.io
     resources:
@@ -54,5 +53,48 @@ rules:
       - /podinterfaces
       - /featuregates
       - /serviceexternalip
+      - /metrics
+      - /debug/pprof
+      - /debug/pprof/*
+    verbs:
+      - get
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreacontrollerinfos
+      - antreaagentinfos
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+    verbs:
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-config
+      - antrea-ca
+      - antrea-ipsec-ca
+      - antrea-cluster-identity
     verbs:
       - get

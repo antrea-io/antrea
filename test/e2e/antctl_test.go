@@ -15,14 +15,21 @@
 package e2e
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"antrea.io/antrea/pkg/antctl"
 	"antrea.io/antrea/pkg/antctl/runtime"
@@ -148,6 +155,32 @@ func copyAntctlToNode(data *TestData, nodeName string, antctlName string, nodeAn
 	return nil
 }
 
+// copyAntctlKubeconfigToNode writes a Kubeconfig file for the antctl ServiceAccount to the provided
+// path on the provided Node.
+func copyAntctlKubeconfigToNode(data *TestData, nodeName string, kubeconfigPath string) error {
+	// First, we create a Secret to store the Kubeconfig. Then, we use kubectl to write the
+	// Secret contents to a file. Ideally, we would use a Pod to run antctl commands instead of
+	// running it from the Node (in that case, the Secret would be mounted to the Pod).
+	kubeconfigSecretKey := "kubeconfig"
+	// No need to worrky about deleting the Secret as it is created in the temporary test Namespace.
+	kubeconfigSecretName, err := createAntctlKubeconfigSecret(context.TODO(), data, kubeconfigSecretKey)
+	if err != nil {
+		return err
+	}
+	cmd := fmt.Sprintf("kubectl get -n %s secret %s --template='{{ .data.%s | base64decode }}' > %s", data.testNamespace, kubeconfigSecretName, kubeconfigSecretKey, kubeconfigPath)
+	if testOptions.providerName == "kind" {
+		cmd = "/bin/sh -c " + cmd
+	}
+	rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
+	if err != nil {
+		return fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
+	}
+	if rc != 0 {
+		return fmt.Errorf("error when getting secret contents, stdout: <%v>, stderr: <%v>", stdout, stderr)
+	}
+	return nil
+}
+
 // testAntctlControllerRemoteAccess ensures antctl is able to be run outside of
 // the kubernetes cluster. It uses the antctl client binary copied from the controller
 // Pod.
@@ -158,14 +191,14 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData) {
 		antctlName = "antctl-coverage"
 		nodeAntctlPath = "~/antctl-coverage"
 	}
-	if err := copyAntctlToNode(data, controlPlaneNodeName(), antctlName, nodeAntctlPath); err != nil {
-		t.Fatalf("Cannot copy %s on control-plane Node: %v", antctlName, err)
-	}
+	require.NoError(t, copyAntctlToNode(data, controlPlaneNodeName(), antctlName, nodeAntctlPath), "failed to copy antctl to control-plane Node")
+	nodeAntctlKubeconfigPath := "~/antctl-kubeconfig"
+	require.NoError(t, copyAntctlKubeconfigToNode(data, controlPlaneNodeName(), nodeAntctlKubeconfigPath), "failed to copy antctl Kubeconfig to control-plane Node")
 
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
-		cmd := append([]string{nodeAntctlPath, "-v"}, c...)
+		cmd := append([]string{nodeAntctlPath, "-k", nodeAntctlKubeconfigPath, "-v"}, c...)
 		if testOptions.enableCoverage {
 			antctlCovArgs := antctlCoverageArgs(nodeAntctlPath)
 			cmd = append(antctlCovArgs, c...)
@@ -235,9 +268,18 @@ func testAntctlVerboseMode(t *testing.T, data *TestData) {
 
 // runAntctProxy runs the antctl reverse proxy on the provided Node; to stop the
 // proxy call the returned function.
-func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, proxyPort int, agentNodeName string, address string, data *TestData) (func() error, error) {
+func runAntctProxy(
+	nodeName string,
+	antctlName string,
+	nodeAntctlPath string,
+	kubeconfigPath string,
+	proxyPort int,
+	agentNodeName string,
+	address string,
+	data *TestData,
+) (func() error, error) {
 	waitCh := make(chan struct{})
-	proxyCmd := []string{nodeAntctlPath, "proxy", "--port", fmt.Sprint(proxyPort), "--address", address}
+	proxyCmd := []string{nodeAntctlPath, "-k", kubeconfigPath, "proxy", "--port", fmt.Sprint(proxyPort), "--address", address}
 	if agentNodeName == "" {
 		proxyCmd = append(proxyCmd, "--controller")
 	} else {
@@ -290,19 +332,33 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 		antctlName = "antctl-coverage"
 		nodeAntctlPath = "~/antctl-coverage"
 	}
-	if err := copyAntctlToNode(data, controlPlaneNodeName(), antctlName, nodeAntctlPath); err != nil {
-		t.Fatalf("Cannot copy %s on control-plane Node: %v", antctlName, err)
+	require.NoError(t, copyAntctlToNode(data, controlPlaneNodeName(), antctlName, nodeAntctlPath), "failed to copy antctl to control-plane Node")
+	nodeAntctlKubeconfigPath := "~/antctl-kubeconfig"
+	require.NoError(t, copyAntctlKubeconfigToNode(data, controlPlaneNodeName(), nodeAntctlKubeconfigPath), "failed to copy antctl Kubeconfig to control-plane Node")
+
+	// getEndpointStatus will return "Success", "Failure", or the empty string when out is not a
+	// marshalled metav1.Status object.
+	getEndpointStatus := func(out []byte) string {
+		var status metav1.Status
+		if err := json.Unmarshal(out, &status); err != nil {
+			// Output is not JSON or does not encode a metav1.Status object.
+			return ""
+		}
+		return status.Status
 	}
 
-	checkAPIAccess := func(url string) error {
-		t.Logf("Checking for API access through antctl proxy")
-		cmd := fmt.Sprintf("curl %s/apis", net.JoinHostPort(url, fmt.Sprint(proxyPort)))
+	checkEndpointAccess := func(address string, endpoint string) error {
+		t.Logf("Checking for access to endpoint '/%s' through antctl proxy", endpoint)
+		cmd := fmt.Sprintf("curl %s/%s", net.JoinHostPort(address, fmt.Sprint(proxyPort)), endpoint)
 		rc, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil {
 			return fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
 		}
 		if rc != 0 {
-			return fmt.Errorf("error when accessing API, stdout: <%v>, stderr: <%v>", stdout, stderr)
+			return fmt.Errorf("error when accessing endpoint '/%s', stdout: <%v>, stderr: <%v>", endpoint, stdout, stderr)
+		}
+		if getEndpointStatus([]byte(stdout)) == "Failure" {
+			return fmt.Errorf("failure status when accessing endpoint: <%v>", stdout)
 		}
 		return nil
 	}
@@ -327,10 +383,10 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 				t.Skipf("Skipping this testcase since cluster network family doesn't fit")
 			}
 			t.Logf("Starting antctl proxy")
-			stopProxyFn, err := runAntctProxy(controlPlaneNodeName(), antctlName, nodeAntctlPath, proxyPort, tc.agentNodeName, tc.address, data)
+			stopProxyFn, err := runAntctProxy(controlPlaneNodeName(), antctlName, nodeAntctlPath, nodeAntctlKubeconfigPath, proxyPort, tc.agentNodeName, tc.address, data)
 			assert.NoError(t, err, "Could not start antctl proxy: %v", err)
-			if err := checkAPIAccess(tc.address); err != nil {
-				t.Errorf("API check failed: %v", err)
+			for _, endpoint := range []string{"apis", "metrics", "debug/pprof/"} {
+				assert.NoErrorf(t, checkEndpointAccess(tc.address, endpoint), "endpoint check failed for '%s'", endpoint)
 			}
 			t.Logf("Stopping antctl proxy")
 			if err := stopProxyFn(); err != nil {
@@ -338,4 +394,75 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 			}
 		})
 	}
+}
+
+func getAntctlServiceAccountToken(ctx context.Context, data *TestData) ([]byte, []byte, error) {
+	const secretName = "antctl-service-account-token"
+	secret, err := data.clientset.CoreV1().Secrets(antreaNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to retrieve secret '%s/%s' containing antctl ServiceAccount token: %w", antreaNamespace, secretName, err)
+	}
+	return secret.Data["token"], secret.Data["ca.crt"], nil
+}
+
+func generateAntctlKubeconfig(ctx context.Context, data *TestData) ([]byte, error) {
+	token, ca, err := getAntctlServiceAccountToken(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+	// the clusterName is purely cosmetic and does not impact functionality
+	const clusterName = "antrea-test-e2e"
+	serverURL := url.URL{
+		Scheme: "https",
+		Host:   net.JoinHostPort(clusterInfo.k8sServiceHost, fmt.Sprint(clusterInfo.k8sServicePort)),
+	}
+	config := clientcmdapi.Config{
+		Clusters: map[string]*clientcmdapi.Cluster{
+			clusterName: {
+				Server:                   serverURL.String(),
+				CertificateAuthorityData: ca,
+			},
+		},
+		Contexts: map[string]*clientcmdapi.Context{
+			clusterName: {
+				Cluster:   clusterName,
+				Namespace: antreaNamespace,
+				AuthInfo:  clusterName,
+			},
+		},
+		AuthInfos: map[string]*clientcmdapi.AuthInfo{
+			clusterName: {
+				Token: string(token),
+			},
+		},
+		CurrentContext: clusterName,
+	}
+	rawConfig, err := clientcmd.Write(config)
+	if err != nil {
+		return nil, err
+	}
+	return rawConfig, nil
+}
+
+// createAntctlKubeconfigSecret creates a Secret containing the raw Kubeconfig data for the antctl
+// ServiceAccount, in the current test Namespace. It returns the randomly-generated Secret name.
+func createAntctlKubeconfigSecret(ctx context.Context, data *TestData, key string) (string, error) {
+	config, err := generateAntctlKubeconfig(ctx, data)
+	if err != nil {
+		return "", err
+	}
+	name := randName("antctl-kubeconfig-")
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: data.testNamespace,
+			Name:      name,
+		},
+		Data: map[string][]byte{
+			key: config,
+		},
+	}
+	if _, err := data.clientset.CoreV1().Secrets(data.testNamespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		return "", fmt.Errorf("failed to create secret containing antctl Kubeconfig data: %w", err)
+	}
+	return name, nil
 }
