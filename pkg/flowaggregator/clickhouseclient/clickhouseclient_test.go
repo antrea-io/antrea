@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gammazero/deque"
 	"github.com/golang/mock/gomock"
@@ -336,17 +337,12 @@ func TestUpdateCH(t *testing.T) {
 
 func TestParseDatabaseURL(t *testing.T) {
 	testcases := []struct {
-		url            string
-		expectedProto  protocol
-		expectedAddr   string
-		expectedErrMsg string
+		url               string
+		expectedProto     clickhouse.Protocol
+		expectedAddr      string
+		expectedTLSEnable bool
+		expectedErrMsg    string
 	}{
-		{
-			url:            "tcp://127.0.0.1:9000",
-			expectedProto:  protocolTCP,
-			expectedAddr:   "127.0.0.1:9000",
-			expectedErrMsg: "",
-		},
 		{
 			url:            "abc://127.0.0.1:9000",
 			expectedErrMsg: "connection over abc transport protocol is not supported",
@@ -367,14 +363,37 @@ func TestParseDatabaseURL(t *testing.T) {
 			url:            "tcp://127.0.0.1:9000?key=value",
 			expectedErrMsg: "invalid ClickHouse database URL",
 		},
+		{
+			url:           "tcp://127.0.0.1:9000",
+			expectedProto: clickhouse.Native,
+			expectedAddr:  "127.0.0.1:9000",
+		},
+		{
+			url:               "tls://127.0.0.1:9000",
+			expectedProto:     clickhouse.Native,
+			expectedAddr:      "127.0.0.1:9000",
+			expectedTLSEnable: true,
+		},
+		{
+			url:           "http://127.0.0.1:9000",
+			expectedProto: clickhouse.HTTP,
+			expectedAddr:  "127.0.0.1:9000",
+		},
+		{
+			url:               "https://127.0.0.1:9000",
+			expectedProto:     clickhouse.HTTP,
+			expectedAddr:      "127.0.0.1:9000",
+			expectedTLSEnable: true,
+		},
 	}
 	for _, tc := range testcases {
-		proto, addr, err := parseDatabaseURL(tc.url)
+		proto, addr, tlsEnable, err := parseDatabaseURL(tc.url)
 		if tc.expectedErrMsg != "" {
 			assert.Contains(t, err.Error(), tc.expectedErrMsg)
 		} else {
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedProto, proto)
+			assert.Equal(t, tc.expectedTLSEnable, tlsEnable)
 			assert.Equal(t, tc.expectedAddr, addr)
 		}
 	}

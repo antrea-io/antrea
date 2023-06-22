@@ -95,7 +95,9 @@ type ClickHouseConfig struct {
 	Enable bool `yaml:"enable,omitempty"`
 	// Database is the name of database where Antrea "flows" table is created.
 	Database string `yaml:"database,omitempty"`
-	// DatabaseURL is the url to the database. TCP protocol is required.
+	// DatabaseURL is the url to the database. Provide the database URL as a string with format
+	// <Protocol>://<ClickHouse server FQDN or IP>:<ClickHouse port>. The protocol has to be one
+	// from below: "tcp", "tls", "http", "https". When "tls" or "https" is used, tls will be enabled.
 	// Defaults to "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 	DatabaseURL string `yaml:"databaseURL,omitempty"`
 	// Debug enables debug logs from ClickHouse sql driver. Defaults to false.
@@ -106,6 +108,18 @@ type ClickHouseConfig struct {
 	// Defaults to "8s". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 	// Min value allowed is "1s".
 	CommitInterval string `yaml:"commitInterval,omitempty"`
+	// TLS configuration options, when using TLS to connect to the ClickHouse service.
+	TLS TLSConfig `yaml:"tls,omitempty"`
+}
+
+type TLSConfig struct {
+	// InsecureSkipVerify determines whether to skip the verification of the server's certificate chain and host name.
+	// Default is false.
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty"`
+	// CACert determines whether to use custom CA certificate. Default root CAs will be used if false.
+	// If true, a Secret named "flow-aggregator-ca" must be provided with the following keys:
+	// ca.crt: <CA certificate>
+	CACert bool `yaml:"caCert,omitempty"`
 }
 
 type S3UploaderConfig struct {

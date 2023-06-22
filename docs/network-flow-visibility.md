@@ -17,6 +17,8 @@
 - [Flow Aggregator](#flow-aggregator)
   - [Deployment](#deployment)
   - [Configuration](#configuration-1)
+    - [Configuring secure connections to the ClickHouse database](#configuring-secure-connections-to-the-clickhouse-database)
+    - [Example of flow-aggregator.conf](#example-of-flow-aggregatorconf)
   - [IPFIX Information Elements (IEs) in an Aggregated Flow Record](#ipfix-information-elements-ies-in-an-aggregated-flow-record)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry-1)
   - [Supported Capabilities](#supported-capabilities-1)
@@ -283,7 +285,43 @@ it is deployed following the [deployment steps](#deployment-steps-1), the
 ClickHouse server is already exposed via a K8s Service, and no further
 configuration is required. If a different FQDN or IP is desired, please use
 the URL for `clickHouse.databaseURL` in the following format:
-`tcp://<ClickHouse server FQDN or IP>:<ClickHouse TCP port>`.
+`<protocol>://<ClickHouse server FQDN or IP>:<ClickHouse port>`.
+
+#### Configuring secure connections to the ClickHouse database
+
+Starting with Antrea v1.13, you can enable TLS when connecting to the ClickHouse
+Server by setting `clickHouse.databaseURL` with protocol `tls` or `https`.
+You can also change the value of `clickHouse.tls.insecureSkipVerify` to
+determine whether to skip the verification of the server's certificate.
+If you want to provide a custom CA certificate, you can set
+`clickHouse.tls.caCert` to `true` and the flow Aggregator will read the
+certificate key pair from the`clickhouse-ca` Secret.
+
+Make sure to follow the following form when creating the `clickhouse-ca` Secret
+with the custom CA certificate:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-ca
+  namespace: flow-aggregator
+data:
+  ca.crt: <BASE64 ENCODED CA CERTIFICATE>
+```
+
+You can use `kubectl apply -f <PATH TO SECRET YAML>` to create the above secret
+, or use `kubectl create secret`:
+
+```bash
+kubectl create secret generic clickhouse-ca -n flow-aggregator --from-file=ca.crt=<PATH TO CA CERTIFICATE>
+```
+
+Prior to Antrea v1.13, secure connections to ClickHouse are not supported,
+and TCP is the only supported protocol when connecting to the ClickHouse
+server from the Flow Aggregator.
+
+#### Example of flow-aggregator.conf
 
 ```yaml
 flow-aggregator.conf: |  
@@ -357,8 +395,22 @@ flow-aggregator.conf: |
     # Database is the name of database where Antrea "flows" table is created.
     database: "default"
 
-    # DatabaseURL is the url to the database. TCP protocol is required.
+    # DatabaseURL is the url to the database. Provide the database URL as a string with format
+    # <Protocol>://<ClickHouse server FQDN or IP>:<ClickHouse port>. The protocol has to be
+    # one of the following: "tcp", "tls", "http", "https". When "tls" or "https" is used, tls
+    # will be enabled.
     databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
+
+    # TLS configuration options, when using TLS to connect to the ClickHouse service.
+    tls:
+      # InsecureSkipVerify determines whether to skip the verification of the server's certificate chain and host name.
+      # Default is false.
+      insecureSkipVerify: false
+
+      # CACert indicates whether to use custom CA certificate. Default root CAs will be used if this field is false.
+      # If true, a Secret named "clickhouse-ca" must be provided with the following keys:
+      # ca.crt: <CA certificate>
+      caCert: false
 
     # Debug enables debug logs from ClickHouse sql driver.
     debug: false

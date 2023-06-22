@@ -45,12 +45,13 @@ function print_usage {
 }
 
 
-TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
-YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
-FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
-FLOW_VISIBILITY_HELM_VALUES=$(dirname $0)"/values-flow-exporter.yml"
-CH_OPERATOR_YML=$(dirname $0)"/../../build/yamls/clickhouse-operator-install-bundle.yml"
-FLOW_VISIBILITY_YML=$(dirname $0)"/../../build/yamls/flow-visibility-e2e.yml"
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+TESTBED_CMD="$THIS_DIR/kind-setup.sh"
+YML_CMD="$THIS_DIR/../../hack/generate-manifest.sh"
+FLOWAGGREGATOR_YML_CMD="$THIS_DIR/../../hack/generate-manifest-flow-aggregator.sh"
+FLOW_VISIBILITY_HELM_VALUES="$THIS_DIR/values-flow-exporter.yml"
+CH_OPERATOR_YML="$THIS_DIR/../../build/yamls/clickhouse-operator-install-bundle.yml"
+FLOW_VISIBILITY_CHART="$THIS_DIR/../../test/e2e/charts/flow-visibility"
 
 function quit {
   result=$?
@@ -146,6 +147,16 @@ case $key in
     ;;
 esac
 done
+
+source $THIS_DIR/../../hack/verify-helm.sh
+
+if [ -z "$HELM" ]; then
+    HELM="$(verify_helm)"
+elif ! $HELM version > /dev/null 2>&1; then
+    echoerr "$HELM does not appear to be a valid helm binary"
+    print_help
+    exit 1
+fi
 
 if [[ $cleanup_only == "true" ]];then
   $TESTBED_CMD destroy kind
@@ -246,14 +257,16 @@ function run_test {
   fi
 
   if $flow_visibility; then
-      timeout="10m"
+      timeout="15m"
       flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
       if $coverage; then
           $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
       else
           $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
       fi
-      cat $FLOW_VISIBILITY_YML | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
+      $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
+      $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
+
       curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
       sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"projects.registry.vmware.com/antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
       sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
