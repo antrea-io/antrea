@@ -48,6 +48,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AntreaAgentInfoList{},
 		&Tier{},
 		&TierList{},
+		&ExternalIPPool{},
+		&ExternalIPPoolList{},
 	)
 
 	metav1.AddToGroupVersion(

@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func marshal(object runtime.Object) []byte {
@@ -36,7 +36,7 @@ func marshal(object runtime.Object) []byte {
 func TestEgressControllerValidateEgress(t *testing.T) {
 	tests := []struct {
 		name                   string
-		existingExternalIPPool *crdv1alpha2.ExternalIPPool
+		existingExternalIPPool *crdv1beta1.ExternalIPPool
 		request                *admv1.AdmissionRequest
 		expectedResponse       *admv1.AdmissionResponse
 	}{

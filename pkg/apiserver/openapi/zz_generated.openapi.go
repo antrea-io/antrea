@@ -78,6 +78,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                       schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool":                             schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus":                       schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                    schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
@@ -2821,6 +2827,224 @@ func schema_pkg_apis_crd_v1beta1_ControllerCondition(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExternalIPPool defines one or multiple IP sets that can be used in the external network. For instance, the IPs can be allocated to the Egress resources as the Egress IPs.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the ExternalIPPool.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The current status of the ExternalIPPool.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipRanges": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange"),
+									},
+								},
+							},
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+				},
+				Required: []string{"ipRanges", "nodeSelector"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"usage": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"total": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Total number of IPs.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"used": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Number of allocated IPs.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"total", "used"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The CIDR of this range, e.g. 10.10.10.0/24.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"start": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The start IP of the range, e.g. 10.10.20.5, inclusive.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"end": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The end IP of the range, e.g. 10.10.20.20, inclusive.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

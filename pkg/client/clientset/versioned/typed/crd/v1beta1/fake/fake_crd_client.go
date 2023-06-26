@@ -34,6 +34,10 @@ func (c *FakeCrdV1beta1) AntreaControllerInfos() v1beta1.AntreaControllerInfoInt
 	return &FakeAntreaControllerInfos{c}
 }
 
+func (c *FakeCrdV1beta1) ExternalIPPools() v1beta1.ExternalIPPoolInterface {
+	return &FakeExternalIPPools{c}
+}
+
 func (c *FakeCrdV1beta1) Tiers() v1beta1.TierInterface {
 	return &FakeTiers{c}
 }
