@@ -274,6 +274,14 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	return testData, v4Enabled, v6Enabled, nil
 }
 
+func exportLogsForSubtest(tb testing.TB, data *TestData) func() {
+	substrings := strings.Split(tb.Name(), "/")
+	subDir := substrings[len(substrings)-1]
+	return func() {
+		exportLogs(tb, data, subDir, true)
+	}
+}
+
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
 	if tb.Skipped() {
 		return
