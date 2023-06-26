@@ -18,17 +18,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
-// ClusterGroupV1Alpha3SpecBuilder builds a core/v1alpha3 ClusterGroup object.
-type ClusterGroupV1Alpha3SpecBuilder struct {
-	Spec crdv1alpha3.GroupSpec
+// ClusterGroupSpecBuilder builds a core/v1beta1 ClusterGroup object.
+type ClusterGroupSpecBuilder struct {
+	Spec crdv1beta1.GroupSpec
 	Name string
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) Get() *crdv1alpha3.ClusterGroup {
-	return &crdv1alpha3.ClusterGroup{
+func (b *ClusterGroupSpecBuilder) Get() *crdv1beta1.ClusterGroup {
+	return &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: b.Name,
 		},
@@ -36,12 +36,12 @@ func (b *ClusterGroupV1Alpha3SpecBuilder) Get() *crdv1alpha3.ClusterGroup {
 	}
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) SetName(name string) *ClusterGroupV1Alpha3SpecBuilder {
+func (b *ClusterGroupSpecBuilder) SetName(name string) *ClusterGroupSpecBuilder {
 	b.Name = name
 	return b
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) SetPodSelector(podSelector map[string]string, podSelectorMatchExp []metav1.LabelSelectorRequirement) *ClusterGroupV1Alpha3SpecBuilder {
+func (b *ClusterGroupSpecBuilder) SetPodSelector(podSelector map[string]string, podSelectorMatchExp []metav1.LabelSelectorRequirement) *ClusterGroupSpecBuilder {
 	var ps *metav1.LabelSelector
 	if podSelector != nil {
 		ps = &metav1.LabelSelector{
@@ -55,7 +55,7 @@ func (b *ClusterGroupV1Alpha3SpecBuilder) SetPodSelector(podSelector map[string]
 	return b
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) SetNamespaceSelector(nsSelector map[string]string, nsSelectorMatchExp []metav1.LabelSelectorRequirement) *ClusterGroupV1Alpha3SpecBuilder {
+func (b *ClusterGroupSpecBuilder) SetNamespaceSelector(nsSelector map[string]string, nsSelectorMatchExp []metav1.LabelSelectorRequirement) *ClusterGroupSpecBuilder {
 	var ns *metav1.LabelSelector
 	if nsSelector != nil {
 		ns = &metav1.LabelSelector{
@@ -69,12 +69,12 @@ func (b *ClusterGroupV1Alpha3SpecBuilder) SetNamespaceSelector(nsSelector map[st
 	return b
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPBlock) *ClusterGroupV1Alpha3SpecBuilder {
+func (b *ClusterGroupSpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPBlock) *ClusterGroupSpecBuilder {
 	b.Spec.IPBlocks = ipBlocks
 	return b
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) SetServiceReference(svcNS, svcName string) *ClusterGroupV1Alpha3SpecBuilder {
+func (b *ClusterGroupSpecBuilder) SetServiceReference(svcNS, svcName string) *ClusterGroupSpecBuilder {
 	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: svcNS,
 		Name:      svcName,
@@ -83,10 +83,10 @@ func (b *ClusterGroupV1Alpha3SpecBuilder) SetServiceReference(svcNS, svcName str
 	return b
 }
 
-func (b *ClusterGroupV1Alpha3SpecBuilder) SetChildGroups(cgs []string) *ClusterGroupV1Alpha3SpecBuilder {
-	var childGroups []crdv1alpha3.ClusterGroupReference
+func (b *ClusterGroupSpecBuilder) SetChildGroups(cgs []string) *ClusterGroupSpecBuilder {
+	var childGroups []crdv1beta1.ClusterGroupReference
 	for _, c := range cgs {
-		childGroups = append(childGroups, crdv1alpha3.ClusterGroupReference(c))
+		childGroups = append(childGroups, crdv1beta1.ClusterGroupReference(c))
 	}
 	b.Spec.ChildGroups = childGroups
 	return b

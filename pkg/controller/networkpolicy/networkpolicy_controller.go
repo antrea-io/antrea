@@ -51,10 +51,8 @@ import (
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	secinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdv1a3informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha3"
 	crdv1b1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	seclisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	crdv1a3listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha3"
 	crdv1b1listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/labelidentity"
@@ -188,10 +186,10 @@ type NetworkPolicyController struct {
 	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
 	tierListerSynced cache.InformerSynced
 
-	cgInformer crdv1a3informers.ClusterGroupInformer
+	cgInformer crdv1b1informers.ClusterGroupInformer
 	// cgLister is able to list/get ClusterGroups and is populated by the shared informer passed to
 	// NewClusterGroupController.
-	cgLister crdv1a3listers.ClusterGroupLister
+	cgLister crdv1b1listers.ClusterGroupLister
 	// cgListerSynced is a function which returns true if the ClusterGroup shared informer has been synced at least
 	// once.
 	cgListerSynced cache.InformerSynced
@@ -203,10 +201,10 @@ type NetworkPolicyController struct {
 	// nodeListerSynced is a function which returns true if the Node shared informer has been synced at least once.
 	nodeListerSynced cache.InformerSynced
 
-	grpInformer crdv1a3informers.GroupInformer
+	grpInformer crdv1b1informers.GroupInformer
 	// grpLister is able to list/get Groups and is populated by the shared informer passed to
 	// NewGroupController.
-	grpLister crdv1a3listers.GroupLister
+	grpLister crdv1b1listers.GroupLister
 	// grpListerSynced is a function which returns true if the Group shared informer has been synced at least
 	// once.
 	grpListerSynced cache.InformerSynced
@@ -388,8 +386,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	acnpInformer secinformers.ClusterNetworkPolicyInformer,
 	annpInformer secinformers.NetworkPolicyInformer,
 	tierInformer crdv1b1informers.TierInformer,
-	cgInformer crdv1a3informers.ClusterGroupInformer,
-	grpInformer crdv1a3informers.GroupInformer,
+	cgInformer crdv1b1informers.ClusterGroupInformer,
+	grpInformer crdv1b1informers.GroupInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,

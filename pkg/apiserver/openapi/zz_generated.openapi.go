@@ -77,11 +77,18 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfoList":                        schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                       schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup":                               schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroupList":                           schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool":                             schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus":                       schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Group":                                      schema_pkg_apis_crd_v1beta1_Group(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition":                             schema_pkg_apis_crd_v1beta1_GroupCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupList":                                  schema_pkg_apis_crd_v1beta1_GroupList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec":                                  schema_pkg_apis_crd_v1beta1_GroupSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus":                                schema_pkg_apis_crd_v1beta1_GroupStatus(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
@@ -2778,6 +2785,103 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Desired state of the group.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Most recently observed status of the group.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_ControllerCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2982,6 +3086,234 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Group(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Group can be used in AntreaNetworkPolicies. When used with AppliedTo, it cannot include NamespaceSelector, otherwise, Antrea will not realize the NetworkPolicy or rule, but will just update the NetworkPolicy Status as \"Unrealizable\".",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Desired state of the group.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Most recently observed status of the group.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_GroupCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"lastTransitionTime": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+				},
+				Required: []string{"type", "status"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_GroupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Group"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Group", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"podSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select Pods matching the labels set in the PodSelector in AppliedTo/To/From fields. If set with NamespaceSelector, Pods are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except NamespaceSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select all Pods from Namespaces matched by this selector, as workloads in AppliedTo/To/From fields. If set with PodSelector, Pods are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except PodSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"ipBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPBlocks describe the IPAddresses/IPBlocks that are matched in to/from. IPBlocks cannot be set as part of the AppliedTo field. Cannot be set with any other selector or ServiceReference.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1alpha1.IPBlock"),
+									},
+								},
+							},
+						},
+					},
+					"serviceReference": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select backend Pods of the referred Service. Cannot be set with any other selector or ipBlock.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1alpha1.NamespacedName"),
+						},
+					},
+					"externalEntitySelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select ExternalEntities from all Namespaces as workloads in AppliedTo/To/From fields. If set with NamespaceSelector, ExternalEntities are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except NamespaceSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"childGroups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select other ClusterGroups by name. The ClusterGroups must already exist and must not contain ChildGroups themselves. Cannot be set with any selector/IPBlock/ServiceReference.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1alpha1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1alpha1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_GroupStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GroupStatus represents information about the status of a Group.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"},
 	}
 }
 

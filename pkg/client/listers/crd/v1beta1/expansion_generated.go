@@ -24,9 +24,21 @@ type AntreaAgentInfoListerExpansion interface{}
 // AntreaControllerInfoLister.
 type AntreaControllerInfoListerExpansion interface{}
 
+// ClusterGroupListerExpansion allows custom methods to be added to
+// ClusterGroupLister.
+type ClusterGroupListerExpansion interface{}
+
 // ExternalIPPoolListerExpansion allows custom methods to be added to
 // ExternalIPPoolLister.
 type ExternalIPPoolListerExpansion interface{}
+
+// GroupListerExpansion allows custom methods to be added to
+// GroupLister.
+type GroupListerExpansion interface{}
+
+// GroupNamespaceListerExpansion allows custom methods to be added to
+// GroupNamespaceLister.
+type GroupNamespaceListerExpansion interface{}
 
 // TierListerExpansion allows custom methods to be added to
 // TierLister.

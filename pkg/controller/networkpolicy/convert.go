@@ -39,7 +39,7 @@ func ConvertClusterGroupCRD(Object *unstructured.Unstructured, toVersion string)
 	switch Object.GetAPIVersion() {
 	case "crd.antrea.io/v1alpha2":
 		switch toVersion {
-		case "crd.antrea.io/v1alpha3":
+		case "crd.antrea.io/v1alpha3", "crd.antrea.io/v1beta1":
 			ipb, found, err := unstructured.NestedMap(convertedObject.Object, "spec", "ipBlock")
 			if err == nil && found && len(ipb) > 0 {
 				unstructured.RemoveNestedField(convertedObject.Object, "spec", "ipBlock")
@@ -51,9 +51,9 @@ func ConvertClusterGroupCRD(Object *unstructured.Unstructured, toVersion string)
 		default:
 			return nil, statusErrorWithMessage("unexpected conversion version %q", toVersion)
 		}
-	case "crd.antrea.io/v1alpha3":
+	case "crd.antrea.io/v1alpha3", "crd.antrea.io/v1beta1":
 		switch toVersion {
-		case "crd.antrea.io/v1alpha2":
+		case "crd.antrea.io/v1alpha2", "crd.antrea.io/v1alpha3", "crd.antrea.io/v1beta1":
 			return convertedObject, metav1.Status{
 				Status: metav1.StatusSuccess,
 			}

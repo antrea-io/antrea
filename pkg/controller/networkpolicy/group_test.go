@@ -25,7 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -39,14 +39,14 @@ func TestProcessGroup(t *testing.T) {
 	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
-		inputGroup    *crdv1alpha3.Group
+		inputGroup    *crdv1beta1.Group
 		expectedGroup *antreatypes.Group
 	}{
 		{
 			name: "g-with-ns-selector",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &selectorA,
 				},
 			},
@@ -62,9 +62,9 @@ func TestProcessGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-pod-selector",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &selectorB,
 				},
 			},
@@ -80,9 +80,9 @@ func TestProcessGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-pod-ns-selector",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsC", Name: "gC", UID: "uidC"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &selectorD,
 					PodSelector:       &selectorC,
 				},
@@ -99,9 +99,9 @@ func TestProcessGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-ip-block",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsD", Name: "gD", UID: "uidD"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{
 							CIDR: cidr,
@@ -127,9 +127,9 @@ func TestProcessGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-svc-reference",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsE", Name: "gE", UID: "uidE"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					ServiceReference: &crdv1alpha1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "nsE",
@@ -151,10 +151,10 @@ func TestProcessGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-child-groups",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsF", Name: "gF", UID: "uidF"},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"gA", "gB"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"gA", "gB"},
 				},
 			},
 			expectedGroup: &antreatypes.Group{
@@ -187,14 +187,14 @@ func TestAddGroup(t *testing.T) {
 	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
-		inputGroup    *crdv1alpha3.Group
+		inputGroup    *crdv1beta1.Group
 		expectedGroup *antreatypes.Group
 	}{
 		{
 			name: "g-with-ns-selector",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &selectorA,
 				},
 			},
@@ -210,9 +210,9 @@ func TestAddGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-pod-selector",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &selectorB,
 				},
 			},
@@ -228,9 +228,9 @@ func TestAddGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-pod-ns-selector",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsC", Name: "gC", UID: "uidC"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &selectorD,
 					PodSelector:       &selectorC,
 				},
@@ -247,9 +247,9 @@ func TestAddGroup(t *testing.T) {
 		},
 		{
 			name: "g-with-ip-block",
-			inputGroup: &crdv1alpha3.Group{
+			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsD", Name: "gD", UID: "uidD"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{
 							CIDR: cidr,
@@ -291,9 +291,9 @@ func TestUpdateGroup(t *testing.T) {
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
-	testG := crdv1alpha3.Group{
+	testG := crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -302,14 +302,14 @@ func TestUpdateGroup(t *testing.T) {
 	_, ipNet, _ := net.ParseCIDR(cidr)
 	tests := []struct {
 		name          string
-		updatedGroup  *crdv1alpha3.Group
+		updatedGroup  *crdv1beta1.Group
 		expectedGroup *antreatypes.Group
 	}{
 		{
 			name: "g-update-ns-selector",
-			updatedGroup: &crdv1alpha3.Group{
+			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &selectorB,
 				},
 			},
@@ -325,9 +325,9 @@ func TestUpdateGroup(t *testing.T) {
 		},
 		{
 			name: "g-update-pod-selector",
-			updatedGroup: &crdv1alpha3.Group{
+			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &selectorC,
 				},
 			},
@@ -343,9 +343,9 @@ func TestUpdateGroup(t *testing.T) {
 		},
 		{
 			name: "g-update-pod-ns-selector",
-			updatedGroup: &crdv1alpha3.Group{
+			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &selectorD,
 					PodSelector:       &selectorC,
 				},
@@ -362,9 +362,9 @@ func TestUpdateGroup(t *testing.T) {
 		},
 		{
 			name: "g-update-ip-block",
-			updatedGroup: &crdv1alpha3.Group{
+			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{
 							CIDR: cidr,
@@ -390,9 +390,9 @@ func TestUpdateGroup(t *testing.T) {
 		},
 		{
 			name: "g-update-svc-reference",
-			updatedGroup: &crdv1alpha3.Group{
+			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					ServiceReference: &crdv1alpha1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "nsA",
@@ -414,10 +414,10 @@ func TestUpdateGroup(t *testing.T) {
 		},
 		{
 			name: "g-update-child-groups",
-			updatedGroup: &crdv1alpha3.Group{
+			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"gB", "gC"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"gB", "gC"},
 				},
 			},
 			expectedGroup: &antreatypes.Group{
@@ -446,9 +446,9 @@ func TestUpdateGroup(t *testing.T) {
 
 func TestDeleteG(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	testG := crdv1alpha3.Group{
+	testG := crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -463,15 +463,15 @@ func TestDeleteG(t *testing.T) {
 func TestGroupMembersComputedConditionEqual(t *testing.T) {
 	tests := []struct {
 		name          string
-		existingConds []crdv1alpha3.GroupCondition
+		existingConds []crdv1beta1.GroupCondition
 		checkStatus   corev1.ConditionStatus
 		expValue      bool
 	}{
 		{
 			name: "groupmem-cond-exists-not-equal",
-			existingConds: []crdv1alpha3.GroupCondition{
+			existingConds: []crdv1beta1.GroupCondition{
 				{
-					Type:   crdv1alpha3.GroupMembersComputed,
+					Type:   crdv1beta1.GroupMembersComputed,
 					Status: corev1.ConditionFalse,
 				},
 			},
@@ -480,9 +480,9 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 		},
 		{
 			name: "groupmem-cond-exists-equal",
-			existingConds: []crdv1alpha3.GroupCondition{
+			existingConds: []crdv1beta1.GroupCondition{
 				{
-					Type:   crdv1alpha3.GroupMembersComputed,
+					Type:   crdv1beta1.GroupMembersComputed,
 					Status: corev1.ConditionTrue,
 				},
 			},
@@ -491,7 +491,7 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 		},
 		{
 			name: "groupmem-cond-not-exists-not-equal",
-			existingConds: []crdv1alpha3.GroupCondition{
+			existingConds: []crdv1beta1.GroupCondition{
 				{
 					Status: corev1.ConditionFalse,
 				},
@@ -502,8 +502,8 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inCond := crdv1alpha3.GroupCondition{
-				Type:   crdv1alpha3.GroupMembersComputed,
+			inCond := crdv1beta1.GroupCondition{
+				Type:   crdv1beta1.GroupMembersComputed,
 				Status: tt.checkStatus,
 			}
 			actualValue := groupMembersComputedConditionEqual(tt.existingConds, inCond)
@@ -515,12 +515,12 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 func TestGetGroupSourceRef(t *testing.T) {
 	tests := []struct {
 		name        string
-		group       *crdv1alpha3.Group
+		group       *crdv1beta1.Group
 		expectedRef *controlplane.GroupReference
 	}{
 		{
 			name: "cg-ref",
-			group: &crdv1alpha3.Group{
+			group: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
 			},
 			expectedRef: &controlplane.GroupReference{

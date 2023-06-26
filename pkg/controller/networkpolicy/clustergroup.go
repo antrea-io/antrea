@@ -27,14 +27,14 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 // addClusterGroup is responsible for processing the ADD event of a ClusterGroup resource.
 func (c *NetworkPolicyController) addClusterGroup(curObj interface{}) {
-	cg := curObj.(*crdv1alpha3.ClusterGroup)
+	cg := curObj.(*crdv1beta1.ClusterGroup)
 	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing ADD event for ClusterGroup %s", cg.Name)
 	newGroup := c.processClusterGroup(cg)
@@ -45,8 +45,8 @@ func (c *NetworkPolicyController) addClusterGroup(curObj interface{}) {
 
 // updateClusterGroup is responsible for processing the UPDATE event of a ClusterGroup resource.
 func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{}) {
-	cg := curObj.(*crdv1alpha3.ClusterGroup)
-	og := oldObj.(*crdv1alpha3.ClusterGroup)
+	cg := curObj.(*crdv1beta1.ClusterGroup)
+	og := oldObj.(*crdv1beta1.ClusterGroup)
 	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := c.processClusterGroup(cg)
@@ -94,7 +94,7 @@ func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 
 // deleteClusterGroup is responsible for processing the DELETE event of a ClusterGroup resource.
 func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
-	og, ok := oldObj.(*crdv1alpha3.ClusterGroup)
+	og, ok := oldObj.(*crdv1beta1.ClusterGroup)
 	klog.V(2).Infof("Processing DELETE event for ClusterGroup %s", og.Name)
 	if !ok {
 		tombstone, ok := oldObj.(cache.DeletedFinalStateUnknown)
@@ -102,7 +102,7 @@ func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 			klog.Errorf("Error decoding object when deleting ClusterGroup, invalid type: %v", oldObj)
 			return
 		}
-		og, ok = tombstone.Obj.(*crdv1alpha3.ClusterGroup)
+		og, ok = tombstone.Obj.(*crdv1beta1.ClusterGroup)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting ClusterGroup, invalid type: %v", tombstone.Obj)
 			return
@@ -117,7 +117,7 @@ func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 	c.enqueueInternalGroup(key)
 }
 
-func (c *NetworkPolicyController) processClusterGroup(cg *crdv1alpha3.ClusterGroup) *antreatypes.Group {
+func (c *NetworkPolicyController) processClusterGroup(cg *crdv1beta1.ClusterGroup) *antreatypes.Group {
 	internalGroup := antreatypes.Group{
 		SourceReference: getClusterGroupSourceRef(cg),
 		UID:             cg.UID,
@@ -258,7 +258,7 @@ func (c *NetworkPolicyController) syncInternalClusterGroup(grp *antreatypes.Grou
 	return err
 }
 
-func getClusterGroupSourceRef(cg *crdv1alpha3.ClusterGroup) *controlplane.GroupReference {
+func getClusterGroupSourceRef(cg *crdv1beta1.ClusterGroup) *controlplane.GroupReference {
 	return &controlplane.GroupReference{
 		Name:      cg.GetName(),
 		Namespace: cg.GetNamespace(),
@@ -310,23 +310,23 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 }
 
 // updateClusterGroupStatus updates the Status subresource for a ClusterGroup.
-func (c *NetworkPolicyController) updateClusterGroupStatus(cg *crdv1alpha3.ClusterGroup, cStatus v1.ConditionStatus) error {
-	condStatus := crdv1alpha3.GroupCondition{
+func (c *NetworkPolicyController) updateClusterGroupStatus(cg *crdv1beta1.ClusterGroup, cStatus v1.ConditionStatus) error {
+	condStatus := crdv1beta1.GroupCondition{
 		Status: cStatus,
-		Type:   crdv1alpha3.GroupMembersComputed,
+		Type:   crdv1beta1.GroupMembersComputed,
 	}
 	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
 	}
 	condStatus.LastTransitionTime = metav1.Now()
-	status := crdv1alpha3.GroupStatus{
-		Conditions: []crdv1alpha3.GroupCondition{condStatus},
+	status := crdv1beta1.GroupStatus{
+		Conditions: []crdv1beta1.GroupCondition{condStatus},
 	}
 	klog.V(4).Infof("Updating ClusterGroup %s status to %#v", cg.Name, condStatus)
 	toUpdate := cg.DeepCopy()
 	toUpdate.Status = status
-	_, err := c.crdClient.CrdV1alpha3().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	_, err := c.crdClient.CrdV1beta1().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	return err
 }
 

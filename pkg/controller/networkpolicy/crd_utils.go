@@ -28,7 +28,7 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -61,9 +61,9 @@ func NetworkPolicyStatusEqual(oldStatus, newStatus v1alpha1.NetworkPolicyStatus)
 
 // groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
 // is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
-func groupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
+func groupMembersComputedConditionEqual(conds []crdv1beta1.GroupCondition, condition crdv1beta1.GroupCondition) bool {
 	for _, c := range conds {
-		if c.Type == crdv1alpha3.GroupMembersComputed {
+		if c.Type == crdv1beta1.GroupMembersComputed {
 			if c.Status == condition.Status {
 				return true
 			}

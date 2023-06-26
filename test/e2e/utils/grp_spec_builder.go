@@ -18,18 +18,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 // GroupSpecBuilder builds a Group object.
 type GroupSpecBuilder struct {
-	Spec      crdv1alpha3.GroupSpec
+	Spec      crdv1beta1.GroupSpec
 	Name      string
 	Namespace string
 }
 
-func (b *GroupSpecBuilder) Get() *crdv1alpha3.Group {
-	return &crdv1alpha3.Group{
+func (b *GroupSpecBuilder) Get() *crdv1beta1.Group {
+	return &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      b.Name,
 			Namespace: b.Namespace,
@@ -91,9 +91,9 @@ func (b *GroupSpecBuilder) SetServiceReference(svcNS, svcName string) *GroupSpec
 }
 
 func (b *GroupSpecBuilder) SetChildGroups(cgs []string) *GroupSpecBuilder {
-	var childGroups []crdv1alpha3.ClusterGroupReference
+	var childGroups []crdv1beta1.ClusterGroupReference
 	for _, c := range cgs {
-		childGroups = append(childGroups, crdv1alpha3.ClusterGroupReference(c))
+		childGroups = append(childGroups, crdv1beta1.ClusterGroupReference(c))
 	}
 	b.Spec.ChildGroups = childGroups
 	return b
