@@ -355,6 +355,14 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 	}()
 }
 
+func (b *OFBridge) FlowGraphEnabledOnSwitch() bool {
+	return true
+}
+
+func (b *OFBridge) TLVMapEnabledOnSwitch() bool {
+	return true
+}
+
 func (b *OFBridge) SetOFSwitch(sw *ofctrl.OFSwitch) {
 	b.ofSwitchMutex.Lock()
 	defer b.ofSwitchMutex.Unlock()
