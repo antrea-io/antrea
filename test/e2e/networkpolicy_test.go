@@ -52,34 +52,43 @@ func TestNetworkPolicy(t *testing.T) {
 	defer teardownTest(t, data)
 
 	t.Run("testNetworkPolicyStats", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		skipIfNotIPv4Cluster(t)
 		skipIfNetworkPolicyStatsDisabled(t)
 		testNetworkPolicyStats(t, data)
 	})
 	t.Run("testDifferentNamedPorts", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		testDifferentNamedPorts(t, data)
 	})
 	t.Run("testDefaultDenyIngressPolicy", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		testDefaultDenyIngressPolicy(t, data)
 	})
 	t.Run("testDefaultDenyEgressPolicy", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		testDefaultDenyEgressPolicy(t, data)
 	})
 	t.Run("testEgressToServerInCIDRBlock", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		skipIfNotIPv6Cluster(t)
 		testEgressToServerInCIDRBlock(t, data)
 	})
 	t.Run("testEgressToServerInCIDRBlockWithException", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		skipIfNotIPv6Cluster(t)
 		testEgressToServerInCIDRBlockWithException(t, data)
 	})
 	t.Run("testNetworkPolicyResyncAfterRestart", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		testNetworkPolicyResyncAfterRestart(t, data)
 	})
 	t.Run("testIngressPolicyWithoutPortNumber", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		testIngressPolicyWithoutPortNumber(t, data)
 	})
 	t.Run("testIngressPolicyWithEndPort", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
 		testIngressPolicyWithEndPort(t, data)
 	})
 }
