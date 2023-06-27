@@ -29,9 +29,9 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
@@ -60,15 +60,15 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 		OriginalPackets:           uint64(1),
 		IsActive:                  true,
 	}
-	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	protocol, _ := lookupServiceProtocol(tuple.Protocol)
 	serviceStr := fmt.Sprintf("%s:%d/%s", tuple.DestinationAddress.String(), tuple.DestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-	mockIfaceStore.EXPECT().GetInterfaceByIP(tuple.SourceAddress.String()).Return(nil, false)
-	mockIfaceStore.EXPECT().GetInterfaceByIP(tuple.DestinationAddress.String()).Return(nil, false)
+	mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(nil, false)
+	mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(nil, false)
 
-	denyConnStore := NewDenyConnectionStore(mockIfaceStore, mockProxier, testFlowExporterOptions)
+	denyConnStore := NewDenyConnectionStore(mockPodStore, mockProxier, testFlowExporterOptions)
 
 	denyConnStore.AddOrUpdateConn(&testFlow, refTime.Add(-(time.Second * 20)), uint64(60))
 	expConn := testFlow

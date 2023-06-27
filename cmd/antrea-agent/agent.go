@@ -77,6 +77,7 @@ import (
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/podstore"
 	"antrea.io/antrea/pkg/version"
 )
 
@@ -139,6 +140,7 @@ func run(o *Options) error {
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
+	enableFLowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
 
 	nodeIPTracker := nodeip.NewTracker(nodeInformer)
 	// Bridging mode will connect the uplink interface to the OVS bridge.
@@ -156,7 +158,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
-		features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable,
+		enableFLowExporter,
 		o.config.AntreaProxy.ProxyAll,
 		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
 		connectUplinkToBridge,
@@ -317,7 +319,7 @@ func run(o *Options) error {
 	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
 	// StretchedNetworkPolicyController, and secondary network controller.
 	var localPodInformer cache.SharedIndexInformer
-	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP ||
+	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFLowExporter ||
 		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
 		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
 		listOptions := func(options *metav1.ListOptions) {
@@ -602,7 +604,8 @@ func run(o *Options) error {
 	}
 
 	var flowExporter *exporter.FlowExporter
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
+	if enableFLowExporter {
+		podStore := podstore.NewPodStore(localPodInformer)
 		flowExporterOptions := &flowexporter.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,
@@ -612,7 +615,7 @@ func run(o *Options) error {
 			PollInterval:           o.pollInterval,
 			ConnectUplinkToBridge:  connectUplinkToBridge}
 		flowExporter, err = exporter.NewFlowExporter(
-			ifaceStore,
+			podStore,
 			proxier,
 			k8sClient,
 			nodeRouteController,
@@ -877,7 +880,7 @@ func run(o *Options) error {
 	go ofClient.StartPacketInHandler(stopCh)
 
 	// Start the goroutine to periodically export IPFIX flow records.
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
+	if enableFLowExporter {
 		go flowExporter.Run(stopCh)
 	}
 
