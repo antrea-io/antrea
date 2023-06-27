@@ -1,5 +1,17 @@
 # Changelog 1.12
 
+## 1.12.1 - 2023-07-04
+
+### Fixed
+
+- Bump up libOpenflow and ofnet versions to fix a PacketIn2 response parse error. ([#5154](https://github.com/antrea-io/antrea/pull/5154), [@wenyingd])
+- Fix incorrect FlowMod message passing in the `modifyFlows` function of the OpenFlow client to avoid unexpected flow error. ([#5125](https://github.com/antrea-io/antrea/pull/5125), [@Dyanngg])
+- Ensure the Egress IP is always correctly advertised to the network, including when the userspace ARP responder is not running or when the Egress IP is temporarily claimed by multiple Nodes. ([#5127](https://github.com/antrea-io/antrea/pull/5127), [@tnqn])
+- Fix ClusterClaim webhook bug to avoid ClusterClaim deletion failure. ([#5075](https://github.com/antrea-io/antrea/pull/5075), [@luolanzone])
+- Fix an issue in ANP with FQDN rules where TCP src port is unset on the TCP DNS response flow. ([#5078](https://github.com/antrea-io/antrea/pull/5078), [@wenyingd])
+- Fix status report when no-op changes are applied to Antrea-native policies. ([#5096](https://github.com/antrea-io/antrea/pull/5096), [@tnqn])
+- Fix IPv4 groups containing IPv6 endpoints mistakenly in dual-stack clusters in AntreaProxy implementation. ([#5194](https://github.com/antrea-io/antrea/pull/5194), [@tnqn])
+
 ## 1.12.0 - 2023-05-24
 
 - The Multicast, TopologyAwareHints, NodeIPAM features are graduated from Alpha to Beta. The TopologyAwareHints, NodeIPAM features are enabled by default. Multicast can be enabled with a new Antrea Agent configuration parameter: `multicast.enable`.
