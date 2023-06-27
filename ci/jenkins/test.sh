@@ -348,19 +348,10 @@ function revert_snapshot_windows {
     sleep 5
 }
 
-function deliver_antrea_windows {
-    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows ======"
-    clean_antrea
-    kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
-    kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
-    kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
-    kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true || true
+function deliver_antrea_linux {
+    set -e
 
-    prepare_env
-    ${CLEAN_STALE_IMAGES}
-    ${PRINT_DOCKER_STATUS}
-    chmod -R g-w build/images/ovs
-    chmod -R g-w build/images/base
+    echo "==== Start building and delivering Linux Docker images ===="
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
         make windows-bin
@@ -370,7 +361,7 @@ function deliver_antrea_windows {
     export_govc_env_var
 
     # Enable verbose log for troubleshooting.
-    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
+    sed -i "s/--v=0/--v=4/g" build/yamls/antrea-windows.yml
 
     if [[ "${PROXY_ALL}" == false && ${TESTCASE} =~ "windows-e2e" ]]; then
         sed -i "s|.*proxyAll: true|      proxyAll: false|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
@@ -406,7 +397,10 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${image}" || true
         done
     done
+    echo "==== Finish building and delivering Linux Docker images ===="
+}
 
+function deliver_antrea_windows {
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
@@ -468,10 +462,59 @@ function deliver_antrea_windows {
         done
     done
     rm -f antrea-windows.tar.gz
+    echo "==== Finish building and delivering Windows Docker images ===="
 }
 
-function deliver_antrea_windows_containerd {
-    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows Containerd ======"
+function build_and_deliver_antrea_windows_and_linux_docker_images {
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows and Antrea Linux Docker Images ====="
+    clean_antrea
+    kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
+    kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
+    kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
+    kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true || true
+
+    prepare_env
+    ${CLEAN_STALE_IMAGES}
+    ${PRINT_DOCKER_STATUS}
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
+  
+    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
+        make windows-bin
+    fi
+
+    export_govc_env_var
+
+    # Enable verbose log for troubleshooting.
+    sed -i "s/--v=0/--v=4/g" build/yamls/antrea-windows.yml
+
+    if [[ "${PROXY_ALL}" == true ]]; then
+        echo "====== Updating yaml files to enable proxyAll ======"
+        KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
+        KUBERNETES_SVC_EP_PORT=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].ports[0].port}')
+        KUBERNETES_SVC_EP_ADDR="${KUBERNETES_SVC_EP_IP}:${KUBERNETES_SVC_EP_PORT}"
+        sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
+        sed -i "s|.*proxyAll: false|      proxyAll: true|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
+    fi
+
+    cp -f build/yamls/*.yml $WORKDIR
+    echo "====== Delivering Antrea to all Nodes ======"
+    set +e
+    deliver_antrea_windows &> deliver_antrea_windows.log &
+    deliver_antrea_windows_pid=$!
+    deliver_antrea_linux
+    linux_result=$?
+    wait $deliver_antrea_windows_pid
+    windows_result=$?
+    cat deliver_antrea_windows.log
+    if [ $windows_result -ne 0 ] || [ $linux_result -ne 0 ]; then
+        exit 1
+    fi
+    set -e
+}
+
+function  build_and_deliver_antrea_windows_and_linux_containerd_images {
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows and Antrea Linux containerd Images ====="
     clean_antrea
     kubectl delete -f ${WORKDIR}/antrea-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows-containerd.yml --ignore-not-found=true || true
@@ -486,11 +529,7 @@ function deliver_antrea_windows_containerd {
     # Clean docker image to save disk space.
     ${CLEAN_STALE_IMAGES}
     ${PRINT_DOCKER_STATUS}
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
-
-    echo "====== Delivering Antrea to all Nodes ======"
     export_govc_env_var
-
     # Enable verbose log for troubleshooting.
     sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
 
@@ -499,6 +538,25 @@ function deliver_antrea_windows_containerd {
     sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_API_SERVER}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
 
     cp -f build/yamls/*.yml $WORKDIR
+    set +e
+    deliver_antrea_windows_containerd &> deliver_antrea_windows_containerd.log &
+    deliver_antrea_windows_containerd=$!
+    deliver_antrea_linux_containerd
+    linux_result=$?
+    wait $deliver_antrea_linux_containerd
+    windows_result=$?
+    cat deliver_antrea_windows_containerd.log
+    if [ $windows_result -ne 0 ] || [ $linux_result -ne 0 ]; then
+        exit 1
+    fi
+    set -e
+}
+
+function deliver_antrea_linux_containerd {
+    set -e
+
+    echo "==== Start building and delivering Linux containerd images ===="
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     # containerd is the runtime, need to load the image via ctr.
     ctr -n=k8s.io images import antrea-ubuntu.tar
@@ -531,7 +589,10 @@ function deliver_antrea_windows_containerd {
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "ctr -n=k8s.io images pull ${k8s_images[i]} && ctr -n=k8s.io images tag ${k8s_images[i]} ${e2e_images[i]}" || true
         done
     done
+    echo "==== Finish building and delivering Linux containerd images ===="
+}
 
+function deliver_antrea_windows_containerd {
     echo "===== Build Antrea Windows on Windows Jumper Node ====="
     echo "==== Reverting Windows VM ${WIN_IMAGE_NODE} ====="
     revert_snapshot_windows ${WIN_IMAGE_NODE}
@@ -576,6 +637,7 @@ function deliver_antrea_windows_containerd {
         fi
     done
     rm -f antrea-windows.tar
+    echo "==== Finish building and delivering Windows containerd images ===="
 }
 
 function deliver_antrea {
@@ -1087,14 +1149,14 @@ trap clean_antrea EXIT
 if [[ ${TESTCASE} =~ "windows" ]]; then
     if [[ ${TESTCASE} =~ "containerd" ]]; then
         WINDOWS_YAML_SUFFIX="windows-containerd"
-        deliver_antrea_windows_containerd
+        build_and_deliver_antrea_windows_and_linux_containerd_images
         if [[ ${TESTCASE} =~ "e2e" ]]; then
             run_e2e_windows
         else
             run_conformance_windows_containerd
         fi
     else
-        deliver_antrea_windows
+        build_and_deliver_antrea_windows_and_linux_docker_images
         if [[ ${TESTCASE} =~ "e2e" ]]; then
             run_e2e_windows
         else
