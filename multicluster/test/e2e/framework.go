@@ -305,15 +305,7 @@ func (data *MCTestData) probeFromPodInCluster(
 		corev1.ProtocolUDP:  "udp",
 		corev1.ProtocolSCTP: "sctp",
 	}
-	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
-	// first. This leads to the first test being run consistently failing. To avoid this issue
-	// until it is resolved, we try to connect 3 times.
-	// See https://github.com/antrea-io/antrea/issues/467.
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=%s; done;", dstAddr, port, protocolStr[protocol]),
-	}
+	cmd := antreae2e.ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(cmd, " "))
 	stdout, stderr, err := data.runCommandFromPod(cluster, podNamespace, podName, containerName, cmd)
 	// It needs to check both err and stderr because:
