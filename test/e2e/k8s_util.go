@@ -157,6 +157,27 @@ func (k *KubernetesUtils) getTCPv4SourcePortRangeFromPod(podNamespace, podNameLa
 	return int32(startPort), int32(endPort), nil
 }
 
+// ProbeCommand generates a command to probe the provider url.
+// The executor parameter can be used to change where the prober will run. For example, it could be "ip netns exec NAME"
+// to run the prober in another namespace.
+// We try to connect 3 times. This dates back to when we were using the OVS netdev datapath for Kind clusters, as the
+// first packet sent on a tunnel was always dropped (https://github.com/antrea-io/antrea/issues/467). We may be able to
+// revisit this now that we use the OVS kernel datapath for Kind.
+// "agnhost connect" outputs nothing when it succeeds. We output "CONNECTED" in such case and prepend a sequence
+// number for each attempt, to make the result more informative. Example output:
+// 1: CONNECTED
+// 2: TIMEOUT
+// 3: TIMEOUT
+func ProbeCommand(url, protocol, executor string) []string {
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		fmt.Sprintf(`for i in $(seq 1 3); do echo -n "${i}: " >&2 && %s /agnhost connect %s --timeout=1s --protocol=%s && echo "CONNECTED" >&2; done;`,
+			executor, url, protocol),
+	}
+	return cmd
+}
+
 func (k *KubernetesUtils) probe(
 	pod *v1.Pod,
 	podName string,
@@ -172,15 +193,7 @@ func (k *KubernetesUtils) probe(
 		utils.ProtocolUDP:  "udp",
 		utils.ProtocolSCTP: "sctp",
 	}
-	// We try to connect 3 times. This dates back to when we were using the OVS netdev datapath
-	// for Kind clusters, as the first packet sent on a tunnel was always dropped
-	// (https://github.com/antrea-io/antrea/issues/467). We may be able to revisit this now that
-	// we use the OVS kernel datapath for Kind.
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=%s; done;", dstAddr, port, protocolStr[protocol]),
-	}
+	cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
 	// It needs to check both err and stderr because:
@@ -205,7 +218,7 @@ func (k *KubernetesUtils) probe(
 
 // DecideProbeResult uses the probe stderr to decide the connectivity.
 func DecideProbeResult(stderr string, probeNum int) PodConnectivityMark {
-	countConnected := probeNum - strings.Count(stderr, "\n")
+	countConnected := strings.Count(stderr, "CONNECTED")
 	countDropped := strings.Count(stderr, "TIMEOUT")
 	// For our UDP rejection cases, agnhost will return:
 	//   For IPv4: 'UNKNOWN: read udp [src]->[dst]: read: no route to host'
