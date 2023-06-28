@@ -3291,6 +3291,11 @@ data:
       # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
       # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
       proxyLoadBalancerIPs: true
+      # The value of the "service.kubernetes.io/service-proxy-name" label for AntreaProxy to match. If it is set,
+      # then AntreaProxy will only handle Services with the label that equals the provided value. If it is not set,
+      # then AntreaProxy will only handle Services without the "service.kubernetes.io/service-proxy-name" label,
+      # but ignore Services with the label no matter what is the value.
+      serviceProxyName: ""
 
     # IPsec tunnel related configurations.
     ipsec:
@@ -4380,7 +4385,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 994e75167f0126a535cea63fc65a5ab86361648a20bcacb06d3c588f06f6e5f6
+        checksum/config: 720e2b412e83992caf5874a01e67507617e079b896796e588c92fd75c9e06ad6
       labels:
         app: antrea
         component: antrea-agent
@@ -4622,7 +4627,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 994e75167f0126a535cea63fc65a5ab86361648a20bcacb06d3c588f06f6e5f6
+        checksum/config: 720e2b412e83992caf5874a01e67507617e079b896796e588c92fd75c9e06ad6
       labels:
         app: antrea
         component: antrea-controller

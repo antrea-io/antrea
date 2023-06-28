@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 
 	"antrea.io/antrea/pkg/agent/proxy/types"
@@ -31,8 +32,8 @@ type serviceChangesTracker struct {
 	initialized bool
 }
 
-func newServiceChangesTracker(recorder record.EventRecorder, ipFamily v1.IPFamily, skipServices []string) *serviceChangesTracker {
-	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, ipFamily, recorder, nil, skipServices)}
+func newServiceChangesTracker(recorder record.EventRecorder, ipFamily v1.IPFamily, serviceLabelSelector labels.Selector, skipServices []string) *serviceChangesTracker {
+	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, ipFamily, recorder, nil, serviceLabelSelector, skipServices)}
 }
 
 func (sh *serviceChangesTracker) OnServiceSynced() {

@@ -28,7 +28,9 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
@@ -43,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/agent/proxy/metrics"
 	"antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/route"
+	antreaconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
@@ -57,6 +60,9 @@ const (
 	// SessionAffinity timeout is implemented using a hard_timeout in OVS. hard_timeout is
 	// represented by a uint16 in the OpenFlow protocol.
 	maxSupportedAffinityTimeout = math.MaxUint16
+	// labelServiceProxyName is the well-known label for service proxy name defined in
+	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-network/2447-Make-kube-proxy-service-abstraction-optional
+	labelServiceProxyName = "service.kubernetes.io/service-proxy-name"
 )
 
 // Proxier wraps proxy.Provider and adds extra methods. It is introduced for
@@ -1095,8 +1101,9 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		nil)
 }
 
-func NewProxier(
+func newProxier(
 	hostname string,
+	serviceProxyName string,
 	k8sClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	ofClient openflow.Client,
@@ -1141,10 +1148,24 @@ func NewProxier(
 		serviceHealthServer = healthcheck.NewServiceHealthServer(hostname, nil, nodePortAddressesString)
 	}
 
+	// TODO: The label selector nonHeadlessServiceSelector was added to pass the Kubernetes e2e test
+	//  'Services should implement service.kubernetes.io/headless'. You can find the test case at:
+	//  https://github.com/kubernetes/kubernetes/blob/027ac5a426a261ba6b66a40e79e123e75e9baf5b/test/e2e/network/service.go#L2281
+	//  However, in AntreaProxy, headless Services are skipped by checking the ClusterIP.
+	nonHeadlessServiceSelector, _ := labels.NewRequirement(corev1.IsHeadlessService, selection.DoesNotExist, nil)
+	var serviceProxyNameSelector *labels.Requirement
+	if serviceProxyName == "" {
+		serviceProxyNameSelector, _ = labels.NewRequirement(labelServiceProxyName, selection.DoesNotExist, nil)
+	} else {
+		serviceProxyNameSelector, _ = labels.NewRequirement(labelServiceProxyName, selection.DoubleEquals, []string{serviceProxyName})
+	}
+	serviceLabelSelector := labels.NewSelector()
+	serviceLabelSelector = serviceLabelSelector.Add(*serviceProxyNameSelector, *nonHeadlessServiceSelector)
+
 	p := &proxier{
 		serviceConfig:             config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:          newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
-		serviceChanges:            newServiceChangesTracker(recorder, ipFamily, skipServices),
+		serviceChanges:            newServiceChangesTracker(recorder, ipFamily, serviceLabelSelector, skipServices),
 		serviceMap:                k8sproxy.ServiceMap{},
 		serviceInstalledMap:       k8sproxy.ServiceMap{},
 		endpointsInstalledMap:     types.EndpointsMap{},
@@ -1213,8 +1234,9 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 	return p.ipv4Proxier.GetServiceByIP(serviceStr)
 }
 
-func NewDualStackProxier(
+func newDualStackProxier(
 	hostname string,
+	serviceProxyName string,
 	k8sClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	ofClient openflow.Client,
@@ -1229,18 +1251,122 @@ func NewDualStackProxier(
 	nestedServiceSupport bool) (*metaProxierWrapper, error) {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier, err := NewProxier(hostname, k8sClient, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter, nestedServiceSupport)
+	ipv4Proxier, err := newProxier(hostname,
+		serviceProxyName,
+		k8sClient,
+		informerFactory,
+		ofClient,
+		false,
+		routeClient,
+		nodePortAddressesIPv4,
+		proxyAllEnabled,
+		skipServices,
+		proxyLoadBalancerIPs,
+		v4groupCounter,
+		nestedServiceSupport)
 	if err != nil {
-		return nil, fmt.Errorf("error when creating v4 proxier: %v", err)
+		return nil, fmt.Errorf("error when creating IPv4 proxier: %v", err)
 	}
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier, err := NewProxier(hostname, k8sClient, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter, nestedServiceSupport)
+	ipv6Proxier, err := newProxier(hostname,
+		serviceProxyName,
+		k8sClient,
+		informerFactory,
+		ofClient,
+		true,
+		routeClient,
+		nodePortAddressesIPv6,
+		proxyAllEnabled,
+		skipServices,
+		proxyLoadBalancerIPs,
+		v6groupCounter,
+		nestedServiceSupport)
 	if err != nil {
-		return nil, fmt.Errorf("error when creating v6 proxier: %v", err)
+		return nil, fmt.Errorf("error when creating IPv6 proxier: %v", err)
 	}
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
 	metaProxier := k8sproxy.NewMetaProxier(ipv4Proxier, ipv6Proxier)
 
 	return &metaProxierWrapper{ipv4Proxier, ipv6Proxier, metaProxier}, nil
+}
+
+func NewProxier(hostname string,
+	k8sClient clientset.Interface,
+	ofClient openflow.Client,
+	routeClient route.Interface,
+	v4Enabled bool,
+	v6Enabled bool,
+	nodePortAddressesIPv4 []net.IP,
+	nodePortAddressesIPv6 []net.IP,
+	proxyConfig antreaconfig.AntreaProxyConfig,
+	v4GroupCounter types.GroupCounter,
+	v6GroupCounter types.GroupCounter,
+	nestedServiceSupport bool,
+	informerFactory informers.SharedInformerFactory) (Proxier, error) {
+	proxyAllEnabled := proxyConfig.ProxyAll
+	skipServices := proxyConfig.SkipServices
+	proxyLoadBalancerIPs := *proxyConfig.ProxyLoadBalancerIPs
+	serviceProxyName := proxyConfig.ServiceProxyName
+
+	var proxier Proxier
+	var err error
+	switch {
+	case v4Enabled && v6Enabled:
+		proxier, err = newDualStackProxier(hostname,
+			serviceProxyName,
+			k8sClient,
+			informerFactory,
+			ofClient,
+			routeClient,
+			nodePortAddressesIPv4,
+			nodePortAddressesIPv6,
+			proxyAllEnabled,
+			skipServices,
+			proxyLoadBalancerIPs,
+			v4GroupCounter,
+			v6GroupCounter,
+			nestedServiceSupport)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating dual-stack proxier: %v", err)
+		}
+	case v4Enabled:
+		proxier, err = newProxier(hostname,
+			serviceProxyName,
+			k8sClient,
+			informerFactory,
+			ofClient,
+			false,
+			routeClient,
+			nodePortAddressesIPv4,
+			proxyAllEnabled,
+			skipServices,
+			proxyLoadBalancerIPs,
+			v4GroupCounter,
+			nestedServiceSupport)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating IPv4 proxier: %v", err)
+		}
+	case v6Enabled:
+		proxier, err = newProxier(hostname,
+			serviceProxyName,
+			k8sClient,
+			informerFactory,
+			ofClient,
+			true,
+			routeClient,
+			nodePortAddressesIPv6,
+			proxyAllEnabled,
+			skipServices,
+			proxyLoadBalancerIPs,
+			v6GroupCounter,
+			nestedServiceSupport)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating IPv6 proxier: %v", err)
+		}
+	default:
+		return nil, fmt.Errorf("either IPv4 or IPv6 proxier, or both proxiers should be created")
+	}
+
+	return proxier, nil
 }
