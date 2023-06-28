@@ -1,6 +1,6 @@
 # Antctl
 
-Antctl is the command-line tool for Antrea. At the moment, antctl supports
+antctl is the command-line tool for Antrea. At the moment, antctl supports
 running in three different modes:
 
 * "controller mode": when run out-of-cluster or from within the Antrea
@@ -36,6 +36,7 @@ running in three different modes:
   - [Multi-cluster commands](#multi-cluster-commands)
   - [Multicast commands](#multicast-commands)
   - [Showing memberlist state](#showing-memberlist-state)
+  - [Upgrade existing objects of CRDs](#upgrade-existing-objects-of-crds)
 <!-- /toc -->
 
 ## Installation
@@ -497,7 +498,7 @@ $ antctl traceflow -D pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10
 
 ### Antctl Proxy
 
-Antctl can run as a reverse proxy for the Antrea API (Controller or arbitrary
+antctl can run as a reverse proxy for the Antrea API (Controller or arbitrary
 Agent). Usage is very similar to `kubectl proxy` and the implementation is
 essentially the same.
 
@@ -669,7 +670,8 @@ testmulticast-vw7gx5b9 test3-sender-1               0       10
 
 ### Showing memberlist state
 
-`antctl` agent command `get memberlist` (or `get ml`) prints the state of memberlist cluster of Antrea Agent.
+`antctl` agent command `get memberlist` (or `get ml`) prints the state of memberlist
+cluster of Antrea Agent.
 
 ```bash
 $ antctl get memberlist
@@ -678,4 +680,79 @@ NODE    IP         STATUS
 worker1 172.18.0.4 Alive 
 worker2 172.18.0.3 Alive 
 worker3 172.18.0.2 Dead
+```
+
+### Upgrade existing objects of CRDs
+
+antctl supports upgrading existing objects of Antrea CRDs to the storage version.
+The related sub-commands should be run out-of-cluster. Please ensure that the
+kubeconfig file used by antctl has the necessary permissions. The required permissions
+are listed in the following sample ClusterRole.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: antctl
+rules:
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get 
+      - list
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources: 
+      - customresourcedefinitions/status
+    verbs:
+      - update
+  - apiGroups: 
+      - crd.antrea.io
+    resources:
+      - "*"
+    verbs: 
+      - get
+      - list 
+      - update
+```
+
+This command performs a dry-run to upgrade all existing objects of Antrea CRDs to
+the storage version:
+
+```bash
+antctl upgrade api-storage --dry-run
+```
+
+This command upgrades all existing objects of Antrea CRDs to the storage version:
+
+```bash
+antctl upgrade api-storage
+```
+
+This command upgrades existing AntreaAgentInfo objects to the storage version:
+
+```bash
+antctl upgrade api-storage --crds=antreaagentinfos.crd.antrea.io
+```
+
+This command upgrades existing Egress and Group objects to the storage version:
+
+```bash
+antctl upgrade api-storage --crds=egresses.crd.antrea.io,groups.crd.antrea.io
+```
+
+If you encounter any errors related to permissions while running the commands, double-check
+the permissions of the kubeconfig used by antctl. Ensure that the ClusterRole has the
+required permissions. The following sample errors are caused by insufficient permissions:
+
+```bash
+Error: failed to get CRD list: customresourcedefinitions.apiextensions.k8s.io is forbidden: User "user" cannot list resource "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope
+
+Error: externalippools.crd.antrea.io is forbidden: User "user" cannot list resource "externalippools" in API group "crd.antrea.io" at the cluster scope
+
+Error: error upgrading object prod-external-ip-pool of CRD "externalippools.crd.antrea.io": externalippools.crd.antrea.io "prod-external-ip-pool" is forbidden: User "user" cannot update resource "externalippools" in API group "crd.antrea.io" at the cluster scope
+
+Error: error updating CRD "externalippools.crd.antrea.io" status.storedVersion: customresourcedefinitions.apiextensions.k8s.io "externalippools.crd.antrea.io" is forbidden: User "user" cannot update resource "customresourcedefinitions/status" in API group "apiextensions.k8s.io" at the cluster scope
 ```

@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/set"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
+	"antrea.io/antrea/pkg/antctl/raw/upgrade/apistorage"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
 	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
@@ -678,6 +679,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 			supportAgent:          false,
 			supportController:     false,
 			supportFlowAggregator: true,
+		},
+		{
+			cobraCommand:      apistorage.NewCommand(),
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      upgrade,
 		},
 	},
 	codec: scheme.Codecs,

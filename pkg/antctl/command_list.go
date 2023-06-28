@@ -63,7 +63,8 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 		if (runtime.Mode == runtime.ModeAgent && cmd.supportAgent) ||
 			(runtime.Mode == runtime.ModeController && cmd.supportController) ||
 			(runtime.Mode == runtime.ModeFlowAggregator && cmd.supportFlowAggregator) ||
-			(!runtime.InPod && cmd.commandGroup == mc) {
+			(!runtime.InPod && cmd.commandGroup == mc) ||
+			(!runtime.InPod && cmd.commandGroup == upgrade) {
 			if groupCommand, ok := groupCommands[cmd.commandGroup]; ok {
 				groupCommand.AddCommand(cmd.cobraCommand)
 			} else {
