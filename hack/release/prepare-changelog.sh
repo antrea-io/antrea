@@ -158,7 +158,7 @@ if [ "$all" == "yes" ]; then
   # There may be some changes not being labelled properly, release manager needs to move them to appropriate sections manually.
   echo "### Unlabelled (Remove this section eventually)"
   echo ""
-  gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc -label:action/release-note $author_filter" -L $limit --json number,title,author,labels --template \
+  gh pr list -s merged -B ${branch} --search "merged:>${release_start_time} sort:updated-desc -label:action/release-note -label:kind/cherry-pick $author_filter" -L $limit --json number,title,author,labels --template \
   '{{range .}}{{tablerow (printf "- %s. ([#%v](https://github.com/antrea-io/antrea/pull/%v), [@%s])" .title .number .number .author.login)}}{{end}}'
 fi
 
