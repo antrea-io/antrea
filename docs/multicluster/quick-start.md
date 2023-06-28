@@ -36,15 +36,18 @@ configuration parameters in `antrea-agent.conf` of the Antrea deployment
 manifest to enable the `Multicluster` feature:
 
 ```yaml
-antrea-agent.conf: |
-...
-  featureGates:
-...
-    Multicluster: true
-...
-  multicluster:
-    enableGateway: true
-    namespace: ""
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      Multicluster: true
+    multicluster:
+      enableGateway: true
+      namespace: ""
 ```
 
 At the moment, Multi-cluster Gateway only works with the Antrea `encap` traffic
@@ -74,16 +77,16 @@ created by the commands), and Multi-cluster Controller for the member into
 Namepsace `kube-system`.
 
 ```bash
-$kubectl create ns antrea-multicluster
-$antctl mc deploy leadercluster -n antrea-multicluster --antrea-version $TAG
-$antctl mc deploy membercluster -n kube-system --antrea-version $TAG
+kubectl create ns antrea-multicluster
+antctl mc deploy leadercluster -n antrea-multicluster --antrea-version $TAG
+antctl mc deploy membercluster -n kube-system --antrea-version $TAG
 ```
 
 You can run the following command to verify the the leader and member
 `antrea-mc-controller` Pods are deployed and running:
 
 ```bash
-$kubectl get all -A -l="component=antrea-mc-controller"
+$ kubectl get all -A -l="component=antrea-mc-controller"
 NAMESPACE             NAME                                        READY   STATUS    RESTARTS   AGE
 antrea-multicluster   pod/antrea-mc-controller-cd7bf8f68-kh4kz    1/1     Running   0          50s
 kube-system           pod/antrea-mc-controller-85dbf58b75-pjj48   1/1     Running   0          48s
@@ -132,7 +135,7 @@ the following command to annotate the Node with:
 Node from the annotation):
 
 ```bash
-$kubectl annotate node node-a1 multicluster.antrea.io/gateway=true
+kubectl annotate node node-a1 multicluster.antrea.io/gateway=true
 ```
 
 ### Set up Cluster B
@@ -146,14 +149,14 @@ Run the following command to deploy the member Multi-cluster Controller into
 Namespace `kube-system`.
 
 ```bash
-$antctl mc deploy membercluster -n kube-system --antrea-version $TAG
+antctl mc deploy membercluster -n kube-system --antrea-version $TAG
 ```
 
 You can run the following command to verify the `antrea-mc-controller` Pod is
 deployed and running:
 
 ```bash
-$kubectl get all -A -l="component=antrea-mc-controller"
+$ kubectl get all -A -l="component=antrea-mc-controller"
 NAMESPACE             NAME                                        READY   STATUS    RESTARTS   AGE
 kube-system           pod/antrea-mc-controller-85dbf58b75-pjj48   1/1     Running   0          40s
 
@@ -180,7 +183,7 @@ Assuming K8s Node `node-b1` is chosen to be the Multi-cluster Gateway for cluste
 B, run the following command to annotate the Node:
 
 ```bash
-$kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
+kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
 ```
 
 ## What is Next
@@ -212,10 +215,10 @@ created by the commands), and Multi-cluster Controller for the member into
 Namepsace `kube-system`.
 
 ```bash
-$kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml
-$kubectl create ns antrea-multicluster
-$kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
-$kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml
+kubectl create ns antrea-multicluster
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
 ```
 
 #### Step 2 - initialize ClusterSet
@@ -227,9 +230,9 @@ for the member clusters (both cluster A and B in our case) to join the
 ClusterSet.
 
 ```bash
-$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/leader-clusterset-template.yml
-$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/leader-access-token-template.yml
-$kubectl get secret default-member-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:' -e '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' > default-member-token.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/leader-clusterset-template.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/leader-access-token-template.yml
+kubectl get secret default-member-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:' -e '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' > default-member-token.yml
 ```
 
 The last command saves the token Secret manifest to `default-member-token.yml`,
@@ -242,9 +245,9 @@ Next, run the following commands to make cluster A join the ClusterSet also as a
 member:
 
 ```bash
-$kubectl apply -f default-member-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml > member-clusterset.yml
-$sed -e 's/test-cluster-member/test-cluster-leader/g' -e 's/<LEADER_APISERVER_IP>/172.10.0.11/g' member-clusterset.yml | kubectl apply -f -
+kubectl apply -f default-member-token.yml
+curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml > member-clusterset.yml
+sed -e 's/test-cluster-member/test-cluster-leader/g' -e 's/<LEADER_APISERVER_IP>/172.10.0.11/g' member-clusterset.yml | kubectl apply -f -
 ```
 
 Here, `172.10.0.11` is the `kube-apiserver` IP of cluster A. You should replace
@@ -256,7 +259,7 @@ Assuming K8s Node `node-a1` is selected for the Multi-cluster Gateway, run
 the following command to annotate the Node:
 
 ```bash
-$kubectl annotate node node-a1 multicluster.antrea.io/gateway=true
+kubectl annotate node node-a1 multicluster.antrea.io/gateway=true
 ```
 
 ### Set up Cluster B
@@ -270,14 +273,14 @@ Run the following command to deploy the member Multi-cluster Controller into
 Namespace `kube-system`.
 
 ```bash
-$kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
 ```
 
 You can run the following command to verify the `antrea-mc-controller` Pod is
 deployed and running:
 
 ```bash
-$kubectl get all -A -l="component=antrea-mc-controller"
+$ kubectl get all -A -l="component=antrea-mc-controller"
 NAMESPACE             NAME                                        READY   STATUS    RESTARTS   AGE
 kube-system           pod/antrea-mc-controller-85dbf58b75-pjj48   1/1     Running   0          40s
 
@@ -290,9 +293,9 @@ kube-system           deployment.apps/antrea-mc-controller   1/1     1          
 Run the following commands to make cluster B join the ClusterSet:
 
 ```bash
-$kubectl apply -f default-member-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml > member-clusterset.yml
-$sed -e 's/<LEADER_APISERVER_IP>/172.10.0.11/g' member-clusterset.yml | kubectl apply -f -
+kubectl apply -f default-member-token.yml
+curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml > member-clusterset.yml
+sed -e 's/<LEADER_APISERVER_IP>/172.10.0.11/g' member-clusterset.yml | kubectl apply -f -
 ```
 
 `default-member-token.yml` saves the default member token which was generated
@@ -304,7 +307,7 @@ Assuming K8s Node `node-b1` is chosen to be the Multi-cluster Gateway for cluste
 B, run the following command to annotate the Node:
 
 ```bash
-$kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
+kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
 ```
 
 ### Add new member clusters
@@ -316,7 +319,7 @@ joining ClusterSet. For example, you can run the following commands to join the
 ClusterSet in a member cluster with ID `test-cluster-member2`:
 
 ```bash
-$kubectl apply -f default-member-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml  > member-clusterset.yml
-$sed -e 's/<LEADER_APISERVER_IP>/172.10.0.11/g' -e 's/test-cluster-member/test-cluster-member2/g' member-clusterset.yml | kubectl apply -f -
+kubectl apply -f default-member-token.yml
+curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml  > member-clusterset.yml
+sed -e 's/<LEADER_APISERVER_IP>/172.10.0.11/g' -e 's/test-cluster-member/test-cluster-member2/g' member-clusterset.yml | kubectl apply -f -
 ```
