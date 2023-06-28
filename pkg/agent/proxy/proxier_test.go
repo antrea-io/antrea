@@ -75,6 +75,8 @@ var (
 	skippedClusterIP = "192.168.1.2"
 )
 
+const testServiceProxyName = "antrea"
+
 func makeSvcPortName(namespace, name, port string, protocol corev1.Protocol) k8sproxy.ServicePortName {
 	return k8sproxy.ServicePortName{
 		NamespacedName: apimachinerytypes.NamespacedName{Namespace: namespace, Name: name},
@@ -145,7 +147,8 @@ func makeTestClusterIPService(svcPortName *k8sproxy.ServicePortName,
 	protocol corev1.Protocol,
 	affinitySeconds *int32,
 	internalTrafficPolicy *corev1.ServiceInternalTrafficPolicyType,
-	nested bool) *corev1.Service {
+	nested bool,
+	labels map[string]string) *corev1.Service {
 	return makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
 		svc.Spec.ClusterIP = clusterIP.String()
 		svc.Spec.Ports = []corev1.ServicePort{{
@@ -171,6 +174,9 @@ func makeTestClusterIPService(svcPortName *k8sproxy.ServicePortName,
 		}
 		if nested {
 			svc.Annotations = map[string]string{mccommon.AntreaMCServiceAnnotation: "true"}
+		}
+		if labels != nil {
+			svc.Labels = labels
 		}
 	})
 }
@@ -320,6 +326,7 @@ type proxyOptions struct {
 	proxyLoadBalancerIPs bool
 	endpointSliceEnabled bool
 	supportNestedService bool
+	serviceProxyNameSet  bool
 }
 
 type proxyOptionsFn func(*proxyOptions)
@@ -340,25 +347,35 @@ func withoutEndpointSlice(o *proxyOptions) {
 	o.endpointSliceEnabled = false
 }
 
+func withServiceProxyNameSet(o *proxyOptions) {
+	o.serviceProxyNameSet = true
+}
+
 func getMockClients(ctrl *gomock.Controller) (*ofmock.MockClient, *routemock.MockInterface) {
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
 	return mockOFClient, mockRouteClient
 }
 
-func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodePortAddresses []net.IP, groupIDAllocator openflow.GroupAllocator, isIPv6 bool, options ...proxyOptionsFn) *proxier {
+func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodePortAddresses []net.IP, groupIDAllocator openflow.GroupAllocator, isIPv6 bool, options ...proxyOptionsFn) *proxier {
 	o := &proxyOptions{
 		proxyAllEnabled:      false,
 		proxyLoadBalancerIPs: true,
 		endpointSliceEnabled: true,
 		supportNestedService: false,
+		serviceProxyNameSet:  false,
 	}
 
 	for _, fn := range options {
 		fn(o)
 	}
+	var serviceProxyName string
+	if o.serviceProxyNameSet {
+		serviceProxyName = testServiceProxyName
+	}
 	fakeClient := fake.NewSimpleClientset()
-	p, _ := NewProxier(hostname,
+	p, _ := newProxier(hostname,
+		serviceProxyName,
 		fakeClient,
 		informers.NewSharedInformerFactory(fakeClient, 0),
 		ofClient,
@@ -392,7 +409,7 @@ func testClusterIPAdd(t *testing.T,
 		options = append(options, withoutEndpointSlice)
 	}
 	options = append(options, withSupportNestedService)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, options...)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, options...)
 
 	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
 	if nodeLocalInternal {
@@ -402,7 +419,7 @@ func testClusterIPAdd(t *testing.T,
 	if externalIP != nil {
 		externalIPs = append(externalIPs, externalIP)
 	}
-	allSvcs := append(extraSvcs, makeTestClusterIPService(&svcPortName, svcIP, externalIPs, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true))
+	allSvcs := append(extraSvcs, makeTestClusterIPService(&svcPortName, svcIP, externalIPs, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true, nil))
 	makeServiceMap(fp, allSvcs...)
 
 	if !endpointSliceEnabled {
@@ -489,7 +506,7 @@ func testLoadBalancerAdd(t *testing.T,
 	if !endpointSliceEnabled {
 		options = append(options, withoutEndpointSlice)
 	}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyTypeCluster
 	if nodeLocalExternal {
@@ -623,7 +640,7 @@ func testNodePortAdd(t *testing.T,
 	if !endpointSliceEnabled {
 		options = append(options, withoutEndpointSlice)
 	}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyTypeCluster
 	if nodeLocalExternal {
@@ -850,7 +867,7 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(false)
 	nodePortAddresses := []net.IP{net.ParseIP("0.0.0.0")}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, false, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, false, withProxyAll)
 
 	port80Str := "port80"
 	port80Int32 := int32(80)
@@ -1073,8 +1090,8 @@ func TestClusterSkipServices(t *testing.T) {
 	skippedServiceName := strings.Split(skippedServiceNN, "/")[1]
 	svc1PortName := makeSvcPortName(skippedServiceNamespace, skippedServiceName, strconv.Itoa(svc1Port), corev1.ProtocolTCP)
 	svc2PortName := makeSvcPortName("kube-system", "test", strconv.Itoa(svc2Port), corev1.ProtocolTCP)
-	svc1 := makeTestClusterIPService(&svc1PortName, svc1ClusterIP, nil, int32(svc1Port), corev1.ProtocolTCP, nil, nil, false)
-	svc2 := makeTestClusterIPService(&svc2PortName, svc2ClusterIP, nil, int32(svc2Port), corev1.ProtocolTCP, nil, nil, false)
+	svc1 := makeTestClusterIPService(&svc1PortName, svc1ClusterIP, nil, int32(svc1Port), corev1.ProtocolTCP, nil, nil, false, nil)
+	svc2 := makeTestClusterIPService(&svc2PortName, svc2ClusterIP, nil, int32(svc2Port), corev1.ProtocolTCP, nil, nil, false, nil)
 	svcs := []*corev1.Service{svc1, svc2}
 
 	epSubset := makeTestEndpointSubset(&svc1PortName, ep1IP, int32(svc1Port), corev1.ProtocolTCP, false)
@@ -1091,8 +1108,8 @@ func TestDualStackService(t *testing.T) {
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	ipv4GroupAllocator := openflow.NewGroupAllocator(false)
 	ipv6GroupAllocator := openflow.NewGroupAllocator(true)
-	fpv4 := NewFakeProxier(mockRouteClient, mockOFClient, nil, ipv4GroupAllocator, false)
-	fpv6 := NewFakeProxier(mockRouteClient, mockOFClient, nil, ipv6GroupAllocator, true)
+	fpv4 := newFakeProxier(mockRouteClient, mockOFClient, nil, ipv4GroupAllocator, false)
+	fpv6 := newFakeProxier(mockRouteClient, mockOFClient, nil, ipv6GroupAllocator, true)
 	metaProxier := k8sproxy.NewMetaProxier(fpv4, fpv6)
 
 	svc := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
@@ -1142,13 +1159,13 @@ func testClusterIPRemove(t *testing.T, svcIP, externalIP, epIP net.IP, isIPv6 bo
 	if !endpointSliceEnabled {
 		options = append(options, withoutEndpointSlice)
 	}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, options...)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, options...)
 
 	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
 	if nodeLocalInternal {
 		internalTrafficPolicy = corev1.ServiceInternalTrafficPolicyLocal
 	}
-	svc := makeTestClusterIPService(&svcPortName, svcIP, []net.IP{externalIP}, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, []net.IP{externalIP}, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, true, nil)
 	makeServiceMap(fp, svc)
 
 	var ep *corev1.Endpoints
@@ -1231,7 +1248,7 @@ func testNodePortRemove(t *testing.T, nodePortAddresses []net.IP, svcIP, externa
 	if !endpointSliceEnabled {
 		options = append(options, withoutEndpointSlice)
 	}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
 	svc := makeTestNodePortService(&svcPortName,
 		svcIP,
@@ -1311,7 +1328,7 @@ func testLoadBalancerRemove(t *testing.T, nodePortAddresses []net.IP, svcIP, ext
 	if !endpointSliceEnabled {
 		options = append(options, withoutEndpointSlice)
 	}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyTypeLocal
 	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
@@ -1473,10 +1490,10 @@ func testClusterIPNoEndpoint(t *testing.T, svcIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
-	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false, nil)
 	makeServiceMap(fp, svc)
 	makeEndpointSliceMap(fp)
 
@@ -1505,7 +1522,7 @@ func testNodePortNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP net.
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	svc := makeTestNodePortService(&svcPortName,
 		svcIP,
@@ -1565,7 +1582,7 @@ func testLoadBalancerNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP 
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
 	externalTrafficPolicy := corev1.ServiceExternalTrafficPolicyTypeLocal
@@ -1637,13 +1654,13 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPortNameTCP := makeSvcPortName("ns", "svc-tcp", strconv.Itoa(svcPort), corev1.ProtocolTCP)
 	svcPortNameUDP := makeSvcPortName("ns", "svc-udp", strconv.Itoa(svcPort), corev1.ProtocolUDP)
 
-	svcTCP := makeTestClusterIPService(&svcPortNameTCP, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-	svcUDP := makeTestClusterIPService(&svcPortNameUDP, svcIP, nil, int32(svcPort), corev1.ProtocolUDP, nil, nil, false)
+	svcTCP := makeTestClusterIPService(&svcPortNameTCP, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+	svcUDP := makeTestClusterIPService(&svcPortNameUDP, svcIP, nil, int32(svcPort), corev1.ProtocolUDP, nil, nil, false, nil)
 	makeServiceMap(fp, svcTCP, svcUDP)
 
 	epTCP, epPortTCP := makeTestEndpointSliceEndpointAndPort(&svcPortNameTCP, epIP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -1694,9 +1711,9 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
-	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
 	makeServiceMap(fp, svc)
 
 	ep, epPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, epIP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -1742,7 +1759,7 @@ func testSessionAffinity(t *testing.T, svcIP net.IP, epIP net.IP, affinitySecond
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svc := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
 		svc.Spec.Type = corev1.ServiceTypeNodePort
@@ -1805,7 +1822,7 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	timeoutSeconds := corev1.DefaultClientIPServiceAffinitySeconds
 
@@ -1855,13 +1872,13 @@ func testServiceClusterIPUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, updatedSvcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+		updatedSvc = makeTestClusterIPService(&svcPortName, updatedSvcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
 	case corev1.ServiceTypeNodePort:
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, updatedSvcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
@@ -1956,13 +1973,13 @@ func testServicePortUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort+1), corev1.ProtocolTCP, nil, nil, false, nil)
 	case corev1.ServiceTypeNodePort:
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
@@ -2058,7 +2075,7 @@ func testServiceNodePortUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
@@ -2143,7 +2160,7 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var svc, updatedSvc *corev1.Service
 	switch svcType {
@@ -2248,13 +2265,13 @@ func testServiceInternalTrafficPolicyUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, withProxyAll)
 
 	internalTrafficPolicyCluster := corev1.ServiceInternalTrafficPolicyCluster
 	internalTrafficPolicyLocal := corev1.ServiceInternalTrafficPolicyLocal
 
-	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyCluster, false)
-	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyLocal, false)
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyCluster, false, nil)
+	updatedSvc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicyLocal, false, nil)
 	makeServiceMap(fp, svc)
 
 	remoteEp, remoteEpPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, ep1IP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -2334,7 +2351,7 @@ func testServiceIngressIPsUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var loadBalancerIPStrs, updatedLoadBalancerIPStrs []string
 	for _, ip := range loadBalancerIPs {
@@ -2421,15 +2438,15 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var svc, updatedSvc *corev1.Service
 	affinitySeconds := int32(10)
 	updatedAffinitySeconds := int32(100)
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false, nil)
+		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, false, nil)
 	case corev1.ServiceTypeNodePort:
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
@@ -2520,14 +2537,14 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T,
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(isIPv6)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	var svc, updatedSvc *corev1.Service
 	affinitySeconds := int32(100)
 	switch svcType {
 	case corev1.ServiceTypeClusterIP:
-		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false)
+		svc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+		updatedSvc = makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, &affinitySeconds, nil, false, nil)
 	case corev1.ServiceTypeNodePort:
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
@@ -2616,12 +2633,12 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
 	groupAllocator := openflow.NewGroupAllocator(false)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false)
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false)
 
 	svcPortName1 := makeSvcPortName("ns", "svc1", strconv.Itoa(svcPort), corev1.ProtocolTCP)
 	svcPortName2 := makeSvcPortName("ns", "svc2", strconv.Itoa(svcPort), corev1.ProtocolTCP)
-	svc1 := makeTestClusterIPService(&svcPortName1, svc1IPv4, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
-	svc2 := makeTestClusterIPService(&svcPortName2, svc2IPv4, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false)
+	svc1 := makeTestClusterIPService(&svcPortName1, svc1IPv4, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+	svc2 := makeTestClusterIPService(&svcPortName2, svc2IPv4, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
 	makeServiceMap(fp, svc1, svc2)
 
 	ep1, ep1Port := makeTestEndpointSliceEndpointAndPort(&svcPortName1, ep1IPv4, int32(svcPort), corev1.ProtocolTCP, false)
@@ -2778,7 +2795,7 @@ func TestGetServiceFlowKeys(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddressesIPv4, groupAllocator, false, withProxyAll)
+			fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddressesIPv4, groupAllocator, false, withProxyAll)
 			if tc.svc != nil {
 				makeServiceMap(fp, svc)
 			}
@@ -2806,4 +2823,54 @@ func TestGetServiceFlowKeys(t *testing.T) {
 			assert.Equal(t, tc.expectedFound, found)
 		})
 	}
+}
+
+func TestServiceLabelSelector(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockOFClient, mockRouteClient := getMockClients(ctrl)
+	groupAllocator := openflow.NewGroupAllocator(false)
+	svcPortName1 := makeSvcPortName("ns", "svc1", strconv.Itoa(svcPort), corev1.ProtocolTCP)
+	svcPortName2 := makeSvcPortName("ns", "svc2", strconv.Itoa(svcPort), corev1.ProtocolTCP)
+	svcPortName3 := makeSvcPortName("ns", "svc3", strconv.Itoa(svcPort), corev1.ProtocolTCP)
+	svcPortName4 := makeSvcPortName("ns", "svc4", strconv.Itoa(svcPort), corev1.ProtocolTCP)
+	svc1IP := net.ParseIP("1.1.1.1")
+	svc2IP := net.ParseIP("1.1.1.2")
+	svc3IP := net.ParseIP("1.1.1.3")
+	svc4IP := net.ParseIP("1.1.1.4")
+	svc1 := makeTestClusterIPService(&svcPortName1, svc1IP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, nil)
+	svc2 := makeTestClusterIPService(&svcPortName2, svc2IP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, map[string]string{labelServiceProxyName: testServiceProxyName})
+	svc3 := makeTestClusterIPService(&svcPortName3, svc3IP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, map[string]string{labelServiceProxyName: "other"})
+	svc4 := makeTestClusterIPService(&svcPortName4, svc4IP, nil, int32(svcPort), corev1.ProtocolTCP, nil, nil, false, map[string]string{corev1.IsHeadlessService: ""})
+
+	// Service with label "service.kubernetes.io/headless" should be always ignored.
+
+	// When ServiceProxyName is set, only the Service with the label "service.kubernetes.io/service-proxy-name=antrea"
+	// should be processed. Other Services without the label "service.kubernetes.io/service-proxy-name=antrea" should
+	// be ignored.
+	t.Run("ServiceProxyName", func(t *testing.T) {
+		fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false, withServiceProxyNameSet)
+		makeServiceMap(fp, svc1, svc2, svc3, svc4)
+		makeEndpointSliceMap(fp)
+
+		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName2, false)
+		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, []k8sproxy.Endpoint{}).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, binding.GroupIDType(0), svc2IP, uint16(svcPort), gomock.Any(), uint16(0), false, false).Times(1)
+		fp.syncProxyRules()
+		assert.Contains(t, fp.serviceInstalledMap, svcPortName2)
+	})
+
+	// When ServiceProxyName is not set, only the Services without the label "service.kubernetes.io/service-proxy-name"
+	// should be processed. Other Services with the label "service.kubernetes.io/service-proxy-name" (regardless of
+	// the value) should be ignored.
+	t.Run("empty ServiceProxyName", func(t *testing.T) {
+		fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false)
+		makeServiceMap(fp, svc1, svc2, svc3, svc4)
+		makeEndpointSliceMap(fp)
+
+		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName1, false)
+		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, []k8sproxy.Endpoint{}).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, binding.GroupIDType(0), svc1IP, uint16(svcPort), gomock.Any(), uint16(0), false, false).Times(1)
+		fp.syncProxyRules()
+		assert.Contains(t, fp.serviceInstalledMap, svcPortName1)
+	})
 }

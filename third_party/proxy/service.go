@@ -47,6 +47,7 @@ import (
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
@@ -316,6 +317,7 @@ type ServiceChangeTracker struct {
 	processServiceMapChange processServiceMapChangeFunc
 	ipFamily                v1.IPFamily
 	recorder                record.EventRecorder
+	serviceLabelSelector    labels.Selector
 	// skipServices indicates the service list for which we should skip proxying
 	// it will be initialized from antrea-agent.conf
 	skipServices sets.Set[string]
@@ -326,6 +328,7 @@ func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
 	ipFamily v1.IPFamily,
 	recorder record.EventRecorder,
 	processServiceMapChange processServiceMapChangeFunc,
+	serviceLabelSelector labels.Selector,
 	skipServices []string) *ServiceChangeTracker {
 	return &ServiceChangeTracker{
 		items:                   make(map[types.NamespacedName]*serviceChange),
@@ -333,6 +336,7 @@ func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
 		recorder:                recorder,
 		ipFamily:                ipFamily,
 		processServiceMapChange: processServiceMapChange,
+		serviceLabelSelector:    serviceLabelSelector,
 		skipServices:            sets.New[string](skipServices...),
 	}
 }
@@ -415,7 +419,7 @@ func (sct *ServiceChangeTracker) serviceToServiceMap(service *v1.Service) Servic
 		return nil
 	}
 
-	if utilproxy.ShouldSkipService(service, sct.skipServices) {
+	if utilproxy.ShouldSkipService(service, sct.skipServices, sct.serviceLabelSelector) {
 		return nil
 	}
 

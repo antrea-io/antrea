@@ -218,6 +218,10 @@ type AntreaProxyConfig struct {
 	// kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
 	// Defaults to true.
 	ProxyLoadBalancerIPs *bool `yaml:"proxyLoadBalancerIPs,omitempty"`
+	// The value of service.kubernetes.io/service-proxy-name label for AntreaProxy to match. If it is set, then
+	// AntreaProxy only handles the Service objects matching this label. The default value is empty string, which
+	// means that AntreaProxy will manage all Service objects without the mentioned label.
+	ServiceProxyName string `yaml:"serviceProxyName,omitempty"`
 }
 
 type WireGuardConfig struct {
