@@ -16,9 +16,7 @@ package openflow
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
-	"strings"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/util"
@@ -457,7 +455,7 @@ func (a *ofFlowAction) Learn(id uint8, priority uint16, idleTimeout, hardTimeout
 	return la
 }
 
-// ofLearnAction is used to describe actions in the learn flow.
+// ofLearnAction is used to describe actions in the learned flow.
 type ofLearnAction struct {
 	flowBuilder *ofFlowBuilder
 	nxLearn     *ofctrl.FlowLearn
@@ -469,26 +467,21 @@ func (a *ofLearnAction) DeleteLearned() LearnAction {
 	return a
 }
 
-// MatchEthernetProtocolIP specifies that the NXM_OF_ETH_TYPE field in the
-// learned flow must match IP(0x800).
-func (a *ofLearnAction) MatchEthernetProtocolIP(isIPv6 bool) LearnAction {
+// MatchEthernetProtocol specifies that the NXM_OF_ETH_TYPE field in the
+// learned flow must match IP(0x800) or IPv6(0x86dd).
+func (a *ofLearnAction) MatchEthernetProtocol(isIPv6 bool) LearnAction {
 	ethTypeVal := make([]byte, 2)
 	var ipProto uint16 = 0x800
 	if isIPv6 {
 		ipProto = 0x86dd
 	}
 	binary.BigEndian.PutUint16(ethTypeVal, ipProto)
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: NxmFieldEthType}, 2*8, nil, ethTypeVal)
 	return a
 }
 
-// MatchTransportDst specifies that the transport layer destination field
-// {tcp|udp}_dst in the learned flow must match the same field of the packet
-// currently being processed. It only accepts ProtocolTCP, ProtocolUDP, or
-// ProtocolSCTP, otherwise this does nothing.
-func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
+func (a *ofLearnAction) MatchIPProtocol(protocol Protocol) LearnAction {
 	var ipProtoValue int
-	isIPv6 := false
 	switch protocol {
 	case ProtocolTCP:
 		ipProtoValue = ofctrl.IP_PROTO_TCP
@@ -498,87 +491,87 @@ func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
 		ipProtoValue = ofctrl.IP_PROTO_SCTP
 	case ProtocolTCPv6:
 		ipProtoValue = ofctrl.IP_PROTO_TCP
-		isIPv6 = true
 	case ProtocolUDPv6:
 		ipProtoValue = ofctrl.IP_PROTO_UDP
-		isIPv6 = true
 	case ProtocolSCTPv6:
 		ipProtoValue = ofctrl.IP_PROTO_SCTP
-		isIPv6 = true
 	default:
-		// Return directly if the protocol is not acceptable.
+		// Return directly if the protocol is not supported.
 		return a
 	}
-
-	a.MatchEthernetProtocolIP(isIPv6)
 	ipTypeVal := make([]byte, 2)
 	ipTypeVal[1] = byte(ipProtoValue)
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
-	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here using "OXM_OF_" to
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: NxmFieldIPProto}, 1*8, nil, ipTypeVal)
+	return a
+}
+
+// MatchLearnedDstPort specifies that the transport layer destination field
+// {tcp|udp|sctp}_dst in the learned flow must match the same field of the packet
+// currently being processed. It only accepts ProtocolTCP, ProtocolUDP, or
+// ProtocolSCTP, and does nothing for other protocols.
+func (a *ofLearnAction) MatchLearnedDstPort(protocol Protocol) LearnAction {
+	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here use "OXM_OF_" to
 	// generate the field name.
-	trimProtocol := strings.ReplaceAll(string(protocol), "v6", "")
-	fieldName := fmt.Sprintf("OXM_OF_%s_DST", strings.ToUpper(trimProtocol))
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: fieldName}, 2*8, &ofctrl.LearnField{Name: fieldName}, nil)
+	var regName string
+	switch protocol {
+	case ProtocolTCP, ProtocolTCPv6:
+		regName = OxmFieldTCPDst
+	case ProtocolUDP, ProtocolUDPv6:
+		regName = OxmFieldUDPDst
+	case ProtocolSCTP, ProtocolSCTPv6:
+		regName = OxmFieldSCTPDst
+	default:
+		// Return directly if the protocol is not supported.
+		return a
+	}
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: regName}, 2*8, &ofctrl.LearnField{Name: regName}, nil)
 	return a
 }
 
-// MatchLearnedTCPDstPort specifies that the tcp_dst field in the learned flow
-// must match the tcp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
-	return a.MatchTransportDst(ProtocolTCP)
-}
-
-// MatchLearnedTCPv6DstPort specifies that the tcp_dst field in the learned flow
-// must match the tcp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedTCPv6DstPort() LearnAction {
-	return a.MatchTransportDst(ProtocolTCPv6)
-}
-
-// MatchLearnedUDPDstPort specifies that the udp_dst field in the learned flow
-// must match the udp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
-	return a.MatchTransportDst(ProtocolUDP)
-}
-
-// MatchLearnedUDPv6DstPort specifies that the udp_dst field in the learned flow
-// must match the udp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedUDPv6DstPort() LearnAction {
-	return a.MatchTransportDst(ProtocolUDPv6)
-}
-
-// MatchLearnedSCTPDstPort specifies that the sctp_dst field in the learned flow
-// must match the sctp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedSCTPDstPort() LearnAction {
-	return a.MatchTransportDst(ProtocolSCTP)
-}
-
-// MatchLearnedSCTPv6DstPort specifies that the sctp_dst field in the learned flow
-// must match the sctp_dst of the packet currently being processed.
-func (a *ofLearnAction) MatchLearnedSCTPv6DstPort() LearnAction {
-	return a.MatchTransportDst(ProtocolSCTPv6)
-}
-
-// MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
-func (a *ofLearnAction) MatchLearnedSrcIP() LearnAction {
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_SRC"}, nil)
+// MatchLearnedSrcPort specifies that the transport layer source field
+// {tcp|udp|sctp}_src in the learned flow must match the same field of the packet
+// currently being processed. It only accepts ProtocolTCP, ProtocolUDP, or
+// ProtocolSCTP, and does nothing for other protocols.
+func (a *ofLearnAction) MatchLearnedSrcPort(protocol Protocol) LearnAction {
+	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here use "OXM_OF_" to
+	// generate the field name.
+	var regName string
+	switch protocol {
+	case ProtocolTCP, ProtocolTCPv6:
+		regName = OxmFieldTCPSrc
+	case ProtocolUDP, ProtocolUDPv6:
+		regName = OxmFieldUDPSrc
+	case ProtocolSCTP, ProtocolSCTPv6:
+		regName = OxmFieldSCTPSrc
+	default:
+		// Return directly if the protocol is not supported.
+		return a
+	}
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: regName}, 2*8, &ofctrl.LearnField{Name: regName}, nil)
 	return a
 }
 
-// MatchLearnedDstIP makes the learned flow to match the nw_dst of current IP packet.
-func (a *ofLearnAction) MatchLearnedDstIP() LearnAction {
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, 4*8, &ofctrl.LearnField{Name: "NXM_OF_IP_DST"}, nil)
+// MatchLearnedSrcIP makes the learned flow match the nw_src of current IP packet.
+func (a *ofLearnAction) MatchLearnedSrcIP(isIPv6 bool) LearnAction {
+	regName := NxmFieldSrcIPv4
+	learnBits := uint16(4 * 8)
+	if isIPv6 {
+		regName = NxmFieldSrcIPv6
+		learnBits = 16 * 8
+	}
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: regName}, learnBits, &ofctrl.LearnField{Name: regName}, nil)
 	return a
 }
 
-// MatchLearnedSrcIPv6 makes the learned flow to match the ipv6_src of current IPv6 packet.
-func (a *ofLearnAction) MatchLearnedSrcIPv6() LearnAction {
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_SRC"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_SRC"}, nil)
-	return a
-}
-
-// MatchLearnedDstIPv6 makes the learned flow to match the ipv6_dst of current IPv6 packet.
-func (a *ofLearnAction) MatchLearnedDstIPv6() LearnAction {
-	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, nil)
+// MatchLearnedDstIP makes the learned flow match the nw_dst of current IP packet.
+func (a *ofLearnAction) MatchLearnedDstIP(isIPv6 bool) LearnAction {
+	regName := NxmFieldDstIPv4
+	learnBits := uint16(4 * 8)
+	if isIPv6 {
+		regName = NxmFieldDstIPv6
+		learnBits = 16 * 8
+	}
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: regName}, learnBits, &ofctrl.LearnField{Name: regName}, nil)
 	return a
 }
 
@@ -593,18 +586,6 @@ func (a *ofLearnAction) MatchRegMark(marks ...*RegMark) LearnAction {
 		}
 		a.nxLearn.AddMatch(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	}
-	return a
-}
-
-// MatchXXReg makes the learned flow to match the data in the xxreg of specific range.
-func (a *ofLearnAction) MatchXXReg(regID int, data []byte, rng Range) LearnAction {
-	s := fmt.Sprintf("%s%d", NxmFieldXXReg, regID)
-	toField := &ofctrl.LearnField{Name: s, Start: uint16(rng[0])}
-	offset := (rng.Length()-1)/8 + 1
-	if offset < 2 {
-		offset = 2
-	}
-	a.nxLearn.AddMatch(toField, uint16(rng.Length()), nil, data[16-offset:])
 	return a
 }
 

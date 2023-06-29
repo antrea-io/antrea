@@ -79,9 +79,17 @@ const (
 	NxmFieldSrcIPv6     = "NXM_NX_IPV6_SRC"
 	NxmFieldDstIPv6     = "NXM_NX_IPV6_DST"
 	NxmFieldTunIPv4Src  = "NXM_NX_TUN_IPV4_SRC"
+	NxmFieldEthType     = "NXM_OF_ETH_TYPE"
+	NxmFieldIPProto     = "NXM_OF_IP_PROTO"
 
 	OxmFieldVLANVID = "OXM_OF_VLAN_VID"
 	OxmFieldInPort  = "OXM_OF_IN_PORT"
+	OxmFieldTCPDst  = "OXM_OF_TCP_DST"
+	OxmFieldUDPDst  = "OXM_OF_UDP_DST"
+	OxmFieldSCTPDst = "OXM_OF_SCTP_DST"
+	OxmFieldTCPSrc  = "OXM_OF_TCP_SRC"
+	OxmFieldUDPSrc  = "OXM_OF_UDP_SRC"
+	OxmFieldSCTPSrc = "OXM_OF_SCTP_SRC"
 )
 
 const (
@@ -309,18 +317,12 @@ type FlowBuilder interface {
 
 type LearnAction interface {
 	DeleteLearned() LearnAction
-	MatchEthernetProtocolIP(isIPv6 bool) LearnAction
-	MatchTransportDst(protocol Protocol) LearnAction
-	MatchLearnedTCPDstPort() LearnAction
-	MatchLearnedUDPDstPort() LearnAction
-	MatchLearnedSCTPDstPort() LearnAction
-	MatchLearnedTCPv6DstPort() LearnAction
-	MatchLearnedUDPv6DstPort() LearnAction
-	MatchLearnedSCTPv6DstPort() LearnAction
-	MatchLearnedSrcIP() LearnAction
-	MatchLearnedDstIP() LearnAction
-	MatchLearnedSrcIPv6() LearnAction
-	MatchLearnedDstIPv6() LearnAction
+	MatchEthernetProtocol(isIPv6 bool) LearnAction
+	MatchIPProtocol(protocol Protocol) LearnAction
+	MatchLearnedDstPort(protocol Protocol) LearnAction
+	MatchLearnedSrcPort(protocol Protocol) LearnAction
+	MatchLearnedSrcIP(isIPv6 bool) LearnAction
+	MatchLearnedDstIP(isIPv6 bool) LearnAction
 	MatchRegMark(marks ...*RegMark) LearnAction
 	LoadRegMark(marks ...*RegMark) LearnAction
 	LoadFieldToField(fromField, toField *RegField) LearnAction
