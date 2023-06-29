@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
@@ -71,7 +71,7 @@ func createL7NetworkPolicy(t *testing.T,
 	appliedToPodSelector map[string]string,
 	l4Protocol AntreaPolicyProtocol,
 	port int32,
-	l7Protocols []crdv1alpha1.L7Protocol) {
+	l7Protocols []crdv1beta1.L7Protocol) {
 	annpBuilder := &AntreaNetworkPolicySpecBuilder{}
 	annpBuilder = annpBuilder.SetName(data.testNamespace, name).SetPriority(priority)
 	if isIngress {
@@ -92,7 +92,7 @@ func createL7NetworkPolicy(t *testing.T,
 			nil,
 			nil,
 			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
-			crdv1alpha1.RuleActionAllow,
+			crdv1beta1.RuleActionAllow,
 			"",
 			"")
 	} else {
@@ -113,14 +113,14 @@ func createL7NetworkPolicy(t *testing.T,
 			nil,
 			nil,
 			[]ANNPAppliedToSpec{{PodSelector: appliedToPodSelector}},
-			crdv1alpha1.RuleActionAllow,
+			crdv1beta1.RuleActionAllow,
 			"",
 			"")
 	}
 
 	annp := annpBuilder.Get()
 	t.Logf("Creating ANNP %v", annp.Name)
-	_, err := data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Create(context.TODO(), annp, metav1.CreateOptions{})
+	_, err := data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 	assert.NoError(t, err)
 }
 
@@ -211,17 +211,17 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		serverIPs = append(serverIPs, podIPs.ipv6)
 	}
 
-	l7ProtocolAllowsPathHostname := []crdv1alpha1.L7Protocol{
+	l7ProtocolAllowsPathHostname := []crdv1beta1.L7Protocol{
 		{
-			HTTP: &crdv1alpha1.HTTPProtocol{
+			HTTP: &crdv1beta1.HTTPProtocol{
 				Method: "GET",
 				Path:   "/host*",
 			},
 		},
 	}
-	l7ProtocolAllowsAnyPath := []crdv1alpha1.L7Protocol{
+	l7ProtocolAllowsAnyPath := []crdv1beta1.L7Protocol{
 		{
-			HTTP: &crdv1alpha1.HTTPProtocol{
+			HTTP: &crdv1beta1.HTTPProtocol{
 				Method: "GET",
 			},
 		},
@@ -246,14 +246,14 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
-		data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
+		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
 		time.Sleep(networkPolicyDelay)
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
 		// and the second L7 NetworkPolicy allows any HTTP path, then both path 'hostname' and 'clientip' are allowed.
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, true)
 
-		data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowAnyPath, metav1.DeleteOptions{})
+		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowAnyPath, metav1.DeleteOptions{})
 	})
 
 	time.Sleep(networkPolicyDelay)
@@ -273,7 +273,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
 
 		// Delete the first L7 NetworkPolicy that only allows HTTP path 'hostname'.
-		data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
+		data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowPathHostname, metav1.DeleteOptions{})
 		time.Sleep(networkPolicyDelay)
 
 		// Since the fist L7 NetworkPolicy has been deleted, corresponding packets will be matched by the second L7 NetworkPolicy,
@@ -294,16 +294,16 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
 
-	l7ProtocolAllowsGoogle := []crdv1alpha1.L7Protocol{
+	l7ProtocolAllowsGoogle := []crdv1beta1.L7Protocol{
 		{
-			TLS: &crdv1alpha1.TLSProtocol{
+			TLS: &crdv1beta1.TLSProtocol{
 				SNI: "*.google.com",
 			},
 		},
 	}
-	l7ProtocolAllowsFacebook := []crdv1alpha1.L7Protocol{
+	l7ProtocolAllowsFacebook := []crdv1beta1.L7Protocol{
 		{
-			TLS: &crdv1alpha1.TLSProtocol{
+			TLS: &crdv1beta1.TLSProtocol{
 				SNI: "*.facebook.com",
 			},
 		},
@@ -323,7 +323,7 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", false)
 
 	// Delete the first L7 NetworkPolicy that allows server name '*.google.com'.
-	data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNI1, metav1.DeleteOptions{})
+	data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNI1, metav1.DeleteOptions{})
 	time.Sleep(networkPolicyDelay)
 
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", false)

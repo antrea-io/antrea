@@ -51,7 +51,7 @@ import (
 	typestest "antrea.io/antrea/pkg/agent/types/testing"
 	agentutil "antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -574,10 +574,10 @@ func TestProcessPacketIn(t *testing.T) {
 		}
 		return ips
 	}
-	allow := v1alpha1.RuleActionAllow
+	allow := v1beta1.RuleActionAllow
 	annp := v1beta2.AntreaNetworkPolicy
 	acnp := v1beta2.AntreaClusterNetworkPolicy
-	drop := v1alpha1.RuleActionDrop
+	drop := v1beta1.RuleActionDrop
 	for _, tc := range []struct {
 		name             string
 		iface            *interfacestore.InterfaceConfig

@@ -45,14 +45,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
-	secinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdv1b1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	seclisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	crdv1b1listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/labelidentity"
@@ -124,7 +121,7 @@ var (
 	// denyAllEgressRule is a NetworkPolicyRule which denies all egress traffic.
 	denyAllEgressRule = controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}
 	// defaultAction is a RuleAction which sets the default Action for the NetworkPolicy rule.
-	defaultAction = secv1alpha1.RuleActionAllow
+	defaultAction = secv1beta1.RuleActionAllow
 )
 
 func getKNPReference(knp *networkingv1.NetworkPolicy) *controlplane.NetworkPolicyReference {
@@ -165,17 +162,17 @@ type NetworkPolicyController struct {
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
-	acnpInformer secinformers.ClusterNetworkPolicyInformer
+	acnpInformer crdv1b1informers.ClusterNetworkPolicyInformer
 	// acnpLister is able to list/get AntreaClusterNetworkPolicies and is populated by the shared informer passed to
 	// NewClusterNetworkPolicyController.
-	acnpLister seclisters.ClusterNetworkPolicyLister
+	acnpLister crdv1b1listers.ClusterNetworkPolicyLister
 	// acnpListerSynced is a function which returns true if the AntreaClusterNetworkPolicies shared informer has been synced at least once.
 	acnpListerSynced cache.InformerSynced
 
-	annpInformer secinformers.NetworkPolicyInformer
+	annpInformer crdv1b1informers.NetworkPolicyInformer
 	// annpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
-	annpLister seclisters.NetworkPolicyLister
+	annpLister crdv1b1listers.NetworkPolicyLister
 	// annpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	annpListerSynced cache.InformerSynced
 
@@ -266,14 +263,14 @@ var tierIndexers = cache.Indexers{
 
 var acnpIndexers = cache.Indexers{
 	TierIndex: func(obj interface{}) ([]string, error) {
-		acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		acnp, ok := obj.(*secv1beta1.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
 		return []string{acnp.Spec.Tier}, nil
 	},
 	ClusterGroupIndex: func(obj interface{}) ([]string, error) {
-		acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		acnp, ok := obj.(*secv1beta1.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
@@ -286,7 +283,7 @@ var acnpIndexers = cache.Indexers{
 		if len(acnp.Spec.Ingress) == 0 && len(acnp.Spec.Egress) == 0 {
 			return sets.List(groupNames), nil
 		}
-		appendGroups := func(rule secv1alpha1.Rule) {
+		appendGroups := func(rule secv1beta1.Rule) {
 			for _, peer := range rule.To {
 				if peer.Group != "" {
 					groupNames.Insert(peer.Group)
@@ -312,7 +309,7 @@ var acnpIndexers = cache.Indexers{
 		return sets.List(groupNames), nil
 	},
 	perNamespaceRuleIndex: func(obj interface{}) ([]string, error) {
-		acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		acnp, ok := obj.(*secv1beta1.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
@@ -326,14 +323,14 @@ var acnpIndexers = cache.Indexers{
 
 var annpIndexers = cache.Indexers{
 	TierIndex: func(obj interface{}) ([]string, error) {
-		annp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		annp, ok := obj.(*secv1beta1.NetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
 		return []string{annp.Spec.Tier}, nil
 	},
 	GroupIndex: func(obj interface{}) ([]string, error) {
-		annp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		annp, ok := obj.(*secv1beta1.NetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
@@ -347,7 +344,7 @@ var annpIndexers = cache.Indexers{
 		if len(annp.Spec.Ingress) == 0 && len(annp.Spec.Egress) == 0 {
 			return sets.List(groupNames), nil
 		}
-		appendGroups := func(rule secv1alpha1.Rule) {
+		appendGroups := func(rule secv1beta1.Rule) {
 			for _, peer := range rule.To {
 				if peer.Group != "" {
 					groupNames.Insert(ns + peer.Group)
@@ -383,8 +380,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	nodeInformer coreinformers.NodeInformer,
-	acnpInformer secinformers.ClusterNetworkPolicyInformer,
-	annpInformer secinformers.NetworkPolicyInformer,
+	acnpInformer crdv1b1informers.ClusterNetworkPolicyInformer,
+	annpInformer crdv1b1informers.NetworkPolicyInformer,
 	tierInformer crdv1b1informers.TierInformer,
 	cgInformer crdv1b1informers.ClusterGroupInformer,
 	grpInformer crdv1b1informers.GroupInformer,

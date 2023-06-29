@@ -24,8 +24,8 @@ import (
 	unsafe "unsafe"
 
 	controlplane "antrea.io/antrea/pkg/apis/controlplane"
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
@@ -1489,7 +1489,7 @@ func autoConvert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 		out.Services = nil
 	}
 	out.Priority = in.Priority
-	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
+	out.Action = (*v1beta1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Name = in.Name
@@ -1524,7 +1524,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(in 
 	}
 	out.Name = in.Name
 	out.Priority = in.Priority
-	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
+	out.Action = (*v1beta1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.L7Protocols = *(*[]L7Protocol)(unsafe.Pointer(&in.L7Protocols))
@@ -1542,7 +1542,7 @@ func autoConvert_v1beta2_NetworkPolicyStats_To_controlplane_NetworkPolicyStats(i
 		return err
 	}
 	out.TrafficStats = in.TrafficStats
-	out.RuleTrafficStats = *(*[]statsv1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
+	out.RuleTrafficStats = *(*[]v1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
 	return nil
 }
 
@@ -1556,7 +1556,7 @@ func autoConvert_controlplane_NetworkPolicyStats_To_v1beta2_NetworkPolicyStats(i
 		return err
 	}
 	out.TrafficStats = in.TrafficStats
-	out.RuleTrafficStats = *(*[]statsv1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
+	out.RuleTrafficStats = *(*[]v1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
 	return nil
 }
 

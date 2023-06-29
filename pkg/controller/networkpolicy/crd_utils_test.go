@@ -25,7 +25,6 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/features"
@@ -37,13 +36,13 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 	queryStr := "224.0.0.1"
 	reportStr := "225.1.2.3"
 	tables := []struct {
-		ports              []crdv1alpha1.NetworkPolicyPort
-		protocols          []crdv1alpha1.NetworkPolicyProtocol
+		ports              []crdv1beta1.NetworkPolicyPort
+		protocols          []crdv1beta1.NetworkPolicyProtocol
 		expServices        []controlplane.Service
 		expNamedPortExists bool
 	}{
 		{
-			ports: []crdv1alpha1.NetworkPolicyPort{
+			ports: []crdv1beta1.NetworkPolicyPort{
 				{
 					Protocol: &k8sProtocolTCP,
 					Port:     &int80,
@@ -58,7 +57,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: false,
 		},
 		{
-			ports: []crdv1alpha1.NetworkPolicyPort{
+			ports: []crdv1beta1.NetworkPolicyPort{
 				{
 					Protocol: &k8sProtocolTCP,
 					Port:     &strHTTP,
@@ -73,7 +72,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: true,
 		},
 		{
-			ports: []crdv1alpha1.NetworkPolicyPort{
+			ports: []crdv1beta1.NetworkPolicyPort{
 				{
 					Protocol: &k8sProtocolTCP,
 					Port:     &int1000,
@@ -90,9 +89,9 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: false,
 		},
 		{
-			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			protocols: []crdv1beta1.NetworkPolicyProtocol{
 				{
-					ICMP: &crdv1alpha1.ICMPProtocol{
+					ICMP: &crdv1beta1.ICMPProtocol{
 						ICMPType: &icmpType8,
 						ICMPCode: &icmpCode0,
 					},
@@ -108,9 +107,9 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: false,
 		},
 		{
-			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			protocols: []crdv1beta1.NetworkPolicyProtocol{
 				{
-					IGMP: &crdv1alpha1.IGMPProtocol{
+					IGMP: &crdv1beta1.IGMPProtocol{
 						IGMPType:     &igmpQuery,
 						GroupAddress: queryStr,
 					},
@@ -125,9 +124,9 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			},
 		},
 		{
-			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			protocols: []crdv1beta1.NetworkPolicyProtocol{
 				{
-					IGMP: &crdv1alpha1.IGMPProtocol{
+					IGMP: &crdv1beta1.IGMPProtocol{
 						IGMPType:     &igmpReport,
 						GroupAddress: reportStr,
 					},
@@ -142,9 +141,9 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			},
 		},
 		{
-			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			protocols: []crdv1beta1.NetworkPolicyProtocol{
 				{
-					ICMP: &crdv1alpha1.ICMPProtocol{
+					ICMP: &crdv1beta1.ICMPProtocol{
 						ICMPType: &icmpType8,
 					},
 				},
@@ -158,9 +157,9 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: false,
 		},
 		{
-			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			protocols: []crdv1beta1.NetworkPolicyProtocol{
 				{
-					ICMP: &crdv1alpha1.ICMPProtocol{},
+					ICMP: &crdv1beta1.ICMPProtocol{},
 				},
 			},
 			expServices: []controlplane.Service{
@@ -171,15 +170,15 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: false,
 		},
 		{
-			ports: []crdv1alpha1.NetworkPolicyPort{
+			ports: []crdv1beta1.NetworkPolicyPort{
 				{
 					Protocol: &k8sProtocolTCP,
 					Port:     &int80,
 				},
 			},
-			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			protocols: []crdv1beta1.NetworkPolicyProtocol{
 				{
-					ICMP: &crdv1alpha1.ICMPProtocol{
+					ICMP: &crdv1beta1.ICMPProtocol{
 						ICMPType: &icmpType8,
 						ICMPCode: &icmpCode0,
 					},
@@ -208,20 +207,20 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 
 func TestToAntreaL7ProtocolsForCRD(t *testing.T) {
 	tables := []struct {
-		l7Protocol []crdv1alpha1.L7Protocol
+		l7Protocol []crdv1beta1.L7Protocol
 		expValue   []controlplane.L7Protocol
 	}{
 		{
-			[]crdv1alpha1.L7Protocol{
-				{HTTP: &crdv1alpha1.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}},
+			[]crdv1beta1.L7Protocol{
+				{HTTP: &crdv1beta1.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}},
 			},
 			[]controlplane.L7Protocol{
 				{HTTP: &controlplane.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}},
 			},
 		},
 		{
-			[]crdv1alpha1.L7Protocol{
-				{TLS: &crdv1alpha1.TLSProtocol{SNI: "test.com"}},
+			[]crdv1beta1.L7Protocol{
+				{TLS: &crdv1beta1.TLSProtocol{SNI: "test.com"}},
 			},
 			[]controlplane.L7Protocol{
 				{TLS: &controlplane.TLSProtocol{SNI: "test.com"}},
@@ -240,12 +239,12 @@ func TestToAntreaIPBlockForCRD(t *testing.T) {
 		PrefixLength: 24,
 	}
 	tables := []struct {
-		ipBlock  *crdv1alpha1.IPBlock
+		ipBlock  *crdv1beta1.IPBlock
 		expValue controlplane.IPBlock
 		err      error
 	}{
 		{
-			&crdv1alpha1.IPBlock{
+			&crdv1beta1.IPBlock{
 				CIDR: "10.0.0.0/24",
 			},
 			controlplane.IPBlock{
@@ -254,7 +253,7 @@ func TestToAntreaIPBlockForCRD(t *testing.T) {
 			nil,
 		},
 		{
-			&crdv1alpha1.IPBlock{
+			&crdv1beta1.IPBlock{
 				CIDR: "10.0.0.0",
 			},
 			controlplane.IPBlock{},
@@ -282,14 +281,14 @@ func TestToAntreaIPBlockForCRD(t *testing.T) {
 }
 
 func TestToAntreaPeerForCRD(t *testing.T) {
-	testCNPObj := &crdv1alpha1.ClusterNetworkPolicy{
+	testCNPObj := &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cnpA",
 		},
 	}
 	cidr := "10.0.0.0/16"
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
-	selectorIP := crdv1alpha1.IPBlock{CIDR: cidr}
+	selectorIP := crdv1beta1.IPBlock{CIDR: cidr}
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -305,7 +304,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	}
 	tests := []struct {
 		name            string
-		inPeers         []crdv1alpha1.NetworkPolicyPeer
+		inPeers         []crdv1beta1.NetworkPolicyPeer
 		outPeer         controlplane.NetworkPolicyPeer
 		direction       controlplane.Direction
 		namedPortExists bool
@@ -314,7 +313,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	}{
 		{
 			name: "pod-ns-selector-peer-ingress",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					PodSelector:       &selectorA,
 					NamespaceSelector: &selectorB,
@@ -333,7 +332,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name: "pod-ns-selector-peer-egress",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					PodSelector:       &selectorA,
 					NamespaceSelector: &selectorB,
@@ -352,7 +351,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name: "ipblock-selector-peer-ingress",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					IPBlock: &selectorIP,
 				},
@@ -368,7 +367,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name: "ipblock-selector-peer-egress",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					IPBlock: &selectorIP,
 				},
@@ -384,13 +383,13 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name:      "empty-peer-ingress",
-			inPeers:   []crdv1alpha1.NetworkPolicyPeer{},
+			inPeers:   []crdv1beta1.NetworkPolicyPeer{},
 			outPeer:   matchAllPeer,
 			direction: controlplane.DirectionIn,
 		},
 		{
 			name: "peer-ingress-with-cg",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					Group: cgA.Name,
 				},
@@ -402,20 +401,20 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name:            "empty-peer-egress-with-named-port",
-			inPeers:         []crdv1alpha1.NetworkPolicyPeer{},
+			inPeers:         []crdv1beta1.NetworkPolicyPeer{},
 			outPeer:         matchAllPodsPeer,
 			direction:       controlplane.DirectionOut,
 			namedPortExists: true,
 		},
 		{
 			name:      "empty-peer-egress-without-named-port",
-			inPeers:   []crdv1alpha1.NetworkPolicyPeer{},
+			inPeers:   []crdv1beta1.NetworkPolicyPeer{},
 			outPeer:   matchAllPeer,
 			direction: controlplane.DirectionOut,
 		},
 		{
 			name: "peer-egress-with-cg",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					Group: cgA.Name,
 				},
@@ -427,7 +426,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name: "node-selector-peer-ingress",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					NodeSelector: &selectorA,
 				},
@@ -441,7 +440,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name: "node-selector-peer-egress",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					NodeSelector: &selectorA,
 				},
@@ -455,10 +454,10 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		},
 		{
 			name: "stretched-policy-peer",
-			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
 					PodSelector: &selectorA,
-					Scope:       crdv1alpha1.ScopeClusterSet,
+					Scope:       crdv1beta1.ScopeClusterSet,
 				},
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
@@ -513,7 +512,7 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 	// cgB with IPBlock present in cache
 	clusterGroupWithIPBlock := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec:       crdv1beta1.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
+		Spec:       crdv1beta1.GroupSpec{IPBlocks: []crdv1beta1.IPBlock{{CIDR: cidr}}},
 	}
 	groupWithSelector := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
@@ -522,7 +521,7 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 	// gB with IPBlock present in cache
 	groupWithIPBlock := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
-		Spec:       crdv1beta1.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
+		Spec:       crdv1beta1.GroupSpec{IPBlocks: []crdv1beta1.IPBlock{{CIDR: cidr}}},
 	}
 	_, npc := newController(nil, nil)
 	npc.addClusterGroup(clusterGroupWithSelector)

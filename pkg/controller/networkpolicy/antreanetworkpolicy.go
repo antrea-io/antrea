@@ -22,11 +22,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
-func getANNPReference(annp *crdv1alpha1.NetworkPolicy) *controlplane.NetworkPolicyReference {
+func getANNPReference(annp *crdv1beta1.NetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
 		Type:      controlplane.AntreaNetworkPolicy,
 		Namespace: annp.Namespace,
@@ -39,7 +39,7 @@ func getANNPReference(annp *crdv1alpha1.NetworkPolicy) *controlplane.NetworkPoli
 // the AntreaNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) addANNP(obj interface{}) {
 	defer n.heartbeat("addANNP")
-	np := obj.(*crdv1alpha1.NetworkPolicy)
+	np := obj.(*crdv1beta1.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	n.enqueueInternalNetworkPolicy(getANNPReference(np))
 }
@@ -48,7 +48,7 @@ func (n *NetworkPolicyController) addANNP(obj interface{}) {
 // of the AntreaNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) updateANNP(old, cur interface{}) {
 	defer n.heartbeat("updateANNP")
-	curNP := cur.(*crdv1alpha1.NetworkPolicy)
+	curNP := cur.(*crdv1beta1.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	n.enqueueInternalNetworkPolicy(getANNPReference(curNP))
 }
@@ -56,14 +56,14 @@ func (n *NetworkPolicyController) updateANNP(old, cur interface{}) {
 // deleteANNP receives AntreaNetworkPolicy DELETE events and enqueues a reference
 // of the AntreaNetworkPolicy to trigger its process.
 func (n *NetworkPolicyController) deleteANNP(old interface{}) {
-	np, ok := old.(*crdv1alpha1.NetworkPolicy)
+	np, ok := old.(*crdv1beta1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", old)
 			return
 		}
-		np, ok = tombstone.Obj.(*crdv1alpha1.NetworkPolicy)
+		np, ok = tombstone.Obj.(*crdv1beta1.NetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -75,10 +75,10 @@ func (n *NetworkPolicyController) deleteANNP(old interface{}) {
 }
 
 // processAntreaNetworkPolicy creates an internal NetworkPolicy instance
-// corresponding to the crdv1alpha1.NetworkPolicy object. This method
+// corresponding to the crdv1beta1.NetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an
 // instance to the caller.
-func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.NetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
+func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1beta1.NetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
 	appliedToPerRule := len(np.Spec.AppliedTo) == 0
 	// appliedToGroups tracks all distinct appliedToGroups referred to by the Antrea NetworkPolicy,
 	// either in the spec section or in ingress/egress rules.
@@ -174,7 +174,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
 
-func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1alpha1.AppliedTo) []*antreatypes.AppliedToGroup {
+func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1beta1.AppliedTo) []*antreatypes.AppliedToGroup {
 	var appliedToGroups []*antreatypes.AppliedToGroup
 	for _, at := range appliedTo {
 		var atg *antreatypes.AppliedToGroup

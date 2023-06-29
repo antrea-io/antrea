@@ -40,8 +40,8 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -303,7 +303,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
-	defaultAction := crdv1alpha1.RuleActionAllow
+	defaultAction := crdv1beta1.RuleActionAllow
 	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
@@ -488,7 +488,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
-	defaultAction := crdv1alpha1.RuleActionAllow
+	defaultAction := crdv1beta1.RuleActionAllow
 	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{

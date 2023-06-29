@@ -31,7 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -124,7 +124,7 @@ func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInD
 	if ruleInfo != nil {
 		klog.V(2).InfoS("Got NetworkPolicy action for IGMP report", "RuleAction", ruleInfo.RuleAction, "uuid", ruleInfo.UUID, "Name", ruleInfo.Name)
 		s.addToIGMPReportNPStatsMap(*ruleInfo, uint64(packetInData.Len()))
-		if ruleInfo.RuleAction == v1alpha1.RuleActionDrop {
+		if ruleInfo.RuleAction == v1beta1.RuleActionDrop {
 			return false, nil
 		}
 	}

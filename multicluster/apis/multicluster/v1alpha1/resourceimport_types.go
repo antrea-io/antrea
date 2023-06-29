@@ -21,8 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 // EndpointsImport imports Endpoints.
@@ -61,7 +61,7 @@ type ResourceImportSpec struct {
 	// If imported resource is ExternalEntity.
 	ExternalEntity *ExternalEntityImport `json:"externalentity,omitempty"`
 	// If imported resource is AntreaClusterNetworkPolicy.
-	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
+	ClusterNetworkPolicy *v1beta1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
 	// If imported resource kind is LabelIdentity.
 	LabelIdentity *LabelIdentitySpec `json:"labelIdentity,omitempty"`
 	// If imported resource kind is unknown.

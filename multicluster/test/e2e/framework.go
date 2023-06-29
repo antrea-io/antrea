@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e/providers"
 )
@@ -231,7 +231,7 @@ func (data *MCTestData) createService(clusterName, serviceName, namespace string
 	return nil, fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-func (data *MCTestData) createOrUpdateANNP(clusterName string, annp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
+func (data *MCTestData) createOrUpdateANNP(clusterName string, annp *crdv1beta1.NetworkPolicy) (*crdv1beta1.NetworkPolicy, error) {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
 		return d.CreateOrUpdateANNP(annp)
 	}
@@ -246,7 +246,7 @@ func (data *MCTestData) deleteANNP(clusterName, namespace, name string) error {
 	return fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-func (data *MCTestData) createOrUpdateACNP(clusterName string, acnp *crdv1alpha1.ClusterNetworkPolicy) (*crdv1alpha1.ClusterNetworkPolicy, error) {
+func (data *MCTestData) createOrUpdateACNP(clusterName string, acnp *crdv1beta1.ClusterNetworkPolicy) (*crdv1beta1.ClusterNetworkPolicy, error) {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
 		return d.CreateOrUpdateACNP(acnp)
 	}

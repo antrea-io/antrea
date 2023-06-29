@@ -32,12 +32,12 @@ import (
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 var (
 	now        = metav1.Now()
-	dropAction = v1alpha1.RuleActionDrop
+	dropAction = v1beta1.RuleActionDrop
 	svcLabels  = map[string]string{
 		constants.SourceNamespace: "default",
 		constants.SourceName:      "nginx",
@@ -61,19 +61,19 @@ var (
 		Namespace: "default",
 		Name:      "test-acnp-export",
 	}}
-	isolationACNPSpec = &v1alpha1.ClusterNetworkPolicySpec{
+	isolationACNPSpec = &v1beta1.ClusterNetworkPolicySpec{
 		Tier:     "securityops",
 		Priority: 1.0,
-		AppliedTo: []v1alpha1.AppliedTo{
+		AppliedTo: []v1beta1.AppliedTo{
 			{NamespaceSelector: &metav1.LabelSelector{}},
 		},
-		Ingress: []v1alpha1.Rule{
+		Ingress: []v1beta1.Rule{
 			{
 				Action: &dropAction,
-				From: []v1alpha1.NetworkPolicyPeer{
+				From: []v1beta1.NetworkPolicyPeer{
 					{
-						Namespaces: &v1alpha1.PeerNamespaces{
-							Match: v1alpha1.NamespaceMatchSelf,
+						Namespaces: &v1beta1.PeerNamespaces{
+							Match: v1beta1.NamespaceMatchSelf,
 						},
 					},
 				},
