@@ -70,10 +70,6 @@ func (a *groupAllocator) Release(id binding.GroupIDType) {
 	a.recycled = append(a.recycled, id)
 }
 
-func NewGroupAllocator(isIPv6 bool) GroupAllocator {
-	var groupIDCounter binding.GroupIDType
-	if isIPv6 {
-		groupIDCounter = 0x10000000
-	}
-	return &groupAllocator{groupIDCounter: groupIDCounter}
+func NewGroupAllocator() GroupAllocator {
+	return &groupAllocator{}
 }

@@ -1252,7 +1252,7 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
 	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).Times(1)
-	groupAllocator := openflow.NewGroupAllocator(false)
+	groupAllocator := openflow.NewGroupAllocator()
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
 
 	clientset = fake.NewSimpleClientset()
