@@ -84,7 +84,7 @@ func TestClean(t *testing.T) {
 			fakeClock := clocktesting.NewFakeClock(time.Now())
 			clock = fakeClock
 			defer func() {
-				clock = &clockutils.RealClock{}
+				clock = clockutils.RealClock{}
 			}()
 			f, err := defaultFS.Create("test.tar.gz")
 			require.NoError(t, err)
