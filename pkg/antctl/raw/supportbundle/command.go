@@ -145,11 +145,13 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer
 	}, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("error when creating the support bundle: %w", err)
 	}
+	timer := time.NewTimer(100 * time.Millisecond) // will expire after 100ms
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-timer.C:
 			supportBundle, err := client.Get(ctx, mode, metav1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("error when getting the support bundle: %w", err)
@@ -159,6 +161,8 @@ func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer
 				fmt.Fprintf(writer, "Expire time: %s\n", supportBundle.DeletionTimestamp)
 				return nil
 			}
+			// retry again after 500ms
+			timer.Reset(500 * time.Millisecond)
 		}
 	}
 
@@ -256,11 +260,13 @@ func download(
 	client systemclientset.SupportBundleInterface,
 	component string,
 ) error {
+	timer := time.NewTimer(100 * time.Millisecond) // will expire after 100ms
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-timer.C:
 			supportBundle, err := client.Get(ctx, component, metav1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("error when downloading the support bundle: %w", err)
@@ -290,6 +296,8 @@ func download(
 				}
 				return nil
 			}
+			// retry again after 500ms
+			timer.Reset(500 * time.Millisecond)
 		}
 	}
 }

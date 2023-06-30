@@ -162,7 +162,7 @@ func copyAntctlKubeconfigToNode(data *TestData, nodeName string, kubeconfigPath 
 	// Secret contents to a file. Ideally, we would use a Pod to run antctl commands instead of
 	// running it from the Node (in that case, the Secret would be mounted to the Pod).
 	kubeconfigSecretKey := "kubeconfig"
-	// No need to worrky about deleting the Secret as it is created in the temporary test Namespace.
+	// No need to worry about deleting the Secret as it is created in the temporary test Namespace.
 	kubeconfigSecretName, err := createAntctlKubeconfigSecret(context.TODO(), data, kubeconfigSecretKey)
 	if err != nil {
 		return err
@@ -384,7 +384,7 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 			}
 			t.Logf("Starting antctl proxy")
 			stopProxyFn, err := runAntctProxy(controlPlaneNodeName(), antctlName, nodeAntctlPath, nodeAntctlKubeconfigPath, proxyPort, tc.agentNodeName, tc.address, data)
-			assert.NoError(t, err, "Could not start antctl proxy: %v", err)
+			require.NoError(t, err, "Could not start antctl proxy: %v", err)
 			for _, endpoint := range []string{"apis", "metrics", "debug/pprof/"} {
 				assert.NoErrorf(t, checkEndpointAccess(tc.address, endpoint), "endpoint check failed for '%s'", endpoint)
 			}
