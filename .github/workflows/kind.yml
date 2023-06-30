@@ -12,7 +12,7 @@ on:
     - feature/*
 
 env:
-  KIND_VERSION: v0.18.0
+  KIND_VERSION: v0.20.0
 
 jobs:
   check-changes:

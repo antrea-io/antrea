@@ -5,7 +5,7 @@ on:
     - cron: '0 0 * * *'
 
 env:
-  KIND_VERSION: v0.18.0
+  KIND_VERSION: v0.20.0
 
 jobs:
   test-netpol-cyclonus:
