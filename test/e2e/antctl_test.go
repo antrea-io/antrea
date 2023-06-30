@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
@@ -278,7 +279,7 @@ func runAntctProxy(
 	address string,
 	data *TestData,
 ) (func() error, error) {
-	waitCh := make(chan struct{})
+	waitCh := make(chan string)
 	proxyCmd := []string{nodeAntctlPath, "-k", kubeconfigPath, "proxy", "--port", fmt.Sprint(proxyPort), "--address", address}
 	if agentNodeName == "" {
 		proxyCmd = append(proxyCmd, "--controller")
@@ -291,23 +292,39 @@ func runAntctProxy(
 		}
 	}
 	go func() {
-		data.RunCommandOnNode(nodeName, strings.Join(proxyCmd, " "))
-		waitCh <- struct{}{}
+		_, stdout, stderr, _ := data.RunCommandOnNode(nodeName, strings.Join(proxyCmd, " "))
+		waitCh <- antctlOutput(stdout, stderr)
 	}()
 
-	// wait for 1 second to make sure the proxy is running and to detect if
-	// it errors on start.
-	time.Sleep(time.Second)
+	// wait for the proxy to be running and retrieve the PID
 	cmd := fmt.Sprintf("pgrep %s", antctlName)
-	rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-	if err != nil {
-		return nil, fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
+	var pid string
+	if err := wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
+		rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
+		if err != nil {
+			return false, fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
+		}
+		if rc == 1 {
+			// no matching process
+			return false, nil
+		} else if rc != 0 {
+			return false, fmt.Errorf("error when retrieving 'antctl proxy' PID, proxy command: '%s'\n stdout: <%v>, stderr: <%v>",
+				strings.Join(proxyCmd, " "), stdout, stderr)
+		}
+		pid = strings.TrimSpace(stdout)
+		return true, nil
+	}); err != nil {
+		if err == wait.ErrWaitTimeout {
+			select {
+			case out := <-waitCh:
+				return nil, fmt.Errorf("'antctl proxy' failed to start:\n%s", out)
+			default:
+				return nil, err
+			}
+		}
+		return nil, err
 	}
-	if rc != 0 {
-		return nil, fmt.Errorf("error when retrieving 'antctl proxy' PID, proxy command: '%s'\n stdout: <%v>, stderr: <%v>",
-			strings.Join(proxyCmd, " "), stdout, stderr)
-	}
-	pid := strings.TrimSpace(stdout)
+
 	return func() error {
 		cmd := fmt.Sprintf("kill -INT %s", pid)
 		rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
@@ -347,7 +364,7 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 		return status.Status
 	}
 
-	checkEndpointAccess := func(address string, endpoint string) error {
+	checkEndpointAccess := func(address string, endpoint string, checkStatus bool) error {
 		t.Logf("Checking for access to endpoint '/%s' through antctl proxy", endpoint)
 		cmd := fmt.Sprintf("curl %s/%s", net.JoinHostPort(address, fmt.Sprint(proxyPort)), endpoint)
 		rc, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
@@ -357,7 +374,7 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 		if rc != 0 {
 			return fmt.Errorf("error when accessing endpoint '/%s', stdout: <%v>, stderr: <%v>", endpoint, stdout, stderr)
 		}
-		if getEndpointStatus([]byte(stdout)) == "Failure" {
+		if checkStatus && getEndpointStatus([]byte(stdout)) == "Failure" {
 			return fmt.Errorf("failure status when accessing endpoint: <%v>", stdout)
 		}
 		return nil
@@ -385,12 +402,22 @@ func testAntctlProxy(t *testing.T, data *TestData) {
 			t.Logf("Starting antctl proxy")
 			stopProxyFn, err := runAntctProxy(controlPlaneNodeName(), antctlName, nodeAntctlPath, nodeAntctlKubeconfigPath, proxyPort, tc.agentNodeName, tc.address, data)
 			require.NoError(t, err, "Could not start antctl proxy: %v", err)
+			defer func() {
+				t.Logf("Stopping antctl proxy")
+				if err := stopProxyFn(); err != nil {
+					t.Errorf("Error when stopping antctl proxy: %v", err)
+				}
+			}()
+
+			require.NoError(t, wait.PollImmediate(1*time.Second, 5*time.Second, func() (bool, error) {
+				if err := checkEndpointAccess(tc.address, "", false); err != nil {
+					return false, err
+				}
+				return true, nil
+			}), "Antctl proxy never became ready")
+
 			for _, endpoint := range []string{"apis", "metrics", "debug/pprof/"} {
-				assert.NoErrorf(t, checkEndpointAccess(tc.address, endpoint), "endpoint check failed for '%s'", endpoint)
-			}
-			t.Logf("Stopping antctl proxy")
-			if err := stopProxyFn(); err != nil {
-				t.Errorf("Error when stopping antctl proxy: %v", err)
+				assert.NoErrorf(t, checkEndpointAccess(tc.address, endpoint, true), "endpoint check failed for '%s'", endpoint)
 			}
 		})
 	}
