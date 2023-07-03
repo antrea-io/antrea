@@ -552,12 +552,23 @@ func (c *ExternalNodeController) updateOVSPortsData(interfaceConfig *interfacest
 func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfacestore.InterfaceConfig) error {
 	portUUID := interfaceConfig.PortUUID
 	portName := interfaceConfig.InterfaceName
+	hostIFName := interfaceConfig.InterfaceName
+	uplinkIfName := util.GenerateUplinkInterfaceName(portName)
+
+	// This is for issue #5111 (https://github.com/antrea-io/antrea/issues/5111), which may happen if an error occurs
+	// when moving the configuration back from host internal interface to uplink. This logic is run in the second
+	// try after the error is returned, at this time the host internal interface is already deleted, and the uplink's
+	// name is recovered. So the ips and routes in "adapterConfig" are actually read from the uplink and no need to
+	// move the configurations back. The issue was seen on VM with RHEL 8.4 on azure cloud.
+	if !hostInterfaceExists(uplinkIfName) {
+		klog.InfoS("The interface with uplink name did not exist on the host, skipping its recovery", "uplinkIfName", uplinkIfName)
+		return nil
+	}
+
 	if err := c.ofClient.UninstallVMUplinkFlows(portName); err != nil {
 		return fmt.Errorf("failed to uninstall uplink and host port openflow entries, portName %s, err %v", portName, err)
 	}
 	klog.InfoS("Removed the flows installed to forward packet between uplinkPort and hostPort", "hostInterface", portName)
-	hostIFName := interfaceConfig.InterfaceName
-	uplinkIfName := util.GenerateUplinkInterfaceName(portName)
 	uplinkPortID := interfaceConfig.UplinkPort.PortUUID
 	iface, addrs, routes, err := getInterfaceConfig(hostIFName)
 	if err != nil {
