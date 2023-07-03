@@ -114,7 +114,7 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 			antctlCovArgs := antctlCoverageArgs("antctl-coverage")
 			args = append(antctlCovArgs, c...)
 		} else {
-			args = append([]string{"antctl", "-v"}, c...)
+			args = append([]string{"antctl"}, c...)
 		}
 		t.Logf("args: %s", args)
 
@@ -199,31 +199,23 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData) {
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
-		cmd := append([]string{nodeAntctlPath, "-k", nodeAntctlKubeconfigPath, "-v"}, c...)
+		cmd := []string{nodeAntctlPath}
 		if testOptions.enableCoverage {
 			antctlCovArgs := antctlCoverageArgs(nodeAntctlPath)
 			cmd = append(antctlCovArgs, c...)
 		}
+		// Add global flags after command to ensure they are recognized correctly when using
+		// the coverage binary.
+		cmd = append(cmd, "-k", nodeAntctlKubeconfigPath)
 		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
 	}
-	if testOptions.enableCoverage {
-		testCmds = append(testCmds,
-			// Malformed config
-			cmdAndReturnCode{
-				args:               []string{nodeAntctlPath, "version", "--kubeconfig", "/dev/null"},
-				expectedReturnCode: 1,
-			},
-		)
-
-	} else {
-		testCmds = append(testCmds,
-			// Malformed config
-			cmdAndReturnCode{
-				args:               []string{nodeAntctlPath, "-v", "version", "--kubeconfig", "/dev/null"},
-				expectedReturnCode: 1,
-			},
-		)
-	}
+	testCmds = append(testCmds,
+		// Malformed config
+		cmdAndReturnCode{
+			args:               []string{nodeAntctlPath, "version", "--kubeconfig", "/dev/null"},
+			expectedReturnCode: 1,
+		},
+	)
 
 	for _, tc := range testCmds {
 		cmd := strings.Join(tc.args, " ")
@@ -280,7 +272,7 @@ func runAntctProxy(
 	data *TestData,
 ) (func() error, error) {
 	waitCh := make(chan string)
-	proxyCmd := []string{nodeAntctlPath, "-k", kubeconfigPath, "proxy", "--port", fmt.Sprint(proxyPort), "--address", address}
+	proxyCmd := []string{nodeAntctlPath, "proxy", "--port", fmt.Sprint(proxyPort), "--address", address}
 	if agentNodeName == "" {
 		proxyCmd = append(proxyCmd, "--controller")
 	} else {
@@ -291,6 +283,9 @@ func runAntctProxy(
 			return nil, err
 		}
 	}
+	// Add global flags after command to ensure they are recognized correctly when using the
+	// coverage binary.
+	proxyCmd = append(proxyCmd, "-k", kubeconfigPath)
 	go func() {
 		_, stdout, stderr, _ := data.RunCommandOnNode(nodeName, strings.Join(proxyCmd, " "))
 		waitCh <- antctlOutput(stdout, stderr)
