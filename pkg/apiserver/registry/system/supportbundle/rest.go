@@ -51,7 +51,7 @@ var (
 	defaultExecutor = exec.New()
 	newAgentDumper  = support.NewAgentDumper
 
-	clock clockutils.Clock = &clockutils.RealClock{}
+	clock clockutils.Clock = clockutils.RealClock{}
 )
 
 // NewControllerStorage creates a support bundle storage for working on antrea controller.
