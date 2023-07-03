@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"fmt"
 	"math"
 	"net"
 	"strconv"
@@ -29,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
@@ -118,17 +120,17 @@ func makeEndpointSliceMap(proxier *proxier, allEndpoints ...*discovery.EndpointS
 	proxier.endpointsChanges.OnEndpointsSynced()
 }
 
-func makeTestEndpointSlice(namespace, name string, eps []discovery.Endpoint, ports []discovery.EndpointPort, isIPv6 bool) *discovery.EndpointSlice {
+func makeTestEndpointSlice(namespace, svcName string, eps []discovery.Endpoint, ports []discovery.EndpointPort, isIPv6 bool) *discovery.EndpointSlice {
 	addrType := discovery.AddressTypeIPv4
 	if isIPv6 {
 		addrType = discovery.AddressTypeIPv6
 	}
 	endpointSlice := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      fmt.Sprintf("%s-%s", svcName, rand.String(5)),
 			Namespace: namespace,
 			Labels: map[string]string{
-				discovery.LabelServiceName: name,
+				discovery.LabelServiceName: svcName,
 			},
 		},
 	}
@@ -1093,7 +1095,6 @@ func TestDualStackService(t *testing.T) {
 	ipv6GroupAllocator := openflow.NewGroupAllocator(true)
 	fpv4 := NewFakeProxier(mockRouteClient, mockOFClient, nil, ipv4GroupAllocator, false)
 	fpv6 := NewFakeProxier(mockRouteClient, mockOFClient, nil, ipv6GroupAllocator, true)
-	metaProxier := k8sproxy.NewMetaProxier(fpv4, fpv6)
 
 	svc := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
 		svc.Spec.ClusterIP = svc1IPv4.String()
@@ -1111,20 +1112,28 @@ func TestDualStackService(t *testing.T) {
 	ep, epPort = makeTestEndpointSliceEndpointAndPort(&svcPortName, ep1IPv6, int32(svcPort), corev1.ProtocolTCP, false)
 	epv6 := makeTestEndpointSlice(svcPortName.Namespace, svcPortName.Name, []discovery.Endpoint{*ep}, []discovery.EndpointPort{*epPort}, true)
 
-	metaProxier.OnServiceUpdate(nil, svc)
-	metaProxier.OnServiceSynced()
-	metaProxier.OnEndpointSliceUpdate(nil, epv4)
-	metaProxier.OnEndpointSliceUpdate(nil, epv6)
-	metaProxier.OnEndpointsSynced()
+	// In production code, each proxier creates its own serviceConfig and endpointSliceConfig, to which each proxier
+	// will register its event handler. So we call each proxier's event handlers directly, instead of meta proxier's
+	// ones.
+	fpv4.OnServiceUpdate(nil, svc)
+	fpv4.OnServiceSynced()
+	fpv4.OnEndpointSliceUpdate(nil, epv4)
+	fpv4.OnEndpointSliceUpdate(nil, epv6)
+	fpv4.OnEndpointsSynced()
+	fpv6.OnServiceUpdate(nil, svc)
+	fpv6.OnServiceSynced()
+	fpv6.OnEndpointSliceUpdate(nil, epv4)
+	fpv6.OnEndpointSliceUpdate(nil, epv6)
+	fpv6.OnEndpointsSynced()
 
 	groupIDv4 := fpv4.groupCounter.AllocateIfNotExist(svcPortName, false)
 	groupIDv6 := fpv6.groupCounter.AllocateIfNotExist(svcPortName, false)
 
-	mockOFClient.EXPECT().InstallServiceGroup(groupIDv4, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallServiceGroup(groupIDv4, false, []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IPv4.String(), "", "", svcPort, false, true, true, false, nil)}).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(groupIDv4, binding.GroupIDType(0), svc1IPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0), false, false).Times(1)
 
-	mockOFClient.EXPECT().InstallServiceGroup(groupIDv6, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallServiceGroup(groupIDv6, false, []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IPv6.String(), "", "", svcPort, false, true, true, false, nil)}).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCPv6, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(groupIDv6, binding.GroupIDType(0), svc1IPv6, uint16(svcPort), binding.ProtocolTCPv6, uint16(0), false, false).Times(1)
 
