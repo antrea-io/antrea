@@ -379,14 +379,14 @@ func run(o *Options) error {
 
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
-	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
-	v4GroupCounter := proxytypes.NewGroupCounter(v4GroupIDAllocator, groupIDUpdates)
+	groupIDAllocator := openflow.NewGroupAllocator()
+	var v4GroupCounter, v6GroupCounter proxytypes.GroupCounter
 	if v4Enabled {
+		v4GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)
 		groupCounters = append(groupCounters, v4GroupCounter)
 	}
-	v6GroupIDAllocator := openflow.NewGroupAllocator(true)
-	v6GroupCounter := proxytypes.NewGroupCounter(v6GroupIDAllocator, groupIDUpdates)
 	if v6Enabled {
+		v6GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)
 		groupCounters = append(groupCounters, v6GroupCounter)
 	}
 
@@ -758,7 +758,7 @@ func run(o *Options) error {
 		}
 		mcastController = multicast.NewMulticastController(
 			ofClient,
-			v4GroupIDAllocator,
+			groupIDAllocator,
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
