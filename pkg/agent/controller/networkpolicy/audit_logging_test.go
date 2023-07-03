@@ -114,7 +114,7 @@ func expectedLogWithCount(msg string, count int) string {
 }
 
 func TestAllowPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &clock.RealClock{})
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionAllow)
 
 	antreaLogger.LogDedupPacket(ob)
@@ -123,7 +123,7 @@ func TestAllowPacketLog(t *testing.T) {
 }
 
 func TestDropPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &clock.RealClock{})
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionDrop)
 
 	antreaLogger.LogDedupPacket(ob)
@@ -199,7 +199,7 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 }
 
 func TestRedirectPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &clock.RealClock{})
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionRedirect)
 
 	antreaLogger.LogDedupPacket(ob)
@@ -476,7 +476,7 @@ func BenchmarkLogDedupPacketAllow(b *testing.B) {
 	// In the allow case, there is actually no buffering.
 	antreaLogger := &AntreaPolicyLogger{
 		bufferLength:     testBufferLength,
-		clock:            &clock.RealClock{},
+		clock:            clock.RealClock{},
 		anpLogger:        log.New(io.Discard, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}

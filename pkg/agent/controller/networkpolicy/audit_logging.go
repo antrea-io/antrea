@@ -182,7 +182,7 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 
 	antreaPolicyLogger := &AntreaPolicyLogger{
 		bufferLength:     time.Second,
-		clock:            &clock.RealClock{},
+		clock:            clock.RealClock{},
 		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
