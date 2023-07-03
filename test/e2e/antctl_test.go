@@ -71,6 +71,26 @@ func antctlOutput(stdout, stderr string) string {
 	return fmt.Sprintf("antctl stdout:\n%s\nantctl stderr:\n%s", stdout, stderr)
 }
 
+func antctlName() string {
+	if testOptions.enableCoverage {
+		return "antctl-coverage"
+	}
+	return "antctl"
+}
+
+func nodeAntctlPath() string {
+	if testOptions.providerName == "kind" {
+		if testOptions.enableCoverage {
+			return "/root/antctl-coverage"
+		}
+		return "/root/antctl"
+	}
+	if testOptions.enableCoverage {
+		return "~/antctl-coverage"
+	}
+	return "~/antctl"
+}
+
 // runAntctl runs antctl commands on antrea Pods, the controller, or agents.
 func runAntctl(podName string, cmds []string, data *TestData) (string, string, error) {
 	var containerName string
@@ -186,14 +206,10 @@ func copyAntctlKubeconfigToNode(data *TestData, nodeName string, kubeconfigPath 
 // the kubernetes cluster. It uses the antctl client binary copied from the controller
 // Pod.
 func testAntctlControllerRemoteAccess(t *testing.T, data *TestData) {
-	antctlName := "antctl"
-	nodeAntctlPath := "~/antctl"
-	if testOptions.enableCoverage {
-		antctlName = "antctl-coverage"
-		nodeAntctlPath = "~/antctl-coverage"
-	}
+	antctlName := antctlName()
+	nodeAntctlPath := nodeAntctlPath()
 	require.NoError(t, copyAntctlToNode(data, controlPlaneNodeName(), antctlName, nodeAntctlPath), "failed to copy antctl to control-plane Node")
-	nodeAntctlKubeconfigPath := "~/antctl-kubeconfig"
+	nodeAntctlKubeconfigPath := "/tmp/antctl-kubeconfig"
 	require.NoError(t, copyAntctlKubeconfigToNode(data, controlPlaneNodeName(), nodeAntctlKubeconfigPath), "failed to copy antctl Kubeconfig to control-plane Node")
 
 	testCmds := []cmdAndReturnCode{}
@@ -338,14 +354,10 @@ func runAntctProxy(
 // Agent API.
 func testAntctlProxy(t *testing.T, data *TestData) {
 	const proxyPort = 8001
-	antctlName := "antctl"
-	nodeAntctlPath := "~/antctl"
-	if testOptions.enableCoverage {
-		antctlName = "antctl-coverage"
-		nodeAntctlPath = "~/antctl-coverage"
-	}
+	antctlName := antctlName()
+	nodeAntctlPath := nodeAntctlPath()
 	require.NoError(t, copyAntctlToNode(data, controlPlaneNodeName(), antctlName, nodeAntctlPath), "failed to copy antctl to control-plane Node")
-	nodeAntctlKubeconfigPath := "~/antctl-kubeconfig"
+	nodeAntctlKubeconfigPath := "/tmp/antctl-kubeconfig"
 	require.NoError(t, copyAntctlKubeconfigToNode(data, controlPlaneNodeName(), nodeAntctlKubeconfigPath), "failed to copy antctl Kubeconfig to control-plane Node")
 
 	// getEndpointStatus will return "Success", "Failure", or the empty string when out is not a
