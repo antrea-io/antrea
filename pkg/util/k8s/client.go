@@ -20,7 +20,6 @@ import (
 	"os"
 	"strings"
 
-	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	discovery "k8s.io/api/discovery/v1"
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -44,7 +43,7 @@ const (
 // CreateClients creates kube clients from the given config.
 func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (
 	clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, apiextensionclientset.Interface, mcclientset.Interface, policyclient.Interface, error) {
-	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
+	kubeConfig, err := CreateRestConfig(config, kubeAPIServerOverride)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
@@ -82,21 +81,7 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kub
 	return client, aggregatorClient, crdClient, apiExtensionClient, mcClient, policyClient, nil
 }
 
-// CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
-func CreateNetworkAttachDefClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
-	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
-	if err != nil {
-		return nil, err
-	}
-
-	netAttachDefClient, err := netdefclient.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-	return netAttachDefClient, nil
-}
-
-func createRestConfig(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (*rest.Config, error) {
+func CreateRestConfig(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (*rest.Config, error) {
 	var kubeConfig *rest.Config
 	var err error
 

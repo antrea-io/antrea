@@ -78,8 +78,8 @@ var (
 	// getIPNetDeviceByV4CIDR is meant to be overridden for testing.
 	getIPNetDeviceByCIDRs = util.GetIPNetDeviceByCIDRs
 
-	// getTransportIPNetDeviceByName is meant to be overridden for testing.
-	getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
+	// getTransportIPNetDeviceByNameFn is meant to be overridden for testing.
+	getTransportIPNetDeviceByNameFn = getTransportIPNetDeviceByName
 
 	// setLinkUp is meant to be overridden for testing
 	setLinkUp = util.SetLinkUp
@@ -954,7 +954,7 @@ func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 	transportInterface = nodeInterface
 	if i.networkConfig.TransportIface != "" {
 		// Find the configured transport interface, and update its IP address in Node's annotation.
-		transportIPv4Addr, transportIPv6Addr, transportInterface, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
+		transportIPv4Addr, transportIPv6Addr, transportInterface, err = getTransportIPNetDeviceByNameFn(i.networkConfig.TransportIface, i.ovsBridge)
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport interface %s: %v", i.networkConfig.TransportIface, err)
 		}
@@ -1347,8 +1347,7 @@ func (i *Initializer) setOVSDatapath() error {
 	if _, exists := otherConfig[ovsconfig.OVSOtherConfigDatapathIDKey]; exists {
 		return nil
 	}
-	randMAC := util.GenerateRandomMAC()
-	datapathID := "0000" + strings.Replace(randMAC.String(), ":", "", -1)
+	datapathID := util.GenerateOVSDatapathID("")
 	if err := i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		klog.ErrorS(err, "Failed to set OVS bridge datapath_id", "datapathID", datapathID)
 		return err

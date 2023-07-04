@@ -213,10 +213,7 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	// Set datapathID of OVS bridge.
 	// If no datapathID configured explicitly, the reconfiguration operation will change OVS bridge datapathID
 	// and break the OpenFlow channel.
-	// The length of datapathID is 64 bits, the lower 48-bits are for a MAC address, while the upper 16-bits are
-	// implementer-defined. Antrea uses "0x0000" for the upper 16-bits.
-	datapathID := strings.Replace(hnsNetwork.SourceMac, ":", "", -1)
-	datapathID = "0000" + datapathID
+	datapathID := util.GenerateOVSDatapathID(hnsNetwork.SourceMac)
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		klog.ErrorS(err, "Failed to set OVS bridge datapath_id", "datapathID", datapathID)
 		return err
@@ -364,10 +361,10 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeTransportIPv4Addr.IP
 }
 
-// saveHostRoutes saves routes which are configured on uplink interface before
-// the interface the configured as the uplink of antrea HNS network.
-// The routes will be restored on OVS bridge interface after the IP configuration
-// is moved to the OVS bridge.
+// saveHostRoutes saves routes configured on the uplink interface before the
+// interface is configured as the uplink of Antrea HNS network.
+// The routes will be restored on the OVS bridge interface after the IP
+// configuration is moved to the OVS bridge.
 func (i *Initializer) saveHostRoutes() error {
 	routes, err := util.GetNetRoutesAll()
 	if err != nil {
@@ -395,7 +392,7 @@ func (i *Initializer) saveHostRoutes() error {
 	return nil
 }
 
-func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+func getTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	// Find transport Interface in the order: ifaceName -> br-int. Return immediately if
 	// an interface using the specified name exists. Using br-int is for restart agent case.
 	for _, name := range []string{ifaceName, ovsBridgeName} {

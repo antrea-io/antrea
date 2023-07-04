@@ -242,3 +242,71 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
+	tests := []struct {
+		name               string
+		featureGateValue   bool
+		ovsBridges         []string
+		physicalInterfaces []string
+		expectedErr        string
+	}{
+		{
+			name:       "featureGate off",
+			ovsBridges: []string{"br1"},
+		},
+		{
+			name:             "no bridge",
+			featureGateValue: true,
+		},
+		{
+			name:             "one bridge",
+			featureGateValue: true,
+			ovsBridges:       []string{"br1"},
+		},
+		{
+			name:               "one interface",
+			featureGateValue:   true,
+			ovsBridges:         []string{"br1"},
+			physicalInterfaces: []string{"eth1"},
+		},
+		{
+			name:             "two bridges",
+			featureGateValue: true,
+			ovsBridges:       []string{"br1", "br2"},
+			expectedErr:      "only one OVS bridge can be specified for secondary network",
+		},
+		{
+			name:             "no bridge name",
+			featureGateValue: true,
+			ovsBridges:       []string{""},
+			expectedErr:      "bridge name is not provided for the secondary network OVS bridge",
+		},
+		{
+			name:               "two interfaces",
+			featureGateValue:   true,
+			ovsBridges:         []string{"br1"},
+			physicalInterfaces: []string{"eth1", "eth2"},
+			expectedErr:        "at most one physical interface can be specified for the secondary network OVS bridge",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.SecondaryNetwork, tc.featureGateValue)()
+
+			o := &Options{config: &agentconfig.AgentConfig{}}
+			for _, brName := range tc.ovsBridges {
+				br := agentconfig.OVSBridgeConfig{BridgeName: brName}
+				br.PhysicalInterfaces = tc.physicalInterfaces
+				o.config.SecondaryNetwork.OVSBridges = append(o.config.SecondaryNetwork.OVSBridges, br)
+			}
+
+			err := o.validateSecondaryNetworkConfig()
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err, tc.expectedErr)
+			}
+		})
+	}
+}

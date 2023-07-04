@@ -20,7 +20,6 @@ package agent
 import (
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/vishvananda/netlink"
@@ -75,10 +74,8 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	// Set datapathID of OVS bridge.
 	// If no datapathID configured explicitly, the reconfiguration operation will change OVS bridge datapathID
 	// and break the OpenFlow channel.
-	// The length of datapathID is 64 bits, the lower 48-bits are for a MAC address, while the upper 16-bits are
-	// implementer-defined. Antrea uses "0x0000" for the upper 16-bits.
-	datapathID := strings.Replace(uplinkNetConfig.MAC.String(), ":", "", -1)
-	datapathID = "0000" + datapathID
+	datapathID := util.GenerateOVSDatapathID(uplinkNetConfig.MAC.String())
+
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		return fmt.Errorf("failed to set datapath_id %s: err=%w", datapathID, err)
 	}
@@ -123,14 +120,14 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return nil
 }
 
-func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+func getTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	return util.GetIPNetDeviceByName(ifaceName)
 }
 
-// saveHostRoutes saves routes which are configured on uplink interface before
-// the interface the configured as the uplink of antrea network.
-// The routes will be restored on OVS bridge interface after the IP configuration
-// is moved to the OVS bridge.
+// saveHostRoutes saves the routes which were configured on the uplink interface
+// before the interface is configured as the OVS brdige uplink. These routes
+// will be moved to the bridge interface together with the interface IP
+// configuration.
 func (i *Initializer) saveHostRoutes() error {
 	routes, err := netlink.RouteList(nil, netlink.FAMILY_V4)
 	if err != nil {
@@ -155,8 +152,8 @@ func (i *Initializer) saveHostRoutes() error {
 
 // restoreHostRoutes restores the host routes which are lost when moving the IP
 // configuration of uplink interface to the OVS bridge interface during
-// the antrea network initialize stage.
-// The backup routes are restored after the IP configuration change.
+// the Antrea bridge initialization stage.
+// The backup routes are restored after the IP configuration changes.
 func (i *Initializer) restoreHostRoutes() error {
 	return i.restoreHostRoutesToInterface(i.nodeConfig.UplinkNetConfig.Name)
 }
@@ -188,7 +185,7 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	uplinkName := uplinkNetConfig.Name
 	bridgedUplinkName := util.GenerateUplinkInterfaceName(uplinkNetConfig.Name)
 
-	// If uplink is already exists, return.
+	// If the uplink port already exists, just return.
 	if uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName, false); err == nil {
 		klog.InfoS("Uplink already exists, skip the configuration", "uplink", bridgedUplinkName, "port", uplinkOFPort)
 		return nil

@@ -63,7 +63,8 @@ func (data *testData) setup(t *testing.T) {
 	// using the netdev datapath type does not impact test coverage but
 	// ensures that the integration tests can be run with Docker Desktop on
 	// macOS.
-	data.br = ovsconfig.NewOVSBridge(bridgeName, "netdev", data.ovsdb)
+	brClient := ovsconfig.NewOVSBridge(bridgeName, "netdev", data.ovsdb)
+	data.br = brClient.(*ovsconfig.OVSBridge)
 	err = data.br.Create()
 	require.Nil(t, err, "Failed to create bridge %s", bridgeName)
 }

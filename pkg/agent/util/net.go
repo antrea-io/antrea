@@ -436,3 +436,13 @@ func GetIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
 	}
 	return addrs, nil
 }
+
+// GenerateOVSDatapathID generates an OVS datapath ID string.
+func GenerateOVSDatapathID(macString string) string {
+	// The length of datapathID is 64 bits, the lower 48-bits are for a MAC address, while the
+	// upper 16-bits are implementer-defined. Antrea uses "0x0000" for the upper 16-bits.
+	if macString == "" {
+		macString = GenerateRandomMAC().String()
+	}
+	return "0000" + strings.Replace(macString, ":", "", -1)
+}
