@@ -26,11 +26,9 @@ metadata:
 spec:
   containers:
     - name: antrea-agent
-      ... ...
       env:
         - name: ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY
           value: "true"
-      ... ...
 ```
 
 ## Hybrid Mode
@@ -60,9 +58,7 @@ parameter is defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
 
 ```yaml
   antrea-agent.conf: |
-    ... ...
     trafficEncapMode: hybrid
-    ... ...
 ```
 
 After changing the config parameter, you can deploy Antrea in `Hybrid` mode with
@@ -109,12 +105,15 @@ parameters are defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
 [Antrea deployment yaml](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
 
 ```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
   antrea-agent.conf: |
-    ... ...
     trafficEncapMode: noEncap
-
     noSNAT: false # Set to true to disable Antrea SNAT for external traffic
-    ... ...
 ```
 
 After changing the parameters, you can deploy Antrea in `noEncap` mode by applying

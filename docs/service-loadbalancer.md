@@ -73,19 +73,15 @@ the Antrea deployment YAML:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: antrea-config-dcfb6k2hkm
+  name: antrea-config
   namespace: kube-system
 data:
   antrea-agent.conf: |
     featureGates:
-...
       ServiceExternalIP: true
-...
   antrea-controller.conf: |
     featureGates:
-...
       ServiceExternalIP: true
-...
 ```
 
 The feature works with both `AntreaProxy` and `kube-proxy`, including the

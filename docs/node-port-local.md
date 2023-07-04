@@ -45,7 +45,7 @@ your `antrea-agent` ConfigMap should look like this:
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: antrea-config-dcfb6k2hkm
+  name: antrea-config
   namespace: kube-system
 data:
   antrea-agent.conf: |
@@ -116,7 +116,6 @@ metadata:
     app: nginx
   annotations:
     nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp","protocols":["tcp"]}]'
-...
 ```
 
 This annotation indicates that port 8080 of the Pod can be reached through port
@@ -153,7 +152,6 @@ metadata:
     app: nginx
   annotations:
     nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002}, "protocols":["tcp","udp"]]'
-...
 ```
 
 This annotation indicates that port 8080 of the Pod can be reached through port

@@ -50,12 +50,16 @@ cluster. Valid range is 64 to 126. Default is 64.
 Below is a sample of needed changes in the Antrea deployment YAML:
 
 ```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
   antrea-controller.conf: |
-    ...
     nodeIPAM:
       enableNodeIPAM: true
       clusterCIDRs: [172.100.0.0/16]
-    ...
 ```
 
 When running Antrea NodeIPAM in a particular version or scenario, you may need to
@@ -100,22 +104,21 @@ When Antrea is installed from YAML, the needed changes in the Antrea
 ConfigMap `antrea-config` YAML are as below:
 
 ```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
   antrea-controller.conf: |
-    ...
     featureGates:
       AntreaIPAM: true
-    ...
   antrea-agent.conf: |
-    ...
     featureGates:
       AntreaIPAM: true
-    ...
     enableBridgingMode: true
-    ...
     trafficEncapMode: "noEncap"
-    ...
     noSNAT: true
-    ...
 ```
 
 Alternatively, you can use the following helm install/upgrade command to configure
@@ -154,7 +157,6 @@ kind: Namespace
 metadata:
   annotations:
     ipam.antrea.io/ippools: 'pool1'
-...
 ```
 
 #### IPPool Annotations on Pod (available since Antrea 1.5)
@@ -176,7 +178,6 @@ spec:
       annotations:
         ipam.antrea.io/ippools: 'sts-ip-pool1'  # This annotation will be set automatically on all Pods managed by this resource
         ipam.antrea.io/pod-ips: '<ip-in-sts-ip-pool1>'
-...
 ```
 
 ```yaml
@@ -188,7 +189,6 @@ spec:
       annotations:
         ipam.antrea.io/ippools: 'sts-ip-pool1'  # This annotation will be set automatically on all Pods managed by this resource
         # Do not add pod-ips annotation to PodTemplate if there is more than 1 replica
-...
 ```
 
 ```yaml
@@ -196,7 +196,6 @@ kind: Pod
 metadata:
   annotations:
     ipam.antrea.io/ippools: 'pod-ip-pool1'
-...
 ```
 
 ```yaml
@@ -205,7 +204,6 @@ metadata:
   annotations:
     ipam.antrea.io/ippools: 'pod-ip-pool1'
     ipam.antrea.io/pod-ips: '<ip-in-pod-ip-pool1>'
-...
 ```
 
 ```yaml
@@ -213,7 +211,6 @@ kind: Pod
 metadata:
   annotations:
     ipam.antrea.io/pod-ips: '<ip-in-namespace-pool>'
-...
 ```
 
 #### Persistent IP for StatefulSet Pod (available since Antrea 1.5)
