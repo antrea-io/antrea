@@ -280,7 +280,7 @@ func (cache *EndpointSliceCache) addEndpoints(serviceNN apimachinerytypes.Namesp
 
 		// Filter out the incorrect IP version case. Any endpoint port that
 		// contains incorrect IP version will be ignored.
-		if cache.isIPv6Mode && utilnet.IsIPv6String(endpoint.Addresses[0]) != cache.isIPv6Mode {
+		if utilnet.IsIPv6String(endpoint.Addresses[0]) != cache.isIPv6Mode {
 			continue
 		}
 		isLocal := false
