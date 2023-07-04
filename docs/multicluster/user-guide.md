@@ -71,15 +71,18 @@ in `antrea-agent.conf` of the Antrea deployment manifest to enable the `Multiclu
 feature:
 
 ```yaml
-antrea-agent.conf: |
-...
-  featureGates:
-...
-    Multicluster: true
-...
-  multicluster:
-    enableGateway: true
-    namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      Multicluster: true
+    multicluster:
+      enableGateway: true
+      namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
 ```
 
 In order for Multi-cluster features to work, it is necessary for `enableGateway` to be set to true by
@@ -112,27 +115,27 @@ To deploy Multi-cluster Controller in a dual-role cluster, please refer to
 
 1. Run the following command to import Multi-cluster CRDs in the leader cluster:
 
-     ```bash
-     kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml
-     ```
+   ```bash
+   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml
+   ```
 
 2. Install Multi-cluster Controller in the leader cluster. Since Multi-cluster
    Controller runs as a namespaced Deployment, you should create the Namespace
    first, and then apply the deployment manifest with the Namespace.
 
-  ```bash
-  kubectl create ns antrea-multicluster
-  kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
-  ```
+   ```bash
+   kubectl create ns antrea-multicluster
+   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
+   ```
 
 The Multi-cluster Controller in the leader cluster will be deployed in Namespace `antrea-multicluster`
 by default. If you'd like to use another Namespace, you can change `antrea-multicluster` to the desired
 Namespace in `antrea-multicluster-leader-namespaced.yml`, for example:
 
 ```bash
-$kubectl create ns '<desired-namespace>'
-$curl -L https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml > antrea-multicluster-leader-namespaced.yml
-$sed 's/antrea-multicluster/<desired-namespace>/g' antrea-multicluster-leader-namespaced.yml | kubectl apply -f -
+kubectl create ns '<desired-namespace>'
+curl -L https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml > antrea-multicluster-leader-namespaced.yml
+sed 's/antrea-multicluster/<desired-namespace>/g' antrea-multicluster-leader-namespaced.yml | kubectl apply -f -
 ```
 
 #### Deploy in a Member Cluster
@@ -381,7 +384,7 @@ the Multi-cluster Gateway by adding an annotation:
 the following command to annotate Node `node-1` as the Multi-cluster Gateway:
 
 ```bash
-$kubectl annotate node node-1 multicluster.antrea.io/gateway=true
+kubectl annotate node node-1 multicluster.antrea.io/gateway=true
 ```
 
 You can annotate multiple Nodes in a member cluster as the candidates for
@@ -398,7 +401,7 @@ will create a `Gateway` CR with the same name as the Node. You can check it with
 command:
 
 ```bash
-$kubectl get gateway -n kube-system
+$ kubectl get gateway -n kube-system
 NAME          GATEWAY IP     INTERNAL IP    AGE
 node-1        10.17.27.55    10.17.27.55    10s
 ```
@@ -438,7 +441,7 @@ you can see a ClusterInfoImport CR with name `test-cluster-east-clusterinfo`
 is created for cluster `test-cluster-east`:
 
 ```bash
-$kubectl get clusterinfoimport -n kube-system
+$ kubectl get clusterinfoimport -n kube-system
 NAME                            CLUSTER ID          SERVICE CIDR   AGE
 test-cluster-east-clusterinfo   test-cluster-east   110.96.0.0/20  10s
 ```
@@ -461,11 +464,15 @@ in Multi-cluster configuration should be set to `wireGuard` and the `enableGatew
 field should be set to `true` as follows:
 
 ```yaml
-antrea-agent.conf: |
-  featureGates:
-...
-    Multicluster: true
-...
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      Multicluster: true
     multicluster:
       enableGateway: true
       trafficEncryptionMode: "wireGuard"
@@ -497,11 +504,11 @@ routed to the backend `nginx` Pods in `test-cluster-west`. You can check the
 imported Service and ServiceImport with commands:
 
 ```bash
-$kubectl get serviceimport antrea-mc-nginx -n default
+$ kubectl get serviceimport antrea-mc-nginx -n default
 NAME            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 antrea-mc-nginx ClusterIP   10.107.57.62 <none>        443/TCP   10s
 
-$kubectl get serviceimport nginx -n default
+$ kubectl get serviceimport nginx -n default
 NAME      TYPE           IP                AGE
 nginx     ClusterSetIP   ["10.19.57.62"]   10s
 ```
@@ -512,12 +519,12 @@ for the exported Service and Endpoints respectively, as well as two
 ResourceImport CRs. You can check them in the leader cluster with commands:
 
 ```bash
-$kubectl get resourceexport -n antrea-multicluster
+$ kubectl get resourceexport -n antrea-multicluster
 NAME                                         CLUSTER ID          KIND          NAMESPACE     NAME      AGE
 test-cluster-west-default-nginx-endpoints    test-cluster-west   Endpoints     default       nginx     30s
 test-cluster-west-default-nginx-service      test-cluster-west   Service       default       nginx     30s
 
-$kubectl get resourceimport -n antrea-multicluster
+$ kubectl get resourceimport -n antrea-multicluster
 NAME                      KIND            NAMESPACE       NAME           AGE
 default-nginx-endpoints   Endpoints       default         nginx          99s
 default-nginx-service     ServiceImport   default         nginx          99s
@@ -565,29 +572,32 @@ Pod-to-Pod connectivity**.
 
 ```yaml
 apiVersion: v1
-data:
-  controller_manager_config.yaml: |
-    apiVersion: multicluster.crd.antrea.io/v1alpha1
-    kind: MultiClusterConfig
-    ...
-    podCIDRs:
-      - "10.10.1.1/16"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
   name: antrea-mc-controller-config
   namespace: kube-system
+data:
+  controller_manager_config.yaml: |
+    apiVersion: multicluster.crd.antrea.io/v1alpha1
+    kind: MultiClusterConfig
+    podCIDRs:
+      - "10.10.1.1/16"
 ```
 
 ```yaml
-antrea-controller.conf: |
-  featureGates:
-...
-    Multicluster: true
-...
-  multicluster:
-    enablePodToPodConnectivity: true
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      Multicluster: true
+    multicluster:
+      enablePodToPodConnectivity: true
 ```
 
 You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml),
@@ -610,25 +620,24 @@ Agent ConfigMaps and make sure that `enableStretchedNetworkPolicy` is set to
 `true` in addition to enabling the `multicluster` feature gate:
 
 ```yaml
-antrea-controller.conf: |
-  featureGates:
-...
-    Multicluster: true
-...
-  multicluster:
-    enableStretchedNetworkPolicy: true # required by both egress and ingres rules
-```
-
-```yaml
-antrea-agent.conf: |
-  featureGates:
-...
-    Multicluster: true
-...
-  multicluster:
-    enableGateway: true
-    enableStretchedNetworkPolicy: true # required by only ingress rules
-    namespace: ""
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-controller.conf: |
+    featureGates:
+      Multicluster: true
+    multicluster:
+      enableStretchedNetworkPolicy: true # required by both egress and ingres rules
+  antrea-agent.conf: |
+    featureGates:
+      Multicluster: true
+    multicluster:
+      enableGateway: true
+      enableStretchedNetworkPolicy: true # required by only ingress rules
+      namespace: ""
 ```
 
 ### Egress Rule to Multi-cluster Service
@@ -738,7 +747,6 @@ on how to change the ConfigMap:
   controller_manager_config.yaml: |
     apiVersion: multicluster.crd.antrea.io/v1alpha1
     kind: MultiClusterConfig
-    ...
     enableStretchedNetworkPolicy: true
 ```
 
@@ -798,7 +806,7 @@ clusters will be reported back to the leader cluster as K8s Events, and can be c
 the `ResourceImport` of the original `ResourceExport`:
 
 ```bash
-$kubectl describe resourceimport -A
+$ kubectl describe resourceimport -A
 Name:         strict-namespace-isolation-antreaclusternetworkpolicy
 Namespace:    antrea-multicluster
 API Version:  multicluster.crd.antrea.io/v1alpha1

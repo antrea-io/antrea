@@ -49,7 +49,7 @@ v1.6, at which time it was enabled by default. Prior to v1.6, a feature gate,
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: antrea-config-dcfb6k2hkm
+  name: antrea-config
   namespace: kube-system
 data:
   antrea-agent.conf: |

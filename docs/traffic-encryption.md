@@ -112,10 +112,14 @@ defined in `antrea-agent.conf` of `antrea` ConfigMap in the Antrea deployment
 yaml:
 
 ```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
   antrea-agent.conf: |
-    ... ...
     trafficEncryptionMode: wireGuard
-    ... ...
 ```
 
 After saving the yaml file change, deploy Antrea with:

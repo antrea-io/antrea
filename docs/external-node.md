@@ -68,7 +68,7 @@ configuration. The configuration for `antrea-controller` is modified in the
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: antrea-config-dcfb6k2hkm
+  name: antrea-config
   namespace: kube-system
 data:
   antrea-controller.conf: |

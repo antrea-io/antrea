@@ -19,15 +19,18 @@ by Antrea Multi-cluster. You should set the following configuration parameters i
  feature and Antrea Multi-cluster Gateway:
 
 ```yaml
-antrea-agent.conf: |
-...
-  featureGates:
-...
-    Multicluster: true
-...
-  multicluster:
-    enableGateway: true
-    namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+ name: antrea-config
+ namespace: kube-system
+data:
+ antrea-agent.conf: |
+   featureGates:
+     Multicluster: true
+   multicluster:
+     enableGateway: true
+     namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
 ```
 
 Repeat the same steps to deploy Antrea for all member clusters in a ClusterSet.

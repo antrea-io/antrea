@@ -103,9 +103,10 @@ Service during initialization. If you are unsure about which values to use, take
 a look at your Kubeconfig file, and look for a line like this one:
 
 ```yaml
-...
+apiVersion: v1
+clusters:
+- cluster:
     server: https://192.168.77.100:6443
-...
 ```
 
 Then use this value as is (e.g., `"https://192.168.77.100:6443"`) for
