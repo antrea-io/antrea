@@ -25,7 +25,7 @@ RUN go mod download
 COPY . /antrea
 
 RUN make antrea-agent antrea-controller antrea-cni antrea-controller-instr-binary antrea-agent-instr-binary
-# The e2e test for antctl currently copy the antctl binary from the Docker container
+# The e2e tests for antctl currently copy the antctl binary from the Docker container
 # to the host Node, and run the binary from the host. The host may be missing some
 # system libraries that are required to run the binary, so we need to disable CGO
 # to avoid such dependencies and ensure that the binary is portable.
