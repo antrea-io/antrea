@@ -735,12 +735,12 @@ can log more information in its own logs.
 The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <direction> <action> <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
     Deduplication:
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <direction> <action> <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2023/07/04 12:45:21.804416 IngressDefaultRule AntreaNetworkPolicy:default/reject-tcp-policy DenyTCPRequest Ingress Reject 16 default/nettoolv3 10.10.1.7 53646 10.10.1.14 80 TCP 60 tcp-log-label
+    2023/07/04 12:45:21.804416 IngressDefaultRule AntreaNetworkPolicy:default/reject-tcp-policy RejectTCPRequest Ingress Reject 16 default/nettoolv3 10.10.1.7 53646 10.10.1.14 80 TCP 60 tcp-log-label
     2023/07/03 23:24:36.422233 AntreaPolicyEgressRule AntreaNetworkPolicy:default/reject-icmp-policy RejectICMPRequest Egress Reject 14500 default/nettool 10.10.1.7 <nil> 10.10.2.3 <nil> ICMP 84 icmp-log-label
     2023/07/03 23:24:37.424024 AntreaPolicyEgressRule AntreaNetworkPolicy:default/reject-icmp-policy RejectICMPRequest Egress Reject 14500 default/nettool 10.10.1.7 <nil> 10.10.2.3 <nil> ICMP 84 icmp-log-label [2 packets in 1.000855539s]
 ```
@@ -756,9 +756,9 @@ using Antrea logging for Kubernetes NetworkPolicies, the rule name field is not
 set and defaults to `<nil>` value. The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> Allow <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
+    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> <direction> Allow <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
     Default dropped traffic:
-    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> Drop <nil> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> <direction> Drop <nil> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
     2023/07/04 12:31:02.801442 IngressRule K8sNetworkPolicy:default/allow-tcp-80 <nil> Ingress Allow 190 default/nettool 10.10.1.13 57050 10.10.1.7 80 TCP 60 <nil>
