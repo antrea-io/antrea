@@ -53,7 +53,6 @@ const (
 	defaultIdleFlowExportTimeout   = "15s"
 	defaultIGMPQueryInterval       = 125 * time.Second
 	defaultStaleConnectionTimeout  = 5 * time.Minute
-	defaultNPLPortRange            = "61000-62000"
 	defaultNodeType                = config.K8sNode
 	defaultMaxEgressIPsPerNode     = 255
 )

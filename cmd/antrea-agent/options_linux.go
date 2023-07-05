@@ -17,6 +17,10 @@
 
 package main
 
+const (
+	defaultNPLPortRange = "61000-62000"
+)
+
 func (o *Options) checkUnsupportedFeatures() error {
 	// All features are supported on a Linux Node.
 	return nil
