@@ -43,7 +43,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 KUBE_CONFORMANCE_IMAGE_VERSION_OPTION=""
 IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
-SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.56.4"
+SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.56.16"
 SYSTEMD_LOGS_IMAGE="projects.registry.vmware.com/sonobuoy/systemd-logs:v0.4"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>]
