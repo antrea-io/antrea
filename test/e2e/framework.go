@@ -2880,7 +2880,7 @@ func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
 }
 
 func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.Duration, name string) error {
-	err := wait.Poll(interval, timeout, func() (bool, error) {
+	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
 		aai, err := data.crdClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -2891,6 +2891,18 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 		if aai.NodeRef.Name == "" {
 			// keep trying
 			return false, nil
+		}
+		// Validate that the podRef in AntreaAgentInfo matches the name of the current Pod for the Node
+		pod, err := data.clientset.CoreV1().Pods(aai.PodRef.Namespace).Get(context.TODO(), aai.PodRef.Name, metav1.GetOptions{})
+		if err != nil {
+			// If err is NotFound, we should keep trying
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if pod.Spec.NodeName != aai.NodeRef.Name {
+			return false, fmt.Errorf("expected Node name %s for Pod %s, got %s", aai.NodeRef.Name, aai.PodRef.Name, pod.Spec.NodeName)
 		}
 		return true, nil
 	})
