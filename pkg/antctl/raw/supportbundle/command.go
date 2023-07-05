@@ -28,10 +28,12 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb/v3"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -44,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
 )
 
 const (
@@ -65,6 +68,8 @@ var option = &struct {
 	since          string
 	insecure       bool
 }{}
+
+var defaultFS = afero.NewOsFs()
 
 var remoteControllerLongDescription = strings.TrimSpace(`
 Generate support bundles for the cluster, which include: information about each Antrea agent, information about the Antrea controller and general information about the cluster.
@@ -115,49 +120,51 @@ func init() {
 	}
 }
 
-var getRestClient func(cmd *cobra.Command) (rest.Interface, error) = setupRestClient
+var getSupportBundleClient func(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) = setupSupportBundleClient
 
-func setupRestClient(cmd *cobra.Command) (rest.Interface, error) {
+func setupSupportBundleClient(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return nil, err
 	}
-	kubeconfig.APIPath = "/apis"
-	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
 	raw.SetupLocalKubeconfig(kubeconfig)
-	client, err := rest.RESTClientFor(kubeconfig)
-	return client, err
+	client, err := systemclientset.NewForConfig(kubeconfig)
+	return client.SupportBundles(), err
 }
 
 func localSupportBundleRequest(cmd *cobra.Command, mode string, writer io.Writer) error {
-	client, err := getRestClient(cmd)
+	ctx := cmd.Context()
+	client, err := getSupportBundleClient(cmd)
 	if err != nil {
-		return fmt.Errorf("error when creating rest client: %w", err)
+		return fmt.Errorf("error when creating system client: %w", err)
 	}
-	_, err = client.Post().
-		Resource("supportbundles").
-		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: mode}}).
-		DoRaw(cmd.Context())
-	if err != nil {
-		return fmt.Errorf("error when requesting the agent support bundle: %w", err)
+	if _, err := client.Create(ctx, &systemv1beta1.SupportBundle{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: mode,
+		},
+	}, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("error when creating the support bundle: %w", err)
 	}
+	timer := time.NewTimer(100 * time.Millisecond) // will expire after 100ms
+	defer timer.Stop()
 	for {
-		var supportBundle systemv1beta1.SupportBundle
-		err := client.Get().
-			Resource("supportbundles").
-			Name(mode).
-			Do(cmd.Context()).
-			Into(&supportBundle)
-		if err != nil {
-			return fmt.Errorf("error when requesting the agent support bundle: %w", err)
-		}
-		if supportBundle.Status == systemv1beta1.SupportBundleStatusCollected {
-			fmt.Fprintf(writer, "Created bundle under %s\n", os.TempDir())
-			fmt.Fprintf(writer, "Expire time: %s\n", supportBundle.DeletionTimestamp)
-			break
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			supportBundle, err := client.Get(ctx, mode, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("error when getting the support bundle: %w", err)
+			}
+			if supportBundle.Status == systemv1beta1.SupportBundleStatusCollected {
+				fmt.Fprintf(writer, "Created bundle under %s\n", os.TempDir())
+				fmt.Fprintf(writer, "Expire time: %s\n", supportBundle.DeletionTimestamp)
+				return nil
+			}
+			// retry again after 500ms
+			timer.Reset(500 * time.Millisecond)
 		}
 	}
-	return nil
 
 }
 
@@ -169,15 +176,13 @@ func controllerLocalRunE(cmd *cobra.Command, _ []string) error {
 	return localSupportBundleRequest(cmd, runtime.ModeController, os.Stdout)
 }
 
-func request(component string, client rest.Interface) error {
-	var err error
-	_, err = client.Post().
-		Resource("supportbundles").
-		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: component}, Since: option.since}).
-		DoRaw(context.TODO())
-	if err == nil {
-		return nil
-	}
+func request(ctx context.Context, component string, client systemclientset.SupportBundleInterface) error {
+	_, err := client.Create(ctx, &systemv1beta1.SupportBundle{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: component,
+		},
+		Since: option.since,
+	}, metav1.CreateOptions{})
 	return err
 }
 
@@ -186,94 +191,119 @@ type result struct {
 	err      error
 }
 
-func mapClients(prefix string, agentClients map[string]rest.Interface, controllerClient rest.Interface, bar *pb.ProgressBar, af, cf func(nodeName string, c rest.Interface) error) map[string]error {
+func mapClients(
+	ctx context.Context,
+	prefix string,
+	agentClients map[string]systemclientset.SupportBundleInterface,
+	controllerClient systemclientset.SupportBundleInterface,
+	bar *pb.ProgressBar,
+	af, cf func(ctx context.Context, nodeName string, c systemclientset.SupportBundleInterface) error,
+) map[string]error {
 	bar.Set("prefix", prefix)
-	rateLimiter := rate.NewLimiter(requestRate, requestBurst)
-	ch := make(chan result)
-	g, ctx := errgroup.WithContext(context.Background())
-	for nodeName, client := range agentClients {
-		rateLimiter.Wait(ctx)
-		nodeName, client := nodeName, client
-		g.Go(func() error {
-			defer bar.Increment()
-			err := af(nodeName, client)
-			ch <- result{nodeName: nodeName, err: err}
-			return err
-		})
-	}
+	results := make(map[string]error, len(agentClients)+1)
 
-	results := make(map[string]error, len(agentClients))
-	for i := 0; i < len(agentClients); i++ {
-		result := <-ch
-		results[result.nodeName] = result.err
-	}
+	func() {
+		rateLimiter := rate.NewLimiter(requestRate, requestBurst)
+		ch := make(chan result)
+		g, ctx := errgroup.WithContext(ctx)
+		for nodeName, client := range agentClients {
+			rateLimiter.Wait(ctx)
+			nodeName, client := nodeName, client
+			g.Go(func() error {
+				defer bar.Increment()
+				err := af(ctx, nodeName, client)
+				ch <- result{nodeName: nodeName, err: err}
+				return err
+			})
+		}
 
-	g.Wait()
+		for i := 0; i < len(agentClients); i++ {
+			result := <-ch
+			results[result.nodeName] = result.err
+		}
+
+		g.Wait()
+	}()
 
 	if controllerClient != nil {
 		defer bar.Increment()
-		results[""] = cf("", controllerClient)
+		results[""] = cf(ctx, "", controllerClient)
 	}
 	return results
 }
 
-func requestAll(agentClients map[string]rest.Interface, controllerClient rest.Interface, bar *pb.ProgressBar) map[string]error {
+func requestAll(
+	ctx context.Context,
+	agentClients map[string]systemclientset.SupportBundleInterface,
+	controllerClient systemclientset.SupportBundleInterface,
+	bar *pb.ProgressBar,
+) map[string]error {
 	return mapClients(
+		ctx,
 		"Requesting",
 		agentClients,
 		controllerClient,
 		bar,
-		func(nodeName string, c rest.Interface) error {
-			return request(runtime.ModeAgent, c)
+		func(ctx context.Context, nodeName string, c systemclientset.SupportBundleInterface) error {
+			return request(ctx, runtime.ModeAgent, c)
 		},
-		func(nodeName string, c rest.Interface) error {
-			return request(runtime.ModeController, c)
+		func(ctx context.Context, nodeName string, c systemclientset.SupportBundleInterface) error {
+			return request(ctx, runtime.ModeController, c)
 		},
 	)
 }
 
-func download(suffix, downloadPath string, client rest.Interface, component string) error {
+func download(
+	ctx context.Context,
+	suffix,
+	downloadPath string,
+	client systemclientset.SupportBundleInterface,
+	component string,
+) error {
+	timer := time.NewTimer(100 * time.Millisecond) // will expire after 100ms
+	defer timer.Stop()
 	for {
-		var supportBundle systemv1beta1.SupportBundle
-		err := client.Get().Resource("supportbundles").Name(component).Do(context.TODO()).Into(&supportBundle)
-		if err != nil {
-			return fmt.Errorf("error when requesting the agent support bundle: %w", err)
-		}
-		if supportBundle.Status == systemv1beta1.SupportBundleStatusCollected {
-			if len(downloadPath) == 0 {
-				break
-			}
-			var fileName string
-			if len(suffix) > 0 {
-				fileName = path.Join(downloadPath, fmt.Sprintf("%s_%s.tar.gz", component, suffix))
-			} else {
-				fileName = path.Join(downloadPath, fmt.Sprintf("%s.tar.gz", component))
-			}
-			f, err := os.Create(fileName)
-			if err != nil {
-				return fmt.Errorf("error when creating the support bundle tar gz: %w", err)
-			}
-			defer f.Close()
-			stream, err := client.Get().
-				Resource("supportbundles").
-				Name(component).
-				SubResource("download").
-				Stream(context.TODO())
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			supportBundle, err := client.Get(ctx, component, metav1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("error when downloading the support bundle: %w", err)
 			}
-			defer stream.Close()
-			if _, err := io.Copy(f, stream); err != nil {
-				return fmt.Errorf("error when downloading the support bundle: %w", err)
+			if supportBundle.Status == systemv1beta1.SupportBundleStatusCollected {
+				if len(downloadPath) == 0 {
+					break
+				}
+				var fileName string
+				if len(suffix) > 0 {
+					fileName = path.Join(downloadPath, fmt.Sprintf("%s_%s.tar.gz", component, suffix))
+				} else {
+					fileName = path.Join(downloadPath, fmt.Sprintf("%s.tar.gz", component))
+				}
+				f, err := defaultFS.Create(fileName)
+				if err != nil {
+					return fmt.Errorf("error when creating the support bundle tar gz: %w", err)
+				}
+				defer f.Close()
+				stream, err := client.Download(ctx, component)
+				if err != nil {
+					return fmt.Errorf("error when downloading the support bundle: %w", err)
+				}
+				defer stream.Close()
+				if _, err := io.Copy(f, stream); err != nil {
+					return fmt.Errorf("error when downloading the support bundle: %w", err)
+				}
+				return nil
 			}
-			break
+			// retry again after 500ms
+			timer.Reset(500 * time.Millisecond)
 		}
 	}
-	return nil
 }
 
 func writeFailedNodes(downloadPath string, nodes []string) error {
-	file, err := os.OpenFile(downloadPath+"/failed_nodes", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := defaultFS.OpenFile(filepath.Join(downloadPath, "failed_nodes"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("err create file for failed nodes: %w", err)
 	}
@@ -293,22 +323,30 @@ func writeFailedNodes(downloadPath string, nodes []string) error {
 
 // downloadAll will download all supportBundles. preResults is the request results of node/controller supportBundle.
 // if err happens for some nodes or controller, the download step will be skipped for the failed nodes or the controller.
-func downloadAll(agentClients map[string]rest.Interface, controllerClient rest.Interface, downloadPath string, bar *pb.ProgressBar, preResults map[string]error) map[string]error {
+func downloadAll(
+	ctx context.Context,
+	agentClients map[string]systemclientset.SupportBundleInterface,
+	controllerClient systemclientset.SupportBundleInterface,
+	downloadPath string,
+	bar *pb.ProgressBar,
+	preResults map[string]error,
+) map[string]error {
 	results := mapClients(
+		ctx,
 		"Downloading",
 		agentClients,
 		controllerClient,
 		bar,
-		func(nodeName string, c rest.Interface) error {
+		func(ctx context.Context, nodeName string, c systemclientset.SupportBundleInterface) error {
 			if preResults[nodeName] == nil {
-				return download(nodeName, downloadPath, c, runtime.ModeAgent)
+				return download(ctx, nodeName, downloadPath, c, runtime.ModeAgent)
 			}
 			return preResults[nodeName]
 
 		},
-		func(nodeName string, c rest.Interface) error {
+		func(ctx context.Context, nodeName string, c systemclientset.SupportBundleInterface) error {
 			if preResults[""] == nil {
-				return download("", downloadPath, c, runtime.ModeController)
+				return download(ctx, "", downloadPath, c, runtime.ModeController)
 			}
 			return preResults[nodeName]
 		},
@@ -330,8 +368,8 @@ func createAgentClients(
 	nameFilter string,
 	nameList []string,
 	insecure bool,
-) (map[string]rest.Interface, error) {
-	clients := map[string]rest.Interface{}
+) (map[string]systemclientset.SupportBundleInterface, error) {
+	clients := map[string]systemclientset.SupportBundleInterface{}
 	nodeAgentInfoMap := map[string]*v1beta1.AntreaAgentInfo{}
 	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
@@ -375,39 +413,45 @@ func createAgentClients(
 			klog.ErrorS(err, "Error when creating agent client config", "node", node.Name)
 			continue
 		}
-		client, err := rest.RESTClientFor(cfg)
+		client, err := systemclientset.NewForConfig(cfg)
 		if err != nil {
 			klog.ErrorS(err, "Error when creating agent client", "node", node.Name)
 			continue
 		}
-		clients[node.Name] = client
+		clients[node.Name] = client.SupportBundles()
 	}
 	return clients, nil
 }
 
-func createControllerClient(ctx context.Context, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, insecure bool) (rest.Interface, error) {
+func createControllerClient(
+	ctx context.Context,
+	k8sClientset kubernetes.Interface,
+	antreaClientset antrea.Interface,
+	cfgTmpl *rest.Config,
+	insecure bool,
+) (systemclientset.SupportBundleInterface, error) {
 	cfg, err := raw.CreateControllerClientCfg(ctx, k8sClientset, antreaClientset, cfgTmpl, insecure)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating controller client config: %w", err)
 	}
-	controllerClient, err := rest.RESTClientFor(cfg)
+	controllerClient, err := systemclientset.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating controller client: %w", err)
 	}
-	return controllerClient, nil
+	return controllerClient.SupportBundles(), nil
 }
 
 func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 	g := new(errgroup.Group)
 	var writeLock sync.Mutex
 
-	output := func(list k8sruntime.Object, comment string) error {
+	outputObjects := func(objects []k8sruntime.Object, comment string) error {
 		writeLock.Lock()
 		defer writeLock.Unlock()
 		if _, err := fmt.Fprintf(w, "#%s\n", comment); err != nil {
 			return err
 		}
-		err := meta.EachListItem(list, func(obj k8sruntime.Object) error {
+		for _, obj := range objects {
 			var jsonObj interface{}
 			data, err := json.Marshal(obj)
 			if err != nil {
@@ -427,9 +471,15 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 			if _, err = fmt.Fprintln(w, "---"); err != nil {
 				return err
 			}
-			return nil
-		})
-		return err
+		}
+		return nil
+	}
+	outputList := func(list k8sruntime.Object, comment string) error {
+		objects, err := meta.ExtractList(list)
+		if err != nil {
+			return err
+		}
+		return outputObjects(objects, comment)
 	}
 
 	g.Go(func() error {
@@ -437,7 +487,7 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		if err != nil {
 			return err
 		}
-		if err := output(pods, "pods"); err != nil {
+		if err := outputList(pods, "pods"); err != nil {
 			return err
 		}
 		return nil
@@ -447,7 +497,7 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		if err != nil {
 			return err
 		}
-		if err := output(nodes, "nodes"); err != nil {
+		if err := outputList(nodes, "nodes"); err != nil {
 			return err
 		}
 		return nil
@@ -457,7 +507,7 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		if err != nil {
 			return err
 		}
-		if err := output(deployments, "deployments"); err != nil {
+		if err := outputList(deployments, "deployments"); err != nil {
 			return err
 		}
 		return nil
@@ -467,7 +517,7 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		if err != nil {
 			return err
 		}
-		if err := output(replicas, "replicas"); err != nil {
+		if err := outputList(replicas, "replicas"); err != nil {
 			return err
 		}
 		return nil
@@ -477,17 +527,30 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		if err != nil {
 			return err
 		}
-		if err := output(daemonsets, "daemonsets"); err != nil {
+		if err := outputList(daemonsets, "daemonsets"); err != nil {
 			return err
 		}
 		return nil
 	})
 	g.Go(func() error {
-		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=antrea", ResourceVersion: "0"})
-		if err != nil {
-			return err
+		// These are the ConfigMaps created by Antrea in the the kube-system Namespace.
+		configMapNames := []string{
+			"antrea-config",
+			"antrea-ca",
+			"antrea-ipsec-ca",
+			"antrea-cluster-identity",
 		}
-		if err := output(configs, "configs"); err != nil {
+		var configMaps []k8sruntime.Object
+		for _, name := range configMapNames {
+			cm, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(context.TODO(), name, metav1.GetOptions{ResourceVersion: "0"})
+			if apierrors.IsNotFound(err) {
+				continue
+			} else if err != nil {
+				return err
+			}
+			configMaps = append(configMaps, cm)
+		}
+		if err := outputObjects(configMaps, "configs"); err != nil {
 			return err
 		}
 		return nil
@@ -521,8 +584,8 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	var controllerClient rest.Interface
-	var agentClients map[string]rest.Interface
+	var controllerClient systemclientset.SupportBundleInterface
+	var agentClients map[string]systemclientset.SupportBundleInterface
 
 	// Collect controller bundle when no Node name or label filter is specified, or
 	// when --controller-only is set.
@@ -585,8 +648,8 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	results := requestAll(agentClients, controllerClient, bar)
-	results = downloadAll(agentClients, controllerClient, dir, bar, results)
+	results := requestAll(ctx, agentClients, controllerClient, bar)
+	results = downloadAll(ctx, agentClients, controllerClient, dir, bar, results)
 	return processResults(results, dir)
 }
 

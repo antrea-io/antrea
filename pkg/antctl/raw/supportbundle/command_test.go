@@ -17,15 +17,13 @@ package supportbundle
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,14 +33,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
-	fakerest "k8s.io/client-go/rest/fake"
-	cgtesting "k8s.io/client-go/testing"
+	k8stesting "k8s.io/client-go/testing"
 
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
 )
 
 var (
@@ -124,33 +122,45 @@ var (
 	nameList = []string{"node-1", "node-3"}
 )
 
+func createFakeSupportBundleClient() systemclientset.SupportBundleInterface {
+	fakeClient := fakeclientset.NewSimpleClientset()
+	fakeClient.PrependReactor("create", "supportbundles", k8stesting.ReactionFunc(
+		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			supportBundle := action.(k8stesting.CreateAction).GetObject().(*systemv1beta1.SupportBundle)
+			// Make the supportBundle "ready" as soon as it is created:
+			supportBundle.Status = systemv1beta1.SupportBundleStatusCollected
+			return false, supportBundle, nil
+		}),
+	)
+	return fakeClient.SystemV1beta1().SupportBundles()
+}
+
 func TestLocalSupportBundleRequest(t *testing.T) {
-	getRestClient = func(cmd *cobra.Command) (rest.Interface, error) {
-		supportBundle := &systemv1beta1.SupportBundle{
-			ObjectMeta: metav1.ObjectMeta{Name: "agent"},
-			Status:     systemv1beta1.SupportBundleStatusCollected,
-		}
-		restClient := createFakeRESTClient(supportBundle)
-		return restClient, nil
+	getSupportBundleClient = func(cmd *cobra.Command) (systemclientset.SupportBundleInterface, error) {
+		return createFakeSupportBundleClient(), nil
 	}
 	defer func() {
-		getRestClient = setupRestClient
+		getSupportBundleClient = setupSupportBundleClient
 	}()
 	cmd := &cobra.Command{}
-	cmd.SetContext(context.Background())
+	// Make sure that the test does not hang even in case of failure:
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd.SetContext(ctx)
 	writer := new(bytes.Buffer)
 	expected := "Created bundle under"
 	err := localSupportBundleRequest(cmd, "agent", writer)
 	require.NoError(t, err)
 	assert.Contains(t, writer.String(), expected)
 }
+
 func TestCreateControllerClient(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		name            string
 		expectedErr     string
 		k8sClientset    kubernetes.Interface
-		antreaClientset antrea.Interface
+		antreaClientset antreaclientset.Interface
 	}{
 		{
 			name:            "created controller client successfully",
@@ -214,7 +224,7 @@ func TestCreateAgentClients(t *testing.T) {
 			name:            "no-op due to error in listing antreaagentinfos",
 			antreaClientset: fakeclientset.NewSimpleClientset(),
 			prepareReactor: func(antreaClientset *fakeclientset.Clientset, k8sClientset *fake.Clientset) {
-				antreaClientset.PrependReactor("list", "antreaagentinfos", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
+				antreaClientset.PrependReactor("list", "antreaagentinfos", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1beta1.AntreaAgentInfoList{}, errors.New("error listing antreaagentinfos")
 				})
 			},
@@ -225,7 +235,7 @@ func TestCreateAgentClients(t *testing.T) {
 			antreaClientset: fakeclientset.NewSimpleClientset(),
 			k8sClientset:    fake.NewSimpleClientset(),
 			prepareReactor: func(antreaClientset *fakeclientset.Clientset, k8sClientset *fake.Clientset) {
-				k8sClientset.PrependReactor("list", "nodes", func(action cgtesting.Action) (handled bool, ret runtime.Object, err error) {
+				k8sClientset.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.NodeList{}, errors.New("error listing nodes")
 				})
 			},
@@ -254,65 +264,61 @@ func TestCreateAgentClients(t *testing.T) {
 }
 
 func TestRequest(t *testing.T) {
-	agentClients := map[string]rest.Interface{}
+	agentClients := map[string]systemclientset.SupportBundleInterface{}
 	for _, name := range nameList {
-		restClient := createFakeRESTClient(&systemv1beta1.SupportBundle{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Status:     systemv1beta1.SupportBundleStatusCollected,
-		})
-		agentClients[name] = restClient
+		agentClients[name] = createFakeSupportBundleClient()
 	}
-	controllerClient := createFakeRESTClient(&systemv1beta1.SupportBundle{
-		ObjectMeta: metav1.ObjectMeta{Name: "controller"},
-		Status:     systemv1beta1.SupportBundleStatusCollected,
-	})
+	controllerClient := createFakeSupportBundleClient()
 	amount := len(agentClients)*2 + 2
 	bar := barTmpl.Start(amount)
 	defer bar.Finish()
 	defer bar.Set("prefix", "Finish ")
-	results := requestAll(agentClients, controllerClient, bar)
+	// Make sure that the test does not hang even in case of failure:
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	results := requestAll(ctx, agentClients, controllerClient, bar)
 	//results[""] corresponds to error received for controller node
 	assert.Equal(t, map[string]error{"": nil, "node-1": nil, "node-3": nil}, results)
 }
 
 func TestDownload(t *testing.T) {
 	path := option.dir
-	option.dir, _ = os.Getwd()
+	option.dir = "/out"
+	defaultFS = afero.NewMemMapFs()
+	defaultFS.MkdirAll(option.dir, 0755)
 	defer func() {
+		defaultFS = afero.NewOsFs()
 		option.dir = path
 	}()
-	dir, err := filepath.Abs(option.dir)
-	require.NoError(t, err)
-	agentClients := map[string]rest.Interface{}
+	agentClients := map[string]systemclientset.SupportBundleInterface{}
 	for _, name := range nameList {
-		restClient := createFakeRESTClient(&systemv1beta1.SupportBundle{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Status:     systemv1beta1.SupportBundleStatusCollected,
-		})
-		agentClients[name] = restClient
+		agentClients[name] = createFakeSupportBundleClient()
 	}
-	controllerClient := createFakeRESTClient(&systemv1beta1.SupportBundle{
-		ObjectMeta: metav1.ObjectMeta{Name: "controller"},
-		Status:     systemv1beta1.SupportBundleStatusCollected,
-	})
+	controllerClient := createFakeSupportBundleClient()
 	amount := len(agentClients)*2 + 2
 	bar := barTmpl.Start(amount)
 	defer bar.Finish()
 	defer bar.Set("prefix", "Finish ")
-	resultMap := requestAll(agentClients, controllerClient, bar)
-	results := downloadAll(agentClients, controllerClient, dir, bar, resultMap)
+	// Make sure that the test does not hang even in case of failure:
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resultMap := requestAll(ctx, agentClients, controllerClient, bar)
+	results := downloadAll(ctx, agentClients, controllerClient, option.dir, bar, resultMap)
 	//results[""] corresponds to error received for controller node
-	assert.Equal(t, map[string]error{"": nil, "node-1": nil, "node-3": nil}, results)
+	require.Equal(t, map[string]error{"": nil, "node-1": nil, "node-3": nil}, results)
+	for _, fileName := range []string{"controller.tar.gz", "agent_node-1.tar.gz", "agent_node-3.tar.gz"} {
+		ok, err := afero.Exists(defaultFS, filepath.Join(option.dir, fileName))
+		require.NoError(t, err)
+		assert.True(t, ok, "expected support bundle file not found")
+	}
 }
 
 func TestProcessResults(t *testing.T) {
 	path := option.dir
-	option.dir, _ = os.Getwd()
+	option.dir = "/out"
 	defer func() {
 		option.dir = path
 	}()
-	dir, err := filepath.Abs(option.dir)
-	require.NoError(t, err)
 	tests := []struct {
 		name        string
 		resultMap   map[string]error
@@ -328,7 +334,7 @@ func TestProcessResults(t *testing.T) {
 			expectedErr: "no data was collected:",
 		},
 		{
-			name: "All nodes did not fail",
+			name: "Not all nodes failed",
 			resultMap: map[string]error{
 				"":       fmt.Errorf("error-0"),
 				"node-1": fmt.Errorf("error-1"),
@@ -339,28 +345,32 @@ func TestProcessResults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := processResults(tt.resultMap, dir)
+			defaultFS = afero.NewMemMapFs()
+			defaultFS.MkdirAll(option.dir, 0755)
+			defer func() {
+				defaultFS = afero.NewOsFs()
+			}()
+
+			err := processResults(tt.resultMap, option.dir)
 			if tt.expectedErr != "" {
-				assert.ErrorContains(t, err, tt.expectedErr)
+				require.ErrorContains(t, err, tt.expectedErr)
 			} else {
 				require.NoError(t, err)
 			}
+			// Both test cases above have failed Nodes, hence this file should always be created/
+			b, err := afero.ReadFile(defaultFS, filepath.Join(option.dir, "failed_nodes"))
+			require.NoError(t, err)
+			data := string(b)
+			for node, err := range tt.resultMap {
+				if node == "" {
+					continue
+				}
+				if err != nil {
+					assert.Contains(t, data, node)
+				} else {
+					assert.NotContains(t, data, node)
+				}
+			}
 		})
 	}
-}
-
-func createFakeRESTClient(supportBundle *systemv1beta1.SupportBundle) *fakerest.RESTClient {
-	resp, _ := json.Marshal(supportBundle)
-	restClient := &fakerest.RESTClient{
-		NegotiatedSerializer: scheme.Codecs,
-		GroupVersion:         systemv1beta1.SchemeGroupVersion,
-		Client: fakerest.CreateHTTPClient(func(request *http.Request) (*http.Response, error) {
-			resp := &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewBuffer(resp)),
-			}
-			return resp, nil
-		}),
-	}
-	return restClient
 }
