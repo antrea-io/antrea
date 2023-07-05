@@ -2892,10 +2892,10 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 			// keep trying
 			return false, nil
 		}
-		// validate that the podRef in AntreaAgentInfo matches the name of the current Pod for the Node
+		// Validate that the podRef in AntreaAgentInfo matches the name of the current Pod for the Node
 		pod, err := data.clientset.CoreV1().Pods(aai.PodRef.Namespace).Get(context.TODO(), aai.PodRef.Name, metav1.GetOptions{})
 		if err != nil {
-			// if err is NotFound, we should keep trying
+			// If err is NotFound, we should keep trying
 			if errors.IsNotFound(err) {
 				return false, nil
 			}
