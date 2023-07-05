@@ -294,7 +294,7 @@ func runAntctProxy(
 	} else {
 		proxyCmd = append(proxyCmd, "--agent-node", agentNodeName)
 		// Retry until AntreaAgentInfo is updated by Antrea Agent.
-		err := data.checkAntreaAgentInfo(1*time.Minute, 2*time.Minute, agentNodeName)
+		err := data.checkAntreaAgentInfo(5*time.Second, 2*time.Minute, agentNodeName)
 		if err != nil {
 			return nil, err
 		}
