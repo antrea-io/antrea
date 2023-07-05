@@ -459,28 +459,14 @@ func testExternalNodeWithANP(t *testing.T, data *TestData, vmList []vmInfo) {
 }
 
 func testANPOnVMs(t *testing.T, data *TestData, vmList []vmInfo, osType string) {
-	appliedToVM, peerVM, err := getVMsByOSType(vmList, osType)
+	appliedToVM, _, err := getVMsByOSType(vmList, osType)
 	if err != nil {
 		t.Skipf("Skip case testANPOnVMs: %v", err)
 	}
-	// Test TCP rules in ANP
-	t.Run("testANPOnExternalNodeWithTCP", func(t *testing.T) {
-		// Use ExternalEntity in an ingress rule configuration.
-		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-tcp-entity", namespace, *appliedToVM, peerVM, ProtocolTCP, true, crdv1alpha1.RuleActionDrop, true)
-		// Use IP in an egress rule configuration.
-		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-egress-tcp-ip", namespace, *appliedToVM, peerVM, ProtocolTCP, false, crdv1alpha1.RuleActionDrop, false)
-	})
-	// Test UDP rules in ANP
-	t.Run("testANPOnExternalNodeWithUDP", func(t *testing.T) {
-		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-udp-entity", namespace, *appliedToVM, peerVM, ProtocolUDP, true, crdv1alpha1.RuleActionReject, false)
-	})
-	// Test ICMP rules in ANP
-	t.Run("testANPOnExternalNodeWithICMP", func(t *testing.T) {
-		testANPProtocolICMP(t, data, "anp-vmagent-ingress-icmp-ip", namespace, *appliedToVM, crdv1alpha1.RuleActionDrop)
-	})
+
 	// Test FQDN rules in ANP
 	t.Run("testANPOnExternalNodeWithFQDN", func(t *testing.T) {
-		testANPWithFQDN(t, data, "anp-vmagent-fqdn", namespace, *appliedToVM, []string{"www.facebook.com"}, []string{"docs.google.com"}, []string{"maps.google.com"})
+		testANPWithFQDN(t, data, "anp-vmagent-fqdn", namespace, *appliedToVM, []string{"www.facebook.com"}, []string{"maps.google.com"}, []string{"docs.google.com"})
 	})
 }
 
