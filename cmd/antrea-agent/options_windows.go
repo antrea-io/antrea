@@ -29,6 +29,10 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
+const (
+	defaultNPLPortRange = "40000-41000"
+)
+
 func (o *Options) checkUnsupportedFeatures() error {
 	var unsupported []string
 
