@@ -3002,6 +3002,7 @@ func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchInPort(f.uplinkPort).
+			MatchDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
 			Action().Output(f.hostIfacePort).
 			Done(),
 		// This generates the flow to forward the packets from bridge local port to uplink port.
