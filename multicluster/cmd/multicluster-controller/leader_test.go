@@ -35,7 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
 
@@ -43,7 +44,8 @@ func initMockManager(mockManager *mocks.MockManager) {
 	newScheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcsv1alpha1.AddToScheme(newScheme))
+	utilruntime.Must(mcv1alpha1.AddToScheme(newScheme))
+	utilruntime.Must(mcv1alpha2.AddToScheme(newScheme))
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.Server{}).AnyTimes()

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 type MulticlusterV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	ClusterClaimsGetter
+	ClusterSetsGetter
 }
 
 // MulticlusterV1alpha2Client is used to interact with features provided by the multicluster.crd.antrea.io group.
@@ -36,6 +37,10 @@ type MulticlusterV1alpha2Client struct {
 
 func (c *MulticlusterV1alpha2Client) ClusterClaims(namespace string) ClusterClaimInterface {
 	return newClusterClaims(c, namespace)
+}
+
+func (c *MulticlusterV1alpha2Client) ClusterSets(namespace string) ClusterSetInterface {
+	return newClusterSets(c, namespace)
 }
 
 // NewForConfig creates a new MulticlusterV1alpha2Client for the given config.

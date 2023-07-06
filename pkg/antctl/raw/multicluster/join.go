@@ -32,7 +32,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
 )
 
@@ -251,12 +251,8 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 		joinOpts.TokenSecretName = joinOpts.Secret.Name
 	}
 
-	err = common.CreateClusterClaim(cmd, joinOpts.k8sClient, memberClusterNamespace, memberClusterSet, memberClusterID, &createdRes)
-	if err != nil {
-		return err
-	}
 	err = common.CreateClusterSet(cmd, joinOpts.k8sClient, memberClusterNamespace, memberClusterSet, joinOpts.LeaderAPIServer, joinOpts.TokenSecretName,
-		joinOpts.ClusterID, joinOpts.LeaderClusterID, joinOpts.LeaderNamespace, &createdRes)
+		memberClusterID, joinOpts.LeaderClusterID, joinOpts.LeaderNamespace, &createdRes)
 	if err != nil {
 		return err
 	}
@@ -282,9 +278,9 @@ func waitForMemberClusterReady(cmd *cobra.Command, k8sClient client.Client) erro
 func waitForClusterSetReady(client client.Client, name string, namespace string, clusterID string) error {
 	return wait.PollImmediate(
 		1*time.Second,
-		3*time.Minute,
+		1*time.Minute,
 		func() (bool, error) {
-			clusterSet := &multiclusterv1alpha1.ClusterSet{}
+			clusterSet := &mcv1alpha2.ClusterSet{}
 			if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, clusterSet); err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil
@@ -295,7 +291,7 @@ func waitForClusterSetReady(client client.Client, name string, namespace string,
 			for _, status := range clusterSet.Status.ClusterStatuses {
 				if status.ClusterID == clusterID {
 					for _, cond := range status.Conditions {
-						if cond.Type == multiclusterv1alpha1.ClusterReady {
+						if cond.Type == mcv1alpha2.ClusterReady {
 							return cond.Status == "True", nil
 						}
 					}

@@ -46,27 +46,9 @@ rules:
   resources:
   - clusterclaims
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clusterclaims/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clusterclaims/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
@@ -332,6 +314,17 @@ metadata:
   namespace: antrea-multicluster
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    kubernetes.io/service-account.name: antrea-mc-member-access-sa
+  labels:
+    app: antrea
+  name: antrea-mc-member-access-token
+  namespace: antrea-multicluster
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
 kind: Service
 metadata:
   labels:
@@ -467,32 +460,7 @@ webhooks:
     service:
       name: antrea-mc-webhook-service
       namespace: antrea-multicluster
-      path: /validate-multicluster-crd-antrea-io-v1alpha2-clusterclaim
-  failurePolicy: Fail
-  name: vclusterclaim.kb.io
-  namespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: antrea-multicluster
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha2
-    operations:
-    - CREATE
-    - UPDATE
-    - DELETE
-    resources:
-    - clusterclaims
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: antrea-multicluster
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterset
+      path: /validate-multicluster-crd-antrea-io-v1alpha2-clusterset
   failurePolicy: Fail
   name: vclusterset.kb.io
   namespaceSelector:
@@ -502,7 +470,7 @@ webhooks:
   - apiGroups:
     - multicluster.crd.antrea.io
     apiVersions:
-    - v1alpha1
+    - v1alpha2
     operations:
     - CREATE
     - UPDATE

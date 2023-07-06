@@ -22,63 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
-
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims/finalizers,verbs=update
-
-func ValidateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterID ClusterID, clusterSetID ClusterSetID, err error) {
-	configNamespace := clusterSet.GetNamespace()
-
-	clusterClaimList := &multiclusterv1alpha2.ClusterClaimList{}
-	klog.InfoS("Validating ClusterClaim", "namespace", configNamespace)
-	if err = c.List(context.TODO(), clusterClaimList, client.InNamespace(configNamespace)); err != nil {
-		return
-	}
-	if len(clusterClaimList.Items) == 0 {
-		err = fmt.Errorf("ClusterClaim is not configured for the cluster")
-		return
-	}
-
-	wellKnownClusterSetClaimIDExist := false
-	wellKnownClusterClaimIDExist := false
-	for _, clusterClaim := range clusterClaimList.Items {
-		klog.InfoS("Processing ClusterClaim", "name", clusterClaim.Name, "value", clusterClaim.Value)
-		if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet {
-			wellKnownClusterSetClaimIDExist = true
-			clusterSetID = ClusterSetID(clusterClaim.Value)
-		} else if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimID {
-			wellKnownClusterClaimIDExist = true
-			clusterID = ClusterID(clusterClaim.Value)
-		}
-	}
-
-	if !wellKnownClusterSetClaimIDExist {
-		err = fmt.Errorf("ClusterClaim not configured for Name=%s",
-			multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
-		return
-	}
-
-	if !wellKnownClusterClaimIDExist {
-		err = fmt.Errorf("ClusterClaim not configured for Name=%s",
-			multiclusterv1alpha2.WellKnownClusterClaimID)
-		return
-	}
-
-	if clusterSet.Name != string(clusterSetID) {
-		err = fmt.Errorf("ClusterSet Name=%s is not same as ClusterClaim Value=%s for Name=%s",
-			clusterSet.Name, clusterSetID, multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
-		return
-	}
-
-	return
-}
 
 // DiscoverServiceCIDRByInvalidServiceCreation creates an invalid Service to get returned error, and analyzes
 // the error message to get Service CIDR.

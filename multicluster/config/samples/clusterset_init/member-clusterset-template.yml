@@ -1,23 +1,10 @@
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: id.k8s.io
-  namespace: kube-system
-value: test-cluster-member
----
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: clusterset.k8s.io
-  namespace: kube-system
-value: test-clusterset
----
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
   name: test-clusterset
   namespace: kube-system
 spec:
+  clusterID: test-cluster-member
   leaders:
     - clusterID: test-cluster-leader
       secret: default-member-token

@@ -27,14 +27,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
 
 func TestMemberClusterDelete(t *testing.T) {
-	existingMemberClusterAnnounce := &mcsv1alpha1.MemberClusterAnnounce{
+	existingMemberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "default",
 			Name:       "member-announce-from-cluster-a",
@@ -56,7 +57,7 @@ func TestMemberClusterDelete(t *testing.T) {
 		}}); err != nil {
 		t.Errorf("Member ClusterSet Reconciler should handle delete event successfully but got error = %v", err)
 	} else {
-		memberClusterAnnounce := &mcsv1alpha1.MemberClusterAnnounce{}
+		memberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
 		err := fakeClient.Get(common.TestCtx, types.NamespacedName{
 			Namespace: "default",
 			Name:      "member-announce-from-cluster-a",
@@ -68,88 +69,78 @@ func TestMemberClusterDelete(t *testing.T) {
 }
 
 func TestMemberClusterStatus(t *testing.T) {
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "mcs1",
 			Name:       "clusterset1",
 			Generation: 1,
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 				}},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID:      "east",
-					ServiceAccount: "east-access-sa",
-				},
-				{
-					ClusterID:      "west",
-					ServiceAccount: "west-access-sa",
-				},
-			},
 			Namespace: "mcs1",
 		},
-		Status: mcsv1alpha1.ClusterSetStatus{
+		Status: mcv1alpha2.ClusterSetStatus{
 			ObservedGeneration: 1,
 		},
 	}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).Build()
-	conditions := []mcsv1alpha1.ClusterCondition{
+	conditions := []mcv1alpha2.ClusterCondition{
 		{
 			Message: "Member Connected",
 			Reason:  "Connected",
 			Status:  v1.ConditionTrue,
-			Type:    mcsv1alpha1.ClusterReady,
+			Type:    mcv1alpha2.ClusterReady,
 		},
 		{
 			Status: v1.ConditionTrue,
-			Type:   mcsv1alpha1.ClusterIsLeader,
+			Type:   mcv1alpha2.ClusterIsLeader,
 		},
 	}
-	expectedStatusNoCondition := mcsv1alpha1.ClusterSetStatus{
+	expectedStatusNoCondition := mcv1alpha2.ClusterSetStatus{
 		ObservedGeneration: 1,
-		TotalClusters:      2,
+		TotalClusters:      1,
 		ReadyClusters:      0,
-		Conditions: []mcsv1alpha1.ClusterSetCondition{
+		Conditions: []mcv1alpha2.ClusterSetCondition{
 			{
 				Message: "Disconnected from leader",
 				Status:  v1.ConditionFalse,
-				Type:    mcsv1alpha1.ClusterSetReady,
+				Type:    mcv1alpha2.ClusterSetReady,
 			},
 		},
-		ClusterStatuses: []mcsv1alpha1.ClusterStatus{
+		ClusterStatuses: []mcv1alpha2.ClusterStatus{
 			{
 				ClusterID:  "leader1",
-				Conditions: []mcsv1alpha1.ClusterCondition{},
+				Conditions: []mcv1alpha2.ClusterCondition{},
 			},
 		},
 	}
-	expectedStatusWithCondition := mcsv1alpha1.ClusterSetStatus{
+	expectedStatusWithCondition := mcv1alpha2.ClusterSetStatus{
 		ObservedGeneration: 1,
-		TotalClusters:      2,
+		TotalClusters:      1,
 		ReadyClusters:      1,
-		Conditions: []mcsv1alpha1.ClusterSetCondition{
+		Conditions: []mcv1alpha2.ClusterSetCondition{
 			{
 				Status: v1.ConditionTrue,
-				Type:   mcsv1alpha1.ClusterSetReady,
+				Type:   mcv1alpha2.ClusterSetReady,
 			},
 		},
-		ClusterStatuses: []mcsv1alpha1.ClusterStatus{
+		ClusterStatuses: []mcv1alpha2.ClusterStatus{
 			{
 				ClusterID: "leader1",
-				Conditions: []mcsv1alpha1.ClusterCondition{
+				Conditions: []mcv1alpha2.ClusterCondition{
 					{
 						Status:  v1.ConditionTrue,
-						Type:    mcsv1alpha1.ClusterReady,
+						Type:    mcv1alpha2.ClusterReady,
 						Message: "Member Connected",
 						Reason:  "Connected",
 					},
 					{
 						Status: v1.ConditionTrue,
-						Type:   mcsv1alpha1.ClusterIsLeader,
+						Type:   mcv1alpha2.ClusterIsLeader,
 					},
 				},
 			},
@@ -158,8 +149,8 @@ func TestMemberClusterStatus(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		conditions     []mcsv1alpha1.ClusterCondition
-		expectedStatus mcsv1alpha1.ClusterSetStatus
+		conditions     []mcv1alpha2.ClusterCondition
+		expectedStatus mcv1alpha2.ClusterSetStatus
 	}{
 		{
 			name:           "with no conditions",
@@ -184,7 +175,7 @@ func TestMemberClusterStatus(t *testing.T) {
 			}
 
 			reconciler.updateStatus()
-			clusterSet := &mcsv1alpha1.ClusterSet{}
+			clusterSet := &mcv1alpha2.ClusterSet{}
 
 			err := fakeClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 			assert.Equal(t, nil, err)
@@ -217,31 +208,21 @@ func TestMemberCreateOrUpdateRemoteCommonArea(t *testing.T) {
 			"ca.crt": []byte(`12345`),
 			"token":  []byte(`12345`)},
 	}
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "mcs1",
 			Name:       "clusterset1",
 			Generation: 1,
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 					Secret:    "membertoken",
 				}},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID:      "east",
-					ServiceAccount: "east-access-sa",
-				},
-				{
-					ClusterID:      "west",
-					ServiceAccount: "west-access-sa",
-				},
-			},
 			Namespace: "mcs1",
 		},
-		Status: mcsv1alpha1.ClusterSetStatus{
+		Status: mcv1alpha2.ClusterSetStatus{
 			ObservedGeneration: 1,
 		},
 	}

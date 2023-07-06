@@ -1,9 +1,10 @@
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterSet
 metadata:
     name: test-clusterset
     namespace: antrea-mcs-ns
 spec:
+    clusterID: test-cluster-leader
     leaders:
       - clusterID: test-cluster-leader
         secret: "leader-access-token"

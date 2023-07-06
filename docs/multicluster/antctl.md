@@ -83,8 +83,8 @@ To see the usage examples of these commands, you may also run `antctl mc deploy 
 ## antctl mc init
 
 `antctl mc init` command initializes an Antrea Multi-cluster ClusterSet in a leader cluster. It will create a
-ClusterSet and two ClusterClaims for the leader cluster. If the `-j|--join-config-file` option is specified, the
-ClusterSet join parameters will be saved to the specified file, which can be used in the `antctl mc join` command
+ClusterSet for the leader cluster. If the `-j|--join-config-file` option is specified, the ClusterSet join
+parameters will be saved to the specified file, which can be used in the `antctl mc join` command
 for a member cluster to join the ClusterSet.
 
 ```bash
@@ -96,8 +96,8 @@ To see the usage examples of this command, you may also run `antctl mc init --he
 ## antctl mc join
 
 `antctl mc join` command lets a member cluster join an existing Antrea Multi-cluster ClusterSet. It will create a
-ClusterSet and ClusterClaims for the member cluster. Users can use command line options or a config file (which can
-be the output file of the `anctl mc init` command) to specify the ClusterSet join arguments.
+ClusterSet for the member cluster. Users can use command line options or a config file (which can be the output
+file of the `anctl mc init` command) to specify the ClusterSet join arguments.
 
 When the config file is provided, the command line options may be overridden by the file. A token is needed for a
 member cluster to access the leader cluster API server. Users can either specify a pre-created token Secret with the
@@ -133,7 +133,7 @@ tokenSecretName: cluster-east-token
 
 ## antctl mc leave
 
-`antctl mc leave` command lets a member cluster leave a ClusterSet. It will delete the ClusterSet and ClusterClaims
+`antctl mc leave` command lets a member cluster leave a ClusterSet. It will delete the ClusterSet
 and other resources created by antctl for the member cluster.
 
 ```bash
@@ -143,7 +143,7 @@ antctl mc leave --clusterset CLUSTERSET_ID --namespace [NAMESPACE]
 ## antctl mc destroy
 
 `antctl mc destroy` command can destroy an Antrea Multi-cluster ClusterSet in a leader cluster. It will delete the
-ClusterSet and ClusterClaims and other resources created by antctl for the leader cluster.
+ClusterSet and other resources created by antctl for the leader cluster.
 
 ```bash
 antctl mc destroy --clusterset=CLUSTERSET_ID --namespace NAMESPACE
