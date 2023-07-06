@@ -1,0 +1,47 @@
+# Copyright 2023 Antrea Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG NANOSERVER_VERSION
+
+FROM mcr.microsoft.com/windows/servercore:${NANOSERVER_VERSION} as windows-ovs
+
+ARG WIN_OVS_VERSION
+
+# Switch to a privileged user
+USER ContainerAdministrator
+
+# Sets the shell to be PowerShell 
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+ENV WIN_OVS_VERSION ${WIN_OVS_VERSION}
+
+# Install VC for ovs
+RUN curl.exe -Lo C:\vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe; \
+    Start-Process -FilePath C:\vc_redist.x64.exe -ArgumentList ‘/install’,’/quiet’,’/norestart’ -Verb RunAs -Wait; \
+    rm C:\vc_redist.x64.exe
+
+# Download and extract OVS
+RUN curl.exe -fLo C:\ovs-${env:WIN_OVS_VERSION}-antrea.0-win64.zip https://downloads.antrea.io/ovs/ovs-${env:WIN_OVS_VERSION}-antrea.0-win64.zip; \
+    Expand-Archive C:\ovs-${env:WIN_OVS_VERSION}-antrea.0-win64.zip -DestinationPath C:\  ; \
+    rm C:\ovs-${env:WIN_OVS_VERSION}-antrea.0-win64.zip
+
+# Download, extract OpenSSL and copy libraries
+RUN curl.exe -Lo C:\openssl-1.0.2u-x64_86-win64.zip https://indy.fulgan.com/SSL/openssl-1.0.2u-x64_86-win64.zip; \
+    Expand-Archive C:\openssl-1.0.2u-x64_86-win64.zip -DestinationPath C:\openssl  ;  \
+    Move-Item -Path 'C:\openssl\libeay32.dll', 'C:\openssl\ssleay32.dll' -Destination 'C:\Windows\System32\' ; \
+    Remove-Item -Path 'C:\openssl-1.0.2u-x64_86-win64.zip' ;\
+    Remove-Item -Path 'C:\openssl' -Recurse -Force
+
+SHELL ["cmd", "/S", "/C"]
+RUN setx /m PATH "C:/openvswitch/usr/bin;C:/openvswitch/usr/sbin;%PATH%"
