@@ -200,6 +200,8 @@ func createDirectory(path string) error {
 }
 
 func (data *TestData) setupLogDirectoryForTest(testName string) error {
+	// sanitize the testName: it can contain '/' if the test is a subtest
+	testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
 	path := filepath.Join(testOptions.logsExportDir, testName)
 	// remove directory if it already exists. This ensures that we start with an empty
 	// directory
@@ -224,7 +226,16 @@ func setupTest(tb testing.TB) (*TestData, error) {
 			exportLogs(tb, testData, "afterSetupTest", true)
 		}
 	}()
-	testData.testNamespace = randName(strings.ToLower(tb.Name()) + "-")
+	// sanitize the name: the final name must be a valid lowercase RFC 1123 label
+	name := tb.Name()
+	// 50 is a conservative length here (we will append a random suffix)
+	if len(name) > 50 {
+		name = name[:50]
+	}
+	replacer := strings.NewReplacer("/", "-", ",", "-", ":", "-")
+	name = replacer.Replace(name)
+	name = strings.ToLower(name)
+	testData.testNamespace = randName(name + "-")
 	tb.Logf("Creating '%s' K8s Namespace", testData.testNamespace)
 	if err := ensureAntreaRunning(testData); err != nil {
 		return nil, err

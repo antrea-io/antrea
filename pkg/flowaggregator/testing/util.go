@@ -176,11 +176,11 @@ func PrepareMockIpfixRecord(mockRecord *ipfixentitiestesting.MockRecord, isIPv4 
 	mockRecord.EXPECT().GetInfoElementWithValue("flowType").Return(flowTypeElem, 0, true)
 
 	sourcePodLabelsElem := createElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID)
-	sourcePodLabelsElem.SetStringValue("{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"}")
+	sourcePodLabelsElem.SetStringValue("{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}")
 	mockRecord.EXPECT().GetInfoElementWithValue("sourcePodLabels").Return(sourcePodLabelsElem, 0, true)
 
 	destinationPodLabelsElem := createElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID)
-	destinationPodLabelsElem.SetStringValue("{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"}")
+	destinationPodLabelsElem.SetStringValue("{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}")
 	mockRecord.EXPECT().GetInfoElementWithValue("destinationPodLabels").Return(destinationPodLabelsElem, 0, true)
 
 	throughputElem := createElement("throughput", ipfixregistry.AntreaEnterpriseID)

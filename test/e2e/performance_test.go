@@ -38,13 +38,13 @@ const (
 	perfTestAppLabel                = "antrea-perf-test"
 	podsConnectionNetworkPolicyName = "pods.ingress"
 	workloadNetworkPolicyName       = "workloads.ingress"
-	perftoolContainerName           = "perftool"
+	toolboxContainerName            = "toolbox"
 	nginxContainerName              = "nginx"
 )
 
 var (
-	benchNginxPodName = randName(perftoolContainerName + "-")
-	perftoolPodName   = randName(nginxContainerName + "-")
+	benchNginxPodName = randName(nginxContainerName + "-")
+	toolboxPodName    = randName(toolboxContainerName + "-")
 
 	customizeRequests    = flag.Int("perf.http.requests", 0, "Number of http requests")
 	customizePolicyRules = flag.Int("perf.http.policy_rules", 0, "Number of CIDRs in the network policy")
@@ -187,22 +187,22 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs)
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
 
-	b.Logf("Creating a perftool test Pod")
-	perfPod := createPerfTestPodDefinition(perftoolPodName, perftoolContainerName, perftoolImage)
+	b.Logf("Creating a toolbox test Pod")
+	perfPod := createPerfTestPodDefinition(toolboxPodName, toolboxContainerName, toolboxImage)
 	_, err = data.clientset.CoreV1().Pods(data.testNamespace).Create(context.TODO(), perfPod, metav1.CreateOptions{})
 	if err != nil {
-		b.Fatalf("Error when creating perftool test Pod: %v", err)
+		b.Fatalf("Error when creating toolbox test Pod: %v", err)
 	}
-	b.Logf("Waiting for IP assignment of the perftool test Pod")
-	perfPodIP, err = data.podWaitForIPs(defaultTimeout, perftoolPodName, data.testNamespace)
+	b.Logf("Waiting for IP assignment of the toolbox test Pod")
+	perfPodIP, err = data.podWaitForIPs(defaultTimeout, toolboxPodName, data.testNamespace)
 	if err != nil {
-		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
+		b.Fatalf("Error when waiting for IP assignment of toolbox test Pod: %v", err)
 	}
 	return nginxPodIP, perfPodIP
 }
 
-// httpRequest runs a benchmark to measure intra-Node Pod-to-Pod HTTP request performance. It creates one perftool
-// Pod and one Nginx Pod, both on the control-plane Node. The perftool will use apache-bench tool to issue perf.http.requests
+// httpRequest runs a benchmark to measure intra-Node Pod-to-Pod HTTP request performance. It creates one toolbox
+// Pod and one Nginx Pod, both on the control-plane Node. The toolbox will use apache-bench tool to issue perf.http.requests
 // number of requests to the Nginx Pod. The number of concurrent requests will be determined by the value provided with
 // the http.perf.concurrency command-line flag (default is 1, for sequential requests). policyRules indicates how many CIDR
 // rules should be included in the network policy applied to the Pods.
@@ -235,7 +235,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
 		cmd := []string{"ab", "-n", fmt.Sprint(requests), "-c", fmt.Sprint(*httpConcurrency), serverURL.String()}
-		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, perftoolPodName, perftoolContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, toolboxPodName, toolboxContainerName, cmd)
 		if err != nil {
 			b.Errorf("Error when running http request %dx: %v, stdout: %s, stderr: %s\n", requests, err, stdout, stderr)
 		}
