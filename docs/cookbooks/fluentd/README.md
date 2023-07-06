@@ -101,7 +101,7 @@ kubectl apply -f docs/cookbooks/fluentd/resources/fluentd.yml
 Navigate to `http://[NodeIP]: 30007` and create an index pattern with "fluentd-*".
 Go to `http://[NodeIP]: 30007/app/kibana#/discover` to see the results as below.
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/40051120/251304854-643272b7-a7a3-4a0f-a721-25be03cd50bc.png" width="900" alt="Audit Logging Fluentd Kibana">
+<img src="https://downloads.antrea.io/static/07062023/audit-logging-fluentd-kibana.png" width="900" alt="Audit Logging Fluentd Kibana">
 
 ## Email Alerting
 
