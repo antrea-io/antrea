@@ -125,6 +125,15 @@ func runMember(o *Options) error {
 	go staleController.Run(stopCh)
 	// Member runs ResourceImportReconciler from RemoteCommonArea only
 
+	if o.ClusterCalimCRDAvailable {
+		clusterClaimConvtController := multiclustercontrollers.NewClusterSetConversionController(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			env.GetPodNamespace(),
+		)
+		go clusterClaimConvtController.Run(stopCh)
+	}
+
 	klog.InfoS("Member MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)

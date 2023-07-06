@@ -74,6 +74,10 @@ func TestRunLeader(t *testing.T) {
 			name:    "Start leader controller successfully with stretchedNetworkPolicy enabled",
 			options: &Options{EnableStretchedNetworkPolicy: true},
 		},
+		{
+			name:    "Start leader controller successfully with available ClusterClaim CRD",
+			options: &Options{ClusterCalimCRDAvailable: true},
+		},
 	}
 
 	for _, tc := range testCases {

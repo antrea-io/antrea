@@ -83,6 +83,10 @@ func TestRunMember(t *testing.T) {
 				ServiceCIDR: "10.101.0.0/16",
 			},
 		},
+		{
+			name:    "Start member controller successfully with available ClusterClaim CRD",
+			options: &Options{ClusterCalimCRDAvailable: true},
+		},
 	}
 
 	for _, tc := range testCases {

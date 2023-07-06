@@ -37,6 +37,46 @@ for the feature in new version.
 It should have no impact during upgrade to those imported resources like Service, Endpoints
 or AntreaClusterNetworkPolicy.
 
+## Upgrade from a version prior to v1.13
+
+Prior to Antrea v1.13, the `ClusterClaim` CRD is used to define both the Cluster ID and
+ClusterSet ID for a ClusterSet. Since Antrea v1.13, the `ClusterClaim` CRD is removed, and
+the `ClusterSet` CRD solely defines a ClusterSet. The name of a ClusterSet CR must match the
+ClusterSet ID, and a new `clusterID` field specifies the Cluster ID.
+
+To upgrade from a version older than v1.13, once you apply the latest manifests for an
+existing ClusterSet, Antrea Multi-cluster controller will try to convert ClusterSet
+automatically:
+
+1. When the existing ClusterSet CR 's name matches the ClusterSet ID, Controller will
+get the Cluster ID from ClusterClaim's CR and fill the existing ClusterSet CR's `clusterID`.
+2. When the existing ClusterSet CR 's name doesn't match the ClusterSet ID, Controller will
+delete the existing one and create a new version of ClusterSet based on the old one.
+
+The new or modified ClusterSet CR should be similar like following:
+
+```yaml
+apiVersion: multicluster.crd.antrea.io/v1alpha2
+kind: ClusterSet
+metadata:
+  name: test-clusterset # This value must match the ClusterSet ID.
+  namespace: kube-system
+spec:
+  clusterID: test-cluster-north # The new added field since v1.13.
+  leaders:
+    - clusterID: test-cluster-north
+      secret: "member-north-token"
+      server: "https://172.18.0.1:6443"
+  namespace: antrea-multicluster
+```
+
+You should also delete the `ClusterClaim` CRD manually, all `ClusterClaim` CRs
+will be removed automatically after the CRD is deleted.
+
+```bash
+kubectl delete crds clusterclaims.multicluster.crd.antrea.io
+```
+
 ## APIs deprecation policy
 
 The Antrea Multi-cluster APIs are built using K8s CustomResourceDefinitions and we

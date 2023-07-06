@@ -116,6 +116,15 @@ func runLeader(o *Options) error {
 
 	go staleController.Run(stopCh)
 
+	if o.ClusterCalimCRDAvailable {
+		clusterClaimConvtController := multiclustercontrollers.NewClusterSetConversionController(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			env.GetPodNamespace(),
+		)
+		go clusterClaimConvtController.Run(stopCh)
+	}
+
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)
