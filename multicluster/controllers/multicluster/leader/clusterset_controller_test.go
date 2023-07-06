@@ -30,8 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -42,55 +41,26 @@ var (
 )
 
 func TestLeaderClusterSetAdd(t *testing.T) {
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "mcs1",
 			Name:       "clusterset1",
 			Generation: 1,
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			ClusterID: "leader1",
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 				}},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID:      "east",
-					ServiceAccount: "east-access-sa",
-				},
-				{
-					ClusterID:      "west",
-					ServiceAccount: "west-access-sa",
-				},
-			},
 			Namespace: "mcs1",
-		},
-	}
-	existingClusterClaimList := &mcsv1alpha2.ClusterClaimList{
-		Items: []mcsv1alpha2.ClusterClaim{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcsv1alpha2.WellKnownClusterClaimClusterSet,
-					Namespace: "mcs1",
-				},
-				Value: "clusterset1",
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcsv1alpha2.WellKnownClusterClaimID,
-					Namespace: "mcs1",
-				},
-				Value: "leader1",
-			},
 		},
 	}
 
 	scheme := runtime.NewScheme()
-	mcsv1alpha1.AddToScheme(scheme)
-	mcsv1alpha2.AddToScheme(scheme)
+	mcv1alpha2.AddToScheme(scheme)
 	fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(existingClusterSet, &existingClusterClaimList.Items[0], &existingClusterClaimList.Items[1]).
-		Build()
+		WithObjects(existingClusterSet).Build()
 
 	mockCtrl := gomock.NewController(t)
 	mockStatusManager = NewMockMemberClusterStatusManager(mockCtrl)
@@ -115,25 +85,15 @@ func TestLeaderClusterSetAdd(t *testing.T) {
 
 func TestLeaderClusterSetUpdate(t *testing.T) {
 	TestLeaderClusterSetAdd(t)
-	clusterSet := &mcsv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 	assert.Equal(t, nil, err)
 
-	clusterSet.Spec = mcsv1alpha1.ClusterSetSpec{
-		Leaders: []mcsv1alpha1.MemberCluster{
+	clusterSet.Spec = mcv1alpha2.ClusterSetSpec{
+		Leaders: []mcv1alpha2.LeaderClusterInfo{
 			{
 				ClusterID: "leader1",
 			}},
-		Members: []mcsv1alpha1.MemberCluster{
-			{
-				ClusterID:      "east",
-				ServiceAccount: "east-access-sa",
-			},
-			{
-				ClusterID:      "north",
-				ServiceAccount: "north-access-sa",
-			},
-		},
 		Namespace: "mcs1",
 	}
 	err = fakeRemoteClient.Update(context.TODO(), clusterSet)
@@ -151,7 +111,7 @@ func TestLeaderClusterSetUpdate(t *testing.T) {
 
 func TestLeaderClusterSetDelete(t *testing.T) {
 	TestLeaderClusterSetAdd(t)
-	clusterSet := &mcsv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 	assert.Equal(t, nil, err)
 
@@ -176,28 +136,28 @@ func TestLeaderClusterStatus(t *testing.T) {
 	eventTime := time.Date(2021, 12, 12, 12, 12, 12, 0, time.Local)
 	metaTime := metav1.Time{Time: eventTime}
 
-	statuses := []mcsv1alpha1.ClusterStatus{
+	statuses := []mcv1alpha2.ClusterStatus{
 		{
 			ClusterID: "east",
-			Conditions: []mcsv1alpha1.ClusterCondition{
+			Conditions: []mcv1alpha2.ClusterCondition{
 				{
 					LastTransitionTime: metaTime,
 					Message:            "Member Connected",
 					Reason:             "Connected",
 					Status:             v1.ConditionTrue,
-					Type:               mcsv1alpha1.ClusterReady,
+					Type:               mcv1alpha2.ClusterReady,
 				},
 			},
 		},
 		{
 			ClusterID: "west",
-			Conditions: []mcsv1alpha1.ClusterCondition{
+			Conditions: []mcv1alpha2.ClusterCondition{
 				{
 					LastTransitionTime: metaTime,
 					Message:            "Member Connected",
 					Reason:             "Disconnected",
 					Status:             v1.ConditionFalse,
-					Type:               mcsv1alpha1.ClusterReady,
+					Type:               mcv1alpha2.ClusterReady,
 				},
 			},
 		},
@@ -207,20 +167,20 @@ func TestLeaderClusterStatus(t *testing.T) {
 
 	leaderClusterSetReconcilerUnderTest.updateStatus()
 
-	clusterSet := &mcsv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 	assert.Equal(t, nil, err)
 
 	actualStatus := clusterSet.Status
-	expectedStatus := mcsv1alpha1.ClusterSetStatus{
+	expectedStatus := mcv1alpha2.ClusterSetStatus{
 		ObservedGeneration: 1,
 		TotalClusters:      2,
 		ClusterStatuses:    statuses,
-		Conditions: []mcsv1alpha1.ClusterSetCondition{
+		Conditions: []mcv1alpha2.ClusterSetCondition{
 			{
 				Reason: "NoReadyCluster",
 				Status: v1.ConditionFalse,
-				Type:   mcsv1alpha1.ClusterSetReady,
+				Type:   mcv1alpha2.ClusterSetReady,
 			},
 		},
 	}

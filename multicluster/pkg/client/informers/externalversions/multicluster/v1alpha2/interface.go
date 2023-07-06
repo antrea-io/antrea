@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 type Interface interface {
 	// ClusterClaims returns a ClusterClaimInformer.
 	ClusterClaims() ClusterClaimInformer
+	// ClusterSets returns a ClusterSetInformer.
+	ClusterSets() ClusterSetInformer
 }
 
 type version struct {
@@ -40,4 +42,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ClusterClaims returns a ClusterClaimInformer.
 func (v *version) ClusterClaims() ClusterClaimInformer {
 	return &clusterClaimInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ClusterSets returns a ClusterSetInformer.
+func (v *version) ClusterSets() ClusterSetInformer {
+	return &clusterSetInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

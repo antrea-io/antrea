@@ -20,7 +20,7 @@
 package commonarea
 
 import (
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	context "context"
 	gomock "github.com/golang/mock/gomock"
@@ -402,10 +402,10 @@ func (mr *MockRemoteCommonAreaMockRecorder) GetNamespace() *gomock.Call {
 }
 
 // GetStatus mocks base method
-func (m *MockRemoteCommonArea) GetStatus() []v1alpha1.ClusterCondition {
+func (m *MockRemoteCommonArea) GetStatus() []v1alpha2.ClusterCondition {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStatus")
-	ret0, _ := ret[0].([]v1alpha1.ClusterCondition)
+	ret0, _ := ret[0].([]v1alpha2.ClusterCondition)
 	return ret0
 }
 

@@ -103,10 +103,6 @@ func initRunE(cmd *cobra.Command, args []string) error {
 			common.Rollback(cmd, initOpts.k8sClient, createdRes)
 		}
 	}()
-	createErr = common.CreateClusterClaim(cmd, initOpts.k8sClient, initOpts.namespace, initOpts.clusterSet, initOpts.clusterID, &createdRes)
-	if createErr != nil {
-		return createErr
-	}
 	createErr = common.CreateClusterSet(cmd, initOpts.k8sClient, initOpts.namespace, initOpts.clusterSet, "", "", "", initOpts.clusterID, initOpts.namespace, &createdRes)
 	if createErr != nil {
 		return createErr

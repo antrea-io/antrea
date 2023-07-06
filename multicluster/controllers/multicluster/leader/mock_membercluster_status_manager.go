@@ -20,7 +20,7 @@
 package leader
 
 import (
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -49,10 +49,10 @@ func (m *MockMemberClusterStatusManager) EXPECT() *MockMemberClusterStatusManage
 }
 
 // GetMemberClusterStatuses mocks base method
-func (m *MockMemberClusterStatusManager) GetMemberClusterStatuses() []v1alpha1.ClusterStatus {
+func (m *MockMemberClusterStatusManager) GetMemberClusterStatuses() []v1alpha2.ClusterStatus {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMemberClusterStatuses")
-	ret0, _ := ret[0].([]v1alpha1.ClusterStatus)
+	ret0, _ := ret[0].([]v1alpha2.ClusterStatus)
 	return ret0
 }
 

@@ -99,27 +99,9 @@ rules:
   resources:
   - clusterclaims
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clusterclaims/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - clusterclaims/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
