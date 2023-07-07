@@ -704,6 +704,65 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			expectedReason: "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer",
 		},
 		{
+			name: "acnp-double-peer-namespace-field",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-double-peer-namespace-field",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1beta1.PeerNamespaces{
+										Match:      crdv1beta1.NamespaceMatchSelf,
+										SameLabels: []string{"test"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "only one matching criteria can be specified in a single peer namespaces field",
+		},
+		{
+			name: "acnp-invalid-rule-samelabels-key",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-invalid-rule-samelabels-key",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1beta1.PeerNamespaces{
+										SameLabels: []string{"&illegalKey"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Update,
+			expectedReason: "Invalid label key in sameLabels rule: &illegalKey",
+		},
+		{
 			name: "acnp-toservice-set-with-to",
 			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
