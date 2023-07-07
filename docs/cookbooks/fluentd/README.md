@@ -101,14 +101,13 @@ kubectl apply -f docs/cookbooks/fluentd/resources/fluentd.yml
 Navigate to `http://[NodeIP]: 30007` and create an index pattern with "fluentd-*".
 Go to `http://[NodeIP]: 30007/app/kibana#/discover` to see the results as below.
 
-<img src="https://downloads.antrea.io/static/10182021/audit-logging-fluentd-kibana.png" width="900" alt="Audit Logging Fluentd Kibana">
+<img src="https://downloads.antrea.io/static/07062023/audit-logging-fluentd-kibana.png" width="900" alt="Audit Logging Fluentd Kibana">
 
 ## Email Alerting
 
 Kibana dashboard supports creating alerts with the logs in this
 [guide](https://www.elastic.co/guide/en/kibana/current/alerting-getting-started.html).
-This
-[documentation](https://docs.fluentd.org/how-to-guides/splunk-like-grep-and-alert-email)
+This [documentation](https://docs.fluentd.org/how-to-guides/splunk-like-grep-and-alert-email)
 also provides a detailed guide for email alerting when using td-agent
 (the stable version of Fluentd and preconfigured).
 

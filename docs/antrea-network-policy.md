@@ -735,19 +735,19 @@ can log more information in its own logs.
 The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <direction> <action> <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
     Deduplication:
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <direction> <action> <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-annp test-rule Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label
-    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-annp test-rule Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 custom-log-label [3 packets in 1.011379442s]
-    2023/03/29 02:21:25.879364 AntreaPolicyIngressRule AntreaNetworkPolicy:default/test-annp AllowFromFrontend Allow 44900 10.10.1.14 <nil> 10.10.1.15 <nil> ICMP 84 frontend-allowed
+    2023/07/04 12:45:21.804416 IngressDefaultRule AntreaNetworkPolicy:default/reject-tcp-policy RejectTCPRequest Ingress Reject 16 default/nettoolv3 10.10.1.7 53646 10.10.1.14 80 TCP 60 tcp-log-label
+    2023/07/03 23:24:36.422233 AntreaPolicyEgressRule AntreaNetworkPolicy:default/reject-icmp-policy RejectICMPRequest Egress Reject 14500 default/nettool 10.10.1.7 <nil> 10.10.2.3 <nil> ICMP 84 icmp-log-label
+    2023/07/03 23:24:37.424024 AntreaPolicyEgressRule AntreaNetworkPolicy:default/reject-icmp-policy RejectICMPRequest Egress Reject 14500 default/nettool 10.10.1.7 <nil> 10.10.2.3 <nil> ICMP 84 icmp-log-label [2 packets in 1.000855539s]
 ```
 
 Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
 (`/var/log/antrea/networkpolicy/np.log`). Add Annotation
-`networkpolicy.antrea.io/enable-logging: "true` on a Namespace to enable logging
+`networkpolicy.antrea.io/enable-logging: "true"` on a Namespace to enable logging
 for all NetworkPolicies in the Namespace. Packets of any connection that match
 a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
 but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
@@ -756,13 +756,13 @@ using Antrea logging for Kubernetes NetworkPolicies, the rule name field is not
 set and defaults to `<nil>` value. The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
+    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> <direction> Allow <openflow-priority> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label>
     Default dropped traffic:
-    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> Drop <nil> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> <direction> Drop <nil> <applied-to-reference> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> <log-label> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log <nil> Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60 <nil>
-    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy <nil> Drop <nil> 10.10.1.83 38608 10.10.1.84 80 TCP 60 <nil>
+    2023/07/04 12:31:02.801442 IngressRule K8sNetworkPolicy:default/allow-tcp-80 <nil> Ingress Allow 190 default/nettool 10.10.1.13 57050 10.10.1.7 80 TCP 60 <nil>
+    2023/07/04 12:33:26.221413 IngressDefaultRule K8sNetworkPolicy <nil> Ingress Drop <nil> default/nettool 10.10.1.13 <nil> 10.10.1.7 <nil> ICMP 84 <nil>
 ```
 
 Fluentd can be used to assist with collecting and analyzing the logs. Refer to the
