@@ -300,16 +300,6 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 		return err
 	}
 
-	liveTraffic := tf.Spec.LiveTraffic
-	if tf.Spec.Source.Pod == "" && tf.Spec.Destination.Pod == "" {
-		klog.Errorf("Traceflow %s has neither source nor destination Pod specified", tf.Name)
-		return nil
-	}
-	if tf.Spec.Source.Pod == "" && !liveTraffic {
-		klog.Errorf("Traceflow %s does not have source Pod specified", tf.Name)
-		return nil
-	}
-
 	receiverOnly := false
 	var pod, ns string
 	if tf.Spec.Source.Pod != "" {
@@ -326,6 +316,8 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	// /receiver Node can just return an error, if fails to find the Pod.
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
 	isSender := len(podInterfaces) > 0 && !receiverOnly
+
+	liveTraffic := tf.Spec.LiveTraffic
 
 	var packet, matchPacket *binding.Packet
 	var ofPort uint32
@@ -397,6 +389,15 @@ func (c *Controller) validateTraceflow(tf *crdv1alpha1.Traceflow) error {
 			return errors.New("using ClusterIP destination requires AntreaProxy feature enabled")
 		}
 	}
+
+	if tf.Spec.Source.Pod == "" && tf.Spec.Destination.Pod == "" {
+		return fmt.Errorf("Traceflow %s has neither source nor destination Pod specified", tf.Name)
+	}
+
+	if tf.Spec.Source.Pod == "" && !tf.Spec.LiveTraffic {
+		return fmt.Errorf("Traceflow %s does not have source Pod specified", tf.Name)
+	}
+
 	return nil
 }
 

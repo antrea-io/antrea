@@ -625,7 +625,8 @@ func TestStartTraceflow(t *testing.T) {
 			tf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
 			},
-			expectedErrLog: "Traceflow tf3 has neither source nor destination Pod specified",
+			nodeConfig:  &config.NodeConfig{},
+			expectedErr: "Traceflow tf3 has neither source nor destination Pod specified",
 		},
 		{
 			name: "empty source Pod",
@@ -638,7 +639,8 @@ func TestStartTraceflow(t *testing.T) {
 					},
 				},
 			},
-			expectedErrLog: "Traceflow tf4 does not have source Pod specified",
+			nodeConfig:  &config.NodeConfig{},
+			expectedErr: "Traceflow tf4 does not have source Pod specified",
 		},
 		{
 			name: "invalid destination IPv4",
