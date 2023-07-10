@@ -23,7 +23,7 @@ import (
 type TraceflowPhase string
 
 const (
-	// Pending is not used anymore
+	// Deprecated: Pending is not used anymore
 	Pending   TraceflowPhase = "Pending"
 	Running   TraceflowPhase = "Running"
 	Succeeded TraceflowPhase = "Succeeded"

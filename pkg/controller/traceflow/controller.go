@@ -237,6 +237,8 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 		return err
 	}
 	switch tf.Status.Phase {
+	//lint:ignore SA1019 Allow existing use.
+	//nolint:staticcheck
 	case "", crdv1alpha1.Pending:
 		err = c.startTraceflow(tf)
 	case crdv1alpha1.Running:
