@@ -18,6 +18,10 @@ import (
 	"io"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/kubectl/pkg/cmd/get"
+	"k8s.io/kubectl/pkg/scheme"
+
 	"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -30,11 +34,23 @@ type Response struct {
 }
 
 func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
-	groups := l.(*cpv1beta.AddressGroupList)
-	result := []interface{}{}
-	for i := range groups.Items {
-		item := groups.Items[i]
-		o, _ := objectTransform(&item, opts)
+	groupsList := l.(*cpv1beta.AddressGroupList)
+	if len(groupsList.Items) == 0 {
+		return "", nil
+	}
+	sortField := opts["sort-by"]
+	if sortField == "" {
+		sortField = ".metadata.name"
+	}
+
+	addressGroupRuntimeObjectList, _ := meta.ExtractList(groupsList)
+	if _, err := get.SortObjects(scheme.Codecs.UniversalDecoder(), addressGroupRuntimeObjectList, sortField); err != nil {
+		return "", err
+	}
+
+	result := make([]Response, 0, len(groupsList.Items))
+	for i := range addressGroupRuntimeObjectList {
+		o, _ := objectTransform(addressGroupRuntimeObjectList[i], opts)
 		result = append(result, o.(Response))
 	}
 	return result, nil

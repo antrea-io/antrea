@@ -44,10 +44,6 @@ const (
 	rawFormatter   formatterType = "raw"
 )
 
-const (
-	sortByEffectivePriority string = "effectivePriority"
-)
-
 // commandGroup is used to group commands, it could be specified in commandDefinition.
 // The default commandGroup of a commandDefinition is `flat` which means the command
 // is a direct sub-command of the root command. For any other commandGroup, the
@@ -105,6 +101,7 @@ type resourceEndpoint struct {
 	groupVersionResource *schema.GroupVersionResource
 	resourceName         string
 	namespaced           bool
+	supportSorting       bool
 }
 
 func (e *resourceEndpoint) OutputType() OutputType {
@@ -132,7 +129,7 @@ func (e *resourceEndpoint) flags() []flagInfo {
 			usage:        "Filter the resource by namespace",
 		})
 	}
-	if e.groupVersionResource == &v1beta2.NetworkPolicyVersionResource {
+	if e.supportSorting {
 		flags = append(flags, getSortByFlag())
 	}
 	return flags
@@ -140,10 +137,9 @@ func (e *resourceEndpoint) flags() []flagInfo {
 
 func getSortByFlag() flagInfo {
 	return flagInfo{
-		name:            "sort-by",
-		defaultValue:    "",
-		supportedValues: []string{sortByEffectivePriority},
-		usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority.",
+		name:         "sort-by",
+		defaultValue: "",
+		usage:        "Get resources in specific order.",
 	}
 }
 

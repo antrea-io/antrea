@@ -175,6 +175,10 @@ $ antctl get podmulticaststats pod -n namespace`,
   $ antctl get networkpolicy
   Get the list of all control plane NetworkPolicies, sorted by the order in which the policies are evaluated.
   $ antctl get networkpolicy --sort-by=effectivePriority
+  Get the list of all control plane NetworkPolicies, sorted using the provided field specification.
+  The list will be sorted by name if no value is provided.
+  Any valid json path can be passed as an argument to the sort-by flag. E.g.: '.sourceRef.name'.
+  $ antctl get networkpolicy --sort-by=''
   Get the control plane NetworkPolicy with a specific source (supported by agent only)
   $ antctl get networkpolicy -S allow-http -n ns1
   Get the list of control plane NetworkPolicies whose source NetworkPolicies are in a Namespace (supported by agent only)
@@ -187,6 +191,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &cpv1beta.NetworkPolicyVersionResource,
+					supportSorting:       true,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
@@ -227,54 +232,68 @@ $ antctl get podmulticaststats pod -n namespace`,
 			transformedResponse: reflect.TypeOf(networkpolicy.Response{}),
 		},
 		{
-			use:          "appliedtogroup",
-			aliases:      []string{"appliedtogroups", "atg"},
-			short:        "Print appliedto groups",
-			long:         "Print appliedto groups in ${component}",
+			use:     "appliedtogroup",
+			aliases: []string{"appliedtogroups", "atg"},
+			short:   "Print appliedto groups",
+			long:    "Print appliedto groups in ${component}",
+			example: `  Get the list of all AppliedToGroups
+  $ antctl get appliedtogroup
+  Get the list of all control plane AppliedToGroups, sorted using the provided field specification.
+  The list will be sorted by name if no value is provided.
+  Any valid json path can be passed as an argument to the sort-by flag. E.g.: '.metadata.name'.
+  $ antctl get appliedtogroup --sort-by=''`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &cpv1beta.AppliedToGroupVersionResource,
+					supportSorting:       true,
 				},
 				addonTransform: appliedtogroup.Transform,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/appliedtogroups",
-					params: []flagInfo{
+					params: append([]flagInfo{
 						{
 							usage: "Retrieve resource by name",
 							name:  "name",
 							arg:   true,
 						},
-					},
+					}, getSortByFlag()),
 				},
 				addonTransform: appliedtogroup.Transform,
 			},
 			transformedResponse: reflect.TypeOf(appliedtogroup.Response{}),
 		},
 		{
-			use:          "addressgroup",
-			aliases:      []string{"addressgroups", "ag"},
-			short:        "Print address groups",
-			long:         "Print address groups in ${component}",
+			use:     "addressgroup",
+			aliases: []string{"addressgroups", "ag"},
+			short:   "Print address groups",
+			long:    "Print address groups in ${component}",
+			example: `  Get the list of all AddressGroups
+  $ antctl get addressgroup
+  Get the list of all control plane AddressGroups, sorted using the provided field specification.
+  The list will be sorted by name if no value is provided.
+  Any valid json path can be passed as an argument to the sort-by flag. E.g.: '.metadata.name'.
+  $ antctl get addressgroup --sort-by=''`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &cpv1beta.AddressGroupVersionResource,
+					supportSorting:       true,
 				},
 				addonTransform: addressgroup.Transform,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/addressgroups",
-					params: []flagInfo{
+					params: append([]flagInfo{
 						{
 							usage: "Retrieve resource by name",
 							name:  "name",
 							arg:   true,
 						},
-					},
+					}, getSortByFlag()),
 				},
 				addonTransform: addressgroup.Transform,
 			},
