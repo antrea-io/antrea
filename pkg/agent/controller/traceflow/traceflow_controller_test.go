@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"net"
 	"os"
+	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	"antrea.io/libOpenflow/protocol"
@@ -571,7 +573,7 @@ func TestStartTraceflow(t *testing.T) {
 				ICMPType:       8,
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
-				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
 				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
 					SourceIP:       net.ParseIP(pod1IPv4),
 					SourceMAC:      pod1MAC,
@@ -611,7 +613,7 @@ func TestStartTraceflow(t *testing.T) {
 				ICMPType:      8,
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
-				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
 				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
 					SourceIP:      net.ParseIP(pod1IPv4),
 					SourceMAC:     pod1MAC,
@@ -683,7 +685,7 @@ func TestStartTraceflow(t *testing.T) {
 			},
 			ofPort: ofPortPod2,
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
-				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, false, true, &binding.Packet{DestinationMAC: pod2MAC}, ofPortPod2, uint16(crdv1beta1.DefaultTraceflowTimeout))
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, false, false, true, &binding.Packet{DestinationMAC: pod2MAC}, ofPortPod2, uint16(crdv1beta1.DefaultTraceflowTimeout))
 			},
 		},
 	}
@@ -714,6 +716,87 @@ func TestStartTraceflow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func clearDirectory(path string) error {
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		filePath := filepath.Join(path, file.Name())
+		err := os.RemoveAll(filePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func TestSamplingTraceflowToWriteAndDeleteFiles(t *testing.T) {
+	tcs := []struct {
+		name          string
+		tf            *crdv1beta1.Traceflow
+		nodeConfig    *config.NodeConfig
+		expectedCalls func(mockOFClient *openflowtest.MockClient)
+	}{
+		{
+			name: "Pod-to-Pod traceflow",
+			tf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					LiveTraffic: true,
+					Sampling:    crdv1beta1.SamplingSpec{Method: crdv1beta1.FirstN, Num: 3},
+				},
+				Status: crdv1beta1.TraceflowStatus{
+					Sampling:     crdv1beta1.SamplingStatus{UID: "123456"},
+					DataplaneTag: 1,
+				},
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, true, false, false, &binding.Packet{}, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
+				mockOFClient.EXPECT().UninstallTraceflowFlows(uint8(1))
+			},
+		},
+	}
+
+	oldPacketDirectory := packetDirectory
+	if goruntime.GOOS == "windows" {
+		packetDirectory = "C:\\tmp\\test\\traceflow"
+	} else {
+		packetDirectory = "/tmp/test/traceflow"
+	}
+	err := os.MkdirAll(packetDirectory, 0755)
+	if err != nil {
+		panic("couldn't create a test directory")
+	}
+	err = clearDirectory(packetDirectory)
+	if err != nil {
+		panic("couldn't clear the test directory")
+	}
+	for _, tt := range tcs {
+		t.Run(tt.name, func(t *testing.T) {
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, tt.nodeConfig, nil, nil)
+			if tt.expectedCalls != nil {
+				tt.expectedCalls(tfc.mockOFClient)
+			}
+
+			err := tfc.startTraceflow(tt.tf)
+			assert.NoError(t, err)
+			assert.FileExists(t, uidToPath(tt.tf.Status.Sampling.UID))
+
+			tfc.cleanupTraceflow(tt.tf.Name)
+			tfc.deleteTraceflow(tt.tf)
+			assert.NoFileExists(t, uidToPath(tt.tf.Status.Sampling.UID))
+		})
+	}
+	packetDirectory = oldPacketDirectory
 }
 
 func TestSyncTraceflow(t *testing.T) {
@@ -839,7 +922,7 @@ func TestProcessTraceflowItem(t *testing.T) {
 	tfc.crdInformerFactory.Start(stopCh)
 	tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 
-	tfc.mockOFClient.EXPECT().InstallTraceflowFlows(uint8(tc.tf.Status.DataplaneTag), tc.tf.Spec.LiveTraffic, tc.tf.Spec.DroppedOnly, tc.receiverOnly, nil, tc.ofPort, uint16(crdv1beta1.DefaultTraceflowTimeout))
+	tfc.mockOFClient.EXPECT().InstallTraceflowFlows(uint8(tc.tf.Status.DataplaneTag), tc.tf.Spec.LiveTraffic, tc.tf.Spec.SamplingEnabled(), tc.tf.Spec.DroppedOnly, tc.receiverOnly, nil, tc.ofPort, uint16(crdv1beta1.DefaultTraceflowTimeout))
 	tfc.mockOFClient.EXPECT().SendTraceflowPacket(uint8(tc.tf.Status.DataplaneTag), tc.packet, tc.ofPort, int32(-1))
 	tfc.enqueueTraceflow(tc.tf)
 	got := tfc.processTraceflowItem()

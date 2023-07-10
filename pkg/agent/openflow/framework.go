@@ -320,6 +320,7 @@ type traceableFeature interface {
 	flowsToTrace(dataplaneTag uint8,
 		ovsMetersAreSupported,
 		liveTraffic,
+		sampling,
 		droppedOnly,
 		receiverOnly bool,
 		packet *binding.Packet,

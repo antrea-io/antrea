@@ -20,10 +20,16 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path"
+	"runtime"
 	"sync"
 	"time"
 
 	"antrea.io/libOpenflow/protocol"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcapgo"
+	"golang.org/x/time/rate"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,6 +77,24 @@ const (
 	defaultTTL uint8 = 64
 )
 
+// Parameters for sampling live traffic traceflow.
+const (
+	// The minimum interval of reporting "traceflowState.numCapturedPackets" change.
+	samplingStatusUpdatePeriod = 10 * time.Second
+	packetDirectoryUnix        = "/root/traceflows/packets"
+	packetDirectoryWindows     = "C:\\traceflows\\packets"
+)
+
+var packetDirectory = getPacketDirectory()
+
+func getPacketDirectory() string {
+	if runtime.GOOS == "windows" {
+		return packetDirectoryWindows
+	} else {
+		return packetDirectoryUnix
+	}
+}
+
 type traceflowState struct {
 	name        string
 	tag         int8
@@ -81,6 +105,24 @@ type traceflowState struct {
 	isSender     bool
 	// Agent received the first Traceflow packet from OVS.
 	receivedPacket bool
+
+	// Non-nil only on sampling mode.
+	samplingState *samplingState
+}
+
+func (s *traceflowState) samplingEnabled() bool {
+	return s.samplingState != nil
+}
+
+type samplingState struct {
+	shouldSyncPackets     bool
+	numCapturedPackets    int32
+	maxNumCapturedPackets int32
+	// Controls the CRD "NumCapturedPackets" update rate.
+	updateRateLimiter *rate.Limiter
+	uid               string
+	pcapngFile        *os.File
+	pcapngWriter      *pcapgo.NgWriter
 }
 
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
@@ -181,6 +223,11 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
+	err := os.MkdirAll(packetDirectory, 0755)
+	if err != nil {
+		klog.ErrorS(err, "Couldn't create directory for storing packets")
+	}
+
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
@@ -202,6 +249,12 @@ func (c *Controller) updateTraceflow(_, curObj interface{}) {
 func (c *Controller) deleteTraceflow(old interface{}) {
 	tf := old.(*crdv1beta1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
+
+	err := deletePcapngFile(tf.Status.Sampling.UID)
+	if err != nil {
+		klog.ErrorS(err, "Couldn't delete pcapng file")
+	}
+
 	c.enqueueTraceflow(tf)
 }
 
@@ -349,7 +402,49 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	tfState := traceflowState{
 		name: tf.Name, tag: tf.Status.DataplaneTag,
 		liveTraffic: liveTraffic, droppedOnly: tf.Spec.DroppedOnly && liveTraffic,
-		receiverOnly: receiverOnly, isSender: isSender}
+		receiverOnly: receiverOnly, isSender: isSender,
+	}
+	if tf.Spec.SamplingEnabled() {
+		exists, err := fileExists(tf.Status.Sampling.UID)
+		if err != nil {
+			return fmt.Errorf("couldn't check if the file exists: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("packet file already exists. this may be due to an unexpected termination")
+		}
+		file, err := createPcapngFile(tf.Status.Sampling.UID)
+		if err != nil {
+			return fmt.Errorf("couldn't create pcapng file: %w", err)
+		}
+		writer, err := pcapgo.NewNgWriter(file, layers.LinkTypeEthernet)
+		if err != nil {
+			return fmt.Errorf("couldn't init NgWriter: %w", err)
+		}
+
+		// If only receiver is assigned in the traceflow spec, then the receiver node is responsible
+		// for reporting number of captured packets. Otherwise, the sender node is responsible for it.
+		if tf.Spec.Destination.Pod != "" {
+			pod = tf.Spec.Destination.Pod
+			ns = tf.Spec.Destination.Namespace
+		} else {
+			pod = tf.Spec.Source.Pod
+			ns = tf.Spec.Source.Namespace
+		}
+		podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+		shouldSyncPackets := len(podInterfaces) > 0
+
+		tfState.samplingState = &samplingState{
+			shouldSyncPackets:     shouldSyncPackets,
+			numCapturedPackets:    0,
+			maxNumCapturedPackets: tf.Spec.Sampling.Num,
+			uid:                   tf.Status.Sampling.UID,
+			pcapngFile:            file,
+			pcapngWriter:          writer,
+		}
+		if tfState.samplingState.shouldSyncPackets {
+			tfState.samplingState.updateRateLimiter = rate.NewLimiter(rate.Every(samplingStatusUpdatePeriod), 1)
+		}
+	}
 	c.runningTraceflows[tfState.tag] = &tfState
 	c.runningTraceflowsMutex.Unlock()
 
@@ -359,7 +454,7 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	if timeout == 0 {
 		timeout = crdv1beta1.DefaultTraceflowTimeout
 	}
-	err = c.ofClient.InstallTraceflowFlows(uint8(tfState.tag), liveTraffic, tfState.droppedOnly, receiverOnly, matchPacket, ofPort, uint16(timeout))
+	err = c.ofClient.InstallTraceflowFlows(uint8(tfState.tag), liveTraffic, tf.Spec.SamplingEnabled(), tfState.droppedOnly, receiverOnly, matchPacket, ofPort, uint16(timeout))
 	if err != nil {
 		return err
 	}
@@ -608,5 +703,40 @@ func (c *Controller) cleanupTraceflow(tfName string) {
 		if err != nil {
 			klog.Errorf("Failed to uninstall Traceflow %s flows: %v", tfName, err)
 		}
+		if tfState.samplingState != nil {
+			err := tfState.samplingState.pcapngWriter.Flush()
+			if err != nil {
+				klog.ErrorS(err, "Couldn't flush pcapngWriter")
+			}
+			err = tfState.samplingState.pcapngFile.Close()
+			if err != nil {
+				klog.ErrorS(err, "Couldn't close pcapng file")
+			}
+		}
 	}
+}
+
+func fileExists(uid string) (bool, error) {
+	_, err := os.Stat(uidToPath(uid))
+	if err == nil {
+		return true, nil
+	} else {
+		if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+}
+
+func createPcapngFile(uid string) (*os.File, error) {
+	return os.Create(uidToPath(uid))
+}
+
+func deletePcapngFile(uid string) error {
+	return os.Remove(uidToPath(uid))
+}
+
+func uidToPath(uid string) string {
+	return path.Join(packetDirectory, uid+".pcapng")
 }

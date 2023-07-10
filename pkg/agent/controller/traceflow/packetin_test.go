@@ -464,7 +464,7 @@ func TestParsePacketIn(t *testing.T) {
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 			tfc.runningTraceflows[tt.expectedTf.Status.DataplaneTag] = tt.tfState
 
-			tf, nodeResult, _, err := tfc.parsePacketIn(tt.pktIn)
+			tf, nodeResult, _, _, _, err := tfc.parsePacketIn(tt.pktIn)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedNodeResult.Observations, nodeResult.Observations)
 			assert.Equal(t, tt.expectedTf, tf)
@@ -499,6 +499,6 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 	tfc := newFakeTraceflowController(t, nil, networkConfig, nodeConfig, nil, nil)
 	tfc.runningTraceflows[tfState.tag] = tfState
 
-	_, _, _, err := tfc.parsePacketIn(pktIn)
-	assert.ErrorIs(t, err, skipTraceflowUpdateErr)
+	_, _, _, _, shouldSkip, _ := tfc.parsePacketIn(pktIn)
+	assert.True(t, shouldSkip)
 }

@@ -216,6 +216,7 @@ func (data *TestData) setupLogDirectoryForTest(testName string) error {
 	return nil
 }
 
+// setupTest prepares a log directory and creates a k8s namespace for testing.
 func setupTest(tb testing.TB) (*TestData, error) {
 	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)

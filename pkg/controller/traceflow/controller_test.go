@@ -141,7 +141,7 @@ func TestTraceflow(t *testing.T) {
 		assert.NotNil(t, res)
 		res, _ = tfc.waitForTraceflow("tf1", crdv1beta1.Failed, defaultTimeoutDuration*2)
 		assert.NotNil(t, res)
-		assert.True(t, time.Now().Sub(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
+		assert.True(t, time.Since(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
 		assert.Equal(t, res.Status.Reason, traceflowTimeout)
 		assert.True(t, res.Status.DataplaneTag == 0)
 		assert.Equal(t, numRunningTraceflows(), 0)
@@ -173,6 +173,46 @@ func TestTraceflow(t *testing.T) {
 		// DataplaneTag should not be allocated by Controller.
 		assert.True(t, res.Status.DataplaneTag == 0)
 		assert.Equal(t, numRunningTraceflows(), 0)
+	})
+
+	t.Run("firstNSamplingTraceflow", func(t *testing.T) {
+		num := int32(3)
+		tf3 := crdv1beta1.Traceflow{
+			ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
+			Spec: crdv1beta1.TraceflowSpec{
+				Source:      crdv1beta1.Source{Namespace: "ns1", Pod: "pod1"},
+				LiveTraffic: true,
+				Sampling:    crdv1beta1.SamplingSpec{Method: crdv1beta1.FirstN, Num: num},
+				Timeout:     2, // 2 seconds timeout
+			},
+		}
+		pod1 := corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod1",
+				Namespace: "ns1",
+			},
+		}
+
+		tfc.kubeClient.CoreV1().Pods("ns1").Create(context.TODO(), &pod1, metav1.CreateOptions{})
+		createdPod, _ := tfc.waitForPodInNamespace("ns1", "pod1", time.Second)
+		require.NotNil(t, createdPod)
+		tfc.client.CrdV1beta1().Traceflows().Create(context.TODO(), &tf3, metav1.CreateOptions{})
+		res, _ := tfc.waitForTraceflow("tf3", crdv1beta1.Running, time.Second)
+		require.NotNil(t, res)
+		// DataplaneTag and UID should be allocated by Controller.
+		assert.True(t, res.Status.DataplaneTag > 0)
+		assert.True(t, res.Status.Sampling.UID != "")
+		assert.Equal(t, numRunningTraceflows(), 1)
+
+		// Test Controller handling of successful Traceflow.
+		res.Status.Sampling.NumCapturedPackets = num
+		tfc.client.CrdV1beta1().Traceflows().Update(context.TODO(), res, metav1.UpdateOptions{})
+		res, _ = tfc.waitForTraceflow("tf3", crdv1beta1.Succeeded, time.Second)
+		assert.NotNil(t, res)
+		// DataplaneTag should be deallocated by Controller.
+		assert.True(t, res.Status.DataplaneTag == 0)
+		assert.Equal(t, numRunningTraceflows(), 0)
+		tfc.client.CrdV1beta1().Traceflows().Delete(context.TODO(), "tf3", metav1.DeleteOptions{})
 	})
 
 	close(stopCh)

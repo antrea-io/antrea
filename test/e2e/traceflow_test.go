@@ -87,6 +87,11 @@ func TestTraceflow(t *testing.T) {
 		skipIfEgressDisabled(t)
 		testTraceflowEgress(t, data)
 	})
+
+	t.Run("testTraceflowFirstN", func(t *testing.T) {
+		skipIfNumNodesLessThan(t, 2)
+		testTraceflowFirstN(t, data)
+	})
 }
 
 func skipIfTraceflowDisabled(t *testing.T) {
@@ -2235,6 +2240,19 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	t.Run(testcaseRemoteEgress.name, func(t *testing.T) {
 		runTestTraceflow(t, data, testcaseRemoteEgress)
 	})
+}
+
+// testTraceflowFirstN tests the firstNSampling method of live traffic traceflow.
+func testTraceflowFirstN(t *testing.T, data *TestData) {
+	// createPod := func(nodeIdx int) *net.IP {
+	// 	_, podIPs, cleanupFn := createTestAgnhostPods(t, data, 1, data.testNamespace, nodeName(nodeIdx))
+	// 	defer cleanupFn()
+	// 	return podIPs[0].ipv4
+	// }
+
+	// podIP1 := createPod(0)
+	// podIP2 := createPod(1)
+
 }
 
 func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {

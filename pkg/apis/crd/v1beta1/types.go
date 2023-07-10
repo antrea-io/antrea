@@ -972,6 +972,12 @@ type TraceflowSpec struct {
 	// Timeout specifies the timeout of the Traceflow in seconds. Defaults
 	// to 20 seconds if not set.
 	Timeout int32 `json:"timeout,omitempty"`
+
+	Sampling SamplingSpec `json:"sampling,omitempty"`
+}
+
+func (t *TraceflowSpec) SamplingEnabled() bool {
+	return t.Sampling.Method != ""
 }
 
 // Source describes the source spec of the traceflow.
@@ -1059,6 +1065,17 @@ type Packet struct {
 	TransportHeader TransportHeader `json:"transportHeader,omitempty"`
 }
 
+type SamplingMethod string
+
+const (
+	FirstN SamplingMethod = "firstN"
+)
+
+type SamplingSpec struct {
+	Method SamplingMethod `json:"method,omitempty"`
+	Num    int32          `json:"num,omitempty"`
+}
+
 // TraceflowStatus describes current status of the traceflow.
 type TraceflowStatus struct {
 	// Phase is the Traceflow phase.
@@ -1078,6 +1095,13 @@ type TraceflowStatus struct {
 	Results []NodeResult `json:"results,omitempty"`
 	// CapturedPacket is the captured packet in live-traffic Traceflow.
 	CapturedPacket *Packet `json:"capturedPacket,omitempty"`
+
+	Sampling SamplingStatus `json:"sampling,omitempty"`
+}
+
+type SamplingStatus struct {
+	NumCapturedPackets int32  `json:"numCapturedPackets,omitempty"`
+	UID                string `json:"uid,omitempty"`
 }
 
 type NodeResult struct {

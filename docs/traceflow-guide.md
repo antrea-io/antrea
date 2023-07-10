@@ -166,6 +166,30 @@ spec:
   timeout: 60
 ```
 
+Starting from antrea version `xxx`, live-traffic traceflow can capture multiple
+packets. Previously, only the first packet that matches the criteria could be
+captured. To enable this feature, you need to add a parameter called `sampling`
+in the spec, which specifies the sampling method. Currently, the `sampling`
+parameter only supports one sampling method: first N sampling. This method
+attempts to capture the first N packets that match the criteria (but cannot
+guarantee strictly). The following example will attempt to capture the first 5
+packets going to `dst-pod`.
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: Traceflow
+metadata:
+  name: tf-test
+spec:
+  liveTraffic: true
+  sampling:
+    method: firstN
+    num: 5
+  destination:
+    namespace: default
+    pod: dst-pod
+```
+
 ### Using antctl
 
 Please refer to the corresponding [antctl page](antctl.md#traceflow).

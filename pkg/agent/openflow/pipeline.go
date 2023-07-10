@@ -959,13 +959,17 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 // flowsToTrace generates Traceflow specific flows in the connectionTrackStateTable or L2ForwardingCalcTable for featurePodConnectivity.
 // When packet is not provided, the flows bypass the drop flow in conntrackStateFlow to avoid unexpected drop of the
 // injected Traceflow packet, and to drop any Traceflow packet that has ct_state +rpl, which may happen when the Traceflow
-// request destination is the Node's IP. When packet is provided, a flow is added to mark - the first packet of the first
-// connection that matches the provided packet - as the Traceflow packet. The flow is added in connectionTrackStateTable
-// when receiverOnly is false and it also matches in_port to be the provided ofPort (the sender Pod); otherwise when
-// receiverOnly is true, the flow is added into L2ForwardingCalcTable and matches the destination MAC (the receiver Pod MAC).
+// request destination is the Node's IP.
+//
+// When packet is provided, a flow is added to mark the packet that matches the provided packet as the Traceflow packet.
+// Specifically, when not on sampling mode, we only mark the first packet of the first connection. The flow is added in
+// connectionTrackStateTable when receiverOnly is false and it also matches in_port to be the provided ofPort (the
+// sender Pod); otherwise when receiverOnly is true, the flow is added into L2ForwardingCalcTable and matches the
+// destination MAC (the receiver Pod MAC).
 func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	ovsMetersAreSupported,
 	liveTraffic,
+	sampling,
 	droppedOnly,
 	receiverOnly bool,
 	packet *binding.Packet,
@@ -997,11 +1001,9 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	} else {
 		var flowBuilder binding.FlowBuilder
 		if !receiverOnly {
-			flowBuilder = ConntrackStateTable.ofTable.BuildFlow(priorityLow).
+			flowBuilder = ConntrackStateTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchInPort(ofPort).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
 				Action().LoadIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				Action().GotoStage(stagePreRouting)
@@ -1011,8 +1013,6 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		} else {
 			flowBuilder = L2ForwardingCalcTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
 				MatchDstMAC(packet.DestinationMAC).
 				Action().LoadToRegField(TargetOFPortField, ofPort).
 				Action().LoadRegMark(OutputToOFPortRegMark).
@@ -1023,6 +1023,15 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 				flowBuilder = flowBuilder.MatchSrcIP(packet.SourceIP)
 			}
 		}
+
+		// For live traffic traceflow, when on sampling mode, we track every target packet.
+		// Otherwise, we track only the first packet.
+		if !sampling {
+			flowBuilder = flowBuilder.
+				MatchCTStateNew(true).
+				MatchCTStateTrk(true)
+		}
+
 		// Match transport header
 		switch packet.IPProto {
 		case protocol.Type_ICMP:
@@ -1150,6 +1159,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 func (f *featureService) flowsToTrace(dataplaneTag uint8,
 	ovsMetersAreSupported,
 	liveTraffic,
+	sampling,
 	droppedOnly,
 	receiverOnly bool,
 	packet *binding.Packet,
@@ -1200,6 +1210,7 @@ func (f *featureService) flowsToTrace(dataplaneTag uint8,
 func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 	ovsMetersAreSupported,
 	liveTraffic,
+	sampling,
 	droppedOnly,
 	receiverOnly bool,
 	packet *binding.Packet,

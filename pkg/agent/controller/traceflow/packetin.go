@@ -25,6 +25,7 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	"github.com/google/gopacket"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -35,18 +36,16 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-var skipTraceflowUpdateErr = errors.New("skip Traceflow update")
-
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if !c.traceflowListerSynced() {
 		return errors.New("Traceflow controller is not started")
 	}
-	oldTf, nodeResult, packet, err := c.parsePacketIn(pktIn)
-	if err == skipTraceflowUpdateErr {
-		return nil
-	}
+	oldTf, nodeResult, packet, samplingState, shouldSkip, err := c.parsePacketIn(pktIn)
 	if err != nil {
 		return fmt.Errorf("parsePacketIn error: %v", err)
+	}
+	if shouldSkip {
+		return nil
 	}
 
 	// Retry when update CRD conflict which caused by multiple agents updating one CRD at same time.
@@ -55,8 +54,21 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if err != nil {
 			return fmt.Errorf("get Traceflow failed: %w", err)
 		}
+
+		if samplingState != nil {
+			shouldUpdate := samplingState.shouldSyncPackets && (packet != nil ||
+				samplingState.updateRateLimiter.Allow() || samplingState.numCapturedPackets == tf.Spec.Sampling.Num)
+			if !shouldUpdate {
+				return nil
+			}
+		}
+
 		update := tf.DeepCopy()
-		update.Status.Results = append(update.Status.Results, *nodeResult)
+		if samplingState != nil {
+			update.Status.Sampling.NumCapturedPackets = samplingState.numCapturedPackets
+		} else {
+			update.Status.Results = append(update.Status.Results, *nodeResult)
+		}
 		if packet != nil {
 			update.Status.CapturedPacket = packet
 		}
@@ -70,102 +82,144 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return fmt.Errorf("Traceflow update error: %w", err)
 	}
+
+	if samplingState != nil {
+		rawData := pktIn.Data.(*util.Buffer).Bytes()
+		ci := gopacket.CaptureInfo{
+			Timestamp:     time.Now(),
+			CaptureLength: len(rawData),
+			Length:        len(rawData),
+		}
+		err = samplingState.pcapngWriter.WritePacket(ci, rawData)
+		if err != nil {
+			return fmt.Errorf("couldn't write packet: %w", err)
+		}
+	}
 	return nil
 }
 
-func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflow, *crdv1beta1.NodeResult, *crdv1beta1.Packet, error) {
+// parsePacketIn parses the packet-in message and returns
+// 1. the corresponding Traceflow CRD,
+// 2. the observed node result,
+// 3. the captured packet metadata (if applicable),
+// 4. the sampling state of the Traceflow (on sampling mode),
+// 5. a flag indicating whether this packet should be skipped,
+// 6. unexpected errors.
+func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (_ *crdv1beta1.Traceflow, _ *crdv1beta1.NodeResult,
+	_ *crdv1beta1.Packet, _ *samplingState, shouldSkip bool, _ error) {
 	matchers := pktIn.GetMatches()
 
 	// Get data plane tag.
 	// Directly read data plane tag from packet.
 	var err error
 	var tag uint8
-	var ctNwDst, ctNwSrc, ipDst, ipSrc, ns, srcPod string
+	var ctNwDst, ctNwSrc, ipDst, ipSrc string
 	etherData := new(protocol.Ethernet)
 	if err := etherData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
+		return nil, nil, nil, nil, false, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
 	}
 	if etherData.Ethertype == protocol.IPv4_MSG {
 		ipPacket, ok := etherData.Data.(*protocol.IPv4)
 		if !ok {
-			return nil, nil, nil, errors.New("invalid traceflow IPv4 packet")
+			return nil, nil, nil, nil, false, errors.New("invalid traceflow IPv4 packet")
 		}
 		tag = ipPacket.DSCP
 		ctNwDst, err = getCTDstValue(matchers, false)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ctNwSrc, err = getCTSrcValue(matchers, false)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ipDst = ipPacket.NWDst.String()
 		ipSrc = ipPacket.NWSrc.String()
 	} else if etherData.Ethertype == protocol.IPv6_MSG {
 		ipv6Packet, ok := etherData.Data.(*protocol.IPv6)
 		if !ok {
-			return nil, nil, nil, errors.New("invalid traceflow IPv6 packet")
+			return nil, nil, nil, nil, false, errors.New("invalid traceflow IPv6 packet")
 		}
 		tag = ipv6Packet.TrafficClass >> 2
 		ctNwDst, err = getCTDstValue(matchers, true)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ctNwSrc, err = getCTSrcValue(matchers, true)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ipDst = ipv6Packet.NWDst.String()
 		ipSrc = ipv6Packet.NWSrc.String()
 	} else {
-		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
+		return nil, nil, nil, nil, false, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
 	}
 
 	firstPacket := false
-	c.runningTraceflowsMutex.RLock()
+	samplingEnabled := false
+	samplingState := samplingState{}
+	c.runningTraceflowsMutex.Lock()
 	tfState, exists := c.runningTraceflows[int8(tag)]
 	if exists {
-		firstPacket = !tfState.receivedPacket
-		tfState.receivedPacket = true
+		samplingEnabled = tfState.samplingEnabled()
+		if samplingEnabled {
+			if tfState.samplingState.numCapturedPackets == tfState.samplingState.maxNumCapturedPackets {
+				c.runningTraceflowsMutex.Unlock()
+				return nil, nil, nil, nil, true, nil
+			}
+			tfState.samplingState.numCapturedPackets++
+			if tfState.samplingState.numCapturedPackets == tfState.samplingState.maxNumCapturedPackets {
+				c.ofClient.UninstallTraceflowFlows(tag)
+			}
+			samplingState = *tfState.samplingState
+		} else {
+			firstPacket = !tfState.receivedPacket
+			tfState.receivedPacket = true
+		}
 	}
-	c.runningTraceflowsMutex.RUnlock()
+	c.runningTraceflowsMutex.Unlock()
 	if !exists {
-		return nil, nil, nil, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", tag)
+		return nil, nil, nil, nil, false, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", tag)
 	}
 
 	var capturedPacket *crdv1beta1.Packet
 	if tfState.liveTraffic {
-		// Live Traceflow only considers the first packet of each
-		// connection. However, it is possible for 2 connections to
-		// match the Live Traceflow flows in OVS (before the flows can
-		// be uninstalled below), leading to 2 Packet In messages being
-		// processed. If we don't ignore all additional Packet Ins, we
-		// can end up with duplicate Node observations in the Traceflow
-		// Status. This situation is more likely when the Live TraceFlow
-		// request does not specify source / destination ports.
-		if !firstPacket {
-			klog.InfoS("An additional Traceflow packet was received unexpectedly for Live Traceflow, ignoring it")
-			return nil, nil, nil, skipTraceflowUpdateErr
-		}
-		// Uninstall the OVS flows after receiving the first packet, to
-		// avoid capturing too many matched packets.
-		c.ofClient.UninstallTraceflowFlows(tag)
-		// Report the captured dropped packet, if the Traceflow is for
-		// the dropped packet only; report too if only the receiver
-		// captures packets in the Traceflow (live-traffic Traceflow
-		// that has only destination Pod set); otherwise only the sender
-		// should report the first captured packet.
-		if tfState.isSender || tfState.receiverOnly || tfState.droppedOnly {
-			capturedPacket = parseCapturedPacket(pktIn)
+		if samplingEnabled {
+			if samplingState.numCapturedPackets == 1 && samplingState.shouldSyncPackets {
+				capturedPacket = parseCapturedPacket(pktIn)
+			}
+		} else {
+			// Live Traceflow only considers the first packet of each
+			// connection. However, it is possible for 2 connections to
+			// match the Live Traceflow flows in OVS (before the flows can
+			// be uninstalled below), leading to 2 Packet In messages being
+			// processed. If we don't ignore all additional Packet Ins, we
+			// can end up with duplicate Node observations in the Traceflow
+			// Status. This situation is more likely when the Live TraceFlow
+			// request does not specify source / destination ports.
+			if !firstPacket {
+				klog.InfoS("An additional Traceflow packet was received unexpectedly for Live Traceflow, ignoring it")
+				return nil, nil, nil, nil, true, nil
+			}
+			// Uninstall the OVS flows after receiving the first packet, to
+			// avoid capturing too many matched packets.
+			c.ofClient.UninstallTraceflowFlows(tag)
+			// Report the captured dropped packet, if the Traceflow is for
+			// the dropped packet only; report too if only the receiver
+			// captures packets in the Traceflow (live-traffic Traceflow
+			// that has only destination Pod set); otherwise only the sender
+			// should report the first captured packet.
+			if tfState.isSender || tfState.receiverOnly || tfState.droppedOnly {
+				capturedPacket = parseCapturedPacket(pktIn)
+			}
 		}
 	}
 
 	tf, err := c.traceflowLister.Get(tfState.name)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get Traceflow %s CRD: %v", tfState.name, err)
+		return nil, nil, nil, nil, false, fmt.Errorf("failed to get Traceflow %s CRD: %v", tfState.name, err)
 	}
-	ns = tf.Spec.Source.Namespace
-	srcPod = tf.Spec.Source.Pod
+	ns := tf.Spec.Source.Namespace
+	srcPod := tf.Spec.Source.Pod
 
 	obs := []crdv1beta1.Observation{}
 	tableID := pktIn.TableId
@@ -201,7 +255,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		if match := getMatchRegField(matchers, openflow.TFEgressConjIDField); match != nil {
 			egressInfo, err := getRegValue(match, nil)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 			ob := getNetworkPolicyObservation(tableID, false)
 			npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
@@ -216,7 +270,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	if match := getMatchRegField(matchers, openflow.TFIngressConjIDField); match != nil {
 		ingressInfo, err := getRegValue(match, nil)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ob := getNetworkPolicyObservation(tableID, true)
 		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressInfo)
@@ -232,7 +286,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		if match := getMatchRegField(matchers, openflow.APConjIDField); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 			if ruleRef := c.networkPolicyQuerier.GetRuleByFlowID(notAllowConjInfo); ruleRef != nil {
 				if npRef := ruleRef.PolicyRef; npRef != nil {
@@ -258,14 +312,14 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		if match := getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 		}
 		var outputPort uint32
 		if match := getMatchRegField(matchers, openflow.TargetOFPortField); match != nil {
 			outputPort, err = getRegValue(match, nil)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 		}
 		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
@@ -279,13 +333,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			if match := getMatchRegField(matchers, openflow.RemoteSNATRegMark.GetField()); match != nil {
 				isRemoteEgress, err = getRegValue(match, openflow.RemoteSNATRegMark.GetField().GetRange().ToNXRange())
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 			}
 			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
 				egress, _, err := c.egressQuerier.GetEgress(ns, srcPod)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 				obEgress := getEgressObservation(false, tunnelDstIP, egress)
 				obs = append(obs, *obEgress)
@@ -299,19 +353,19 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			if match := getMatchPktMarkField(matchers); match != nil {
 				pktMark, err = getMarkValue(match)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 			}
 			if pktMark != 0 { // Egress packet on Egress Node
 				egressIP, err := c.egressQuerier.GetEgressIPByMark(pktMark)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 				egress := ""
 				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
 					egress, _, err = c.egressQuerier.GetEgress(ns, srcPod)
 					if err != nil {
-						return nil, nil, nil, err
+						return nil, nil, nil, nil, false, err
 					}
 				}
 				obEgress := getEgressObservation(true, egressIP, egress)
@@ -330,7 +384,11 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	}
 
 	nodeResult := crdv1beta1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
-	return tf, &nodeResult, capturedPacket, nil
+	if samplingEnabled {
+		return tf, &nodeResult, capturedPacket, &samplingState, false, nil
+	} else {
+		return tf, &nodeResult, capturedPacket, nil, false, nil
+	}
 }
 
 func getMatchPktMarkField(matchers *ofctrl.Matchers) *ofctrl.MatchField {

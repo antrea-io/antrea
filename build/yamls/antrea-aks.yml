@@ -4712,6 +4712,14 @@ spec:
                   type: boolean
                 timeout:
                   type: integer
+                sampling:
+                  type: object
+                  properties:
+                    method:
+                      type: string
+                      enum: [firstN]
+                    num:
+                      type: integer 
             status:
               type: object
               properties:
@@ -4814,6 +4822,13 @@ spec:
                           type: object
                       type: object
                   type: object
+                sampling:
+                  type: object
+                  properties:
+                    numCapturedPackets:
+                      type: integer
+                    uid:
+                      type: string
       subresources:
         status: {}
     - name: v1beta1
