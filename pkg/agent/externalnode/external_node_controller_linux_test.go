@@ -87,6 +87,7 @@ func TestUpdateExternalNode(t *testing.T) {
 		curIf                 *interfacestore.InterfaceConfig
 		syncedExternalNode    *v1alpha1.ExternalNode
 		linkByNameCalledTimes int
+		existingIfaceMap      map[string]bool
 		expectedCalls         func(mockOFClient *openflowtest.MockClient, mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, mockIfaceStore *interfacestoretest.MockInterfaceStore, mockOVSCtlClient *ovsctltest.MockOVSCtlClient)
 	}{
 		{
@@ -130,6 +131,7 @@ func TestUpdateExternalNode(t *testing.T) {
 				mockOVSBridgeClient.EXPECT().SetPortExternalIDs(intf3.InterfaceName, expectedAttachInfo).Times(1)
 				mockIfaceStore.EXPECT().AddInterface(expectedUpdatedInterface).Times(1)
 			},
+			existingIfaceMap: map[string]bool{},
 		},
 		{
 			name:            "no change for Interface[0]",
@@ -139,6 +141,7 @@ func TestUpdateExternalNode(t *testing.T) {
 			curExternalNode: &externalNode1,
 			expectedCalls: func(_ *openflowtest.MockClient, _ *ovsconfigtest.MockOVSBridgeClient, _ *interfacestoretest.MockInterfaceStore, _ *ovsctltest.MockOVSCtlClient) {
 			},
+			existingIfaceMap: map[string]bool{},
 		},
 		{
 			name:                  "different interface name",
@@ -188,6 +191,11 @@ func TestUpdateExternalNode(t *testing.T) {
 				mockOVSCtlClient.EXPECT().DeleteDPInterface(intf1.InterfaceName).Times(1)
 				mockIfaceStore.EXPECT().DeleteInterface(&intf1).Times(1)
 			},
+			existingIfaceMap: map[string]bool{
+				ifaceName1:                              false,
+				ifaceName2:                              false,
+				fmt.Sprintf("%s~", intf1.InterfaceName): true,
+			},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -196,7 +204,7 @@ func TestUpdateExternalNode(t *testing.T) {
 			defer mockLinkSetUp(nil)()
 			defer mockLinkSetMTU(nil)()
 			defer mockRenameInterface(nil)()
-			defer mockHostInterfaceExists(false)()
+			defer mockHostInterfaceExists(tt.existingIfaceMap)()
 			defer mockConfigureLinkAddresses(nil)()
 			defer mockConfigureLinkRoutes(nil)()
 			defer mockLinkByName(t, tt.linkByNameCalledTimes)()
@@ -462,7 +470,10 @@ func TestDeleteExternalNode(t *testing.T) {
 	})()
 	defer mockLinkByName(t, 2)()
 	defer mockRenameInterface(nil)()
-	defer mockHostInterfaceExists(false)()
+	defer mockHostInterfaceExists(map[string]bool{
+		fmt.Sprintf("%s~", intf1.InterfaceName): true,
+		fmt.Sprintf("%s~", intf2.InterfaceName): true,
+	})()
 	defer mockConfigureLinkAddresses(nil)()
 	defer mockConfigureLinkRoutes(nil)()
 	mockIfaceStore.EXPECT().GetInterfacesByType(interfacestore.ExternalEntityInterface).Return([]*interfacestore.InterfaceConfig{
@@ -616,10 +627,14 @@ func mockLinkByName(t *testing.T, calledTimes int) func() {
 	}
 }
 
-func mockHostInterfaceExists(exists bool) func() {
+func mockHostInterfaceExists(existingIfaces map[string]bool) func() {
 	originalHostInterfaceExists := hostInterfaceExists
-	hostInterfaceExists = func(IfName string) bool {
-		return exists
+	hostInterfaceExists = func(ifName string) bool {
+		exists, ok := existingIfaces[ifName]
+		if ok {
+			return exists
+		}
+		return false
 	}
 	return func() {
 		hostInterfaceExists = originalHostInterfaceExists
