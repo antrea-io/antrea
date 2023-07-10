@@ -4,7 +4,6 @@ metadata:
   labels:
     component: antrea-agent
   name: antrea-agent-windows
-  namespace: kube-system
 spec:
   selector:
     matchLabels:
