@@ -83,6 +83,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=4 actions=output:4294967294",
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=4294967294 actions=output:4",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4,dl_dst=0a:00:00:00:00:02 actions=output:4294967294",
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4,dl_dst=ff:ff:ff:ff:ff:ff actions=output:4294967294",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4294967294 actions=output:4",
 				"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,ct_state=-rpl+trk,ip,nw_src=10.10.0.1 actions=goto_table:ConntrackCommit",
 			)
@@ -152,6 +153,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,in_port=4294967294 actions=output:4",
 				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4,nw_dst=10.10.0.0/24 actions=set_field:0x4/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4,dl_dst=0a:00:00:00:00:02 actions=output:4294967294",
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4,dl_dst=ff:ff:ff:ff:ff:ff actions=output:4294967294",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4294967294 actions=output:4",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520,nat)",
@@ -170,6 +172,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 					"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=2,arp_spa=192.168.77.100,arp_sha=0a:00:00:00:00:01 actions=goto_table:ARPResponder",
 					"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.0.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:0a:00:00:00:00:01->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:0a:00:00:00:00:01->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.0.1->arp_spa,IN_PORT",
 					"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4,dl_dst=0a:00:00:00:00:02 actions=output:4294967294",
+					"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4,dl_dst=ff:ff:ff:ff:ff:ff actions=output:4294967294",
 					"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4294967294 actions=output:4",
 					"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=NXM_NX_REG8[0..15],nat)",
 					"cookie=0x1010000000000, table=L3Forwarding, priority=210,ct_state=+rpl+trk,ct_mark=0x5/0xf,ip,reg8=0x0/0xfff actions=set_field:0a:00:00:00:00:02->eth_dst,goto_table:L2ForwardingCalc",

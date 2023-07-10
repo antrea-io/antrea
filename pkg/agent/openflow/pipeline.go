@@ -223,6 +223,8 @@ var (
 	arpOpReply   = uint16(2)
 
 	tableNameIndex = "tableNameIndex"
+
+	broadcastMAC, _ = net.ParseMAC("ff:ff:ff:ff:ff:ff")
 )
 
 type ofAction int32
@@ -2998,11 +3000,18 @@ func (f *featurePodConnectivity) l3FwdFlowToExternal() binding.Flow {
 func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	return []binding.Flow{
-		// This generates the flow to forward the packets from uplink port to bridge local port.
+		// This generates the flows to forward the packets from uplink port to bridge local port with these conditions:
+		// 1) dst MAC is the same as the uplink MAC; 2) it is for broadcast (dst MAC is ff:ff:ff:ff:ff:ff).
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchInPort(f.uplinkPort).
 			MatchDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
+			Action().Output(f.hostIfacePort).
+			Done(),
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchInPort(f.uplinkPort).
+			MatchDstMAC(broadcastMAC).
 			Action().Output(f.hostIfacePort).
 			Done(),
 		// This generates the flow to forward the packets from bridge local port to uplink port.
