@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/util/keyutil"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	antreaapis "antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -74,6 +75,8 @@ type Controller struct {
 	rotateCertificate  func() (*certificateKeyPair, error)
 	certificateKeyPair *certificateKeyPair
 
+	clock clock.WithTicker
+
 	// caPath and is initialized with NewIPSecCertificateController and should not
 	// be changed once Controller starts.
 	caPath string
@@ -96,11 +99,19 @@ func NewIPSecCertificateController(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	nodeName string,
 ) *Controller {
+	return newIPSecCertificateControllerWithCustomClock(kubeClient, ovsBridgeClient, nodeName, clock.RealClock{})
+}
+
+func newIPSecCertificateControllerWithCustomClock(kubeClient clientset.Interface,
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	nodeName string, clock clock.WithTicker) *Controller {
 	controller := &Controller{
-		kubeClient:            kubeClient,
-		ovsBridgeClient:       ovsBridgeClient,
-		nodeName:              nodeName,
-		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "IPsecCertificateController"),
+		kubeClient:      kubeClient,
+		ovsBridgeClient: ovsBridgeClient,
+		nodeName:        nodeName,
+		queue: workqueue.NewRateLimitingQueueWithDelayingInterface(workqueue.NewDelayingQueueWithCustomClock(clock, "IPsecCertificateController"),
+			workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay)),
+		clock:                 clock,
 		caPath:                filepath.Join(defaultCertificatesPath, "ca", "ca.crt"),
 		certificateFolderPath: defaultCertificatesPath,
 	}
@@ -249,7 +260,7 @@ func loadCertAndKeyFromFiles(caPath, certPath, keyPath string) (*certificateKeyP
 }
 
 func (c *Controller) syncConfigurations() error {
-	startTime := time.Now()
+	startTime := c.clock.Now()
 	defer func() {
 		d := time.Since(startTime)
 		klog.V(2).InfoS("Finished syncing IPsec certificate configurations", "duration", d)
@@ -259,12 +270,12 @@ func (c *Controller) syncConfigurations() error {
 	// Validate the existing certificate and key pair.
 	if err := c.certificateKeyPair.validate(); err != nil {
 		klog.ErrorS(err, "Verifying current certificate configurations failed")
-		deadline = time.Now()
+		deadline = c.clock.Now()
 	} else {
 		deadline = c.certificateKeyPair.nextRotationDeadline()
 	}
 	// Current certificate is about to expire.
-	if sleepInterval := time.Until(deadline); sleepInterval <= 0 {
+	if sleepInterval := deadline.Sub(c.clock.Now()); sleepInterval <= 0 {
 		klog.InfoS("Start rotating IPsec certificate")
 		newCertKeyPair, err := c.rotateCertificate()
 		if err != nil {
@@ -284,7 +295,8 @@ func (c *Controller) syncConfigurations() error {
 		deadline = c.certificateKeyPair.nextRotationDeadline()
 	}
 	// Re-queue after the interval to renew the certificate.
-	c.queue.AddAfter(workerItemKey, time.Until(deadline))
+	addAfter := deadline.Sub(c.clock.Now())
+	c.queue.AddAfter(workerItemKey, addAfter)
 	// Sync OVS bridge configurations.
 	if err := c.syncOVSConfigurations(c.certificateKeyPair.certificatePath,
 		c.certificateKeyPair.privateKeyPath, caCertificatePath); err != nil {

@@ -43,6 +43,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	certutil "k8s.io/client-go/util/cert"
+	"k8s.io/utils/clock"
+	testingclock "k8s.io/utils/clock/testing"
 
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
@@ -58,7 +60,7 @@ type fakeController struct {
 	caKey            crypto.Signer
 }
 
-func newFakeController(t *testing.T) *fakeController {
+func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 	mockController := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(mockController)
 	fakeClient := fake.NewSimpleClientset()
@@ -72,7 +74,7 @@ func newFakeController(t *testing.T) *fakeController {
 				csr.ObjectMeta.Name = fmt.Sprintf("%s%s", csr.ObjectMeta.GenerateName, utilrand.String(8))
 				csr.ObjectMeta.GenerateName = ""
 				csr.UID = uuid.NewUUID()
-				csr.CreationTimestamp = metav1.Now()
+				csr.CreationTimestamp = metav1.Time{Time: clock.Now()}
 			}
 			return false, csr, nil
 		}),
@@ -132,7 +134,7 @@ func newFakeController(t *testing.T) *fakeController {
 	err = certutil.WriteCert(filepath.Join(defaultCertificatesPath, "ca", "ca.crt"), caData)
 	require.NoError(t, err)
 
-	c := NewIPSecCertificateController(fakeClient, mockOVSBridgeClient, fakeNodeName)
+	c := newIPSecCertificateControllerWithCustomClock(fakeClient, mockOVSBridgeClient, fakeNodeName, clock)
 	return &fakeController{
 		Controller:       c,
 		mockController:   mockController,
@@ -145,7 +147,7 @@ func newFakeController(t *testing.T) *fakeController {
 
 func TestController_syncConfigurations(t *testing.T) {
 	t.Run("rotate certificate if current certificates are empty", func(t *testing.T) {
-		fakeController := newFakeController(t)
+		fakeController := newFakeController(t, clock.RealClock{})
 		ch := make(chan struct{})
 		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
 			close(ch)
@@ -157,7 +159,7 @@ func TestController_syncConfigurations(t *testing.T) {
 		<-ch
 	})
 	t.Run("should not touch existing certificate if rotate certificate failed", func(t *testing.T) {
-		fakeController := newFakeController(t)
+		fakeController := newFakeController(t, clock.RealClock{})
 		defer fakeController.mockController.Finish()
 		fakeController.certificateKeyPair = &certificateKeyPair{
 			certificatePath: "cert.crt",
@@ -176,7 +178,7 @@ func TestController_syncConfigurations(t *testing.T) {
 		<-ch
 	})
 	t.Run("should clean up new certificate if it is not valid", func(t *testing.T) {
-		fakeController := newFakeController(t)
+		fakeController := newFakeController(t, clock.RealClock{})
 		defer fakeController.mockController.Finish()
 		certPath := filepath.Join(fakeController.certificateFolderPath, "cert-1.crt")
 		keyPath := filepath.Join(fakeController.certificateFolderPath, "key-1.key")
@@ -201,7 +203,7 @@ func TestController_syncConfigurations(t *testing.T) {
 	t.Run("request and configure new certificates", func(t *testing.T) {
 		ch := make(chan struct{})
 		defer close(ch)
-		fakeController := newFakeController(t)
+		fakeController := newFakeController(t, clock.RealClock{})
 		defer fakeController.mockController.Finish()
 		assert.Equal(t, 0, fakeController.queue.Len())
 		ctx, cancel := context.WithCancel(context.Background())
@@ -270,7 +272,9 @@ func TestController_syncConfigurations(t *testing.T) {
 func TestController_RotateCertificates(t *testing.T) {
 	ch := make(chan struct{})
 	defer close(ch)
-	fakeController := newFakeController(t)
+	now := time.Now()
+	fakeClock := testingclock.NewFakeClock(now)
+	fakeController := newFakeController(t, fakeClock)
 	defer fakeController.mockController.Finish()
 	assert.Equal(t, 0, fakeController.queue.Len())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -290,6 +294,7 @@ func TestController_RotateCertificates(t *testing.T) {
 				assert.True(t, ok)
 				// issue a certificate with lifetime of 10 seconds.
 				signCSR(t, fakeController, csr, time.Second*10)
+				signCh <- struct{}{}
 				counter++
 				if counter == 2 {
 					return
@@ -300,25 +305,22 @@ func TestController_RotateCertificates(t *testing.T) {
 	fakeController.mockBridgeClient.EXPECT().GetOVSOtherConfig().Times(1)
 	fakeController.mockBridgeClient.EXPECT().UpdateOVSOtherConfig(gomock.Any()).MinTimes(1)
 	go fakeController.Run(ch)
+	<-signCh
+	// the rotation interval is determined by nextRotationDeadline as notBefore + (notAfter -
+	// notBefore) * k, where k is >= 0.7 and <= 0.9. We would therefore expect the rotation
+	// interval to be between [7, 9] seconds.
+	fakeClock.SetTime(now.Add(time.Millisecond * 6999))
+	select {
+	case <-signCh:
+		t.Error("CSR should not be signed before the rotation deadline")
+	case <-time.After(2 * time.Second):
+	}
+	fakeClock.SetTime(now.Add(time.Second * 9))
 	// wait for the signer to finish signing two CSRs.
 	<-signCh
 	list, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().List(context.TODO(), metav1.ListOptions{})
 	assert.NoError(t, err)
 	assert.Len(t, list.Items, 2)
-	delta := list.Items[0].CreationTimestamp.Sub(list.Items[1].CreationTimestamp.Time)
-	if delta < 0 {
-		delta = -delta
-	}
-	// the rotation interval is determined by nextRotationDeadline as notBefore + (notAfter -
-	// notBefore) * k, where k is >= 0.7 and <= 0.9. We would therefore expect the delta to
-	// fall in the interval [7s, 9s]. However we have to account for the following:
-	// a) the accuracy of notAfter is at the second level, which means that it will be
-	// truncated, which means that there can actually be less than 7s between the
-	// CreationTimestamp of the first certificate and the rotation deadline. As a result, we
-	// need to set the lower bound to 6s.
-	// b) it takes time to process the CSR request so we add one second to the upper bound.
-	assert.Less(t, delta, 10*time.Second)
-	assert.LessOrEqual(t, 6*time.Second, delta)
 }
 
 func newIPsecCertTemplate(t *testing.T, nodeName string, notBefore, notAfter time.Time) *x509.Certificate {
