@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,6 +70,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=multicluster.crd.antrea.io, Version=v1alpha2
 	case v1alpha2.SchemeGroupVersion.WithResource("clusterclaims"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha2().ClusterClaims().Informer()}, nil
+	case v1alpha2.SchemeGroupVersion.WithResource("clustersets"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha2().ClusterSets().Informer()}, nil
 
 	}
 

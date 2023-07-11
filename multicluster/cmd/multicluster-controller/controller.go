@@ -37,8 +37,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/util/env"
@@ -71,8 +71,8 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(multiclusterv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(multiclusterv1alpha2.AddToScheme(scheme))
+	utilruntime.Must(mcv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(mcv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(antreacrd.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -174,12 +174,8 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	}
 
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-clusterset",
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
-			Client:    mgr.GetClient(),
-			namespace: env.GetPodNamespace()}})
-	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterclaim",
-		&webhook.Admission{Handler: &clusterClaimValidator{
 			Client:    mgr.GetClient(),
 			namespace: env.GetPodNamespace()}})
 

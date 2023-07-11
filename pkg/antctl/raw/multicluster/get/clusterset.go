@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 	"antrea.io/antrea/pkg/antctl/transform/clusterset"
@@ -96,10 +96,10 @@ func runEClusterSet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	var clusterSets []multiclusterv1alpha1.ClusterSet
+	var clusterSets []mcv1alpha2.ClusterSet
 	if len(args) > 0 {
 		clusterSetName := args[0]
-		clusterSet := multiclusterv1alpha1.ClusterSet{}
+		clusterSet := mcv1alpha2.ClusterSet{}
 		err = optionsClusterSet.k8sClient.Get(context.TODO(), types.NamespacedName{
 			Namespace: optionsClusterSet.namespace,
 			Name:      clusterSetName,
@@ -116,7 +116,7 @@ func runEClusterSet(cmd *cobra.Command, args []string) error {
 		}
 		clusterSets = append(clusterSets, clusterSet)
 	} else {
-		clusterSetList := &multiclusterv1alpha1.ClusterSetList{}
+		clusterSetList := &mcv1alpha2.ClusterSetList{}
 		err = optionsClusterSet.k8sClient.List(context.TODO(), clusterSetList, &client.ListOptions{Namespace: optionsClusterSet.namespace})
 		if err != nil {
 			return err

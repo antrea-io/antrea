@@ -13,8 +13,7 @@ which is defined by Kubernetes upstream [KEP-1645](https://github.com/kubernetes
 
 | CRD                      | CRD version | Introduced in | Deprecated in / Planned Deprecation | Planned Removal |
 | ------------------------ | ----------- | ------------- | ----------------------------------- | --------------- |
-| `ClusterClaims`          | v1alpha2    | v1.8.0        | N/A                                 | N/A             |
-| `ClusterSets`            | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
+| `ClusterSets`            | v1alpha2    | v1.13.0       | N/A                                 | N/A             |
 | `MemberClusterAnnounces` | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
 | `ResourceExports`        | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
 | `ResourceImports`        | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
@@ -33,3 +32,5 @@ which is defined by Kubernetes upstream [KEP-1645](https://github.com/kubernetes
 | CRD                      | API group                    | CRD version | Introduced in | Deprecated in | Removed in |
 | ------------------------ | ---------------------------- | ----------- | ------------- | ------------- | ---------- |
 | `ClusterClaims`          | `multicluster.crd.antrea.io` | v1alpha1    | v1.5.0        | v1.8.0        | v1.8.0     |
+| `ClusterClaims`          | `multicluster.crd.antrea.io` | v1alpha2    | v1.8.0        | v1.13.0       | v1.13.0         |
+| `ClusterSets`            | `multicluster.crd.antrea.io` | v1alpha1    | v1.5.0         | v1.13.0       | N/A        |

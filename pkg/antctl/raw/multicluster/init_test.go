@@ -85,9 +85,7 @@ kind: Config`)
 		{
 			name:      "init successfully",
 			namespace: "default",
-			expectedOutput: `ClusterClaim "id.k8s.io" created in Namespace default
-ClusterClaim "clusterset.k8s.io" created in Namespace default
-ClusterSet "test-clusterset" created in Namespace default
+			expectedOutput: `ClusterSet "test-clusterset" created in Namespace default
 Successfully initialized ClusterSet test-clusterset
 You can run command "antctl mc get joinconfig -n default" to print the parameters needed for a member cluster to join the ClusterSet.
 ServiceAccount "default-member-token" created

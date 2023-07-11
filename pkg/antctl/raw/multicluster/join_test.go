@@ -26,26 +26,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
 	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
 
 func TestJoin(t *testing.T) {
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "test-clusterset",
 		},
-		Status: mcsv1alpha1.ClusterSetStatus{
-			ClusterStatuses: []mcsv1alpha1.ClusterStatus{
+		Status: mcv1alpha2.ClusterSetStatus{
+			ClusterStatuses: []mcv1alpha2.ClusterStatus{
 				{
 					ClusterID: "leader-id",
-					Conditions: []mcsv1alpha1.ClusterCondition{
+					Conditions: []mcv1alpha2.ClusterCondition{
 						{
 							Message: "Is the leader",
 							Status:  v1.ConditionTrue,
-							Type:    mcsv1alpha1.ClusterReady,
+							Type:    mcv1alpha2.ClusterReady,
 						},
 					},
 				},

@@ -23,7 +23,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/admission/v1"
-	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,32 +32,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
 var clusterSetWebhookUnderTest *clusterSetValidator
 
 func TestWebhookClusterSetEvents(t *testing.T) {
-	newClusterSet := &mcsv1alpha1.ClusterSet{
+	newClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "mcs1",
 			Name:      "clusterset1",
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			ClusterID: "east",
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 				}},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID:      "east",
-					ServiceAccount: "east-access-sa",
-				},
-				{
-					ClusterID:      "west",
-					ServiceAccount: "west-access-sa",
-				},
-			},
 			Namespace: "mcs-A",
 		},
 	}
@@ -68,29 +58,16 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 	existingClusterSet2 := newClusterSet.DeepCopy()
 	existingClusterSet2.Name = "clusterset2"
 	leaderUpdatedClusterSet := newClusterSet.DeepCopy()
-	leaderUpdatedClusterSet.Spec.Leaders = []mcsv1alpha1.MemberCluster{
+	leaderUpdatedClusterSet.Spec.Leaders = []mcv1alpha2.LeaderClusterInfo{
 		{ClusterID: "leader1-1"},
 	}
 
-	memberUpdatedClusterSet := newClusterSet.DeepCopy()
-	memberUpdatedClusterSet.Spec.Members = []mcsv1alpha1.MemberCluster{
-		{
-			ClusterID:      "east",
-			ServiceAccount: "east-access-sa",
-		},
-		{
-			ClusterID:      "west",
-			ServiceAccount: "west-access-sa-1",
-		},
-	}
-
-	labelUpdatedClusterSet := existingClusterSet1.DeepCopy()
-	labelUpdatedClusterSet.Labels = map[string]string{"test": "true"}
+	clusterIDUpdatedClusterSet := newClusterSet.DeepCopy()
+	clusterIDUpdatedClusterSet.Spec.ClusterID = "newclusterid"
 
 	newCS, _ := j.Marshal(newClusterSet)
 	leaderUpdatedCS, _ := j.Marshal(leaderUpdatedClusterSet)
-	memberUpdatedCS, _ := j.Marshal(memberUpdatedClusterSet)
-	labelUpdatedCS, _ := j.Marshal(labelUpdatedClusterSet)
+	clusterIDUpdatedCS, _ := j.Marshal(clusterIDUpdatedClusterSet)
 
 	newReq := admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
@@ -124,65 +101,22 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 		AdmissionRequest: *leaderNewReqCopy,
 	}
 
-	memberUpdateReq1Copy := newReq.DeepCopy()
-	memberUpdateReq1Copy.Operation = v1.Update
-	memberUpdateReq1Copy.Object = runtime.RawExtension{
-		Raw: memberUpdatedCS,
+	clusterIDNewReqCopy := newReq.DeepCopy()
+	clusterIDNewReqCopy.Object = runtime.RawExtension{
+		Raw: clusterIDUpdatedCS,
 	}
-	memberUpdateReq1Copy.OldObject = runtime.RawExtension{
+	clusterIDNewReqCopy.OldObject = runtime.RawExtension{
 		Raw: newCS,
 	}
-	memberUpdateReq1Copy.UserInfo = authenticationv1.UserInfo{
-		Username: "system:serviceaccount:mcs1:antrea-mc-controller",
-		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
-		Groups: []string{
-			"system:serviceaccounts",
-			"system:serviceaccounts:mcs1",
-			"system:authenticated",
-		},
+	clusterIDUpdatedReq := admission.Request{
+		AdmissionRequest: *clusterIDNewReqCopy,
 	}
 
-	memberUpdatedReq1 := admission.Request{
-		AdmissionRequest: *memberUpdateReq1Copy,
-	}
-
-	memberUpdateReq2Copy := memberUpdateReq1Copy.DeepCopy()
-	memberUpdateReq2Copy.UserInfo = authenticationv1.UserInfo{
-		Username: "system:serviceaccount:mcs1:east-access-sa",
-		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
-		Groups: []string{
-			"system:serviceaccounts",
-			"system:serviceaccounts:mcs1",
-			"system:authenticated",
-		},
-	}
-	memberUpdatedReq2 := admission.Request{
-		AdmissionRequest: *memberUpdateReq2Copy,
-	}
-
-	labelUpdateReqCopy := memberUpdateReq2Copy.DeepCopy()
-	labelUpdateReqCopy.Object = runtime.RawExtension{
-		Raw: labelUpdatedCS,
-	}
-	labelUpdatedReq := admission.Request{
-		AdmissionRequest: *labelUpdateReqCopy,
-	}
-
-	memberUpdatedReqInvalidUser := admission.Request{
-		AdmissionRequest: *memberUpdateReq1Copy,
-	}
-	memberUpdatedReqInvalidUser.UserInfo = authenticationv1.UserInfo{
-		Username: "system:user:east-access-sa",
-		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
-		Groups: []string{
-			"system:authenticated",
-		},
-	}
 	tests := []struct {
 		name               string
 		req                admission.Request
-		existingClusterSet *mcsv1alpha1.ClusterSet
-		newClusterSet      *mcsv1alpha1.ClusterSet
+		existingClusterSet *mcv1alpha2.ClusterSet
+		newClusterSet      *mcv1alpha2.ClusterSet
 		isAllowed          bool
 	}{
 		{
@@ -197,46 +131,25 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 			isAllowed:          false,
 		},
 		{
+			name:               "update a new ClusterSet's ClusterID when there is an existing ClusterSet",
+			existingClusterSet: existingClusterSet1,
+			newClusterSet:      clusterIDUpdatedClusterSet,
+			req:                clusterIDUpdatedReq,
+			isAllowed:          false,
+		},
+		{
 			name:               "update a new ClusterSet's leader ClusterID when there is an existing ClusterSet",
 			existingClusterSet: existingClusterSet1,
 			newClusterSet:      leaderUpdatedClusterSet,
 			req:                leaderUpdatedReq,
 			isAllowed:          false,
 		},
-		{
-			name:               "update a new ClusterSet's member list with mc ServiceAccount",
-			existingClusterSet: existingClusterSet1,
-			newClusterSet:      memberUpdatedClusterSet,
-			req:                memberUpdatedReq1,
-			isAllowed:          true,
-		},
-		{
-			name:               "update a new ClusterSet's member list with  invalid user info",
-			existingClusterSet: existingClusterSet1,
-			newClusterSet:      memberUpdatedClusterSet,
-			req:                memberUpdatedReqInvalidUser,
-			isAllowed:          false,
-		},
-		{
-			name:               "update a new ClusterSet's member list without mc ServiceAccount",
-			existingClusterSet: existingClusterSet1,
-			newClusterSet:      memberUpdatedClusterSet,
-			req:                memberUpdatedReq2,
-			isAllowed:          false,
-		},
-		{
-			name:               "update a new ClusterSet's labels without mc ServiceAccount",
-			existingClusterSet: existingClusterSet1,
-			newClusterSet:      labelUpdatedClusterSet,
-			req:                labelUpdatedReq,
-			isAllowed:          true,
-		},
 	}
 
 	newScheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcsv1alpha1.AddToScheme(newScheme))
+	utilruntime.Must(mcv1alpha2.AddToScheme(newScheme))
 	decoder, err := admission.NewDecoder(newScheme)
 	if err != nil {
 		klog.ErrorS(err, "Error constructing a decoder")

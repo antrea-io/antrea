@@ -23,25 +23,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
 
 func TestGetClusterSet(t *testing.T) {
-	clusterSetList := &mcsv1alpha1.ClusterSetList{
-		Items: []mcsv1alpha1.ClusterSet{
+	clusterSetList := &mcv1alpha2.ClusterSetList{
+		Items: []mcv1alpha2.ClusterSet{
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "clusterset-name",
 				},
-				Status: mcsv1alpha1.ClusterSetStatus{},
+				Status: mcv1alpha2.ClusterSetStatus{},
 			},
 		},
 	}
 	tests := []struct {
 		name                string
-		existingClusterSets *mcsv1alpha1.ClusterSetList
+		existingClusterSets *mcv1alpha2.ClusterSetList
 		args                []string
 		output              string
 		allNamespaces       bool
@@ -59,14 +59,14 @@ func TestGetClusterSet(t *testing.T) {
 			existingClusterSets: clusterSetList,
 			args:                []string{"clusterset-name"},
 			output:              "json",
-			expectedOutput:      "[\n  {\n    \"kind\": \"ClusterSet\",\n    \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha1\",\n    \"metadata\": {\n      \"name\": \"clusterset-name\",\n      \"namespace\": \"default\",\n      \"resourceVersion\": \"999\",\n      \"creationTimestamp\": null\n    },\n    \"spec\": {\n      \"leaders\": null\n    },\n    \"status\": {}\n  }\n]\n",
+			expectedOutput:      "[\n  {\n    \"kind\": \"ClusterSet\",\n    \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha2\",\n    \"metadata\": {\n      \"name\": \"clusterset-name\",\n      \"namespace\": \"default\",\n      \"resourceVersion\": \"999\",\n      \"creationTimestamp\": null\n    },\n    \"spec\": {\n      \"clusterID\": \"\",\n      \"leaders\": null\n    },\n    \"status\": {}\n  }\n]\n",
 		},
 		{
 			name:                "get single ClusterSet with yaml output",
 			existingClusterSets: clusterSetList,
 			args:                []string{"clusterset-name"},
 			output:              "yaml",
-			expectedOutput:      "- apiVersion: multicluster.crd.antrea.io/v1alpha1\n  kind: ClusterSet\n  metadata:\n    creationTimestamp: null\n    name: clusterset-name\n    namespace: default\n    resourceVersion: \"999\"\n  spec:\n    leaders: null\n  status: {}\n",
+			expectedOutput:      "- apiVersion: multicluster.crd.antrea.io/v1alpha2\n  kind: ClusterSet\n  metadata:\n    creationTimestamp: null\n    name: clusterset-name\n    namespace: default\n    resourceVersion: \"999\"\n  spec:\n    clusterID: \"\"\n    leaders: null\n  status: {}\n",
 		},
 		{
 			name:           "get non-existing ClusterSet",
@@ -76,29 +76,29 @@ func TestGetClusterSet(t *testing.T) {
 		{
 			name:          "get all ClusterSets",
 			allNamespaces: true,
-			existingClusterSets: &mcsv1alpha1.ClusterSetList{
-				Items: []mcsv1alpha1.ClusterSet{
+			existingClusterSets: &mcv1alpha2.ClusterSetList{
+				Items: []mcv1alpha2.ClusterSet{
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
 							Name:      "clusterset-name",
 						},
-						Status: mcsv1alpha1.ClusterSetStatus{},
+						Status: mcv1alpha2.ClusterSetStatus{},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "kube-system",
 							Name:      "clusterset-1",
 						},
-						Status: mcsv1alpha1.ClusterSetStatus{
-							ClusterStatuses: []mcsv1alpha1.ClusterStatus{{
+						Status: mcv1alpha2.ClusterSetStatus{
+							ClusterStatuses: []mcv1alpha2.ClusterStatus{{
 								ClusterID: "cluster-a",
-								Conditions: []mcsv1alpha1.ClusterCondition{
+								Conditions: []mcv1alpha2.ClusterCondition{
 									{
 										Message: "Member Connected",
 										Reason:  "Connected",
 										Status:  v1.ConditionTrue,
-										Type:    mcsv1alpha1.ClusterReady,
+										Type:    mcv1alpha2.ClusterReady,
 									},
 								},
 							},

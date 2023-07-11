@@ -2,7 +2,6 @@
 # since it depends on service name and Namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/multicluster.crd.antrea.io_clusterclaims.yaml
 - bases/multicluster.crd.antrea.io_memberclusterannounces.yaml
 - bases/multicluster.crd.antrea.io_clustersets.yaml
 - bases/multicluster.crd.antrea.io_resourceexports.yaml
@@ -18,7 +17,6 @@ patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
 # Dont need conversion webhook since we only have one version right now
-#- patches/webhook_in_clusterclaims.yaml
 #- patches/webhook_in_memberclusterannounces.yaml
 #- patches/webhook_in_clustersets.yaml
 #- patches/webhook_in_resourceexports.yaml

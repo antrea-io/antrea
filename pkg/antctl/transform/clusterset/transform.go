@@ -15,7 +15,7 @@
 package clusterset
 
 import (
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 )
 
@@ -30,13 +30,13 @@ type Response struct {
 
 func Transform(r interface{}, single bool) (interface{}, error) {
 	if single {
-		return listTransform([]multiclusterv1alpha1.ClusterSet{r.(multiclusterv1alpha1.ClusterSet)})
+		return listTransform([]mcv1alpha2.ClusterSet{r.(mcv1alpha2.ClusterSet)})
 	}
 	return listTransform(r)
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	clusterSets := l.([]multiclusterv1alpha1.ClusterSet)
+	clusterSets := l.([]mcv1alpha2.ClusterSet)
 	var result []interface{}
 
 	for _, clusterSet := range clusterSets {
@@ -51,8 +51,8 @@ func listTransform(l interface{}) (interface{}, error) {
 			}
 		} else {
 			// When the ClusterSet has no status, we should print it with empty status.
-			o, _ := objectTransform(clusterSet, multiclusterv1alpha1.ClusterStatus{},
-				multiclusterv1alpha1.ClusterCondition{})
+			o, _ := objectTransform(clusterSet, mcv1alpha2.ClusterStatus{},
+				mcv1alpha2.ClusterCondition{})
 			result = append(result, o.(Response))
 		}
 	}
@@ -60,8 +60,8 @@ func listTransform(l interface{}) (interface{}, error) {
 	return result, nil
 }
 
-func objectTransform(clusterSet multiclusterv1alpha1.ClusterSet, status multiclusterv1alpha1.ClusterStatus,
-	condition multiclusterv1alpha1.ClusterCondition) (interface{}, error) {
+func objectTransform(clusterSet mcv1alpha2.ClusterSet, status mcv1alpha2.ClusterStatus,
+	condition mcv1alpha2.ClusterCondition) (interface{}, error) {
 
 	return Response{
 		ClusterID:    status.ClusterID,

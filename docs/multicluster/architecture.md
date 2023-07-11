@@ -25,9 +25,6 @@ Namespace sameness applies, which means all Namespaces with a given name are con
 be the same Namespace. The ClusterSet Custom Resource Definition(CRD) defines a ClusterSet
 including the leader and member clusters information.
 
-The ClusterClaim CRD is used to claim a ClusterSet with a unique ClusterSet ID, and to
-claim the cluster itself as a member of a ClusterSet with a unique cluster ID.
-
 The MemberClusterAnnounce CRD declares a member cluster configuration to the leader cluster.
 
 The Common Area is an abstraction in the Antrea Multi-cluster implementation provides a storage
@@ -44,14 +41,13 @@ it takes different responsibilities in leader and member clusters.
 
 ### ClusterSet Establishment
 
-In a member cluster, Multi-cluster Controller watches and validates the ClusterSet
-and ClusterClaim CRs, and creates a MemberClusterAnnounce CR in the Common Area of
-the leader cluster to join the ClusterSet.
+In a member cluster, Multi-cluster Controller watches and validates the ClusterSet,
+and creates a MemberClusterAnnounce CR in the Common Area of the leader cluster to
+join the ClusterSet.
 
-In the leader cluster, Multi-cluster controller watches and validates the
-ClusterSet and Clusterclaim CRs, and initializes the ClusterSet. It also validates
-the MemberClusterAnnounce CR created by a member cluster and adds the cluster to
-the ClusterSet CR's member cluster list.
+In the leader cluster, Multi-cluster controller watches, validates and initializes
+the ClusterSet. It also validates the MemberClusterAnnounce CR created by a member
+cluster and updates the member cluster's connection status to `ClusterSet.Status`.
 
 ### Resource Export and Import
 

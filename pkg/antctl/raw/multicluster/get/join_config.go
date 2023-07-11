@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
@@ -86,7 +86,7 @@ func runEJoinConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	clusterSetList := &multiclusterv1alpha1.ClusterSetList{}
+	clusterSetList := &mcv1alpha2.ClusterSetList{}
 	err = joinConfigOpts.k8sClient.List(context.TODO(), clusterSetList, &client.ListOptions{Namespace: joinConfigOpts.namespace})
 	if err != nil {
 		return err

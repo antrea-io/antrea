@@ -11,11 +11,11 @@ The goal is to support 'graceful' upgrade. Multi-cluster upgrade will not have d
 to data-plane of member clusters, but there can be downtime of processing new configurations
 when individual components restart:
 
-- During Leader Controller restart, new member cluster, ClusterSet, ClusterClaim or
-  ResourceExport will not be processed. This is because the Controller also runs the validation
-  webhooks for MemberClusterAnnounce, ClusterSet, ClusterClaim and ResourceExport.
-- During Member Controller restart, new ClusterSet or ClusterClaim will not be processed.
-  This is because the Controller runs the validation webhooks for ClusterSet and ClusterClaim.
+- During Leader Controller restart, a new member cluster, ClusterSet or ResourceExport will
+  not be processed. This is because the Controller also runs the validation webhooks for
+  MemberClusterAnnounce, ClusterSet and ResourceExport.
+- During Member Controller restart, a new ClusterSet will not be processed, this is because
+  the Controller runs the validation webhooks for ClusterSet.
 
 Our goal is to support version skew for different Antrea Multi-cluster components, but the
 Multi-cluster feature is still in Alpha version, and the API is not stable yet. Our recommendation

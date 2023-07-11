@@ -105,6 +105,7 @@ func runLeader(o *Options) error {
 	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
+
 	staleController := multiclustercontrollers.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),

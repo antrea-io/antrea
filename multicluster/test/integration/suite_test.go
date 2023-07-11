@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
@@ -196,50 +196,28 @@ var _ = BeforeSuite(func() {
 })
 
 func configureClusterSet() {
-	clusterIDClaim := &mcsv1alpha2.ClusterClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: LeaderNamespace,
-			Name:      mcsv1alpha2.WellKnownClusterClaimID,
-		},
-		Value: LocalClusterID,
-	}
-	clusterSetIDClaim := &mcsv1alpha2.ClusterClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: LeaderNamespace,
-			Name:      mcsv1alpha2.WellKnownClusterClaimClusterSet,
-		},
-		Value: clusterSetID,
-	}
-	clusterSet := &mcsv1alpha1.ClusterSet{
+	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: LeaderNamespace,
 			Name:      clusterSetID,
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			ClusterID: LocalClusterID,
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: LocalClusterID,
 					Secret:    "access-token",
 					Server:    k8sServerURL,
 				},
 			},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID: LocalClusterID,
-				},
-			},
 			Namespace: LeaderNamespace,
 		},
 	}
 	ctx := context.Background()
-	err := k8sClient.Create(ctx, clusterIDClaim, &client.CreateOptions{})
-	Expect(err == nil).Should(BeTrue())
-	err = k8sClient.Create(ctx, clusterSetIDClaim, &client.CreateOptions{})
-	Expect(err == nil).Should(BeTrue())
-	err = k8sClient.Create(ctx, clusterSet, &client.CreateOptions{})
+	err := k8sClient.Create(ctx, clusterSet, &client.CreateOptions{})
 	Expect(err == nil).Should(BeTrue())
 	Eventually(func() bool {
-		memberAnnounce := &mcsv1alpha1.MemberClusterAnnounce{}
+		memberAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
 		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: LeaderNamespace, Name: "member-announce-from-cluster-a"}, memberAnnounce)
 		return err == nil
 	}, timeout, interval).Should(BeTrue())

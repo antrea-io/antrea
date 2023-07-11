@@ -34,7 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -55,7 +56,7 @@ type MemberClusterSetReconciler struct {
 	// commonAreaLock protects the access to RemoteCommonArea.
 	commonAreaLock sync.RWMutex
 
-	clusterSetConfig *multiclusterv1alpha1.ClusterSet
+	clusterSetConfig *mcv1alpha2.ClusterSet
 	clusterSetID     common.ClusterSetID
 	clusterID        common.ClusterID
 	installedLeader  leaderClusterInfo
@@ -84,7 +85,7 @@ func NewMemberClusterSetReconciler(client client.Client,
 
 // Reconcile ClusterSet changes
 func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
 	r.commonAreaLock.Lock()
 	defer r.commonAreaLock.Unlock()
@@ -112,18 +113,13 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Handle create or update
 	if r.clusterSetConfig == nil {
-		// If create, make sure the local ClusterClaim is part of the member ClusterSet.
-		clusterID, clusterSetID, err := common.ValidateLocalClusterClaim(r.Client, clusterSet)
-		if err != nil {
-			return ctrl.Result{}, err
+		if clusterSet.Spec.ClusterID == "" {
+			// ClusterID is a required feild, and the empty value case should only happen
+			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
+			return ctrl.Result{}, fmt.Errorf("the spec.clusterID field of ClusterSet %s is required", req.NamespacedName)
 		}
-		r.clusterID = clusterID
-		r.clusterSetID = clusterSetID
-	} else {
-		if string(r.clusterSetID) != clusterSet.Name {
-			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
-				r.clusterSetID, clusterSet.Name)
-		}
+		r.clusterID = common.ClusterID(clusterSet.Spec.ClusterID)
+		r.clusterSetID = common.ClusterSetID(clusterSet.Name)
 	}
 	r.clusterSetConfig = clusterSet.DeepCopy()
 
@@ -136,7 +132,7 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 }
 
 func (r *MemberClusterSetReconciler) deleteMemberClusterAnnounce(ctx context.Context) error {
-	memberClusterAnnounce := &multiclusterv1alpha1.MemberClusterAnnounce{
+	memberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-" + r.remoteCommonArea.GetLocalClusterID(),
 			Namespace: r.remoteCommonArea.GetNamespace(),
@@ -160,7 +156,7 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Only register this controller to reconcile the ClusterSet in the same Namespace
 	namespaceFilter := func(object client.Object) bool {
-		if clusterSet, ok := object.(*multiclusterv1alpha1.ClusterSet); ok {
+		if clusterSet, ok := object.(*mcv1alpha2.ClusterSet); ok {
 			return clusterSet.Namespace == r.Namespace
 		}
 		return false
@@ -172,7 +168,7 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	filter := predicate.And(generationPredicate, namespacePredicate)
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&multiclusterv1alpha1.ClusterSet{}).
+		For(&mcv1alpha2.ClusterSet{}).
 		WithEventFilter(filter).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
@@ -180,7 +176,7 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *multiclusterv1alpha1.ClusterSet) error {
+func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *mcv1alpha2.ClusterSet) error {
 	currentCommonArea := r.remoteCommonArea
 	newLeader := clusterSet.Spec.Leaders[0]
 
@@ -285,14 +281,13 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 		return
 	}
 
-	status := multiclusterv1alpha1.ClusterSetStatus{}
-	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members))
+	status := mcv1alpha2.ClusterSetStatus{}
 	status.ObservedGeneration = r.clusterSetConfig.Generation
-	status.ClusterStatuses = []multiclusterv1alpha1.ClusterStatus{}
+	status.ClusterStatuses = []mcv1alpha2.ClusterStatus{}
 	r.commonAreaLock.RLock()
 	if r.remoteCommonArea != nil {
 		status.ClusterStatuses = append(status.ClusterStatuses,
-			multiclusterv1alpha1.ClusterStatus{
+			mcv1alpha2.ClusterStatus{
 				ClusterID:  string(r.remoteCommonArea.GetClusterID()),
 				Conditions: r.remoteCommonArea.GetStatus(),
 			},
@@ -300,8 +295,8 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	}
 	r.commonAreaLock.RUnlock()
 
-	overallCondition := multiclusterv1alpha1.ClusterSetCondition{
-		Type:               multiclusterv1alpha1.ClusterSetReady,
+	overallCondition := mcv1alpha2.ClusterSetCondition{
+		Type:               mcv1alpha2.ClusterSetReady,
 		Status:             v1.ConditionUnknown,
 		Message:            "Leader not yet connected",
 		Reason:             "",
@@ -313,14 +308,14 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 		isLeader := false
 		for _, condition := range cluster.Conditions {
 			switch condition.Type {
-			case multiclusterv1alpha1.ClusterReady:
+			case mcv1alpha2.ClusterReady:
 				{
 					if condition.Status == v1.ConditionTrue {
 						connected = true
 						readyClusters += 1
 					}
 				}
-			case multiclusterv1alpha1.ClusterIsLeader:
+			case mcv1alpha2.ClusterIsLeader:
 				{
 					if condition.Status == v1.ConditionTrue {
 						isLeader = true
@@ -339,13 +334,15 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 		overallCondition.LastTransitionTime = metav1.Now()
 		overallCondition.Message = "Disconnected from leader"
 	}
+	// The total cluster should always be 1 to include the member cluster itself.
+	status.TotalClusters = 1
 	status.ReadyClusters = int32(readyClusters)
 
 	namespacedName := types.NamespacedName{
 		Namespace: r.clusterSetConfig.Namespace,
 		Name:      r.clusterSetConfig.Name,
 	}
-	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
 	if err != nil {
 		klog.ErrorS(err, "Failed to read ClusterSet", "name", namespacedName)
@@ -353,7 +350,7 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
 		len(clusterSet.Status.Conditions) == 0 {
-		status.Conditions = []multiclusterv1alpha1.ClusterSetCondition{overallCondition}
+		status.Conditions = []mcv1alpha2.ClusterSetCondition{overallCondition}
 	}
 	clusterSet.Status = status
 	err = r.Status().Update(context.TODO(), clusterSet)
