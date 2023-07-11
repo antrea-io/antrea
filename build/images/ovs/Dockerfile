@@ -53,7 +53,11 @@ COPY charon-logging.conf /tmp
 # final image.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends iptables logrotate libstrongswan-standard-plugins && \
-    (dpkg -i /tmp/ovs-debs/*.deb || apt-get -f -y --no-install-recommends install) && \
+    # -f / --fix-broken will take care of installing all missing dependencies
+    apt-get -f -y --no-install-recommends install /tmp/ovs-debs/*.deb && \
+    # make sure that openvswitch packages will not be upgraded by mistake
+    # in practice, the packages should not be upgraded anyway since they were installed using a .deb
+    apt-mark hold *openvswitch* && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
     sed -i "/rotate /a\    #size 100M" /etc/logrotate.d/openvswitch-switch && \
     sed -i "/^.*filelog.*{/r /tmp/charon-logging.conf" /etc/strongswan.d/charon-logging.conf && \
