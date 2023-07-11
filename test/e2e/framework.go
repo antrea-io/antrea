@@ -127,7 +127,7 @@ const (
 	netshootImage       = "projects.registry.vmware.com/antrea/netshoot:v0.1"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
+	toolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.1-0"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.6.2"
 	ipfixCollectorPort  = "4739"
 	clickHouseHTTPPort  = "8123"

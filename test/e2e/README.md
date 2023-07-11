@@ -270,7 +270,7 @@ To run all benchmarks, without the standard e2e tests:
 ```bash
 go test -v -timeout=30m -run=XXX -bench=. \
     antrea.io/antrea/test/e2e \
-    --performance.http.concurrency=16
+    -perf.http.concurrency=16
 ```
 
 The above command uses `-run=XXX` to deselect all `Test*` tests and uses `-bench=.` to select
@@ -282,9 +282,9 @@ If you would like to run the performance tests in a different scale, you could r
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
     antrea.io/antrea/test/e2e \
-    --performance.http.requests=5000 \
-    --performance.http.policy_rules=1000 \
-    --performance.http.concurrency=16
+    -perf.http.requests=5000 \
+    -perf.http.policy_rules=1000 \
+    -perf.http.concurrency=16
 ```
 
 All flags of performance tests includes:
