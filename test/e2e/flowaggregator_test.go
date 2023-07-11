@@ -111,8 +111,8 @@ DATA SET:
     reverseThroughput: 12381344
     reverseThroughputFromSourceNode: 12381344
     reverseThroughputFromDestinationNode: 12381344
-    sourcePodLabels: {"antrea-e2e":"perftest-a","app":"perftool"}
-    destinationPodLabels: {"antrea-e2e":"perftest-b","app":"perftool"}
+    sourcePodLabels: {"antrea-e2e":"perftest-a","app":"iperf"}
+    destinationPodLabels: {"antrea-e2e":"perftest-b","app":"iperf"}
 Intra-Node: Flow record information is complete for source and destination e.g. sourcePodName, destinationPodName
 Inter-Node: Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info e.g., sourcePodName, sourcePodNamespace, sourceNodeName etc.
 AntreaProxy enabled (Intra-Node): Flow record information is complete for source and destination along with K8s service info such as destinationClusterIP, destinationServicePort, destinationServicePortName etc.
@@ -634,7 +634,7 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 		dstIP = podBIPs.ipv6.String()
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSecShort)
 	}
-	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
 	_, srcPort, dstPort := getBandwidthAndPorts(stdout)
 
@@ -693,7 +693,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	} else {
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d -b %s", dstIP, iperfTimeSec, iperfBandwidth)
 	}
-	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
 	bwSlice, srcPort, _ := getBandwidthAndPorts(stdout)
 	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
@@ -1040,8 +1040,8 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 		assert.Contains(record, dstPod, "Record with dstIP does not have Pod name: %s", dstPod)
 		assert.Contains(record, fmt.Sprintf("destinationPodNamespace: %s", namespace), "Record does not have correct destinationPodNamespace: %s", namespace)
 		assert.Contains(record, fmt.Sprintf("destinationNodeName: %s", dstNode), "Record does not have correct destinationNodeName: %s", dstNode)
-		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", srcPod), "Record does not have correct label for source Pod")
-		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", dstPod), "Record does not have correct label for destination Pod")
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"iperf\"}", srcPod), "Record does not have correct label for source Pod")
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"iperf\"}", dstPod), "Record does not have correct label for destination Pod")
 	} else {
 		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"busybox\"}", srcPod), "Record does not have correct label for source Pod")
 	}
@@ -1059,8 +1059,8 @@ func checkPodAndNodeDataClickHouse(data *TestData, t *testing.T, record *ClickHo
 		assert.Equal(record.DestinationPodName, dstPod, "Record with dstIP does not have Pod name: %s", dstPod)
 		assert.Equal(record.DestinationPodNamespace, data.testNamespace, "Record does not have correct destinationPodNamespace: %s", data.testNamespace)
 		assert.Equal(record.DestinationNodeName, dstNode, "Record does not have correct destinationNodeName: %s", dstNode)
-		assert.Equal(record.SourcePodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", srcPod), "Record does not have correct label for source Pod")
-		assert.Equal(record.DestinationPodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", dstPod), "Record does not have correct label for destination Pod")
+		assert.Equal(record.SourcePodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"iperf\"}", srcPod), "Record does not have correct label for source Pod")
+		assert.Equal(record.DestinationPodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"iperf\"}", dstPod), "Record does not have correct label for destination Pod")
 	} else {
 		assert.Equal(record.SourcePodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"busybox\"}", srcPod), "Record does not have correct label for source Pod")
 	}
@@ -1386,8 +1386,9 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string, 
 }
 
 func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCIPs *PodIPs, podDIPs *PodIPs, podEIPs *PodIPs, err error) {
+	cmd := []string{"iperf3", "-s"}
 	create := func(name string, nodeName string, ports []corev1.ContainerPort) error {
-		return NewPodBuilder(name, data.testNamespace, perftoolImage).OnNode(nodeName).WithPorts(ports).Create(data)
+		return NewPodBuilder(name, data.testNamespace, toolboxImage).WithContainerName("iperf").WithCommand(cmd).OnNode(nodeName).WithPorts(ports).Create(data)
 	}
 
 	if err := create("perftest-a", controlPlaneNodeName(), nil); err != nil {
