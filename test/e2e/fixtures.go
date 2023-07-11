@@ -508,16 +508,16 @@ func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
-	return createTestPods(tb, data, num, ns, nodeName, data.createBusyboxPodOnNode)
+	return createTestPods(tb, data, num, ns, nodeName, false, data.createBusyboxPodOnNode)
 }
 
 func createTestAgnhostPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
-	return createTestPods(tb, data, num, ns, nodeName, data.createAgnhostPodOnNode)
+	return createTestPods(tb, data, num, ns, nodeName, false, data.createAgnhostPodOnNode)
 }
 
-func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName string, createFunc func(string, string, string, bool) error) (
+func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName string, hostNetwork bool, createFunc func(string, string, string, bool) error) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
 	cleanupFn = func() {
@@ -541,7 +541,7 @@ func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName 
 	createPodAndGetIP := func() (string, *PodIPs, error) {
 		podName := randName("test-pod-")
 		tb.Logf("Creating a test Pod '%s' and waiting for IP", podName)
-		if err := createFunc(podName, ns, nodeName, false); err != nil {
+		if err := createFunc(podName, ns, nodeName, hostNetwork); err != nil {
 			tb.Errorf("Error when creating test Pod '%s': %v", podName, err)
 			return "", nil, err
 		}

@@ -66,6 +66,7 @@ import (
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/stats"
 	controllerbundlecollection "antrea.io/antrea/pkg/controller/supportbundlecollection"
+	"antrea.io/antrea/pkg/controller/traceflow"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -116,6 +117,7 @@ type ExtraConfig struct {
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
 	bundleCollectionController    *controllerbundlecollection.Controller
+	traceflowController           *traceflow.Controller
 }
 
 // Config defines the config for Antrea apiserver.
@@ -158,7 +160,8 @@ func NewConfig(
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController,
 	egressController *egress.EgressController,
-	bundleCollectionController *controllerbundlecollection.Controller) *Config {
+	bundleCollectionController *controllerbundlecollection.Controller,
+	traceflowController *traceflow.Controller) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
@@ -178,6 +181,7 @@ func NewConfig(
 			networkPolicyStatusController: networkPolicyStatusController,
 			egressController:              egressController,
 			bundleCollectionController:    bundleCollectionController,
+			traceflowController:           traceflowController,
 		},
 	}
 }
@@ -333,6 +337,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/supportbundlecollection", webhook.HandlerForValidateFunc(c.bundleCollectionController.Validate))
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/traceflow", webhook.HandlerForValidateFunc(c.traceflowController.Validate))
 	}
 }
 

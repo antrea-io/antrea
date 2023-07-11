@@ -147,34 +147,6 @@ func TestTraceflow(t *testing.T) {
 		assert.Equal(t, numRunningTraceflows(), 0)
 	})
 
-	t.Run("timeoutHostnetworkTraceflow", func(t *testing.T) {
-		tf2 := crdv1beta1.Traceflow{
-			ObjectMeta: metav1.ObjectMeta{Name: "tf2", UID: "uid2"},
-			Spec: crdv1beta1.TraceflowSpec{
-				Source:      crdv1beta1.Source{Namespace: "ns1", Pod: "pod2"},
-				Destination: crdv1beta1.Destination{Namespace: "ns2", Pod: "pod2"},
-				Timeout:     2, // 2 seconds timeout
-			},
-		}
-		pod2 := corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pod2",
-				Namespace: "ns1",
-			},
-			Spec: corev1.PodSpec{HostNetwork: true},
-		}
-
-		tfc.kubeClient.CoreV1().Pods("ns1").Create(context.TODO(), &pod2, metav1.CreateOptions{})
-		createdPod, _ := tfc.waitForPodInNamespace("ns1", "pod2", time.Second)
-		require.NotNil(t, createdPod)
-		tfc.client.CrdV1beta1().Traceflows().Create(context.TODO(), &tf2, metav1.CreateOptions{})
-		res, _ := tfc.waitForTraceflow("tf2", crdv1beta1.Failed, time.Second)
-		require.NotNil(t, res)
-		// DataplaneTag should not be allocated by Controller.
-		assert.True(t, res.Status.DataplaneTag == 0)
-		assert.Equal(t, numRunningTraceflows(), 0)
-	})
-
 	close(stopCh)
 }
 
