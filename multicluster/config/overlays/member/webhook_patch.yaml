@@ -49,13 +49,6 @@ webhooks:
 - admissionReviewVersions:
   - v1
   - v1beta1
-  name: vclusterclaim.kb.io
-  namespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: kube-system
-- admissionReviewVersions:
-  - v1
-  - v1beta1
   name: vclusterset.kb.io
   namespaceSelector:
     matchLabels:

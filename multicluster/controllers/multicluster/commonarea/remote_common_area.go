@@ -34,7 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -77,8 +78,8 @@ type remoteCommonArea struct {
 	// connected is a state to know whether the remoteCommonArea is connected or not.
 	connected bool
 
-	clusterStatus multiclusterv1alpha1.ClusterCondition
-	leaderStatus  multiclusterv1alpha1.ClusterCondition
+	clusterStatus mcv1alpha2.ClusterCondition
+	leaderStatus  mcv1alpha2.ClusterCondition
 
 	// The ID of the local member cluster
 	localClusterID common.ClusterID
@@ -124,11 +125,11 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 		localClusterID:               localClusterID,
 		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
 	}
-	remote.clusterStatus.Type = multiclusterv1alpha1.ClusterReady
+	remote.clusterStatus.Type = mcv1alpha2.ClusterReady
 	remote.clusterStatus.Status = v1.ConditionUnknown
 	remote.clusterStatus.Message = "Leader cluster added"
 	remote.clusterStatus.LastTransitionTime = metav1.Now()
-	remote.leaderStatus.Type = multiclusterv1alpha1.ClusterIsLeader
+	remote.leaderStatus.Type = mcv1alpha2.ClusterIsLeader
 	remote.leaderStatus.Status = v1.ConditionFalse
 	remote.leaderStatus.Message = "Leader cluster added"
 	remote.leaderStatus.LastTransitionTime = metav1.Now()
@@ -136,7 +137,7 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 	return remote, nil
 }
 
-func GetRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common.ClusterID, clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+func GetRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common.ClusterID, clusterSet *mcv1alpha2.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
 	manager.Manager, client.Client, error) {
 	crtData, token, err := getSecretCACrtAndToken(secretObj)
 	if err != nil {
@@ -186,7 +187,7 @@ func getSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
 func (r *remoteCommonArea) SendMemberAnnounce() error {
 	var err error
 	memberAnnounceName := "member-announce-from-" + r.GetLocalClusterID()
-	existingMemberAnnounce := &multiclusterv1alpha1.MemberClusterAnnounce{}
+	existingMemberAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
 	if err = r.Get(context.TODO(), types.NamespacedName{
 		Namespace: r.GetNamespace(),
 		Name:      memberAnnounceName,
@@ -385,11 +386,11 @@ func (r *remoteCommonArea) StopWatching() {
 	r.managerStopFunc = nil
 }
 
-func (r *remoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterCondition {
+func (r *remoteCommonArea) GetStatus() []mcv1alpha2.ClusterCondition {
 	defer r.mutex.Unlock()
 	r.mutex.Lock()
 
-	statues := make([]multiclusterv1alpha1.ClusterCondition, 0, 2)
+	statues := make([]mcv1alpha2.ClusterCondition, 0, 2)
 	statues = append(statues, r.clusterStatus) // This will be a copy
 	statues = append(statues, r.leaderStatus)  // This will be a copy
 	return statues

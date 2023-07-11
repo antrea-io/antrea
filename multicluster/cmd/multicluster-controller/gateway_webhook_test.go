@@ -33,13 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 )
 
 var gatewayWebhookUnderTest *gatewayValidator
 
 func TestWebhookGatewayEvents(t *testing.T) {
-	newGateway := &mcsv1alpha1.Gateway{
+	newGateway := &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "node-1",
@@ -47,13 +47,13 @@ func TestWebhookGatewayEvents(t *testing.T) {
 		GatewayIP:  "1.2.3.4",
 		InternalIP: "172.168.3.4",
 	}
-	existingGateway := &mcsv1alpha1.Gateway{
+	existingGateway := &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "node-2",
 		},
 	}
-	updatedGateway := &mcsv1alpha1.Gateway{
+	updatedGateway := &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "node-2",
@@ -141,8 +141,8 @@ func TestWebhookGatewayEvents(t *testing.T) {
 	tests := []struct {
 		name            string
 		req             admission.Request
-		existingGateway *mcsv1alpha1.Gateway
-		newGateway      *mcsv1alpha1.Gateway
+		existingGateway *mcv1alpha1.Gateway
+		newGateway      *mcv1alpha1.Gateway
 		isAllowed       bool
 	}{
 		{
@@ -178,7 +178,7 @@ func TestWebhookGatewayEvents(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcsv1alpha1.AddToScheme(newScheme))
+	utilruntime.Must(mcv1alpha1.AddToScheme(newScheme))
 	decoder, err := admission.NewDecoder(newScheme)
 	if err != nil {
 		klog.ErrorS(err, "Error constructing a decoder")

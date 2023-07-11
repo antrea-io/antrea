@@ -30,7 +30,8 @@ import (
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
@@ -58,12 +59,12 @@ func TestStaleController_CleanupService(t *testing.T) {
 			Name:      "non-nginx",
 		},
 	}
-	svcResImport := mcsv1alpha1.ResourceImport{
+	svcResImport := mcv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "default-non-nginx-service",
 		},
-		Spec: mcsv1alpha1.ResourceImportSpec{
+		Spec: mcv1alpha1.ResourceImportSpec{
 			Name:      "non-nginx",
 			Namespace: "default",
 			Kind:      constants.ServiceImportKind,
@@ -73,7 +74,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 		name               string
 		existSvcList       *corev1.ServiceList
 		existSvcImpList    *k8smcsv1alpha1.ServiceImportList
-		existingResImpList *mcsv1alpha1.ResourceImportList
+		existingResImpList *mcv1alpha1.ResourceImportList
 		wantErr            bool
 	}{
 		{
@@ -86,8 +87,8 @@ func TestStaleController_CleanupService(t *testing.T) {
 					mcSvcImpNginx, mcSvcImpNonNginx,
 				},
 			},
-			existingResImpList: &mcsv1alpha1.ResourceImportList{
-				Items: []mcsv1alpha1.ResourceImport{
+			existingResImpList: &mcv1alpha1.ResourceImportList{
+				Items: []mcv1alpha1.ResourceImport{
 					svcResImport,
 				},
 			},
@@ -132,12 +133,12 @@ func TestStaleController_CleanupService(t *testing.T) {
 func TestStaleController_CleanupACNP(t *testing.T) {
 	acnpImportName := "acnp-for-isolation"
 	acnpResImportName := common.LeaderNamespace + "-" + acnpImportName
-	acnpResImport := mcsv1alpha1.ResourceImport{
+	acnpResImport := mcv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      acnpResImportName,
 		},
-		Spec: mcsv1alpha1.ResourceImportSpec{
+		Spec: mcv1alpha1.ResourceImportSpec{
 			Name: acnpImportName,
 			Kind: constants.AntreaClusterNetworkPolicyKind,
 			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
@@ -169,7 +170,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 	tests := []struct {
 		name                  string
 		existingACNPList      *v1alpha1.ClusterNetworkPolicyList
-		existingResImpList    *mcsv1alpha1.ResourceImportList
+		existingResImpList    *mcv1alpha1.ResourceImportList
 		expectedACNPRemaining sets.Set[string]
 	}{
 		{
@@ -179,8 +180,8 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 					acnp1, acnp2, acnp3,
 				},
 			},
-			existingResImpList: &mcsv1alpha1.ResourceImportList{
-				Items: []mcsv1alpha1.ResourceImport{
+			existingResImpList: &mcv1alpha1.ResourceImportList{
+				Items: []mcv1alpha1.ResourceImport{
 					acnpResImport,
 				},
 			},
@@ -222,7 +223,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			Name:      "keep-nginx",
 		},
 	}
-	toDeleteSvcResExport := mcsv1alpha1.ResourceExport{
+	toDeleteSvcResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-default-nginx-service",
@@ -230,13 +231,13 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 				constants.SourceClusterID: "cluster-a",
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Name:      "nginx",
 			Namespace: "default",
 			Kind:      constants.ServiceKind,
 		},
 	}
-	toDeleteEPResExport := mcsv1alpha1.ResourceExport{
+	toDeleteEPResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-default-nginx-endpoint",
@@ -244,25 +245,25 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 				constants.SourceClusterID: "cluster-a",
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Name:      "nginx",
 			Namespace: "default",
 			Kind:      constants.EndpointsKind,
 		},
 	}
-	toDeleteCIResExport := mcsv1alpha1.ResourceExport{
+	toDeleteCIResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-clusterinfo",
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Name:      "tobedeleted",
 			Namespace: "default",
 			ClusterID: "cluster-a",
 			Kind:      constants.ClusterInfoKind,
 		},
 	}
-	toKeepSvcResExport := mcsv1alpha1.ResourceExport{
+	toKeepSvcResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-default-keep-nginx-service",
@@ -270,14 +271,14 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 				constants.SourceClusterID: "cluster-a",
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Name:      "keep-nginx",
 			Namespace: "default",
 			Kind:      constants.ServiceKind,
 		},
 	}
 
-	svcResExportFromOtherCluster := mcsv1alpha1.ResourceExport{
+	svcResExportFromOtherCluster := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-b-default-nginx-service",
@@ -285,7 +286,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 				constants.SourceClusterID: "cluster-b",
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Name:      "nginx",
 			Namespace: "default",
 			Kind:      constants.ServiceKind,
@@ -318,7 +319,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 	}
 	labelNormalizedExist := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=web"
 	labelNormalizedNonExist := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=db"
-	toKeepLabelResExport := mcsv1alpha1.ResourceExport{
+	toKeepLabelResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-" + common.HashLabelIdentity(labelNormalizedExist),
@@ -327,14 +328,14 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 				constants.SourceClusterID: "cluster-a",
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Kind: constants.LabelIdentityKind,
-			LabelIdentity: &mcsv1alpha1.LabelIdentityExport{
+			LabelIdentity: &mcv1alpha1.LabelIdentityExport{
 				NormalizedLabel: labelNormalizedExist,
 			},
 		},
 	}
-	toDeleteLabelResExport := mcsv1alpha1.ResourceExport{
+	toDeleteLabelResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-" + common.HashLabelIdentity(labelNormalizedNonExist),
@@ -343,9 +344,9 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 				constants.SourceClusterID: "cluster-a",
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Kind: constants.LabelIdentityKind,
-			LabelIdentity: &mcsv1alpha1.LabelIdentityExport{
+			LabelIdentity: &mcv1alpha1.LabelIdentityExport{
 				NormalizedLabel: labelNormalizedNonExist,
 			},
 		},
@@ -355,9 +356,9 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 		existSvcList           *corev1.ServiceList
 		existPodList           *corev1.PodList
 		existNamespaceList     *corev1.NamespaceList
-		existLabelIdentityList *mcsv1alpha1.LabelIdentityList
+		existLabelIdentityList *mcv1alpha1.LabelIdentityList
 		existSvcExpList        *k8smcsv1alpha1.ServiceExportList
-		existResExpList        *mcsv1alpha1.ResourceExportList
+		existResExpList        *mcv1alpha1.ResourceExportList
 		wantErr                bool
 	}{
 		{
@@ -369,8 +370,8 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 					svcExpNginx,
 				},
 			},
-			existResExpList: &mcsv1alpha1.ResourceExportList{
-				Items: []mcsv1alpha1.ResourceExport{
+			existResExpList: &mcv1alpha1.ResourceExportList{
+				Items: []mcv1alpha1.ResourceExport{
 					toDeleteSvcResExport,
 					toDeleteEPResExport,
 					toDeleteCIResExport,
@@ -394,7 +395,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			if err := c.cleanup(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ResourceExports but got err = %v", err)
 			}
-			resExpList := &mcsv1alpha1.ResourceExportList{}
+			resExpList := &mcv1alpha1.ResourceExportList{}
 			err := fakeRemoteClient.List(context.TODO(), resExpList, &client.ListOptions{})
 			resExpLen := len(resExpList.Items)
 			if err == nil {
@@ -409,30 +410,30 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 }
 
 func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
-	ci := mcsv1alpha1.ClusterInfo{
+	ci := mcv1alpha1.ClusterInfo{
 		ClusterID:   "cluster-a",
 		ServiceCIDR: "10.10.1.0/16",
 	}
-	ciResImportA := mcsv1alpha1.ResourceImport{
+	ciResImportA := mcv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "antrea-mcs",
 			Name:      "cluster-a-default-clusterinfo",
 		},
-		Spec: mcsv1alpha1.ResourceImportSpec{
+		Spec: mcv1alpha1.ResourceImportSpec{
 			Kind:        constants.ClusterInfoKind,
 			Name:        "node-1",
 			Namespace:   "default",
 			ClusterInfo: &ci,
 		},
 	}
-	ciImportA := mcsv1alpha1.ClusterInfoImport{
+	ciImportA := mcv1alpha1.ClusterInfoImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-a-default-clusterinfo",
 		},
 		Spec: ci,
 	}
-	ciImportB := mcsv1alpha1.ClusterInfoImport{
+	ciImportB := mcv1alpha1.ClusterInfoImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "cluster-b-default-clusterinfo",
@@ -441,19 +442,19 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 	}
 	tests := []struct {
 		name               string
-		existCIImpList     *mcsv1alpha1.ClusterInfoImportList
-		existingResImpList *mcsv1alpha1.ResourceImportList
+		existCIImpList     *mcv1alpha1.ClusterInfoImportList
+		existingResImpList *mcv1alpha1.ResourceImportList
 		wantErr            bool
 	}{
 		{
 			name: "clean up ClusterInfoImport successfully",
-			existCIImpList: &mcsv1alpha1.ClusterInfoImportList{
-				Items: []mcsv1alpha1.ClusterInfoImport{
+			existCIImpList: &mcv1alpha1.ClusterInfoImportList{
+				Items: []mcv1alpha1.ClusterInfoImport{
 					ciImportA, ciImportB,
 				},
 			},
-			existingResImpList: &mcsv1alpha1.ResourceImportList{
-				Items: []mcsv1alpha1.ResourceImport{
+			existingResImpList: &mcv1alpha1.ResourceImportList{
+				Items: []mcv1alpha1.ResourceImport{
 					ciResImportA,
 				},
 			},
@@ -472,7 +473,7 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 				t.Errorf("StaleController.cleanup() should clean up all stale ClusterInfoImport but got err = %v", err)
 			}
 			ctx := context.TODO()
-			ciImpList := &mcsv1alpha1.ClusterInfoImportList{}
+			ciImpList := &mcv1alpha1.ClusterInfoImportList{}
 			err := fakeClient.List(ctx, ciImpList, &client.ListOptions{})
 			ciImpLen := len(ciImpList.Items)
 			if err == nil {
@@ -489,38 +490,32 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
 	tests := []struct {
 		name                              string
-		memberClusterAnnounceList         *mcsv1alpha1.MemberClusterAnnounceList
-		clusterSet                        *mcsv1alpha1.ClusterSetList
+		memberClusterAnnounceList         *mcv1alpha1.MemberClusterAnnounceList
+		clusterSet                        *mcv1alpha2.ClusterSetList
 		exceptMemberClusterAnnounceNumber int
 	}{
 		{
 			name:                              "no MemberClusterAnnounce to clean up when there is no resource",
-			clusterSet:                        &mcsv1alpha1.ClusterSetList{},
-			memberClusterAnnounceList:         &mcsv1alpha1.MemberClusterAnnounceList{},
+			clusterSet:                        &mcv1alpha2.ClusterSetList{},
+			memberClusterAnnounceList:         &mcv1alpha1.MemberClusterAnnounceList{},
 			exceptMemberClusterAnnounceNumber: 0,
 		},
 		{
 			name:                              "no MemberClusterAnnounce to clean up when the resource has a valid update time",
 			exceptMemberClusterAnnounceNumber: 1,
-			clusterSet: &mcsv1alpha1.ClusterSetList{
-				Items: []mcsv1alpha1.ClusterSet{
+			clusterSet: &mcv1alpha2.ClusterSetList{
+				Items: []mcv1alpha2.ClusterSet{
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
 							Name:      "clusterset",
 						},
-						Spec: mcsv1alpha1.ClusterSetSpec{
-							Members: []mcsv1alpha1.MemberCluster{
-								{
-									ClusterID: "cluster-a",
-								},
-							},
-						},
+						Spec: mcv1alpha2.ClusterSetSpec{},
 					},
 				},
 			},
-			memberClusterAnnounceList: &mcsv1alpha1.MemberClusterAnnounceList{
-				Items: []mcsv1alpha1.MemberClusterAnnounce{
+			memberClusterAnnounceList: &mcv1alpha1.MemberClusterAnnounceList{
+				Items: []mcv1alpha1.MemberClusterAnnounce{
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
@@ -537,28 +532,19 @@ func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
 		{
 			name:                              "clean up outdated MemberClusterAnnounce",
 			exceptMemberClusterAnnounceNumber: 1,
-			clusterSet: &mcsv1alpha1.ClusterSetList{
-				Items: []mcsv1alpha1.ClusterSet{
+			clusterSet: &mcv1alpha2.ClusterSetList{
+				Items: []mcv1alpha2.ClusterSet{
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
 							Name:      "clusterset",
 						},
-						Spec: mcsv1alpha1.ClusterSetSpec{
-							Members: []mcsv1alpha1.MemberCluster{
-								{
-									ClusterID: "cluster-a",
-								},
-								{
-									ClusterID: "cluster-outdated",
-								},
-							},
-						},
+						Spec: mcv1alpha2.ClusterSetSpec{},
 					},
 				},
 			},
-			memberClusterAnnounceList: &mcsv1alpha1.MemberClusterAnnounceList{
-				Items: []mcsv1alpha1.MemberClusterAnnounce{
+			memberClusterAnnounceList: &mcv1alpha1.MemberClusterAnnounceList{
+				Items: []mcv1alpha1.MemberClusterAnnounce{
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: "default",
@@ -591,7 +577,7 @@ func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, LeaderCluster)
 			assert.Equal(t, nil, c.cleanup(ctx))
 
-			memberClusterAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
+			memberClusterAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
 			if err := fakeClient.List(context.TODO(), memberClusterAnnounceList, &client.ListOptions{}); err != nil {
 				t.Errorf("Should list MemberClusterAnnounce successfully but got err = %v", err)
 			}
@@ -606,52 +592,52 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 	normalizedLabelB := "namespace:kubernetes.io/metadata.name=test&pod:app=db"
 	labelHashA := common.HashLabelIdentity(normalizedLabelA)
 	labelHashB := common.HashLabelIdentity(normalizedLabelB)
-	labelIdentityA := mcsv1alpha1.LabelIdentity{
+	labelIdentityA := mcv1alpha1.LabelIdentity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: labelHashA,
 		},
-		Spec: mcsv1alpha1.LabelIdentitySpec{
+		Spec: mcv1alpha1.LabelIdentitySpec{
 			Label: normalizedLabelA,
 			ID:    1,
 		},
 	}
-	resImpA := mcsv1alpha1.ResourceImport{
+	resImpA := mcv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "antrea-mcs",
 			Name:      labelHashA,
 		},
-		Spec: mcsv1alpha1.ResourceImportSpec{
+		Spec: mcv1alpha1.ResourceImportSpec{
 			Kind: constants.LabelIdentityKind,
-			LabelIdentity: &mcsv1alpha1.LabelIdentitySpec{
+			LabelIdentity: &mcv1alpha1.LabelIdentitySpec{
 				Label: normalizedLabelA,
 				ID:    1,
 			},
 		},
 	}
-	labelIdentityB := mcsv1alpha1.LabelIdentity{
+	labelIdentityB := mcv1alpha1.LabelIdentity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: labelHashB,
 		},
-		Spec: mcsv1alpha1.LabelIdentitySpec{
+		Spec: mcv1alpha1.LabelIdentitySpec{
 			Label: normalizedLabelB,
 			ID:    2,
 		},
 	}
 	tests := []struct {
 		name                   string
-		existLabelIdentityList *mcsv1alpha1.LabelIdentityList
-		existingResImpList     *mcsv1alpha1.ResourceImportList
+		existLabelIdentityList *mcv1alpha1.LabelIdentityList
+		existingResImpList     *mcv1alpha1.ResourceImportList
 		wantErr                bool
 	}{
 		{
 			name: "clean up LabelIdentities successfully",
-			existLabelIdentityList: &mcsv1alpha1.LabelIdentityList{
-				Items: []mcsv1alpha1.LabelIdentity{
+			existLabelIdentityList: &mcv1alpha1.LabelIdentityList{
+				Items: []mcv1alpha1.LabelIdentity{
 					labelIdentityA, labelIdentityB,
 				},
 			},
-			existingResImpList: &mcsv1alpha1.ResourceImportList{
-				Items: []mcsv1alpha1.ResourceImport{
+			existingResImpList: &mcv1alpha1.ResourceImportList{
+				Items: []mcv1alpha1.ResourceImport{
 					resImpA,
 				},
 			},
@@ -670,7 +656,7 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 				t.Errorf("StaleController.cleanup() should clean up all stale LabelIdentities but got err = %v", err)
 			}
 			ctx := context.TODO()
-			labelList := &mcsv1alpha1.LabelIdentityList{}
+			labelList := &mcv1alpha1.LabelIdentityList{}
 			err := fakeClient.List(ctx, labelList, &client.ListOptions{})
 			labelListLen := len(labelList.Items)
 			if err == nil {

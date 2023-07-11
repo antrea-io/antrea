@@ -32,8 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
@@ -78,45 +77,6 @@ func NewClient(cmd *cobra.Command) (client.Client, error) {
 	return k8sClient, nil
 }
 
-func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterset string, clusterID string, createdRes *[]map[string]interface{}) error {
-	var createErr error
-	var unstructuredClusterClaim map[string]interface{}
-	clusterClaim := newClusterClaim(clusterID, namespace, false)
-
-	if createErr = k8sClient.Create(context.TODO(), clusterClaim); createErr != nil {
-		if !apierrors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\": %v\n", multiclusterv1alpha2.WellKnownClusterClaimID, createErr)
-			return createErr
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, namespace)
-		createErr = nil
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" created in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, namespace)
-		unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
-		unstructuredClusterClaim["apiVersion"] = clusterClaim.APIVersion
-		unstructuredClusterClaim["kind"] = clusterClaim.Kind
-		*createdRes = append(*createdRes, unstructuredClusterClaim)
-	}
-
-	clusterClaim = newClusterClaim(clusterset, namespace, true)
-	if createErr = k8sClient.Create(context.TODO(), clusterClaim); createErr != nil {
-		if !apierrors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\": %v\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, createErr)
-			return createErr
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, namespace)
-		createErr = nil
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" created in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, namespace)
-		unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
-		unstructuredClusterClaim["apiVersion"] = clusterClaim.APIVersion
-		unstructuredClusterClaim["kind"] = clusterClaim.Kind
-		*createdRes = append(*createdRes, unstructuredClusterClaim)
-	}
-
-	return nil
-}
-
 func CreateClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterset string,
 	leaderServer string, secret string, memberClusterID string, leaderClusterID string, leaderClusterNamespace string, createdRes *[]map[string]interface{}) error {
 	clusterSet := newClusterSet(clusterset, namespace, leaderServer, secret, memberClusterID, leaderClusterID, leaderClusterNamespace)
@@ -136,24 +96,6 @@ func CreateClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace str
 	}
 
 	return nil
-}
-
-func deleteClusterClaims(cmd *cobra.Command, k8sClient client.Client, namespace string) {
-	clusterClaimNames := []string{
-		multiclusterv1alpha2.WellKnownClusterClaimID,
-		multiclusterv1alpha2.WellKnownClusterClaimClusterSet,
-	}
-	for _, name := range clusterClaimNames {
-		if err := k8sClient.Delete(context.TODO(), newClusterClaim(name, namespace, name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet)); err == nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" deleted in Namespace %s\n", name, namespace)
-		} else {
-			if apierrors.IsNotFound(err) {
-				fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" not found in Namespace %s\n", name, namespace)
-			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterClaim \"%s\": %v\n", name, err)
-			}
-		}
-	}
 }
 
 func deleteClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterSet string) {
@@ -401,28 +343,8 @@ func waitForSecretReady(client client.Client, secretName string, namespace strin
 		})
 }
 
-func newClusterClaim(name string, namespace string, clusterSet bool) *multiclusterv1alpha2.ClusterClaim {
-	clusterClaim := &multiclusterv1alpha2.ClusterClaim{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "multicluster.crd.antrea.io/v1alpha2",
-			Kind:       "ClusterClaim",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      multiclusterv1alpha2.WellKnownClusterClaimID,
-		},
-		Value: name,
-	}
-
-	if clusterSet {
-		clusterClaim.Name = multiclusterv1alpha2.WellKnownClusterClaimClusterSet
-	}
-
-	return clusterClaim
-}
-
-func newClusterSet(name, namespace, leaderServer, secret, memberClusterID, leaderClusterID, leaderNamespace string) *multiclusterv1alpha1.ClusterSet {
-	clusterSet := &multiclusterv1alpha1.ClusterSet{
+func newClusterSet(name, namespace, leaderServer, secret, memberClusterID, leaderClusterID, leaderNamespace string) *mcv1alpha2.ClusterSet {
+	clusterSet := &mcv1alpha2.ClusterSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "multicluster.crd.antrea.io/v1alpha1",
 			Kind:       "ClusterSet",
@@ -431,8 +353,8 @@ func newClusterSet(name, namespace, leaderServer, secret, memberClusterID, leade
 			Namespace: namespace,
 			Name:      name,
 		},
-		Spec: multiclusterv1alpha1.ClusterSetSpec{
-			Leaders: []multiclusterv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: leaderClusterID,
 				},
@@ -441,12 +363,12 @@ func newClusterSet(name, namespace, leaderServer, secret, memberClusterID, leade
 		},
 	}
 	if leaderServer != "" {
+		clusterSet.Spec.ClusterID = memberClusterID
 		clusterSet.Spec.Namespace = leaderNamespace
 		clusterSet.Spec.Leaders[0].Secret = secret
 		clusterSet.Spec.Leaders[0].Server = leaderServer
-		clusterSet.Spec.Members = append(clusterSet.Spec.Members, multiclusterv1alpha1.MemberCluster{
-			ClusterID: memberClusterID,
-		})
+	} else {
+		clusterSet.Spec.ClusterID = leaderClusterID
 	}
 
 	return clusterSet

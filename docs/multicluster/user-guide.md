@@ -166,13 +166,21 @@ An Antrea Multi-cluster ClusterSet should include at least one leader cluster
 and two member clusters. As an example, in the following sections we will create
 a ClusterSet `test-clusterset` which has two member clusters with cluster ID
 `test-cluster-east` and `test-cluster-west` respectively, and one leader cluster
-with ID `test-cluster-north`.
+with ID `test-cluster-north`. Please note that the name of a ClusterSet CR must
+match the ClusterSet ID. In all the member and leader clusters of a ClusterSet,
+the ClusterSet CR must use the ClusterSet ID as the name, e.g. `test-clusterset`
+in the example of this guide.
 
 #### Set up Access to Leader Cluster
 
 We first need to set up access to the leader cluster's API server for all member
 clusters. We recommend creating one ServiceAccount for each member for
 fine-grained access control.
+
+The Multi-cluster Controller deployment manifest for a leader cluster also creates
+a default member cluster token. If you prefer to use the default token, you can skip
+step 1 and replace the Secret name `member-east-token` to the default token Secret
+`antrea-mc-member-access-token` in step 2.
 
 1. Apply the following YAML manifest in the leader cluster to set up access for
    `test-cluster-east`:
@@ -223,64 +231,35 @@ fine-grained access control.
 
 #### Initialize ClusterSet
 
-In all clusters, a `ClusterSet` CR must be created to define the ClusterSet, and
-two `ClusterClaim` CRs must be created to claim the ClusterSet and claim the
+In all clusters, a `ClusterSet` CR must be created to define the ClusterSet and claim the
 cluster is a member of the ClusterSet.
 
-- Create `ClusterClaim` and `ClusterSet` in the leader cluster
-`test-cluster-north` with the following YAML manifest (you can also refer to
-[leader-clusterset-template.yml](../../multicluster/config/samples/clusterset_init/leader-clusterset-template.yml)):
+- Create `ClusterSet` in the leader cluster `test-cluster-north` with the following YAML
+  manifest (you can also refer to [leader-clusterset-template.yml](../../multicluster/config/samples/clusterset_init/leader-clusterset-template.yml)):
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: id.k8s.io
-  namespace: antrea-multicluster
-value: test-cluster-north
----
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: clusterset.k8s.io
-  namespace: antrea-multicluster
-value: test-clusterset
----
-apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
   name: test-clusterset
   namespace: antrea-multicluster
 spec:
+  clusterID: test-cluster-north
   leaders:
     - clusterID: test-cluster-north
 ```
 
-- Create `ClusterClaim` and `ClusterSet` in member cluster `test-cluster-east`
-with the following YAML manifest (you can also refer to
-[member-clusterset-template.yml](../../multicluster/config/samples/clusterset_init/member-clusterset-template.yml)):
+- Create `ClusterSet` in member cluster `test-cluster-east` with the following
+YAML manifest (you can also refer to [member-clusterset-template.yml](../../multicluster/config/samples/clusterset_init/member-clusterset-template.yml)):
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: id.k8s.io
-  namespace: kube-system
-value: test-cluster-east
----
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: clusterset.k8s.io
-  namespace: kube-system
-value: test-clusterset
----
-apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
   name: test-clusterset
   namespace: kube-system
 spec:
+  clusterID: test-cluster-east
   leaders:
     - clusterID: test-cluster-north
       secret: "member-east-token"
@@ -291,29 +270,16 @@ spec:
 Note: update `server: "https://172.18.0.1:6443"` in the `ClusterSet` spec to the
 correct leader cluster API server address.
 
-- Create `ClusterClaim` and `ClusterSet` in member cluster `test-cluster-west`:
+- Create `ClusterSet` in member cluster `test-cluster-west`:
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: id.k8s.io
-  namespace: kube-system
-value: test-cluster-west
----
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: clusterset.k8s.io
-  namespace: kube-system
-value: test-clusterset
----
-apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
   name: test-clusterset
   namespace: kube-system
 spec:
+  clusterID: test-cluster-west
   leaders:
     - clusterID: test-cluster-north
       secret: "member-west-token"
@@ -329,31 +295,17 @@ Member in One Cluster](#deploy-leader-and-member-in-one-cluster) and repeat the
 steps in [Set up Access to Leader Cluster](#set-up-access-to-leader-cluster) as
 well (don't forget replace all `east` to `north` when you repeat the steps).
 
-Then create the `ClusterClaim` and `ClusterSet` CRs in cluster
-`test-cluster-north` in the `kube-system` Namespace (where the member
-Multi-cluster Controller runs):
+Then create the `ClusterSet` CR in cluster `test-cluster-north` in the
+`kube-system` Namespace (where the member Multi-cluster Controller runs):
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: id.k8s.io
-  namespace: kube-system
-value: test-cluster-north
----
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: clusterset.k8s.io
-  namespace: kube-system
-value: test-clusterset
----
-apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
   name: test-clusterset
   namespace: kube-system
 spec:
+  clusterID: test-cluster-north
   leaders:
     - clusterID: test-cluster-north
       secret: "member-north-token"

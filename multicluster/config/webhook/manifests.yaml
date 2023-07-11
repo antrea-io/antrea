@@ -40,36 +40,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-multicluster-crd-antrea-io-v1alpha2-clusterclaim
-  failurePolicy: Fail
-  name: vclusterclaim.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha2
-    operations:
-    - CREATE
-    - UPDATE
-    - DELETE
-    resources:
-    - clusterclaims
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterset
+      path: /validate-multicluster-crd-antrea-io-v1alpha2-clusterset
   failurePolicy: Fail
   name: vclusterset.kb.io
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
     apiVersions:
-    - v1alpha1
+    - v1alpha2
     operations:
     - CREATE
     - UPDATE

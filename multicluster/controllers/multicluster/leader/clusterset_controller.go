@@ -23,7 +23,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -49,7 +49,7 @@ type LeaderClusterSetReconciler struct {
 	Scheme *runtime.Scheme
 	mutex  sync.Mutex
 
-	clusterSetConfig *multiclusterv1alpha1.ClusterSet
+	clusterSetConfig *mcv1alpha2.ClusterSet
 	clusterSetID     common.ClusterSetID
 	clusterID        common.ClusterID
 
@@ -62,12 +62,12 @@ type LeaderClusterSetReconciler struct {
 
 // Reconcile ClusterSet changes
 func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
@@ -81,25 +81,20 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
 
 	// Handle create or update
-	// If create, make sure the required local ClusterClaims are defined, and the cluster and ClusterSet
-	// IDs are included in the leader cluster's ClusterSet CR.
 	if r.clusterSetConfig == nil {
-		clusterID, clusterSetID, err := common.ValidateLocalClusterClaim(r.Client, clusterSet)
-		if err != nil {
-			return ctrl.Result{}, err
+		if clusterSet.Spec.ClusterID == "" {
+			// ClusterID is a required feild, and the empty value case should only happen
+			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
+			return ctrl.Result{}, fmt.Errorf("the spec.clusterID field of ClusterSet %s is required", req.NamespacedName)
 		}
+		clusterID := common.ClusterID(clusterSet.Spec.ClusterID)
+		clusterSetID := common.ClusterSetID(clusterSet.Name)
 		if err = validateMemberClusterExists(clusterID, clusterSet.Spec.Leaders); err != nil {
 			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterID)
 			return ctrl.Result{}, err
 		}
 		r.clusterID = clusterID
 		r.clusterSetID = clusterSetID
-	} else {
-		// Make sure clusterSetID has not changed
-		if string(r.clusterSetID) != clusterSet.Name {
-			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
-				r.clusterSetID, clusterSet.Name)
-		}
 	}
 
 	r.clusterSetConfig = clusterSet.DeepCopy()
@@ -112,7 +107,7 @@ func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
 	instance := predicate.GenerationChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&multiclusterv1alpha1.ClusterSet{}).
+		For(&mcv1alpha2.ClusterSet{}).
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
@@ -156,7 +151,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		return
 	}
 
-	status := multiclusterv1alpha1.ClusterSetStatus{}
+	status := mcv1alpha2.ClusterSetStatus{}
 	status.ObservedGeneration = r.clusterSetConfig.Generation
 	clusterStatuses := r.StatusManager.GetMemberClusterStatuses()
 	status.ClusterStatuses = clusterStatuses
@@ -166,7 +161,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	unknownClusters := 0
 	for _, cluster := range clusterStatuses {
 		for _, condition := range cluster.Conditions {
-			if condition.Type == multiclusterv1alpha1.ClusterReady {
+			if condition.Type == mcv1alpha2.ClusterReady {
 				switch condition.Status {
 				case v1.ConditionTrue:
 					readyClusters += 1
@@ -177,8 +172,8 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		}
 	}
 	status.ReadyClusters = int32(readyClusters)
-	overallCondition := multiclusterv1alpha1.ClusterSetCondition{
-		Type:               multiclusterv1alpha1.ClusterSetReady,
+	overallCondition := mcv1alpha2.ClusterSetCondition{
+		Type:               mcv1alpha2.ClusterSetReady,
 		Status:             v1.ConditionFalse,
 		Message:            "",
 		Reason:             NoReadyCluster,
@@ -196,7 +191,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		Namespace: r.clusterSetConfig.Namespace,
 		Name:      r.clusterSetConfig.Name,
 	}
-	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
 	if err != nil {
 		klog.ErrorS(err, "Failed to read ClusterSet", "name", namespacedName)
@@ -204,7 +199,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
 		len(clusterSet.Status.Conditions) == 0 {
-		status.Conditions = []multiclusterv1alpha1.ClusterSetCondition{overallCondition}
+		status.Conditions = []mcv1alpha2.ClusterSetCondition{overallCondition}
 	}
 	clusterSet.Status = status
 	err = r.Status().Update(context.TODO(), clusterSet)
@@ -213,7 +208,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	}
 }
 
-func validateMemberClusterExists(clusterID common.ClusterID, clusters []multiclusterv1alpha1.MemberCluster) (err error) {
+func validateMemberClusterExists(clusterID common.ClusterID, clusters []mcv1alpha2.LeaderClusterInfo) (err error) {
 	configExists := false
 	for _, cluster := range clusters {
 		if string(clusterID) == cluster.ClusterID {

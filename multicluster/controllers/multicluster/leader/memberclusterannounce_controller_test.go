@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
 var (
@@ -38,110 +38,30 @@ var (
 )
 
 func setup() {
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "mcs1",
 			Name:       "clusterset1",
 			Generation: 1,
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 				}},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID:      "east",
-					ServiceAccount: "east-access-sa",
-				},
-				{
-					ClusterID:      "west",
-					ServiceAccount: "west-access-sa",
-				},
-			},
 			Namespace: "mcs1",
-		},
-	}
-	existingClusterClaimList := &mcsv1alpha2.ClusterClaimList{
-		Items: []mcsv1alpha2.ClusterClaim{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcsv1alpha2.WellKnownClusterClaimClusterSet,
-					Namespace: "mcs1",
-				},
-				Value: "clusterset1",
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcsv1alpha2.WellKnownClusterClaimID,
-					Namespace: "mcs1",
-				},
-				Value: "leader1",
-			},
 		},
 	}
 
 	scheme := runtime.NewScheme()
-	mcsv1alpha1.AddToScheme(scheme)
-	mcsv1alpha2.AddToScheme(scheme)
+	mcv1alpha1.AddToScheme(scheme)
+	mcv1alpha2.AddToScheme(scheme)
 	mcaTestFakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(existingClusterSet, &existingClusterClaimList.Items[0], &existingClusterClaimList.Items[1]).
+		WithObjects(existingClusterSet).
 		Build()
 
 	memberClusterAnnounceReconcilerUnderTest = NewMemberClusterAnnounceReconciler(
 		mcaTestFakeRemoteClient, scheme)
-}
-
-func TestAddMemberToClusterSet(t *testing.T) {
-	setup()
-
-	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "member-announce-from-south",
-			Namespace: "mcs1",
-		},
-		ClusterSetID: "clusterset1",
-		ClusterID:    "south",
-	}
-
-	err := memberClusterAnnounceReconcilerUnderTest.addMemberToClusterSet(memberCluster)
-	assert.Equal(t, nil, err)
-
-	clusterSet := &mcsv1alpha1.ClusterSet{}
-	err = mcaTestFakeRemoteClient.Get(context.TODO(), types.NamespacedName{Namespace: "mcs1", Name: "clusterset1"}, clusterSet)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 3, len(clusterSet.Spec.Members))
-}
-
-func TestRemoveMemberCluster(t *testing.T) {
-	setup()
-
-	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "member-announce-from-east",
-			Namespace: "mcs1",
-		},
-		ClusterSetID: "clusterset1",
-		ClusterID:    "east",
-	}
-	err := memberClusterAnnounceReconcilerUnderTest.removeMemberFromClusterSet(memberCluster)
-	assert.Equal(t, nil, err)
-}
-
-func TestRemoveMemberClusterNotExist(t *testing.T) {
-	setup()
-
-	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "member-announce-from-not-exist",
-			Namespace: "mcs1",
-		},
-		ClusterSetID: "clusterset1",
-		ClusterID:    "not-exist",
-	}
-	err := memberClusterAnnounceReconcilerUnderTest.removeMemberFromClusterSet(memberCluster)
-
-	assert.Equal(t, nil, err)
 }
 
 func TestStatusAfterAdd(t *testing.T) {
@@ -149,9 +69,9 @@ func TestStatusAfterAdd(t *testing.T) {
 
 	memberClusterAnnounceReconcilerUnderTest.addOrUpdateMemberStatus("east")
 
-	expectedStatus := mcsv1alpha1.ClusterStatus{
+	expectedStatus := mcv1alpha2.ClusterStatus{
 		ClusterID: "east",
-		Conditions: []mcsv1alpha1.ClusterCondition{
+		Conditions: []mcv1alpha2.ClusterCondition{
 			{
 				Type:    "Ready",
 				Status:  "True",
@@ -178,7 +98,7 @@ func TestStatusAfterDelete(t *testing.T) {
 func TestStatusAfterReconcile(t *testing.T) {
 	TestStatusAfterAdd(t)
 
-	mca := mcsv1alpha1.MemberClusterAnnounce{
+	mca := mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "memberclusterannounce-east",
 			Namespace: "mcs1",
@@ -198,9 +118,9 @@ func TestStatusAfterReconcile(t *testing.T) {
 	}
 	memberClusterAnnounceReconcilerUnderTest.Reconcile(context.Background(), req)
 
-	expectedStatus := mcsv1alpha1.ClusterStatus{
+	expectedStatus := mcv1alpha2.ClusterStatus{
 		ClusterID: "east",
-		Conditions: []mcsv1alpha1.ClusterCondition{
+		Conditions: []mcv1alpha2.ClusterCondition{
 			{
 				Type:   "Ready",
 				Status: "True",
@@ -219,7 +139,7 @@ func TestStatusAfterReconcile(t *testing.T) {
 func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 	TestStatusAfterAdd(t)
 
-	mca := mcsv1alpha1.MemberClusterAnnounce{
+	mca := mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-east",
 			Namespace: "mcs1",
@@ -239,9 +159,9 @@ func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 	}
 	memberClusterAnnounceReconcilerUnderTest.Reconcile(context.Background(), req)
 
-	expectedStatus := mcsv1alpha1.ClusterStatus{
+	expectedStatus := mcv1alpha2.ClusterStatus{
 		ClusterID: "east",
-		Conditions: []mcsv1alpha1.ClusterCondition{
+		Conditions: []mcv1alpha2.ClusterCondition{
 			{
 				Type:    "Ready",
 				Status:  "False",
@@ -261,7 +181,7 @@ func TestStatusAfterReconcileAndTimeout(t *testing.T) {
 	ConnectionTimeout = 3 * TimerInterval
 }
 
-func verifyStatus(t *testing.T, expected mcsv1alpha1.ClusterStatus, actual mcsv1alpha1.ClusterStatus) {
+func verifyStatus(t *testing.T, expected mcv1alpha2.ClusterStatus, actual mcv1alpha2.ClusterStatus) {
 	assert.Equal(t, expected.ClusterID, actual.ClusterID)
 	assert.Equal(t, len(expected.Conditions), len(actual.Conditions))
 	verfiedConditions := 0

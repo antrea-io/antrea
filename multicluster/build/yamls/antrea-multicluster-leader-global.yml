@@ -6,59 +6,6 @@ metadata:
   creationTimestamp: null
   labels:
     app: antrea
-  name: clusterclaims.multicluster.crd.antrea.io
-spec:
-  group: multicluster.crd.antrea.io
-  names:
-    kind: ClusterClaim
-    listKind: ClusterClaimList
-    plural: clusterclaims
-    singular: clusterclaim
-  scope: Namespaced
-  versions:
-  - additionalPrinterColumns:
-    - description: Value of the ClusterClaim
-      jsonPath: .value
-      name: Value
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha2
-    schema:
-      openAPIV3Schema:
-        description: ClusterClaim is the Schema for the clusterclaims API.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          value:
-            description: Value of the ClusterClaim.
-            type: string
-        required:
-        - value
-        type: object
-    served: true
-    storage: true
-    subresources: {}
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
-  labels:
-    app: antrea
   name: clustersets.multicluster.crd.antrea.io
 spec:
   group: multicluster.crd.antrea.io
@@ -155,6 +102,164 @@ spec:
                   is defined. Used in member cluster.
                 type: string
             required:
+            - leaders
+            type: object
+          status:
+            description: ClusterSetStatus defines the observed state of ClusterSet.
+            properties:
+              clusterStatuses:
+                description: The status of individual member clusters.
+                items:
+                  properties:
+                    clusterID:
+                      description: ClusterID is the unique identifier of this cluster.
+                      type: string
+                    conditions:
+                      items:
+                        description: ClusterCondition indicates the readiness condition
+                          of a cluster.
+                        properties:
+                          lastTransitionTime:
+                            description: Last time the condition transited from one
+                              status to another.
+                            format: date-time
+                            type: string
+                          message:
+                            description: A human readable message indicating details
+                              about the transition.
+                            type: string
+                          reason:
+                            description: Unique, one-word, CamelCase reason for the
+                              condition's last transition.
+                            type: string
+                          status:
+                            description: Status of the condition, one of True, False,
+                              Unknown.
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              conditions:
+                description: The overall condition of the cluster set.
+                items:
+                  description: ClusterSetCondition indicates the readiness condition
+                    of the clusterSet.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transited from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition.
+                      type: string
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              observedGeneration:
+                description: The generation observed by the controller.
+                format: int64
+                type: integer
+              readyClusters:
+                description: Total number of clusters ready and connected.
+                format: int32
+                type: integer
+              totalClusters:
+                description: Total number of member clusters configured in the ClusterSet.
+                format: int32
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: false
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - description: The leader cluster Namespace for the ClusterSet
+      jsonPath: .spec.namespace
+      name: Leader Cluster Namespace
+      type: string
+    - description: Total number of clusters in the ClusterSet
+      jsonPath: .status.totalClusters
+      name: Total Clusters
+      type: string
+    - description: Number of ready clusters in the ClusterSet
+      jsonPath: .status.readyClusters
+      name: Ready Clusters
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        description: ClusterSet represents a ClusterSet.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterSetSpec defines the desired state of ClusterSet.
+            properties:
+              clusterID:
+                description: ClusterID identifies the local cluster.
+                type: string
+              leaders:
+                description: Leaders include leader clusters known to the member clusters.
+                items:
+                  description: LeaderClusterInfo specifies information of a leader
+                    cluster.
+                  properties:
+                    clusterID:
+                      description: Identify a leader cluster in the ClusterSet.
+                      type: string
+                    secret:
+                      description: Name of the Secret resource in the member cluster,
+                        which stores the token to access the leader cluster's API
+                        server.
+                      type: string
+                    server:
+                      description: API server endpoint of the leader cluster. E.g.
+                        "https://172.18.0.1:6443", "https://example.com:6443".
+                      type: string
+                    serviceAccount:
+                      description: "ServiceAccount in the leader cluster, from which
+                        the member cluster's token is generated. This is an optional
+                        field which helps admin to check which ServiceAccount is used
+                        by a member cluster to access the leader cluster. \n DEPRECATED
+                        This field is planned to be removed in the future releases."
+                      type: string
+                  type: object
+                maxItems: 1
+                minItems: 1
+                type: array
+              namespace:
+                description: The leader cluster Namespace in which the ClusterSet
+                  is defined. Used in a member cluster.
+                type: string
+            required:
+            - clusterID
             - leaders
             type: object
           status:

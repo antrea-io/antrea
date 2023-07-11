@@ -30,7 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
@@ -60,7 +61,7 @@ func TestMemberAnnounce(t *testing.T) {
 	go func() {
 		// Test that member announce is written to the fakeRemoteClient
 		ctx := context.Background()
-		memberAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
+		memberAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
 
 		for i := 0; i < 10; i++ {
 			time.Sleep(1 * time.Second)
@@ -91,7 +92,7 @@ func TestMemberAnnounce(t *testing.T) {
 func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
-	existingMemberClusterAnnounce := &mcsv1alpha1.MemberClusterAnnounce{
+	existingMemberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "cluster-a-ns",
 			Name:       "member-announce-from-clusterA",
@@ -111,10 +112,10 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 		Namespace:          "cluster-a-ns",
 		connected:          false,
 		localClusterClient: nil, // Not used for this test
-		leaderStatus: mcsv1alpha1.ClusterCondition{
+		leaderStatus: mcv1alpha2.ClusterCondition{
 			Message: "Leader cluster added",
 			Status:  v1.ConditionFalse,
-			Type:    mcsv1alpha1.ClusterIsLeader,
+			Type:    mcv1alpha2.ClusterIsLeader,
 		},
 	}
 
@@ -125,7 +126,7 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 	go func() {
 		// Test that member announce is written to the fakeRemoteClient
 		ctx := context.Background()
-		memberAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
+		memberAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
 
 		for i := 0; i < 10; i++ {
 			time.Sleep(1 * time.Second)
@@ -159,8 +160,8 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 	assert.Equal(t, "", status[1].Reason)
 	assert.Equal(t, "", status[0].Message)
 	assert.Equal(t, "This leader cluster is the leader for local cluster", status[1].Message)
-	assert.Equal(t, mcsv1alpha1.ClusterConditionType(""), status[0].Type)
-	assert.Equal(t, mcsv1alpha1.ClusterIsLeader, status[1].Type)
+	assert.Equal(t, mcv1alpha2.ClusterConditionType(""), status[0].Type)
+	assert.Equal(t, mcv1alpha2.ClusterIsLeader, status[1].Type)
 }
 
 func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
@@ -180,13 +181,13 @@ func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 		localClusterClient: nil,
 		localNamespace:     "localnamespace",
 		localClusterID:     "clusterA",
-		clusterStatus: mcsv1alpha1.ClusterCondition{
-			Type:    mcsv1alpha1.ClusterReady,
+		clusterStatus: mcv1alpha2.ClusterCondition{
+			Type:    mcv1alpha2.ClusterReady,
 			Status:  v1.ConditionUnknown,
 			Message: "Leader cluster added",
 		},
-		leaderStatus: mcsv1alpha1.ClusterCondition{
-			Type:    mcsv1alpha1.ClusterIsLeader,
+		leaderStatus: mcv1alpha2.ClusterCondition{
+			Type:    mcv1alpha2.ClusterIsLeader,
 			Status:  v1.ConditionFalse,
 			Message: "Leader cluster added",
 		},

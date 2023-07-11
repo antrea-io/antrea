@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -36,7 +36,7 @@ type fakeRemoteCommonArea struct {
 	ClusterID      common.ClusterID
 	LocalClusterID string
 	Namespace      string
-	status         []multiclusterv1alpha1.ClusterCondition
+	status         []mcv1alpha2.ClusterCondition
 }
 
 func (c *fakeRemoteCommonArea) GetClusterID() common.ClusterID {
@@ -65,7 +65,7 @@ func (c *fakeRemoteCommonArea) StartWatching() error {
 func (c *fakeRemoteCommonArea) StopWatching() {
 }
 
-func (c *fakeRemoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterCondition {
+func (c *fakeRemoteCommonArea) GetStatus() []mcv1alpha2.ClusterCondition {
 	return c.status
 }
 
@@ -77,7 +77,7 @@ func (c *fakeRemoteCommonArea) AddImportReconciler(reconciler ImportReconciler) 
 }
 
 // NewFakeRemoteCommonArea creates a new fakeRemoteCommonArea for unit test purpose only
-func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localClusterID string, namespace string, status []multiclusterv1alpha1.ClusterCondition) RemoteCommonArea {
+func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localClusterID string, namespace string, status []mcv1alpha2.ClusterCondition) RemoteCommonArea {
 	fakeRemoteCommonArea := &fakeRemoteCommonArea{
 		Client:         fakeClient,
 		ClusterID:      common.ClusterID(clusterID),
@@ -89,12 +89,12 @@ func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localCl
 }
 
 type funcGetRemoteConfigAndClient func(secretObj *v1.Secret, url string, clusterID common.ClusterID,
-	clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+	clusterSet *mcv1alpha2.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
 	manager.Manager, client.Client, error)
 
 func FuncGetFakeRemoteConfigAndClient(mgr manager.Manager) funcGetRemoteConfigAndClient {
 	return func(secretObj *v1.Secret, url string, clusterID common.ClusterID,
-		clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+		clusterSet *mcv1alpha2.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
 		manager.Manager, client.Client, error) {
 		_, _, err := getSecretCACrtAndToken(secretObj)
 		if err != nil {

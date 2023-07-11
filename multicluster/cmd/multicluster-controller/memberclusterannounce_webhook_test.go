@@ -34,32 +34,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
 var mcaWebhookUnderTest *memberClusterAnnounceValidator
 
 func TestMemberClusterAnnounceWebhook(t *testing.T) {
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "mcs1",
 			Name:      "clusterset1",
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 				}},
-			Members: []mcsv1alpha1.MemberCluster{
-				{
-					ClusterID:      "east",
-					ServiceAccount: "east-access-sa",
-				},
-				{
-					ClusterID:      "west",
-					ServiceAccount: "west-access-sa",
-				},
-			},
 			Namespace: "mcs-A",
 		},
 	}
@@ -80,7 +71,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		},
 	}
 
-	mca := &mcsv1alpha1.MemberClusterAnnounce{
+	mca := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-east",
 			Namespace: "mcs1",
@@ -93,7 +84,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 	oldmca := mca.DeepCopy()
 	oldmca.ClusterSetID = "old-clusterset"
 
-	mcafromAnotherClusterSet := &mcsv1alpha1.MemberClusterAnnounce{
+	mcafromAnotherClusterSet := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-north",
 			Namespace: "mcs1",
@@ -103,7 +94,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		LeaderClusterID: "leader1",
 	}
 
-	mcaDifferentLeader := &mcsv1alpha1.MemberClusterAnnounce{
+	mcaDifferentLeader := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "member-announce-from-north",
 			Namespace: "mcs1",
@@ -210,7 +201,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		existingClusterSet *mcsv1alpha1.ClusterSet
+		existingClusterSet *mcv1alpha2.ClusterSet
 		req                admission.Request
 		isAllowed          bool
 	}{
@@ -266,7 +257,7 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcsv1alpha1.AddToScheme(newScheme))
+	utilruntime.Must(mcv1alpha2.AddToScheme(newScheme))
 	decoder, err := admission.NewDecoder(newScheme)
 	if err != nil {
 		klog.ErrorS(err, "Error constructing a decoder")

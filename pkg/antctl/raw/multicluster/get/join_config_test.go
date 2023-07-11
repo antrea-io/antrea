@@ -28,32 +28,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
 
 var (
-	clusterSet1 = &mcsv1alpha1.ClusterSet{
+	clusterSet1 = &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "antrea-multi-cluster",
 			Name:      "clusterset1",
 		},
-		Spec: mcsv1alpha1.ClusterSetSpec{
-			Leaders: []mcsv1alpha1.MemberCluster{
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
 				{
 					ClusterID: "leader1",
 				},
 			},
 		},
 	}
-	invalidClusterSet = &mcsv1alpha1.ClusterSet{
+	invalidClusterSet = &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "antrea-multi-cluster",
 			Name:      "invalidClusterSet",
 		},
 		// No leader cluster in Spec.
-		Spec:   mcsv1alpha1.ClusterSetSpec{},
-		Status: mcsv1alpha1.ClusterSetStatus{},
+		Spec:   mcv1alpha2.ClusterSetSpec{},
+		Status: mcv1alpha2.ClusterSetStatus{},
 	}
 
 	tokenSecret = &corev1.Secret{
@@ -111,14 +111,14 @@ func TestJoinConfig(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		clusterSets    []*mcsv1alpha1.ClusterSet
+		clusterSets    []*mcv1alpha2.ClusterSet
 		secret         *corev1.Secret
 		tokenName      string
 		expectedOutput string
 	}{
 		{
 			name:           "successful get",
-			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1},
+			clusterSets:    []*mcv1alpha2.ClusterSet{clusterSet1},
 			expectedOutput: jcOutput,
 		},
 		{
@@ -127,17 +127,17 @@ func TestJoinConfig(t *testing.T) {
 		},
 		{
 			name:           "invalid ClusterSet",
-			clusterSets:    []*mcsv1alpha1.ClusterSet{invalidClusterSet},
+			clusterSets:    []*mcv1alpha2.ClusterSet{invalidClusterSet},
 			expectedOutput: "Invalid ClusterSet",
 		},
 		{
 			name:           ">1 ClusterSets",
-			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1, invalidClusterSet},
+			clusterSets:    []*mcv1alpha2.ClusterSet{clusterSet1, invalidClusterSet},
 			expectedOutput: "More than one ClusterSets in Namespace",
 		},
 		{
 			name:           "get with token",
-			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1},
+			clusterSets:    []*mcv1alpha2.ClusterSet{clusterSet1},
 			secret:         tokenSecret,
 			tokenName:      tokenSecret.Name,
 			expectedOutput: jcOutput + tkOutput,
@@ -145,7 +145,7 @@ func TestJoinConfig(t *testing.T) {
 		{
 			name:           "non-existing token",
 			tokenName:      "token0",
-			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1},
+			clusterSets:    []*mcv1alpha2.ClusterSet{clusterSet1},
 			expectedOutput: "secrets \"token0\" not found",
 		},
 	}

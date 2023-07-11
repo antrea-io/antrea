@@ -27,91 +27,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
-
-func TestCreateClusterClaim(t *testing.T) {
-	tests := []struct {
-		name                  string
-		expectedResLen        int
-		existingClusterClaims []mcsv1alpha2.ClusterClaim
-	}{
-		{
-			name:           "create successfully",
-			expectedResLen: 2,
-		},
-		{
-			name:           "create one cluster ClusterClaim successfully",
-			expectedResLen: 1,
-			existingClusterClaims: []mcsv1alpha2.ClusterClaim{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "default",
-						Name:      "clusterset.k8s.io",
-					},
-				},
-			},
-		},
-		{
-			name:           "create one clusterSet ClusterClaim successfully",
-			expectedResLen: 1,
-			existingClusterClaims: []mcsv1alpha2.ClusterClaim{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "default",
-						Name:      "id.k8s.io",
-					},
-				},
-			},
-		},
-		{
-			name:           "falied to create two ClusterClaims",
-			expectedResLen: 0,
-			existingClusterClaims: []mcsv1alpha2.ClusterClaim{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "default",
-						Name:      "id.k8s.io",
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "default",
-						Name:      "clusterset.k8s.io",
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			createdRes := []map[string]interface{}{}
-			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).Build()
-			if len(tt.existingClusterClaims) > 0 {
-				var obj []client.Object
-				for _, n := range tt.existingClusterClaims {
-					cc := n
-					obj = append(obj, &cc)
-				}
-				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(obj...).Build()
-			}
-
-			_ = CreateClusterClaim(cmd, fakeClient, "default", "clusterset", "clusterID", &createdRes)
-
-			assert.Equal(t, len(createdRes), tt.expectedResLen)
-		})
-	}
-}
 
 func TestCreateClusterSet(t *testing.T) {
 	tests := []struct {
 		name               string
 		expectedResLen     int
-		existingClusterSet *mcsv1alpha1.ClusterSet
+		existingClusterSet *mcv1alpha2.ClusterSet
 	}{
 		{
 			name:           "create successfully",
@@ -120,7 +44,7 @@ func TestCreateClusterSet(t *testing.T) {
 		{
 			name:           "falied to create ClusterSet",
 			expectedResLen: 0,
-			existingClusterSet: &mcsv1alpha1.ClusterSet{
+			existingClusterSet: &mcv1alpha2.ClusterSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "clusterset",
@@ -146,67 +70,8 @@ func TestCreateClusterSet(t *testing.T) {
 	}
 }
 
-func TestDeleteClusterClaims(t *testing.T) {
-	id := mcsv1alpha2.ClusterClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "id.k8s.io",
-		},
-	}
-	clusterset := mcsv1alpha2.ClusterClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "clusterset.k8s.io",
-		},
-	}
-	tests := []struct {
-		name                  string
-		expectedOutput        string
-		existingClusterClaims *mcsv1alpha2.ClusterClaimList
-	}{
-		{
-			name:           "delete successfully",
-			expectedOutput: "ClusterClaim \"id.k8s.io\" deleted in Namespace default\nClusterClaim \"clusterset.k8s.io\" deleted in Namespace default\n",
-			existingClusterClaims: &mcsv1alpha2.ClusterClaimList{
-				Items: []mcsv1alpha2.ClusterClaim{
-					id, clusterset,
-				},
-			},
-		},
-		{
-			name:           "delete with not found error",
-			expectedOutput: "ClusterClaim \"id.k8s.io\" not found in Namespace default\nClusterClaim \"clusterset.k8s.io\" deleted in Namespace default\n",
-			existingClusterClaims: &mcsv1alpha2.ClusterClaimList{
-				Items: []mcsv1alpha2.ClusterClaim{
-					clusterset,
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).Build()
-			if tt.existingClusterClaims != nil {
-				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithLists(tt.existingClusterClaims).Build()
-			}
-			buf := new(bytes.Buffer)
-			cmd.SetOutput(buf)
-			cmd.SetOut(buf)
-			cmd.SetErr(buf)
-
-			deleteClusterClaims(cmd, fakeClient, "default")
-
-			assert.Equal(t, tt.expectedOutput, buf.String())
-			remainClusterClaims := &mcsv1alpha2.ClusterClaimList{}
-			fakeClient.List(context.Background(), remainClusterClaims, &client.ListOptions{})
-			assert.Equal(t, len(remainClusterClaims.Items), 0)
-		})
-	}
-}
-
 func TestDeleteClusterSet(t *testing.T) {
-	existingClusterSet := &mcsv1alpha1.ClusterSet{
+	existingClusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "clusterset",
@@ -215,7 +80,7 @@ func TestDeleteClusterSet(t *testing.T) {
 	tests := []struct {
 		name               string
 		expectedOutput     string
-		existingClusterSet *mcsv1alpha1.ClusterSet
+		existingClusterSet *mcv1alpha2.ClusterSet
 	}{
 		{
 			name:               "delete successfully",
