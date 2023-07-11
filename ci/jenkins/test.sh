@@ -638,11 +638,19 @@ function deliver_antrea {
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
 
+    echo $(env)
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+            echo $IP
+            echo ${WORKDIR}
+            echo ${DEFAULT_WORKDIR}
+            echo $USER
+            scp -v -q -o  UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
+            echo "here1"
+            scp -v -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
+            echo "here2"
+            ssh -o  StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar"  || true
+        echo "finish"
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
             kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
@@ -707,7 +715,7 @@ function run_e2e {
     # HACK: see https://github.com/antrea-io/antrea/issues/2292
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
+        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam -run=TestAntreaIPAM
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi
