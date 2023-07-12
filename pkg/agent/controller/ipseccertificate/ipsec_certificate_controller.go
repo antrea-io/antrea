@@ -58,11 +58,12 @@ const (
 	ovsConfigCACertificateKey = "ca_cert"
 	ovsConfigPrivateKeyKey    = "private_key"
 	ovsConfigCertificateKey   = "certificate"
+
+	// certificateWaitTimeout controls the amount of time we wait for certificate approval in
+	// one iteration.
+	certificateWaitTimeout = 15 * time.Minute
 )
 
-// certificateWaitTimeout controls the amount of time we wait for certificate
-// approval in one iteration.
-var certificateWaitTimeout = 15 * time.Minute
 var defaultCertificatesPath = "/var/run/openvswitch"
 
 // Controller is responsible for requesting certificates by CertificateSigningRequest and configure them to OVS
@@ -154,7 +155,7 @@ type certificateKeyPair struct {
 	rotationDeadline time.Time
 }
 
-func (pair *certificateKeyPair) validate() error {
+func (pair *certificateKeyPair) validate(clock clock.Clock) error {
 	if pair == nil {
 		return fmt.Errorf("certificate and key pair is nil")
 	}
@@ -177,6 +178,7 @@ func (pair *certificateKeyPair) validate() error {
 		KeyUsages: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageIPSECTunnel,
 		},
+		CurrentTime: clock.Now(),
 	}
 	if _, err := certificate.Verify(verifyOptions); err != nil {
 		return err
@@ -268,7 +270,7 @@ func (c *Controller) syncConfigurations() error {
 
 	var deadline time.Time
 	// Validate the existing certificate and key pair.
-	if err := c.certificateKeyPair.validate(); err != nil {
+	if err := c.certificateKeyPair.validate(c.clock); err != nil {
 		klog.ErrorS(err, "Verifying current certificate configurations failed")
 		deadline = c.clock.Now()
 	} else {
@@ -281,7 +283,7 @@ func (c *Controller) syncConfigurations() error {
 		if err != nil {
 			return fmt.Errorf("failed to rotate certificate: %w", err)
 		}
-		if err := newCertKeyPair.validate(); err != nil {
+		if err := newCertKeyPair.validate(c.clock); err != nil {
 			newCertKeyPair.cleanup()
 			return fmt.Errorf("failed to validate new certificate: %w", err)
 		}
