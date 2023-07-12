@@ -74,7 +74,6 @@ func newFakeController(t *testing.T, clock clock.WithTicker) *fakeController {
 				csr.ObjectMeta.Name = fmt.Sprintf("%s%s", csr.ObjectMeta.GenerateName, utilrand.String(8))
 				csr.ObjectMeta.GenerateName = ""
 				csr.UID = uuid.NewUUID()
-				csr.CreationTimestamp = metav1.Time{Time: clock.Now()}
 			}
 			return false, csr, nil
 		}),
@@ -270,9 +269,10 @@ func TestController_syncConfigurations(t *testing.T) {
 }
 
 func TestController_RotateCertificates(t *testing.T) {
-	ch := make(chan struct{})
-	defer close(ch)
-	now := time.Now()
+	// It is important to truncate to the second, because the accuracy of notAfter in the
+	// certificate is at the second level. If we don't, the certificate may actually be rotated
+	// before 7s.
+	now := time.Now().Truncate(time.Second)
 	fakeClock := testingclock.NewFakeClock(now)
 	fakeController := newFakeController(t, fakeClock)
 	defer fakeController.mockController.Finish()
@@ -304,7 +304,9 @@ func TestController_RotateCertificates(t *testing.T) {
 	}()
 	fakeController.mockBridgeClient.EXPECT().GetOVSOtherConfig().Times(1)
 	fakeController.mockBridgeClient.EXPECT().UpdateOVSOtherConfig(gomock.Any()).MinTimes(1)
-	go fakeController.Run(ch)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go fakeController.Run(stopCh)
 	<-signCh
 	// the rotation interval is determined by nextRotationDeadline as notBefore + (notAfter -
 	// notBefore) * k, where k is >= 0.7 and <= 0.9. We would therefore expect the rotation
@@ -341,9 +343,16 @@ func newIPsecCertTemplate(t *testing.T, nodeName string, notBefore, notAfter tim
 	}
 }
 
-func createCertificate(t *testing.T, nodeName string, caCert *x509.Certificate, caKey crypto.Signer,
-	publicKey crypto.PublicKey, notBefore time.Time, expirationDuration time.Duration) []byte {
-	template := newIPsecCertTemplate(t, nodeName, notBefore, notBefore.Add(expirationDuration))
+func createCertificate(
+	t *testing.T,
+	nodeName string,
+	caCert *x509.Certificate,
+	caKey crypto.Signer,
+	publicKey crypto.PublicKey,
+	currentTime time.Time,
+	expirationDuration time.Duration,
+) []byte {
+	template := newIPsecCertTemplate(t, nodeName, currentTime, currentTime.Add(expirationDuration))
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, caCert, publicKey, caKey)
 	require.NoError(t, err)
 	certs, err := x509.ParseCertificates(derBytes)
@@ -354,11 +363,13 @@ func createCertificate(t *testing.T, nodeName string, caCert *x509.Certificate, 
 	return encoded
 }
 
-func signCSR(t *testing.T, controller *fakeController,
-	csr *certificatesv1.CertificateSigningRequest, expirationDuration time.Duration) {
+func signCSR(
+	t *testing.T,
+	controller *fakeController,
+	csr *certificatesv1.CertificateSigningRequest,
+	expirationDuration time.Duration,
+) {
 	assert.Empty(t, csr.Status.Certificate)
-	// use the CreationTimestamp as the NotBefore field of issued certificates for testing.
-	assert.False(t, csr.CreationTimestamp.IsZero())
 	block, remain := pem.Decode(csr.Spec.Request)
 	assert.Empty(t, remain)
 	req, err := x509.ParseCertificateRequest(block.Bytes)
@@ -370,7 +381,7 @@ func signCSR(t *testing.T, controller *fakeController,
 	time.Sleep(1 * time.Second)
 
 	newCert := createCertificate(t, req.Subject.CommonName, controller.caCert,
-		controller.caKey, req.PublicKey, csr.CreationTimestamp.Time, expirationDuration)
+		controller.caKey, req.PublicKey, controller.clock.Now(), expirationDuration)
 	toUpdate := csr.DeepCopy()
 	toUpdate.Status.Conditions = append(toUpdate.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
 		Type:   certificatesv1.CertificateApproved,
