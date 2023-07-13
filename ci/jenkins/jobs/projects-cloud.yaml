@@ -1036,3 +1036,44 @@
                       default-excludes: true
                       fingerprint: false
                       only-if-success: false
+
+      - '{name}-{test_name}-for-pull-request':
+          test_name: multicluster-e2e
+          node: 'antrea-multicluster-node'
+          description: 'This is the {test_name} test for {name} pull request.'
+          white_list_target_branches: [ ]
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-multicluster
+          status_url: https://jenkins.antrea-ci.rocks/job/antrea-multicluster-for-pull-request
+          branches:
+              - ${{sha1}}
+          builders:
+              - builder-multicluster-e2e
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(multicluster-e2e).*
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-multicluster-e2e to re-trigger.
+          error_status: Failed. Add comment /test-multicluster-e2e to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+              - credentials-binding:
+                    - text:
+                          credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                          variable: CODECOV_TOKEN
+              - timeout:
+                    fail: true
+                    timeout: 150
+                    type: absolute
+          publishers:
+              - archive:
+                    allow-empty: true
+                    artifacts: antrea-test-logs.tar.gz, e2e-coverage.tar.gz
+                    case-sensitive: true
+                    default-excludes: true
+                    fingerprint: false
+                    only-if-success: false
