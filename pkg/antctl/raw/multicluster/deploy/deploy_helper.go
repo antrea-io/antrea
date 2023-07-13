@@ -120,11 +120,25 @@ func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGrou
 	}
 
 	for dri, unstructuredObj := range unstructuredObjs {
-		if _, err := dri.Create(context.TODO(), unstructuredObj, metav1.CreateOptions{}); err != nil {
+		if _, err = dri.Create(context.TODO(), unstructuredObj, metav1.CreateOptions{}); err != nil {
 			if !kerrors.IsAlreadyExists(err) {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s/%s already exists\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
+			existingRes, err := dri.Get(context.TODO(), unstructuredObj.GetName(), metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			existingVersion := existingRes.GetResourceVersion()
+			unstructuredObj.SetResourceVersion(existingVersion)
+			var updatedObj *unstructured.Unstructured
+			if updatedObj, err = dri.Update(context.TODO(), unstructuredObj, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+			if updatedObj.GetResourceVersion() != existingVersion {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s/%s configured\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s/%s, unchanged\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
+			}
 		} else {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s/%s created\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
 		}

@@ -21,6 +21,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/delete"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/deploy"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/get"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/upgrade"
 )
 
 var GetCmd = &cobra.Command{
@@ -43,6 +44,11 @@ var DeleteCmd = &cobra.Command{
 	Short: "Delete a member token",
 }
 
+var UpgradeCmd = &cobra.Command{
+	Use:   "upgrade",
+	Short: "Upgrade Multi-cluster resources",
+}
+
 var JoinCmd = NewJoinCommand()
 var LeaveCmd = NewLeaveCommand()
 var InitCmd = NewInitCommand()
@@ -58,4 +64,5 @@ func init() {
 	DeployCmd.AddCommand(deploy.NewLeaderClusterCmd())
 	DeployCmd.AddCommand(deploy.NewMemberClusterCmd())
 	DeleteCmd.AddCommand(delete.NewMemberTokenCmd())
+	UpgradeCmd.AddCommand(upgrade.NewUpgradeClusterSetCommand())
 }
