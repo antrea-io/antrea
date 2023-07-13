@@ -145,7 +145,7 @@ func (r *LabelIdentityResourceImportReconciler) SetupWithManager(mgr ctrl.Manage
 		For(&multiclusterv1alpha1.ResourceImport{}).
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: common.DefaultWorkerCount,
+			MaxConcurrentReconciles: common.LabelIdentityWorkerCount,
 		}).
 		Complete(r)
 

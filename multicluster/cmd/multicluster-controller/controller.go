@@ -39,6 +39,7 @@ import (
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/util/env"
@@ -134,6 +135,8 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 
 	// build up cert controller to manage certificate for MC Controller
 	k8sConfig := ctrl.GetConfigOrDie()
+	k8sConfig.QPS = common.ResourceExchangeQPS
+	k8sConfig.Burst = common.ResourceExchangeBurst
 	client, aggregatorClient, apiExtensionClient, err := createClients(k8sConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error creating K8s clients: %v", err)

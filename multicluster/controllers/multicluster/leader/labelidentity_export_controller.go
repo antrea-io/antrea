@@ -122,7 +122,7 @@ func (r *LabelIdentityExportReconciler) SetupWithManager(mgr ctrl.Manager) error
 		For(&mcsv1alpha1.ResourceExport{}).
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: common.DefaultWorkerCount,
+			MaxConcurrentReconciles: common.LabelIdentityWorkerCount,
 		}).
 		Complete(r)
 }
@@ -173,7 +173,7 @@ func (r *LabelIdentityExportReconciler) onLabelExportAdd(clusterID, labelHash, l
 func (r *LabelIdentityExportReconciler) Run(stopCh <-chan struct{}) {
 	defer r.labelQueue.ShutDown()
 
-	for i := 0; i < common.DefaultWorkerCount; i++ {
+	for i := 0; i < common.LabelIdentityWorkerCount; i++ {
 		go wait.Until(r.labelQueueWorker, time.Second, stopCh)
 	}
 	<-stopCh
