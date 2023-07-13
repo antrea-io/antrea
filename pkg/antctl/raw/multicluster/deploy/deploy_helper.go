@@ -48,6 +48,7 @@ const (
 	leaderGlobalYAML     = "antrea-multicluster-leader-global.yml"
 	leaderNamespacedYAML = "antrea-multicluster-leader-namespaced.yml"
 	memberYAML           = "antrea-multicluster-member.yml"
+	memberGlobalYAML     = "antrea-multicluster-member-global.yml"
 )
 
 var httpGet = http.Get
@@ -70,10 +71,12 @@ func generateManifests(role string, version string) ([]string, error) {
 	case memberRole:
 		manifests = []string{
 			fmt.Sprintf("%s/%s", latestVersionURL, memberYAML),
+			fmt.Sprintf("%s/%s", latestVersionURL, memberGlobalYAML),
 		}
 		if version != "latest" {
 			manifests = []string{
 				fmt.Sprintf("%s/%s/%s", downloadURL, version, memberYAML),
+				fmt.Sprintf("%s/%s/%s", downloadURL, version, memberGlobalYAML),
 			}
 		}
 	default:

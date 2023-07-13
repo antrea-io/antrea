@@ -6,7 +6,6 @@ commonLabels:
   app: antrea
 
 bases:
-  - ../../crd
   - ../../default
 
 resources:
@@ -28,4 +27,3 @@ configurations:
 patchesStrategicMerge:
   - manager_command_patch.yaml
   - webhook_patch.yaml
-  - crd_patch.yaml

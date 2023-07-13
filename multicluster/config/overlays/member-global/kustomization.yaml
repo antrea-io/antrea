@@ -1,0 +1,8 @@
+commonLabels:
+  app: antrea
+
+bases:
+  - ../../crd
+
+patchesStrategicMerge:
+  - crd_patch.yaml

@@ -120,6 +120,7 @@ cd multicluster
 ./hack/generate-manifest.sh -g > "$OUTPUT_DIR"/antrea-multicluster-leader-global.yml
 ./hack/generate-manifest.sh -r -l antrea-multicluster > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
 ./hack/generate-manifest.sh -r -m > "$OUTPUT_DIR"/antrea-multicluster-member.yml
+./hack/generate-manifest.sh --member-global > "$OUTPUT_DIR"/antrea-multicluster-member-global.yml
 cd -
 
 # Package the Antrea chart

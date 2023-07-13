@@ -71,6 +71,10 @@ case $key in
     OVERLAY=member
     shift
     ;;
+    --member-global)
+    OVERLAY=member-global
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0

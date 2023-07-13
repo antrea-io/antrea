@@ -58,6 +58,7 @@ func TestGenerateManifests(t *testing.T) {
 			version: "latest",
 			expectedManifests: []string{
 				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-member.yml",
+				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-member-global.yml",
 			},
 		},
 		{
@@ -75,6 +76,7 @@ func TestGenerateManifests(t *testing.T) {
 			version: "v1.7.0",
 			expectedManifests: []string{
 				"https://github.com/antrea-io/antrea/releases/download/v1.7.0/antrea-multicluster-member.yml",
+				"https://github.com/antrea-io/antrea/releases/download/v1.7.0/antrea-multicluster-member-global.yml",
 			},
 		},
 		{
