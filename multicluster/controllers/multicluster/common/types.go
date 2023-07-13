@@ -31,7 +31,19 @@ const (
 	InvalidClusterSetID = ClusterSetID("invalid")
 
 	DefaultWorkerCount = 5
+	// LabelIdentityWorkerCount is the number of workers used by LabelIdentityReconciler,
+	// LabelIdentityExportReconciler and LabelIdentityResourceImportReconciler.
+	// Using more workers for those reconcilers could have a better performance when a
+	// lot of LabelIdentity events happen concurrently.
+	LabelIdentityWorkerCount = 10
 
 	EndpointIPTypeClusterIP = "ClusterIP"
 	EndpointIPTypePodIP     = "PodIP"
+
+	// ResourceExchangeQPS and ResourceExchangeBurst are used to configure the client-go
+	// used by Antrea Multi-cluster resource exchange pipeline. Using higher QPS and
+	// Burst, instead of default settings, could significantly improve the performance,
+	// when a lot of LabelIdentity events happen concurrently.
+	ResourceExchangeQPS   = 100
+	ResourceExchangeBurst = 200
 )

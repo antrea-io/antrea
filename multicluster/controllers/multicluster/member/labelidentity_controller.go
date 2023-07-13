@@ -136,7 +136,7 @@ func (r *LabelIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.namespaceMapFunc),
 			builder.WithPredicates(predicate.LabelChangedPredicate{})).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: common.DefaultWorkerCount,
+			MaxConcurrentReconciles: common.LabelIdentityWorkerCount,
 		}).
 		Complete(r)
 }
@@ -213,7 +213,7 @@ func (r *LabelIdentityReconciler) onPodCreateOrUpdate(podNamespacedName, current
 func (r *LabelIdentityReconciler) Run(stopCh <-chan struct{}) {
 	defer r.labelQueue.ShutDown()
 
-	for i := 0; i < common.DefaultWorkerCount; i++ {
+	for i := 0; i < common.LabelIdentityWorkerCount; i++ {
 		go wait.Until(r.labelQueueWorker, time.Second, stopCh)
 	}
 	<-stopCh
