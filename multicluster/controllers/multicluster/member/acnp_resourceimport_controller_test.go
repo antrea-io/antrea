@@ -34,6 +34,7 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 var (
@@ -55,11 +56,11 @@ var (
 
 	allowAction     = v1alpha1.RuleActionAllow
 	dropAction      = v1alpha1.RuleActionDrop
-	securityOpsTier = &v1alpha1.Tier{
+	securityOpsTier = &v1beta1.Tier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "securityops",
 		},
-		Spec: v1alpha1.TierSpec{
+		Spec: v1beta1.TierSpec{
 			Priority:    int32(100),
 			Description: "[READ-ONLY]: System generated SecurityOps Tier",
 		},

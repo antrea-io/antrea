@@ -23,16 +23,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stesting "k8s.io/client-go/testing"
 
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
 func TestInitTier(t *testing.T) {
-	testTier := &secv1alpha1.Tier{
+	testTier := &secv1beta1.Tier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test",
 		},
-		Spec: secv1alpha1.TierSpec{
+		Spec: secv1beta1.TierSpec{
 			Priority: 10,
 		},
 	}

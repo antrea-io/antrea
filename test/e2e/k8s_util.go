@@ -34,6 +34,7 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/test/e2e/utils"
 )
 
@@ -738,15 +739,15 @@ func (data *TestData) CleanNetworkPolicies(namespaces map[string]string) error {
 }
 
 // CreateTier is a convenience function for creating an Antrea Policy Tier by name and priority.
-func (data *TestData) CreateNewTier(name string, tierPriority int32) (*crdv1alpha1.Tier, error) {
+func (data *TestData) CreateNewTier(name string, tierPriority int32) (*crdv1beta1.Tier, error) {
 	log.Infof("Creating tier %s", name)
-	_, err := data.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	_, err := data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
-		tr := &crdv1alpha1.Tier{
+		tr := &crdv1beta1.Tier{
 			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Spec:       crdv1alpha1.TierSpec{Priority: tierPriority},
+			Spec:       crdv1beta1.TierSpec{Priority: tierPriority},
 		}
-		tr, err = data.crdClient.CrdV1alpha1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
+		tr, err = data.crdClient.CrdV1beta1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create tier %s: %s", name, err)
 		}
@@ -756,25 +757,25 @@ func (data *TestData) CreateNewTier(name string, tierPriority int32) (*crdv1alph
 }
 
 // GetTier is a convenience function for getting Tier.
-func (data *TestData) GetTier(name string) (*crdv1alpha1.Tier, error) {
-	return data.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+func (data *TestData) GetTier(name string) (*crdv1beta1.Tier, error) {
+	return data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // UpdateTier is a convenience function for updating an Antrea Policy Tier.
-func (data *TestData) UpdateTier(tier *crdv1alpha1.Tier) (*crdv1alpha1.Tier, error) {
+func (data *TestData) UpdateTier(tier *crdv1beta1.Tier) (*crdv1beta1.Tier, error) {
 	log.Infof("Updating tier %s", tier.Name)
-	updatedTier, err := data.crdClient.CrdV1alpha1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
+	updatedTier, err := data.crdClient.CrdV1beta1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
 	return updatedTier, err
 }
 
 // DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
 func (data *TestData) DeleteTier(name string) error {
-	_, err := data.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	_, err := data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to get tier %s", name)
 	}
 	log.Infof("Deleting tier %s", name)
-	if err = data.crdClient.CrdV1alpha1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+	if err = data.crdClient.CrdV1beta1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "unable to delete tier %s", name)
 	}
 	return nil

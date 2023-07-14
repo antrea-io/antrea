@@ -80,6 +80,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                    schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierList":                                   schema_pkg_apis_crd_v1beta1_TierList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec":                                   schema_pkg_apis_crd_v1beta1_TierSpec(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":         schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":                schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
@@ -2886,6 +2889,126 @@ func schema_pkg_apis_crd_v1beta1_OVSInfo(ref common.ReferenceCallback) common.Op
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Tier(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the desired behavior of Tier.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TierList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Tier"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TierSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TierSpec defines the desired state for Tier.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority specfies the order of the Tier relative to other Tiers.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"description": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Description is an optional field to add more information regarding the purpose of this Tier.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"priority"},
 			},
 		},
 	}

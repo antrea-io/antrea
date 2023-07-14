@@ -134,7 +134,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		informerFactory.Core().V1().Nodes(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Crd().V1alpha1().NetworkPolicies(),
-		crdInformerFactory.Crd().V1alpha1().Tiers(),
+		crdInformerFactory.Crd().V1beta1().Tiers(),
 		cgInformer,
 		gInformer,
 		addressGroupStore,
@@ -146,7 +146,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
 	npController.acnpListerSynced = alwaysReady
-	npController.tierLister = crdInformerFactory.Crd().V1alpha1().Tiers().Lister()
+	npController.tierLister = crdInformerFactory.Crd().V1beta1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
 	npController.cgInformer = cgInformer
 	npController.cgLister = cgInformer.Lister()
@@ -160,7 +160,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().NetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
+		crdInformerFactory.Crd().V1beta1().Tiers().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha3().ClusterGroups().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha3().Groups().Informer().GetStore(),
 		appliedToGroupStore,
@@ -186,7 +186,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	internalGroupStore := store.NewGroupStore()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
-	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
+	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
 	acnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
 	annpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
