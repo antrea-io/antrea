@@ -51,6 +51,8 @@ CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
+PRINT_DOCKER_STATUS="docker system df -v"
+PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-containerd-conformance|windows-conformance|windows-containerd-networkpolicy|windows-networkpolicy|windows-containerd-e2e|windows-e2e|e2e|conformance|networkpolicy|multicast-e2e>]
@@ -610,7 +612,7 @@ function deliver_antrea {
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:~
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:${WORKDIR}/
+        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:${WORKDIR}/
     else
         cp -f build/yamls/*.yml $WORKDIR
     fi
@@ -631,9 +633,9 @@ function deliver_antrea {
             kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@${IP}:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" flow-aggregator.tar jenkins@${IP}:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD};ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
+            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
+            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     else
         kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $6}' | while read IP; do
