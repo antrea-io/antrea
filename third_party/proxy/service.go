@@ -230,7 +230,13 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 		externalPolicyLocal:   externalPolicyLocal,
 		internalPolicyLocal:   internalPolicyLocal,
 		internalTrafficPolicy: service.Spec.InternalTrafficPolicy,
-		hintsAnnotation:       service.Annotations[v1.AnnotationTopologyAwareHints],
+	}
+	// TODO: Switch to v1.DeprecatedAnnotationTopologyAwareHints and v1.AnnotationTopologyMode after
+	//  upgrading Antrea K8s API to at least 1.27
+	var ok bool
+	info.hintsAnnotation, ok = service.Annotations[v1.AnnotationTopologyAwareHints]
+	if !ok {
+		info.hintsAnnotation, _ = service.Annotations["service.kubernetes.io/topology-mode"]
 	}
 
 	loadBalancerSourceRanges := make([]string, len(service.Spec.LoadBalancerSourceRanges))
