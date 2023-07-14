@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -37,9 +38,9 @@ import (
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	t10 := int32(10)
-	tierA := crdv1alpha1.Tier{
+	tierA := crdv1beta1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "tier-A", UID: "uidA"},
-		Spec: crdv1alpha1.TierSpec{
+		Spec: crdv1beta1.TierSpec{
 			Priority:    t10,
 			Description: "tier-A",
 		},
@@ -1752,7 +1753,7 @@ func TestGetTierPriority(t *testing.T) {
 	p10 := int32(10)
 	tests := []struct {
 		name      string
-		inputTier *crdv1alpha1.Tier
+		inputTier *crdv1beta1.Tier
 		expPrio   int32
 	}{
 		{
@@ -1762,9 +1763,9 @@ func TestGetTierPriority(t *testing.T) {
 		},
 		{
 			name: "tier10",
-			inputTier: &crdv1alpha1.Tier{
+			inputTier: &crdv1beta1.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "tA", UID: "uidA"},
-				Spec: crdv1alpha1.TierSpec{
+				Spec: crdv1beta1.TierSpec{
 					Priority:    p10,
 					Description: "tier10",
 				},

@@ -35,7 +35,8 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `ExternalIPPool` | v1alpha2 | v1.2.0 | N/A | N/A |
 | `Group` | v1alpha3 | v1.8.0 | N/A | N/A |
 | `NetworkPolicy` | v1alpha1 | v1.0.0 | N/A | N/A |
-| `Tier` | v1alpha1 | v1.0.0 | N/A | N/A |
+| `Tier` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
+| `Tier` | v1beta1 | v1.13.0 | N/A | N/A |
 | `Traceflow` | v1alpha1 | v1.0.0 | N/A | N/A |
 
 ### Other API groups

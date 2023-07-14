@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ type CrdV1beta1Interface interface {
 	RESTClient() rest.Interface
 	AntreaAgentInfosGetter
 	AntreaControllerInfosGetter
+	TiersGetter
 }
 
 // CrdV1beta1Client is used to interact with features provided by the crd.antrea.io group.
@@ -41,6 +42,10 @@ func (c *CrdV1beta1Client) AntreaAgentInfos() AntreaAgentInfoInterface {
 
 func (c *CrdV1beta1Client) AntreaControllerInfos() AntreaControllerInfoInterface {
 	return newAntreaControllerInfos(c)
+}
+
+func (c *CrdV1beta1Client) Tiers() TierInterface {
+	return newTiers(c)
 }
 
 // NewForConfig creates a new CrdV1beta1Client for the given config.

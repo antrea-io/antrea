@@ -44,6 +44,7 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 var (
@@ -121,6 +122,7 @@ var (
 func init() {
 	utilruntime.Must(mcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v1beta1.AddToScheme(scheme))
 	utilruntime.Must(k8smcsapi.AddToScheme(scheme))
 	utilruntime.Must(k8sscheme.AddToScheme(scheme))
 }

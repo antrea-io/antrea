@@ -47,12 +47,15 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	secinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdv1a3informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha3"
+	crdv1b1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	seclisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	crdv1a3listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha3"
+	crdv1b1listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/labelidentity"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -178,10 +181,10 @@ type NetworkPolicyController struct {
 	// annpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	annpListerSynced cache.InformerSynced
 
-	tierInformer secinformers.TierInformer
+	tierInformer crdv1b1informers.TierInformer
 	// tierLister is able to list/get Tiers and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
-	tierLister seclisters.TierLister
+	tierLister crdv1b1listers.TierLister
 	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
 	tierListerSynced cache.InformerSynced
 
@@ -255,7 +258,7 @@ type heartbeat struct {
 
 var tierIndexers = cache.Indexers{
 	PriorityIndex: func(obj interface{}) ([]string, error) {
-		tr, ok := obj.(*secv1alpha1.Tier)
+		tr, ok := obj.(*secv1beta1.Tier)
 		if !ok {
 			return []string{}, nil
 		}
@@ -384,7 +387,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	acnpInformer secinformers.ClusterNetworkPolicyInformer,
 	annpInformer secinformers.NetworkPolicyInformer,
-	tierInformer secinformers.TierInformer,
+	tierInformer crdv1b1informers.TierInformer,
 	cgInformer crdv1a3informers.ClusterGroupInformer,
 	grpInformer crdv1a3informers.GroupInformer,
 	addressGroupStore storage.Interface,

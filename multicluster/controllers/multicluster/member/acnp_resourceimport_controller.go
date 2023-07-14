@@ -30,6 +30,7 @@ import (
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 const acnpImportFailed string = "ACNPImportFailed"
@@ -69,7 +70,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 		}
 	}
 	acnpObj := getMCAntreaClusterPolicy(resImp)
-	tierObj, tierName := &v1alpha1.Tier{}, acnpObj.Spec.Tier
+	tierObj, tierName := &v1beta1.Tier{}, acnpObj.Spec.Tier
 	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tierName}, tierObj)
 	tierNotFound := apierrors.IsNotFound(err)
 	if err != nil && !tierNotFound {

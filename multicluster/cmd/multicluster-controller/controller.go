@@ -40,7 +40,8 @@ import (
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antreacrdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antreacrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/util/env"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
@@ -74,7 +75,8 @@ func init() {
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(mcv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(mcv1alpha2.AddToScheme(scheme))
-	utilruntime.Must(antreacrd.AddToScheme(scheme))
+	utilruntime.Must(antreacrdv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(antreacrdv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

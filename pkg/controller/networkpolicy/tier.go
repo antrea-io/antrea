@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 var (
@@ -61,12 +61,12 @@ var (
 	// be converted to corresponding Tier CRD names.
 	staticTierSet = sets.New[string]("Emergency", "SecurityOps", "NetworkOps", "Platform", "Application", "Baseline")
 	// systemGeneratedTiers are the Tier CRs to be created at init.
-	systemGeneratedTiers = []*secv1alpha1.Tier{
+	systemGeneratedTiers = []*secv1beta1.Tier{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: baselineTierName,
 			},
-			Spec: secv1alpha1.TierSpec{
+			Spec: secv1beta1.TierSpec{
 				Priority:    priorityMap[baselineTierName],
 				Description: "[READ-ONLY]: System generated Baseline Tier",
 			},
@@ -75,7 +75,7 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: defaultTierName,
 			},
-			Spec: secv1alpha1.TierSpec{
+			Spec: secv1beta1.TierSpec{
 				Priority:    priorityMap[defaultTierName],
 				Description: "[READ-ONLY]: System generated default Application Tier",
 			},
@@ -84,7 +84,7 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: platformTierName,
 			},
-			Spec: secv1alpha1.TierSpec{
+			Spec: secv1beta1.TierSpec{
 				Priority:    priorityMap[platformTierName],
 				Description: "[READ-ONLY]: System generated Platform Tier",
 			},
@@ -93,7 +93,7 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: networkOpsTierName,
 			},
-			Spec: secv1alpha1.TierSpec{
+			Spec: secv1beta1.TierSpec{
 				Priority:    priorityMap[networkOpsTierName],
 				Description: "[READ-ONLY]: System generated NetworkOps Tier",
 			},
@@ -102,7 +102,7 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: securityOpsTierName,
 			},
-			Spec: secv1alpha1.TierSpec{
+			Spec: secv1beta1.TierSpec{
 				Priority:    priorityMap[securityOpsTierName],
 				Description: "[READ-ONLY]: System generated SecurityOps Tier",
 			},
@@ -111,7 +111,7 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: emergencyTierName,
 			},
-			Spec: secv1alpha1.TierSpec{
+			Spec: secv1beta1.TierSpec{
 				Priority:    priorityMap[emergencyTierName],
 				Description: "[READ-ONLY]: System generated Emergency Tier",
 			},
@@ -145,14 +145,14 @@ func (n *NetworkPolicyController) InitializeTiers() {
 
 // initTier attempts to create system Tiers until they are created using an
 // exponential backoff period from 1 to max of 8secs.
-func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
+func (n *NetworkPolicyController) initTier(t *secv1beta1.Tier) {
 	var err error
 	const maxBackoffTime = 8 * time.Second
 	backoff := 1 * time.Second
 	retryAttempt := 1
 	for {
 		klog.V(2).InfoS("Creating system Tier", "tier", t.Name)
-		_, err = n.crdClient.CrdV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
+		_, err = n.crdClient.CrdV1beta1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
 		// Attempt to recreate Tier after a backoff only if it does not exist.
 		if err != nil {
 			if errors.IsAlreadyExists(err) {
@@ -178,14 +178,14 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 
 // updateTier attempts to update Tiers using an
 // exponential backoff period from 1 to max of 8secs.
-func (n *NetworkPolicyController) updateTier(t *secv1alpha1.Tier) {
+func (n *NetworkPolicyController) updateTier(t *secv1beta1.Tier) {
 	var err error
 	const maxBackoffTime = 8 * time.Second
 	backoff := 1 * time.Second
 	retryAttempt := 1
 	for {
 		klog.V(2).Infof("Updating %s Tier", t.Name)
-		_, err = n.crdClient.CrdV1alpha1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
+		_, err = n.crdClient.CrdV1beta1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
 		// Attempt to update Tier after a backoff.
 		if err != nil {
 			klog.Warningf("Failed to update %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)

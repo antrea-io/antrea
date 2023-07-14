@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,6 +92,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().AntreaAgentInfos().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("antreacontrollerinfos"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().AntreaControllerInfos().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("tiers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().Tiers().Informer()}, nil
 
 	}
 
