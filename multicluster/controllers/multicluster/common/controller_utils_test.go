@@ -21,7 +21,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
 func TestDiscoverServiceCIDRByInvalidServiceCreation(t *testing.T) {
@@ -58,5 +63,160 @@ func TestParseServiceCIDRFromError(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.expectedError)
 		}
 		assert.Equal(t, cidr, tt.expectedCIDR)
+	}
+}
+
+func TestGetClusterIDFromClusterClaim(t *testing.T) {
+	clusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test-clusterset",
+		},
+	}
+	clusterClaim1 := mcv1alpha2.ClusterClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "id.k8s.io",
+		},
+		Value: "cluster-a",
+	}
+	clusterClaim2 := mcv1alpha2.ClusterClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset.k8s.io",
+		},
+		Value: "test-clusterset",
+	}
+
+	tests := []struct {
+		name             string
+		clusterClaimList mcv1alpha2.ClusterClaimList
+		expectedErr      string
+	}{
+		{
+			name: "succeed to get clusterID",
+			clusterClaimList: mcv1alpha2.ClusterClaimList{
+				Items: []mcv1alpha2.ClusterClaim{
+					clusterClaim1,
+					clusterClaim2,
+				},
+			},
+		},
+		{
+			name:             "empty ClusterClaims",
+			clusterClaimList: mcv1alpha2.ClusterClaimList{},
+			expectedErr:      "ClusterClaim is not configured for the cluster",
+		},
+		{
+			name: "No ClusterClaim with ClusterID",
+			clusterClaimList: mcv1alpha2.ClusterClaimList{
+				Items: []mcv1alpha2.ClusterClaim{
+					clusterClaim2,
+				},
+			},
+			expectedErr: "ClusterClaim not configured for Name=id.k8s.io",
+		},
+	}
+
+	for _, tt := range tests {
+		fakeClient := fake.NewClientBuilder().WithScheme(TestScheme).WithLists(&tt.clusterClaimList).Build()
+		t.Run(tt.name, func(t *testing.T) {
+			actualClusterID, err := getClusterIDFromClusterClaim(fakeClient, clusterSet)
+			if err != nil {
+				assert.Equal(t, tt.expectedErr, err.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, clusterClaim1.Value, string(actualClusterID))
+			}
+		})
+	}
+}
+
+func TestGetClusterID(t *testing.T) {
+	tests := []struct {
+		name             string
+		clusterSet       *mcv1alpha2.ClusterSet
+		clusterClaimList *mcv1alpha2.ClusterClaimList
+		expectedErr      string
+		expectedID       string
+	}{
+		{
+			name: "succeed to get clusterID from ClusterClaim",
+			clusterSet: &mcv1alpha2.ClusterSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "test-clusterset",
+				},
+				Spec: mcv1alpha2.ClusterSetSpec{},
+			},
+			clusterClaimList: &mcv1alpha2.ClusterClaimList{
+				Items: []mcv1alpha2.ClusterClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "id.k8s.io",
+						},
+						Value: "cluster-a",
+					},
+				},
+			},
+			expectedID: "cluster-a",
+		},
+		{
+			name: "error to get clusterID from ClusterClaim",
+			clusterSet: &mcv1alpha2.ClusterSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "test-clusterset",
+				},
+				Spec: mcv1alpha2.ClusterSetSpec{},
+			},
+			clusterClaimList: &mcv1alpha2.ClusterClaimList{
+				Items: []mcv1alpha2.ClusterClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "clusterset.k8s.io",
+						},
+						Value: "cluster-a",
+					},
+				},
+			},
+			expectedErr: "'clusterID' is not set in the ClusterSet default/test-clusterset spec",
+		},
+		{
+			name: "succeed to get clusterID from ClusterSet",
+			clusterSet: &mcv1alpha2.ClusterSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "test-clusterset",
+				},
+				Spec: mcv1alpha2.ClusterSetSpec{
+					ClusterID: "cluster-1",
+				},
+			},
+			clusterClaimList: &mcv1alpha2.ClusterClaimList{},
+			expectedID:       "cluster-1",
+		},
+	}
+
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      "test-clusterset",
+		},
+	}
+
+	for _, tt := range tests {
+		fakeClient := fake.NewClientBuilder().WithScheme(TestScheme).WithLists(tt.clusterClaimList).Build()
+		t.Run(tt.name, func(t *testing.T) {
+			actualID, err := GetClusterID(true, req, fakeClient, tt.clusterSet)
+			if err != nil {
+				assert.Equal(t, tt.expectedErr, err.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedID, string(actualID))
+			}
+		})
 	}
 }

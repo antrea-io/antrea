@@ -18,7 +18,9 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -171,6 +173,14 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 		o.EnableEndpointSlice = true
 	}
 
+	// ClusterClaim CRD is removed since v1.13. Check the existence of
+	// ClusterClaim API before using ClusterClaim API.
+	clusterClaimCRDAvailable, err := clusterClaimCRDAvailable(client)
+	if err != nil {
+		return nil, fmt.Errorf("error checking if ClusterClaim API is available")
+	}
+	o.ClusterCalimCRDAvailable = clusterClaimCRDAvailable
+
 	mgr, err := ctrl.NewManager(k8sConfig, o.options)
 	if err != nil {
 		return nil, fmt.Errorf("error starting manager: %v", err)
@@ -191,4 +201,22 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 		return nil, fmt.Errorf("error setting up ready check: %v", err)
 	}
 	return mgr, nil
+}
+
+func clusterClaimCRDAvailable(k8sClient clientset.Interface) (bool, error) {
+	groupVersion := mcv1alpha2.SchemeGroupVersion.String()
+	resources, err := k8sClient.Discovery().ServerResourcesForGroupVersion(groupVersion)
+	if err != nil {
+		// The group version doesn't exist.
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("error getting server resources for GroupVersion %s: %v", groupVersion, err)
+	}
+	for _, resource := range resources.APIResources {
+		if resource.Kind == "ClusterClaim" {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -558,7 +558,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists().Build()
 	ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
 
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true)
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true, false)
 	mcReconciler.SetRemoteCommonArea(ca)
 	c := multicluster.NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, multicluster.MemberCluster)
 	r := newLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", ca)

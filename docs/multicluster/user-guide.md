@@ -33,6 +33,10 @@ through tunnels among clusters. The ClusterNetworkPolicy replication feature is
 supported since Antrea v1.6.0, and Multi-cluster NetworkPolicy rules are
 supported since Antrea v1.10.0.
 
+Antrea v1.13 promoted the ClusterSet CRD version from v1alpha1 to v1alpha2. If you
+plan to upgrade from a previous version to v1.13 or later, please check
+the [upgrade guide](./upgrade.md#upgrade-from-a-version-prior-to-v113).
+
 ## Quick Start
 
 Please refer to the [Quick Start Guide](quick-start.md) to learn how to build a
