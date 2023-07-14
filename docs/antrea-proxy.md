@@ -7,6 +7,7 @@
 - [AntreaProxy with proxyAll](#antreaproxy-with-proxyall)
   - [Removing kube-proxy](#removing-kube-proxy)
     - [Windows Nodes](#windows-nodes)
+  - [Configuring load balancer mode for external traffic](#configuring-load-balancer-mode-for-external-traffic)
 - [Special use cases](#special-use-cases)
   - [When you are using NodeLocal DNSCache](#when-you-are-using-nodelocal-dnscache)
   - [When you want your external LoadBalancer to handle Pod traffic](#when-you-want-your-external-loadbalancer-to-handle-pod-traffic)
@@ -127,6 +128,61 @@ kube-proxy:
 * Do not create the `kube-proxy-windows` DaemonSet [when using Docker as the
   container runtime](windows.md#installation-via-wins-docker-based-runtimes)
 
+### Configuring load balancer mode for external traffic
+
+Starting with Antrea v1.13, the `defaultLoadBalancerMode` configuration
+parameter and the `service.antrea.io/load-balancer-mode` Service annotation
+can be used to specify how you want AntreaProxy to handle external traffic
+destined to LoadBalancerIPs and ExternalIPs of Services. Specifically, the mode
+determines how external traffic is processed when it's load balanced across
+Nodes. Currently, it has two options: `nat` (default) and `dsr`.
+
+* In NAT mode, external traffic is SNAT'd when it's load balanced across Nodes
+to ensure symmetric paths. It's the default and the most general mode.
+
+* In DSR mode, external traffic is never SNAT'd and backend Pods running on
+Nodes that are not the ingress Node can reply to clients directly, bypassing
+the ingress Node. Therefore, DSR mode can preserve the client IP of requests,
+and usually has lower latency and higher throughput. Currently, it is only
+applicable to Linux Nodes, encap mode, and IPv4 clusters. The feature gate
+`LoadBalancerModeDSR` must be enabled to use this mode for any Service.
+
+You can make the following changes to the `antrea-config` ConfigMap to specify
+the default load balancer mode for all Services:
+
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    kubeAPIServerOverride: "<kube-apiserver URL>"
+    antreaProxy:
+      proxyAll: true
+      defaultLoadBalancerMode: <nat|dsr>
+```
+
+To configure a different load balancer mode for a particular Service, you can
+annotate the Service in the following way:
+
+```bash
+kubectl annotate service my-service service.antrea.io/load-balancer-mode=<nat|dsr>
+```
+
+**Note**: Configuring the load balancer mode is only meaningful when `proxyAll`
+is enabled and kube-proxy is not deployed, otherwise external traffic would be
+processed by kube-proxy rules before it reaches Antrea's datapath. If
+kube-proxy was ever deployed in the cluster, its rules must be deleted to avoid
+interference. In particular, the following filter rule that drops packets in
+INVALID conntrack state could prevent DSR mode from working:
+
+```text
+*filter
+-A KUBE-FORWARD -m conntrack --ctstate INVALID -j DROP
+```
+
 ## Special use cases
 
 ### When you are using NodeLocal DNSCache
@@ -218,3 +274,8 @@ There are two important prerequisites for this feature:
   greater than 65535 seconds will be truncated and the Antrea Agent will log a
   warning. [We do not intend to address this
   limitation](https://github.com/antrea-io/antrea/issues/1578).
+* Due to the use of the "learn" action in the implementation of DSR mode, the
+  cost of processing the first packet of each connection is higher than NAT
+  mode. Therefore, establishing connections may be slightly slower, and you may
+  observe lower transaction rate if short-lived connections dominate your
+  traffic. This may be improved in the future.
