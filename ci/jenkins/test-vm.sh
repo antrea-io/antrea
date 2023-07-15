@@ -136,6 +136,10 @@ function apply_antrea {
             exit 1
         fi
     fi
+    TEMP_ANTREA_TAR="antrea-image.tar"
+    docker save antrea/antrea-ubuntu:latest -o $TEMP_ANTREA_TAR
+    ctr -n k8s.io image import $TEMP_ANTREA_TAR
+    rm $TEMP_ANTREA_TAR
     echo "====== Applying Antrea yaml ======"
     ./hack/generate-manifest.sh --feature-gates ExternalNode=true --extra-helm-values "controller.apiNodePort=32767" > ${WORKDIR}/antrea.yml
     kubectl apply -f ${WORKDIR}/antrea.yml
@@ -284,7 +288,7 @@ function run_e2e_vms {
     tar -zcf antrea-test-logs.tar.gz antrea-test-logs
 }
 
-function deliver_antrea_vm {
+function build_antrea_binary {
     export_govc_env_var
     clean_vm_agent ${LIN_HOSTNAMES[@]}
     clean_vm_agent ${WIN_HOSTNAMES[@]}
@@ -294,12 +298,8 @@ function deliver_antrea_vm {
     export GOROOT=/usr/local/go
     export GOCACHE=${WORKSPACE}/../gocache
     export PATH=${GOROOT}/bin:$PATH
-    TEMP_ANTREA_TAR="antrea-image.tar"
 
     make docker-bin
-    docker save antrea/antrea-ubuntu:latest -o $TEMP_ANTREA_TAR
-    ctr -n k8s.io image import $TEMP_ANTREA_TAR
-    rm $TEMP_ANTREA_TAR
     make docker-windows-bin
 
     cp ./build/yamls/externalnode/conf/antrea-agent.conf ${WORKDIR}/antrea-agent.conf
@@ -308,5 +308,5 @@ function deliver_antrea_vm {
 trap clean_antrea EXIT
 fetch_vm_ip
 apply_antrea
-deliver_antrea_vm
+build_antrea_binary
 run_e2e_vms
