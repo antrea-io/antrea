@@ -15,6 +15,7 @@
 package deploy
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"log"
@@ -27,10 +28,18 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedisco "k8s.io/client-go/discovery/fake"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/restmapper"
+	coretesting "k8s.io/client-go/testing"
 
 	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
@@ -97,18 +106,66 @@ func TestGenerateManifests(t *testing.T) {
 
 func TestCreateResources(t *testing.T) {
 	fakeDynamicClient := dynamicfake.NewSimpleDynamicClient(mcscheme.Scheme)
-	fakeClient := fake.NewSimpleClientset()
-	apiGroupResources, _ := restmapper.GetAPIGroupResources(fakeClient.Discovery())
+	fakeDynamicClient.PrependReactor("create", "customresourcedefinitions", func(action coretesting.Action) (bool, runtime.Object, error) {
+		crd := action.(coretesting.CreateAction).GetObject().(*unstructured.Unstructured)
+		metadata, ok := crd.UnstructuredContent()["metadata"].(map[string]interface{})
+		if ok && metadata["name"] == "clustersets.multicluster.crd.antrea.io" {
+			return true, nil, k8serrors.NewAlreadyExists(schema.GroupResource{Resource: "customresourcedefinitions"}, "clustersets")
+		}
+		return true, nil, nil
+	})
+	fakeDynamicClient.PrependReactor("get", "customresourcedefinitions", func(action coretesting.Action) (bool, runtime.Object, error) {
+		if action.(coretesting.GetAction).GetName() == "clustersets.multicluster.crd.antrea.io" {
+			return true, &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "customresourcedefinitions",
+					"metadata": map[string]interface{}{
+						"name": "clustersets.multicluster.crd.antrea.io",
+					},
+				},
+			}, nil
+		}
+		return true, nil, nil
+	})
+	fakeDynamicClient.PrependReactor("update", "customresourcedefinitions", func(action coretesting.Action) (bool, runtime.Object, error) {
+		crd := action.(coretesting.UpdateAction).GetObject().(*unstructured.Unstructured)
+		metadata, ok := crd.UnstructuredContent()["metadata"].(map[string]interface{})
+		if ok && metadata["name"] == "clustersets.multicluster.crd.antrea.io" {
+			return true, &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "customresourcedefinitions",
+					"metadata": map[string]interface{}{
+						"name":            "clustersets.multicluster.crd.antrea.io",
+						"resourceVersion": "100",
+					},
+				},
+			}, nil
+		}
+		return true, nil, nil
+	})
+	fakeDiscoveryClient := &fakedisco.FakeDiscovery{Fake: &coretesting.Fake{}}
+	fakeDiscoveryClient.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: apiextensionsv1.SchemeGroupVersion.String(),
+			APIResources: []metav1.APIResource{
+				{Name: "customresourcedefinitions", Namespaced: false, Kind: "CustomResourceDefinition"},
+			},
+		},
+	}
+	apiGroupResources, _ := restmapper.GetAPIGroupResources(fakeDiscoveryClient)
 	cmd := &cobra.Command{}
+	buf := new(bytes.Buffer)
+	cmd.SetOutput(buf)
 	file := filepath.Join("..", "..", "..", "..", "..", "multicluster", "build", "yamls", "antrea-multicluster-leader-global.yml")
 	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Errorf("Failed to open the file %s", file)
 	}
 	err = createResources(cmd, apiGroupResources, fakeDynamicClient, content)
-	if err != nil {
-		assert.Contains(t, err.Error(), "no matches for kind \"CustomResourceDefinition\"")
-	}
+	assert.NoError(t, err)
+	assert.Contains(t, buf.String(), "CustomResourceDefinition/clustersets.multicluster.crd.antrea.io configured\n")
 }
 
 func TestDeploy(t *testing.T) {
