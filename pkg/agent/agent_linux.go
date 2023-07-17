@@ -34,6 +34,11 @@ import (
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
+var (
+	// getInterfaceByName is meant to be overridden for testing.
+	getInterfaceByName = net.InterfaceByName
+)
+
 // prepareHostNetwork returns immediately on Linux.
 func (i *Initializer) prepareHostNetwork() error {
 	return nil
@@ -89,7 +94,7 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 		} else {
 			uplinkNetConfig.OFPort = uint32(uplinkOFPort)
 		}
-		if adapter, err := net.InterfaceByName(bridgedUplinkName); err != nil {
+		if adapter, err := getInterfaceByName(bridgedUplinkName); err != nil {
 			return fmt.Errorf("cannot find uplink interface %s: err=%w", bridgedUplinkName, err)
 		} else {
 			uplinkNetConfig.Index = adapter.Index

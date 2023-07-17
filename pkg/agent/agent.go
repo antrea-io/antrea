@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/spf13/afero"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -35,6 +36,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	clockutils "k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
@@ -89,6 +91,12 @@ var (
 // otherConfigKeysForIPsecCertificates are configurations added to OVS bridge when AuthenticationMode is "cert" and
 // need to be deleted when changing to "psk".
 var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key", "ca_cert", "remote_cert", "remote_name"}
+
+var (
+	// Declared as variables for testing.
+	defaultFs                       = afero.NewOsFs()
+	clock     clockutils.WithTicker = &clockutils.RealClock{}
+)
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
@@ -211,7 +219,7 @@ func (i *Initializer) setupOVSBridge() error {
 }
 
 func (i *Initializer) validateSupportedDPFeatures() error {
-	gotFeatures, err := ovsctl.NewClient(i.ovsBridge).GetDPFeatures()
+	gotFeatures, err := i.ovsCtlClient.GetDPFeatures()
 	if err != nil {
 		return err
 	}
@@ -1064,19 +1072,19 @@ func (i *Initializer) waitForIPsecMonitorDaemon() error {
 	// PID files before starting the OVS daemons, it is safe to assume that
 	// if this file exists, the IPsec monitor is indeed running.
 	const ovsMonitorIPSecPID = "/var/run/openvswitch/ovs-monitor-ipsec.pid"
-	timer := time.NewTimer(10 * time.Second)
+	timer := clock.NewTimer(10 * time.Second)
 	defer timer.Stop()
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := clock.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
-		if _, err := os.Stat(ovsMonitorIPSecPID); err == nil {
+		if _, err := defaultFs.Stat(ovsMonitorIPSecPID); err == nil {
 			klog.V(2).Infof("OVS IPsec monitor seems to be present")
 			break
 		}
 		select {
-		case <-ticker.C:
+		case <-ticker.C():
 			continue
-		case <-timer.C:
+		case <-timer.C():
 			return fmt.Errorf("IPsec was requested, but the OVS IPsec monitor does not seem to be running")
 		}
 	}
