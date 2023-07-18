@@ -134,7 +134,7 @@ external network. The IPs in the pool can be allocated to the Egress resources
 as the Egress IPs. A typical ExternalIPPool resource example:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: ExternalIPPool
 metadata:
   name: prod-external-ip-pool
@@ -173,7 +173,7 @@ First, create an `ExternalIPPool` with a list of external routable IPs on the
 network.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: ExternalIPPool
 metadata:
   name: external-ip-pool

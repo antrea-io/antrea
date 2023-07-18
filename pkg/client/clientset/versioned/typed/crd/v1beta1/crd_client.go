@@ -28,6 +28,7 @@ type CrdV1beta1Interface interface {
 	RESTClient() rest.Interface
 	AntreaAgentInfosGetter
 	AntreaControllerInfosGetter
+	ExternalIPPoolsGetter
 	TiersGetter
 }
 
@@ -42,6 +43,10 @@ func (c *CrdV1beta1Client) AntreaAgentInfos() AntreaAgentInfoInterface {
 
 func (c *CrdV1beta1Client) AntreaControllerInfos() AntreaControllerInfoInterface {
 	return newAntreaControllerInfos(c)
+}
+
+func (c *CrdV1beta1Client) ExternalIPPools() ExternalIPPoolInterface {
+	return newExternalIPPools(c)
 }
 
 func (c *CrdV1beta1Client) Tiers() TierInterface {

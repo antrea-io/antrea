@@ -31,7 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
-	antreacrds "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	antreacrds "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -86,7 +86,7 @@ func newController(objects, crdObjects []runtime.Object) *loadBalancerController
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPPoolController := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1alpha2().ExternalIPPools())
+	externalIPPoolController := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
 	controller := NewServiceExternalIPController(client, informerFactory.Core().V1().Services(), externalIPPoolController)
 	return &loadBalancerController{
 		ServiceExternalIPController: controller,
@@ -193,21 +193,21 @@ func TestSyncService(t *testing.T) {
 	eip1 := newExternalIPPool("eip1", "", "1.2.3.4", "1.2.3.5")
 
 	t.Run("IP pool eip1 created", func(t *testing.T) {
-		_, err = controller.crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), eip1, metav1.CreateOptions{})
+		_, err = controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eip1, metav1.CreateOptions{})
 		require.NoError(t, err)
 		checkForServiceExternalIP(t, controller, service.Name, service.Namespace, "1.2.3.4")
 		checkExternalIPPoolUsed(t, controller, "eip1", 1)
 	})
 
 	t.Run("IP pool eip1 deleted", func(t *testing.T) {
-		err = controller.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), eip1.Name, metav1.DeleteOptions{})
+		err = controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eip1.Name, metav1.DeleteOptions{})
 		assert.NoError(t, err)
 		checkForServiceExternalIP(t, controller, service.Name, service.Namespace, "")
 	})
 
 	t.Run("IP pool eip1 re-created", func(t *testing.T) {
 		// Re-create ExternalIPPool.
-		_, err = controller.crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), eip1, metav1.CreateOptions{})
+		_, err = controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eip1, metav1.CreateOptions{})
 		require.NoError(t, err)
 		checkForServiceExternalIP(t, controller, service.Name, service.Namespace, "1.2.3.4")
 		checkExternalIPPoolUsed(t, controller, "eip1", 1)
@@ -226,7 +226,7 @@ func TestSyncService(t *testing.T) {
 
 	t.Run("IP pool eip2 created", func(t *testing.T) {
 		// Create second ExternalIPPool.
-		_, err = controller.crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), eip2, metav1.CreateOptions{})
+		_, err = controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eip2, metav1.CreateOptions{})
 		require.NoError(t, err)
 		checkForServiceExternalIP(t, controller, service.Name, service.Namespace, "1.2.4.4")
 		checkExternalIPPoolUsed(t, controller, "eip1", 0)
@@ -315,7 +315,7 @@ func checkExternalIPPoolUsed(t *testing.T, controller *loadBalancerController, p
 	exists := controller.externalIPAllocator.IPPoolExists(poolName)
 	require.True(t, exists)
 	assert.Eventually(t, func() bool {
-		eip, err := controller.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 		require.NoError(t, err)
 		t.Logf("current status %#v", eip.Status)
 		return eip.Status.Usage.Used == used

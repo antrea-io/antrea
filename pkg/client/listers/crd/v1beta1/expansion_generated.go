@@ -24,6 +24,10 @@ type AntreaAgentInfoListerExpansion interface{}
 // AntreaControllerInfoLister.
 type AntreaControllerInfoListerExpansion interface{}
 
+// ExternalIPPoolListerExpansion allows custom methods to be added to
+// ExternalIPPoolLister.
+type ExternalIPPoolListerExpansion interface{}
+
 // TierListerExpansion allows custom methods to be added to
 // TierLister.
 type TierListerExpansion interface{}

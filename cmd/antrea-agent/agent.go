@@ -108,7 +108,7 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
-	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	trafficControlInformer := crdInformerFactory.Crd().V1alpha2().TrafficControls()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	serviceInformer := informerFactory.Core().V1().Services()
