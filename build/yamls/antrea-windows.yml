@@ -142,7 +142,7 @@ data:
       # Therefore, running kube-proxy is no longer required. This requires the AntreaProxy feature to be enabled.
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
-      #proxyAll: false
+      proxyAll: true
       # The value of the "service.kubernetes.io/service-proxy-name" label for AntreaProxy to match. If it is set,
       # then AntreaProxy will only handle Services with the label that equals the provided value. If it is not set,
       # then AntreaProxy will only handle Services without the "service.kubernetes.io/service-proxy-name" label,
@@ -177,7 +177,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-hc82tmf96f
+  name: antrea-windows-config-cb2hmgg648
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -265,7 +265,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-hc82tmf96f
+          name: antrea-windows-config-cb2hmgg648
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
