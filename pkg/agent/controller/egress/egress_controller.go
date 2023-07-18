@@ -44,10 +44,10 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/metrics"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -194,7 +194,7 @@ func NewEgressController(
 		cache.Indexers{
 			// egressIPIndex will be used to get all Egresses sharing the same Egress IP.
 			egressIPIndex: func(obj interface{}) ([]string, error) {
-				egress, ok := obj.(*crdv1a2.Egress)
+				egress, ok := obj.(*crdv1b1.Egress)
 				if !ok {
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
@@ -247,7 +247,7 @@ func (c *EgressController) processPodUpdate(e interface{}) {
 
 // addEgress processes Egress ADD events.
 func (c *EgressController) addEgress(obj interface{}) {
-	egress := obj.(*crdv1a2.Egress)
+	egress := obj.(*crdv1b1.Egress)
 	if egress.Spec.EgressIP == "" {
 		return
 	}
@@ -257,8 +257,8 @@ func (c *EgressController) addEgress(obj interface{}) {
 
 // updateEgress processes Egress UPDATE events.
 func (c *EgressController) updateEgress(old, cur interface{}) {
-	oldEgress := old.(*crdv1a2.Egress)
-	curEgress := cur.(*crdv1a2.Egress)
+	oldEgress := old.(*crdv1b1.Egress)
+	curEgress := cur.(*crdv1b1.Egress)
 	// Ignore handling the Egress Status change if Egress IP already has been assigned on current node.
 	if curEgress.Status.EgressNode == c.nodeName && oldEgress.GetGeneration() == curEgress.GetGeneration() {
 		return
@@ -269,14 +269,14 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events.
 func (c *EgressController) deleteEgress(obj interface{}) {
-	egress, ok := obj.(*crdv1a2.Egress)
+	egress, ok := obj.(*crdv1b1.Egress)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		egress, ok = deletedState.Obj.(*crdv1a2.Egress)
+		egress, ok = deletedState.Obj.(*crdv1b1.Egress)
 		if !ok {
 			klog.Errorf("DeletedFinalStateUnknown contains non-Egress object: %v", deletedState.Obj)
 			return
@@ -297,7 +297,7 @@ func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
 		klog.Infof("Detected Egress IP address %s deleted from this Node", ip)
 	}
 	for _, obj := range egresses {
-		egress := obj.(*crdv1a2.Egress)
+		egress := obj.(*crdv1b1.Egress)
 		c.queue.Add(egress.Name)
 	}
 }
@@ -561,7 +561,7 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, egressIP string) error {
+func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP string) error {
 	isLocal := false
 	if egressIP != "" {
 		isLocal = c.localIPDetector.IsLocalIP(egressIP)
@@ -585,9 +585,9 @@ func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, egressIP s
 			toUpdate.Status.EgressIP = ""
 		}
 		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
-		_, updateErr = c.crdClient.CrdV1alpha2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
+			if toUpdate, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
 				return getErr
 			}
 		}
@@ -971,6 +971,6 @@ func (c *EgressController) GetEgress(ns, podName string) (string, string, error)
 }
 
 // An Egress is schedulable if its Egress IP is allocated from ExternalIPPool.
-func isEgressSchedulable(egress *crdv1a2.Egress) bool {
+func isEgressSchedulable(egress *crdv1b1.Egress) bool {
 	return egress.Spec.EgressIP != "" && egress.Spec.ExternalIPPool != ""
 }

@@ -30,9 +30,9 @@ import (
 
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/types"
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 )
 
 const (
@@ -170,7 +170,7 @@ func (s *egressIPScheduler) deleteNode(obj interface{}) {
 
 // addEgress processes Egress ADD events.
 func (s *egressIPScheduler) addEgress(obj interface{}) {
-	egress := obj.(*crdv1a2.Egress)
+	egress := obj.(*crdv1b1.Egress)
 	if !isEgressSchedulable(egress) {
 		return
 	}
@@ -180,8 +180,8 @@ func (s *egressIPScheduler) addEgress(obj interface{}) {
 
 // updateEgress processes Egress UPDATE events.
 func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
-	oldEgress := old.(*crdv1a2.Egress)
-	curEgress := cur.(*crdv1a2.Egress)
+	oldEgress := old.(*crdv1b1.Egress)
+	curEgress := cur.(*crdv1b1.Egress)
 	if !isEgressSchedulable(oldEgress) && !isEgressSchedulable(curEgress) {
 		return
 	}
@@ -194,14 +194,14 @@ func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events.
 func (s *egressIPScheduler) deleteEgress(obj interface{}) {
-	egress, ok := obj.(*crdv1a2.Egress)
+	egress, ok := obj.(*crdv1b1.Egress)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		egress, ok = deletedState.Obj.(*crdv1a2.Egress)
+		egress, ok = deletedState.Obj.(*crdv1b1.Egress)
 		if !ok {
 			klog.Errorf("DeletedFinalStateUnknown contains non-Egress object: %v", deletedState.Obj)
 			return
@@ -260,7 +260,7 @@ func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, b
 }
 
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
-type EgressesByCreationTimestamp []*crdv1a2.Egress
+type EgressesByCreationTimestamp []*crdv1b1.Egress
 
 func (o EgressesByCreationTimestamp) Len() int      { return len(o) }
 func (o EgressesByCreationTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }

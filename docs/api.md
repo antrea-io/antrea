@@ -34,6 +34,7 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | N/A |
 | `ClusterNetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
 | `Egress` | v1alpha2 | v1.0.0 | N/A | N/A |
+| `Egress` | v1beta1 | v1.13.0 | N/A | N/A |
 | `ExternalEntity` | v1alpha2 | v1.0.0 | N/A | N/A |
 | `ExternalIPPool` | v1alpha2 | v1.2.0 | v1.13.0 | N/A |
 | `ExternalIPPool` | v1beta1 | v1.13.0 | N/A | N/A |

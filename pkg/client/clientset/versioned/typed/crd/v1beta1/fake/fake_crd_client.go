@@ -42,6 +42,10 @@ func (c *FakeCrdV1beta1) ClusterNetworkPolicies() v1beta1.ClusterNetworkPolicyIn
 	return &FakeClusterNetworkPolicies{c}
 }
 
+func (c *FakeCrdV1beta1) Egresses() v1beta1.EgressInterface {
+	return &FakeEgresses{c}
+}
+
 func (c *FakeCrdV1beta1) ExternalIPPools() v1beta1.ExternalIPPoolInterface {
 	return &FakeExternalIPPools{c}
 }
