@@ -292,9 +292,10 @@ function wait_for_antrea_windows_processes_ready {
 }
 
 function clean_ns {
+    echo "Cleaning up Namespace $1"
     ns=$1
     matching_ns=$(kubectl get ns | awk -v ns="${ns}" '$1 ~ ns {print $1}')
-    
+    set -x
     if [ -n "${matching_ns}" ]; then
         echo "${matching_ns}" | while read -r ns_name; do
             kubectl get pod -n "${ns_name}" --no-headers=true | awk '{print $1}' | while read pod_name; do
@@ -305,6 +306,7 @@ function clean_ns {
     else
         echo "No matching namespaces $ns found."
     fi
+    set +x
 }
 
 function prepare_env {
