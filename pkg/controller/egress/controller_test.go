@@ -39,6 +39,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -82,17 +83,17 @@ func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSele
 	return egress
 }
 
-func newExternalIPPool(name, cidr, start, end string) *v1alpha2.ExternalIPPool {
-	pool := &v1alpha2.ExternalIPPool{
+func newExternalIPPool(name, cidr, start, end string) *v1beta1.ExternalIPPool {
+	pool := &v1beta1.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 	}
 	if len(cidr) > 0 {
-		pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1alpha2.IPRange{CIDR: cidr})
+		pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1beta1.IPRange{CIDR: cidr})
 	}
 	if len(start) > 0 && len(end) > 0 {
-		pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1alpha2.IPRange{Start: start, End: end})
+		pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1beta1.IPRange{Start: start, End: end})
 	}
 	return pool
 }
@@ -180,7 +181,7 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 	crdClient.PrependReactor("patch", "egresses", egressPatchReactor)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1alpha2().ExternalIPPools())
+	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
 	egressGroupStore := store.NewEgressGroupStore()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
@@ -509,7 +510,7 @@ func TestUpdateEgress(t *testing.T) {
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
 
 	// Delete the IPPool in use. The EgressIP should be released.
-	controller.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
+	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
 		_, _, exists := controller.getIPAllocation(egress.Name)
 		if exists {
@@ -523,7 +524,7 @@ func TestUpdateEgress(t *testing.T) {
 	}, time.Second, 50*time.Millisecond, "EgressIP was not deleted after the ExternalIPPool was deleted")
 
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.
-	controller.crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
+	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
 	assert.Eventually(t, func() bool {
 		_, _, exists := controller.getIPAllocation(egress.Name)
 		return exists
@@ -543,7 +544,7 @@ func TestSyncEgressIP(t *testing.T) {
 	tests := []struct {
 		name                       string
 		existingEgresses           []*v1alpha2.Egress
-		existingExternalIPPool     *v1alpha2.ExternalIPPool
+		existingExternalIPPool     *v1beta1.ExternalIPPool
 		inputEgress                *v1alpha2.Egress
 		expectedEgressIP           string
 		expectedExternalIPPoolUsed int
@@ -758,7 +759,7 @@ func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolNam
 	exists := controller.externalIPAllocator.IPPoolExists(poolName)
 	require.True(t, exists)
 	err := wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (found bool, err error) {
-		eip, err := controller.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

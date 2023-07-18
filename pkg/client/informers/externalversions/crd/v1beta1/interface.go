@@ -26,6 +26,8 @@ type Interface interface {
 	AntreaAgentInfos() AntreaAgentInfoInformer
 	// AntreaControllerInfos returns a AntreaControllerInfoInformer.
 	AntreaControllerInfos() AntreaControllerInfoInformer
+	// ExternalIPPools returns a ExternalIPPoolInformer.
+	ExternalIPPools() ExternalIPPoolInformer
 	// Tiers returns a TierInformer.
 	Tiers() TierInformer
 }
@@ -49,6 +51,11 @@ func (v *version) AntreaAgentInfos() AntreaAgentInfoInformer {
 // AntreaControllerInfos returns a AntreaControllerInfoInformer.
 func (v *version) AntreaControllerInfos() AntreaControllerInfoInformer {
 	return &antreaControllerInfoInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// ExternalIPPools returns a ExternalIPPoolInformer.
+func (v *version) ExternalIPPools() ExternalIPPoolInformer {
+	return &externalIPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Tiers returns a TierInformer.

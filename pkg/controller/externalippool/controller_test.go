@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 
-	antreacrds "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	antreacrds "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -60,7 +60,7 @@ type controller struct {
 func newController(crdObjects []runtime.Object) *controller {
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPPoolController := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1alpha2().ExternalIPPools())
+	externalIPPoolController := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
 	return &controller{
 		externalIPPoolController,
 		crdClient,
@@ -296,7 +296,7 @@ func TestIPPoolEvents(t *testing.T) {
 	go controller.Run(stopCh)
 	require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
 	// ADD event
-	eip, err := controller.crdClient.CrdV1alpha2().ExternalIPPools().Create(context,
+	eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context,
 		newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
 		metav1.CreateOptions{},
 	)
@@ -304,14 +304,14 @@ func TestIPPoolEvents(t *testing.T) {
 	assert.Equal(t, "eip1", <-consumerCh)
 	// UPDATE event
 	eip.Spec.IPRanges[0].End = "10.10.10.4"
-	eip, err = controller.crdClient.CrdV1alpha2().ExternalIPPools().Update(context,
+	eip, err = controller.crdClient.CrdV1beta1().ExternalIPPools().Update(context,
 		eip,
 		metav1.UpdateOptions{},
 	)
 	require.NoError(t, err)
 	assert.Equal(t, "eip1", <-consumerCh)
 	// DELETE event
-	err = controller.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context,
+	err = controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context,
 		eip.Name,
 		metav1.DeleteOptions{},
 	)
@@ -459,7 +459,7 @@ func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName st
 	exists := controller.IPPoolExists(poolName)
 	require.True(t, exists)
 	err := wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (found bool, err error) {
-		eip, err := controller.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

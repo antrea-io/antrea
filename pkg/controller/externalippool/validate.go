@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -32,7 +32,7 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	allowed := true
 
 	klog.V(2).Info("Validating ExternalIPPool", "request", review.Request)
-	var newObj, oldObj crdv1alpha2.ExternalIPPool
+	var newObj, oldObj crdv1beta1.ExternalIPPool
 	if review.Request.Object.Raw != nil {
 		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
 			klog.ErrorS(err, "Error de-serializing current ExternalIPPool")
@@ -77,7 +77,7 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		Result:  result,
 	}
 }
-func getIPRangeSet(ipRanges []crdv1alpha2.IPRange) sets.Set[string] {
+func getIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
 	set := sets.New[string]()
 	for _, ipRange := range ipRanges {
 		ipRangeStr := ipRange.CIDR

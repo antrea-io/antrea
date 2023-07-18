@@ -142,7 +142,7 @@ func run(o *Options) error {
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	grpInformer := crdInformerFactory.Crd().V1alpha3().Groups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
-	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
 
 	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
