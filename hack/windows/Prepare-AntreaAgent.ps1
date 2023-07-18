@@ -7,7 +7,14 @@ This script prepares environment needed by antrea-agent which includes:
 - Cleaning stale Antrea network resources if they exist.
 - Prepare a network interface which is needed by kube-proxy. Without the interface, kube-proxy cannot
   provide the proxy for Kubernetes Services.
+
+.PARAMETER InstallKubeProxy
+Specifies whether kube-proxy interface is included in the installation. If false, this interface will not
+be installed on the host.
 #>
+Param(
+    [parameter(Mandatory = $false)] [bool] $InstallKubeProxy = $true
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -33,5 +40,7 @@ Start-Service ovsdb-server
 Write-Host "Starting ovs-vswitchd service..."
 Start-Service ovs-vswitchd
 # Prepare service network interface for kube-proxy.
-Write-Host "Preparing service network interface for kube-proxy..."
-& $PrepareServiceInterfaceScript
+if ($InstallKubeProxy -eq $true) {
+    Write-Host "Preparing service network interface for kube-proxy..."
+    & $PrepareServiceInterfaceScript
+}
