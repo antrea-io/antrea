@@ -53,7 +53,7 @@ FLOW_VISIBILITY_YML=$(dirname $0)"/../../build/yamls/flow-visibility-e2e.yml"
 
 function quit {
   result=$?
-  if [[ $setup_only || $test_only ]]; then
+  if [[ "$setup_only" = true || "$test_only" = true ]]; then
     exit $result
   fi
   echoerr "Cleaning testbed"
