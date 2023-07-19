@@ -143,6 +143,7 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetScheme(),
 		LeaderNamespace,
 		false,
+		false,
 	)
 	err = clusterSetReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())

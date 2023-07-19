@@ -99,7 +99,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existSvcList, tt.existSvcImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
+			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(ctx); err != nil {
@@ -194,7 +194,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
+			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(ctx); err != nil {
@@ -389,7 +389,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existResExpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
+			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(ctx); err != nil {
@@ -466,7 +466,7 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
+			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
 			mcReconciler.SetRemoteCommonArea(commonarea)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(ctx); err != nil {
@@ -573,7 +573,7 @@ func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.memberClusterAnnounceList).WithLists(tt.clusterSet).Build()
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
+			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, LeaderCluster)
 			assert.Equal(t, nil, c.cleanup(ctx))
 
@@ -649,7 +649,7 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false)
+			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
 			mcReconciler.SetRemoteCommonArea(ca)
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(ctx); err != nil {

@@ -22,7 +22,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
 // DiscoverServiceCIDRByInvalidServiceCreation creates an invalid Service to get returned error, and analyzes
@@ -77,4 +80,41 @@ func parseServiceCIDRFromError(msg string) (string, error) {
 
 func NewClusterInfoResourceExportName(clusterID string) string {
 	return clusterID + "-clusterinfo"
+}
+
+func getClusterIDFromClusterClaim(c client.Client, clusterSet *mcv1alpha2.ClusterSet) (ClusterID, error) {
+	configNamespace := clusterSet.GetNamespace()
+
+	clusterClaimList := &mcv1alpha2.ClusterClaimList{}
+	if err := c.List(context.TODO(), clusterClaimList, client.InNamespace(configNamespace)); err != nil {
+		return "", err
+	}
+	if len(clusterClaimList.Items) == 0 {
+		return "", fmt.Errorf("ClusterClaim is not configured for the cluster")
+	}
+
+	for _, clusterClaim := range clusterClaimList.Items {
+		if clusterClaim.Name == mcv1alpha2.WellKnownClusterClaimID {
+			return ClusterID(clusterClaim.Value), nil
+		}
+	}
+
+	return "", fmt.Errorf("ClusterClaim not configured for Name=%s",
+		mcv1alpha2.WellKnownClusterClaimID)
+}
+
+func GetClusterID(clusterCalimCRDAvailable bool, req ctrl.Request, client client.Client, clusterSet *mcv1alpha2.ClusterSet) (ClusterID, error) {
+	if clusterSet.Spec.ClusterID == "" {
+		// ClusterID is a required feild, and the empty value case should only happen
+		// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
+		// Here we try to get the ClusterID from ClusterClaim before returning any error.
+		if clusterCalimCRDAvailable {
+			clusterID, err := getClusterIDFromClusterClaim(client, clusterSet)
+			if err == nil {
+				return clusterID, nil
+			}
+		}
+		return "", fmt.Errorf("'clusterID' is not set in the ClusterSet %s spec", req.NamespacedName)
+	}
+	return ClusterID(clusterSet.Spec.ClusterID), nil
 }

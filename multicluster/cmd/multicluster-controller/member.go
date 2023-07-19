@@ -67,6 +67,7 @@ func runMember(o *Options) error {
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
 		o.EnableStretchedNetworkPolicy,
+		o.ClusterCalimCRDAvailable,
 	)
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
