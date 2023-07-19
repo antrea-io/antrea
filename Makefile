@@ -14,6 +14,8 @@ CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version
 NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
 BUILD_TAG          := $(shell build/images/build-tag.sh)
 WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
+WIN_OVS_VERSION	   := $(shell head -n 1 build/images/deps/ovs-version-windows)
+WIN_BUILD_OVS_TAG  := $(NANOSERVER_VERSION)-$(WIN_OVS_VERSION)
 GIT_HOOKS          := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
 TRIVY_TARGET_IMAGE ?=
@@ -29,6 +31,7 @@ WIN_BUILD_ARGS := --build-arg GO_VERSION=$(GO_VERSION)
 WIN_BUILD_ARGS += --build-arg CNI_BINARIES_VERSION=$(CNI_BINARIES_VERSION)
 WIN_BUILD_ARGS += --build-arg NANOSERVER_VERSION=$(NANOSERVER_VERSION)
 WIN_BUILD_ARGS += --build-arg WIN_BUILD_TAG=$(WIN_BUILD_TAG)
+WIN_BUILD_ARGS += --build-arg WIN_BUILD_OVS_TAG=$(WIN_BUILD_OVS_TAG)
 
 .PHONY: all
 all: build
@@ -383,6 +386,7 @@ manifest:
 	$(CURDIR)/hack/generate-standard-manifests.sh --mode dev --out build/yamls
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev --containerd > build/yamls/antrea-windows-containerd.yml
+	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev --containerd --include-ovs > build/yamls/antrea-windows-containerd-with-ovs.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
 
 .PHONY: manifest-scale

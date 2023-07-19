@@ -22,9 +22,12 @@ function echoerr {
 
 _usage="Usage: $0 [--mode (dev|release)] [--keep] [--help|-h]
 Generate a YAML manifest to run Antrea on Windows Nodes, using Kustomize, and print it to stdout.
-        --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
-        --keep                Debug flag which will preserve the generated kustomization.yml
-        --help, -h            Print this message and exit
+        --mode (dev|release)            Choose the configuration variant that you need (default is 'dev')
+        --keep                          Debug flag which will preserve the generated kustomization.yml
+        --help, -h                      Print this message and exit
+        --containerd                    Support for containerd runtime. 
+        --include-ovs                   Run Windows OVS processes inside antrea-ovs container in antrea-agent pod
+                                        on Windows host with containerd runtime.
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -44,6 +47,7 @@ function print_help {
 RUNTIME=""
 MODE="dev"
 KEEP=false
+INCLUDE_OVS=false
 
 while [[ $# -gt 0 ]]
 do
@@ -60,6 +64,10 @@ case $key in
     ;;
     --containerd)
     RUNTIME="containerd"
+    shift
+    ;;
+    --include-ovs)
+    INCLUDE_OVS=true
     shift
     ;;
     -h|--help)
@@ -111,7 +119,11 @@ pushd $TMP_DIR > /dev/null
 
 BASE=../../default
 if [ "$RUNTIME" == "containerd" ]; then
-    BASE=../../containerd
+    if $INCLUDE_OVS; then
+        BASE=../../containerd-with-ovs
+    else 
+        BASE=../../containerd
+    fi
 fi
 
 mkdir $MODE && cd $MODE

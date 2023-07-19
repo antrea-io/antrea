@@ -28,12 +28,14 @@ The node ip used by kubelet
 .PARAMETER ContainerRuntime
 Container runtime that Kubernetes will use. (docker or containerd)
 
+.PARAMETER InstallOVSUserspace
+Specifies whether OVS userspace processes are included in the installation. If false, these processes will not 
+be installed as a Windows service on the host.
+
 .EXAMPLE
 PS> .\Prepare-Node.ps1 -KubernetesVersion v1.27.0 -NodeIP 192.168.1.10 -ContainerRuntime containerd 
 
 #>
-
-
 
 Param(
     [parameter(Mandatory = $false, HelpMessage="Kubernetes version to use")] [string] $KubernetesVersion="v1.18.0",
@@ -41,7 +43,8 @@ Param(
     [parameter(Mandatory = $false)] [switch] $InstallKubeProxy = $false,
     [parameter(Mandatory = $false)] [switch] $InstallOVS = $false,
     [parameter(Mandatory = $false, HelpMessage="Kubernetes download")] [string] $KubernetesURL="dl.k8s.io",
-    [parameter(HelpMessage="Container runtime that Kubernets will use")] [ValidateSet("containerd", "docker")] [string] $ContainerRuntime = "containerd"
+    [parameter(HelpMessage="Container runtime that Kubernets will use")] [ValidateSet("containerd", "docker")] [string] $ContainerRuntime = "containerd",
+    [parameter(Mandatory = $false)] [bool] $InstallOVSUserspace = $true 
 )
 $ErrorActionPreference = 'Stop'
 
@@ -162,5 +165,5 @@ if ($InstallKubeProxy) {
 
 if ($InstallOVS) {
     Write-Host "Installing OVS"
-    & .\Install-OVS.ps1
+    & .\Install-OVS.ps1 -InstallUserspace $InstallOVSUserspace
 }

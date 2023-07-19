@@ -50,7 +50,7 @@ spec:
       hostNetwork: true
       initContainers:
       - args:
-        - -File
+        - -file
         - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI-Containerd.ps1
         command:
         - powershell
