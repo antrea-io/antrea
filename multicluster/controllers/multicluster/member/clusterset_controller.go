@@ -51,8 +51,9 @@ var getRemoteConfigAndClient = commonarea.GetRemoteConfigAndClient
 // MemberClusterSetReconciler reconciles a ClusterSet object in the member cluster deployment.
 type MemberClusterSetReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Namespace string
+	Scheme                   *runtime.Scheme
+	Namespace                string
+	ClusterCalimCRDAvailable bool
 	// commonAreaLock protects the access to RemoteCommonArea.
 	commonAreaLock sync.RWMutex
 
@@ -70,12 +71,14 @@ func NewMemberClusterSetReconciler(client client.Client,
 	scheme *runtime.Scheme,
 	namespace string,
 	enableStretchedNetworkPolicy bool,
+	clusterCalimCRDAvailable bool,
 ) *MemberClusterSetReconciler {
 	return &MemberClusterSetReconciler{
 		Client:                       client,
 		Scheme:                       scheme,
 		Namespace:                    namespace,
 		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
+		ClusterCalimCRDAvailable:     clusterCalimCRDAvailable,
 	}
 }
 
@@ -113,12 +116,10 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Handle create or update
 	if r.clusterSetConfig == nil {
-		if clusterSet.Spec.ClusterID == "" {
-			// ClusterID is a required feild, and the empty value case should only happen
-			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
-			return ctrl.Result{}, fmt.Errorf("the spec.clusterID field of ClusterSet %s is required", req.NamespacedName)
+		r.clusterID, err = common.GetClusterID(r.ClusterCalimCRDAvailable, req, r.Client, clusterSet)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		r.clusterID = common.ClusterID(clusterSet.Spec.ClusterID)
 		r.clusterSetID = common.ClusterSetID(clusterSet.Name)
 	}
 	r.clusterSetConfig = clusterSet.DeepCopy()
@@ -353,7 +354,14 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 		status.Conditions = []mcv1alpha2.ClusterSetCondition{overallCondition}
 	}
 	clusterSet.Status = status
-	err = r.Status().Update(context.TODO(), clusterSet)
+	if clusterSet.Spec.ClusterID == "" {
+		// When the common area is not empty but ClusterID is empty, it means the
+		// CR was created by an old version of ClusterSet CRD. We can use the ClusterID
+		// from ClusterClaim to update the CR, otherwise, the update will fail due
+		// to invalid ClusterID.
+		clusterSet.Spec.ClusterID = string(r.clusterID)
+	}
+	err = r.Update(context.TODO(), clusterSet)
 	if err != nil {
 		klog.ErrorS(err, "Failed to update Status of ClusterSet", "name", namespacedName)
 	}

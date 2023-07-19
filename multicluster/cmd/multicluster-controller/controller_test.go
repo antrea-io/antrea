@@ -23,8 +23,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 )
 
@@ -90,6 +94,48 @@ func TestGetCAConfig(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expectedRes, getCaConfig(tt.isLeader, tt.controllerNS))
+		})
+	}
+}
+
+func TestClusterClaimCRDAvailable(t *testing.T) {
+	groupVersion := mcv1alpha2.SchemeGroupVersion.String()
+	testCases := []struct {
+		name              string
+		resources         []*metav1.APIResourceList
+		expectedAvailable bool
+	}{
+		{
+			name:              "empty",
+			expectedAvailable: false,
+		},
+		{
+			name: "GroupVersion exists",
+			resources: []*metav1.APIResourceList{
+				{
+					GroupVersion: groupVersion,
+				},
+			},
+			expectedAvailable: false,
+		},
+		{
+			name: "API exists",
+			resources: []*metav1.APIResourceList{
+				{
+					GroupVersion: groupVersion,
+					APIResources: []metav1.APIResource{{Kind: "ClusterClaim"}},
+				},
+			},
+			expectedAvailable: true,
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			k8sClient := fake.NewSimpleClientset()
+			k8sClient.Resources = tt.resources
+			available, err := clusterClaimCRDAvailable(k8sClient)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedAvailable, available)
 		})
 	}
 }

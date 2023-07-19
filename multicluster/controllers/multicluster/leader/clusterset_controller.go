@@ -46,8 +46,9 @@ var (
 // Namespace, so a MC Controller will be handling only a single ClusterSet in the given Namespace.
 type LeaderClusterSetReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	mutex  sync.Mutex
+	Scheme                   *runtime.Scheme
+	mutex                    sync.Mutex
+	ClusterCalimCRDAvailable bool
 
 	clusterSetConfig *mcv1alpha2.ClusterSet
 	clusterSetID     common.ClusterSetID
@@ -82,19 +83,15 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Handle create or update
 	if r.clusterSetConfig == nil {
-		if clusterSet.Spec.ClusterID == "" {
-			// ClusterID is a required feild, and the empty value case should only happen
-			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
-			return ctrl.Result{}, fmt.Errorf("the spec.clusterID field of ClusterSet %s is required", req.NamespacedName)
-		}
-		clusterID := common.ClusterID(clusterSet.Spec.ClusterID)
-		clusterSetID := common.ClusterSetID(clusterSet.Name)
-		if err = validateMemberClusterExists(clusterID, clusterSet.Spec.Leaders); err != nil {
-			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterID)
+		r.clusterID, err = common.GetClusterID(r.ClusterCalimCRDAvailable, req, r.Client, clusterSet)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
-		r.clusterID = clusterID
-		r.clusterSetID = clusterSetID
+		r.clusterSetID = common.ClusterSetID(clusterSet.Name)
+		if err = validateMemberClusterExists(r.clusterID, clusterSet.Spec.Leaders); err != nil {
+			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", r.clusterID)
+			return ctrl.Result{}, err
+		}
 	}
 
 	r.clusterSetConfig = clusterSet.DeepCopy()
@@ -202,7 +199,14 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		status.Conditions = []mcv1alpha2.ClusterSetCondition{overallCondition}
 	}
 	clusterSet.Status = status
-	err = r.Status().Update(context.TODO(), clusterSet)
+	if clusterSet.Spec.ClusterID == "" {
+		// When the common area is not empty but ClusterID is empty, it means the
+		// CR was created by an old version of ClusterSet CRD. We can use the ClusterID
+		// from ClusterClaim to update the CR, otherwise, the update will fail due
+		// to invalid ClusterID.
+		clusterSet.Spec.ClusterID = string(r.clusterID)
+	}
+	err = r.Update(context.TODO(), clusterSet)
 	if err != nil {
 		klog.ErrorS(err, "Failed to update Status of ClusterSet", "name", namespacedName)
 	}

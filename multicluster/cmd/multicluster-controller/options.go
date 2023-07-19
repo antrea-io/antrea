@@ -46,6 +46,9 @@ type Options struct {
 	EnableStretchedNetworkPolicy bool
 	// Watch EndpointSlice API for exported Service if EndpointSlice API is available.
 	EnableEndpointSlice bool
+	// ClusterCalimCRDAvailable indicates if the ClusterClaim CRD is available or not
+	// in the cluster.
+	ClusterCalimCRDAvailable bool
 }
 
 func newOptions() *Options {
