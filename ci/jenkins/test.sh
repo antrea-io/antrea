@@ -296,12 +296,8 @@ function clean_ns {
     matching_ns=$(kubectl get ns | awk -v ns="${ns}" '$1 ~ ns {print $1}')
     
     if [ -n "${matching_ns}" ]; then
-        echo "${matching_ns}" | while read -r ns_name; do
-            kubectl get pod -n "${ns_name}" --no-headers=true | awk '{print $1}' | while read pod_name; do
-                kubectl delete pod "${pod_name}" -n "${ns_name}" --force --grace-period 0
-            done
-            kubectl delete ns "${ns_name}" --ignore-not-found=true || true
-        done
+        kubectl delete all --all -n ${matching_ns} || true
+        kubectl delete ns "${matching_ns}" --ignore-not-found=true || true
     else
         echo "No matching namespaces $ns found."
     fi
