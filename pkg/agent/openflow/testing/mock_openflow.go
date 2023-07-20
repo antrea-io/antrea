@@ -457,17 +457,17 @@ func (mr *MockClientMockRecorder) InstallSNATMarkFlows(arg0, arg1 interface{}) *
 }
 
 // InstallServiceFlows mocks base method
-func (m *MockClient) InstallServiceFlows(arg0, arg1 openflow.GroupIDType, arg2 net.IP, arg3 uint16, arg4 openflow.Protocol, arg5 uint16, arg6, arg7 bool) error {
+func (m *MockClient) InstallServiceFlows(arg0 *types.ServiceConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallServiceFlows", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	ret := m.ctrl.Call(m, "InstallServiceFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallServiceFlows indicates an expected call of InstallServiceFlows
-func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallServiceFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallServiceFlows), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallServiceFlows), arg0)
 }
 
 // InstallServiceGroup mocks base method

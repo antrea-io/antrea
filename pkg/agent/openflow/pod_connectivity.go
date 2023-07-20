@@ -50,6 +50,7 @@ type featurePodConnectivity struct {
 	ipCtZoneTypeRegMarks  map[binding.Protocol]*binding.RegMark
 	enableMulticast       bool
 	proxyAll              bool
+	enableDSR             bool
 	enableTrafficControl  bool
 
 	category cookie.Category
@@ -67,6 +68,7 @@ func newFeaturePodConnectivity(
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	proxyAll bool,
+	enableDSR bool,
 	enableTrafficControl bool) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
 	gatewayIPs := make(map[binding.Protocol]net.IP)
@@ -124,6 +126,7 @@ func newFeaturePodConnectivity(
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
 		proxyAll:              proxyAll,
+		enableDSR:             enableDSR,
 		category:              cookie.PodConnectivity,
 	}
 }
@@ -156,7 +159,7 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	flows = append(flows, f.decTTLFlows()...)
 	flows = append(flows, f.conntrackFlows()...)
 	flows = append(flows, f.l2ForwardOutputFlow())
-	flows = append(flows, f.gatewayClassifierFlow())
+	flows = append(flows, f.gatewayClassifierFlows()...)
 	flows = append(flows, f.l2ForwardCalcFlow(gatewayMAC, f.gatewayPort))
 	flows = append(flows, f.gatewayIPSpoofGuardFlows()...)
 	flows = append(flows, f.l3FwdFlowToGateway()...)

@@ -113,18 +113,7 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 				egressNodeIP = controlPlaneNodeIPv4()
 			}
 
-			// Create a http server in another netns to fake an external server connected to the egress Node.
-			cmd := fmt.Sprintf(`ip netns add %[1]s && \
-ip link add dev %[1]s-a type veth peer name %[1]s-b && \
-ip link set dev %[1]s-a netns %[1]s && \
-ip addr add %[3]s/%[5]d dev %[1]s-b && \
-ip addr add %[4]s/%[5]d dev %[1]s-b && \
-ip link set dev %[1]s-b up && \
-ip netns exec %[1]s ip addr add %[2]s/%[5]d dev %[1]s-a && \
-ip netns exec %[1]s ip link set dev %[1]s-a up && \
-ip netns exec %[1]s ip route replace default via %[3]s && \
-ip netns exec %[1]s /agnhost netexec
-`, tt.fakeServer, tt.serverIP, tt.localIP0, tt.localIP1, tt.ipMaskLen)
+			cmd, _ := getCommandInFakeExternalNetwork("/agnhost netexec", tt.ipMaskLen, tt.serverIP, tt.localIP0, tt.localIP1)
 			if err := NewPodBuilder(tt.fakeServer, data.testNamespace, agnhostImage).OnNode(egressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 				t.Fatalf("Failed to create server Pod: %v", err)
 			}

@@ -447,10 +447,10 @@ func (a *ofFlowAction) Meter(meterID uint32) FlowBuilder {
 }
 
 // Learn is an action which adds or modifies a flow in an OpenFlow table.
-func (a *ofFlowAction) Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
+func (a *ofFlowAction) Learn(id uint8, priority uint16, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout uint16, cookieID uint64) LearnAction {
 	la := &ofLearnAction{
 		flowBuilder: a.builder,
-		nxLearn:     ofctrl.NewLearnAction(id, priority, idleTimeout, hardTimeout, 0, 0, cookieID),
+		nxLearn:     ofctrl.NewLearnAction(id, priority, idleTimeout, hardTimeout, finIdleTimeout, finHardTimeout, cookieID),
 	}
 	return la
 }

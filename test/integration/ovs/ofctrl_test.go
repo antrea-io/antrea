@@ -1018,7 +1018,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().Normal().Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolTCP).
 			Cookie(getCookieID()).
-			Action().Learn(table.GetID(), priorityNormal-10, 10, 0, 1).
+			Action().Learn(table.GetID(), priorityNormal-10, 10, 0, 0, 0, 1).
 			DeleteLearned().
 			MatchEthernetProtocol(false).
 			MatchIPProtocol(binding.ProtocolTCP).

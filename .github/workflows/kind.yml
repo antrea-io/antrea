@@ -125,8 +125,7 @@ jobs:
         retention-days: 30
 
   test-e2e-encap-non-default:
-    # NodeIPAM=true cannot run with proxyAll enabled due to https://github.com/antrea-io/antrea/issues/5022.
-    name: E2e tests on a Kind cluster on Linux with non default values (AntreaProxy=false, NodeIPAM=true)
+    name: E2e tests on a Kind cluster on Linux with non default values (proxyAll=true, LoadBalancerMode=DSR, NodeIPAM=true)
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
@@ -155,7 +154,13 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-encap-non-default-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-non-default-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --feature-gates AntreaProxy=false --node-ipam --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-non-default-coverage ./ci/kind/test-e2e-kind.sh \
+          --coverage \
+          --encap-mode encap \
+          --proxy-all \
+          --feature-gates LoadBalancerModeDSR=true \
+          --load-balancer-mode dsr \
+          --node-ipam
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-non-default-coverage.tar.gz test-e2e-encap-non-default-coverage
     - name: Upload coverage for test-e2e-encap-non-default-coverage

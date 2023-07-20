@@ -20,14 +20,19 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/features"
 )
 
 type expectTableFlows struct {
@@ -178,9 +183,9 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 
 	// Create two LoadBalancer Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
 	// of another one is Local.
-	_, err = data.createAgnhostLoadBalancerService("agnhost-cluster", true, false, clusterIngressIP, &ipProtocol)
+	_, err = data.createAgnhostLoadBalancerService("agnhost-cluster", true, false, clusterIngressIP, &ipProtocol, nil)
 	require.NoError(t, err)
-	svc, err := data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, &ipProtocol)
+	svc, err := data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, &ipProtocol, nil)
 	require.NoError(t, err)
 
 	// For the 'Local' externalTrafficPolicy, setup the health checks.
@@ -431,17 +436,7 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 
 	// Create another netns to fake an external network on the host network Pod.
 	testPod := "test-client"
-	testNetns := "test-ns"
-	cmd := fmt.Sprintf(`ip netns add %[1]s && \
-ip link add dev %[1]s-a type veth peer name %[1]s-b && \
-ip link set dev %[1]s-a netns %[1]s && \
-ip addr add %[3]s/%[4]d dev %[1]s-b && \
-ip link set dev %[1]s-b up && \
-ip netns exec %[1]s ip addr add %[2]s/%[4]d dev %[1]s-a && \
-ip netns exec %[1]s ip link set dev %[1]s-a up && \
-ip netns exec %[1]s ip route replace default via %[3]s && \
-sleep 3600
-`, testNetns, "1.1.1.1", "1.1.1.254", 24)
+	cmd, testNetns := getCommandInFakeExternalNetwork("sleep 3600", 24, "1.1.1.1", "1.1.1.254")
 	if err := NewPodBuilder(testPod, data.testNamespace, agnhostImage).OnNode(controlPlaneNodeName()).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 		t.Fatalf("Failed to create client Pod: %v", err)
 	}
@@ -732,9 +727,9 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	// of another one is Local.
 	serviceLBCluster := fmt.Sprintf("lb-cluster-%v", isIPv6)
 	serviceLBLocal := fmt.Sprintf("lb-local-%v", isIPv6)
-	_, err = data.createAgnhostLoadBalancerService(serviceLBCluster, true, false, lbClusterIngressIP, &ipProtocol)
+	_, err = data.createAgnhostLoadBalancerService(serviceLBCluster, true, false, lbClusterIngressIP, &ipProtocol, nil)
 	require.NoError(t, err)
-	_, err = data.createAgnhostLoadBalancerService(serviceLBLocal, true, true, lbLocalIngressIP, &ipProtocol)
+	_, err = data.createAgnhostLoadBalancerService(serviceLBLocal, true, true, lbLocalIngressIP, &ipProtocol, nil)
 	require.NoError(t, err)
 
 	// These are test urls.
@@ -1082,5 +1077,155 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 		for _, expectedFlow := range expectedTable.flows {
 			require.NotContains(t, tableOutput, expectedFlow)
 		}
+	}
+}
+
+// TestProxyLoadBalancerModeDSR creates a LoadBalancer Service and verifies both external and internal clients accessing
+// its LoadBalancer IPs work as expected.
+// Client IP should always be preserved regardless of whether the traffic is externally or internally originated.
+// Session affinity should take effect when it's enabled.
+func TestProxyLoadBalancerModeDSR(t *testing.T) {
+	skipIfFeatureDisabled(t, features.LoadBalancerModeDSR, true, false)
+	skipIfHasWindowsNodes(t)
+	skipIfNumNodesLessThan(t, 3)
+	skipIfAntreaIPAMTest(t)
+	skipIfProxyDisabled(t)
+
+	data, err := setupTest(t)
+	require.NoError(t, err, "Error when setting up test")
+	defer teardownTest(t, data)
+	skipIfProxyAllDisabled(t, data)
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+
+	ingressNode := controlPlaneNodeName()
+	backendNode1 := workerNodeName(1)
+	backendNode2 := workerNodeName(2)
+
+	internalClient := "internal-client"
+	err = NewPodBuilder(internalClient, data.testNamespace, toolboxImage).OnNode(ingressNode).Create(data)
+	require.NoError(t, err, "Failed to create internal client")
+	defer deletePodWrapper(t, data, data.testNamespace, internalClient)
+	internalClientIPs, err := data.podWaitForIPs(defaultTimeout, internalClient, data.testNamespace)
+	require.NoError(t, err, "Error when waiting for Pod '%s' to be in the Running state", internalClient)
+
+	// Create 4 backend Nodes on 2 backend Nodes different from the ingress Node.
+	var wg sync.WaitGroup
+	for i, node := range []string{backendNode1, backendNode1, backendNode2, backendNode2} {
+		wg.Add(1)
+		go func(index int, node string) {
+			defer wg.Done()
+			createAgnhostPod(t, data, fmt.Sprintf("agnhost-%d", index), node, false)
+		}(i, node)
+	}
+	wg.Wait()
+
+	testCases := []struct {
+		name                string
+		withSessionAffinity bool
+	}{
+		{
+			name:                "IPv4,withSessionAffinity",
+			withSessionAffinity: true,
+		},
+		{
+			name:                "IPv4,withoutSessionAffinity",
+			withSessionAffinity: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			skipIfNotIPv4Cluster(t)
+			ingressNodeIP := controlPlaneNodeIPv4()
+			ipProtocol := corev1.IPv4Protocol
+			lbIP := "1.1.2.1"
+			internalClientIP := internalClientIPs.ipv4.String()
+			externalClientIP := "1.1.1.1"
+			externalClientGateway := "1.1.1.254"
+			externalIPPrefix := 24
+
+			// Create another netns to fake an external network on the host network Pod.
+			externalClient := randName("external-client-")
+			cmd, externalNetns := getCommandInFakeExternalNetwork("sleep infinity", externalIPPrefix, externalClientIP, externalClientGateway)
+			err := NewPodBuilder(externalClient, data.testNamespace, toolboxImage).OnNode(ingressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data)
+			require.NoError(t, err, "Failed to create external client")
+			defer deletePodWrapper(t, data, data.testNamespace, externalClient)
+			err = data.podWaitForRunning(defaultTimeout, externalClient, data.testNamespace)
+			require.NoError(t, err, "Error when waiting for Pod '%s' to be in the Running state", externalClient)
+
+			// Since the "external client" runs in a netns on ingress Node, we install a route on backend Node to route reply
+			// traffic to ingress Node.
+			addRouteToClientIPCmd := []string{"ip", "route", "replace", externalClientIP, "via", ingressNodeIP}
+			stdout, stderr, err := data.RunCommandFromAntreaPodOnNode(backendNode1, addRouteToClientIPCmd)
+			require.NoError(t, err, "Failed to add route to client IP on Node %s, stdout: %s, stderr: %s", backendNode1, stdout, stderr)
+			stdout, stderr, err = data.RunCommandFromAntreaPodOnNode(backendNode2, addRouteToClientIPCmd)
+			require.NoError(t, err, "Failed to add route to client IP on Node %s, stdout: %s, stderr: %s", backendNode2, stdout, stderr)
+			defer func() {
+				delRouteToClientIPCmd := []string{"ip", "route", "del", externalClientIP, "via", ingressNodeIP}
+				stdout, stderr, err := data.RunCommandFromAntreaPodOnNode(backendNode1, delRouteToClientIPCmd)
+				assert.NoError(t, err, "Failed to delete route to client IP on Node %s, stdout: %s, stderr: %s", backendNode1, stdout, stderr)
+				stdout, stderr, err = data.RunCommandFromAntreaPodOnNode(backendNode2, delRouteToClientIPCmd)
+				assert.NoError(t, err, "Failed to delete route to client IP on Node %s, stdout: %s, stderr: %s", backendNode2, stdout, stderr)
+			}()
+
+			serviceName := fmt.Sprintf("svc-dsr")
+			annotations := map[string]string{
+				types.ServiceLoadBalancerModeAnnotationKey: "dsr",
+			}
+			service, err := data.createAgnhostLoadBalancerService(serviceName, tc.withSessionAffinity, false, []string{lbIP}, &ipProtocol, annotations)
+			require.NoError(t, err)
+			defer data.deleteServiceAndWait(defaultTimeout, serviceName, data.testNamespace)
+
+			curlServiceWithPath := func(clientPod, clientNetns, path string) string {
+				testURL := fmt.Sprintf("http://%s:%d/%s", lbIP, service.Spec.Ports[0].Port, path)
+				cmd = fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", testURL)
+				if clientNetns != "" {
+					cmd = fmt.Sprintf("ip netns exec %s %s", clientNetns, cmd)
+				}
+				stdout, stderr, err = data.RunCommandFromPod(data.testNamespace, clientPod, "toolbox", []string{"sh", "-c", cmd})
+				require.NoError(t, err, "Failed to access ExternalIP of Service %s from Pod %s, stdout: %s, stderr: %s", service.Name, clientPod, stdout, stderr)
+				return stdout
+			}
+
+			checkClientIPAndSessionAffinity := func(clientPod, clientNetns, clientIP string) {
+				clientIPResponse := curlServiceWithPath(clientPod, clientNetns, "clientip")
+				gotClientIP, _, err := net.SplitHostPort(clientIPResponse)
+				require.NoError(t, err, "Failed to got client IP from stdout: %s", clientIPResponse)
+				assert.Equal(t, clientIP, gotClientIP, "Client IP should be preserved with DSR mode")
+
+				hostNames := sets.New[string]()
+				for i := 0; i < 10; i++ {
+					hostName := curlServiceWithPath(clientPod, clientNetns, "hostname")
+					t.Logf("Request #%d from %s got hostname: %s", i, clientPod, hostName)
+					hostNames.Insert(hostName)
+					// Session affinity can only be guaranteed after the learned flow is realized in the datapath, which
+					// currently has a delay of 200ms, as set by start_ovs via other_config:max-revalidator.
+					// To avoid test flake, we wait enough time before sending more requests after the first one.
+					if i == 0 {
+						time.Sleep(200 * time.Millisecond)
+					}
+				}
+				if tc.withSessionAffinity {
+					assert.Len(t, hostNames, 1, "Hostnames should be the same when session affinity is enabled")
+				} else {
+					// There is 1/262144 (1/4^9) chance that all requests are forwarded to the same backend when session affinity is disabled.
+					assert.Greater(t, len(hostNames), 1, "Hostnames should not be the same when session affinity is disabled")
+				}
+			}
+			checkClientIPAndSessionAffinity(externalClient, externalNetns, externalClientIP)
+			checkClientIPAndSessionAffinity(internalClient, "", internalClientIP)
+
+			// Update the Service's LoadBalancerMode to NAT by updating its annotation, verify the operation takes effect.
+			_, err = data.updateService(serviceName, func(service *corev1.Service) {
+				if service.Annotations == nil {
+					service.Annotations = map[string]string{}
+				}
+				service.Annotations[types.ServiceLoadBalancerModeAnnotationKey] = "nat"
+			})
+			require.NoError(t, err)
+			clientIPResponse := curlServiceWithPath(externalClient, externalNetns, "clientip")
+			gotClientIP, _, err := net.SplitHostPort(clientIPResponse)
+			require.NoError(t, err, "Failed to got client IP from stdout: %s", clientIPResponse)
+			assert.NotEqual(t, externalClientIP, gotClientIP, "Client IP should not be preserved with NAT mode")
+		})
 	}
 }
