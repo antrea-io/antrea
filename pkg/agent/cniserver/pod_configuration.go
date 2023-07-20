@@ -200,7 +200,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 
 func (pc *podConfigurator) configureInterfaces(
 	podName string,
-	podNameSpace string,
+	podNamespace string,
 	containerID string,
 	containerNetNS string,
 	containerIFDev string,
@@ -210,7 +210,7 @@ func (pc *podConfigurator) configureInterfaces(
 	createOVSPort bool,
 	containerAccess *containerAccessArbitrator,
 ) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (pc *podConfigurator) configureInterfaces(
 	}
 
 	var containerConfig *interfacestore.InterfaceConfig
-	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface, containerIface, result.IPs, result.VLANID, containerAccess); err != nil {
+	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, hostIface, containerIface, result.IPs, result.VLANID, containerAccess); err != nil {
 		return fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
 	}
 	defer func() {
@@ -544,7 +544,7 @@ func (pc *podConfigurator) disconnectInterfaceFromOVS(containerConfig *interface
 // connectInterceptedInterface connects intercepted interface to ovs br-int.
 func (pc *podConfigurator) connectInterceptedInterface(
 	podName string,
-	podNameSpace string,
+	podNamespace string,
 	containerID string,
 	containerNetNS string,
 	containerIFDev string,
@@ -562,7 +562,7 @@ func (pc *podConfigurator) connectInterceptedInterface(
 	if err = pc.routeClient.MigrateRoutesToGw(hostIface.Name); err != nil {
 		return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
 	}
-	_, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface,
+	_, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, hostIface,
 		containerIface, containerIPs, 0, containerAccess)
 	return err
 }

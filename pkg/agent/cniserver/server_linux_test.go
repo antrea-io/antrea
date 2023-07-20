@@ -493,7 +493,7 @@ func TestCmdDel(t *testing.T) {
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName
 			cniserver.podConfigurator.ifConfigurator = testIfaceConfigurator
 			if tc.secondaryNetworkEnabled {
-				cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: supportedCNIVersion, PodName: tc.podName, PodNameSpace: testPodNamespace,
+				cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: supportedCNIVersion, PodName: tc.podName, PodNamespace: testPodNamespace,
 					ContainerID: containerID, ContainerNetNS: netns, PodCNIDeleted: false,
 					MTU: 1450}
 				cniserver.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)

@@ -530,7 +530,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 
 	if s.secondaryNetworkEnabled {
 		// Go cache the CNI server info at CNIConfigInfo cache, for podWatch usage
-		cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: cniVersion, PodName: podName, PodNameSpace: podNamespace,
+		cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: cniVersion, PodName: podName, PodNamespace: podNamespace,
 			ContainerID: cniConfig.ContainerId, ContainerNetNS: netNS, PodCNIDeleted: false,
 			MTU: cniConfig.MTU}
 		s.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)

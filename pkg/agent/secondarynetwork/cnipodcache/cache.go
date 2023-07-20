@@ -90,7 +90,7 @@ func (c *CNIPodInfoCache) GetCNIConfigInfoByContainerID(podName, podNamespace, c
 
 func podIndexFunc(obj interface{}) ([]string, error) {
 	podConfig := obj.(*CNIConfigInfo)
-	return []string{k8s.NamespacedName(podConfig.PodNameSpace, podConfig.PodName)}, nil
+	return []string{k8s.NamespacedName(podConfig.PodNamespace, podConfig.PodName)}, nil
 }
 
 func getCNIPodInfoKey(obj interface{}) (string, error) {
