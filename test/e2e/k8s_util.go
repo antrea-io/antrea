@@ -89,11 +89,17 @@ type probeResult struct {
 	err          error
 }
 
-// GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
+var ErrPodNotFound = errors.New("Pod not found")
+
+// GetPodByLabel returns a Pod with the matching Namespace and "pod" label if it's found.
+// If the pod is not found, GetPodByLabel returns "ErrPodNotFound".
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
-	if err != nil || len(pods) == 0 {
-		return nil, errors.WithMessagef(err, "unable to get Pod in Namespace %s with label pod=%s", ns, name)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to get Pod in Namespace %s with label pod=%s", ns, name)
+	}
+	if len(pods) == 0 {
+		return nil, ErrPodNotFound
 	}
 	return &pods[0], nil
 }
@@ -1083,7 +1089,7 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 	log.Infof("Waiting for Pod '%s/%s'", ns, pod)
 	for {
 		k8sPod, err := k.GetPodByLabel(ns, pod)
-		if err != nil {
+		if err != nil && err != ErrPodNotFound {
 			return nil, errors.WithMessagef(err, "unable to get Pod '%s/%s'", ns, pod)
 		}
 
