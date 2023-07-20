@@ -37,6 +37,7 @@ edit the Agent configuration in the
 | `AntreaProxy`             | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
 | `EndpointSlice`           | Agent              | `true`  | Beta  | v0.13.0       | v1.11        | N/A        | Yes                |       |
 | `TopologyAwareHints`      | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |       |
+| `LoadBalancerModeDSR`     | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |       |
 | `AntreaPolicy`            | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`               | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`            | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
@@ -98,6 +99,23 @@ for more information about TopologyAwareHints.
 
 - `AntreaProxy` is enabled.
 - `EndpointSlice` is enabled.
+
+### LoadBalancerModeDSR
+
+`LoadBalancerModeDSR` allows users to specify the load balancer mode as DSR (Direct Server Return). The load balancer
+mode determines how external traffic destined to LoadBalancerIPs and ExternalIPs of Services is processed when it's load
+balanced across Nodes. In DSR mode, external traffic is never SNAT'd and backend Pods running on Nodes that are not the
+ingress Node can reply to clients directly, bypassing the ingress Node. Therefore, DSR mode can preserve client IP of
+requests, and usually has lower latency and higher throughput. It's only meaningful to use this feature when AntreaProxy
+is enabled and configured to proxy external traffic (proxyAll=true). Refer to this [link](
+antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more information about load balancer mode.
+
+#### Requirements for this Feature
+
+- `AntreaProxy` with `proxyAll` is enabled.
+- IPv4 only.
+- Linux Nodes only.
+- Encap mode only.
 
 ### AntreaPolicy
 
