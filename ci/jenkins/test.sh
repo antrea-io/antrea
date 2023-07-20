@@ -500,7 +500,8 @@ function deliver_antrea_windows_containerd {
 
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
-
+    # containerd is the runtime, need to load the image via ctr.
+    ctr -n=k8s.io images import antrea-ubuntu.tar
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
