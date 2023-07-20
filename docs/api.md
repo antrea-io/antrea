@@ -28,6 +28,7 @@ These are the CRDs currently available in `crd.antrea.io`.
 |---|---|---|---|---|
 | `AntreaAgentInfo` | v1beta1 | v1.0.0 | N/A | N/A |
 | `AntreaControllerInfo` | v1beta1 | v1.0.0 | N/A | N/A |
+| `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | v2.0.0 |
 | `ClusterGroup` | v1alpha3 | v1.1.0 | N/A | N/A |
 | `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | N/A | N/A |
 | `Egress` | v1alpha2 | v1.0.0 | N/A | N/A |
@@ -71,10 +72,6 @@ These are the API group versions which are curently available when using Antrea.
 
 | CRD | CRD version | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|
-| `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | v1.12.0 [^1] |
-
-[^1]: The v1alpha2 version of the `ClusterGroup` CRD is no longer served by the
-      apiserver in v1.12 and is completely removed in v1.13.
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
 
