@@ -32,8 +32,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/agent/config"
+	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
@@ -81,6 +83,7 @@ type clientOptions struct {
 	enableAntreaPolicy    bool
 	enableEgress          bool
 	proxyAll              bool
+	enableDSR             bool
 	connectUplinkToBridge bool
 	enableMulticast       bool
 	enableTrafficControl  bool
@@ -93,6 +96,12 @@ type clientOptionsFn func(*clientOptions)
 func enableProxyAll(o *clientOptions) {
 	o.enableProxy = true
 	o.proxyAll = true
+}
+
+func enableDSR(o *clientOptions) {
+	o.enableProxy = true
+	o.proxyAll = true
+	o.enableDSR = true
 }
 
 func enableProxy(o *clientOptions) {
@@ -341,6 +350,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		enableAntreaPolicy:    true,
 		enableEgress:          true,
 		proxyAll:              false,
+		enableDSR:             false,
 		connectUplinkToBridge: false,
 		enableMulticast:       false,
 		enableTrafficControl:  false,
@@ -353,12 +363,14 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 
 	cli := NewClient(bridgeName,
 		bridgeMgmtAddr,
+		nodeiptest.NewFakeNodeIPChecker(),
 		o.enableProxy,
 		o.enableAntreaPolicy,
 		o.enableL7NetworkPolicy,
 		o.enableEgress,
 		false,
 		o.proxyAll,
+		o.enableDSR,
 		o.connectUplinkToBridge,
 		o.enableMulticast,
 		o.enableTrafficControl,
@@ -593,6 +605,22 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 			expectedFlows: []string{
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg4=0x0/0x100000,ipv6_dst=fec0:10:10:1::/80 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg4=0x100000/0x100000,reg8=0x0/0xfff,ipv6_dst=fec0:10:10:1::/80 actions=set_field:00:00:10:10:01:01->eth_dst,set_field:0x40/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 Encap DSR",
+			enableIPv4:       true,
+			clientOptions:    []clientOptionsFn{enableDSR},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			ipsecTunOFPort:   uint32(100),
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
 	}
@@ -948,53 +976,53 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 		{
 			name: "IPv4 Endpoints",
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.100", "node1", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", "node2", "", 80, true, true, false, false, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
 		},
 		{
 			name: "IPv6 Endpoints",
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("fec0:10:10::100", "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("fec0:10:10::101", "", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::100", "node1", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::101", "node2", "", 80, true, true, false, false, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
 		},
 		{
 			name:                "IPv4 Endpoints,SessionAffinity",
 			withSessionAffinity: true,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.100", "node1", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", "node2", "", 80, true, true, false, false, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
 		},
 		{
 			name:                "IPv6 Endpoints,SessionAffinity",
 			withSessionAffinity: true,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("fec0:10:10::100", "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("fec0:10:10::101", "", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::100", "node1", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::101", "node2", "", 80, true, true, false, false, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
 		},
 		{
 			name: "delete group failed for IPv4 Endpoints",
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.100", "node1", "", 80, false, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", "node2", "", 80, true, true, false, false, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
 				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
 			deleteOFEntriesError: fmt.Errorf("error when deleting Openflow entries for Service Endpoints Group 100"),
 		},
@@ -1159,26 +1187,26 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 }
 
 func Test_client_InstallServiceFlows(t *testing.T) {
-	groupID := binding.GroupIDType(100)
-	clusterGroupID := binding.GroupIDType(101)
+	clusterGroupID := binding.GroupIDType(100)
+	localGroupID := binding.GroupIDType(101)
 	svcIPv4 := net.ParseIP("10.96.0.100")
 	svcIPv6 := net.ParseIP("fec0:10:96::100")
 	port := uint16(80)
 
 	testCases := []struct {
-		name              string
-		groupID           binding.GroupIDType
-		clusterGroupID    binding.GroupIDType
-		protocol          binding.Protocol
-		svcIP             net.IP
-		affinityTimeout   uint16
-		toExternalAddress bool
-		expectedFlows     []string
-		nested            bool
+		name               string
+		trafficPolicyLocal bool
+		protocol           binding.Protocol
+		svcIP              net.IP
+		affinityTimeout    uint16
+		isExternal         bool
+		isNodePort         bool
+		isNested           bool
+		isDSR              bool
+		expectedFlows      []string
 	}{
 		{
 			name:     "Service ClusterIP",
-			groupID:  groupID,
 			protocol: binding.ProtocolTCP,
 			svcIP:    svcIPv4,
 			expectedFlows: []string{
@@ -1187,117 +1215,169 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			},
 		},
 		{
+			name:               "Service ClusterIP, local",
+			protocol:           binding.ProtocolTCP,
+			trafficPolicyLocal: true,
+			svcIP:              svcIPv4,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x65->reg7,group:101",
+			},
+		},
+		{
 			name:     "Service ClusterIP, nested",
-			groupID:  groupID,
 			protocol: binding.ProtocolTCP,
 			svcIP:    svcIPv4,
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x64->reg7,set_field:0x1000000/0x1000000->reg4,group:100",
 			},
-			nested: true,
+			isNested: true,
 		},
 		{
 			name:            "Service ClusterIP,SessionAffinity",
-			groupID:         groupID,
 			protocol:        binding.ProtocolTCP,
 			svcIP:           svcIPv4,
 			affinityTimeout: uint16(100),
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
 			name:            "Service ClusterIP,IPv6,SessionAffinity",
-			groupID:         groupID,
 			protocol:        binding.ProtocolTCPv6,
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp6,reg4=0x1020050/0x107ffff,xxreg3=0xfec00010009600000000000000000100 actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
-			name:              "Service NodePort,SessionAffinity",
-			groupID:           groupID,
-			clusterGroupID:    groupID,
-			protocol:          binding.ProtocolUDP,
-			svcIP:             config.VirtualNodePortDNATIPv4,
-			affinityTimeout:   uint16(100),
-			toExternalAddress: true,
+			name:            "Service NodePort,SessionAffinity",
+			protocol:        binding.ProtocolUDP,
+			svcIP:           config.VirtualNodePortDNATIPv4,
+			affinityTimeout: uint16(100),
+			isExternal:      true,
+			isNodePort:      true,
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,udp,reg4=0x90000/0xf0000,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,udp,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,udp,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
-			name:              "Service NodePort,IPv6,SessionAffinity",
-			groupID:           groupID,
-			clusterGroupID:    groupID,
-			protocol:          binding.ProtocolUDPv6,
-			svcIP:             config.VirtualNodePortDNATIPv6,
-			affinityTimeout:   uint16(100),
-			toExternalAddress: true,
+			name:            "Service NodePort,IPv6,SessionAffinity",
+			protocol:        binding.ProtocolUDPv6,
+			svcIP:           config.VirtualNodePortDNATIPv6,
+			affinityTimeout: uint16(100),
+			isExternal:      true,
+			isNodePort:      true,
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,udp6,reg4=0x90000/0xf0000,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,udp6,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,udp6,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
-			name:              "Service NodePort,SessionAffinity,Short-circuiting",
-			groupID:           groupID,
-			clusterGroupID:    clusterGroupID,
-			protocol:          binding.ProtocolUDP,
-			svcIP:             config.VirtualNodePortDNATIPv4,
-			affinityTimeout:   uint16(100),
-			toExternalAddress: true,
+			name:               "Service NodePort,SessionAffinity,Short-circuiting",
+			protocol:           binding.ProtocolUDP,
+			svcIP:              config.VirtualNodePortDNATIPv4,
+			affinityTimeout:    uint16(100),
+			isExternal:         true,
+			isNodePort:         true,
+			trafficPolicyLocal: true,
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=ServiceLB, priority=210,udp,reg4=0x90000/0xf0000,nw_src=10.10.0.0/24,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
-				"cookie=0x1030000000000, table=ServiceLB, priority=200,udp,reg4=0x90000/0xf0000,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,udp,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,udp,reg4=0x90000/0xf0000,nw_src=10.10.0.0/24,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,udp,reg4=0x90000/0xf0000,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000065, table=ServiceLB, priority=190,udp,reg4=0xb0000/0xf0000,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000065,eth_type=0x800,nw_proto=0x11,OXM_OF_UDP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
-			name:              "Service LoadBalancer,SessionAffinity",
-			groupID:           groupID,
-			clusterGroupID:    groupID,
-			protocol:          binding.ProtocolSCTP,
-			svcIP:             svcIPv4,
-			affinityTimeout:   uint16(100),
-			toExternalAddress: true,
+			name:            "Service LoadBalancer,SessionAffinity",
+			protocol:        binding.ProtocolSCTP,
+			svcIP:           svcIPv4,
+			affinityTimeout: uint16(100),
+			isExternal:      true,
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
-			name:              "Service LoadBalancer,IPv6,SessionAffinity",
-			groupID:           groupID,
-			clusterGroupID:    groupID,
-			protocol:          binding.ProtocolSCTPv6,
-			svcIP:             svcIPv6,
-			affinityTimeout:   uint16(100),
-			toExternalAddress: true,
+			name:            "Service LoadBalancer,IPv6,SessionAffinity",
+			protocol:        binding.ProtocolSCTPv6,
+			svcIP:           svcIPv6,
+			affinityTimeout: uint16(100),
+			isExternal:      true,
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 		{
-			name:              "Service LoadBalancer,SessionAffinity,Short-circuiting",
-			groupID:           groupID,
-			clusterGroupID:    clusterGroupID,
-			protocol:          binding.ProtocolSCTP,
-			svcIP:             svcIPv4,
-			affinityTimeout:   uint16(100),
-			toExternalAddress: true,
+			name:               "Service LoadBalancer,SessionAffinity,Short-circuiting",
+			protocol:           binding.ProtocolSCTP,
+			svcIP:              svcIPv4,
+			affinityTimeout:    uint16(100),
+			isExternal:         true,
+			trafficPolicyLocal: true,
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=ServiceLB, priority=210,sctp,reg4=0x10000/0x70000,nw_src=10.10.0.0/24,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
-				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
-				"cookie=0x1030000000064, table=ServiceLB, priority=190,sctp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,sctp,reg4=0x10000/0x70000,nw_src=10.10.0.0/24,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,sctp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000065, table=ServiceLB, priority=190,sctp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000065,eth_type=0x800,nw_proto=0x84,OXM_OF_SCTP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
+			name:       "Service LoadBalancer,DSR",
+			protocol:   binding.ProtocolTCP,
+			svcIP:      svcIPv4,
+			isExternal: true,
+			isDSR:      true,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,tcp,reg0=0x1/0xf,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp,reg4=0xc000000/0xe000000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_OF_IP_SRC[],NXM_OF_IP_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_REG3[]->NXM_NX_REG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
+			name:       "Service LoadBalancer,IPv6,DSR",
+			protocol:   binding.ProtocolTCPv6,
+			svcIP:      svcIPv6,
+			isExternal: true,
+			isDSR:      true,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,tcp6,reg0=0x1/0xf,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp6,reg4=0xc000000/0xe000000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_NX_IPV6_SRC[],NXM_NX_IPV6_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
+			name:            "Service LoadBalancer,SessionAffinity,DSR",
+			protocol:        binding.ProtocolTCP,
+			svcIP:           svcIPv4,
+			affinityTimeout: uint16(100),
+			isExternal:      true,
+			isDSR:           true,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,tcp,reg0=0x1/0xf,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:DSRServiceMark",
+				"cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp,reg4=0xc000000/0xe000000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_OF_IP_SRC[],NXM_OF_IP_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_REG3[]->NXM_NX_REG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT",
+			},
+		},
+		{
+			name:            "Service LoadBalancer,IPv6,SessionAffinity,DSR",
+			protocol:        binding.ProtocolTCPv6,
+			svcIP:           svcIPv6,
+			affinityTimeout: uint16(100),
+			isExternal:      true,
+			isDSR:           true,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=210,tcp6,reg0=0x1/0xf,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101",
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9],load:0x1->NXM_NX_REG4[21]),set_field:0x20000/0x70000->reg4,goto_table:DSRServiceMark",
+				"cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp6,reg4=0xc000000/0xe000000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_NX_IPV6_SRC[],NXM_NX_IPV6_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT",
 			},
 		},
 	}
@@ -1306,7 +1386,11 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := oftest.NewMockOFEntryOperations(ctrl)
 
-			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+			var options []clientOptionsFn
+			if tc.isDSR {
+				options = append(options, enableDSR)
+			}
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, options...)
 			defer resetPipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -1314,7 +1398,19 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 
 			cacheKey := generateServicePortFlowCacheKey(tc.svcIP, port, tc.protocol)
 
-			assert.NoError(t, fc.InstallServiceFlows(tc.groupID, tc.clusterGroupID, tc.svcIP, port, tc.protocol, tc.affinityTimeout, tc.toExternalAddress, tc.nested))
+			assert.NoError(t, fc.InstallServiceFlows(&types.ServiceConfig{
+				ServiceIP:          tc.svcIP,
+				ServicePort:        port,
+				Protocol:           tc.protocol,
+				TrafficPolicyLocal: tc.trafficPolicyLocal,
+				LocalGroupID:       localGroupID,
+				ClusterGroupID:     clusterGroupID,
+				AffinityTimeout:    tc.affinityTimeout,
+				IsExternal:         tc.isExternal,
+				IsNodePort:         tc.isNodePort,
+				IsNested:           tc.isNested,
+				IsDSR:              tc.isDSR,
+			}))
 			fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -1343,7 +1439,19 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 		proxy.NewBaseEndpointInfo("10.10.0.12", "", "", 80, true, true, false, false, nil),
 	}
 
-	assert.NoError(t, fc.InstallServiceFlows(groupID, groupID, svcIP, svcPort, bindingProtocol, 100, true, false))
+	assert.NoError(t, fc.InstallServiceFlows(&types.ServiceConfig{
+		ServiceIP:          svcIP,
+		ServicePort:        svcPort,
+		Protocol:           bindingProtocol,
+		TrafficPolicyLocal: false,
+		LocalGroupID:       0,
+		ClusterGroupID:     groupID,
+		AffinityTimeout:    100,
+		IsExternal:         true,
+		IsNodePort:         false,
+		IsNested:           false,
+		IsDSR:              false,
+	}))
 	assert.NoError(t, fc.InstallEndpointFlows(bindingProtocol, endpoints))
 	flowKeys := fc.GetServiceFlowKeys(svcIP, svcPort, bindingProtocol, endpoints)
 	expectedFlowKeys := []string{
@@ -1706,7 +1814,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
@@ -2376,7 +2484,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(false, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, true)...)
-	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false)...)
+	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
 
 	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {
 		fCache := flowMessageCache{}
@@ -2441,7 +2549,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 		"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 	)
 	_, peerPodCIDR, _ := net.ParseCIDR("10.10.1.0/24")
-	addFlowInCache(fc.featurePodConnectivity.nodeCachedFlows, "nodeFlows", []binding.Flow{fc.featurePodConnectivity.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)})
+	addFlowInCache(fc.featurePodConnectivity.nodeCachedFlows, "nodeFlows", fc.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
 	replayedFlows = append(replayedFlows,
 		"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 	)

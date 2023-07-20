@@ -22,12 +22,14 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/nodeip"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 type featureService struct {
 	cookieAllocator cookie.Allocator
+	nodeIPChecker   nodeip.Checker
 	ipProtocols     []binding.Protocol
 	bridge          binding.Bridge
 
@@ -49,6 +51,7 @@ type featureService struct {
 	enableAntreaPolicy    bool
 	enableProxy           bool
 	proxyAll              bool
+	enableDSR             bool
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
 
@@ -61,6 +64,7 @@ func (f *featureService) getFeatureName() string {
 
 func newFeatureService(
 	cookieAllocator cookie.Allocator,
+	nodeIPChecker nodeip.Checker,
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
@@ -69,6 +73,7 @@ func newFeatureService(
 	enableAntreaPolicy,
 	enableProxy,
 	proxyAll,
+	enableDSR,
 	connectUplinkToBridge bool) *featureService {
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	virtualIPs := make(map[binding.Protocol]net.IP)
@@ -110,6 +115,7 @@ func newFeatureService(
 
 	return &featureService{
 		cookieAllocator:        cookieAllocator,
+		nodeIPChecker:          nodeIPChecker,
 		ipProtocols:            ipProtocols,
 		bridge:                 bridge,
 		cachedFlows:            newFlowCategoryCache(),
@@ -128,6 +134,7 @@ func newFeatureService(
 		enableAntreaPolicy:     enableAntreaPolicy,
 		enableProxy:            enableProxy,
 		proxyAll:               proxyAll,
+		enableDSR:              enableDSR,
 		connectUplinkToBridge:  connectUplinkToBridge,
 		ctZoneSrcField:         getZoneSrcField(connectUplinkToBridge),
 		category:               cookie.Service,
@@ -159,6 +166,9 @@ func (f *featureService) initFlows() []*openflow15.FlowMod {
 			// This installs the flows to match the first packet of NodePort connection. The flows set a bit of a register
 			// to mark the Service type of the packet as NodePort, and the mark is consumed in table serviceLBTable.
 			flows = append(flows, f.nodePortMarkFlows()...)
+		}
+		if f.enableDSR {
+			flows = append(flows, f.dsrServiceNoDNATFlows()...)
 		}
 	} else {
 		// This installs the flows to enable Service connectivity. Upstream kube-proxy is leveraged to provide load-balancing,

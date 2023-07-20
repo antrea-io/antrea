@@ -79,6 +79,76 @@ func TestOptionsValidateTLSOptions(t *testing.T) {
 	}
 }
 
+func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
+	tests := []struct {
+		name                            string
+		enabledDSR                      bool
+		trafficEncapMode                config.TrafficEncapModeType
+		antreaProxyConfig               agentconfig.AntreaProxyConfig
+		expectedErr                     string
+		expectedDefaultLoadBalancerMode config.LoadBalancerMode
+	}{
+		{
+			name:             "default",
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				DefaultLoadBalancerMode: config.LoadBalancerModeNAT.String(),
+			},
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeNAT,
+		},
+		{
+			name:             "DSR enabled",
+			enabledDSR:       true,
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+			},
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+		},
+		{
+			name: "LoadBalancerModeDSR disabled",
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+			},
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			expectedErr:      "LoadBalancerMode DSR requires feature gate LoadBalancerModeDSR to be enabled",
+		},
+		{
+			name:       "unsupported encap mode",
+			enabledDSR: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+			},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedErr:      "LoadBalancerMode DSR requires encap mode",
+		},
+		{
+			name:             "invalid LoadBalancerMode",
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				DefaultLoadBalancerMode: "drs",
+			},
+			expectedErr: "LoadBalancerMode drs is unknown",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, tt.enabledDSR)()
+
+			o := &Options{config: &agentconfig.AgentConfig{
+				AntreaProxy: tt.antreaProxyConfig,
+			}}
+			err := o.validateAntreaProxyConfig(tt.trafficEncapMode)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+			assert.Equal(t, tt.expectedDefaultLoadBalancerMode, o.defaultLoadBalancerMode)
+		})
+	}
+}
+
 func TestOptionsValidateEgressConfig(t *testing.T) {
 	tests := []struct {
 		name                 string

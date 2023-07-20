@@ -88,6 +88,8 @@ type Options struct {
 	// enableEgress represents whether Egress should run or not, calculated from its feature gate configuration and
 	// whether the traffic mode supports it.
 	enableEgress bool
+
+	defaultLoadBalancerMode config.LoadBalancerMode
 }
 
 func newOptions() *Options {
@@ -183,6 +185,9 @@ func (o *Options) setDefaults() {
 	if o.config.Multicluster.EnableGateway {
 		o.setMulticlusterDefaultOptions()
 	}
+	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
+		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
+	}
 }
 
 func (o *Options) validateTLSOptions() error {
@@ -202,7 +207,7 @@ func (o *Options) validateTLSOptions() error {
 	return nil
 }
 
-func (o *Options) validateAntreaProxyConfig() error {
+func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeType) error {
 	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		// Validate service CIDR configuration if AntreaProxy is not enabled.
 		if _, _, err := net.ParseCIDR(o.config.ServiceCIDR); err != nil {
@@ -225,6 +230,20 @@ func (o *Options) validateAntreaProxyConfig() error {
 			}
 		}
 	}
+
+	ok, defaultLoadBalancerMode := config.GetLoadBalancerModeFromStr(o.config.AntreaProxy.DefaultLoadBalancerMode)
+	if !ok {
+		return fmt.Errorf("LoadBalancerMode %s is unknown", o.config.AntreaProxy.DefaultLoadBalancerMode)
+	}
+	if defaultLoadBalancerMode == config.LoadBalancerModeDSR {
+		if !features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) {
+			return fmt.Errorf("LoadBalancerMode DSR requires feature gate %s to be enabled", features.LoadBalancerModeDSR)
+		}
+		if encapMode != config.TrafficEncapModeEncap {
+			return fmt.Errorf("LoadBalancerMode DSR requires %s mode", config.TrafficEncapModeEncap)
+		}
+	}
+	o.defaultLoadBalancerMode = defaultLoadBalancerMode
 	return nil
 }
 
@@ -539,7 +558,7 @@ func (o *Options) validateK8sNodeOptions() error {
 		// (but SNAT can be done by the primary CNI).
 		o.config.NoSNAT = true
 	}
-	if err := o.validateAntreaProxyConfig(); err != nil {
+	if err := o.validateAntreaProxyConfig(encapMode); err != nil {
 		return fmt.Errorf("proxy config is invalid: %w", err)
 	}
 	if err := o.validateFlowExporterConfig(); err != nil {

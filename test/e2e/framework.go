@@ -1684,6 +1684,14 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 	return pods.Items[0].Name, nil
 }
 
+func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []string) (string, string, error) {
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		return "", "", err
+	}
+	return data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+}
+
 // getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
 func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
@@ -1885,9 +1893,23 @@ func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nod
 	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
 }
 
+func (data *TestData) updateService(serviceName string, mutateFunc func(service *corev1.Service)) (*corev1.Service, error) {
+	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if mutateFunc != nil {
+		mutateFunc(svc)
+	}
+	if svc, err = data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{}); err != nil {
+		return nil, fmt.Errorf("error when updating '%s' Service: %v", serviceName, err)
+	}
+	return svc, nil
+}
+
 // createAgnhostLoadBalancerService creates a LoadBalancer agnhost service with the given name.
-func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.CreateService(serviceName, data.testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
+func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
+	svc, err := data.CreateServiceWithAnnotations(serviceName, data.testNamespace, 8080, 8080, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily, annotations)
 	if err != nil {
 		return svc, err
 	}
@@ -2925,4 +2947,29 @@ func getPingCommand(count int, size int, os string, ip *net.IP) []string {
 		cmd = append(cmd, "-6", ip.String())
 	}
 	return cmd
+}
+
+// getCommandInFakeExternalNetwork fakes executing a command from external network by creating a netns and link the netns
+// with the host network.
+func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP string, localIP string, otherLocalIPs ...string) (string, string) {
+	// Create another netns to fake an external network on the host network Pod.
+	suffix := randSeq(5)
+	netns := fmt.Sprintf("ext-%s", suffix)
+	linkInHost := fmt.Sprintf("%s-a", netns)
+	linkInNetns := fmt.Sprintf("%s-b", netns)
+	cmds := []string{
+		fmt.Sprintf("ip netns add %s", netns),
+		fmt.Sprintf("ip link add dev %s type veth peer name %s", linkInHost, linkInNetns),
+		fmt.Sprintf("ip link set dev %s netns %s", linkInNetns, netns),
+		fmt.Sprintf("ip addr add %s/%d dev %s", localIP, prefixLength, linkInHost),
+		fmt.Sprintf("ip link set dev %s up", linkInHost),
+		fmt.Sprintf("ip netns exec %s ip addr add %s/%d dev %s", netns, externalIP, prefixLength, linkInNetns),
+		fmt.Sprintf("ip netns exec %s ip link set dev %s up", netns, linkInNetns),
+		fmt.Sprintf("ip netns exec %s ip route replace default via %s", netns, localIP),
+	}
+	for _, ip := range otherLocalIPs {
+		cmds = append(cmds, fmt.Sprintf("ip addr add %s/%d dev %s", ip, prefixLength, linkInHost))
+	}
+	cmds = append(cmds, fmt.Sprintf("ip netns exec %s %s", netns, cmd))
+	return strings.Join(cmds, " && "), netns
 }

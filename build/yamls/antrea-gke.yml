@@ -3163,6 +3163,9 @@ data:
     # into account application context.
     #  L7NetworkPolicy: false
 
+    # Allow users to specify the load balancer mode as DSR (Direct Server Return).
+    #  LoadBalancerModeDSR: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -3411,6 +3414,13 @@ data:
       # then AntreaProxy will only handle Services without the "service.kubernetes.io/service-proxy-name" label,
       # but ignore Services with the label no matter what is the value.
       serviceProxyName: ""
+      # Determines how external traffic is processed when it's load balanced across Nodes by default.
+      # It has the following options:
+      # - nat (default): External traffic is SNAT'd when it's load balanced across Nodes to ensure symmetric path.
+      # - dsr:           External traffic is never SNAT'd. Backend Pods running on Nodes that are not the ingress Node
+      #                  can reply to clients directly, bypassing the ingress Node.
+      # A Service's load balancer mode can be overridden by annotating it with `service.antrea.io/load-balancer-mode`.
+      defaultLoadBalancerMode: "nat"
 
     # IPsec tunnel related configurations.
     ipsec:
@@ -4542,7 +4552,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 46b91206a96d91e7e4861f20fa0e255ed660cf96e796116e562061efc09fdfcc
+        checksum/config: 48b346133ac76c11a6c456d99aa93c2421e5598a13b9d18d5dd58d6cce5408ff
       labels:
         app: antrea
         component: antrea-agent
@@ -4781,7 +4791,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 46b91206a96d91e7e4861f20fa0e255ed660cf96e796116e562061efc09fdfcc
+        checksum/config: 48b346133ac76c11a6c456d99aa93c2421e5598a13b9d18d5dd58d6cce5408ff
       labels:
         app: antrea
         component: antrea-controller

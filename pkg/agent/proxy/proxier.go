@@ -41,10 +41,12 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	agentconfig "antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/nodeip"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy/metrics"
 	"antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/route"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	antreaconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -93,6 +95,7 @@ type proxier struct {
 	endpointsChanges *endpointsChangesTracker
 	serviceChanges   *serviceChangesTracker
 	nodeLabels       map[string]string
+	nodeIPChecker    nodeip.Checker
 	// serviceMap stores services we expect to be installed.
 	serviceMap k8sproxy.ServiceMap
 	// serviceInstalledMap stores services we actually installed.
@@ -140,6 +143,24 @@ type proxier struct {
 	proxyLoadBalancerIPs      bool
 	topologyAwareHintsEnabled bool
 	supportNestedService      bool
+
+	// When a Service's LoadBalancerMode is DSR, the following changes will be applied to the OpenFlow flows and groups:
+	// 1. ClusterGroup will be used by traffic working in DSR mode on ingress Node.
+	//   * If a local Endpoint is selected, it will just be handled normally as DSR is not applicable in this case.
+	//   * If a remote Endpoint is selected, it will be sent to the backend Node that hosts the Endpoint without being
+	//     NAT'd, the eventual Endpoint will be determined on the backend Node and may be different from the one
+	//     selected here.
+	// 2. LocalGroup will be used by traffic working in DSR mode on backend Node. In this way, each Endpoint has the
+	//    same chance to be selected eventually.
+	// 3. Traffic working in DSR mode on ingress Node will be marked and treated specially, e.g. bypassing SNAT.
+	// 4. Learned flow will be created for each connection to ensure consistent load balance decision for a connection of DSR mode.
+	//
+	// Learned flow is necessary because connections of DSR mode will remain invalid on ingress Node as it can only see
+	// requests and not responses. And OVS doesn't provide ct_state and ct_label for invalid connections. Thus, we can't
+	// store the load balance decision of the connection to ct_state or ct_label. To ensure consistent load balancing
+	// decision for packets of a connection, we use "learn" action to generate a learned flow when processing the first
+	// packet of a connection, and rely on the learned flow to process subsequent packets of the same connection.
+	defaultLoadBalancerMode agentconfig.LoadBalancerMode
 }
 
 func (p *proxier) SyncedOnce() bool {
@@ -153,6 +174,13 @@ func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
 }
 
 func (p *proxier) isInitialized() bool {
+	// When LoadBalancerModeDSR is enabled, we wait for NodeIPChecker to be initialized before processing any Service, to
+	// ensure we get correct result when checking if an Endpoint is running in host network.
+	if features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) {
+		if !p.nodeIPChecker.HasSynced() {
+			return false
+		}
+	}
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
@@ -221,7 +249,7 @@ func (p *proxier) removeServiceFlows(svcInfo *types.ServiceInfo) bool {
 	return true
 }
 
-func (p *proxier) installServiceGroup(svcPortName k8sproxy.ServicePortName, needUpdate, local bool, withSessionAffinity bool, localEndpoints []k8sproxy.Endpoint, clusterEndpoints []k8sproxy.Endpoint) (binding.GroupIDType, bool) {
+func (p *proxier) installServiceGroup(svcPortName k8sproxy.ServicePortName, needUpdate, local, withSessionAffinity bool, endpoints []k8sproxy.Endpoint) (binding.GroupIDType, bool) {
 	groupID, exists := p.groupCounter.Get(svcPortName, local)
 	if exists && !needUpdate {
 		return groupID, true
@@ -235,10 +263,6 @@ func (p *proxier) installServiceGroup(svcPortName k8sproxy.ServicePortName, need
 				p.groupCounter.Recycle(svcPortName, local)
 			}
 		}()
-	}
-	endpoints := clusterEndpoints
-	if local {
-		endpoints = localEndpoints
 	}
 	if err := p.ofClient.InstallServiceGroup(groupID, withSessionAffinity, endpoints); err != nil {
 		klog.ErrorS(err, "Error when installing group of Endpoints for Service", "ServicePortName", svcPortName, "local", local)
@@ -366,7 +390,7 @@ func smallSliceDifference(s1, s2 []string) []string {
 	return diff
 }
 
-func (p *proxier) installNodePortService(externalGroupID, clusterGroupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+func (p *proxier) installNodePortService(localGroupID, clusterGroupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, trafficPolicyLocal bool, affinityTimeout uint16) error {
 	if svcPort == 0 {
 		return nil
 	}
@@ -374,7 +398,19 @@ func (p *proxier) installNodePortService(externalGroupID, clusterGroupID binding
 	if p.isIPv6 {
 		svcIP = agentconfig.VirtualNodePortDNATIPv6
 	}
-	if err := p.ofClient.InstallServiceFlows(externalGroupID, clusterGroupID, svcIP, svcPort, protocol, affinityTimeout, true, false); err != nil {
+	if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
+		ServiceIP:          svcIP,
+		ServicePort:        svcPort,
+		Protocol:           protocol,
+		TrafficPolicyLocal: trafficPolicyLocal,
+		LocalGroupID:       localGroupID,
+		ClusterGroupID:     clusterGroupID,
+		AffinityTimeout:    affinityTimeout,
+		IsExternal:         true,
+		IsNodePort:         true,
+		IsNested:           false, // Unsupported for NodePort
+		IsDSR:              false, // Unsupported because external traffic has been DNAT'd in host network before it's forwarded to OVS.
+	}); err != nil {
 		return fmt.Errorf("failed to install NodePort load balancing flows: %w", err)
 	}
 	if err := p.routeClient.AddNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
@@ -400,10 +436,30 @@ func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Prot
 	return nil
 }
 
-func (p *proxier) installExternalIPService(svcInfoStr string, externalGroupID, clusterGroupID binding.GroupIDType, externalIPStrings []string, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+func (p *proxier) installExternalIPService(svcInfoStr string,
+	localGroupID,
+	clusterGroupID binding.GroupIDType,
+	externalIPStrings []string,
+	svcPort uint16,
+	protocol binding.Protocol,
+	trafficPolicyLocal bool,
+	affinityTimeout uint16,
+	loadBalancerMode agentconfig.LoadBalancerMode) error {
 	for _, externalIP := range externalIPStrings {
 		ip := net.ParseIP(externalIP)
-		if err := p.ofClient.InstallServiceFlows(externalGroupID, clusterGroupID, ip, svcPort, protocol, affinityTimeout, true, false); err != nil {
+		if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
+			ServiceIP:          ip,
+			ServicePort:        svcPort,
+			Protocol:           protocol,
+			TrafficPolicyLocal: trafficPolicyLocal,
+			LocalGroupID:       localGroupID,
+			ClusterGroupID:     clusterGroupID,
+			AffinityTimeout:    affinityTimeout,
+			IsExternal:         true,
+			IsNodePort:         false,
+			IsNested:           false, // Unsupported for ExternalIP
+			IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+		}); err != nil {
 			return fmt.Errorf("failed to install ExternalIP load balancing flows: %w", err)
 		}
 		if err := p.addRouteForServiceIP(svcInfoStr, ip, p.routeClient.AddExternalIPRoute); err != nil {
@@ -426,11 +482,31 @@ func (p *proxier) uninstallExternalIPService(svcInfoStr string, externalIPString
 	return nil
 }
 
-func (p *proxier) installLoadBalancerService(svcInfoStr string, externalGroupID, clusterGroupID binding.GroupIDType, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+func (p *proxier) installLoadBalancerService(svcInfoStr string,
+	localGroupID,
+	clusterGroupID binding.GroupIDType,
+	loadBalancerIPStrings []string,
+	svcPort uint16,
+	protocol binding.Protocol,
+	trafficPolicyLocal bool,
+	affinityTimeout uint16,
+	loadBalancerMode agentconfig.LoadBalancerMode) error {
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
 			ip := net.ParseIP(ingress)
-			if err := p.ofClient.InstallServiceFlows(externalGroupID, clusterGroupID, ip, svcPort, protocol, affinityTimeout, true, false); err != nil {
+			if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
+				ServiceIP:          ip,
+				ServicePort:        svcPort,
+				Protocol:           protocol,
+				TrafficPolicyLocal: trafficPolicyLocal,
+				LocalGroupID:       localGroupID,
+				ClusterGroupID:     clusterGroupID,
+				AffinityTimeout:    affinityTimeout,
+				IsExternal:         true,
+				IsNodePort:         false,
+				IsNested:           false, // Unsupported for LoadBalancerIP
+				IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+			}); err != nil {
 				return fmt.Errorf("failed to install LoadBalancer load balancing flows: %w", err)
 			}
 			if p.proxyAll {
@@ -519,7 +595,8 @@ func (p *proxier) installServices() {
 				svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType() || // All Service flows use it.
 				svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds() || // All Service flows use it.
 				svcInfo.ExternalPolicyLocal() != pSvcInfo.ExternalPolicyLocal() || // It affects the group ID used by external Service flows.
-				svcInfo.InternalPolicyLocal() != pSvcInfo.InternalPolicyLocal() // It affects the group ID used by internal Service flows.
+				svcInfo.InternalPolicyLocal() != pSvcInfo.InternalPolicyLocal() || // It affects the group ID used by internal Service flows.
+				svcInfo.LoadBalancerMode != pSvcInfo.LoadBalancerMode
 			needUpdateServiceExternalAddresses = serviceExternalAddressesChanged(svcInfo, pSvcInfo)
 			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
 				pSvcInfo.ExternalPolicyLocal() != svcInfo.ExternalPolicyLocal() ||
@@ -548,41 +625,26 @@ func (p *proxier) installServices() {
 		}
 
 		withSessionAffinity := svcInfo.SessionAffinityType() == corev1.ServiceAffinityClientIP
-		internalPolicyLocal := svcInfo.InternalPolicyLocal()
-		externalPolicyLocal := svcInfo.ExternalPolicyLocal()
-		var internalGroupID, externalGroupID, clusterGroupID binding.GroupIDType
-		// Ensure a group for internal traffic exist.
-		if internalGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, internalPolicyLocal, withSessionAffinity, localEndpoints, clusterEndpoints); !ok {
-			continue
-		}
-		// Ensure a group for external traffic exist if it's externally accessible, and remove the unneeded group.
-		if svcInfo.ExternallyAccessible() {
-			if externalPolicyLocal != internalPolicyLocal {
-				if externalGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, externalPolicyLocal, withSessionAffinity, localEndpoints, clusterEndpoints); !ok {
-					continue
-				}
-				if externalPolicyLocal {
-					clusterGroupID = internalGroupID
-				} else {
-					clusterGroupID = externalGroupID
-				}
-			} else {
-				externalGroupID = internalGroupID
-				if externalPolicyLocal {
-					if clusterGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, false, withSessionAffinity, nil, clusterEndpoints); !ok {
-						continue
-					}
-				} else {
-					// Ensure the other group is removed as ExternalTrafficPolicy is the same as InternalTrafficPolicy.
-					if !p.removeServiceGroup(svcPortName, !internalPolicyLocal) {
-						continue
-					}
-					clusterGroupID = externalGroupID
-				}
+		var localGroupID, clusterGroupID binding.GroupIDType
+		// categorizeEndpoints has checked if localGroup and clusterGroup should exist. We just create the group if its
+		// Endpoints is not nil.
+		// Note that nil represents the group should not exist and empty represents the group should exist but there is
+		// no available Endpoints.
+		if localEndpoints != nil {
+			if localGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, true, withSessionAffinity, localEndpoints); !ok {
+				continue
 			}
 		} else {
-			// Ensure the other group is removed as we only need a group for internal traffic.
-			if !p.removeServiceGroup(svcPortName, !internalPolicyLocal) {
+			if !p.removeServiceGroup(svcPortName, true) {
+				continue
+			}
+		}
+		if clusterEndpoints != nil {
+			if clusterGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, false, withSessionAffinity, clusterEndpoints); !ok {
+				continue
+			}
+		} else {
+			if !p.removeServiceGroup(svcPortName, false) {
 				continue
 			}
 		}
@@ -594,11 +656,11 @@ func (p *proxier) installServices() {
 					continue
 				}
 			}
-			if !p.installServiceFlows(svcInfo, internalGroupID, externalGroupID, clusterGroupID) {
+			if !p.installServiceFlows(svcInfo, localGroupID, clusterGroupID) {
 				continue
 			}
 		} else if needUpdateServiceExternalAddresses {
-			if !p.updateServiceExternalAddresses(pSvcInfo, svcInfo, externalGroupID, clusterGroupID) {
+			if !p.updateServiceExternalAddresses(pSvcInfo, svcInfo, localGroupID, clusterGroupID) {
 				continue
 			}
 		}
@@ -606,6 +668,19 @@ func (p *proxier) installServices() {
 		p.serviceInstalledMap[svcPortName] = svcPort
 		p.addServiceByIP(svcInfoStr, svcPortName)
 	}
+}
+
+// getLoadBalancerMode returns the default load balancer mode if the Service doesn't have the annotation overriding it.
+// Otherwise, it returns the mode specified in the annotation.
+func (p *proxier) getLoadBalancerMode(svcInfo *types.ServiceInfo) agentconfig.LoadBalancerMode {
+	if svcInfo.LoadBalancerMode == nil {
+		return p.defaultLoadBalancerMode
+	}
+	if *svcInfo.LoadBalancerMode == agentconfig.LoadBalancerModeDSR && !features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) {
+		klog.InfoS("The Service's load balancer mode is set to DSR but won't take effect as feature gate LoadBalancerModeDSR is not enabled", "ServiceInfo", svcInfo.String())
+		return p.defaultLoadBalancerMode
+	}
+	return *svcInfo.LoadBalancerMode
 }
 
 func getAffinityTimeout(svcInfo *types.ServiceInfo) uint16 {
@@ -629,7 +704,7 @@ func getAffinityTimeout(svcInfo *types.ServiceInfo) uint16 {
 	return uint16(affinityTimeout)
 }
 
-func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, internalGroupID, externalGroupID, clusterGroupID binding.GroupIDType) bool {
+func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, localGroupID, clusterGroupID binding.GroupIDType) bool {
 	svcInfoStr := svcInfo.String()
 	svcPort := uint16(svcInfo.Port())
 	svcProto := svcInfo.OFProtocol
@@ -641,27 +716,40 @@ func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, internalGroupI
 		// It is true only when the Service is an Antrea Multi-cluster Service for now.
 		isNestedService = svcInfo.IsNested
 	}
+	loadBalancerMode := p.getLoadBalancerMode(svcInfo)
 
 	// Install ClusterIP flows.
-	if err := p.ofClient.InstallServiceFlows(internalGroupID, binding.GroupIDType(0), svcInfo.ClusterIP(), svcPort, svcProto, affinityTimeout, false, isNestedService); err != nil {
+	if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
+		ServiceIP:          svcInfo.ClusterIP(),
+		ServicePort:        svcPort,
+		Protocol:           svcProto,
+		TrafficPolicyLocal: svcInfo.InternalPolicyLocal(),
+		LocalGroupID:       localGroupID,
+		ClusterGroupID:     clusterGroupID,
+		AffinityTimeout:    affinityTimeout,
+		IsExternal:         false,
+		IsNodePort:         false,
+		IsNested:           isNestedService,
+		IsDSR:              false, // not applicable for ClusterIP
+	}); err != nil {
 		klog.ErrorS(err, "Error when installing ClusterIP flows for Service", "ServiceInfo", svcInfoStr)
 		return false
 	}
 	if p.proxyAll {
 		// Install NodePort flows and configurations.
-		if err := p.installNodePortService(externalGroupID, clusterGroupID, uint16(svcInfo.NodePort()), svcProto, affinityTimeout); err != nil {
+		if err := p.installNodePortService(localGroupID, clusterGroupID, uint16(svcInfo.NodePort()), svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout); err != nil {
 			klog.ErrorS(err, "Error when installing NodePort flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
 		// Install ExternalIP flows and configurations.
-		if err := p.installExternalIPService(svcInfoStr, externalGroupID, clusterGroupID, svcInfo.ExternalIPStrings(), svcPort, svcProto, affinityTimeout); err != nil {
+		if err := p.installExternalIPService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.ExternalIPStrings(), svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
 			klog.ErrorS(err, "Error when installing ExternalIP flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
 	}
 	// Install LoadBalancer flows and configurations.
 	if p.proxyLoadBalancerIPs {
-		if err := p.installLoadBalancerService(svcInfoStr, externalGroupID, clusterGroupID, svcInfo.LoadBalancerIPStrings(), svcPort, svcProto, affinityTimeout); err != nil {
+		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.LoadBalancerIPStrings(), svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
 			klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
@@ -669,7 +757,7 @@ func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, internalGroupI
 	return true
 }
 
-func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.ServiceInfo, externalGroupID, clusterGroupID binding.GroupIDType) bool {
+func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.ServiceInfo, localGroupID, clusterGroupID binding.GroupIDType) bool {
 	pSvcInfoStr := pSvcInfo.String()
 	svcInfoStr := svcInfo.String()
 	pSvcPort := uint16(pSvcInfo.Port())
@@ -679,14 +767,14 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 	pSvcProto := pSvcInfo.OFProtocol
 	svcProto := svcInfo.OFProtocol
 	affinityTimeout := getAffinityTimeout(svcInfo)
-
+	loadBalancerMode := p.getLoadBalancerMode(svcInfo)
 	if p.proxyAll {
 		if pSvcNodePort != svcNodePort {
 			if err := p.uninstallNodePortService(pSvcNodePort, pSvcProto); err != nil {
 				klog.ErrorS(err, "Error when uninstalling NodePort flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 				return false
 			}
-			if err := p.installNodePortService(externalGroupID, clusterGroupID, svcNodePort, svcProto, affinityTimeout); err != nil {
+			if err := p.installNodePortService(localGroupID, clusterGroupID, svcNodePort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout); err != nil {
 				klog.ErrorS(err, "Error when installing NodePort flows and configurations for Service", "ServiceInfo", svcInfoStr)
 				return false
 			}
@@ -697,7 +785,7 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 			klog.ErrorS(err, "Error when uninstalling ExternalIP flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 			return false
 		}
-		if err := p.installExternalIPService(svcInfoStr, externalGroupID, clusterGroupID, addedExternalIPs, svcPort, svcProto, affinityTimeout); err != nil {
+		if err := p.installExternalIPService(svcInfoStr, localGroupID, clusterGroupID, addedExternalIPs, svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
 			klog.ErrorS(err, "Error when installing ExternalIP flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
@@ -709,7 +797,7 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 			klog.ErrorS(err, "Error when uninstalling LoadBalancer flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 			return false
 		}
-		if err := p.installLoadBalancerService(svcInfoStr, externalGroupID, clusterGroupID, addedLoadBalancerIPs, svcPort, svcProto, affinityTimeout); err != nil {
+		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, addedLoadBalancerIPs, svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
 			klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
@@ -1109,10 +1197,12 @@ func newProxier(
 	ofClient openflow.Client,
 	isIPv6 bool,
 	routeClient route.Interface,
+	nodeIPChecker nodeip.Checker,
 	nodePortAddresses []net.IP,
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
+	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	groupCounter types.GroupCounter,
 	supportNestedService bool) (*proxier, error) {
 	recorder := record.NewBroadcaster().NewRecorder(
@@ -1163,6 +1253,7 @@ func newProxier(
 	serviceLabelSelector = serviceLabelSelector.Add(*serviceProxyNameSelector, *nonHeadlessServiceSelector)
 
 	p := &proxier{
+		nodeIPChecker:             nodeIPChecker,
 		serviceConfig:             config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:          newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
 		serviceChanges:            newServiceChangesTracker(recorder, ipFamily, serviceLabelSelector, skipServices),
@@ -1187,6 +1278,7 @@ func newProxier(
 		serviceHealthServer:       serviceHealthServer,
 		numLocalEndpoints:         map[apimachinerytypes.NamespacedName]int{},
 		supportNestedService:      supportNestedService,
+		defaultLoadBalancerMode:   defaultLoadBalancerMode,
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
@@ -1241,11 +1333,13 @@ func newDualStackProxier(
 	informerFactory informers.SharedInformerFactory,
 	ofClient openflow.Client,
 	routeClient route.Interface,
+	nodeIPChecker nodeip.Checker,
 	nodePortAddressesIPv4 []net.IP,
 	nodePortAddressesIPv6 []net.IP,
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
+	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	v4groupCounter types.GroupCounter,
 	v6groupCounter types.GroupCounter,
 	nestedServiceSupport bool) (*metaProxierWrapper, error) {
@@ -1258,10 +1352,12 @@ func newDualStackProxier(
 		ofClient,
 		false,
 		routeClient,
+		nodeIPChecker,
 		nodePortAddressesIPv4,
 		proxyAllEnabled,
 		skipServices,
 		proxyLoadBalancerIPs,
+		defaultLoadBalancerMode,
 		v4groupCounter,
 		nestedServiceSupport)
 	if err != nil {
@@ -1275,10 +1371,12 @@ func newDualStackProxier(
 		ofClient,
 		true,
 		routeClient,
+		nodeIPChecker,
 		nodePortAddressesIPv6,
 		proxyAllEnabled,
 		skipServices,
 		proxyLoadBalancerIPs,
+		defaultLoadBalancerMode,
 		v6groupCounter,
 		nestedServiceSupport)
 	if err != nil {
@@ -1295,11 +1393,13 @@ func NewProxier(hostname string,
 	k8sClient clientset.Interface,
 	ofClient openflow.Client,
 	routeClient route.Interface,
+	nodeIPChecker nodeip.Checker,
 	v4Enabled bool,
 	v6Enabled bool,
 	nodePortAddressesIPv4 []net.IP,
 	nodePortAddressesIPv6 []net.IP,
 	proxyConfig antreaconfig.AntreaProxyConfig,
+	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	v4GroupCounter types.GroupCounter,
 	v6GroupCounter types.GroupCounter,
 	nestedServiceSupport bool,
@@ -1319,11 +1419,13 @@ func NewProxier(hostname string,
 			informerFactory,
 			ofClient,
 			routeClient,
+			nodeIPChecker,
 			nodePortAddressesIPv4,
 			nodePortAddressesIPv6,
 			proxyAllEnabled,
 			skipServices,
 			proxyLoadBalancerIPs,
+			defaultLoadBalancerMode,
 			v4GroupCounter,
 			v6GroupCounter,
 			nestedServiceSupport)
@@ -1338,10 +1440,12 @@ func NewProxier(hostname string,
 			ofClient,
 			false,
 			routeClient,
+			nodeIPChecker,
 			nodePortAddressesIPv4,
 			proxyAllEnabled,
 			skipServices,
 			proxyLoadBalancerIPs,
+			defaultLoadBalancerMode,
 			v4GroupCounter,
 			nestedServiceSupport)
 		if err != nil {
@@ -1355,10 +1459,12 @@ func NewProxier(hostname string,
 			ofClient,
 			true,
 			routeClient,
+			nodeIPChecker,
 			nodePortAddressesIPv6,
 			proxyAllEnabled,
 			skipServices,
 			proxyLoadBalancerIPs,
+			defaultLoadBalancerMode,
 			v6GroupCounter,
 			nestedServiceSupport)
 		if err != nil {
