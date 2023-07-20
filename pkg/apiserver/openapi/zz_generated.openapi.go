@@ -85,6 +85,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicyList":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination":                                schema_pkg_apis_crd_v1beta1_Destination(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress":                                     schema_pkg_apis_crd_v1beta1_Egress(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressList":                                 schema_pkg_apis_crd_v1beta1_EgressList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec":                                 schema_pkg_apis_crd_v1beta1_EgressSpec(ref),
@@ -99,11 +100,14 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec":                                  schema_pkg_apis_crd_v1beta1_GroupSpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus":                                schema_pkg_apis_crd_v1beta1_GroupStatus(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol":                               schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader":                      schema_pkg_apis_crd_v1beta1_ICMPEchoRequestHeader(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol":                               schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol":                               schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock":                                    schema_pkg_apis_crd_v1beta1_IPBlock(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader":                                   schema_pkg_apis_crd_v1beta1_IPHeader(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header":                                 schema_pkg_apis_crd_v1beta1_IPv6Header(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol":                                 schema_pkg_apis_crd_v1beta1_L7Protocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName":                             schema_pkg_apis_crd_v1beta1_NamespacedName(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy":                              schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref),
@@ -115,14 +119,25 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol":                      schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec":                          schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus":                        schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult":                                 schema_pkg_apis_crd_v1beta1_NodeResult(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                    schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Observation":                                schema_pkg_apis_crd_v1beta1_Observation(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Packet":                                     schema_pkg_apis_crd_v1beta1_Packet(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces":                             schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService":                                schema_pkg_apis_crd_v1beta1_PeerService(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Rule":                                       schema_pkg_apis_crd_v1beta1_Rule(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Source":                                     schema_pkg_apis_crd_v1beta1_Source(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader":                                  schema_pkg_apis_crd_v1beta1_TCPHeader(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol":                                schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierList":                                   schema_pkg_apis_crd_v1beta1_TierList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec":                                   schema_pkg_apis_crd_v1beta1_TierSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow":                                  schema_pkg_apis_crd_v1beta1_Traceflow(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowList":                              schema_pkg_apis_crd_v1beta1_TraceflowList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec":                              schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus":                            schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader":                            schema_pkg_apis_crd_v1beta1_TransportHeader(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader":                                  schema_pkg_apis_crd_v1beta1_UDPHeader(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":         schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":                schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
@@ -3209,6 +3224,47 @@ func schema_pkg_apis_crd_v1beta1_ControllerCondition(ref common.ReferenceCallbac
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_Destination(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Destination describes the destination spec of the traceflow.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace is the destination namespace.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pod is the destination pod, exclusive with destination service.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"service": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Service is the destination service, exclusive with destination pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ip": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IP is the destination IPv4 or IPv6 address.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3822,6 +3878,33 @@ func schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref common.ReferenceCallback) comm
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_ICMPEchoRequestHeader(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ICMPEchoRequestHeader describes spec of an ICMP echo request header.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"id": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ID is the ICMPEchoRequestHeader ID.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"sequence": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Sequence is the ICMPEchoRequestHeader sequence.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3894,6 +3977,40 @@ func schema_pkg_apis_crd_v1beta1_IPBlock(ref common.ReferenceCallback) common.Op
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_IPHeader(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPHeader describes spec of an IPv4 header.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"protocol": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Protocol is the IP protocol.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ttl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTL is the IP TTL.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"flags": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Flags is the flags for IP.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3949,6 +4066,33 @@ func schema_pkg_apis_crd_v1beta1_IPRange(ref common.ReferenceCallback) common.Op
 							Description: "The end IP of the range, e.g. 10.10.20.20, inclusive.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPv6Header(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPv6Header describes spec of an IPv6 header.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"nextHeader": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NextHeader is the IPv6 protocol.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"hopLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HopLimit is the IPv6 Hop Limit.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
@@ -4474,6 +4618,55 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref common.ReferenceCallbac
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_NodeResult(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"node": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Node is the node of the observation.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"role": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Role of the node like sender, receiver, etc.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"timestamp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Timestamp is the timestamp of the observations on the node.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"observations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Observations includes all observations from sender nodes, receiver ones, etc.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Observation"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Observation"},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_OVSInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4511,6 +4704,152 @@ func schema_pkg_apis_crd_v1beta1_OVSInfo(ref common.ReferenceCallback) common.Op
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Observation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Observation describes those from sender nodes or receiver nodes.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"component": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Component is the observation component.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"componentInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ComponentInfo is the extension of Component field.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Action is the action to the observation.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pod is the combination of Pod name and Pod Namespace.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dstMAC": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DstMAC is the destination MAC.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"networkPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NetworkPolicy is the combination of Namespace and NetworkPolicyName.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"egress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress is the name of the Egress.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ttl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTL is the observation TTL.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"translatedSrcIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TranslatedSrcIP is the translated source IP.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"translatedDstIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TranslatedDstIP is the translated destination IP.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"tunnelDstIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TunnelDstIP is the tunnel destination IP.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"egressIP": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Packet(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Packet includes header info.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"srcIP": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"dstIP": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"length": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Length is the IP packet length (includes the IPv4 or IPv6 header length).",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipHeader": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader"),
+						},
+					},
+					"ipv6Header": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header"),
+						},
+					},
+					"transportHeader": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header", "antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader"},
 	}
 }
 
@@ -4706,6 +5045,74 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_Source(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Source describes the source spec of the traceflow.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace is the source namespace.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pod is the source pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ip": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IP is the source IPv4 or IPv6 address. IP as the source is supported only for live-traffic Traceflow.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TCPHeader(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TCPHeader describes spec of a TCP header.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"srcPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SrcPort is the source port.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"dstPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DstPort is the destination port.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"flags": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Flags are flags in the header.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_TLSProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4841,6 +5248,273 @@ func schema_pkg_apis_crd_v1beta1_TierSpec(ref common.ReferenceCallback) common.O
 					},
 				},
 				Required: []string{"priority"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Traceflow(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TraceflowList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TraceflowSpec describes the spec of the traceflow.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Source"),
+						},
+					},
+					"destination": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Destination"),
+						},
+					},
+					"packet": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Packet"),
+						},
+					},
+					"liveTraffic": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LiveTraffic indicates the Traceflow is to trace the live traffic rather than an injected packet, when set to true. The first packet of the first connection that matches the packet spec will be traced.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"droppedOnly": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DroppedOnly indicates only the dropped packet should be captured in a live-traffic Traceflow.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"timeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Timeout specifies the timeout of the Traceflow in seconds. Defaults to 20 seconds if not set.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination", "antrea.io/antrea/pkg/apis/crd/v1beta1.Packet", "antrea.io/antrea/pkg/apis/crd/v1beta1.Source"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TraceflowStatus describes current status of the traceflow.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Phase is the Traceflow phase.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reason is a message indicating the reason of the traceflow's current phase.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"startTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StartTime is the time at which the Traceflow as started by the Antrea Controller. Before K8s v1.20, null values (field not set) are not pruned, and a CR where a metav1.Time field is not set would fail OpenAPI validation (type string). The recommendation seems to be to use a pointer instead, and the field will be omitted when serializing. See https://github.com/kubernetes/kubernetes/issues/86811",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"dataplaneTag": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DataplaneTag is a tag to identify a traceflow session across Nodes.",
+							Type:        []string{"integer"},
+							Format:      "byte",
+						},
+					},
+					"results": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Results is the collection of all observations on different nodes.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult"),
+									},
+								},
+							},
+						},
+					},
+					"capturedPacket": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CapturedPacket is the captured packet in live-traffic Traceflow.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Packet"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult", "antrea.io/antrea/pkg/apis/crd/v1beta1.Packet", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TransportHeader(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TransportHeader describes spec of a TransportHeader.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"icmp": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader"),
+						},
+					},
+					"udp": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader"),
+						},
+					},
+					"tcp": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_UDPHeader(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UDPHeader describes spec of a UDP header.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"srcPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SrcPort is the source port.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"dstPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DstPort is the destination port.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
 			},
 		},
 	}

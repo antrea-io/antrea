@@ -57,7 +57,7 @@ const (
 )
 
 // List the supported protocols and their codes in traceflow.
-// According to code in Antrea agent and controller, default protocol is ICMP if protocol is not inputted by users.
+// According to code in Antrea agent and controller, default protocol is ICMP if protocol is not provided by users.
 const (
 	ICMPProtocolNumber int32 = 1
 	IGMPProtocolNumber int32 = 2
@@ -92,12 +92,6 @@ var SupportedDestinationTypes = []string{
 	DstTypeService,
 	DstTypeIPv4,
 }
-
-// List the ethernet types.
-const (
-	EtherTypeIPv4 uint16 = 0x0800
-	EtherTypeIPv6 uint16 = 0x86DD
-)
 
 // Default timeout in seconds.
 const DefaultTraceflowTimeout uint16 = 20
