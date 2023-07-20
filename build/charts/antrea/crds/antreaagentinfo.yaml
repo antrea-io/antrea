@@ -13,7 +13,105 @@ spec:
       schema:
         openAPIV3Schema:
           type: object
-          x-kubernetes-preserve-unknown-fields: true
+          properties:
+            version:
+              type: string
+            agentConditions:
+              type: array
+              items:
+                type: object
+                required:
+                - type
+                - status
+                - lastHeartbeatTime
+                properties:
+                  lastHeartbeatTime:
+                    type: string
+                    format: date-time
+                  type:
+                    type: string
+                    enum: ['AgentHealthy', 'ControllerConnectionUp', 'OVSDBConnectionUp', 'OpenflowConnectionUp']
+                  status:
+                    type: string
+                    enum: ['True', 'False', 'Unknown']
+                  reason:
+                    type: string
+                  message:
+                    type: string
+            localPodNum:
+              type: integer
+              format: int32
+            nodePortLocalPortRange:
+              type: string
+            nodeSubnets:
+              type: array
+              items:
+                type: string
+            apiCABundle:
+              type: string
+              format: byte
+            ovsInfo:
+              type: object
+              properties:
+                version:
+                  type: string
+                bridgeName:
+                  type: string
+                flowTable:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int32
+            networkPolicyControllerInfo:
+              type: object
+              properties:
+                networkPolicyNum:
+                  type: integer
+                  format: int32
+                addressGroupNum:
+                  type: integer
+                  format: int32
+                appliedToGroupNum:
+                  type: integer
+                  format: int32
+            apiPort:
+              type: integer
+              minimum: 1
+              maximum: 65535
+            podRef:
+              type: object
+              properties:
+                kind:
+                  type: string
+                namespace:
+                  type: string
+                name:
+                  type: string
+                uid:
+                  type: string
+                apiVersion:
+                  type: string
+                resourceVersion:
+                  type: string
+                fieldPath:
+                  type: string
+            nodeRef:
+              type: object
+              properties:
+                kind:
+                  type: string
+                namespace:
+                  type: string
+                name:
+                  type: string
+                uid:
+                  type: string
+                apiVersion:
+                  type: string
+                resourceVersion:
+                  type: string
+                fieldPath:
+                  type: string
       additionalPrinterColumns:
         - description: Health status of this Agent
           jsonPath: ".agentConditions[?(@.type=='AgentHealthy')].status"
