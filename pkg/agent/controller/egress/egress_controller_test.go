@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -580,12 +581,12 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: nil},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: "external-ip-pool"},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode", LastTransitionTime: metav1.NewTime(time.Time{})}}},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -630,7 +631,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: "external-ip-pool"},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode", LastTransitionTime: metav1.NewTime(time.Time{})}}},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
@@ -738,7 +739,7 @@ func TestSyncEgress(t *testing.T) {
 			for _, expectedEgress := range tt.expectedEgresses {
 				gotEgress, err := c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), expectedEgress.Name, metav1.GetOptions{})
 				require.NoError(t, err)
-				assert.Equal(t, expectedEgress, gotEgress)
+				equalEgressNoTimestamp(t, expectedEgress, gotEgress)
 			}
 		})
 	}
@@ -1199,4 +1200,119 @@ func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface
 		queue.Done(key)
 	}
 	assert.Equal(t, expectedItems, actualItems)
+}
+
+func TestCompareEgressStatus(t *testing.T) {
+	newIPAssignedCondition := func(c v1.ConditionStatus, reason string, message string) crdv1b1.EgressCondition {
+		return crdv1b1.EgressCondition{
+			Type:               crdv1b1.IPAssigned,
+			Status:             c,
+			Message:            message,
+			Reason:             reason,
+			LastTransitionTime: metav1.Now(),
+		}
+	}
+	tests := []struct {
+		name           string
+		status1        crdv1b1.EgressStatus
+		status2        crdv1b1.EgressStatus
+		expectedReturn bool // true if equal, false if not
+	}{
+		{
+			name: "Different EgressIP",
+			status1: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+			},
+			status2: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.2",
+				EgressNode: "node1",
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "Different EgressNode",
+			status1: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+			},
+			status2: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node2",
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "Egresses are the same",
+			status1: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newIPAssignedCondition(v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			status2: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newIPAssignedCondition(v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			expectedReturn: true,
+		},
+		{
+			name: "EgressStatus Condition is different",
+			status1: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newIPAssignedCondition(v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			status2: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newIPAssignedCondition(v1.ConditionFalse, "NoAvailableNode", "No available Node can be elected as EgressNode"),
+				},
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "New Status has Condition that old one doesn't",
+			status1: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{},
+			},
+			status2: crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newIPAssignedCondition(v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			expectedReturn: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compareEgressStatus(tt.status1, tt.status2)
+			assert.Equal(t, tt.expectedReturn, result)
+		})
+	}
+}
+
+func equalEgressNoTimestamp(t *testing.T, expectedEgress, actualEgress *crdv1b1.Egress) bool {
+	if expectedEgress == nil || actualEgress == nil || expectedEgress.Status.Conditions == nil || actualEgress.Status.Conditions == nil {
+		return assert.Equal(t, expectedEgress, actualEgress)
+	}
+	for i := range expectedEgress.Status.Conditions {
+		expectedEgress.Status.Conditions[i].LastTransitionTime = metav1.NewTime(time.Time{})
+	}
+	for i := range actualEgress.Status.Conditions {
+		actualEgress.Status.Conditions[i].LastTransitionTime = metav1.NewTime(time.Time{})
+	}
+	t.Log(actualEgress.Status.Conditions)
+	return assert.Equal(t, expectedEgress, actualEgress)
 }

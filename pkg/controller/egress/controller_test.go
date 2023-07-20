@@ -742,7 +742,7 @@ func TestSyncEgressIP(t *testing.T) {
 			go controller.externalIPAllocator.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 			controller.restoreIPAllocations(tt.existingEgresses)
-			getEgressIP, err := controller.syncEgressIP(tt.inputEgress)
+			getEgressIP, _, err := controller.syncEgressIP(tt.inputEgress)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -765,4 +765,101 @@ func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolNam
 		return eip.Status.Usage.Used == used, nil
 	})
 	assert.NoError(t, err)
+}
+
+func TestEgressAllocatedStatus(t *testing.T) {
+	tests := []struct {
+		name                          string
+		existingEgresses              []*v1beta1.Egress
+		existingExternalIPPool        *v1beta1.ExternalIPPool
+		inputEgress                   *v1beta1.Egress
+		expectedUpdate                bool
+		expectedEgressConditionType   v1beta1.EgressConditionType
+		expectedEgressConditionStatus v1.ConditionStatus
+		expectedEgressConditionReason string
+	}{
+		{
+			name:                   "Manually assigned EgressIP",
+			existingExternalIPPool: newExternalIPPool("ipPoolA", "1.1.1.0/32", "", ""),
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "1.1.1.1",
+					ExternalIPPool: "",
+				},
+			},
+			expectedUpdate: false,
+		},
+		{
+			name:                   "Available IP to be allocated",
+			existingExternalIPPool: newExternalIPPool("ipPoolA", "1.1.1.0/24", "", ""),
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "",
+					ExternalIPPool: "ipPoolA",
+				},
+			},
+			expectedUpdate:                true,
+			expectedEgressConditionType:   v1beta1.IPAllocated,
+			expectedEgressConditionStatus: v1.ConditionTrue,
+			expectedEgressConditionReason: "Allocated",
+		},
+		{
+			name:                   "No available IP to be allocated",
+			existingExternalIPPool: newExternalIPPool("ipPoolA", "1.1.1.0/32", "", ""),
+			existingEgresses: []*v1beta1.Egress{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+					Spec: v1beta1.EgressSpec{
+						EgressIP:       "",
+						ExternalIPPool: "ipPoolA",
+					},
+				},
+			},
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "",
+					ExternalIPPool: "ipPoolA",
+				},
+			},
+			expectedUpdate:                true,
+			expectedEgressConditionType:   v1beta1.IPAllocated,
+			expectedEgressConditionStatus: v1.ConditionFalse,
+			expectedEgressConditionReason: "AllocationError",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			var fakeObjects []runtime.Object
+			fakeObjects = append(fakeObjects, tt.inputEgress, tt.existingExternalIPPool)
+			controller := newController(nil, fakeObjects)
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+			controller.restoreIPAllocations(tt.existingEgresses)
+			controller.addEgress(tt.inputEgress)
+			controller.syncEgress(tt.inputEgress.Name)
+			eg, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), tt.inputEgress.Name, metav1.GetOptions{})
+			assert.NoError(t, err)
+
+			if tt.expectedUpdate {
+				assert.Eventually(t, func() bool {
+					eg, err = controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), tt.inputEgress.Name, metav1.GetOptions{})
+					if len(eg.Status.Conditions) == 0 {
+						return false
+					}
+					return assert.Equal(t, tt.expectedEgressConditionStatus, eg.Status.Conditions[0].Status) && assert.Equal(t, tt.expectedEgressConditionType, eg.Status.Conditions[0].Type) && assert.Equal(t, tt.expectedEgressConditionReason, eg.Status.Conditions[0].Reason)
+				}, time.Second, 50*time.Millisecond, "Egress status was not updated properly")
+			} else {
+				assert.Len(t, eg.Status.Conditions, 0)
+			}
+		})
+	}
 }

@@ -836,6 +836,23 @@ type EgressStatus struct {
 	// EgressIP indicates the effective Egress IP for the selected workloads. It could be empty if the Egress IP in spec
 	// is not assigned to any Node. It's also useful when there are more than one Egress IP specified in spec.
 	EgressIP string `json:"egressIP"`
+
+	Conditions []EgressCondition `json:"conditions,omitempty"`
+}
+
+type EgressConditionType string
+
+const (
+	IPAllocated EgressConditionType = "IPAllocated"
+	IPAssigned  EgressConditionType = "IPAssigned"
+)
+
+type EgressCondition struct {
+	Type               EgressConditionType    `json:"type,omitempty"`
+	Status             corev1.ConditionStatus `json:"status,omitempty"`
+	LastTransitionTime metav1.Time            `json:"lastTransitionTime,omitempty"`
+	Reason             string                 `json:"reason,omitempty"`
+	Message            string                 `json:"message,omitempty"`
 }
 
 // EgressSpec defines the desired state for Egress.

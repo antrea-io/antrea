@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -618,24 +619,62 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 	if egressIP != "" {
 		isLocal = c.localIPDetector.IsLocalIP(egressIP)
 	}
+
+	desiredStatus := &crdv1b1.EgressStatus{}
+	if isLocal {
+		desiredStatus.EgressNode = c.nodeName
+		desiredStatus.EgressIP = egressIP
+		if isEgressSchedulable(egress) {
+			desiredStatus.Conditions = []crdv1b1.EgressCondition{
+				{
+					Type:               crdv1b1.IPAssigned,
+					Status:             v1.ConditionTrue,
+					LastTransitionTime: metav1.Now(),
+					Reason:             "Assigned",
+					Message:            "EgressIP is successfully assigned to EgressNode",
+				},
+			}
+		}
+	} else if egressIP == "" {
+		// Select one Node to update false status among all Nodes.
+		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(egress.Spec.EgressIP, "")
+		if err != nil {
+			return err
+		}
+		// Skip if the Node is not the selected one.
+		if nodeToUpdateStatus != c.nodeName {
+			return nil
+		}
+		desiredStatus.EgressNode = ""
+		desiredStatus.EgressIP = ""
+		if isEgressSchedulable(egress) {
+			desiredStatus.Conditions = []crdv1b1.EgressCondition{
+				{
+					Type:               crdv1b1.IPAssigned,
+					Status:             v1.ConditionFalse,
+					LastTransitionTime: metav1.Now(),
+					Reason:             "NoAvailableNode",
+					Message:            "No available Node can be elected as EgressNode",
+				},
+			}
+		}
+	} else {
+		return nil
+	}
+
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if isLocal {
-			// Do nothing if the current EgressNode in status is already this Node.
-			if toUpdate.Status.EgressNode == c.nodeName && toUpdate.Status.EgressIP == egressIP {
-				return nil
-			}
-			toUpdate.Status.EgressNode = c.nodeName
-			toUpdate.Status.EgressIP = egressIP
-		} else {
-			// Do nothing if the current EgressNode in status is not this Node.
-			if toUpdate.Status.EgressNode != c.nodeName {
-				return nil
-			}
-			toUpdate.Status.EgressNode = ""
-			toUpdate.Status.EgressIP = ""
+		if compareEgressStatus(toUpdate.Status, *desiredStatus) {
+			return nil
 		}
+		for _, c := range toUpdate.Status.Conditions {
+			if c.Type != crdv1b1.IPAssigned {
+				desiredStatus.Conditions = append(desiredStatus.Conditions, c)
+			}
+		}
+		toUpdate.Status = *desiredStatus
+
 		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
 		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if updateErr != nil && errors.IsConflict(updateErr) {
@@ -1025,4 +1064,28 @@ func (c *EgressController) GetEgress(ns, podName string) (string, string, error)
 // An Egress is schedulable if its Egress IP is allocated from ExternalIPPool.
 func isEgressSchedulable(egress *crdv1b1.Egress) bool {
 	return egress.Spec.EgressIP != "" && egress.Spec.ExternalIPPool != ""
+}
+
+// compareEgressStatus compares two Egress Statuses, ignoring LastTransitionTime and conditions other than IPAssigned, returns true if they are equal.
+func compareEgressStatus(currentStatus, desiredStatus crdv1b1.EgressStatus) bool {
+	if currentStatus.EgressIP != desiredStatus.EgressIP || currentStatus.EgressNode != desiredStatus.EgressNode {
+		return false
+	}
+	getIPAssignedCondition := func(conditions []crdv1b1.EgressCondition) *crdv1b1.EgressCondition {
+		for _, c := range conditions {
+			if c.Type == crdv1b1.IPAssigned {
+				return &c
+			}
+		}
+		return nil
+	}
+	currentIPAssignedCondition := getIPAssignedCondition(currentStatus.Conditions)
+	desiredIPAssignedCondition := getIPAssignedCondition(desiredStatus.Conditions)
+	if currentIPAssignedCondition == nil && desiredIPAssignedCondition == nil {
+		return true
+	}
+	if currentIPAssignedCondition == nil || desiredIPAssignedCondition == nil {
+		return false
+	}
+	return currentIPAssignedCondition.Status == desiredIPAssignedCondition.Status && currentIPAssignedCondition.Reason == desiredIPAssignedCondition.Reason && currentIPAssignedCondition.Message == desiredIPAssignedCondition.Message
 }
