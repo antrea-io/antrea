@@ -794,9 +794,9 @@ spec:
                                     type: string
                                 type: object
                               tls:
-                                description: TLSProtocol matches TLS handshakes with
-                                  specific SNI. If the field is not provided, this
-                                  matches all TLS handshakes.
+                                description: TLSProtocol matches TLS handshake packets
+                                  with specific SNI. If the field is not provided,
+                                  this matches all TLS handshake packets.
                                 properties:
                                   sni:
                                     description: SNI (Server Name Indication) indicates
@@ -1709,9 +1709,9 @@ spec:
                                     type: string
                                 type: object
                               tls:
-                                description: TLSProtocol matches TLS handshakes with
-                                  specific SNI. If the field is not provided, this
-                                  matches all TLS handshakes.
+                                description: TLSProtocol matches TLS handshake packets
+                                  with specific SNI. If the field is not provided,
+                                  this matches all TLS handshake packets.
                                 properties:
                                   sni:
                                     description: SNI (Server Name Indication) indicates

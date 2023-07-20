@@ -77,7 +77,7 @@ welcome feature requests for protocols that you are interested in.
 
 ### HTTP
 
-An example of layer 7 NetworkPolicy for the HTTP protocol is like below:
+An example layer 7 NetworkPolicy for the HTTP protocol is like below:
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
@@ -262,7 +262,7 @@ spec:
           port: 53
     - name: allow-tls-only      # Allow outbound SSL/TLS handshake packets towards "*.bar.com". 
       action: Allow             # As the rule's "to" and "ports" are empty, which means it selects traffic to any network
-      l7Protocols:              # peer's any port of any transport protocol, all outbound SSL/TLS handshake packet towards
+      l7Protocols:              # peer's any port of any transport protocol, all outbound SSL/TLS handshake packets towards
         - tls:                  # other server names and non-SSL/non-TLS handshake packets will be automatically dropped, 
             sni: "*.bar.com"    # and subsequent rules will not be considered.
 ```
