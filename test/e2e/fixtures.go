@@ -180,9 +180,11 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 }
 
 func ensureAntreaRunning(data *TestData) error {
-	log.Println("Applying Antrea YAML")
-	if err := data.deployAntrea(deployAntreaDefault); err != nil {
-		return err
+	if testOptions.deployAntrea {
+		log.Println("Applying Antrea YAML")
+		if err := data.deployAntrea(deployAntreaDefault); err != nil {
+			return err
+		}
 	}
 	log.Println("Waiting for all Antrea DaemonSet Pods")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {

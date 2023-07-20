@@ -195,6 +195,9 @@ type TestOptions struct {
 	skipCases           string
 	linuxVMs            string
 	windowsVMs          string
+	// deployAntrea determines whether to deploy Antrea before running tests. It requires antrea.yml to be present in
+	// the home directory of the control-plane Node. Note it doesn't affect the tests that redeploy Antrea themselves.
+	deployAntrea bool
 }
 
 var testOptions TestOptions
