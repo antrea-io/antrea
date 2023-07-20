@@ -124,7 +124,7 @@ func testPod(name string, container string, podIP string, networks ...netdefv1.N
 	}
 	cniConfig := &cnipodcache.CNIConfigInfo{
 		PodName:        name,
-		PodNameSpace:   testNamespace,
+		PodNamespace:   testNamespace,
 		ContainerID:    container,
 		ContainerNetNS: containerNetNs(container),
 		MTU:            defaultMTU,

@@ -92,7 +92,7 @@ func GetPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 // Limitation: only SR-IOV interface is supported as of now.
 func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	podName string,
-	podNameSpace string,
+	podNamespace string,
 	containerID string,
 	containerNetNS string,
 	containerIFDev string,
@@ -104,7 +104,7 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 		return fmt.Errorf("error getting the Pod SR-IOV VF device ID")
 	}
 
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, "", podSriovVFDeviceID, result, nil)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerIFDev, mtu, "", podSriovVFDeviceID, result, nil)
 	if err != nil {
 		return err
 	}

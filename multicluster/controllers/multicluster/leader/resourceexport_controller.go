@@ -261,7 +261,7 @@ func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Cont
 
 func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	resExport mcsv1alpha1.ResourceExport) (bool, *mcsv1alpha1.ResourceImport, error) {
-	importedResNameSpace := resExport.Labels[constants.SourceNamespace]
+	importedResNamespace := resExport.Labels[constants.SourceNamespace]
 	importedResName := resExport.Labels[constants.SourceName]
 	var createResImport bool
 	existResImport := &mcsv1alpha1.ResourceImport{}
@@ -281,7 +281,7 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 			Spec: mcsv1alpha1.ResourceImportSpec{
 				ClusterIDs: []string{},
 				Name:       importedResName,
-				Namespace:  importedResNameSpace,
+				Namespace:  importedResNamespace,
 			},
 		}
 		createResImport = true

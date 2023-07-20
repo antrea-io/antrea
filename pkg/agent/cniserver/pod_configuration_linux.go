@@ -27,7 +27,7 @@ import (
 // connectInterfaceToOVS connects an existing interface to ovs br-int.
 func (pc *podConfigurator) connectInterfaceToOVS(
 	podName string,
-	podNameSpace string,
+	podNamespace string,
 	containerID string,
 	hostIface *current.Interface,
 	containerIface *current.Interface,
@@ -37,7 +37,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 ) (*interfacestore.InterfaceConfig, error) {
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
-	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips, vlanID)
+	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNamespace, containerIface, ips, vlanID)
 	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 }
 
