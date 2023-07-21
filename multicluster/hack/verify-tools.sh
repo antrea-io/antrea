@@ -19,27 +19,49 @@
 
 WORKDIR=$1
 
-os=$(echo $(uname) | tr '[:upper:]' '[:lower:]')
-if ! which kind > /dev/null; then
-    if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.20.0/kind-${os}-amd64
-        chmod +x ./kind
-        if [[ "$WORKDIR" != "" ]];then
-          mv kind "$WORKDIR"
-        else
-          sudo mv kind /usr/local/bin
-        fi
-    fi
-fi
+kind_version="v0.20.0"
+kubectl_version="v1.27.3"
 
-if ! which kubectl > /dev/null; then
+os=$(echo $(uname) | tr '[:upper:]' '[:lower:]')
+
+function install_kind(){
     if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
-        curl -LO https://dl.k8s.io/release/v1.27.3/bin/${os}/amd64/kubectl
+      curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${kind_version}/kind-${os}-amd64
+      chmod +x ./kind
+      if [[ "$WORKDIR" != "" ]];then
+        mv kind "$WORKDIR"
+      else
+        sudo mv kind /usr/local/bin
+      fi
+    fi
+}
+
+function install_kubectl() {
+    if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
+        curl -LO https://dl.k8s.io/release/${kubectl_version}/bin/${os}/amd64/kubectl
         chmod +x ./kubectl
         if [[ "$WORKDIR" != "" ]];then
           mv kubectl "$WORKDIR"
         else
           sudo mv kubectl /usr/local/bin
         fi
+    fi
+}
+
+if ! which kind > /dev/null; then
+    install_kind
+else
+    installed_kind_version=$(kind version | awk  '{print $2}')
+    if [[ "${installed_kind_version}" != "${kind_version}" ]];then
+      install_kind
+    fi
+fi
+
+if ! which kubectl > /dev/null; then
+    install_kubectl
+else
+    installed_kubectl_version=$(kubectl version --short 2>/dev/null | grep "Client" |awk -F':' '{print $2}' | tr -d ' ')
+    if [[ "${installed_kubectl_version}" != "${kubectl_version}" ]];then
+    install_kubectl
     fi
 fi
