@@ -8,6 +8,8 @@
 - [Usage](#usage)
   - [HTTP](#http)
     - [More examples](#more-examples)
+  - [TLS](#tls)
+    - [More examples](#more-examples-1)
   - [Logs](#logs)
 - [Limitations](#limitations)
 <!-- /toc -->
@@ -75,7 +77,7 @@ welcome feature requests for protocols that you are interested in.
 
 ### HTTP
 
-A typical layer 7 NetworkPolicy for HTTP protocol is as below:
+An example layer 7 NetworkPolicy for the HTTP protocol is like below:
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
@@ -90,7 +92,7 @@ spec:
         matchLabels:
           app: web
   ingress:
-    - name: allow-http   # Allow inbound HTTP GET requests to "/api/v2" from Pods with app=client label.
+    - name: allow-http   # Allow inbound HTTP GET requests to "/api/v2" from Pods with label "app=client".
       action: Allow      # All other traffic from these Pods will be automatically dropped, and subsequent rules will not be considered.
       from:
         - podSelector:
@@ -101,7 +103,7 @@ spec:
             path: "/api/v2/*"
             host: "foo.bar.com"
             method: "GET"
-    - name: drop-other   # Drop all other inbound traffic (i.e., from Pods without the app=client label or from external clients).
+    - name: drop-other   # Drop all other inbound traffic (i.e., from Pods without label "app=client" or from external clients).
       action: Drop
 ```
 
@@ -133,7 +135,7 @@ spec:
         matchLabels:
           app: web
   ingress:
-    - name: for-admin    # Allow inbound HTTP GET requests to "/admin" and "/public" from Pods with role=admin label.
+    - name: for-admin    # Allow inbound HTTP GET requests to "/admin" and "/public" from Pods with label "role=admin".
       action: Allow
       from:
         - podSelector:
@@ -144,7 +146,7 @@ spec:
             path: "/admin/*"
         - http:
             path: "/public/*"
-    - name: for-public   # Allow inbound HTTP GET requests to "/public" from Pods with app=client label.
+    - name: for-public   # Allow inbound HTTP GET requests to "/public" from Pods with label "app=client".
       action: Allow      # All other inbound traffic will be automatically dropped.
       l7Protocols:
         - http:
@@ -173,14 +175,14 @@ spec:
           port: 53
         - protocol: UDP
           port: 53
-    - name: allow-http-only    # Allow outbound HTTP requests towards foo.bar.com. 
+    - name: allow-http-only    # Allow outbound HTTP requests towards "*.bar.com". 
       action: Allow            # As the rule's "to" and "ports" are empty, which means it selects traffic to any network
       l7Protocols:             # peer's any port using any transport protocol, all outbound HTTP requests towards other
         - http:                # domains and non-HTTP requests will be automatically dropped, and subsequent rules will
             host: "*.bar.com"  # not be considered.
 ```
 
-The following NetworkPolicy blocks network traffic using an unauthorized application protocol regardless of port used.
+The following NetworkPolicy blocks network traffic using an unauthorized application protocol regardless of the port used.
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
@@ -199,6 +201,91 @@ spec:
       action: Allow      # As the rule's "from" and "ports" are empty, which means it selects traffic from any network
       l7Protocols:       # peer to any port of the Pods this policy applies to, all inbound non-HTTP requests will be
         - http: {}       # automatically dropped, and subsequent rules will not be considered.
+```
+
+### TLS
+
+An example layer 7 NetworkPolicy for the TLS protocol is like below:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: ingress-allow-tls-handshake
+spec:
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: web
+  ingress:
+    - name: allow-tls    # Allow inbound TLS/SSL handshake packets to server name "foo.bar.com" from Pods with label "app=client".
+      action: Allow      # All other traffic from these Pods will be automatically dropped, and subsequent rules will not be considered.
+      from:
+        - podSelector:
+            matchLabels:
+              app: client
+      l7Protocols:
+        - tls:
+            sni: "foo.bar.com"
+    - name: drop-other   # Drop all other inbound traffic (i.e., from Pods without label "app=client" or from external clients).
+      action: Drop
+```
+
+**sni**: The `sni` field matches the TLS/SSL Server Name Indication (SNI) field in the TLS/SSL handshake process. Both
+exact matches and wildcards are supported, e.g. `*.foo.com`, `*.foo.*`, `foo.bar.com`. If not set, the rule matches all names.
+
+#### More examples
+
+The following NetworkPolicy prevents applications from accessing unauthorized SSL/TLS server names:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: allow-tls-handshake-to-internal
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          egress-restriction: internal-tls-only
+  egress:
+    - name: allow-dns          # Allow outbound DNS requests.
+      action: Allow
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+    - name: allow-tls-only      # Allow outbound SSL/TLS handshake packets towards "*.bar.com". 
+      action: Allow             # As the rule's "to" and "ports" are empty, which means it selects traffic to any network
+      l7Protocols:              # peer's any port of any transport protocol, all outbound SSL/TLS handshake packets towards
+        - tls:                  # other server names and non-SSL/non-TLS handshake packets will be automatically dropped, 
+            sni: "*.bar.com"    # and subsequent rules will not be considered.
+```
+
+The following NetworkPolicy blocks network traffic using an unauthorized application protocol regardless of the port used.
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: allow-tls-only
+spec:
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: web
+  ingress:
+    - name: tls-only     # Allow inbound SSL/TLS handshake packets only.
+      action: Allow      # As the rule's "from" and "ports" are empty, which means it selects traffic from any network
+      l7Protocols:       # peer to any port of the Pods this policy applies to, all inbound non-SSL/non-TLS handshake 
+        - tls: {}        # packets will be automatically dropped, and subsequent rules will not be considered.
 ```
 
 ### Logs

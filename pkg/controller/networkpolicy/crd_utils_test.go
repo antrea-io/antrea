@@ -219,6 +219,14 @@ func TestToAntreaL7ProtocolsForCRD(t *testing.T) {
 				{HTTP: &controlplane.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}},
 			},
 		},
+		{
+			[]crdv1alpha1.L7Protocol{
+				{TLS: &crdv1alpha1.TLSProtocol{SNI: "test.com"}},
+			},
+			[]controlplane.L7Protocol{
+				{TLS: &controlplane.TLSProtocol{SNI: "test.com"}},
+			},
+		},
 	}
 	for _, table := range tables {
 		gotValue := toAntreaL7ProtocolsForCRD(table.l7Protocol)

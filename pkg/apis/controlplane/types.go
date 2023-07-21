@@ -314,6 +314,7 @@ type Service struct {
 // L7Protocol defines application layer protocol to match.
 type L7Protocol struct {
 	HTTP *HTTPProtocol
+	TLS  *TLSProtocol
 }
 
 // HTTPProtocol matches HTTP requests with specific host, method, and path. All
@@ -328,6 +329,13 @@ type HTTPProtocol struct {
 	Method string
 	// Path represents the URI path to match (Ex. "/index.html", "/admin").
 	Path string
+}
+
+// TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this
+// matches all TLS handshake packets.
+type TLSProtocol struct {
+	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
+	SNI string `json:"sni,omitempty" protobuf:"bytes,1,opt,name=sni"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
