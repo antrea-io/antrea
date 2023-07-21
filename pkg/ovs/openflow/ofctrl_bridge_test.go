@@ -122,7 +122,7 @@ func TestConcurrentCreateGroups(t *testing.T) {
 	b := NewOFBridge("test-br", GetMgmtAddress(ovsconfig.DefaultOVSRunDir, "test-br"))
 	b.SwitchConnected(newFakeOFSwitch(b))
 	// Race detector on Windows has limit of 8192 simultaneously alive goroutines.
-	concurrentNum := 8000
+	concurrentNum := 7000
 	var wg sync.WaitGroup
 	for i := 0; i < concurrentNum; i++ {
 		wg.Add(1)
