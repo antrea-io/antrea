@@ -108,6 +108,10 @@ func (g *ofGroup) ResetBuckets() Group {
 	return g
 }
 
+func (g *ofGroup) GetID() GroupIDType {
+	return GroupIDType(g.ofctrl.ID)
+}
+
 type bucketBuilder struct {
 	group  *ofGroup
 	bucket *openflow15.Bucket

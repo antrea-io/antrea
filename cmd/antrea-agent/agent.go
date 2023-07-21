@@ -148,6 +148,7 @@ func run(o *Options) error {
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable
+	groupIDAllocator := openflow.NewGroupAllocator()
 	ofClient := openflow.NewClient(o.config.OVSBridge,
 		ovsBridgeMgmtAddr,
 		nodeIPTracker,
@@ -162,6 +163,7 @@ func run(o *Options) error {
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
 		enableMulticlusterGW,
+		groupIDAllocator,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -384,7 +386,6 @@ func run(o *Options) error {
 
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
-	groupIDAllocator := openflow.NewGroupAllocator()
 	var v4GroupCounter, v6GroupCounter proxytypes.GroupCounter
 	if v4Enabled {
 		v4GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)

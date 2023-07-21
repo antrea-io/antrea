@@ -63,13 +63,13 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 			Cookie(cookieID).
 			MatchDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
 			Action().LoadToRegField(TargetOFPortField, f.hostIfacePort).
-			Action().LoadRegMark(OFPortFoundRegMark).
+			Action().LoadRegMark(OutputToOFPortRegMark).
 			Action().GotoStage(stageConntrack).
 			Done(),
-		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
+		OutputTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegMark(outputToBridgeRegMark, OFPortFoundRegMark).
+			MatchRegMark(outputToBridgeRegMark, OutputToOFPortRegMark).
 			Action().Output(f.hostIfacePort).
 			Done(),
 		// Handle outgoing packet from AntreaFlexibleIPAM Pods. Broadcast is not supported.
@@ -77,7 +77,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 			Cookie(cookieID).
 			MatchRegMark(AntreaFlexibleIPAMRegMark).
 			Action().LoadToRegField(TargetOFPortField, f.uplinkPort).
-			Action().LoadRegMark(OFPortFoundRegMark).
+			Action().LoadRegMark(OutputToOFPortRegMark).
 			Action().GotoStage(stageConntrack).
 			Done())
 	return flows

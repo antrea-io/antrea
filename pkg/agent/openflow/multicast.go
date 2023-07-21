@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	"antrea.io/libOpenflow/openflow15"
-	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -96,14 +95,14 @@ func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, 
 	group := f.bridge.NewGroupTypeAll(groupID)
 	for i := range ports {
 		group = group.Bucket().
-			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).
+			LoadToRegField(OutputToOFPortRegMark.GetField(), OutputToOFPortRegMark.GetValue()).
 			LoadToRegField(TargetOFPortField, ports[i]).
 			ResubmitToTable(tableID).
 			Done()
 	}
 	for _, ip := range remoteIPs {
 		group = group.Bucket().
-			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).
+			LoadToRegField(OutputToOFPortRegMark.GetField(), OutputToOFPortRegMark.GetValue()).
 			LoadToRegField(TargetOFPortField, f.tunnelPort).
 			SetTunnelDst(ip).
 			ResubmitToTable(MulticastOutputTable.GetID()).
@@ -117,7 +116,7 @@ func (f *featureMulticast) multicastOutputFlows() []binding.Flow {
 	flows := []binding.Flow{
 		MulticastOutputTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark).
+			MatchRegMark(OutputToOFPortRegMark).
 			Action().OutputToRegField(TargetOFPortField).
 			Done(),
 	}
@@ -131,14 +130,14 @@ func (f *featureMulticast) multicastOutputFlows() []binding.Flow {
 		flows = append(flows, MulticastOutputTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchRegMark(FromTunnelRegMark).
-			MatchRegMark(OFPortFoundRegMark).
+			MatchRegMark(OutputToOFPortRegMark).
 			MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
 			Action().Drop().
 			Done(),
 			MulticastOutputTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchRegMark(FromGatewayRegMark).
-				MatchRegMark(OFPortFoundRegMark).
+				MatchRegMark(OutputToOFPortRegMark).
 				MatchRegFieldWithValue(TargetOFPortField, config.DefaultTunOFPort).
 				Action().Drop().
 				Done(),
@@ -182,7 +181,7 @@ func (f *featureMulticast) multicastPodMetricFlows(podIP net.IP, podOFPort uint3
 	}
 }
 
-func (f *featureMulticast) replayGroups() {
+func (f *featureMulticast) replayGroups() []binding.OFEntry {
 	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
 		group := value.(binding.Group)
@@ -190,9 +189,11 @@ func (f *featureMulticast) replayGroups() {
 		groups = append(groups, group)
 		return true
 	})
-	if err := f.bridge.AddOFEntriesInBundle(groups, nil, nil); err != nil {
-		klog.ErrorS(err, "error when replaying cached groups for Multicast")
-	}
+	return groups
+}
+
+func (f *featureMulticast) initGroups() []binding.OFEntry {
+	return nil
 }
 
 func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDType, firstMulticastTable binding.Table) []binding.Flow {

@@ -82,3 +82,11 @@ func (f *featureEgress) initFlows() []*openflow15.FlowMod {
 func (f *featureEgress) replayFlows() []*openflow15.FlowMod {
 	return getCachedFlowMessages(f.cachedFlows)
 }
+
+func (f *featureEgress) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureEgress) replayGroups() []binding.OFEntry {
+	return nil
+}

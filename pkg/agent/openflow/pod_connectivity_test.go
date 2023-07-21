@@ -47,11 +47,11 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				"cookie=0x1010000000000, table=L3Forwarding, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 				"cookie=0x1010000000000, table=L3DecTTL, priority=210,ipv6,reg0=0x2/0xf actions=goto_table:SNATMark",
 				"cookie=0x1010000000000, table=L3DecTTL, priority=200,ipv6 actions=dec_ttl,goto_table:SNATMark",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 				"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,pkt_mark=0x80000000/0x80000000,ct_state=-rpl+trk,ipv6 actions=goto_table:ConntrackCommit",
 				"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ipv6 actions=ct(commit,table=Output,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1010000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+				"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 			}
 		}
 		flows = []string{
@@ -71,7 +71,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=L3DecTTL, priority=210,ip,reg0=0x2/0xf actions=goto_table:SNATMark",
 			"cookie=0x1010000000000, table=L3DecTTL, priority=200,ip actions=dec_ttl,goto_table:SNATMark",
 			"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 		}
 		if !multicastEnabled {
 			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:UnSNAT")
@@ -93,16 +93,16 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 		}
 		if trafficControlEnabled {
 			flows = append(flows,
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
-				"cookie=0x1010000000000, table=TrafficControl, priority=210,reg0=0x106/0x10f actions=goto_table:Output",
-				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x100/0x100,reg4=0x400000/0xc00000 actions=output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
-				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x100/0x100,reg4=0x800000/0xc00000 actions=output:NXM_NX_REG9[]",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl",
+				"cookie=0x1010000000000, table=TrafficControl, priority=210,reg0=0x200006/0x60000f actions=goto_table:Output",
+				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x400000/0xc00000 actions=output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
+				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x800000/0xc00000 actions=output:NXM_NX_REG9[]",
 			)
 		} else {
 			flows = append(flows,
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			)
 		}
 	case config.TrafficEncapModeNoEncap:
@@ -125,10 +125,10 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				"cookie=0x1010000000000, table=L3Forwarding, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 				"cookie=0x1010000000000, table=L3DecTTL, priority=210,ipv6,reg0=0x2/0xf actions=goto_table:SNATMark",
 				"cookie=0x1010000000000, table=L3DecTTL, priority=200,ipv6 actions=dec_ttl,goto_table:SNATMark",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 				"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,pkt_mark=0x80000000/0x80000000,ct_state=-rpl+trk,ipv6 actions=goto_table:ConntrackCommit",
 				"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ipv6 actions=ct(commit,table=Output,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1010000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+				"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 			}
 		}
 		flows = []string{
@@ -144,7 +144,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=L3Forwarding, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			"cookie=0x1010000000000, table=L3DecTTL, priority=210,ip,reg0=0x2/0xf actions=goto_table:SNATMark",
 			"cookie=0x1010000000000, table=L3DecTTL, priority=200,ip actions=dec_ttl,goto_table:SNATMark",
-			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 		}
 		if runtime.IsWindowsPlatform() {
 			flows = append(flows,
@@ -174,11 +174,11 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 					"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=NXM_NX_REG8[0..15],nat)",
 					"cookie=0x1010000000000, table=L3Forwarding, priority=210,ct_state=+rpl+trk,ct_mark=0x5/0xf,ip,reg8=0x0/0xfff actions=set_field:0a:00:00:00:00:02->eth_dst,goto_table:L2ForwardingCalc",
 					"cookie=0x1010000000000, table=L3Forwarding, priority=210,ip,reg4=0x100000/0x100000,reg8=0x0/0xfff,nw_dst=192.168.77.100 actions=set_field:0a:00:00:00:00:02->eth_dst,goto_table:L2ForwardingCalc",
-					"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x0/0x200,reg8=0x0/0xfff,nw_dst=10.10.0.0/24 actions=goto_table:L2ForwardingCalc", "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:02 actions=set_field:0xfffffffe->reg1,set_field:0x100/0x100->reg0,goto_table:ConntrackCommit",
-					"cookie=0x1010000000000, table=L2ForwardingCalc, priority=190,reg4=0x100000/0x100000 actions=set_field:0x4->reg1,set_field:0x100/0x100->reg0,goto_table:ConntrackCommit",
+					"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x0/0x200,reg8=0x0/0xfff,nw_dst=10.10.0.0/24 actions=goto_table:L2ForwardingCalc", "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:02 actions=set_field:0xfffffffe->reg1,set_field:0x200000/0x600000->reg0,goto_table:ConntrackCommit",
+					"cookie=0x1010000000000, table=L2ForwardingCalc, priority=190,reg4=0x100000/0x100000 actions=set_field:0x4->reg1,set_field:0x200000/0x600000->reg0,goto_table:ConntrackCommit",
 					"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ip actions=ct(commit,table=VLAN,zone=NXM_NX_REG8[0..15],exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 					"cookie=0x1010000000000, table=VLAN, priority=190,in_port=4,vlan_tci=0x1000/0x1000 actions=pop_vlan,goto_table:Output",
-					"cookie=0x1010000000000, table=Output, priority=210,ip,reg0=0x100/0x100,reg1=0xfffffffe actions=output:4294967294",
+					"cookie=0x1010000000000, table=Output, priority=210,ip,reg0=0x200000/0x600000,reg1=0xfffffffe actions=output:4294967294",
 				)
 				if !multicastEnabled {
 					flows = append(flows,
@@ -208,14 +208,14 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 		}
 		if trafficControlEnabled {
 			flows = append(flows,
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
-				"cookie=0x1010000000000, table=TrafficControl, priority=210,reg0=0x106/0x10f actions=goto_table:Output",
-				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x100/0x100,reg4=0x400000/0xc00000 actions=output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
-				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x100/0x100,reg4=0x800000/0xc00000 actions=output:NXM_NX_REG9[]",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl",
+				"cookie=0x1010000000000, table=TrafficControl, priority=210,reg0=0x200006/0x60000f actions=goto_table:Output",
+				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x400000/0xc00000 actions=output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
+				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x800000/0xc00000 actions=output:NXM_NX_REG9[]",
 			)
 		} else {
 			flows = append(flows,
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			)
 		}
 	case config.TrafficEncapModeNetworkPolicyOnly:
@@ -238,10 +238,10 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				"cookie=0x1010000000000, table=L3Forwarding, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 				"cookie=0x1010000000000, table=L3DecTTL, priority=210,ipv6,reg0=0x2/0xf actions=goto_table:SNATMark",
 				"cookie=0x1010000000000, table=L3DecTTL, priority=200,ipv6 actions=dec_ttl,goto_table:SNATMark",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 				"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,pkt_mark=0x80000000/0x80000000,ct_state=-rpl+trk,ipv6 actions=goto_table:ConntrackCommit",
 				"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ipv6 actions=ct(commit,table=Output,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1010000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+				"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 			}
 		}
 		return []string{
@@ -260,11 +260,11 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=L3Forwarding, priority=0 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			"cookie=0x1010000000000, table=L3DecTTL, priority=210,ip,reg0=0x2/0xf actions=goto_table:SNATMark",
 			"cookie=0x1010000000000, table=L3DecTTL, priority=200,ip actions=dec_ttl,goto_table:SNATMark",
-			"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+			"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
 			"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,pkt_mark=0x80000000/0x80000000,ct_state=-rpl+trk,ip actions=goto_table:ConntrackCommit",
 			"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			"cookie=0x1010000000000, table=ConntrackState, priority=0 actions=goto_table:PreRoutingClassifier",
-			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 		}
 	}
 	return flows
