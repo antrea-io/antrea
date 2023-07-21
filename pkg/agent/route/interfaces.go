@@ -87,4 +87,7 @@ type Interface interface {
 
 	// DeleteRouteForLink deletes a route entry for a specific link.
 	DeleteRouteForLink(dstCIDR *net.IPNet, linkIndex int) error
+
+	// ClearConntrackEntryForService deletes a conntrack entry for a Service connection.
+	ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error
 }

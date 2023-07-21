@@ -134,6 +134,20 @@ func (mr *MockInterfaceMockRecorder) AddSNATRule(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), arg0, arg1)
 }
 
+// ClearConntrackEntryForService mocks base method
+func (m *MockInterface) ClearConntrackEntryForService(arg0 net.IP, arg1 uint16, arg2 net.IP, arg3 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClearConntrackEntryForService", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ClearConntrackEntryForService indicates an expected call of ClearConntrackEntryForService
+func (mr *MockInterfaceMockRecorder) ClearConntrackEntryForService(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearConntrackEntryForService", reflect.TypeOf((*MockInterface)(nil).ClearConntrackEntryForService), arg0, arg1, arg2, arg3)
+}
+
 // DeleteExternalIPRoute mocks base method
 func (m *MockInterface) DeleteExternalIPRoute(arg0 net.IP) error {
 	m.ctrl.T.Helper()

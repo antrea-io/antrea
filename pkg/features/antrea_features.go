@@ -33,7 +33,7 @@ const (
 
 	// alpha: v0.8
 	// beta: v1.0
-	// Enables support for ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
+	// Enable support for ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.13
@@ -47,6 +47,10 @@ const (
 	// Enable TopologyAwareHints in AntreaProxy. If EndpointSlice is not enabled, this
 	// flag will not take effect.
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
+
+	// alpha: v1.13
+	// Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
+	CleanupStaleUDPSvcConntrack featuregate.Feature = "CleanupStaleUDPSvcConntrack"
 
 	// alpha: v0.8
 	// beta: v0.11
@@ -143,27 +147,28 @@ var (
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-		AntreaPolicy:            {Default: true, PreRelease: featuregate.Beta},
-		AntreaProxy:             {Default: true, PreRelease: featuregate.Beta},
-		Egress:                  {Default: true, PreRelease: featuregate.Beta},
-		EndpointSlice:           {Default: true, PreRelease: featuregate.Beta},
-		TopologyAwareHints:      {Default: true, PreRelease: featuregate.Beta},
-		Traceflow:               {Default: true, PreRelease: featuregate.Beta},
-		AntreaIPAM:              {Default: false, PreRelease: featuregate.Alpha},
-		FlowExporter:            {Default: false, PreRelease: featuregate.Alpha},
-		NetworkPolicyStats:      {Default: true, PreRelease: featuregate.Beta},
-		NodePortLocal:           {Default: true, PreRelease: featuregate.Beta},
-		NodeIPAM:                {Default: true, PreRelease: featuregate.Beta},
-		Multicast:               {Default: true, PreRelease: featuregate.Beta},
-		Multicluster:            {Default: false, PreRelease: featuregate.Alpha},
-		SecondaryNetwork:        {Default: false, PreRelease: featuregate.Alpha},
-		ServiceExternalIP:       {Default: false, PreRelease: featuregate.Alpha},
-		TrafficControl:          {Default: false, PreRelease: featuregate.Alpha},
-		IPsecCertAuth:           {Default: false, PreRelease: featuregate.Alpha},
-		ExternalNode:            {Default: false, PreRelease: featuregate.Alpha},
-		SupportBundleCollection: {Default: false, PreRelease: featuregate.Alpha},
-		L7NetworkPolicy:         {Default: false, PreRelease: featuregate.Alpha},
-		LoadBalancerModeDSR:     {Default: false, PreRelease: featuregate.Alpha},
+		AntreaPolicy:                {Default: true, PreRelease: featuregate.Beta},
+		AntreaProxy:                 {Default: true, PreRelease: featuregate.Beta},
+		Egress:                      {Default: true, PreRelease: featuregate.Beta},
+		EndpointSlice:               {Default: true, PreRelease: featuregate.Beta},
+		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
+		CleanupStaleUDPSvcConntrack: {Default: false, PreRelease: featuregate.Alpha},
+		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
+		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
+		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
+		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
+		NodePortLocal:               {Default: true, PreRelease: featuregate.Beta},
+		NodeIPAM:                    {Default: true, PreRelease: featuregate.Beta},
+		Multicast:                   {Default: true, PreRelease: featuregate.Beta},
+		Multicluster:                {Default: false, PreRelease: featuregate.Alpha},
+		SecondaryNetwork:            {Default: false, PreRelease: featuregate.Alpha},
+		ServiceExternalIP:           {Default: false, PreRelease: featuregate.Alpha},
+		TrafficControl:              {Default: false, PreRelease: featuregate.Alpha},
+		IPsecCertAuth:               {Default: false, PreRelease: featuregate.Alpha},
+		ExternalNode:                {Default: false, PreRelease: featuregate.Alpha},
+		SupportBundleCollection:     {Default: false, PreRelease: featuregate.Alpha},
+		L7NetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
+		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -183,11 +188,12 @@ var (
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
 		IPsecCertAuth:     {},
-		// Multicluster feature is not validated on Windows yet. This can removed
+		// Multicluster feature is not validated on Windows yet. This can be removed
 		// in the future if it's fully tested on Windows.
-		Multicluster:        {},
-		L7NetworkPolicy:     {},
-		LoadBalancerModeDSR: {},
+		Multicluster:                {},
+		L7NetworkPolicy:             {},
+		LoadBalancerModeDSR:         {},
+		CleanupStaleUDPSvcConntrack: {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

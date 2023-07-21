@@ -59,4 +59,6 @@ type Interface interface {
 	LinkSetName(link netlink.Link, name string) error
 
 	LinkSetUp(link netlink.Link) error
+
+	ConntrackDeleteFilter(table netlink.ConntrackTableType, family netlink.InetFamily, filter netlink.CustomConntrackFilter) (uint, error)
 }
