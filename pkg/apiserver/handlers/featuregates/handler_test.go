@@ -16,11 +16,10 @@ package featuregates
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,33 +50,70 @@ func Test_getGatesResponse(t *testing.T) {
 				},
 			},
 			want: []Response{
+				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "CleanupStaleUDPSvcConntrack", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "L7NetworkPolicy", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "LoadBalancerModeDSR", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
+				{Component: "agent", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
+				{Component: "agent", Name: "SecondaryNetwork", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "SupportBundleCollection", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "TopologyAwareHints", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "TrafficControl", Status: "Disabled", Version: "ALPHA"},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getAgentGatesResponse(tt.cfg)
-			sort.SliceStable(got, func(i, j int) bool {
-				return got[i].Name < got[j].Name
-			})
-			sort.SliceStable(tt.want, func(i, j int) bool {
-				return tt.want[i].Name < tt.want[j].Name
-			})
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getAgentGatesResponse() = %v, want %v", got, tt.want)
-			}
+			got := getFeatureGatesResponse(tt.cfg, agentMode)
+			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea agent is not correct")
+		})
+	}
+}
+
+func Test_getGatesWindowsResponse(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *Config
+		want []Response
+	}{
+		{
+			name: "mutated AntreaPolicy feature gate, agent windows mode",
+			cfg: &Config{
+				FeatureGates: map[string]bool{
+					"AntreaPolicy": false,
+				},
+			},
+			want: []Response{
+				{Component: "agent-windows", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent-windows", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent-windows", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "SupportBundleCollection", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent-windows", Name: "TopologyAwareHints", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "TrafficControl", Status: "Disabled", Version: "ALPHA"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getFeatureGatesResponse(tt.cfg, agentWindowsMode)
+			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea agent windows is not correct")
 		})
 	}
 }
@@ -132,6 +168,12 @@ func TestHandleFunc(t *testing.T) {
 				"antrea-controller.conf": "#configmap-value",
 			},
 		},
+		&v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "antrea-windows-config-xqwiwuv", Labels: map[string]string{"app": "antrea"}},
+			Data: map[string]string{
+				"antrea-agent.conf": "#configmap-value",
+			},
+		},
 	)
 
 	tests := []struct {
@@ -158,6 +200,7 @@ func TestHandleFunc(t *testing.T) {
 			}
 			var resp []Response
 			err = json.Unmarshal(recorder.Body.Bytes(), &resp)
+			fmt.Println(resp)
 			assert.Nil(t, err)
 			for _, v := range resp {
 				for n, f := range features.DefaultAntreaFeatureGates {
@@ -179,29 +222,26 @@ func Test_getControllerGatesResponse(t *testing.T) {
 		{
 			name: "good path",
 			want: []Response{
+				{Component: "controller", Name: "AdminNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
-				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
+				{Component: "controller", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "L7NetworkPolicy", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
+				{Component: "controller", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
-				{Component: "controller", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
-				{Component: "controller", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
+				{Component: "controller", Name: "SupportBundleCollection", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getControllerGatesResponse()
-			sort.SliceStable(got, func(i, j int) bool {
-				return got[i].Name < got[j].Name
-			})
-			sort.SliceStable(tt.want, func(i, j int) bool {
-				return tt.want[i].Name < tt.want[j].Name
-			})
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getControllerGatesResponse() = %v, want %v", got, tt.want)
-			}
+			got := getFeatureGatesResponse(&Config{}, controllerMode)
+			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea Controller is not correct")
 		})
 	}
 }

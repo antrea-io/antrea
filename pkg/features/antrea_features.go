@@ -16,6 +16,7 @@ package features
 
 import (
 	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/util/runtime"
@@ -114,7 +115,7 @@ const (
 	TrafficControl featuregate.Feature = "TrafficControl"
 
 	// alpha: v1.7
-	// Enable certificated-based authentication for IPsec.
+	// Enable certificate-based authentication for IPSec tunnel.
 	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
 
 	// alpha: v1.8
@@ -176,6 +177,50 @@ var (
 		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
 		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 	}
+
+	// AgentGates consists of all known feature gates for the Antrea Agent.
+	// When adding a new feature gate that applies to the Antrea Agent, please also add it here.
+	AgentGates = sets.New[featuregate.Feature](
+		AntreaIPAM,
+		AntreaPolicy,
+		AntreaProxy,
+		CleanupStaleUDPSvcConntrack,
+		Egress,
+		EndpointSlice,
+		ExternalNode,
+		FlowExporter,
+		IPsecCertAuth,
+		L7NetworkPolicy,
+		LoadBalancerModeDSR,
+		Multicast,
+		Multicluster,
+		NetworkPolicyStats,
+		NodePortLocal,
+		SecondaryNetwork,
+		ServiceExternalIP,
+		SupportBundleCollection,
+		TopologyAwareHints,
+		Traceflow,
+		TrafficControl,
+	)
+
+	// ControllerGates consists of all known feature gates for the Antrea Controller.
+	// When adding a new feature gate that applies to the Antrea Controller, please also add it here.
+	ControllerGates = sets.New[featuregate.Feature](
+		AdminNetworkPolicy,
+		AntreaIPAM,
+		AntreaPolicy,
+		Egress,
+		IPsecCertAuth,
+		L7NetworkPolicy,
+		Multicast,
+		Multicluster,
+		NetworkPolicyStats,
+		NodeIPAM,
+		ServiceExternalIP,
+		SupportBundleCollection,
+		Traceflow,
+	)
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
 	// a Windows Node. Antrea Agent on a Windows Node checks the enabled

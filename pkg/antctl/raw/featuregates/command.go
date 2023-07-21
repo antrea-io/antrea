@@ -87,19 +87,25 @@ func featureGateRequest(cmd *cobra.Command, mode string) error {
 		return err
 	}
 	var agentGates []featuregates.Response
+	var agentWindowsGates []featuregates.Response
 	var controllerGates []featuregates.Response
 	for _, v := range resp {
-		if v.Component == "agent" {
+		switch v.Component {
+		case runtime.ModeAgent:
 			agentGates = append(agentGates, v)
-		} else {
+		case runtime.ModeAgentWindows:
+			agentWindowsGates = append(agentWindowsGates, v)
+		case runtime.ModeController:
 			controllerGates = append(controllerGates, v)
 		}
 	}
 	if len(agentGates) > 0 {
 		output(agentGates, runtime.ModeAgent, cmd.OutOrStdout())
 	}
+	if len(agentWindowsGates) > 0 {
+		output(agentWindowsGates, runtime.ModeAgentWindows, cmd.OutOrStdout())
+	}
 	if len(controllerGates) > 0 {
-		fmt.Println()
 		output(controllerGates, runtime.ModeController, cmd.OutOrStdout())
 	}
 	return nil
@@ -169,10 +175,27 @@ func output(resps []featuregates.Response, runtimeMode string, output io.Writer)
 	switch runtimeMode {
 	case runtime.ModeAgent:
 		output.Write([]byte("Antrea Agent Feature Gates\n"))
+	case runtime.ModeAgentWindows:
+		output.Write([]byte("\n"))
+		output.Write([]byte("Antrea Agent Feature Gates (Windows)\n"))
 	case runtime.ModeController:
+		output.Write([]byte("\n"))
 		output.Write([]byte("Antrea Controller Feature Gates\n"))
 	}
-	formatter := "%-25s%-15s%-10s\n"
+
+	maxNameLen := len("FEATUREGATE")
+	maxStatusLen := len("STATUS")
+
+	for _, r := range resps {
+		if len(r.Name) > maxNameLen {
+			maxNameLen = len(r.Name)
+		}
+		if len(r.Status) > maxStatusLen {
+			maxStatusLen = len(r.Status)
+		}
+	}
+
+	formatter := fmt.Sprintf("%%-%ds%%-%ds%%-s\n", maxNameLen+5, maxStatusLen+5)
 	output.Write([]byte(fmt.Sprintf(formatter, "FEATUREGATE", "STATUS", "VERSION")))
 	for _, r := range resps {
 		fmt.Fprintf(output, formatter, r.Name, r.Status, r.Version)

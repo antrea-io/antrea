@@ -18,20 +18,18 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v2"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
 )
-
-var controllerGates = sets.New[string]("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM", "ServiceExternalIP", "Multicluster", "Multicast")
-var agentGates = sets.New[string]("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats",
-	"NodePortLocal", "AntreaIPAM", "Multicast", "ServiceExternalIP", "Multicluster")
 
 type (
 	Config struct {
@@ -48,80 +46,106 @@ type (
 )
 
 const (
-	controllerMode = "controller"
-	agentMode      = "agent"
+	agentMode            = "agent"
+	agentWindowsMode     = "agent-windows"
+	agentConfigName      = "antrea-agent.conf"
+	controllerMode       = "controller"
+	controllerConfigName = "antrea-controller.conf"
 )
 
 // HandleFunc returns the function which can handle queries issued by 'antctl get featuregates' command.
 // The handler function populates Antrea featuregates information to the response.
-// For now, it will return all feature gates included in features.DefaultAntreaFeatureGates for agent
-// We need to exclude any new feature gates which is not consumed by agent in the future.
 func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		antreaConfigName := env.GetAntreaConfigMapName()
 		antreaConfig, err := k8sclient.CoreV1().ConfigMaps(env.GetAntreaNamespace()).Get(context.TODO(), antreaConfigName, metav1.GetOptions{})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.Errorf("Error when getting config map %s: %v", antreaConfigName, err)
+			klog.ErrorS(err, "Error when getting config map", antreaConfigName)
 			return
+		}
+		configMaps, err := k8sclient.CoreV1().ConfigMaps(env.GetAntreaNamespace()).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "app=antrea",
+		})
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			klog.ErrorS(err, "Error when getting antrea-windows config map")
+			return
+		}
+		antreaWindowsConfigMaps := []v1.ConfigMap{}
+		for _, cm := range configMaps.Items {
+			if strings.HasPrefix(cm.Name, "antrea-windows-config") {
+				antreaWindowsConfigMaps = append(antreaWindowsConfigMaps, cm)
+			}
 		}
 
 		agentConfig := &Config{}
-		err = yaml.Unmarshal([]byte(antreaConfig.Data["antrea-agent.conf"]), agentConfig)
+		err = yaml.Unmarshal([]byte(antreaConfig.Data[agentConfigName]), agentConfig)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.Errorf("Failed to unmarshal Antrea antrea-agent.conf: %v", err)
+			klog.ErrorS(err, "Failed to unmarshal Antrea", agentConfigName)
 			return
 		}
 
-		agentfeatureGates := getAgentGatesResponse(agentConfig)
-		controllerfeatureGates := getControllerGatesResponse()
+		controllerConfig := &Config{}
+		err = yaml.Unmarshal([]byte(antreaConfig.Data[controllerConfigName]), controllerConfig)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			klog.ErrorS(err, "Failed to unmarshal Antrea", controllerConfigName)
+			return
+		}
+
+		agentfeatureGates := getFeatureGatesResponse(agentConfig, agentMode)
+		controllerfeatureGates := getFeatureGatesResponse(controllerConfig, controllerMode)
 		result := append(agentfeatureGates, controllerfeatureGates...)
+
+		if len(antreaWindowsConfigMaps) > 0 {
+			sort.Slice(antreaWindowsConfigMaps, func(i, j int) bool {
+				return antreaWindowsConfigMaps[i].CreationTimestamp.After(antreaWindowsConfigMaps[j].CreationTimestamp.Time)
+			})
+			agentWindowsConfig := &Config{}
+			err = yaml.Unmarshal([]byte(configMaps.Items[0].Data[agentConfigName]), agentWindowsConfig)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				klog.ErrorS(err, "Failed to unmarshal Antrea windows", agentConfigName)
+				return
+			}
+			agentWindowsfeatureGates := getFeatureGatesResponse(agentWindowsConfig, agentWindowsMode)
+			result = append(result, agentWindowsfeatureGates...)
+		}
+
 		err = json.NewEncoder(w).Encode(result)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.Errorf("Error when encoding FeatureGates to json: %v", err)
+			klog.ErrorS(err, "Error when encoding FeatureGates to json")
 			return
 		}
 	}
 }
 
-func getAgentGatesResponse(cfg *Config) []Response {
+func getFeatureGatesResponse(cfg *Config, component string) []Response {
 	gatesResp := []Response{}
 	for df := range features.DefaultAntreaFeatureGates {
-		dfs := string(df)
-		if !agentGates.Has(dfs) {
-			continue
-		}
-		status, ok := cfg.FeatureGates[dfs]
-		if !ok {
-			status = features.DefaultMutableFeatureGate.Enabled(df)
-		}
-		featureStatus := getStatus(status)
-		gatesResp = append(gatesResp, Response{
-			Component: agentMode,
-			Name:      dfs,
-			Status:    featureStatus,
-			Version:   string(features.DefaultAntreaFeatureGates[df].PreRelease),
-		})
-	}
-	return gatesResp
-}
+		if component == agentMode && features.AgentGates.Has(df) ||
+			component == agentWindowsMode && features.AgentGates.Has(df) && features.SupportedOnWindows(df) ||
+			component == controllerMode && features.ControllerGates.Has(df) {
 
-func getControllerGatesResponse() []Response {
-	gatesResp := []Response{}
-	for df := range features.DefaultAntreaFeatureGates {
-		dfs := string(df)
-		if !controllerGates.Has(dfs) {
-			continue
+			status, ok := cfg.FeatureGates[string(df)]
+			if !ok {
+				status = features.DefaultFeatureGate.Enabled(df)
+			}
+			featureStatus := getStatus(status)
+			gatesResp = append(gatesResp, Response{
+				Component: component,
+				Name:      string(df),
+				Status:    featureStatus,
+				Version:   string(features.DefaultAntreaFeatureGates[df].PreRelease),
+			})
 		}
-		gatesResp = append(gatesResp, Response{
-			Component: controllerMode,
-			Name:      dfs,
-			Status:    getStatus(features.DefaultMutableFeatureGate.Enabled(df)),
-			Version:   string(features.DefaultAntreaFeatureGates[df].PreRelease),
-		})
 	}
+	sort.SliceStable(gatesResp, func(i, j int) bool {
+		return gatesResp[i].Name < gatesResp[j].Name
+	})
 	return gatesResp
 }
 

@@ -29,6 +29,7 @@ import (
 const (
 	ModeController     string = "controller"
 	ModeAgent          string = "agent"
+	ModeAgentWindows   string = "agent-windows"
 	ModeFlowAggregator string = "flowaggregator"
 )
 
