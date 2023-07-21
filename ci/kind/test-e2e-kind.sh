@@ -183,14 +183,24 @@ FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector
                             "projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0" \
                             "projects.registry.vmware.com/antrea/metrics-exporter:0.21.0" \
                             "projects.registry.vmware.com/antrea/clickhouse-server:23.4")
+if $proxy_all; then
+    COMMON_IMAGES_LIST+=("registry.k8s.io/echoserver:1.10")
+fi
+# Silence CLI suggestions.
+export DOCKER_CLI_HINTS=false
+for image in "${COMMON_IMAGES_LIST[@]}"; do
+    for i in `seq 3`; do
+        docker pull $image && break
+        sleep 1
+    done
+done
+
+# The Antrea images should not be pulled, as we want to use the local build.
 if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
 else
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
-fi
-if $proxy_all; then
-    COMMON_IMAGES_LIST+=("registry.k8s.io/echoserver:1.10")
 fi
 if $flow_visibility; then
     COMMON_IMAGES_LIST+=("${FLOW_VISIBILITY_IMAGE_LIST[@]}")
@@ -200,12 +210,6 @@ if $flow_visibility; then
         COMMON_IMAGES_LIST+=("antrea/flow-aggregator:latest")
     fi
 fi
-for image in "${COMMON_IMAGES_LIST[@]}"; do
-    for i in `seq 3`; do
-        docker pull $image && break
-        sleep 1
-    done
-done
 
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
