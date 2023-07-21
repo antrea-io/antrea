@@ -291,10 +291,9 @@ function run_e2e_vms {
     go test -v -timeout=100m antrea.io/antrea/test/e2e -run=TestVMAgent --logs-export-dir `pwd`/antrea-test-logs -provider=remote -windowsVMs="${WIN_HOSTNAMES[*]}" -linuxVMs="${LIN_HOSTNAMES[*]}"
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
+        tar -zcf antrea-test-logs.tar.gz antrea-test-logs
     fi
     set -e
-
-    tar -zcf antrea-test-logs.tar.gz antrea-test-logs
 }
 
 function build_antrea_binary {

@@ -244,10 +244,12 @@ function collect_windows_network_info_and_logs {
 
         DOCKER_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/docker"
         mkdir "${DOCKER_LOG_PATH}"
-        scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:'/cygdrive/c/"Program Files"/Docker/dockerd.log*' "${DOCKER_LOG_PATH}"
+        if [[ ${TESTCASE} =~ "containerd" ]];then
+            scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:'/cygdrive/c/"Program Files"/Docker/dockerd.log*' "${DOCKER_LOG_PATH}"
+        fi
     done
     set -e
-    tar zcf debug_logs.tar.gz "${DEBUG_LOG_PATH}"
+    tar -zcf debug_logs.tar.gz "${DEBUG_LOG_PATH}"
 }
 
 function wait_for_antrea_windows_pods_ready {
@@ -719,10 +721,9 @@ function run_e2e {
     fi
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
+        tar -zcf antrea-test-logs.tar.gz antrea-test-logs
     fi
     set -e
-
-    tar -zcf antrea-test-logs.tar.gz antrea-test-logs
 }
 
 function run_conformance {
@@ -779,10 +780,9 @@ function run_e2e_windows {
     go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
+        tar -zcf antrea-test-logs.tar.gz antrea-test-logs
     fi
     set -e
-
-    tar -zcf antrea-test-logs.tar.gz antrea-test-logs
 }
 
 function run_conformance_windows {

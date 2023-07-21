@@ -522,11 +522,11 @@ function run_e2e {
     if [[ "$test_rc" != "0" ]]; then
         echo "=== TEST FAILURE !!! ==="
         TEST_FAILURE=true
+        tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
     else
         echo "=== TEST SUCCESS !!! ==="
     fi
 
-    tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
         tar -zcf ${GIT_CHECKOUT_DIR}/e2e-coverage.tar.gz ${GIT_CHECKOUT_DIR}/e2e-coverage
         run_codecov "e2e-tests" "*.cov.out*" "${GIT_CHECKOUT_DIR}/e2e-coverage" false ""

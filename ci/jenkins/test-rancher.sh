@@ -212,10 +212,9 @@ function run_e2e {
     go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -remote.kubeconfig="$KUBECONFIG_PATH" -timeout=100m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
+        tar -zcf antrea-test-logs.tar.gz antrea-test-logs
     fi
     set -e
-
-    tar -zcf antrea-test-logs.tar.gz antrea-test-logs
 }
 
 function run_conformance {
