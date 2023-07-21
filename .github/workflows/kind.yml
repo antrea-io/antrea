@@ -473,7 +473,7 @@ jobs:
     - name: Run NetworkPolicy conformance tests
       run: |
         mkdir log
-        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-netpol-v2-conformance-kind.sh --encap-mode encap
+        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-netpol-v2-conformance-kind.sh
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log

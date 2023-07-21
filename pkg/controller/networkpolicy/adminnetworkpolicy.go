@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antreacrd "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 

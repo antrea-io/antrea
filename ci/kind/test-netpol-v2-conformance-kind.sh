@@ -22,9 +22,8 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--api-version <version>] [--encap-mode <mode>] [--ip-family <v4|v6>] [--help|-h]
+_usage="Usage: $0 [--api-version <version>] [--ip-family <v4|v6>] [--help|-h]
         --api-version                 Set specific network-policy-api version for testing.
-        --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --ip-family                   Configures the ipFamily for the KinD cluster.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --setup-only                  Only perform setting up the cluster and run test.
@@ -50,7 +49,6 @@ function quit {
 }
 
 api_version="v0.1.0"
-mode=""
 ipfamily="v4"
 feature_gates="AdminNetworkPolicy=true"
 setup_only=false
@@ -71,10 +69,6 @@ case $key in
     ;;
     --ip-family)
     ipfamily="$2"
-    shift 2
-    ;;
-    --encap-mode)
-    mode="$2"
     shift 2
     ;;
     --setup-only)
@@ -107,20 +101,12 @@ fi
 
 trap "quit" INT EXIT
 
-manifest_args="$manifest_args --verbose-log --coverage"
 if [ -n "$feature_gates" ]; then
   manifest_args="$manifest_args --feature-gates $feature_gates"
 fi
 
 IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.43" \
-            "antrea/antrea-ubuntu-coverage:latest")
-
-for image in "${IMAGE_LIST[@]}"; do
-    for i in $(seq 3); do
-        docker pull $image && break
-        sleep 1
-    done
-done
+            "antrea/antrea-ubuntu:latest")
 
 printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 
@@ -139,19 +125,17 @@ function setup_cluster {
 }
 
 function run_test {
-  current_mode=$1
-
   # Install the network-policy-api CRDs in the kind cluster
   kubectl apply -f https://github.com/kubernetes-sigs/network-policy-api/releases/download/"$api_version"/install.yaml
   echo "Generating Antrea manifest with args $manifest_args"
-  $YML_CMD --encap-mode $current_mode $manifest_args | kubectl apply -f -
-  $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+  $YML_CMD $manifest_args | kubectl apply -f -
 
   kubectl rollout status --timeout=1m deployment.apps/antrea-controller -n kube-system
   kubectl rollout status --timeout=1m daemonset/antrea-agent -n kube-system
 
-  sleep 1
+  # KUBERNETES_CONFORMANCE_TEST=y prevents ginkgo e2e from trying to run provider setup
   export KUBERNETES_CONFORMANCE_TEST=y
+  # The following env variables are required to make RuntimeClass tests work
   export KUBE_CONTAINER_RUNTIME=remote
   export KUBE_CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
   export KUBE_CONTAINER_RUNTIME_NAME=containerd
@@ -164,18 +148,9 @@ function run_test {
   popd
 }
 
-if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
-  echo "======== Test encap mode =========="
-  if [[ $test_only == "false" ]];then
-    setup_cluster "--images \"$IMAGES\""
-  fi
-  run_test encap
+echo "======== Testing networkpolicy v2 conformance in encap mode =========="
+if [[ $test_only == "false" ]];then
+  setup_cluster "--images \"$IMAGES\""
 fi
-if [[ "$mode" == "" ]] || [[ "$mode" == "noEncap" ]]; then
-  echo "======== Test noEncap mode =========="
-  if [[ $test_only == "false" ]];then
-    setup_cluster "--images \"$IMAGES\""
-  fi
-  run_test noEncap
-fi
+run_test
 exit 0
