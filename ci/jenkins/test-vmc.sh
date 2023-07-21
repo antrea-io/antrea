@@ -589,7 +589,16 @@ function run_conformance {
         echo "Failed cases exist."
         TEST_FAILURE=true
     else
-        echo "All tests passed."
+        set +e
+        grep 'e2e' ${GIT_CHECKOUT_DIR}/vmc-test.log | grep "complete"
+        RETURN_RC=$?
+        set -e
+        if [[ $RETURN_RC -eq 0 ]]; then
+            echo "All tests passed."
+        else
+            echo "Unexpected error when running tests."
+            TEST_FAILURE=true
+        fi
     fi
 
     if [[ "$COVERAGE" == true ]]; then
