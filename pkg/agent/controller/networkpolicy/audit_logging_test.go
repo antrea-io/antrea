@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -210,12 +211,18 @@ func TestRedirectPacketLog(t *testing.T) {
 func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
 	generateMatch := func(regID int, data []byte) openflow15.MatchField {
+		baseData := make([]byte, 8, 8)
+		if regID%2 == 0 {
+			copy(baseData[0:4], data)
+		} else {
+			copy(baseData[4:8], data)
+		}
 		return openflow15.MatchField{
 			Class: openflow15.OXM_CLASS_PACKET_REGS,
 			// convert reg (4-byte) ID to xreg (8-byte) ID
 			Field:   uint8(regID / 2),
 			HasMask: false,
-			Value:   &openflow15.ByteArrayField{Data: data},
+			Value:   &openflow15.ByteArrayField{Data: baseData},
 		}
 	}
 	testPriority, testRule, testLogLabel := "61800", "test-rule", "test-log-label"
@@ -225,11 +232,11 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
 	dropK8sDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
 	redirectDispositionData := []byte{0x11, 0x10, 0x00, 0x11}
-	// need 8 bytes (full register) of data for the conjunction
-	// this will be used for one of the following registers depending on the test case:
+	// use 4 bytes of data for the conjunction identifier, this will be used for one of
+	// the following registers depending on the test case:
 	// openflow.APConjIDField, openflow.TFEgressConjIDField, openflow.TFIngressConjIDField
 	// the data itself is not relevant
-	conjunctionData := []byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11}
+	conjunctionData := []byte{0x11, 0x11, 0x11, 0x11}
 	srcIP := net.ParseIP("192.168.1.1")
 	destIP := net.ParseIP("192.168.1.2")
 	testPacket := &binding.Packet{
@@ -251,6 +258,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 2},
 	})
 
+	antreaIngressRuleTableID := openflow.AntreaPolicyIngressRuleTable.GetID()
 	tests := []struct {
 		name            string
 		tableID         uint8
@@ -259,6 +267,7 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 		ob              *logInfo
 		wantOb          *logInfo
 		wantErr         error
+		tableIDInReg    *uint8
 	}{
 		{
 			name:    "ANNP Allow Ingress",
@@ -370,6 +379,46 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				logLabel:     testLogLabel,
 			},
 		},
+		{
+			name:    "Antrea-native Policy Allow from output table",
+			tableID: openflow.OutputTable.GetID(),
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					true, testANNPRef, testPriority, testRule, testLogLabel)
+			},
+			dispositionData: allowDispositionData,
+			wantOb: &logInfo{
+				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition:  actionAllow,
+				npRef:        testANNPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     testRule,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     testLogLabel,
+			},
+			tableIDInReg: &antreaIngressRuleTableID,
+		},
+		{
+			name:    "Antrea-native Policy Drop from output table",
+			tableID: openflow.OutputTable.GetID(),
+			expectedCalls: func(mockClient *openflowtesting.MockClientMockRecorder) {
+				mockClient.GetPolicyInfoFromConjunction(gomock.Any()).Return(
+					true, testANNPRef, testPriority, testRule, testLogLabel)
+			},
+			dispositionData: dropCNPDispositionData,
+			wantOb: &logInfo{
+				tableName:    openflow.AntreaPolicyIngressRuleTable.GetName(),
+				disposition:  actionDrop,
+				npRef:        testANNPRef.ToString(),
+				ofPriority:   testPriority,
+				ruleName:     testRule,
+				direction:    "Ingress",
+				appliedToRef: "default/destPod",
+				logLabel:     testLogLabel,
+			},
+			tableIDInReg: &antreaIngressRuleTableID,
+		},
 	}
 
 	for _, tc := range tests {
@@ -389,6 +438,23 @@ func TestGetNetworkPolicyInfo(t *testing.T) {
 				}
 				ingressMatch := generateMatch(regID, conjunctionData)
 				matchers = append(matchers, ingressMatch)
+			}
+			if tc.tableIDInReg != nil {
+				tableMatchRegID := openflow.PacketInTableField.GetRegID()
+				tableRegData := make([]byte, 4, 4)
+				binary.BigEndian.PutUint32(tableRegData[0:], uint32(*tc.tableIDInReg))
+				found := false
+				for _, m := range matchers {
+					if m.Class == openflow15.OXM_CLASS_PACKET_REGS && m.Field == uint8(tableMatchRegID/2) {
+						copy(m.Value.(*openflow15.ByteArrayField).Data[0:4], tableRegData)
+						found = true
+						break
+					}
+				}
+				if !found {
+					tableMatch := generateMatch(tableMatchRegID, tableRegData)
+					matchers = append(matchers, tableMatch)
+				}
 			}
 			pktIn := &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{

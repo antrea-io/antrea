@@ -52,11 +52,12 @@ import (
 )
 
 var (
-	br             = "br01"
-	c              ofClient.Client
-	roundInfo      = types.RoundInfo{RoundNum: 0, PrevRoundNum: nil}
-	ovsCtlClient   = ovsctl.NewClient(br)
-	bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, br)
+	br               = "br01"
+	c                ofClient.Client
+	roundInfo        = types.RoundInfo{RoundNum: 0, PrevRoundNum: nil}
+	ovsCtlClient     = ovsctl.NewClient(br)
+	bridgeMgmtAddr   = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, br)
+	groupIDAllocator = ofClient.NewGroupAllocator()
 )
 
 const (
@@ -118,7 +119,7 @@ func TestConnectivityFlows(t *testing.T) {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -174,7 +175,7 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, true, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, true, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -237,7 +238,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -269,7 +270,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	t.Run("testInstallPodFlows", func(t *testing.T) {
 		testInstallPodFlows(t, config)
 	})
-	t.Run("testInstallPodFlows", func(t *testing.T) {
+	t.Run("testReplayFlows", func(t *testing.T) {
 		testReplayFlows(t)
 	})
 }
@@ -279,7 +280,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -360,6 +361,8 @@ func testReplayFlows(t *testing.T) {
 	t.Logf("Counted %d flows before deletion & reconciliation", count1)
 	err = ofTestUtils.OfctlDeleteFlows(ovsCtlClient)
 	require.Nil(t, err, "Error when deleting flows from OVS bridge")
+	err = ofTestUtils.OfctlDeleteGroups(ovsCtlClient)
+	require.Nil(t, err, "Error when deleting groups from OVS bridge")
 	count2 := countFlows()
 	assert.Zero(t, count2, "Expected no flows after deletion")
 	c.ReplayFlows()
@@ -462,7 +465,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -576,7 +579,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, true, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -617,7 +620,7 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, false, false, false, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -707,7 +710,7 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1136,7 +1139,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", podMAC.String()),
-					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier", podOFPort),
+					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier", podOFPort),
 				},
 			},
 		},
@@ -1263,7 +1266,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier", agentconfig.HostGatewayOFPort),
+					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier", agentconfig.HostGatewayOFPort),
 				},
 			},
 		},
@@ -1365,7 +1368,7 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", vMAC.String()),
-					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier", agentconfig.DefaultTunOFPort),
+					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier", agentconfig.DefaultTunOFPort),
 				},
 			},
 		},
@@ -1641,7 +1644,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		{
 			"Output",
 			[]*ofTestUtils.ExpectFlow{
-				{MatchStr: "priority=200,reg0=0x100/0x100", ActStr: "output:NXM_NX_REG1[]"},
+				{MatchStr: "priority=200,reg0=0x200000/0x600000", ActStr: "output:NXM_NX_REG1[]"},
 			},
 		},
 	}
@@ -1745,11 +1748,11 @@ func prepareTrafficControlFlows(sourceOFPorts []uint32, targetOFPort, returnOFPo
 			"Output",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: "priority=211,reg0=0x100/0x100,reg4=0x400000/0xc00000",
+					MatchStr: "priority=211,reg0=0x200000/0x600000,reg4=0x400000/0xc00000",
 					ActStr:   "output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
 				},
 				{
-					MatchStr: "priority=211,reg0=0x100/0x100,reg4=0x800000/0xc00000",
+					MatchStr: "priority=211,reg0=0x200000/0x600000,reg4=0x800000/0xc00000",
 					ActStr:   "output:NXM_NX_REG9[]",
 				},
 			},
@@ -1759,7 +1762,7 @@ func prepareTrafficControlFlows(sourceOFPorts []uint32, targetOFPort, returnOFPo
 		"TrafficControl",
 		[]*ofTestUtils.ExpectFlow{
 			{
-				MatchStr: "priority=210,reg0=0x106/0x10f",
+				MatchStr: "priority=210,reg0=0x200006/0x60000f",
 				ActStr:   "goto_table:Output",
 			},
 		},
@@ -1785,7 +1788,7 @@ func TestEgressMarkFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, true, false, false, false, false, false, false, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1842,7 +1845,7 @@ func TestTrafficControlFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, false, false, false, false, false, false, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), false, false, false, false, false, false, false, false, false, true, false, groupIDAllocator)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 

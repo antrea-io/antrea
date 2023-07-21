@@ -195,7 +195,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table name.
-	tableID := pktIn.TableId
+	tableID := getPacketInTableID(pktIn)
 	ob.tableName = openflow.GetFlowTableName(tableID)
 
 	var localIP string

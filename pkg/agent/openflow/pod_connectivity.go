@@ -253,24 +253,32 @@ func (f *featurePodConnectivity) trafficControlCommonFlows() []binding.Flow {
 	return []binding.Flow{
 		// This generates the flow to output packets to the original target port as well as mirror the packets to the target
 		// traffic control port.
-		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh+1).
+		OutputTable.ofTable.BuildFlow(priorityHigh+1).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark, TrafficControlMirrorRegMark).
+			MatchRegMark(OutputToOFPortRegMark, TrafficControlMirrorRegMark).
 			Action().OutputToRegField(TargetOFPortField).
 			Action().OutputToRegField(TrafficControlTargetOFPortField).
 			Done(),
 		// This generates the flow to output the packets to be redirected to the target traffic control port.
-		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh+1).
+		OutputTable.ofTable.BuildFlow(priorityHigh+1).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark, TrafficControlRedirectRegMark).
+			MatchRegMark(OutputToOFPortRegMark, TrafficControlRedirectRegMark).
 			Action().OutputToRegField(TrafficControlTargetOFPortField).
 			Done(),
 		// This generates the flow to forward the returned packets (with FromTCReturnRegMark) to stageOutput directly
 		// after loading output port number to reg1 in L2ForwardingCalcTable.
 		TrafficControlTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark, FromTCReturnRegMark).
+			MatchRegMark(OutputToOFPortRegMark, FromTCReturnRegMark).
 			Action().GotoStage(stageOutput).
 			Done(),
 	}
+}
+
+func (f *featurePodConnectivity) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featurePodConnectivity) replayGroups() []binding.OFEntry {
+	return nil
 }

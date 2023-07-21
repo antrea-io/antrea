@@ -16,6 +16,8 @@ package openflow
 
 import (
 	"antrea.io/libOpenflow/openflow15"
+
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 type featureTraceflow struct {
@@ -38,4 +40,12 @@ func (f *featureTraceflow) initFlows() []*openflow15.FlowMod {
 
 func (f *featureTraceflow) replayFlows() []*openflow15.FlowMod {
 	return []*openflow15.FlowMod{}
+}
+
+func (f *featureTraceflow) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureTraceflow) replayGroups() []binding.OFEntry {
+	return nil
 }
