@@ -26,8 +26,12 @@ type Interface interface {
 	AntreaAgentInfos() AntreaAgentInfoInformer
 	// AntreaControllerInfos returns a AntreaControllerInfoInformer.
 	AntreaControllerInfos() AntreaControllerInfoInformer
+	// ClusterGroups returns a ClusterGroupInformer.
+	ClusterGroups() ClusterGroupInformer
 	// ExternalIPPools returns a ExternalIPPoolInformer.
 	ExternalIPPools() ExternalIPPoolInformer
+	// Groups returns a GroupInformer.
+	Groups() GroupInformer
 	// Tiers returns a TierInformer.
 	Tiers() TierInformer
 }
@@ -53,9 +57,19 @@ func (v *version) AntreaControllerInfos() AntreaControllerInfoInformer {
 	return &antreaControllerInfoInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// ClusterGroups returns a ClusterGroupInformer.
+func (v *version) ClusterGroups() ClusterGroupInformer {
+	return &clusterGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // ExternalIPPools returns a ExternalIPPoolInformer.
 func (v *version) ExternalIPPools() ExternalIPPoolInformer {
 	return &externalIPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Groups returns a GroupInformer.
+func (v *version) Groups() GroupInformer {
+	return &groupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Tiers returns a TierInformer.

@@ -1516,7 +1516,7 @@ without having to update individual policy rules.
 Below are some example ClusterGroup specs:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterGroup
 metadata:
   name: test-cg-sel
@@ -1528,7 +1528,7 @@ spec:
     matchLabels:
       env: prod
 ---
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
@@ -1537,7 +1537,7 @@ spec:
   ipBlocks:
     - cidr: 10.0.10.0/24
 ---
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterGroup
 metadata:
   name: test-cg-svc-ref
@@ -1547,7 +1547,7 @@ spec:
     name: test-service
     namespace: default
 ---
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterGroup
 metadata:
   name: test-cg-nested
@@ -1643,7 +1643,7 @@ Below are some example Group specs:
 
 ```yaml
 # Group that selects all Pods labeled role: db in the default Namespace
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: Group
 metadata:
   name: test-grp-sel
@@ -1655,7 +1655,7 @@ spec:
 ---
 # Group that selects all Pods labeled role: db in Namespaces labeled env: prod.
 # This Group cannot be used in Antrea NetworkPolicy appliedTo because of the namespaceSelector.
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: Group
 metadata:
   name: test-grp-with-namespace
@@ -1668,7 +1668,7 @@ spec:
       env: prod
 ---
 # Group that selects IP block 10.0.10.0/24.
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: Group
 metadata:
   name: test-grp-ip-block
@@ -1678,7 +1678,7 @@ spec:
     - cidr: 10.0.10.0/24
 ---
 # Group that selects Service named test-service in the default Namespace.
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: Group
 metadata:
   name: test-grp-svc-ref
@@ -1689,7 +1689,7 @@ spec:
     namespace: default
 ---
 # Group that includes the previous Groups as childGroups.
-apiVersion: crd.antrea.io/v1alpha3
+apiVersion: crd.antrea.io/v1beta1
 kind: Group
 metadata:
   name: test-grp-nested

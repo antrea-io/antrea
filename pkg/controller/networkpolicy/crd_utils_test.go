@@ -26,7 +26,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/features"
 )
@@ -297,9 +297,9 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	matchAllPodsPeer := matchAllPeer
 	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil, nil).NormalizedName)}
 	// cgA with selector present in cache
-	cgA := crdv1alpha3.ClusterGroup{
+	cgA := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -506,23 +506,23 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 	selector := metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}
 	cidr := "10.0.0.0/24"
 	// cgA with selector present in cache
-	clusterGroupWithSelector := &crdv1alpha3.ClusterGroup{
+	clusterGroupWithSelector := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec:       crdv1alpha3.GroupSpec{NamespaceSelector: &selector},
+		Spec:       crdv1beta1.GroupSpec{NamespaceSelector: &selector},
 	}
 	// cgB with IPBlock present in cache
-	clusterGroupWithIPBlock := &crdv1alpha3.ClusterGroup{
+	clusterGroupWithIPBlock := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec:       crdv1alpha3.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
+		Spec:       crdv1beta1.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
 	}
-	groupWithSelector := &crdv1alpha3.Group{
+	groupWithSelector := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
-		Spec:       crdv1alpha3.GroupSpec{PodSelector: &selector},
+		Spec:       crdv1beta1.GroupSpec{PodSelector: &selector},
 	}
 	// gB with IPBlock present in cache
-	groupWithIPBlock := &crdv1alpha3.Group{
+	groupWithIPBlock := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
-		Spec:       crdv1alpha3.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
+		Spec:       crdv1beta1.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
 	}
 	_, npc := newController(nil, nil)
 	npc.addClusterGroup(clusterGroupWithSelector)

@@ -29,7 +29,6 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -93,9 +92,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"internal.antrea.io/service-account": saA.Name}}
 	queryAddr := "224.0.0.1"
 	reportAddr := "225.1.2.3"
-	cgA := crdv1alpha3.ClusterGroup{
+	cgA := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -1792,16 +1791,16 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 	cidr := "10.0.0.0/24"
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
 	// cgA with selector present in cache
-	cgA := crdv1alpha3.ClusterGroup{
+	cgA := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	// cgB with IPBlock present in cache
-	cgB := crdv1alpha3.ClusterGroup{
+	cgB := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			IPBlocks: []crdv1alpha1.IPBlock{
 				{
 					CIDR: cidr,
@@ -1810,35 +1809,35 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 		},
 	}
 	// cgC not found in cache
-	cgC := crdv1alpha3.ClusterGroup{
+	cgC := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
-	cgNested1 := crdv1alpha3.ClusterGroup{
+	cgNested1 := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
-		Spec: crdv1alpha3.GroupSpec{
-			ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgB"},
+		Spec: crdv1beta1.GroupSpec{
+			ChildGroups: []crdv1beta1.ClusterGroupReference{"cgB"},
 		},
 	}
-	cgNested2 := crdv1alpha3.ClusterGroup{
+	cgNested2 := crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
-		Spec: crdv1alpha3.GroupSpec{
-			ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA", "cgB"},
+		Spec: crdv1beta1.GroupSpec{
+			ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA", "cgB"},
 		},
 	}
 	// gA with selector present in cache
-	gA := crdv1alpha3.Group{
+	gA := crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidGA"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	// gB with IPBlock present in cache
-	gB := crdv1alpha3.Group{
+	gB := crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidGB"},
-		Spec: crdv1alpha3.GroupSpec{
+		Spec: crdv1beta1.GroupSpec{
 			IPBlocks: []crdv1alpha1.IPBlock{
 				{
 					CIDR: cidr,
@@ -2003,9 +2002,9 @@ func getCNP() *crdv1alpha1.ClusterNetworkPolicy {
 }
 
 func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
-	group := &crdv1alpha3.ClusterGroup{
+	group := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-		Spec:       crdv1alpha3.GroupSpec{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}},
+		Spec:       crdv1beta1.GroupSpec{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}},
 	}
 	cnpWithSpecAppliedTo := &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnp-with-spec-appliedTo"},
