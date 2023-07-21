@@ -13,7 +13,101 @@ spec:
       schema:
         openAPIV3Schema:
           type: object
-          x-kubernetes-preserve-unknown-fields: true
+          properties:
+            version:
+              type: string
+            controllerConditions:
+              type: array
+              items:
+                type: object
+                required:
+                - type
+                - status
+                - lastHeartbeatTime
+                properties:
+                  lastHeartbeatTime:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                    enum: ['True', 'False', 'Unknown']
+                  type:
+                    type: string
+                    enum: ['ControllerHealthy']
+                  reason:
+                    type: string
+                  message:
+                    type: string
+            serviceRef:
+              type: object
+              properties:
+                kind:
+                  type: string
+                namespace:
+                  type: string
+                name:
+                  type: string
+                uid:
+                  type: string
+                apiVersion:
+                  type: string
+                resourceVersion:
+                  type: string
+                fieldPath:
+                  type: string
+            networkPolicyControllerInfo:
+              type: object
+              properties:
+                networkPolicyNum:
+                  type: integer
+                  format: int32
+                addressGroupNum:
+                  type: integer
+                  format: int32
+                appliedToGroupNum:
+                  type: integer
+                  format: int32
+            apiPort:
+              type: integer
+              minimum: 1
+              maximum: 65535
+            connectedAgentNum:
+              type: integer
+              format: int32
+            podRef:
+              type: object
+              properties:
+                kind:
+                  type: string
+                namespace:
+                  type: string
+                name:
+                  type: string
+                uid:
+                  type: string
+                apiVersion:
+                  type: string
+                resourceVersion:
+                  type: string
+                fieldPath:
+                  type: string
+            nodeRef:
+              type: object
+              properties:
+                kind:
+                  type: string
+                namespace:
+                  type: string
+                name:
+                  type: string
+                uid:
+                  type: string
+                apiVersion:
+                  type: string
+                resourceVersion:
+                  type: string
+                fieldPath:
+                  type: string
       additionalPrinterColumns:
         - description: Health status of the Controller
           jsonPath: ".controllerConditions[?(@.type=='ControllerHealthy')].status"
