@@ -119,6 +119,7 @@ func toAntreaL7ProtocolsForCRD(l7Protocols []v1alpha1.L7Protocol) []controlplane
 	for _, l7p := range l7Protocols {
 		antreaL7Protocols = append(antreaL7Protocols, controlplane.L7Protocol{
 			HTTP: (*controlplane.HTTPProtocol)(l7p.HTTP),
+			TLS:  (*controlplane.TLSProtocol)(l7p.TLS),
 		})
 	}
 	return antreaL7Protocols

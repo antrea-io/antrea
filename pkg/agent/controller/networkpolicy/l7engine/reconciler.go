@@ -44,6 +44,7 @@ const (
 	suricataCommandSocket = "/var/run/suricata/suricata-command.socket"
 
 	protocolHTTP = "http"
+	protocolTLS  = "tls"
 
 	scCmdOK = "OK"
 )
@@ -195,6 +196,14 @@ func convertProtocolHTTP(http *v1beta.HTTPProtocol) string {
 	return strings.Join(keywords, " ")
 }
 
+func convertProtocolTLS(tls *v1beta.TLSProtocol) string {
+	var keywords []string
+	if tls.SNI != "" {
+		keywords = append(keywords, fmt.Sprintf("tls.sni; %s", convertContent(tls.SNI)))
+	}
+	return strings.Join(keywords, " ")
+}
+
 func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta.L7Protocol, enableLogging bool) error {
 	start := time.Now()
 	defer func() {
@@ -214,6 +223,13 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 				protoKeywords[protocolHTTP] = sets.New[string]()
 			}
 			protoKeywords[protocolHTTP].Insert(httpKeywords)
+		}
+		if protocol.TLS != nil {
+			tlsKeywords := convertProtocolTLS(protocol.TLS)
+			if _, ok := protoKeywords[protocolTLS]; !ok {
+				protoKeywords[protocolTLS] = sets.New[string]()
+			}
+			protoKeywords[protocolTLS].Insert(tlsKeywords)
 		}
 	}
 

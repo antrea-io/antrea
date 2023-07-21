@@ -89,6 +89,32 @@ func TestConvertProtocolHTTP(t *testing.T) {
 	}
 }
 
+func TestConvertProtocolTLS(t *testing.T) {
+	testCases := []struct {
+		name     string
+		tls      *v1beta.TLSProtocol
+		expected string
+	}{
+		{
+			name:     "without SNI",
+			tls:      &v1beta.TLSProtocol{},
+			expected: "",
+		},
+		{
+			name: "with SNI",
+			tls: &v1beta.TLSProtocol{
+				SNI: "google.com",
+			},
+			expected: `tls.sni; content:"google.com"; startswith; endswith;`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, convertProtocolTLS(tc.tls))
+		})
+	}
+}
+
 func TestStartSuricata(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defer func() {

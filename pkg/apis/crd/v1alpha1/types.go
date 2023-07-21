@@ -919,6 +919,7 @@ type BundleServerAuthConfiguration struct {
 
 type L7Protocol struct {
 	HTTP *HTTPProtocol `json:"http,omitempty"`
+	TLS  *TLSProtocol  `json:"tls,omitempty"`
 }
 
 // HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together.
@@ -932,4 +933,11 @@ type HTTPProtocol struct {
 	Method string `json:"method,omitempty"`
 	// Path represents the URI path to match (Ex. "/index.html", "/admin").
 	Path string `json:"path,omitempty"`
+}
+
+// TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this
+// matches all TLS handshake packets.
+type TLSProtocol struct {
+	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
+	SNI string `json:"sni,omitempty"`
 }
