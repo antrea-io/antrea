@@ -11,8 +11,6 @@ on:
     - release-*
     - feature/*
 
-env:
-  KIND_VERSION: v0.20.0
 
 jobs:
   check-changes:
@@ -95,6 +93,7 @@ jobs:
         docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
@@ -156,6 +155,7 @@ jobs:
         docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
@@ -223,6 +223,7 @@ jobs:
           docker load -i antrea-ubuntu.tar
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
@@ -290,6 +291,7 @@ jobs:
         docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
@@ -351,6 +353,7 @@ jobs:
         docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
@@ -424,6 +427,7 @@ jobs:
           docker load -i flow-aggregator.tar
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
@@ -486,6 +490,7 @@ jobs:
         docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
     - name: Install Kind
       run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
@@ -530,6 +535,7 @@ jobs:
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
@@ -574,6 +580,7 @@ jobs:
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
@@ -618,6 +625,7 @@ jobs:
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
@@ -662,6 +670,7 @@ jobs:
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
@@ -703,6 +712,7 @@ jobs:
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin

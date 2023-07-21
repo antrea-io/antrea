@@ -4,8 +4,6 @@ on:
     # run once a day at midnight
     - cron: '0 0 * * *'
 
-env:
-  KIND_VERSION: v0.20.0
 
 jobs:
   test-netpol-cyclonus:
@@ -22,6 +20,7 @@ jobs:
       - run: make
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
