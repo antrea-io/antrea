@@ -20,6 +20,10 @@ type AntreaAgentInfoExpansion interface{}
 
 type AntreaControllerInfoExpansion interface{}
 
+type ClusterGroupExpansion interface{}
+
 type ExternalIPPoolExpansion interface{}
+
+type GroupExpansion interface{}
 
 type TierExpansion interface{}

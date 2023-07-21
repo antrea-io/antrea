@@ -26,8 +26,6 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 )
@@ -1757,19 +1755,19 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 func TestValidateAntreaClusterGroup(t *testing.T) {
 	tests := []struct {
 		name           string
-		curCG          *crdv1alpha2.ClusterGroup
-		oldCG          *crdv1alpha2.ClusterGroup
-		existGroup     *crdv1alpha3.ClusterGroup
+		curCG          *crdv1beta1.ClusterGroup
+		oldCG          *crdv1beta1.ClusterGroup
+		existGroup     *crdv1beta1.ClusterGroup
 		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
 			name: "cg-invalid-label-key",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-invalid-label-key",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo=": "bar"},
 					},
@@ -1780,11 +1778,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-invalid-label-value",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-invalid-label-value",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar="},
 					},
@@ -1795,11 +1793,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-three-fields-set",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-three-fields-set",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -1816,11 +1814,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-psel-and-nssel",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-set-with-podselector-and-namespaceselector",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -1833,11 +1831,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-nssel-and-eesel",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "annp-group-set-with-podselector-and-namespaceselector",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -1850,11 +1848,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-psel-and-eesel",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-set-with-podselector-and-namespaceselector",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -1868,11 +1866,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-podselector-and-ipblock",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-set-with-podselector-and-ipblock",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -1886,11 +1884,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-ipblock",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-set-with-ipblock",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "10.0.0.10/32"},
 					},
@@ -1900,11 +1898,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-multicast",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-set-with-ipblock",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "224.0.0.0/24"},
 					},
@@ -1914,11 +1912,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-set-with-multicast-and-unicast",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-set-with-ipblock",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "224.0.0.0/24"},
 						{CIDR: "10.0.0.10/32"},
@@ -1930,32 +1928,32 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-childGroup",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-with-childGroup",
 				},
-				Spec: crdv1alpha2.GroupSpec{
-					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgA", "cgB"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA", "cgB"},
 				},
 			},
 			operation: admv1.Create,
 		},
 		{
 			name: "already-child-to-be-parent",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "already-child-to-be-parent",
 				},
-				Spec: crdv1alpha2.GroupSpec{
-					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgA"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"},
 				},
 			},
-			existGroup: &crdv1alpha3.ClusterGroup{
+			existGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cgParent",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"already-child-to-be-parent"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"already-child-to-be-parent"},
 				},
 			},
 			operation:      admv1.Create,
@@ -1963,20 +1961,20 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "to-be-parent-of-parent",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "to-be-parent-of-parent",
 				},
-				Spec: crdv1alpha2.GroupSpec{
-					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgParent"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgParent"},
 				},
 			},
-			existGroup: &crdv1alpha3.ClusterGroup{
+			existGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cgParent",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"},
 				},
 			},
 			operation:      admv1.Create,
@@ -1985,21 +1983,21 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		// Update using the same func as creation. Only put one case here.
 		{
 			name: "cg-update",
-			curCG: &crdv1alpha2.ClusterGroup{
+			curCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-update",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "10.0.0.10/32"},
 					},
 				},
 			},
-			oldCG: &crdv1alpha2.ClusterGroup{
+			oldCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-update",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2009,11 +2007,11 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-to-delete",
-			oldCG: &crdv1alpha2.ClusterGroup{
+			oldCG: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cg-to-delete",
 				},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2044,20 +2042,20 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 func TestValidateAntreaGroup(t *testing.T) {
 	tests := []struct {
 		name           string
-		curGroup       *crdv1alpha3.Group
-		oldGroup       *crdv1alpha3.Group
-		existGroup     *crdv1alpha3.Group
+		curGroup       *crdv1beta1.Group
+		oldGroup       *crdv1beta1.Group
+		existGroup     *crdv1beta1.Group
 		operation      admv1.Operation
 		expectedReason string
 	}{
 		{
 			name: "annp-group-three-fields-set",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-three-fields-set",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2074,12 +2072,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-set-with-psel-and-nssel",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2092,12 +2090,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-set-with-nssel-and-eesel",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					NamespaceSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2110,12 +2108,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-set-with-psel-and-eesel",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-set-with-podselector-and-namespaceselector",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2129,12 +2127,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-set-with-podselector-and-ipblock",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-set-with-podselector-and-ipblock",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2148,12 +2146,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-set-with-ipblock",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-set-with-ipblock",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "10.0.0.10/32"},
 					},
@@ -2163,12 +2161,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-set-with-invalid-psel",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-set-with-invalid-psel",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo=": "bar"},
 					},
@@ -2179,35 +2177,35 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-with-childGroup",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-with-childGroup",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA", "cgB"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA", "cgB"},
 				},
 			},
 			operation: admv1.Create,
 		},
 		{
 			name: "already-child-to-be-parent",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "already-child-to-be-parent",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"},
 				},
 			},
-			existGroup: &crdv1alpha3.Group{
+			existGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cgParent",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"already-child-to-be-parent"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"already-child-to-be-parent"},
 				},
 			},
 			operation:      admv1.Create,
@@ -2215,22 +2213,22 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "to-be-parent-of-parent",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "to-be-parent-of-parent",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgParent"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgParent"},
 				},
 			},
-			existGroup: &crdv1alpha3.Group{
+			existGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cgParent",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
-					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA"},
+				Spec: crdv1beta1.GroupSpec{
+					ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"},
 				},
 			},
 			operation:      admv1.Create,
@@ -2239,23 +2237,23 @@ func TestValidateAntreaGroup(t *testing.T) {
 		// Update using the same func as creation. Only put one case here.
 		{
 			name: "annp-group-update",
-			curGroup: &crdv1alpha3.Group{
+			curGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-update",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					IPBlocks: []crdv1alpha1.IPBlock{
 						{CIDR: "10.0.0.10/32"},
 					},
 				},
 			},
-			oldGroup: &crdv1alpha3.Group{
+			oldGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-update",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},
@@ -2265,12 +2263,12 @@ func TestValidateAntreaGroup(t *testing.T) {
 		},
 		{
 			name: "annp-group-to-delete",
-			oldGroup: &crdv1alpha3.Group{
+			oldGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "annp-group-to-delete",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha3.GroupSpec{
+				Spec: crdv1beta1.GroupSpec{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"foo": "bar"},
 					},

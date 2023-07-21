@@ -64,8 +64,8 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 	acnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
 	annpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
-	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
-	grpInformer := crdInformerFactory.Crd().V1alpha3().Groups()
+	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
+	grpInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
 
 	addressGroupStore := store.NewAddressGroupStore()
