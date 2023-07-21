@@ -145,6 +145,11 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
+# disable gcloud prompts, e.g., when deleting resources
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+export CLOUDSDK_CORE_PROJECT="$GKE_PROJECT"
+
 function setup_gke() {
     if [[ -z ${K8S_VERSION+x} ]]; then
         K8S_VERSION=$(${GCLOUD_PATH} container get-server-config --zone ${GKE_ZONE} | awk '/validMasterVersions/{getline;print}' | cut -c3- )
@@ -239,9 +244,11 @@ function deliver_antrea_to_gke() {
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
 
-    # Restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
-    kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork \
-        --no-headers=true | grep '<none>' | awk '{ print $1 }')
+    # Restart all Pods in all Namespaces (kube-system, gmp-system, etc) so they can be managed by Antrea.
+    for ns in $(kubectl get ns -o=jsonpath=''{.items[*].metadata.name}'' --no-headers=true); do
+        pods=$(kubectl get pods -n $ns -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
+        [ -z "$pods" ] || kubectl delete pods -n $ns $pods
+    done
     kubectl rollout status --timeout=2m deployment.apps/kube-dns -n kube-system
     # wait for other pods in the kube-system namespace to become ready
     sleep 5
