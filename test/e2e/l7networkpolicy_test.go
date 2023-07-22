@@ -172,11 +172,13 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string, serverName string, canAccess bool) {
 	url := fmt.Sprintf("https://%s", serverName)
 	assert.NoError(t, wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
-		_, _, err := data.runWgetCommandFromTestPodWithRetry(clientPodName, data.testNamespace, agnhostContainerName, url, 5)
+		stdout, stderr, err := data.runWgetCommandFromTestPodWithRetry(clientPodName, data.testNamespace, agnhostContainerName, url, 5)
 		if canAccess && err != nil {
+			t.Logf("Failed to access %s: %v\nStdout: %s\nStderr: %s\n", url, err, stdout, stderr)
 			return false, err
 		} else if !canAccess && err == nil {
-			return false, fmt.Errorf("should not be able to access to the server")
+			t.Logf("Expected not to access the server, but the request succeeded.\nStdout: %s\nStderr: %s\n", stdout, stderr)
+			return false, fmt.Errorf("expected not to access the server %s, but the request succeeded", url)
 		}
 		return true, nil
 	}))
@@ -294,10 +296,10 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
 
-	l7ProtocolAllowsGoogle := []crdv1beta1.L7Protocol{
+	l7ProtocolAllowsGithub := []crdv1beta1.L7Protocol{
 		{
 			TLS: &crdv1beta1.TLSProtocol{
-				SNI: "*.google.com",
+				SNI: "github.com",
 			},
 		},
 	}
@@ -309,23 +311,23 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 		},
 	}
 
-	policyAllowSNI1 := "test-l7-tls-allow-sni-google"
-	policyAllowSNI2 := "test-l7-tls-allow-sni-facebook"
+	policyAllowSNIGithub := "test-l7-tls-allow-sni-github"
+	policyAllowSNIFacebook := "test-l7-tls-allow-sni-facebook"
 
-	// Create two L7 NetworkPolicies, one allows server name '*.google.com', the other allows '*.facebook.com'. Note
+	// Create two L7 NetworkPolicies, one allows server name 'github.com', the other allows '*.facebook.com'. Note
 	// that, the priority of the first one is higher than the second one, and they have the same appliedTo labels and Pod
 	// selector labels.
-	createL7NetworkPolicy(t, data, false, policyAllowSNI1, 1, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsGoogle)
-	createL7NetworkPolicy(t, data, false, policyAllowSNI2, 2, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsFacebook)
+	createL7NetworkPolicy(t, data, false, policyAllowSNIGithub, 1, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsGithub)
+	createL7NetworkPolicy(t, data, false, policyAllowSNIFacebook, 2, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsFacebook)
 	time.Sleep(networkPolicyDelay)
 
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", true)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "github.com", true)
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", false)
 
-	// Delete the first L7 NetworkPolicy that allows server name '*.google.com'.
+	// Delete the first L7 NetworkPolicy that allows server name 'github.com'.
 	data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNI1, metav1.DeleteOptions{})
 	time.Sleep(networkPolicyDelay)
 
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", false)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "github.com", false)
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", true)
 }
