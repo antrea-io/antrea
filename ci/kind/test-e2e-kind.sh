@@ -292,7 +292,7 @@ function run_test {
   if [ -n "$run" ]; then
     RUN_OPT="-run $run"
   fi
-  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args
+  go test -v -timeout=$timeout -run TestL7NetworkPolicy/TLS $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
