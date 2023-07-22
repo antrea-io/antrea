@@ -16,6 +16,8 @@ package clickhouseclient
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -32,6 +34,7 @@ import (
 )
 
 const (
+	ProtocolUnknown   = -1
 	maxQueueSize      = 1 << 19 // 524288. ~500MB assuming 1KB per record
 	queueFlushTimeout = 10 * time.Second
 	insertQuery       = `INSERT INTO flows (
@@ -92,13 +95,6 @@ const (
 // PrepareClickHouseConnection is used for unit testing
 var PrepareClickHouseConnection = prepareConnection
 
-type protocol string
-
-const (
-	protocolTCP     = "tcp"
-	protocolUnknown = ""
-)
-
 type stopPayload struct {
 	flushQueue bool
 }
@@ -126,13 +122,16 @@ type ClickHouseExportProcess struct {
 }
 
 type ClickHouseConfig struct {
-	Username       string
-	Password       string
-	Database       string
-	DatabaseURL    string
-	Debug          bool
-	Compress       *bool
-	CommitInterval time.Duration
+	Username           string
+	Password           string
+	Database           string
+	DatabaseURL        string
+	Debug              bool
+	Compress           *bool
+	CommitInterval     time.Duration
+	CACert             bool
+	InsecureSkipVerify bool
+	Certificate        []byte
 }
 
 func NewClickHouseClient(config ClickHouseConfig, clusterUUID string) (*ClickHouseExportProcess, error) {
@@ -366,7 +365,7 @@ func (ch *ClickHouseExportProcess) pushRecordsToFrontOfQueue(records []*flowreco
 func prepareConnection(config ClickHouseConfig) (*sql.DB, error) {
 	connect, err := ConnectClickHouse(&config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error when connecting to ClickHouse, %w", err)
 	}
 	// Test open Transaction
 	tx, err := connect.Begin()
@@ -411,9 +410,9 @@ func (ch *ClickHouseExportProcess) GetClickHouseConfig() ClickHouseConfig {
 }
 
 func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
-	_, addr, err := parseDatabaseURL(config.DatabaseURL)
+	proto, addr, enableTLS, err := parseDatabaseURL(config.DatabaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error when parsing database url: %w", err)
 	}
 	var connect *sql.DB
 	var connErr error
@@ -430,6 +429,7 @@ func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
 				Password: config.Password,
 				Database: config.Database,
 			},
+			Protocol: proto,
 		}
 		var compression clickhouse.CompressionMethod
 		if *config.Compress {
@@ -438,7 +438,20 @@ func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
 		opt.Compression = &clickhouse.Compression{
 			Method: compression,
 		}
-
+		if enableTLS { // #nosec G402: ignore insecure options
+			opt.TLS = &tls.Config{
+				InsecureSkipVerify: config.InsecureSkipVerify,
+			}
+			if config.CACert {
+				caCertPool := x509.NewCertPool()
+				ok := caCertPool.AppendCertsFromPEM(config.Certificate)
+				if !ok {
+					connErr = fmt.Errorf("failed to add the custom CA certificate")
+					return false, nil
+				}
+				opt.TLS.RootCAs = caCertPool
+			}
+		}
 		connect = clickhouse.OpenDB(&opt)
 		if err := connect.Ping(); err != nil {
 			if exception, ok := err.(*clickhouse.Exception); ok {
@@ -456,19 +469,24 @@ func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
 	return connect, nil
 }
 
-func parseDatabaseURL(dbUrl string) (protocol, string, error) {
+func parseDatabaseURL(dbUrl string) (clickhouse.Protocol, string, bool, error) {
 	u, err := url.Parse(dbUrl)
 	if err != nil {
-		return protocolUnknown, "", fmt.Errorf("failed to parse ClickHouse database URL: %w", err)
+		return ProtocolUnknown, "", false, fmt.Errorf("failed to parse ClickHouse database URL: %w", err)
 	}
 	if u.Path != "" || u.RawQuery != "" || u.User != nil {
-		return protocolUnknown, "", fmt.Errorf("invalid ClickHouse database URL '%s': path, query string or user info should not be set", dbUrl)
+		return ProtocolUnknown, "", false, fmt.Errorf("invalid ClickHouse database URL '%s': path, query string or user info should not be set", dbUrl)
 	}
-	proto := u.Scheme
-	switch proto {
-	case protocolTCP:
-		return protocolTCP, u.Host, nil
+	switch u.Scheme {
+	case "http":
+		return clickhouse.HTTP, u.Host, false, nil
+	case "https":
+		return clickhouse.HTTP, u.Host, true, nil
+	case "tcp":
+		return clickhouse.Native, u.Host, false, nil
+	case "tls":
+		return clickhouse.Native, u.Host, true, nil
 	default:
-		return protocolUnknown, "", fmt.Errorf("connection over %s transport protocol is not supported", proto)
+		return ProtocolUnknown, "", false, fmt.Errorf("connection over %s transport protocol is not supported", u.Scheme)
 	}
 }

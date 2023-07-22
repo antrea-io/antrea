@@ -84,6 +84,7 @@ const (
 	antreaWindowsDaemonSet     string = "antrea-agent-windows"
 	antreaDeployment           string = "antrea-controller"
 	flowAggregatorDeployment   string = "flow-aggregator"
+	flowAggregatorCHSecret     string = "clickhouse-ca"
 	antreaDefaultGW            string = "antrea-gw0"
 	testAntreaIPAMNamespace    string = "antrea-ipam-test"
 	testAntreaIPAMNamespace11  string = "antrea-ipam-test-11"
@@ -102,6 +103,7 @@ const (
 	flowAggregatorYML          string = "flow-aggregator.yml"
 	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
 	flowVisibilityYML          string = "flow-visibility.yml"
+	flowVisibilityTLSYML       string = "flow-visibility-tls.yml"
 	chOperatorYML              string = "clickhouse-operator-install-bundle.yml"
 	flowVisibilityCHPodName    string = "chi-clickhouse-clickhouse-0-0-0"
 	flowVisibilityNamespace    string = "flow-visibility"
@@ -142,6 +144,8 @@ const (
 	aggregatorClickHouseCommitInterval  = 1 * time.Second
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
+
+	defaultCHDatabaseURL = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 )
 
 type ClusterNode struct {
@@ -198,6 +202,11 @@ type TestOptions struct {
 	// deployAntrea determines whether to deploy Antrea before running tests. It requires antrea.yml to be present in
 	// the home directory of the control-plane Node. Note it doesn't affect the tests that redeploy Antrea themselves.
 	deployAntrea bool
+}
+
+type flowVisibilityTestOptions struct {
+	databaseURL      string
+	secureConnection bool
 }
 
 var testOptions TestOptions
@@ -785,10 +794,15 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 }
 
 // deployFlowVisibilityClickHouse deploys ClickHouse operator and DB.
-func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
+func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions) (string, error) {
 	err := data.CreateNamespace(flowVisibilityNamespace, nil)
 	if err != nil {
 		return "", err
+	}
+
+	visibilityYML := flowVisibilityYML
+	if o.secureConnection {
+		visibilityYML = flowVisibilityTLSYML
 	}
 
 	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", chOperatorYML))
@@ -796,7 +810,7 @@ func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
 		return "", fmt.Errorf("error when deploying the ClickHouse Operator YML; %s not available on the control-plane Node", chOperatorYML)
 	}
 	if err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
-		rc, stdout, stderr, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowVisibilityYML))
+		rc, stdout, stderr, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", visibilityYML))
 		if err != nil || rc != 0 {
 			// ClickHouseInstallation CRD from ClickHouse Operator install bundle applied soon before
 			// applying CR. Sometimes apiserver validation fails to recognize resource of
@@ -804,7 +818,7 @@ func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
 			if strings.Contains(stderr, "ClickHouseInstallation") || strings.Contains(stdout, "ClickHouseInstallation") {
 				return false, nil
 			}
-			return false, fmt.Errorf("error when deploying the flow visibility YML %s: %s, %s, %v", flowVisibilityYML, stdout, stderr, err)
+			return false, fmt.Errorf("error when deploying the flow visibility YML %s: %s, %s, %v", visibilityYML, stdout, stderr, err)
 		}
 		return true, nil
 	}); err != nil {
@@ -871,7 +885,8 @@ func (data *TestData) deleteClickHouseOperator() error {
 }
 
 // deployFlowAggregator deploys the Flow Aggregator with ipfix collector and clickHouse address.
-func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
+func (data *TestData) deployFlowAggregator(ipfixCollector string, o flowVisibilityTestOptions) error {
+
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
@@ -880,7 +895,30 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
+	// clickhouse-ca Secret is created in the flow-visibility Namespace. In order to make it accessible to the Flow Aggregator,
+	// we copy it from Namespace flow-visibility to Namespace flow-aggregator when secureConnection is true.
+	if o.secureConnection {
+		secret, err := data.clientset.CoreV1().Secrets(flowVisibilityNamespace).Get(context.TODO(), flowAggregatorCHSecret, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to get Secret with name %s in Namespace %s: %v", flowAggregatorCHSecret, flowVisibilityNamespace, err)
+		}
+		newSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: flowAggregatorNamespace,
+				Name:      flowAggregatorCHSecret,
+			},
+			Data: secret.Data,
+		}
+		_, err = data.clientset.CoreV1().Secrets(flowAggregatorNamespace).Create(context.TODO(), newSecret, metav1.CreateOptions{})
+		if errors.IsAlreadyExists(err) {
+			_, err = data.clientset.CoreV1().Secrets(flowAggregatorNamespace).Update(context.TODO(), newSecret, metav1.UpdateOptions{})
+		}
+		if err != nil {
+			return fmt.Errorf("unable to copy ClickHouse CA secret '%s' from Namespace '%s' to Namespace '%s': %v", flowAggregatorCHSecret, flowVisibilityNamespace, flowAggregatorNamespace, err)
+		}
+	}
+
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, o); err != nil {
 		return err
 	}
 	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
@@ -899,7 +937,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
 	return nil
 }
 
-func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string) error {
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o flowVisibilityTestOptions) error {
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
@@ -921,6 +959,10 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string) e
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
+	flowAggregatorConf.ClickHouse.DatabaseURL = o.databaseURL
+	if o.secureConnection {
+		flowAggregatorConf.ClickHouse.TLS.CACert = true
+	}
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {

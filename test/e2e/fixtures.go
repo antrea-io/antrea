@@ -249,7 +249,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
+func setupTestForFlowAggregator(tb testing.TB, o flowVisibilityTestOptions) (*TestData, bool, bool, error) {
 	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
 	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
 	testData, err := setupTest(tb)
@@ -274,16 +274,18 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
 	tb.Logf("Deploying ClickHouse")
-	chSvcIP, err := testData.deployFlowVisibilityClickHouse()
+	chSvcIP, err := testData.deployFlowVisibilityClickHouse(o)
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
 	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse enabled",
 		ipfixCollectorAddr)
-	if err := testData.deployFlowAggregator(ipfixCollectorAddr); err != nil {
+
+	if err := testData.deployFlowAggregator(ipfixCollectorAddr, o); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
+
 	return testData, v4Enabled, v6Enabled, nil
 }
 

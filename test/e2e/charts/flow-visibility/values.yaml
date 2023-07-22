@@ -1,0 +1,11 @@
+# Settings for ClickHouse
+secureConnection:
+  enable: false
+  # -- Common name to use in the certificate.
+  commonName: "clickhouse-clickhouse.flow-visibility.svc"
+  # -- IP addresses to use in the certificate.
+  ipAddresses: []
+  # -- DNS names to use in the certificate.
+  dnsNames: []
+  # -- Number of days for which the certificate will be valid.
+  daysValid: 365

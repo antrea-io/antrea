@@ -79,6 +79,8 @@ spec:
           readOnly: true
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
+        - name: clickhouse-ca
+          mountPath: /etc/flow-aggregator/certs
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
@@ -91,3 +93,9 @@ spec:
         hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
+      # Make it optional as we only read it when caCert=true.
+      - name: clickhouse-ca
+        secret:
+          secretName: clickhouse-ca
+          defaultMode: 0400
+          optional: true

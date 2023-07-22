@@ -15,10 +15,14 @@
 package exporter
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"reflect"
+	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -31,21 +35,47 @@ type ClickHouseExporter struct {
 	chExportProcess *clickhouseclient.ClickHouseExportProcess
 }
 
+const (
+	CACertFile      = "ca.crt"
+	CertDir         = "/etc/flow-aggregator/certs"
+	DefaultInterval = 1 * time.Second
+	Timeout         = 1 * time.Minute
+)
+
 func buildClickHouseConfig(opt *options.Options) clickhouseclient.ClickHouseConfig {
 	return clickhouseclient.ClickHouseConfig{
-		Username:       os.Getenv("CH_USERNAME"),
-		Password:       os.Getenv("CH_PASSWORD"),
-		Database:       opt.Config.ClickHouse.Database,
-		DatabaseURL:    opt.Config.ClickHouse.DatabaseURL,
-		Debug:          opt.Config.ClickHouse.Debug,
-		Compress:       opt.Config.ClickHouse.Compress,
-		CommitInterval: opt.ClickHouseCommitInterval,
+		Username:           os.Getenv("CH_USERNAME"),
+		Password:           os.Getenv("CH_PASSWORD"),
+		Database:           opt.Config.ClickHouse.Database,
+		DatabaseURL:        opt.Config.ClickHouse.DatabaseURL,
+		Debug:              opt.Config.ClickHouse.Debug,
+		Compress:           opt.Config.ClickHouse.Compress,
+		CommitInterval:     opt.ClickHouseCommitInterval,
+		CACert:             opt.Config.ClickHouse.TLS.CACert,
+		InsecureSkipVerify: opt.Config.ClickHouse.TLS.InsecureSkipVerify,
 	}
 }
 
 func NewClickHouseExporter(k8sClient kubernetes.Interface, opt *options.Options) (*ClickHouseExporter, error) {
 	chConfig := buildClickHouseConfig(opt)
-	klog.InfoS("ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug, "compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval)
+	klog.InfoS("ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug,
+		"compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval, "insecureSkipVerify", chConfig.InsecureSkipVerify, "caCert", chConfig.CACert)
+	var errMessage error
+	if chConfig.CACert {
+		err := wait.Poll(DefaultInterval, Timeout, func() (bool, error) {
+			caCertPath := path.Join(CertDir, CACertFile)
+			certificate, err := os.ReadFile(caCertPath)
+			if err != nil {
+				errMessage = err
+				return false, nil
+			}
+			chConfig.Certificate = certificate
+			return true, nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error when reading custom CA certificate: %v", errMessage)
+		}
+	}
 	clusterUUID, err := getClusterUUID(k8sClient)
 	if err != nil {
 		return nil, err

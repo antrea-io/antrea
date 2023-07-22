@@ -162,11 +162,75 @@ type testFlow struct {
 	dstPodName string
 }
 
+func TestFlowAggregatorSecureConnection(t *testing.T) {
+	skipIfNotFlowVisibilityTest(t)
+	skipIfHasWindowsNodes(t)
+	testCases := []struct {
+		flowVisibilityTestOptions
+		name string
+	}{
+		{
+			flowVisibilityTestOptions: flowVisibilityTestOptions{
+				databaseURL:      "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
+				secureConnection: false,
+			},
+			name: "tcp",
+		},
+		{
+			flowVisibilityTestOptions: flowVisibilityTestOptions{
+				databaseURL:      "http://clickhouse-clickhouse.flow-visibility.svc:8123",
+				secureConnection: false,
+			},
+			name: "http",
+		},
+		{
+			flowVisibilityTestOptions: flowVisibilityTestOptions{
+				databaseURL:      "tls://clickhouse-clickhouse.flow-visibility.svc:9440",
+				secureConnection: true,
+			},
+			name: "tls",
+		},
+		{
+			flowVisibilityTestOptions: flowVisibilityTestOptions{
+				databaseURL:      "https://clickhouse-clickhouse.flow-visibility.svc:8443",
+				secureConnection: true,
+			},
+			name: "https",
+		},
+	}
+	for _, o := range testCases {
+		data, v4Enabled, v6Enabled, err := setupTestForFlowAggregator(t, o.flowVisibilityTestOptions)
+		if err != nil {
+			t.Fatalf("Error when setting up test: %v", err)
+		}
+		t.Run(o.name, func(t *testing.T) {
+			defer func() {
+				teardownTest(t, data)
+				// Execute teardownFlowAggregator later than teardownTest to ensure that the log
+				// of Flow Aggregator has been exported.
+				teardownFlowAggregator(t, data)
+			}()
+			podAIPs, podBIPs, _, _, _, err := createPerftestPods(data)
+			if err != nil {
+				t.Fatalf("Error when creating perftest Pods: %v", err)
+			}
+			if v4Enabled {
+				checkIntraNodeFlows(t, data, podAIPs, podBIPs, false)
+			}
+			if v6Enabled {
+				checkIntraNodeFlows(t, data, podAIPs, podBIPs, false)
+			}
+		})
+	}
+}
+
 func TestFlowAggregator(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
-	data, v4Enabled, v6Enabled, err := setupTestForFlowAggregator(t)
+	data, v4Enabled, v6Enabled, err := setupTestForFlowAggregator(t, flowVisibilityTestOptions{
+		databaseURL: defaultCHDatabaseURL,
+	})
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
@@ -197,6 +261,27 @@ func TestFlowAggregator(t *testing.T) {
 
 }
 
+func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
+	np1, np2 := deployK8sNetworkPolicies(t, data, "perftest-a", "perftest-b")
+	defer func() {
+		if np1 != nil {
+			if err := data.deleteNetworkpolicy(np1); err != nil {
+				t.Errorf("Error when deleting network policy: %v", err)
+			}
+		}
+		if np2 != nil {
+			if err := data.deleteNetworkpolicy(np2); err != nil {
+				t.Errorf("Error when deleting network policy: %v", err)
+			}
+		}
+	}()
+	if !isIPv6 {
+		checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false)
+	} else {
+		checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false)
+	}
+}
+
 func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs *PodIPs, isIPv6 bool) {
 	svcB, svcC, err := createPerftestServices(data, isIPv6)
 	if err != nil {
@@ -210,24 +295,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// and their flow information is exported as IPFIX flow records.
 	// K8s network policies are being tested here.
 	t.Run("IntraNodeFlows", func(t *testing.T) {
-		np1, np2 := deployK8sNetworkPolicies(t, data, "perftest-a", "perftest-b")
-		defer func() {
-			if np1 != nil {
-				if err = data.deleteNetworkpolicy(np1); err != nil {
-					t.Errorf("Error when deleting network policy: %v", err)
-				}
-			}
-			if np2 != nil {
-				if err = data.deleteNetworkpolicy(np2); err != nil {
-					t.Errorf("Error when deleting network policy: %v", err)
-				}
-			}
-		}()
-		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false)
-		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false)
-		}
+		checkIntraNodeFlows(t, data, podAIPs, podBIPs, isIPv6)
 	})
 
 	// IntraNodeDenyConnIngressANP tests the case, where Pods are deployed on same Node with an Antrea ingress deny policy rule
