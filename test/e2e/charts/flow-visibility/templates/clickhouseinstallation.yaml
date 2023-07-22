@@ -1,0 +1,96 @@
+{{- define "clickhouse.tlsConfig" -}}
+{{- $Files := .Files }}
+{{- $Global := .Global }}
+{{- range $path, $_ :=  .Files.Glob  "provisioning/tls/*" }}
+{{ regexReplaceAll "(.*)/" $path "" }}: |
+{{ tpl ($.Files.Get $path) $Global | indent 2 }}
+{{- end }}
+{{- end -}}
+
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseInstallation"
+metadata:
+  name: clickhouse
+  labels:
+    app: clickhouse
+  namespace: flow-visibility
+spec:
+  configuration:
+    users:
+      clickhouse_operator/k8s_secret_password: flow-visibility/clickhouse-secret/password
+      clickhouse_operator/networks/ip: "::/0"
+    profiles:
+      readonly/readonly: 1
+    {{- if .Values.secureConnection.enable }}
+    files:
+      {{- include "clickhouse.tlsConfig" (dict "Files" .Files "Global" .) | indent 6 }}
+    {{- end }}
+    clusters:
+      - name: "clickhouse"
+        {{- if .Values.secureConnection.enable }}
+        secure: "yes"
+        {{- end }}
+        settings:
+          tcp_port: 9000
+          http_port: 8123
+          {{- if .Values.secureConnection.enable }}
+          tcp_port_secure: 9440
+          https_port: 8443
+          {{- end }}
+        layout:
+          shardsCount: 1
+          replicasCount: 1
+  defaults:
+    templates:
+      podTemplate: pod-template
+      serviceTemplate: service-template
+  templates:
+    serviceTemplates:
+      - name: service-template
+        spec:
+          type: ClusterIP
+          ports:
+            - name: http
+              port: 8123
+            - name: tcp
+              port: 9000
+            {{- if .Values.secureConnection.enable }}
+            - name: https
+              port: 8443
+            - name: secureclient
+              port: 9440
+            {{- end }}
+    podTemplates:
+      - name: pod-template
+        spec:
+          containers:
+            - name: clickhouse
+              image: projects.registry.vmware.com/antrea/clickhouse-server:23.4
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - name: clickhouse-configmap-volume
+                  mountPath: /docker-entrypoint-initdb.d
+                - name: clickhouse-storage-volume
+                  mountPath: /var/lib/clickhouse
+                {{- if .Values.secureConnection.enable }}
+                - name: clickhouse-tls
+                  mountPath: /opt/certs/tls.crt
+                  subPath: tls.crt
+                - name: clickhouse-tls
+                  mountPath: /opt/certs/tls.key
+                  subPath: tls.key
+                {{- end }}
+          volumes:
+            - name: clickhouse-configmap-volume
+              configMap:
+                name: clickhouse-mounted-configmap
+            - name: clickhouse-storage-volume
+              emptyDir:
+                medium: Memory
+                sizeLimit: 8Gi
+            {{- if .Values.secureConnection.enable }}
+            - name: clickhouse-tls
+              secret:
+                secretName: clickhouse-tls
+                optional: true
+            {{- end }}

@@ -26,9 +26,11 @@ Kubernetes: `>= 1.16.0-0`
 | clickHouse.commitInterval | string | `"8s"` | CommitInterval is the periodical interval between batch commit of flow records to DB. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | clickHouse.compress | bool | `true` | Compress enables lz4 compression when committing flow records. |
 | clickHouse.connectionSecret | object | `{"password":"clickhouse_operator_password","username":"clickhouse_operator"}` | Credentials to connect to ClickHouse. They will be stored in a Secret. |
-| clickHouse.databaseURL | string | `"tcp://clickhouse-clickhouse.flow-visibility.svc:9000"` | DatabaseURL is the url to the database. TCP protocol is required. |
+| clickHouse.databaseURL | string | `"tcp://clickhouse-clickhouse.flow-visibility.svc:9000"` | DatabaseURL is the url to the database. Provide the database URL as a string with format <Protocol>://<ClickHouse server FQDN or IP>:<ClickHouse port>. The protocol has to be one of the following: "tcp", "tls", "http", "https". When "tls" or "https" is used, tls will be enabled. |
 | clickHouse.debug | bool | `false` | Debug enables debug logs from ClickHouse sql driver. |
 | clickHouse.enable | bool | `false` | Determine whether to enable exporting flow records to ClickHouse. |
+| clickHouse.tls.caCert | bool | `false` | Indicates whether to use custom CA certificate. Default root CAs will be used if this field is false. If true, a Secret named "clickhouse-ca" must be provided with the following keys: ca.crt: <CA certificate> |
+| clickHouse.tls.insecureSkipVerify | bool | `false` | Determine whether to skip the verification of the server's certificate chain and host name. Default is false. |
 | flowAggregatorAddress | string | `""` | Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate. |
 | flowCollector.address | string | `""` | Provide the flow collector address as string with format <IP>:<port>[:<proto>],  where proto is tcp or udp. If no L4 transport proto is given, we consider tcp as default. |
 | flowCollector.enable | bool | `false` | Determine whether to enable exporting flow records to external flow collector. |

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: flow-visibility
+description: This Helm chart is only for e2e test.
+type: application
+version: 0.1.0
+appVersion: "1.16.0"
