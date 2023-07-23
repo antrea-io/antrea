@@ -210,3 +210,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
+
+replace antrea.io/libOpenflow => github.com/ceclinux/libOpenflow v0.0.0-20230724115541-388ee97058c5
