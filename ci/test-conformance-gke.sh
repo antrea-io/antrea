@@ -268,9 +268,8 @@ function run_conformance() {
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log && \
-   # Skip Netpol tests for GKE as the test suite's Namespace creation function is not robust, which leads to test
-   # failures. See https://github.com/antrea-io/antrea/issues/3762#issuecomment-1195865441.
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "Netpol" \
+    # Skip legacy NetworkPolicy tests
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "NetworkPolicyLegacy" \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/gke-test.log || \
     TEST_SCRIPT_RC=$?
