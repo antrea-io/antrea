@@ -74,7 +74,7 @@ These are the API group versions which are curently available when using Antrea.
 
 ### Previously-supported CRDs
 
-| CRD             | CRD version | Introduced in | Deprecated in | Removed in |
+| CRD | CRD version | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
