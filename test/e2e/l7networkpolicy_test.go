@@ -297,7 +297,7 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	l7ProtocolAllowsGithub := []crdv1alpha1.L7Protocol{
 		{
 			TLS: &crdv1alpha1.TLSProtocol{
-				SNI: "github.com",
+				SNI: "*.google.com",
 			},
 		},
 	}
@@ -319,13 +319,13 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	createL7NetworkPolicy(t, data, false, policyAllowSNIFacebook, 2, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsFacebook)
 	time.Sleep(networkPolicyDelay)
 
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "github.com", true)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "developers.google.com", true)
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", false)
 
 	// Delete the first L7 NetworkPolicy that allows server name 'github.com'.
 	data.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNIGithub, metav1.DeleteOptions{})
 	time.Sleep(networkPolicyDelay)
 
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "github.com", false)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, "developers.google.com", false)
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", true)
 }
