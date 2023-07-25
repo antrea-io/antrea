@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -102,7 +101,7 @@ func TestProcessGroup(t *testing.T) {
 			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsD", Name: "gD", UID: "uidD"},
 				Spec: crdv1beta1.GroupSpec{
-					IPBlocks: []crdv1alpha1.IPBlock{
+					IPBlocks: []crdv1beta1.IPBlock{
 						{
 							CIDR: cidr,
 						},
@@ -130,7 +129,7 @@ func TestProcessGroup(t *testing.T) {
 			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsE", Name: "gE", UID: "uidE"},
 				Spec: crdv1beta1.GroupSpec{
-					ServiceReference: &crdv1alpha1.NamespacedName{
+					ServiceReference: &crdv1beta1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "nsE",
 					},
@@ -250,7 +249,7 @@ func TestAddGroup(t *testing.T) {
 			inputGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsD", Name: "gD", UID: "uidD"},
 				Spec: crdv1beta1.GroupSpec{
-					IPBlocks: []crdv1alpha1.IPBlock{
+					IPBlocks: []crdv1beta1.IPBlock{
 						{
 							CIDR: cidr,
 						},
@@ -365,7 +364,7 @@ func TestUpdateGroup(t *testing.T) {
 			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
 				Spec: crdv1beta1.GroupSpec{
-					IPBlocks: []crdv1alpha1.IPBlock{
+					IPBlocks: []crdv1beta1.IPBlock{
 						{
 							CIDR: cidr,
 						},
@@ -393,7 +392,7 @@ func TestUpdateGroup(t *testing.T) {
 			updatedGroup: &crdv1beta1.Group{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
 				Spec: crdv1beta1.GroupSpec{
-					ServiceReference: &crdv1alpha1.NamespacedName{
+					ServiceReference: &crdv1beta1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "nsA",
 					},

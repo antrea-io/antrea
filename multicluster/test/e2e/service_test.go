@@ -28,7 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreae2e "antrea.io/antrea/test/e2e"
 	e2euttils "antrea.io/antrea/test/e2e/utils"
 )
@@ -200,10 +200,10 @@ func (data *MCTestData) testANNPToServices(t *testing.T) {
 	annpBuilder1 = annpBuilder1.SetName(multiClusterTestNamespace, "block-west-exported-service").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ANNPAppliedToSpec{{PodSelector: map[string]string{"app": "client"}}}).
-		AddToServicesRule([]crdv1alpha1.PeerService{{
+		AddToServicesRule([]crdv1beta1.PeerService{{
 			Name:      mcWestClusterTestService,
 			Namespace: multiClusterTestNamespace},
-		}, "", nil, crdv1alpha1.RuleActionDrop)
+		}, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateANNP(eastCluster, annpBuilder1.Get()); err != nil {
 		t.Fatalf("Error creating ANNP %s: %v", annpBuilder1.Name, err)
 	}
@@ -226,11 +226,11 @@ func (data *MCTestData) testANNPToServices(t *testing.T) {
 	annpBuilder2 = annpBuilder2.SetName(multiClusterTestNamespace, "block-west-service-clusterset-scope").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ANNPAppliedToSpec{{PodSelector: map[string]string{"app": "client"}}}).
-		AddToServicesRule([]crdv1alpha1.PeerService{{
+		AddToServicesRule([]crdv1beta1.PeerService{{
 			Name:      westClusterTestService,
 			Namespace: multiClusterTestNamespace,
 			Scope:     "ClusterSet",
-		}}, "", nil, crdv1alpha1.RuleActionDrop)
+		}}, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateANNP(eastCluster, annpBuilder2.Get()); err != nil {
 		t.Fatalf("Error creating ANNP %s: %v", annpBuilder2.Name, err)
 	}
@@ -262,8 +262,8 @@ func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 	acnpBuilder1 = acnpBuilder1.SetName("drop-client-pod-sel").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastGwClientName}, nil, "", nil, crdv1alpha1.RuleActionDrop).
-		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace}, "", nil, crdv1alpha1.RuleActionDrop)
+		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastGwClientName}, nil, "", nil, crdv1beta1.RuleActionDrop).
+		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace}, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder1.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder1.Name, err)
 	}
@@ -285,7 +285,7 @@ func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 	acnpBuilder2 = acnpBuilder2.SetName("drop-client-ns-sel").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(nil, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace}, "", nil, crdv1alpha1.RuleActionDrop)
+		AddStretchedIngressRule(nil, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace}, "", nil, crdv1beta1.RuleActionDrop)
 
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder2.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder2.Name, err)
@@ -317,7 +317,7 @@ func (data *MCTestData) testStretchedNetworkPolicyReject(t *testing.T) {
 	acnpBuilder = acnpBuilder.SetName("drop-client-pod-sel").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(map[string]string{"app": "client"}, nil, "", nil, crdv1alpha1.RuleActionReject)
+		AddStretchedIngressRule(map[string]string{"app": "client"}, nil, "", nil, crdv1beta1.RuleActionReject)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder.Name, err)
 	}
@@ -364,7 +364,7 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdatePod(t *testing.T) {
 	acnpBuilder = acnpBuilder.SetName("drop-client-pod-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName, "foo": "bar"}, nil, "", nil, crdv1alpha1.RuleActionDrop)
+		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName, "foo": "bar"}, nil, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder.Name, err)
 	}
@@ -402,7 +402,7 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdateNS(t *testing.T) {
 	acnpBuilder = acnpBuilder.SetName("drop-client-ns-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(nil, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace, "foo": "bar"}, "", nil, crdv1alpha1.RuleActionDrop)
+		AddStretchedIngressRule(nil, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace, "foo": "bar"}, "", nil, crdv1beta1.RuleActionDrop)
 
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder.Name, err)
@@ -445,7 +445,7 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdatePolicy(t *testing.T) {
 	acnpBuilder = acnpBuilder.SetName("drop-client-pod-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(map[string]string{"foo": "bar"}, nil, "", nil, crdv1alpha1.RuleActionDrop)
+		AddStretchedIngressRule(map[string]string{"foo": "bar"}, nil, "", nil, crdv1beta1.RuleActionDrop)
 
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder.Name, err)
@@ -456,7 +456,7 @@ func (data *MCTestData) testStretchedNetworkPolicyUpdatePolicy(t *testing.T) {
 	assert.Equal(t, antreae2e.Connected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
 
 	// Update the policy to select the eastRegularClient.
-	acnpBuilder.AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, nil, "", nil, crdv1alpha1.RuleActionDrop)
+	acnpBuilder.AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, nil, "", nil, crdv1beta1.RuleActionDrop)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
 		t.Fatalf("Error updateing ACNP %s: %v", acnpBuilder.Name, err)
 	}

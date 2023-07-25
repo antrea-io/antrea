@@ -28,7 +28,7 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 var (
@@ -108,5 +108,5 @@ func init() {
 	utilruntime.Must(mcsv1alpha2.AddToScheme(TestScheme))
 	utilruntime.Must(k8smcsapi.AddToScheme(TestScheme))
 	utilruntime.Must(k8sscheme.AddToScheme(TestScheme))
-	utilruntime.Must(crdv1alpha1.AddToScheme(TestScheme))
+	utilruntime.Must(crdv1beta1.AddToScheme(TestScheme))
 }

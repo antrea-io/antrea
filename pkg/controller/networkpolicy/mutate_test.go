@@ -22,34 +22,34 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name        string
-		policy      *crdv1alpha1.ClusterNetworkPolicy
+		policy      *crdv1beta1.ClusterNetworkPolicy
 		operation   admv1.Operation
 		expectPatch []jsonPatch
 	}{
 		{
 			name: "acnp-create-mutate",
-			policy: &crdv1alpha1.ClusterNetworkPolicy{
+			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mutate-rule-name-tier",
 				},
-				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
 							},
 						},
 					},
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo1": "bar1"},
@@ -59,7 +59,7 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 						},
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -68,10 +68,10 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 							},
 						},
 					},
-					Egress: []crdv1alpha1.Rule{
+					Egress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							To: []crdv1alpha1.NetworkPolicyPeer{
+							To: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -108,22 +108,22 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "acnp-update-mutate",
-			policy: &crdv1alpha1.ClusterNetworkPolicy{
+			policy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mutate-tier-name",
 				},
-				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
 							},
 						},
 					},
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo1": "bar1"},
@@ -133,7 +133,7 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 						},
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -142,10 +142,10 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 							},
 						},
 					},
-					Egress: []crdv1alpha1.Rule{
+					Egress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							To: []crdv1alpha1.NetworkPolicyPeer{
+							To: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -196,29 +196,29 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 func TestMutateAntreaNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name        string
-		policy      *crdv1alpha1.NetworkPolicy
+		policy      *crdv1beta1.NetworkPolicy
 		operation   admv1.Operation
 		expectPatch []jsonPatch
 	}{
 		{
 			name: "anp-create-mutate",
-			policy: &crdv1alpha1.NetworkPolicy{
+			policy: &crdv1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "mutate-rule-name-tier",
 					Namespace: "x",
 				},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: crdv1beta1.NetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
 							},
 						},
 					},
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo1": "bar1"},
@@ -228,7 +228,7 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 						},
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -237,10 +237,10 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 							},
 						},
 					},
-					Egress: []crdv1alpha1.Rule{
+					Egress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							To: []crdv1alpha1.NetworkPolicyPeer{
+							To: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -277,22 +277,22 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "anp-update-mutate",
-			policy: &crdv1alpha1.NetworkPolicy{
+			policy: &crdv1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mutate-rule-name-tier",
 				},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: crdv1beta1.NetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
 							},
 						},
 					},
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo1": "bar1"},
@@ -302,7 +302,7 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 						},
 						{
 							Action: &allowAction,
-							From: []crdv1alpha1.NetworkPolicyPeer{
+							From: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -311,10 +311,10 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 							},
 						},
 					},
-					Egress: []crdv1alpha1.Rule{
+					Egress: []crdv1beta1.Rule{
 						{
 							Action: &allowAction,
-							To: []crdv1alpha1.NetworkPolicyPeer{
+							To: []crdv1beta1.NetworkPolicyPeer{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},

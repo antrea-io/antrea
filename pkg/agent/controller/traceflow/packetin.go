@@ -31,6 +31,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/openflow"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -237,7 +238,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 				if npRef := ruleRef.PolicyRef; npRef != nil {
 					ob.NetworkPolicy = npRef.ToString()
 				}
-				if ruleRef.Action != nil && *ruleRef.Action == crdv1alpha1.RuleActionReject {
+				if ruleRef.Action != nil && *ruleRef.Action == crdv1beta1.RuleActionReject {
 					ob.Action = crdv1alpha1.ActionRejected
 				}
 			}

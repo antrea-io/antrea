@@ -20,8 +20,8 @@
 package controlplane
 
 import (
-	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -902,7 +902,7 @@ func (in *NetworkPolicyRule) DeepCopyInto(out *NetworkPolicyRule) {
 	}
 	if in.Action != nil {
 		in, out := &in.Action, &out.Action
-		*out = new(v1alpha1.RuleAction)
+		*out = new(v1beta1.RuleAction)
 		**out = **in
 	}
 	if in.AppliedToGroups != nil {
@@ -937,7 +937,7 @@ func (in *NetworkPolicyStats) DeepCopyInto(out *NetworkPolicyStats) {
 	out.TrafficStats = in.TrafficStats
 	if in.RuleTrafficStats != nil {
 		in, out := &in.RuleTrafficStats, &out.RuleTrafficStats
-		*out = make([]statsv1alpha1.RuleTrafficStats, len(*in))
+		*out = make([]v1alpha1.RuleTrafficStats, len(*in))
 		copy(*out, *in)
 	}
 	return

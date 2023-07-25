@@ -27,16 +27,15 @@ import (
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var (
-	// matchAllPodsPeerCrd is a v1alpha1.NetworkPolicyPeer matching all
+	// matchAllPodsPeerCrd is a crdv1beta1.NetworkPolicyPeer matching all
 	// Pods from all Namespaces.
-	matchAllPodsPeerCrd = v1alpha1.NetworkPolicyPeer{
+	matchAllPodsPeerCrd = crdv1beta1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 )
@@ -46,7 +45,7 @@ var (
 // comparing NetworkPolicyCondition in NetworkPolicyStatus objects to avoid
 // unnecessary updates caused different status generation time.
 var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
-	func(a, b v1alpha1.NetworkPolicyCondition) bool {
+	func(a, b crdv1beta1.NetworkPolicyCondition) bool {
 		a.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 		b.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
 		return a == b
@@ -55,7 +54,7 @@ var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 
 // NetworkPolicyStatusEqual compares two NetworkPolicyStatus objects. It disregards
 // the LastTransitionTime field in the status Conditions.
-func NetworkPolicyStatusEqual(oldStatus, newStatus v1alpha1.NetworkPolicyStatus) bool {
+func NetworkPolicyStatusEqual(oldStatus, newStatus crdv1beta1.NetworkPolicyStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
 }
 
@@ -72,11 +71,11 @@ func groupMembersComputedConditionEqual(conds []crdv1beta1.GroupCondition, condi
 	return false
 }
 
-// toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort objects
-// and a slice of v1alpha1.NetworkPolicyProtocol objects to a slice of Antrea
+// toAntreaServicesForCRD converts a slice of crdv1beta1.NetworkPolicyPort objects
+// and a slice of v1beta1.NetworkPolicyProtocol objects to a slice of Antrea
 // Service objects. A bool is returned along with the Service objects to indicate
 // whether any named port exists.
-func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort, npProtocols []v1alpha1.NetworkPolicyProtocol) ([]controlplane.Service, bool) {
+func toAntreaServicesForCRD(npPorts []crdv1beta1.NetworkPolicyPort, npProtocols []crdv1beta1.NetworkPolicyProtocol) ([]controlplane.Service, bool) {
 	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
@@ -112,9 +111,9 @@ func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort, npProtocols []
 	return antreaServices, namedPortExists
 }
 
-// toAntreaL7ProtocolsForCRD converts a slice of v1alpha1.L7Protocol objects to
+// toAntreaL7ProtocolsForCRD converts a slice of v1beta1.L7Protocol objects to
 // a slice of Antrea L7Protocol objects.
-func toAntreaL7ProtocolsForCRD(l7Protocols []v1alpha1.L7Protocol) []controlplane.L7Protocol {
+func toAntreaL7ProtocolsForCRD(l7Protocols []crdv1beta1.L7Protocol) []controlplane.L7Protocol {
 	var antreaL7Protocols []controlplane.L7Protocol
 	for _, l7p := range l7Protocols {
 		antreaL7Protocols = append(antreaL7Protocols, controlplane.L7Protocol{
@@ -125,8 +124,8 @@ func toAntreaL7ProtocolsForCRD(l7Protocols []v1alpha1.L7Protocol) []controlplane
 	return antreaL7Protocols
 }
 
-// toAntreaIPBlockForCRD converts a v1alpha1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlockForCRD(ipBlock *v1alpha1.IPBlock) (*controlplane.IPBlock, error) {
+// toAntreaIPBlockForCRD converts a crdv1beta1.IPBlock to an Antrea IPBlock.
+func toAntreaIPBlockForCRD(ipBlock *crdv1beta1.IPBlock) (*controlplane.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
 	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
 	if err != nil {
@@ -140,12 +139,12 @@ func toAntreaIPBlockForCRD(ipBlock *v1alpha1.IPBlock) (*controlplane.IPBlock, er
 	return antreaIPBlock, nil
 }
 
-// toAntreaPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer.
+// toAntreaPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1beta1 NetworkPolicyPeer.
 // It is used when peer's Namespaces are not matched by NamespaceMatchTypes, for which the controlplane
 // NetworkPolicyPeers will need to be created on a per-Namespace basis.
 // Any ClusterSet scoped selector in this peer will also be registered with the labelIdentityInterface
 // for the policy.
-func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPolicyPeer,
+func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []crdv1beta1.NetworkPolicyPeer,
 	np metav1.Object, dir controlplane.Direction, namedPortExists bool) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup, sets.Set[string]) {
 	var addressGroups []*antreatypes.AddressGroup
 	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
@@ -172,7 +171,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 	uniqueLabelIDs := map[uint32]struct{}{}
 	clusterSetScopeSelectorKeys := sets.New[string]()
 	for _, peer := range peers {
-		// A v1alpha1.NetworkPolicyPeer will have exactly one of the following fields set:
+		// A crdv1beta1.NetworkPolicyPeer will have exactly one of the following fields set:
 		// - podSelector and/or namespaceSelector (in-cluster scope or ClusterSet scope)
 		// - reference to a Group/ClusterGroup
 		// - IPBlocks
@@ -202,7 +201,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 			addressGroup := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector, nil)
 			addressGroups = append(addressGroups, addressGroup)
 		}
-		if n.stretchNPEnabled && peer.Scope == v1alpha1.ScopeClusterSet {
+		if n.stretchNPEnabled && peer.Scope == crdv1beta1.ScopeClusterSet {
 			newClusterSetScopeSelector := antreatypes.NewGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, nil, nil)
 			clusterSetScopeSelectorKeys.Insert(newClusterSetScopeSelector.NormalizedName)
 			// In addition to getting the matched Label Identity IDs, AddSelector also registers the selector
@@ -224,10 +223,10 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 	}, addressGroups, clusterSetScopeSelectorKeys
 }
 
-// toNamespacedPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer
-// for a particular Namespace. It is used when a single crdv1alpha1 NetworkPolicyPeer maps to multiple
+// toNamespacedPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1beta1 NetworkPolicyPeer
+// for a particular Namespace. It is used when a single crdv1beta1 NetworkPolicyPeer maps to multiple
 // controlplane NetworkPolicyPeers because the appliedTo workloads reside in different Namespaces.
-func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.NetworkPolicyPeer,
+func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []crdv1beta1.NetworkPolicyPeer,
 	np metav1.Object, namespace string) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup, sets.Set[string]) {
 	var addressGroups []*antreatypes.AddressGroup
 	var labelIdentities []uint32
@@ -236,7 +235,7 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.Networ
 	for _, peer := range peers {
 		addressGroup := n.createAddressGroup(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector, nil)
 		addressGroups = append(addressGroups, addressGroup)
-		if n.stretchNPEnabled && peer.Scope == v1alpha1.ScopeClusterSet {
+		if n.stretchNPEnabled && peer.Scope == crdv1beta1.ScopeClusterSet {
 			newClusterSetScopeSelector := antreatypes.NewGroupSelector(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector, nil)
 			clusterSetScopeSelectorKeys.Insert(newClusterSetScopeSelector.NormalizedName)
 			// In addition to getting the matched Label Identity IDs, AddSelector also registers the selector
@@ -256,16 +255,16 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.Networ
 }
 
 // svcRefToPeerForCRD creates an Antrea controlplane NetworkPolicyPeer from ServiceReferences in ToServices
-// or ToMulticlusterServices field of a crdv1alpha1 NetworkPolicyPeer. For ANNP NetworkPolicyPeers, if
+// or ToMulticlusterServices field of a crdv1beta1 NetworkPolicyPeer. For ANNP NetworkPolicyPeers, if
 // Namespace is not provided in the ServiceReference, the policy's Namespace will be assumed.
-func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.PeerService, defaultNamespace string) *controlplane.NetworkPolicyPeer {
+func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []crdv1beta1.PeerService, defaultNamespace string) *controlplane.NetworkPolicyPeer {
 	var controlplaneSvcRefs []controlplane.ServiceReference
 	for _, svcRef := range svcRefs {
 		svcNS, svcName := defaultNamespace, svcRef.Name
 		if svcRef.Namespace != "" {
 			svcNS = svcRef.Namespace
 		}
-		if svcRef.Scope == v1alpha1.ScopeClusterSet {
+		if svcRef.Scope == crdv1beta1.ScopeClusterSet {
 			if n.stretchNPEnabled {
 				svcName = common.ToMCResourceName(svcName)
 			} else {
@@ -282,7 +281,7 @@ func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.PeerServ
 }
 
 // createAppliedToGroupForService creates an AppliedToGroup object corresponding to a Service.
-func (n *NetworkPolicyController) createAppliedToGroupForService(service *v1alpha1.NamespacedName) *antreatypes.AppliedToGroup {
+func (n *NetworkPolicyController) createAppliedToGroupForService(service *crdv1beta1.NamespacedName) *antreatypes.AppliedToGroup {
 	key := getNormalizedUID(k8s.NamespacedName(service.Namespace, service.Name))
 
 	// Create an AppliedToGroup object for this Service.

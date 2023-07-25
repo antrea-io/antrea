@@ -25,7 +25,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -221,7 +220,7 @@ func (n *NetworkPolicyController) triggerANNPUpdates(g string) {
 	// If a Group is added/updated, it might have a reference in Antrea NetworkPolicy.
 	annps, _ := n.annpInformer.Informer().GetIndexer().ByIndex(GroupIndex, g)
 	for _, obj := range annps {
-		n.enqueueInternalNetworkPolicy(getANNPReference(obj.(*crdv1alpha1.NetworkPolicy)))
+		n.enqueueInternalNetworkPolicy(getANNPReference(obj.(*crdv1beta1.NetworkPolicy)))
 	}
 }
 

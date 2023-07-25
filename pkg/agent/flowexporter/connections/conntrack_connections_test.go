@@ -39,7 +39,7 @@ import (
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
@@ -72,7 +72,7 @@ var (
 		Name:      "bar",
 		UID:       "uid1",
 	}
-	action = secv1alpha1.RuleActionAllow
+	action = secv1beta1.RuleActionAllow
 	rule1  = agenttypes.PolicyRule{
 		Direction: cpv1beta.DirectionIn,
 		From:      []agenttypes.Address{},

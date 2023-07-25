@@ -17,7 +17,6 @@ package utils
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
@@ -76,13 +75,13 @@ func (b *GroupSpecBuilder) SetNamespaceSelector(nsSelector map[string]string, ns
 	return b
 }
 
-func (b *GroupSpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPBlock) *GroupSpecBuilder {
+func (b *GroupSpecBuilder) SetIPBlocks(ipBlocks []crdv1beta1.IPBlock) *GroupSpecBuilder {
 	b.Spec.IPBlocks = ipBlocks
 	return b
 }
 
 func (b *GroupSpecBuilder) SetServiceReference(svcNS, svcName string) *GroupSpecBuilder {
-	svcRef := &crdv1alpha1.NamespacedName{
+	svcRef := &crdv1beta1.NamespacedName{
 		Namespace: svcNS,
 		Name:      svcName,
 	}

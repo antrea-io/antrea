@@ -28,10 +28,14 @@ type Interface interface {
 	AntreaControllerInfos() AntreaControllerInfoInformer
 	// ClusterGroups returns a ClusterGroupInformer.
 	ClusterGroups() ClusterGroupInformer
+	// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
+	ClusterNetworkPolicies() ClusterNetworkPolicyInformer
 	// ExternalIPPools returns a ExternalIPPoolInformer.
 	ExternalIPPools() ExternalIPPoolInformer
 	// Groups returns a GroupInformer.
 	Groups() GroupInformer
+	// NetworkPolicies returns a NetworkPolicyInformer.
+	NetworkPolicies() NetworkPolicyInformer
 	// Tiers returns a TierInformer.
 	Tiers() TierInformer
 }
@@ -62,6 +66,11 @@ func (v *version) ClusterGroups() ClusterGroupInformer {
 	return &clusterGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
+func (v *version) ClusterNetworkPolicies() ClusterNetworkPolicyInformer {
+	return &clusterNetworkPolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // ExternalIPPools returns a ExternalIPPoolInformer.
 func (v *version) ExternalIPPools() ExternalIPPoolInformer {
 	return &externalIPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
@@ -70,6 +79,11 @@ func (v *version) ExternalIPPools() ExternalIPPoolInformer {
 // Groups returns a GroupInformer.
 func (v *version) Groups() GroupInformer {
 	return &groupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// NetworkPolicies returns a NetworkPolicyInformer.
+func (v *version) NetworkPolicies() NetworkPolicyInformer {
+	return &networkPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Tiers returns a TierInformer.
