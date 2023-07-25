@@ -200,8 +200,10 @@ type OFBridge struct {
 	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method.
 	connected chan bool
 	// pktConsumers is a map from PacketIn category to the channel that is used to publish the PacketIn message.
-	pktConsumers      sync.Map
-	multipartReplyChs map[uint32]chan *openflow15.MultipartReply
+	pktConsumers sync.Map
+
+	mpReplyChsMutex sync.RWMutex
+	mpReplyChs      map[uint32]chan *openflow15.MultipartReply
 	// tunMetadataLengthMap is used to store the tlv-map settings on the OVS bridge. Key is the index of tunnel metedata,
 	// and value is the length configured in this tunnel metadata.
 	tunMetadataLengthMap map[uint16]uint8
@@ -238,6 +240,32 @@ func (b *OFBridge) DeleteMeterAll() error {
 		return err
 	}
 	return nil
+}
+
+func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error {
+	const OFPM_ALL = 0xffffffff // Represents all meters
+	mpMeterStatsReq := openflow15.NewMpRequest(openflow15.MultipartType_MeterStats)
+	meterMPReq := openflow15.NewMeterMultipartRequest(OFPM_ALL)
+	mpMeterStatsReq.Body = append(mpMeterStatsReq.Body, meterMPReq)
+	ch := make(chan *openflow15.MultipartReply, 1)
+	b.registerMpReplyCh(mpMeterStatsReq.Xid, ch)
+	go func() {
+		defer b.unregisterMpReplyCh(mpMeterStatsReq.Xid)
+		select {
+		case reply := <-ch:
+			if reply.Type == openflow15.MultipartType_MeterStats {
+				for _, entry := range reply.Body {
+					stats := entry.(*openflow15.MeterStats)
+					if len(stats.BandStats) > 0 {
+						handleMeterStatsReply(int(stats.MeterId), int64(stats.BandStats[0].PacketBandCount))
+					}
+				}
+			}
+		case <-time.After(5 * time.Second):
+			klog.InfoS("Timeout waiting for OVS MeterStats reply")
+		}
+	}()
+	return b.ofSwitch.Send(mpMeterStatsReq)
 }
 
 func (b *OFBridge) NewTable(table Table, next uint8, missAction MissActionType) Table {
@@ -319,7 +347,13 @@ func (b *OFBridge) SetOFSwitch(sw *ofctrl.OFSwitch) {
 // MultipartReply is a callback when multipartReply message is received on ofctrl.OFSwitch is connected.
 // Client uses this method to handle the reply message if it has customized MultipartRequest message.
 func (b *OFBridge) MultipartReply(sw *ofctrl.OFSwitch, rep *openflow15.MultipartReply) {
-	if ch, ok := b.multipartReplyChs[rep.Xid]; ok {
+	ch, ok := func() (chan *openflow15.MultipartReply, bool) {
+		b.mpReplyChsMutex.RLock()
+		defer b.mpReplyChsMutex.RUnlock()
+		ch, ok := b.mpReplyChs[rep.Xid]
+		return ch, ok
+	}()
+	if ok {
 		ch <- rep
 	}
 }
@@ -693,12 +727,10 @@ func (b *OFBridge) queryTableFeatures() {
 	// sending the Multipart Request messages to modify the tables' names. The buffer size "20" is the observed number
 	// of the Multipart Reply messages sent from OVS.
 	tableFeatureCh := make(chan *openflow15.MultipartReply, 20)
-	b.multipartReplyChs[mpartRequest.Xid] = tableFeatureCh
+	b.registerMpReplyCh(mpartRequest.Xid, tableFeatureCh)
 	go func() {
 		// Delete the channel which is used to receive the MultipartReply message after all tables' features are received.
-		defer func() {
-			delete(b.multipartReplyChs, mpartRequest.Xid)
-		}()
+		defer b.unregisterMpReplyCh(mpartRequest.Xid)
 		b.processTableFeatures(tableFeatureCh)
 	}()
 	b.ofSwitch.Send(mpartRequest)
@@ -742,6 +774,19 @@ func (b *OFBridge) processTableFeatures(ch chan *openflow15.MultipartReply) {
 	}
 }
 
+func (b *OFBridge) registerMpReplyCh(xid uint32, ch chan *openflow15.MultipartReply) {
+	b.mpReplyChsMutex.Lock()
+	defer b.mpReplyChsMutex.Unlock()
+	b.mpReplyChs[xid] = ch
+
+}
+
+func (b *OFBridge) unregisterMpReplyCh(xid uint32) {
+	b.mpReplyChsMutex.Lock()
+	defer b.mpReplyChsMutex.Unlock()
+	delete(b.mpReplyChs, xid)
+}
+
 func NewOFBridge(br string, mgmtAddr string) *OFBridge {
 	s := &OFBridge{
 		bridgeName:           br,
@@ -749,7 +794,7 @@ func NewOFBridge(br string, mgmtAddr string) *OFBridge {
 		tableCache:           make(map[uint8]*ofTable),
 		retryInterval:        1 * time.Second,
 		pktConsumers:         sync.Map{},
-		multipartReplyChs:    make(map[uint32]chan *openflow15.MultipartReply),
+		mpReplyChs:           make(map[uint32]chan *openflow15.MultipartReply),
 		tunMetadataLengthMap: make(map[uint16]uint8),
 	}
 	s.controller = ofctrl.NewController(s)

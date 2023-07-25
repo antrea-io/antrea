@@ -174,6 +174,8 @@ partitioned by operation type (add, modify and delete).
 errors, partitioned by operation type (add, modify and delete).
 - **antrea_agent_ovs_flow_ops_latency_milliseconds:** The latency of OVS
 flow operations, partitioned by operation type (add, modify and delete).
+- **antrea_agent_ovs_meter_packet_dropped_count:** Number of packets dropped by
+OVS meter. The value is greater than 0 when the packets exceed the rate-limit.
 - **antrea_agent_ovs_total_flow_count:** Total flow count of all OVS flow
 tables.
 

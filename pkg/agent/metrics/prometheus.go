@@ -116,6 +116,20 @@ var (
 		[]string{"operation"},
 	)
 
+	// OVSMeterPacketDroppedCount is defined as a Gauge and not a Counter, even though this metric is monotonically
+	// increasing (only being reset to 0 on restart).  This is because we want to set its value directly using the
+	// Set method (using the value provided by OVS), and using Inc / Add is not convenient.
+	OVSMeterPacketDroppedCount = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "ovs_meter_packet_dropped_count",
+			Help:           "Number of packets dropped by OVS meter. The value is greater than 0 when the packets exceed the rate-limit.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"meter_id"},
+	)
+
 	TotalConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Namespace:      metricNamespaceAntrea,
@@ -212,6 +226,9 @@ func InitializeOVSMetrics() {
 	}
 	if err := legacyregistry.Register(OVSFlowOpsLatency); err != nil {
 		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_flow_ops_latency_milliseconds")
+	}
+	if err := legacyregistry.Register(OVSMeterPacketDroppedCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_meter_packet_dropped_count")
 	}
 	// Initialize OpenFlow operations metrics with label add, modify and delete
 	// since those metrics won't come out until observation.
