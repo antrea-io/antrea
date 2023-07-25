@@ -123,7 +123,6 @@ func run(o *Options) error {
 	if *o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
-
 	// Create ovsdb and openflow clients.
 	ovsdbAddress := ovsconfig.GetConnAddress(o.config.OVSRunDir)
 	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS(ovsdbAddress)
@@ -164,6 +163,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
 		enableMulticlusterGW,
 		groupIDAllocator,
+		*o.config.EnablePrometheusMetrics,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -873,8 +873,8 @@ func run(o *Options) error {
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier, agentAPICertData)
 	go agentMonitor.Run(stopCh)
 
-	// Start PacketIn
-	go ofClient.StartPacketInHandler(stopCh)
+	// Start PacketIn and OVS meter stats collection for Prometheus
+	go ofClient.Run(stopCh)
 
 	// Start the goroutine to periodically export IPFIX flow records.
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {

@@ -361,7 +361,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		fn(o)
 	}
 
-	cli := NewClient(bridgeName,
+	client := NewClient(bridgeName,
 		bridgeMgmtAddr,
 		nodeiptest.NewFakeNodeIPChecker(),
 		o.enableProxy,
@@ -375,8 +375,8 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.enableMulticast,
 		o.enableTrafficControl,
 		o.enableMulticluster,
-		NewGroupAllocator())
-	client := cli.(*client)
+		NewGroupAllocator(),
+		false)
 
 	var egressExceptCIDRs []net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
@@ -1815,16 +1815,15 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil)
-	c := ofClient.(*client)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false)
 	m := ovsoftest.NewMockBridge(ctrl)
-	c.bridge = m
+	ofClient.bridge = m
 	bridge := binding.OFBridge{}
 	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
 	if success {
 		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
 	}
-	return c
+	return ofClient
 }
 
 func Test_client_SendPacketOut(t *testing.T) {

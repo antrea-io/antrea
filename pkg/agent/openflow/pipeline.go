@@ -25,6 +25,7 @@ import (
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
@@ -418,22 +419,23 @@ type flowCategoryCache struct {
 }
 
 type client struct {
-	enableProxy           bool
-	proxyAll              bool
-	enableDSR             bool
-	enableAntreaPolicy    bool
-	enableL7NetworkPolicy bool
-	enableDenyTracking    bool
-	enableEgress          bool
-	enableMulticast       bool
-	enableTrafficControl  bool
-	enableMulticluster    bool
-	connectUplinkToBridge bool
-	nodeType              config.NodeType
-	roundInfo             types.RoundInfo
-	cookieAllocator       cookie.Allocator
-	bridge                binding.Bridge
-	groupIDAllocator      GroupAllocator
+	enableProxy             bool
+	proxyAll                bool
+	enableDSR               bool
+	enableAntreaPolicy      bool
+	enableL7NetworkPolicy   bool
+	enableDenyTracking      bool
+	enableEgress            bool
+	enableMulticast         bool
+	enableTrafficControl    bool
+	enableMulticluster      bool
+	enablePrometheusMetrics bool
+	connectUplinkToBridge   bool
+	nodeType                config.NodeType
+	roundInfo               types.RoundInfo
+	cookieAllocator         cookie.Allocator
+	bridge                  binding.Bridge
+	groupIDAllocator        GroupAllocator
 
 	featurePodConnectivity          *featurePodConnectivity
 	featureService                  *featureService
@@ -470,6 +472,18 @@ type client struct {
 	ovsctlClient ovsctl.OVSCtlClient
 
 	nodeIPChecker nodeip.Checker
+}
+
+func (c *client) Run(stopCh <-chan struct{}) {
+	// Start PacketIn
+	c.StartPacketInHandler(stopCh)
+	// Start OVS meter stats collection
+	if c.enablePrometheusMetrics {
+		if c.ovsMetersAreSupported {
+			klog.Info("Start collecting OVS meter stats")
+			go wait.Until(c.getMeterStats, time.Second*30, stopCh)
+		}
+	}
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -2871,27 +2885,30 @@ func NewClient(bridgeName string,
 	enableMulticast bool,
 	enableTrafficControl bool,
 	enableMulticluster bool,
-	groupIDAllocator GroupAllocator) Client {
+	groupIDAllocator GroupAllocator,
+	enablePrometheusMetrics bool,
+) *client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
-		bridge:                bridge,
-		nodeIPChecker:         nodeIPCheck,
-		enableProxy:           enableProxy,
-		proxyAll:              proxyAll,
-		enableDSR:             enableDSR,
-		enableAntreaPolicy:    enableAntreaPolicy,
-		enableL7NetworkPolicy: enableL7NetworkPolicy,
-		enableDenyTracking:    enableDenyTracking,
-		enableEgress:          enableEgress,
-		enableMulticast:       enableMulticast,
-		enableTrafficControl:  enableTrafficControl,
-		enableMulticluster:    enableMulticluster,
-		connectUplinkToBridge: connectUplinkToBridge,
-		pipelines:             make(map[binding.PipelineID]binding.Pipeline),
-		packetInHandlers:      map[uint8]PacketInHandler{},
-		ovsctlClient:          ovsctl.NewClient(bridgeName),
-		ovsMetersAreSupported: ovsMetersAreSupported(),
-		groupIDAllocator:      groupIDAllocator,
+		bridge:                  bridge,
+		nodeIPChecker:           nodeIPCheck,
+		enableProxy:             enableProxy,
+		proxyAll:                proxyAll,
+		enableDSR:               enableDSR,
+		enableAntreaPolicy:      enableAntreaPolicy,
+		enableL7NetworkPolicy:   enableL7NetworkPolicy,
+		enableDenyTracking:      enableDenyTracking,
+		enableEgress:            enableEgress,
+		enableMulticast:         enableMulticast,
+		enableTrafficControl:    enableTrafficControl,
+		enableMulticluster:      enableMulticluster,
+		enablePrometheusMetrics: enablePrometheusMetrics,
+		connectUplinkToBridge:   connectUplinkToBridge,
+		pipelines:               make(map[binding.PipelineID]binding.Pipeline),
+		packetInHandlers:        map[uint8]PacketInHandler{},
+		ovsctlClient:            ovsctl.NewClient(bridgeName),
+		ovsMetersAreSupported:   ovsMetersAreSupported(),
+		groupIDAllocator:        groupIDAllocator,
 	}
 	c.ofEntryOperations = c
 	return c
