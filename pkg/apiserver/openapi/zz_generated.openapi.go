@@ -78,8 +78,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfoList":                        schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                       schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo":                                  schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup":                               schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroupList":                           schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy":                       schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicyList":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool":                             schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
@@ -90,10 +94,28 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupList":                                  schema_pkg_apis_crd_v1beta1_GroupList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec":                                  schema_pkg_apis_crd_v1beta1_GroupSpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus":                                schema_pkg_apis_crd_v1beta1_GroupStatus(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol":                               schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol":                               schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol":                               schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock":                                    schema_pkg_apis_crd_v1beta1_IPBlock(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol":                                 schema_pkg_apis_crd_v1beta1_L7Protocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName":                             schema_pkg_apis_crd_v1beta1_NamespacedName(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy":                              schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition":                     schema_pkg_apis_crd_v1beta1_NetworkPolicyCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyList":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyPort(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol":                      schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec":                          schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus":                        schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                    schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces":                             schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService":                                schema_pkg_apis_crd_v1beta1_PeerService(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Rule":                                       schema_pkg_apis_crd_v1beta1_Rule(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol":                                schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierList":                                   schema_pkg_apis_crd_v1beta1_TierList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec":                                   schema_pkg_apis_crd_v1beta1_TierSpec(ref),
@@ -2811,6 +2833,58 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AppliedTo describes the grouping selector of workloads in AppliedTo field.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"podSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select Pods from NetworkPolicy's Namespace as workloads in AppliedTo fields. If set with NamespaceSelector, Pods are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except NamespaceSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select all Pods from Namespaces matched by this selector, as workloads in AppliedTo fields. If set with PodSelector, Pods are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except PodSelector or ExternalEntitySelector. Cannot be set with Namespaces.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"externalEntitySelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select ExternalEntities from NetworkPolicy's Namespace as workloads in AppliedTo fields. If set with NamespaceSelector, ExternalEntities are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except NamespaceSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"group": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Group is the name of the ClusterGroup which can be set as an AppliedTo in place of a stand-alone selector. A Group cannot be set with any other selector.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"serviceAccount": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select all Pods with the ServiceAccount matched by this field, as workloads in AppliedTo fields. Cannot be set with any other selector.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+						},
+					},
+					"service": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select a certain Service which matches the NamespacedName. A Service can only be set in either policy level AppliedTo field in a policy that only has ingress rules or rule level AppliedTo field in an ingress rule. Only a NodePort Service can be referred by this field. Cannot be set with any other selector.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2905,6 +2979,177 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the desired behavior of ClusterNetworkPolicy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Most recently observed status of the NetworkPolicy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"tier": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Tier specifies the tier to which this ClusterNetworkPolicy belongs to. The ClusterNetworkPolicy order will be determined based on the combination of the Tier's Priority and the ClusterNetworkPolicy's own Priority. If not specified, this policy will be created in the Application Tier right above the K8s NetworkPolicy which resides at the bottom.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority specfies the order of the ClusterNetworkPolicy relative to other AntreaClusterNetworkPolicies.",
+							Default:     0,
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+					"appliedTo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select workloads on which the rules will be applied to. Cannot be set in conjunction with AppliedTo in each rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+									},
+								},
+							},
+						},
+					},
+					"ingress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of ingress rules evaluated based on the order in which they are set. Currently Ingress rule supports setting the `From` field but not the `To` field within a Rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+									},
+								},
+							},
+						},
+					},
+					"egress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of egress rules evaluated based on the order in which they are set. Currently Egress rule supports setting the `To` field but not the `From` field within a Rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"priority"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"},
 	}
 }
 
@@ -3274,7 +3519,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1alpha1.IPBlock"),
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock"),
 									},
 								},
 							},
@@ -3283,7 +3528,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 					"serviceReference": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select backend Pods of the referred Service. Cannot be set with any other selector or ipBlock.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1alpha1.NamespacedName"),
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
 						},
 					},
 					"externalEntitySelector": {
@@ -3311,7 +3556,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1alpha1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1alpha1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
 	}
 }
 
@@ -3340,6 +3585,112 @@ func schema_pkg_apis_crd_v1beta1_GroupStatus(ref common.ReferenceCallback) commo
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together. If all fields are not provided, it matches all HTTP requests.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"host": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Host represents the hostname present in the URI or the HTTP Host header to match. It does not contain the port associated with the host.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"method": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Method represents the HTTP method to match. It could be GET, POST, PUT, HEAD, DELETE, TRACE, OPTIONS, CONNECT and PATCH.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Path represents the URI path to match (Ex. \"/index.html\", \"/admin\").",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ICMPProtocol matches ICMP traffic with specific ICMPType and/or ICMPCode. All fields could be used alone or together. If all fields are not provided, this matches all ICMP traffic.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"icmpType": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"icmpCode": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IGMPProtocol matches IGMP traffic with IGMPType and GroupAddress. IGMPType must be filled with: IGMPQuery    int32 = 0x11 IGMPReportV1 int32 = 0x12 IGMPReportV2 int32 = 0x16 IGMPReportV3 int32 = 0x22 If groupAddress is empty, all groupAddresses will be matched.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"igmpType": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"groupAddress": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPBlock describes a particular CIDR (Ex. \"192.168.1.1/24\") that is allowed or denied to/from the workloads matched by a Spec.AppliedTo.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CIDR is a string representing the IP Block Valid examples are \"192.168.1.1/24\".",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"cidr"},
+			},
+		},
 	}
 }
 
@@ -3406,6 +3757,158 @@ func schema_pkg_apis_crd_v1beta1_IPRange(ref common.ReferenceCallback) common.Op
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_L7Protocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"http": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol"),
+						},
+					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NamespacedName(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NamespacedName refers to a Namespace scoped resource. All fields must be used together.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the desired behavior of NetworkPolicy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Most recently observed status of the NetworkPolicy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyCondition describes the state of a NetworkPolicy at a certain point.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type of StatefulSet condition.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the condition, one of True, False, Unknown.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastTransitionTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Last time the condition transitioned from one status to another.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The reason for the condition's last transition.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A human-readable message indicating details about the transition.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"type", "status"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3433,6 +3936,341 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref common.Referenc
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyPeer describes the grouping selector of workloads.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipBlock": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPBlock describes the IPAddresses/IPBlocks that is matched in to/from. IPBlock cannot be set as part of the AppliedTo field. Cannot be set with any other selector.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock"),
+						},
+					},
+					"podSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select Pods from NetworkPolicy's Namespace as workloads in To/From fields. If set with NamespaceSelector, Pods are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except NamespaceSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select all Pods from Namespaces matched by this selector, as workloads in To/From fields. If set with PodSelector, Pods are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except PodSelector or ExternalEntitySelector. Cannot be set with Namespaces.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"namespaces": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select Pod/ExternalEntity from Namespaces matched by specific criteria. Current supported criteria is match: Self, which selects from the same Namespace of the appliedTo workloads. Cannot be set with any other selector except PodSelector or ExternalEntitySelector. This field can only be set when NetworkPolicyPeer is created for ClusterNetworkPolicy ingress/egress rules. Cannot be set with NamespaceSelector.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces"),
+						},
+					},
+					"externalEntitySelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select ExternalEntities from NetworkPolicy's Namespace as workloads in To/From fields. If set with NamespaceSelector, ExternalEntities are matched from Namespaces matched by the NamespaceSelector. Cannot be set with any other selector except NamespaceSelector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"group": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Group is the name of the ClusterGroup which can be set within an Ingress or Egress rule in place of a stand-alone selector. A Group cannot be set with any other selector.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"fqdn": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Restrict egress access to the Fully Qualified Domain Names prescribed by name or by wildcard match patterns. This field can only be set for NetworkPolicyPeer of egress rules. Supported formats are:\n Exact FQDNs, i.e. \"google.com\", \"db-svc.default.svc.cluster.local\"\n Wildcard expressions, i.e. \"*wayfair.com\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"serviceAccount": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select all Pods with the ServiceAccount matched by this field, as workloads in To/From fields. Cannot be set with any other selector.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select certain Nodes which match the label selector. A NodeSelector cannot be set in AppliedTo field or set with any other selector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"scope": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Define scope of the Pod/NamespaceSelector(s) of this peer. Can only be used in ingress NetworkPolicyPeers. Defaults to \"Cluster\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyPort describes the port and protocol to match in a rule.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"protocol": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this field defaults to TCP.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"port": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The port on the given protocol. This can be either a numerical or named port on a Pod. If this field is not provided, this matches all port names and numbers.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"endPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EndPort defines the end of the port range, inclusive. It can only be specified when a numerical `port` is specified.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"sourcePort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The source port on the given protocol. This can only be a numerical port. If this field is not provided, rule matches all source ports.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"sourceEndPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SourceEndPort defines the end of the source port range, inclusive. It can only be specified when `sourcePort` is specified.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyProtocol defines additional protocols that are not supported by `ports`. All fields should be used as a standalone field.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"icmp": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol"),
+						},
+					},
+					"igmp": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicySpec defines the desired state for NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"tier": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Tier specifies the tier to which this NetworkPolicy belongs to. The NetworkPolicy order will be determined based on the combination of the Tier's Priority and the NetworkPolicy's own Priority. If not specified, this policy will be created in the Application Tier right above the K8s NetworkPolicy which resides at the bottom.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority specfies the order of the NetworkPolicy relative to other NetworkPolicies.",
+							Default:     0,
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+					"appliedTo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select workloads on which the rules will be applied to. Cannot be set in conjunction with AppliedTo in each rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+									},
+								},
+							},
+						},
+					},
+					"ingress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of ingress rules evaluated based on the order in which they are set. Currently Ingress rule supports setting the `From` field but not the `To` field within a Rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+									},
+								},
+							},
+						},
+					},
+					"egress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of egress rules evaluated based on the order in which they are set. Currently Egress rule supports setting the `To` field but not the `From` field within a Rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"priority"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyStatus represents information about the status of a NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The phase of a NetworkPolicy is a simple, high-level summary of the NetworkPolicy's status.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The generation observed by Antrea.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"currentNodesRealized": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of nodes that have realized the NetworkPolicy.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"desiredNodesRealized": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The total number of nodes that should realize the NetworkPolicy.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Represents the latest available observations of a NetworkPolicy current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"phase", "observedGeneration", "currentNodesRealized", "desiredNodesRealized", "conditions"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition"},
 	}
 }
 
@@ -3468,6 +4306,218 @@ func schema_pkg_apis_crd_v1beta1_OVSInfo(ref common.ReferenceCallback) common.Op
 									},
 								},
 							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"match": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_PeerService(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PeerService refers to a Service, which can be a in-cluster Service or imported multi-cluster service.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"scope": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Rule describes the traffic allowed to/from the workloads selected by Spec.AppliedTo. Based on the action specified in the rule, traffic is either allowed or denied which exactly match the specified ports and protocol.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Action specifies the action to be applied on the rule.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of ports and protocols matched by the rule. If this field and Protocols are unset or empty, this rule matches all ports.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort"),
+									},
+								},
+							},
+						},
+					},
+					"protocols": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of protocols matched by the rule. If this field and Ports are unset or empty, this rule matches all protocols supported.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol"),
+									},
+								},
+							},
+						},
+					},
+					"l7Protocols": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set of layer 7 protocols matched by the rule. If this field is set, action can only be Allow. When this field is used in a rule, any traffic matching the other layer 3/4 criteria of the rule (typically the 5-tuple) will be forwarded to an application-aware engine for protocol detection and rule enforcement, and the traffic will be allowed if the layer 7 criteria is also matched, otherwise it will be dropped. Therefore, any rules after a layer 7 rule will not be enforced for the traffic.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol"),
+									},
+								},
+							},
+						},
+					},
+					"from": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rule is matched if traffic originates from workloads selected by this field. If this field is empty, this rule matches all sources.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+									},
+								},
+							},
+						},
+					},
+					"to": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rule is matched if traffic is intended for workloads selected by this field. This field can't be used with ToServices. If this field and ToServices are both empty or missing this rule matches all destinations.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+									},
+								},
+							},
+						},
+					},
+					"toServices": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rule is matched if traffic is intended for a Service listed in this field. Currently, only ClusterIP types Services are supported in this field. When scope is set to ClusterSet, it matches traffic intended for a multi-cluster Service listed in this field. Service name and Namespace provided should match the original exported Service. This field can only be used when AntreaProxy is enabled. This field can't be used with To or Ports. If this field and To are both empty or missing, this rule matches all destinations.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService"),
+									},
+								},
+							},
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name describes the intention of this rule. Name should be unique within the policy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"enableLogging": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EnableLogging is used to indicate if agent should generate logs when rules are matched. Should be default to false.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"logLabel": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogLabel is a user-defined arbitrary string which will be printed in the NetworkPolicy logs.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"appliedTo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select workloads on which this rule will be applied to. Cannot be set in conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"action"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_TLSProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TLSProtocol matches TLS handshake packets with specific SNI. If the field is not provided, this matches all TLS handshake packets.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"sni": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

@@ -33,7 +33,6 @@ import (
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
@@ -54,8 +53,8 @@ var (
 		Name:      "default-acnp-no-spec",
 	}}
 
-	allowAction     = v1alpha1.RuleActionAllow
-	dropAction      = v1alpha1.RuleActionDrop
+	allowAction     = v1beta1.RuleActionAllow
+	dropAction      = v1beta1.RuleActionDrop
 	securityOpsTier = &v1beta1.Tier{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "securityops",
@@ -73,19 +72,19 @@ var (
 		Spec: mcsv1alpha1.ResourceImportSpec{
 			Name: acnpImportName,
 			Kind: constants.AntreaClusterNetworkPolicyKind,
-			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
+			ClusterNetworkPolicy: &v1beta1.ClusterNetworkPolicySpec{
 				Tier:     "securityops",
 				Priority: 1.0,
-				AppliedTo: []v1alpha1.AppliedTo{
+				AppliedTo: []v1beta1.AppliedTo{
 					{NamespaceSelector: &metav1.LabelSelector{}},
 				},
-				Ingress: []v1alpha1.Rule{
+				Ingress: []v1beta1.Rule{
 					{
 						Action: &dropAction,
-						From: []v1alpha1.NetworkPolicyPeer{
+						From: []v1beta1.NetworkPolicyPeer{
 							{
-								Namespaces: &v1alpha1.PeerNamespaces{
-									Match: v1alpha1.NamespaceMatchSelf,
+								Namespaces: &v1beta1.PeerNamespaces{
+									Match: v1beta1.NamespaceMatchSelf,
 								},
 							},
 						},
@@ -112,10 +111,10 @@ var (
 		Spec: mcsv1alpha1.ResourceImportSpec{
 			Name: "acnp-no-matching-tier",
 			Kind: constants.AntreaClusterNetworkPolicyKind,
-			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
+			ClusterNetworkPolicy: &v1beta1.ClusterNetworkPolicySpec{
 				Tier:     "somerandomtier",
 				Priority: 1.0,
-				AppliedTo: []v1alpha1.AppliedTo{
+				AppliedTo: []v1beta1.AppliedTo{
 					{NamespaceSelector: &metav1.LabelSelector{}},
 				},
 			},
@@ -161,7 +160,7 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 					t.Errorf("ResourceImport Reconciler should handle ACNP create event successfully but got error = %v", err)
 				}
 			} else {
-				acnp := &v1alpha1.ClusterNetworkPolicy{}
+				acnp := &v1beta1.ClusterNetworkPolicy{}
 				err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: common.AntreaMCSPrefix + tt.acnpImportName}, acnp)
 				if tt.expectedSuccess && err != nil {
 					t.Errorf("ResourceImport Reconciler should import an ACNP successfully but got error = %v", err)
@@ -183,7 +182,7 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
-	existingACNP := &v1alpha1.ClusterNetworkPolicy{
+	existingACNP := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: common.AntreaMCSPrefix + acnpImportName,
 		},
@@ -199,7 +198,7 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 	if _, err := r.Reconcile(ctx, acnpImpReq); err != nil {
 		t.Errorf("ResourceImport Reconciler should handle ACNP ResourceImport delete event successfully but got error = %v", err)
 	}
-	acnp := &v1alpha1.ClusterNetworkPolicy{}
+	acnp := &v1beta1.ClusterNetworkPolicy{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: common.AntreaMCSPrefix + acnpImportName}, acnp); !apierrors.IsNotFound(err) {
 		t.Errorf("ResourceImport Reconciler should delete ACNP successfully but got error = %v", err)
 	}
@@ -209,24 +208,24 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
-	existingACNP1 := &v1alpha1.ClusterNetworkPolicy{
+	existingACNP1 := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        common.AntreaMCSPrefix + acnpImportName,
 			Annotations: map[string]string{common.AntreaMCACNPAnnotation: "true"},
 		},
-		Spec: v1alpha1.ClusterNetworkPolicySpec{
+		Spec: v1beta1.ClusterNetworkPolicySpec{
 			Tier:     "securityops",
 			Priority: 1.0,
-			AppliedTo: []v1alpha1.AppliedTo{
+			AppliedTo: []v1beta1.AppliedTo{
 				{NamespaceSelector: &metav1.LabelSelector{}},
 			},
-			Ingress: []v1alpha1.Rule{
+			Ingress: []v1beta1.Rule{
 				{
 					Action: &allowAction,
-					From: []v1alpha1.NetworkPolicyPeer{
+					From: []v1beta1.NetworkPolicyPeer{
 						{
-							Namespaces: &v1alpha1.PeerNamespaces{
-								Match: v1alpha1.NamespaceMatchSelf,
+							Namespaces: &v1beta1.PeerNamespaces{
+								Match: v1beta1.NamespaceMatchSelf,
 							},
 						},
 					},
@@ -242,24 +241,24 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 		Spec: mcsv1alpha1.ResourceImportSpec{
 			Name: "acnp-no-matching-tier",
 			Kind: constants.AntreaClusterNetworkPolicyKind,
-			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
+			ClusterNetworkPolicy: &v1beta1.ClusterNetworkPolicySpec{
 				Tier:     "securityops",
 				Priority: 1.0,
-				AppliedTo: []v1alpha1.AppliedTo{
+				AppliedTo: []v1beta1.AppliedTo{
 					{NamespaceSelector: &metav1.LabelSelector{}},
 				},
 			},
 		},
 	}
-	existingACNP3 := &v1alpha1.ClusterNetworkPolicy{
+	existingACNP3 := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        common.AntreaMCSPrefix + "valid-updated-to-no-valid",
 			Annotations: map[string]string{common.AntreaMCACNPAnnotation: "true"},
 		},
-		Spec: v1alpha1.ClusterNetworkPolicySpec{
+		Spec: v1beta1.ClusterNetworkPolicySpec{
 			Tier:     "securityops",
 			Priority: 1.0,
-			AppliedTo: []v1alpha1.AppliedTo{
+			AppliedTo: []v1beta1.AppliedTo{
 				{NamespaceSelector: &metav1.LabelSelector{}},
 			},
 		},
@@ -272,10 +271,10 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 		Spec: mcsv1alpha1.ResourceImportSpec{
 			Name: acnpImportName,
 			Kind: constants.AntreaClusterNetworkPolicyKind,
-			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
+			ClusterNetworkPolicy: &v1beta1.ClusterNetworkPolicySpec{
 				Tier:     "somerandomtier",
 				Priority: 1.0,
-				AppliedTo: []v1alpha1.AppliedTo{
+				AppliedTo: []v1beta1.AppliedTo{
 					{NamespaceSelector: &metav1.LabelSelector{}},
 				},
 			},
@@ -289,14 +288,14 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 		Namespace: leaderNamespace,
 		Name:      "default-name-conflict",
 	}}
-	existingACNP4 := &v1alpha1.ClusterNetworkPolicy{
+	existingACNP4 := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: common.AntreaMCSPrefix + "name-conflict",
 		},
-		Spec: v1alpha1.ClusterNetworkPolicySpec{
+		Spec: v1beta1.ClusterNetworkPolicySpec{
 			Tier:     "securityops",
 			Priority: 1.0,
-			AppliedTo: []v1alpha1.AppliedTo{
+			AppliedTo: []v1beta1.AppliedTo{
 				{NamespaceSelector: &metav1.LabelSelector{}},
 			},
 		},
@@ -317,7 +316,7 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 		req                     ctrl.Request
 		expectErr               bool
 		expectImportSuccess     bool
-		expectedUpdatedACNPSpec *v1alpha1.ClusterNetworkPolicySpec
+		expectedUpdatedACNPSpec *v1beta1.ClusterNetworkPolicySpec
 	}{
 		{
 			name:                    "update acnp spec",
@@ -362,7 +361,7 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 				}
 			} else {
 				if tt.expectedUpdatedACNPSpec != nil {
-					acnp := &v1alpha1.ClusterNetworkPolicy{}
+					acnp := &v1beta1.ClusterNetworkPolicy{}
 					err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: common.AntreaMCSPrefix + tt.acnpImportName}, acnp)
 					if tt.expectImportSuccess && err != nil {
 						t.Errorf("ResourceImport Reconciler should import an ACNP successfully but got error = %v", err)

@@ -26,7 +26,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -305,7 +304,7 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 		return
 	}
 	for _, obj := range cnps {
-		c.enqueueInternalNetworkPolicy(getACNPReference(obj.(*crdv1alpha1.ClusterNetworkPolicy)))
+		c.enqueueInternalNetworkPolicy(getACNPReference(obj.(*crdv1beta1.ClusterNetworkPolicy)))
 	}
 }
 

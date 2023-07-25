@@ -35,7 +35,7 @@ import (
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 const (
@@ -114,7 +114,7 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember(ctx context.Co
 	if err := c.List(ctx, svcList, &client.ListOptions{}); err != nil {
 		return err
 	}
-	acnpList := &crdv1alpha1.ClusterNetworkPolicyList{}
+	acnpList := &crdv1beta1.ClusterNetworkPolicyList{}
 	if err := c.List(ctx, acnpList, &client.ListOptions{}); err != nil {
 		return err
 	}
@@ -211,9 +211,9 @@ func (c *StaleResCleanupController) cleanupStaleServiceResources(ctx context.Con
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupACNPResources(ctx context.Context, acnpList *crdv1alpha1.ClusterNetworkPolicyList,
+func (c *StaleResCleanupController) cleanupACNPResources(ctx context.Context, acnpList *crdv1beta1.ClusterNetworkPolicyList,
 	resImpList *mcsv1alpha1.ResourceImportList) error {
-	staleMCACNPItems := map[string]crdv1alpha1.ClusterNetworkPolicy{}
+	staleMCACNPItems := map[string]crdv1beta1.ClusterNetworkPolicy{}
 	for _, acnp := range acnpList.Items {
 		if _, ok := acnp.Annotations[common.AntreaMCACNPAnnotation]; ok {
 			staleMCACNPItems[acnp.Name] = acnp

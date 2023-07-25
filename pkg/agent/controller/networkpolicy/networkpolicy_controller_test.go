@@ -38,7 +38,7 @@ import (
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/querier"
@@ -627,7 +627,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 func TestValidate(t *testing.T) {
 	controller, _, _ := newTestController()
 	igmpType := int32(0x12)
-	actionAllow, actionDrop := v1alpha1.RuleActionAllow, v1alpha1.RuleActionDrop
+	actionAllow, actionDrop := v1beta1.RuleActionAllow, v1beta1.RuleActionDrop
 	appliedToGroup := v1beta2.NewGroupMemberSet()
 	appliedToGroup.Insert()
 	tierPriority01 := int32(100)
@@ -684,14 +684,14 @@ func TestValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to validate group %s %v", groupAddress1, err)
 	}
-	if item.RuleAction != v1alpha1.RuleActionAllow {
-		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress1, v1alpha1.RuleActionAllow, item.RuleAction)
+	if item.RuleAction != v1beta1.RuleActionAllow {
+		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress1, v1beta1.RuleActionAllow, item.RuleAction)
 	}
 	item, err = controller.GetIGMPNPRuleInfo("pod1", "ns1", net.ParseIP(groupAddress2), 0x12)
 	if err != nil {
 		t.Fatalf("failed to validate group %s %+v", groupAddress2, err)
 	}
-	if item.RuleAction != v1alpha1.RuleActionDrop {
-		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress2, v1alpha1.RuleActionDrop, item.RuleAction)
+	if item.RuleAction != v1beta1.RuleActionDrop {
+		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress2, v1beta1.RuleActionDrop, item.RuleAction)
 	}
 }

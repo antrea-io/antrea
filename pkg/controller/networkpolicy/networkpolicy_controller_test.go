@@ -45,7 +45,6 @@ import (
 	fakemcsversioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
 	mcsinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/storage"
@@ -132,8 +131,8 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		informerFactory.Core().V1().Services(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		informerFactory.Core().V1().Nodes(),
-		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(),
-		crdInformerFactory.Crd().V1alpha1().NetworkPolicies(),
+		crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(),
+		crdInformerFactory.Crd().V1beta1().NetworkPolicies(),
 		crdInformerFactory.Crd().V1beta1().Tiers(),
 		cgInformer,
 		gInformer,
@@ -158,8 +157,8 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Crd().V1alpha1().NetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1beta1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().Tiers().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().ClusterGroups().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().Groups().Informer().GetStore(),
@@ -187,8 +186,8 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
-	acnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
-	annpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	acnpInformer := crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
+	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	groupInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
@@ -1212,7 +1211,7 @@ func TestAddAndUpdateService(t *testing.T) {
 			Name: "cg-1",
 		},
 		Spec: v1beta1.GroupSpec{
-			ServiceReference: &crdv1alpha1.NamespacedName{
+			ServiceReference: &v1beta1.NamespacedName{
 				Name:      "test-svc-1",
 				Namespace: "test-ns",
 			},
@@ -1223,7 +1222,7 @@ func TestAddAndUpdateService(t *testing.T) {
 			Name: "cg-2",
 		},
 		Spec: v1beta1.GroupSpec{
-			ServiceReference: &crdv1alpha1.NamespacedName{
+			ServiceReference: &v1beta1.NamespacedName{
 				Name:      "test-svc-2",
 				Namespace: "test-ns",
 			},
@@ -1318,7 +1317,7 @@ func TestDeleteService(t *testing.T) {
 			Name: "test-cg",
 		},
 		Spec: v1beta1.GroupSpec{
-			ServiceReference: &crdv1alpha1.NamespacedName{
+			ServiceReference: &v1beta1.NamespacedName{
 				Name:      "test-svc",
 				Namespace: "test-ns",
 			},
@@ -2920,24 +2919,24 @@ func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
 
 func TestSyncInternalNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
-	allowAction := crdv1alpha1.RuleActionAllow
-	inputPolicy := &crdv1alpha1.ClusterNetworkPolicy{
+	allowAction := v1beta1.RuleActionAllow
+	inputPolicy := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
-		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.AppliedTo{
+		Spec: v1beta1.ClusterNetworkPolicySpec{
+			AppliedTo: []v1beta1.AppliedTo{
 				{PodSelector: &selectorA},
 				{PodSelector: &selectorB},
 			},
 			Priority: p10,
-			Ingress: []crdv1alpha1.Rule{
+			Ingress: []v1beta1.Rule{
 				{
-					From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorA}},
+					From:   []v1beta1.NetworkPolicyPeer{{PodSelector: &selectorA}},
 					Action: &allowAction,
 				},
 			},
-			Egress: []crdv1alpha1.Rule{
+			Egress: []v1beta1.Rule{
 				{
-					To:     []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+					To:     []v1beta1.NetworkPolicyPeer{{PodSelector: &selectorB}},
 					Action: &allowAction,
 				},
 			},
@@ -3244,7 +3243,7 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 
 func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 	p10 := float64(10)
-	allowAction := crdv1alpha1.RuleActionAllow
+	allowAction := v1beta1.RuleActionAllow
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
 	podA.Labels = selectorA.MatchLabels
 	podB := getPod("podB", "nsB", "nodeB", "10.0.0.2", false)
@@ -3254,7 +3253,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 	tests := []struct {
 		name           string
 		groups         []*v1beta1.Group
-		inputPolicy    *crdv1alpha1.NetworkPolicy
+		inputPolicy    *v1beta1.NetworkPolicy
 		expectedPolicy *antreatypes.NetworkPolicy
 	}{
 		{
@@ -3265,16 +3264,16 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					Spec:       v1beta1.GroupSpec{PodSelector: &selectorA},
 				},
 			},
-			inputPolicy: &crdv1alpha1.NetworkPolicy{
+			inputPolicy: &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: v1beta1.NetworkPolicySpec{
+					AppliedTo: []v1beta1.AppliedTo{
 						{Group: "groupA"},
 					},
 					Priority: p10,
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []v1beta1.Rule{
 						{
-							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							From:   []v1beta1.NetworkPolicyPeer{{PodSelector: &selectorB}},
 							Action: &allowAction,
 						},
 					},
@@ -3314,16 +3313,16 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					Spec:       v1beta1.GroupSpec{PodSelector: &selectorA},
 				},
 			},
-			inputPolicy: &crdv1alpha1.NetworkPolicy{
+			inputPolicy: &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: v1beta1.NetworkPolicySpec{
+					AppliedTo: []v1beta1.AppliedTo{
 						{Group: "parentGroup"},
 					},
 					Priority: p10,
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []v1beta1.Rule{
 						{
-							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							From:   []v1beta1.NetworkPolicyPeer{{PodSelector: &selectorB}},
 							Action: &allowAction,
 						},
 					},
@@ -3359,16 +3358,16 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					Spec:       v1beta1.GroupSpec{NamespaceSelector: &metav1.LabelSelector{}, PodSelector: &selectorA},
 				},
 			},
-			inputPolicy: &crdv1alpha1.NetworkPolicy{
+			inputPolicy: &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: v1beta1.NetworkPolicySpec{
+					AppliedTo: []v1beta1.AppliedTo{
 						{Group: "groupA"},
 					},
 					Priority: p10,
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []v1beta1.Rule{
 						{
-							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							From:   []v1beta1.NetworkPolicyPeer{{PodSelector: &selectorB}},
 							Action: &allowAction,
 						},
 					},
@@ -3408,16 +3407,16 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					Spec:       v1beta1.GroupSpec{NamespaceSelector: &metav1.LabelSelector{}, PodSelector: &selectorA},
 				},
 			},
-			inputPolicy: &crdv1alpha1.NetworkPolicy{
+			inputPolicy: &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "annpA", UID: "uidA"},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.AppliedTo{
+				Spec: v1beta1.NetworkPolicySpec{
+					AppliedTo: []v1beta1.AppliedTo{
 						{Group: "parentGroup"},
 					},
 					Priority: p10,
-					Ingress: []crdv1alpha1.Rule{
+					Ingress: []v1beta1.Rule{
 						{
-							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							From:   []v1beta1.NetworkPolicyPeer{{PodSelector: &selectorB}},
 							Action: &allowAction,
 						},
 					},
@@ -3462,7 +3461,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			for _, group := range tt.groups {
 				c.crdClient.CrdV1beta1().Groups(group.Namespace).Create(context.TODO(), group, metav1.CreateOptions{})
 			}
-			c.crdClient.CrdV1alpha1().NetworkPolicies(tt.inputPolicy.Namespace).Create(context.TODO(), tt.inputPolicy, metav1.CreateOptions{})
+			c.crdClient.CrdV1beta1().NetworkPolicies(tt.inputPolicy.Namespace).Create(context.TODO(), tt.inputPolicy, metav1.CreateOptions{})
 
 			var gotPolicy *antreatypes.NetworkPolicy
 			err := wait.PollImmediate(100*time.Millisecond, 3*time.Second, func() (done bool, err error) {

@@ -20,7 +20,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
@@ -29,7 +28,7 @@ func testInvalidGroupIPBlockWithPodSelector(t *testing.T) {
 	gName := "ipb-pod"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
 	cidr := "10.0.0.10/32"
-	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
+	ipb := []crdv1beta1.IPBlock{{CIDR: cidr}}
 	g := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
@@ -51,7 +50,7 @@ func testInvalidGroupIPBlockWithNSSelector(t *testing.T) {
 	gName := "ipb-ns"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": namespaces["y"]}}
 	cidr := "10.0.0.10/32"
-	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
+	ipb := []crdv1beta1.IPBlock{{CIDR: cidr}}
 	g := &crdv1beta1.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
@@ -72,7 +71,7 @@ func testInvalidGroupServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with serviceReference and podSelector")
 	gName := "svcref-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
-	svcRef := &crdv1alpha1.NamespacedName{
+	svcRef := &crdv1beta1.NamespacedName{
 		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
@@ -96,7 +95,7 @@ func testInvalidGroupServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with serviceReference and namespaceSelector")
 	gName := "svcref-ns-selector"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": namespaces["y"]}}
-	svcRef := &crdv1alpha1.NamespacedName{
+	svcRef := &crdv1beta1.NamespacedName{
 		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
@@ -120,8 +119,8 @@ func testInvalidGroupServiceRefWithIPBlock(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with ipblock and namespaceSelector")
 	gName := "ipb-svcref"
 	cidr := "10.0.0.10/32"
-	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
-	svcRef := &crdv1alpha1.NamespacedName{
+	ipb := []crdv1beta1.IPBlock{{CIDR: cidr}}
+	svcRef := &crdv1beta1.NamespacedName{
 		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
@@ -190,7 +189,7 @@ func testInvalidGroupChildGroupWithPodSelector(t *testing.T) {
 func testInvalidGroupChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with childGroups and ServiceReference")
 	gName := "child-group-svcref"
-	svcRef := &crdv1alpha1.NamespacedName{
+	svcRef := &crdv1beta1.NamespacedName{
 		Name:      "test-svc",
 		Namespace: namespaces[testChildGroupNamespace],
 	}

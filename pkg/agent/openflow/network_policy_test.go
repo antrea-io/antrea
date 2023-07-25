@@ -38,7 +38,7 @@ import (
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	mocks "antrea.io/antrea/pkg/ovs/openflow/testing"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
@@ -65,8 +65,8 @@ var (
 	_, podIPv4CIDR, _ = net.ParseCIDR("100.100.100.0/24")
 	_, podIPv6CIDR, _ = net.ParseCIDR("fd12:ab35:34:a001::/64")
 
-	actionAllow  = crdv1alpha1.RuleActionAllow
-	actionDrop   = crdv1alpha1.RuleActionDrop
+	actionAllow  = crdv1beta1.RuleActionAllow
+	actionDrop   = crdv1beta1.RuleActionDrop
 	port8080     = intstr.FromInt(8080)
 	port32800    = int32(32800)
 	protocolICMP = v1beta2.ProtocolICMP
@@ -170,7 +170,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
 	c.networkConfig = &config.NetworkConfig{}
 	c.pipelines = pipelineMap
-	defaultAction := crdv1alpha1.RuleActionAllow
+	defaultAction := crdv1beta1.RuleActionAllow
 	// Create a policyRuleConjunction for the dns response interception flows
 	// to ensure nil NetworkPolicyReference is handled correctly by GetNetworkPolicyFlowKeys.
 	dnsID := uint32(1)
@@ -677,7 +677,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}
 	c.networkConfig = &config.NetworkConfig{IPv4Enabled: true, IPv6Enabled: true}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6}
-	defaultAction := crdv1alpha1.RuleActionAllow
+	defaultAction := crdv1beta1.RuleActionAllow
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
 		Direction: v1beta2.DirectionOut,

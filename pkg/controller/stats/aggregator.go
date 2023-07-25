@@ -28,9 +28,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -170,7 +170,7 @@ func (a *Aggregator) deleteNetworkPolicy(obj interface{}) {
 
 // addACNP handles ClusterNetworkPolicy ADD events and creates corresponding ClusterNetworkPolicyStats objects.
 func (a *Aggregator) addACNP(obj interface{}) {
-	acnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
+	acnp := obj.(*crdv1beta1.ClusterNetworkPolicy)
 	stats := &statsv1alpha1.AntreaClusterNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: acnp.Name,
@@ -185,14 +185,14 @@ func (a *Aggregator) addACNP(obj interface{}) {
 
 // deleteACNP handles ClusterNetworkPolicy DELETE events and deletes corresponding ClusterNetworkPolicyStats objects.
 func (a *Aggregator) deleteACNP(obj interface{}) {
-	acnp, ok := obj.(*crdv1alpha1.ClusterNetworkPolicy)
+	acnp, ok := obj.(*crdv1beta1.ClusterNetworkPolicy)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea ClusterNetworkPolicy, invalid type: %v", obj)
 			return
 		}
-		acnp, ok = tombstone.Obj.(*crdv1alpha1.ClusterNetworkPolicy)
+		acnp, ok = tombstone.Obj.(*crdv1beta1.ClusterNetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea ClusterNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -209,7 +209,7 @@ func (a *Aggregator) deleteACNP(obj interface{}) {
 
 // addANNP handles Antrea NetworkPolicy ADD events and creates corresponding AntreaNetworkPolicyStats objects.
 func (a *Aggregator) addANNP(obj interface{}) {
-	annp := obj.(*crdv1alpha1.NetworkPolicy)
+	annp := obj.(*crdv1beta1.NetworkPolicy)
 	stats := &statsv1alpha1.AntreaNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: annp.Namespace,
@@ -225,14 +225,14 @@ func (a *Aggregator) addANNP(obj interface{}) {
 
 // deleteANNP handles Antrea NetworkPolicy DELETE events and deletes corresponding AntreaNetworkPolicyStats objects.
 func (a *Aggregator) deleteANNP(obj interface{}) {
-	annp, ok := obj.(*crdv1alpha1.NetworkPolicy)
+	annp, ok := obj.(*crdv1beta1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", obj)
 			return
 		}
-		annp, ok = tombstone.Obj.(*crdv1alpha1.NetworkPolicy)
+		annp, ok = tombstone.Obj.(*crdv1beta1.NetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
 			return

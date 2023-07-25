@@ -21,7 +21,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	annotation "antrea.io/antrea/pkg/ipam"
 	e2eutils "antrea.io/antrea/test/e2e/utils"
 )
@@ -171,14 +171,14 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		// meantime.
 		skipIfIPv6Cluster(t)
 	}
-	var ruleAction crdv1alpha1.RuleAction
+	var ruleAction crdv1beta1.RuleAction
 	switch action {
 	case Dropped:
-		ruleAction = crdv1alpha1.RuleActionDrop
+		ruleAction = crdv1beta1.RuleActionDrop
 	case Rejected:
-		ruleAction = crdv1alpha1.RuleActionReject
+		ruleAction = crdv1beta1.RuleActionReject
 	default:
-		ruleAction = crdv1alpha1.RuleActionAllow
+		ruleAction = crdv1beta1.RuleActionAllow
 	}
 	builder := &e2eutils.ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName(fmt.Sprintf("acnp-%s-a", strings.ToLower(string(ruleAction)))).

@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -103,7 +102,7 @@ func TestProcessClusterGroup(t *testing.T) {
 			inputGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
 				Spec: crdv1beta1.GroupSpec{
-					IPBlocks: []crdv1alpha1.IPBlock{
+					IPBlocks: []crdv1beta1.IPBlock{
 						{
 							CIDR: cidr,
 						},
@@ -130,7 +129,7 @@ func TestProcessClusterGroup(t *testing.T) {
 			inputGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
 				Spec: crdv1beta1.GroupSpec{
-					ServiceReference: &crdv1alpha1.NamespacedName{
+					ServiceReference: &crdv1beta1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "test-ns",
 					},
@@ -245,7 +244,7 @@ func TestAddClusterGroup(t *testing.T) {
 			inputGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
 				Spec: crdv1beta1.GroupSpec{
-					IPBlocks: []crdv1alpha1.IPBlock{
+					IPBlocks: []crdv1beta1.IPBlock{
 						{
 							CIDR: cidr,
 						},
@@ -356,7 +355,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			updatedGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
 				Spec: crdv1beta1.GroupSpec{
-					IPBlocks: []crdv1alpha1.IPBlock{
+					IPBlocks: []crdv1beta1.IPBlock{
 						{
 							CIDR: cidr,
 						},
@@ -383,7 +382,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			updatedGroup: &crdv1beta1.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
 				Spec: crdv1beta1.GroupSpec{
-					ServiceReference: &crdv1alpha1.NamespacedName{
+					ServiceReference: &crdv1beta1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "test-ns",
 					},
@@ -928,23 +927,23 @@ func TestGetGroupMembers(t *testing.T) {
 func TestSyncInternalGroup(t *testing.T) {
 	p10 := float64(10)
 	p20 := float64(20)
-	allowAction := crdv1alpha1.RuleActionAllow
+	allowAction := crdv1beta1.RuleActionAllow
 	cgName := "cgA"
 	cgUID := types.UID("uidA")
 	cg := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: cgName, UID: cgUID},
 		Spec:       crdv1beta1.GroupSpec{NamespaceSelector: &selectorA},
 	}
-	cnp1 := &crdv1alpha1.ClusterNetworkPolicy{
+	cnp1 := &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnp1", UID: "uid1"},
-		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.AppliedTo{
+		Spec: crdv1beta1.ClusterNetworkPolicySpec{
+			AppliedTo: []crdv1beta1.AppliedTo{
 				{PodSelector: &selectorB},
 			},
 			Priority: p10,
-			Ingress: []crdv1alpha1.Rule{
+			Ingress: []crdv1beta1.Rule{
 				{
-					From: []crdv1alpha1.NetworkPolicyPeer{
+					From: []crdv1beta1.NetworkPolicyPeer{
 						{Group: cgName},
 					},
 					Action: &allowAction,
@@ -952,16 +951,16 @@ func TestSyncInternalGroup(t *testing.T) {
 			},
 		},
 	}
-	cnp2 := &crdv1alpha1.ClusterNetworkPolicy{
+	cnp2 := &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnp2", UID: "uid2"},
-		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.AppliedTo{
+		Spec: crdv1beta1.ClusterNetworkPolicySpec{
+			AppliedTo: []crdv1beta1.AppliedTo{
 				{PodSelector: &selectorC},
 			},
 			Priority: p20,
-			Ingress: []crdv1alpha1.Rule{
+			Ingress: []crdv1beta1.Rule{
 				{
-					From: []crdv1alpha1.NetworkPolicyPeer{
+					From: []crdv1beta1.NetworkPolicyPeer{
 						{Group: cgName},
 					},
 					Action: &allowAction,
@@ -1129,7 +1128,7 @@ func TestGetAssociatedIPBlockGroups(t *testing.T) {
 	cg1 := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockGrp1", UID: "UID1"},
 		Spec: crdv1beta1.GroupSpec{
-			IPBlocks: []crdv1alpha1.IPBlock{
+			IPBlocks: []crdv1beta1.IPBlock{
 				{CIDR: "172.60.0.0/16"},
 			},
 		},
@@ -1137,7 +1136,7 @@ func TestGetAssociatedIPBlockGroups(t *testing.T) {
 	cg2 := &crdv1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "ipBlockGrp2", UID: "UID2"},
 		Spec: crdv1beta1.GroupSpec{
-			IPBlocks: []crdv1alpha1.IPBlock{
+			IPBlocks: []crdv1beta1.IPBlock{
 				{CIDR: "172.60.2.0/24"},
 			},
 		},

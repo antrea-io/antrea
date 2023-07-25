@@ -32,7 +32,7 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -72,7 +72,7 @@ type rule struct {
 	// Name of this rule. Empty for k8s NetworkPolicy.
 	Name string
 	// Action of this rule. nil for k8s NetworkPolicy.
-	Action *crdv1alpha1.RuleAction
+	Action *crdv1beta1.RuleAction
 	// Priority of this rule within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
 	Priority int32
 	// The highest rule Priority within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
@@ -392,7 +392,7 @@ func toIGMPReportGroupAddressIndexFunc(obj interface{}) ([]string, error) {
 	if rule.Direction == v1beta.DirectionOut {
 		for _, svc := range rule.Services {
 			if svc.Protocol != nil && *svc.Protocol == v1beta.ProtocolIGMP && svc.IGMPType == nil ||
-				svc.IGMPType != nil && (*svc.IGMPType == crdv1alpha1.IGMPReportV1 || *svc.IGMPType == crdv1alpha1.IGMPReportV2 || *svc.IGMPType == crdv1alpha1.IGMPReportV3) {
+				svc.IGMPType != nil && (*svc.IGMPType == crdv1beta1.IGMPReportV1 || *svc.IGMPType == crdv1beta1.IGMPReportV2 || *svc.IGMPType == crdv1beta1.IGMPReportV3) {
 				mcastGroupAddresses.Insert(svc.GroupAddress)
 			}
 		}

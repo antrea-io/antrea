@@ -29,7 +29,6 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
@@ -55,7 +54,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 	klog.InfoS("Updating ACNP corresponding to ResourceImport",
 		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
 
-	acnp := &v1alpha1.ClusterNetworkPolicy{}
+	acnp := &v1beta1.ClusterNetworkPolicy{}
 	err := r.localClusterClient.Get(ctx, acnpName, acnp)
 	acnpNotFound := apierrors.IsNotFound(err)
 	if err != nil && !acnpNotFound {
@@ -116,7 +115,7 @@ func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx
 	klog.InfoS("Deleting ACNP corresponding to ResourceImport",
 		"acnp", acnpName, "resourceimport", klog.KObj(resImp))
 
-	acnp := &v1alpha1.ClusterNetworkPolicy{
+	acnp := &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: acnpName,
 		},
@@ -130,8 +129,8 @@ func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx
 	return ctrl.Result{}, nil
 }
 
-func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1alpha1.ClusterNetworkPolicy {
-	return &v1alpha1.ClusterNetworkPolicy{
+func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1beta1.ClusterNetworkPolicy {
+	return &v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: common.ToMCResourceName(resImp.Spec.Name),
 			Annotations: map[string]string{

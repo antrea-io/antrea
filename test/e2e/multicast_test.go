@@ -32,7 +32,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/multicast"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func skipIfMulticastDisabled(tb testing.TB, data *TestData) {
@@ -183,8 +183,8 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 						name:         "anp1-multicast",
 						appliedToPod: "test1-sender-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-multicast-traffic", address: "225.20.2.3", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-multicast-traffic", address: "225.20.2.2", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-multicast-traffic", address: "225.20.2.3", action: crdv1beta1.RuleActionAllow},
+							{name: "drop-multicast-traffic", address: "225.20.2.2", action: crdv1beta1.RuleActionDrop},
 						},
 					},
 				},
@@ -205,8 +205,8 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 						name:         "anp1-igmp",
 						appliedToPod: "test2-receiver-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-igmp-report", address: "225.20.3.3", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-igmp-report", address: "225.20.3.2", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-igmp-report", address: "225.20.3.3", action: crdv1beta1.RuleActionAllow},
+							{name: "drop-igmp-report", address: "225.20.3.2", action: crdv1beta1.RuleActionDrop},
 						},
 					},
 				},
@@ -235,8 +235,8 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 						name:         "anp1-mixed",
 						appliedToPod: "test3-sender-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-multicast-traffic", address: "225.20.1.3", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-multicast-traffic", address: "225.20.1.2", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-multicast-traffic", address: "225.20.1.3", action: crdv1beta1.RuleActionAllow},
+							{name: "drop-multicast-traffic", address: "225.20.1.2", action: crdv1beta1.RuleActionDrop},
 						},
 					},
 				},
@@ -245,14 +245,14 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 						name:         "anp2-mixed",
 						appliedToPod: "test3-receiver-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-igmp-report", address: "225.20.1.2", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-igmp-report", address: "225.20.1.3", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-igmp-report", address: "225.20.1.2", action: crdv1beta1.RuleActionAllow},
+							{name: "drop-igmp-report", address: "225.20.1.3", action: crdv1beta1.RuleActionDrop},
 						},
 					},
 					{
 						name:         "anp3-mixed",
 						appliedToPod: "test3-receiver-1",
-						ruleConfigs:  []ruleConfig{{name: "allow-igmp-query", igmpType: &igmpQueryType, address: "224.0.0.1", action: crdv1alpha1.RuleActionAllow}},
+						ruleConfigs:  []ruleConfig{{name: "allow-igmp-query", igmpType: &igmpQueryType, address: "224.0.0.1", action: crdv1beta1.RuleActionAllow}},
 					},
 				},
 				antctlResults: map[string]multicast.PodTrafficStats{
@@ -331,7 +331,7 @@ type ruleConfig struct {
 	name     string
 	address  string
 	igmpType *int32
-	action   crdv1alpha1.RuleAction
+	action   crdv1beta1.RuleAction
 }
 
 // testMulticastStatsWithSendersReceivers tests multiple multicast senders and receivers cases with specified AntreaNetworkPolicies which may drop/allow IGMP or Multicast traffic.
@@ -354,21 +354,21 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 	p10 := float64(10)
 
 	for _, anp := range mc.multicastANPConfigs {
-		np := &crdv1alpha1.NetworkPolicy{
+		np := &crdv1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: anp.name, Labels: map[string]string{"antrea-e2e": anp.name}},
-			Spec: crdv1alpha1.NetworkPolicySpec{
+			Spec: crdv1beta1.NetworkPolicySpec{
 				Priority: p10,
-				AppliedTo: []crdv1alpha1.AppliedTo{
+				AppliedTo: []crdv1beta1.AppliedTo{
 					{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": anp.appliedToPod}}},
 				},
-				Egress: []crdv1alpha1.Rule{},
+				Egress: []crdv1beta1.Rule{},
 			},
 		}
 		for i := range anp.ruleConfigs {
-			np.Spec.Egress = append(np.Spec.Egress, crdv1alpha1.Rule{
-				To: []crdv1alpha1.NetworkPolicyPeer{
+			np.Spec.Egress = append(np.Spec.Egress, crdv1beta1.Rule{
+				To: []crdv1beta1.NetworkPolicyPeer{
 					{
-						IPBlock: &crdv1alpha1.IPBlock{
+						IPBlock: &crdv1beta1.IPBlock{
 							CIDR: fmt.Sprintf("%s/32", anp.ruleConfigs[i].address),
 						},
 					},
@@ -388,23 +388,23 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 	}
 
 	for _, anp := range mc.igmpANPConfigs {
-		np := &crdv1alpha1.NetworkPolicy{
+		np := &crdv1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: anp.name, Labels: map[string]string{"antrea-e2e": anp.name}},
-			Spec: crdv1alpha1.NetworkPolicySpec{
+			Spec: crdv1beta1.NetworkPolicySpec{
 				Priority: p10,
-				AppliedTo: []crdv1alpha1.AppliedTo{
+				AppliedTo: []crdv1beta1.AppliedTo{
 					{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": anp.appliedToPod}}},
 				},
-				Egress:  []crdv1alpha1.Rule{},
-				Ingress: []crdv1alpha1.Rule{},
+				Egress:  []crdv1beta1.Rule{},
+				Ingress: []crdv1beta1.Rule{},
 			},
 		}
 		for i := range anp.ruleConfigs {
-			rule := crdv1alpha1.Rule{
-				From: []crdv1alpha1.NetworkPolicyPeer{},
-				Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+			rule := crdv1beta1.Rule{
+				From: []crdv1beta1.NetworkPolicyPeer{},
+				Protocols: []crdv1beta1.NetworkPolicyProtocol{
 					{
-						IGMP: &crdv1alpha1.IGMPProtocol{IGMPType: anp.ruleConfigs[i].igmpType, GroupAddress: anp.ruleConfigs[i].address},
+						IGMP: &crdv1beta1.IGMPProtocol{IGMPType: anp.ruleConfigs[i].igmpType, GroupAddress: anp.ruleConfigs[i].address},
 					},
 				},
 				Action: &anp.ruleConfigs[i].action,
