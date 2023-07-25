@@ -50,7 +50,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
         --svc-cidr            The service CIDR to be used for cluster. Defaults to 10.94.0.0/16.
         --host-type           The host type of worker node. Defaults to UBUNTU.
         --machine-type        The machine type of worker node. Defaults to e2-standard-4.
-        --gcloud-path         The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
+        --gcloud-sdk-path     The path of gcloud installation. Only need to be explicitly set for Jenkins environments.
         --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --setup-only          Only perform setting up the cluster and run test.
         --cleanup-only        Only perform cleaning up the cluster."
@@ -105,8 +105,8 @@ case $key in
     K8S_VERSION="$2"
     shift 2
     ;;
-    --gcloud-path)
-    GCLOUD_PATH="$2"
+    --gcloud-sdk-path)
+    GCLOUD_SDK_PATH="$2"
     shift 2
     ;;
    --log-mode)
@@ -134,20 +134,28 @@ case $key in
 esac
 done
 
-if [[ -z ${GCLOUD_PATH+x} ]]; then
-    GCLOUD_PATH=$(which gcloud)
+if [[ ! -z ${GCLOUD_SDK_PATH+x} ]]; then
+    export PATH=${GCLOUD_SDK_PATH}/bin:$PATH
 fi
 
-export KUBECONFIG="${KUBECONFIG_PATH}/kubeconfig"
+if ! [ -x "$(command -v gcloud)" ]; then
+    echoerr "gcloud is not available in the PATH; consider using --gcloud-sdk-path"
+    exit 1
+fi
 
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
+# disable gcloud prompts, e.g., when deleting resources
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+export CLOUDSDK_CORE_PROJECT="$GKE_PROJECT"
+
 function setup_gke() {
     if [[ -z ${K8S_VERSION+x} ]]; then
-        K8S_VERSION=$(${GCLOUD_PATH} container get-server-config --zone ${GKE_ZONE} | awk '/validMasterVersions/{getline;print}' | cut -c3- )
+        K8S_VERSION=$(gcloud container get-server-config --zone ${GKE_ZONE} | awk '/validMasterVersions/{getline;print}' | cut -c3- )
     fi
 
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
@@ -158,12 +166,12 @@ function setup_gke() {
     fi
 
     echo "=== Using the following gcloud version ==="
-    ${GCLOUD_PATH} --version
+    gcloud --version
     echo "=== Using the following kubectl ==="
     which kubectl
 
     echo '=== Creating a cluster in GKE ==='
-    ${GCLOUD_PATH} container --project ${GKE_PROJECT} clusters create ${CLUSTER} \
+    gcloud container clusters create ${CLUSTER} \
         --image-type ${GKE_HOST} --machine-type ${MACHINE_TYPE} \
         --cluster-version ${K8S_VERSION} --zone ${GKE_ZONE} \
         --enable-ip-alias \
@@ -174,7 +182,7 @@ function setup_gke() {
     fi
 
     mkdir -p ${KUBECONFIG_PATH}
-    ${GCLOUD_PATH} container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE}
+    KUBECONFIG=${KUBECONFIG_PATH}/kubeconfig gcloud container clusters get-credentials ${CLUSTER} --zone ${GKE_ZONE}
 
     sleep 10
     if [[ $(kubectl get nodes) ]]; then
@@ -216,17 +224,17 @@ function deliver_antrea_to_gke() {
 
     node_names=$(kubectl get nodes -o wide --no-headers=true | awk '{print $1}')
     for node_name in ${node_names}; do
-        ${GCLOUD_PATH} compute scp ${antrea_image}.tar ubuntu@${node_name}:~ --zone ${GKE_ZONE}
-        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
+        gcloud compute scp ${antrea_image}.tar ubuntu@${node_name}:~ --zone ${GKE_ZONE}
+        gcloud compute ssh ubuntu@${node_name} --command="sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
     done
     rm ${antrea_image}.tar
 
     echo "=== Configuring Antrea for cluster ==="
     if [[ -n ${SVC_ACCOUNT_NAME+x} ]]; then
-        ${GCLOUD_PATH} projects add-iam-policy-binding ${GKE_PROJECT} --member serviceAccount:${SVC_ACCOUNT_NAME} --role roles/container.admin
+        gcloud projects add-iam-policy-binding ${GKE_PROJECT} --member serviceAccount:${SVC_ACCOUNT_NAME} --role roles/container.admin
         kubectl create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin --user ${SVC_ACCOUNT_NAME}
     elif [[ -n ${USER_EMAIL+x} ]]; then
-        ${GCLOUD_PATH} projects add-iam-policy-binding ${GKE_PROJECT} --member user:${USER_EMAIL} --role roles/container.admin
+        gcloud projects add-iam-policy-binding ${GKE_PROJECT} --member user:${USER_EMAIL} --role roles/container.admin
         kubectl create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin --user ${USER_EMAIL}
     else
         echo "Neither service account or user email info is set, cannot create cluster-admin-binding!"
@@ -239,9 +247,11 @@ function deliver_antrea_to_gke() {
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
 
-    # Restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
-    kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork \
-        --no-headers=true | grep '<none>' | awk '{ print $1 }')
+    # Restart all Pods in all Namespaces (kube-system, gmp-system, etc) so they can be managed by Antrea.
+    for ns in $(kubectl get ns -o=jsonpath=''{.items[*].metadata.name}'' --no-headers=true); do
+        pods=$(kubectl get pods -n $ns -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
+        [ -z "$pods" ] || kubectl delete pods -n $ns $pods
+    done
     kubectl rollout status --timeout=2m deployment.apps/kube-dns -n kube-system
     # wait for other pods in the kube-system namespace to become ready
     sleep 5
@@ -253,14 +263,13 @@ function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
     # Allow nodeport traffic by external IP
-    ${GCLOUD_PATH} compute firewall-rules create allow-nodeport --allow tcp:30000-32767
+    gcloud compute firewall-rules create allow-nodeport --allow tcp:30000-32767
 
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log && \
-   # Skip Netpol tests for GKE as the test suite's Namespace creation function is not robust, which leads to test
-   # failures. See https://github.com/antrea-io/antrea/issues/3762#issuecomment-1195865441.
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "Netpol" \
+    # Skip legacy NetworkPolicy tests
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "NetworkPolicyLegacy" \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/gke-test.log || \
     TEST_SCRIPT_RC=$?
@@ -276,7 +285,7 @@ function run_conformance() {
         echo "=== FAILURE !!! ==="
     fi
 
-    ${GCLOUD_PATH} compute firewall-rules delete allow-nodeport
+    gcloud compute firewall-rules delete allow-nodeport
 
     echo "=== Cleanup Antrea Installation ==="
     kubectl delete -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke.yml --ignore-not-found=true || true
@@ -289,7 +298,7 @@ function cleanup_cluster() {
     set +e
     retry=5
     while [[ "${retry}" -gt 0 ]]; do
-       yes | ${GCLOUD_PATH} container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
+       gcloud container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
        if [[ $? -eq 0 ]]; then
          break
        fi

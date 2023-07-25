@@ -110,17 +110,24 @@ you should be able to see these Pods running in your cluster:
 
 3. Restart remaining Pods
 
-    Once Antrea is up and running, restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
+    Once Antrea is up and running, restart all Pods in all Namespaces (kube-system, gmp-system, etc) so they can be managed by Antrea.
 
     ```bash
-    $ kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
-    pod "event-exporter-gke-755c4b4d97-wqlcg" deleted
-    pod "konnectivity-agent-5cb8ff9b9-2cv5j" deleted
-    pod "konnectivity-agent-5cb8ff9b9-5jpvp" deleted
-    pod "konnectivity-agent-autoscaler-7dc78c8c9-kqn9f" deleted
-    pod "kube-dns-5b5dfcd97b-79m4c" deleted
-    pod "kube-dns-5b5dfcd97b-q49qj" deleted
-    pod "kube-dns-autoscaler-5f56f8997c-kqrgx" deleted
-    pod "l7-default-backend-d6b749b76-bsv9l" deleted
-    pod "metrics-server-v0.5.2-67864775dc-bhd9p" deleted
+    $ for ns in $(kubectl get ns -o=jsonpath=''{.items[*].metadata.name}'' --no-headers=true); do \
+        pods=$(kubectl get pods -n $ns -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }'); \
+        [ -z "$pods" ] || kubectl delete pods -n $ns $pods; done
+    pod "alertmanager-0" deleted
+    pod "collector-4sfvd" deleted
+    pod "collector-gtlxf" deleted
+    pod "gmp-operator-67c4678f5c-ffktp" deleted
+    pod "rule-evaluator-85b8bb96dc-trnqj" deleted
+    pod "event-exporter-gke-7bf6c99dcb-4r62c" deleted
+    pod "konnectivity-agent-autoscaler-6dfdb49cf7-hfv9g" deleted
+    pod "konnectivity-agent-cc655669b-2cjc9" deleted
+    pod "konnectivity-agent-cc655669b-d79vf" deleted
+    pod "kube-dns-5bfd847c64-ksllw" deleted
+    pod "kube-dns-5bfd847c64-qv9tq" deleted
+    pod "kube-dns-autoscaler-84b8db4dc7-2pb2b" deleted
+    pod "l7-default-backend-64679d9c86-q69lm" deleted
+    pod "metrics-server-v0.5.2-6bf74b5d5f-22gqq" deleted
     ```
