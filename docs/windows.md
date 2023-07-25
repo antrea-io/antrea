@@ -254,11 +254,37 @@ Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 Firstly, install wins, kubelet, kubeadm using script `PrepareNode.ps1` provided
 by kubernetes. The third component [`wins`](https://github.com/rancher/wins) is
 used to run kube-proxy and antrea-agent on Windows host inside the Windows
-container. The following command downloads and executes `PrepareNode.ps1`:
+container. Specify the Node IP, Kubernetes Version and container runtime while
+running the script. If you do not specify any container runtime, it will be
+containerd by default. The following command downloads and executes `Prepare-Node.ps1`:
 
 ```powershell
-curl.exe -LO "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/PrepareNode.ps1"
-.\PrepareNode.ps1 -KubernetesVersion v1.23.5
+# Example:
+curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-Node.ps1"
+.\Prepare-Node.ps1 -KubernetesVersion v1.27.0 -NodeIP 192.168.1.10 
+
+```
+
+You can specify the ContainerRuntime parameter as docker if you want to run kubelet
+using docker runtime on the node. (Note: Docker has been deprecated since k8s version 1.24).
+
+```powershell
+# Example:
+curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-Node.ps1"
+.\Prepare-Node.ps1 -KubernetesVersion v1.23.5 -NodeIP 192.168.1.10 -ContainerRuntime
+docker
+
+```
+
+You can specify the InstallKubeProxy parameter as true if you want to install
+kube-proxy on the node. The default value of the parameter is false. (Note: since
+k8s version 1.26 kube-proxy kernel datapath has been deprecated on windows and antrea
+can only run with proxyAll enabled)
+
+```powershell
+
+.\Prepare-Node.ps1 -KubernetesVersion v1.25.0 -InstallKubeProxy:$true -NodeIP 192.168.1.10
+
 ```
 
 ##### 4. Prepare Node environment needed by antrea-agent
