@@ -14,6 +14,7 @@
 
 ARG WIN_BUILD_TAG
 ARG NANOSERVER_VERSION
+ARG WIN_BUILD_OVS_TAG
 
 FROM antrea/base-windows:${WIN_BUILD_TAG} as antrea-build-windows
 
@@ -26,6 +27,8 @@ RUN go mod download
 COPY . /antrea
 
 RUN sh -c 'make windows-bin'
+
+FROM antrea/windows-ovs:${WIN_BUILD_OVS_TAG} as windows-ovs
 
 FROM mcr.microsoft.com/powershell:lts-nanoserver-${NANOSERVER_VERSION}
 SHELL ["pwsh", "-NoLogo", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
@@ -44,3 +47,8 @@ COPY --from=antrea-build-windows  /antrea/bin/antrea-cni.exe /k/antrea/cni/antre
 
 RUN mkdir C:\k\antrea\utils
 COPY --from=antrea-build-windows /wins/wins.exe /k/antrea/utils/wins.exe
+
+COPY --from=windows-ovs /Windows/System32/vcruntime140.dll /Windows/System32/
+COPY --from=windows-ovs /Windows/System32/libeay32.dll /Windows/System32/
+COPY --from=windows-ovs /Windows/System32/ssleay32.dll /Windows/System32/
+COPY --from=windows-ovs /openvswitch/usr/bin /k/antrea/bin/

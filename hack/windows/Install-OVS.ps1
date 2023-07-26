@@ -21,6 +21,10 @@
   .PARAMETER ImportCertificate
   Specifies if a certificate file is needed for OVS package. If true, certificate
   will be retrieved from OVSExt.sys and a package.cer file will be generated.
+
+  .PARAMETER InstallUserspace
+  Specifies whether OVS userspace processes are included in the installation. If false, these processes will not 
+  be installed as a Windows service on the host.
 #>
 Param(
     [parameter(Mandatory = $false)] [string] $DownloadDir,
@@ -28,7 +32,8 @@ Param(
     [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
     [parameter(Mandatory = $false)] [bool] $CheckFileHash = $true,
     [parameter(Mandatory = $false)] [string] $LocalFile,
-    [parameter(Mandatory = $false)] [bool] $ImportCertificate = $true
+    [parameter(Mandatory = $false)] [bool] $ImportCertificate = $true,
+    [parameter(Mandatory = $false)] [bool] $InstallUserspace = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -259,8 +264,13 @@ DownloadOVS
 
 InstallOVS
 
-InstallDependency
+if ($InstallUserspace -eq $true) {
+    InstallDependency
 
-ConfigOVS
+    ConfigOVS
+}
 
+# Antrea Pod runs as NT AUTHORITY\SYSTEM user on Windows, antrea-ovs container writes
+# pid and conf.db files to $OVSInstallDir on Windows host Node during runtime.
+icacls $OVSInstallDir /grant "NT AUTHORITY\SYSTEM:(OI)(CI)F" /T
 Log "OVS Installation Complete!"
