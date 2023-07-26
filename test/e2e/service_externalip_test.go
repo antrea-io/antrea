@@ -35,7 +35,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/querier"
 )
@@ -62,7 +62,7 @@ func TestServiceExternalIP(t *testing.T) {
 func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	tests := []struct {
 		name                    string
-		ipRange                 v1alpha2.IPRange
+		ipRange                 v1beta1.IPRange
 		nodeSelector            metav1.LabelSelector
 		originalEndpointSubsets []v1.EndpointSubset
 		expectedExternalIP      string
@@ -72,7 +72,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	}{
 		{
 			name:    "endpoint created",
-			ipRange: v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: "169.254.100.0/30"},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -99,7 +99,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint created IPv6",
-			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
+			ipRange: v1beta1.IPRange{CIDR: "2021:1::aaa0/124"},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -126,7 +126,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint changed",
-			ipRange: v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: "169.254.100.0/30"},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -162,7 +162,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "endpoint changed IPv6",
-			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
+			ipRange: v1beta1.IPRange{CIDR: "2021:1::aaa0/124"},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -256,7 +256,7 @@ func stringPtr(s string) *string {
 func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 	tests := []struct {
 		name               string
-		ipRange            v1alpha2.IPRange
+		ipRange            v1beta1.IPRange
 		nodeSelector       metav1.LabelSelector
 		expectedExternalIP string
 		expectedNodes      sets.Set[string]
@@ -264,7 +264,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 	}{
 		{
 			name:    "single matching Node",
-			ipRange: v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: "169.254.100.0/30"},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
@@ -276,7 +276,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "single matching Node with IPv6 range",
-			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
+			ipRange: v1beta1.IPRange{CIDR: "2021:1::aaa0/124"},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
@@ -288,7 +288,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "two matching Nodes",
-			ipRange: v1alpha2.IPRange{Start: "169.254.101.10", End: "169.254.101.11"},
+			ipRange: v1beta1.IPRange{Start: "169.254.101.10", End: "169.254.101.11"},
 			nodeSelector: metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
@@ -304,7 +304,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "no matching Node",
-			ipRange: v1alpha2.IPRange{CIDR: "169.254.102.0/30"},
+			ipRange: v1beta1.IPRange{CIDR: "169.254.102.0/30"},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"foo": "bar",
@@ -373,36 +373,36 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 		name               string
 		originalNode       string
 		newNode            string
-		originalIPRange    v1alpha2.IPRange
+		originalIPRange    v1beta1.IPRange
 		originalExternalIP string
-		newIPRange         v1alpha2.IPRange
+		newIPRange         v1beta1.IPRange
 		newExternalIP      string
 	}{
 		{
 			name:               "same Node",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(0),
-			originalIPRange:    v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
+			originalIPRange:    v1beta1.IPRange{CIDR: "169.254.100.0/30"},
 			originalExternalIP: "169.254.100.1",
-			newIPRange:         v1alpha2.IPRange{CIDR: "169.254.101.0/30"},
+			newIPRange:         v1beta1.IPRange{CIDR: "169.254.101.0/30"},
 			newExternalIP:      "169.254.101.1",
 		},
 		{
 			name:               "different Nodes",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(1),
-			originalIPRange:    v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
+			originalIPRange:    v1beta1.IPRange{CIDR: "169.254.100.0/30"},
 			originalExternalIP: "169.254.100.1",
-			newIPRange:         v1alpha2.IPRange{CIDR: "169.254.101.0/30"},
+			newIPRange:         v1beta1.IPRange{CIDR: "169.254.101.0/30"},
 			newExternalIP:      "169.254.101.1",
 		},
 		{
 			name:               "different Nodes in IPv6 cluster",
 			originalNode:       nodeName(0),
 			newNode:            nodeName(1),
-			originalIPRange:    v1alpha2.IPRange{CIDR: "2021:2::aaa0/124"},
+			originalIPRange:    v1beta1.IPRange{CIDR: "2021:2::aaa0/124"},
 			originalExternalIP: "2021:2::aaa1",
-			newIPRange:         v1alpha2.IPRange{CIDR: "2021:2::bbb0/124"},
+			newIPRange:         v1beta1.IPRange{CIDR: "2021:2::bbb0/124"},
 			newExternalIP:      "2021:2::bbb1",
 		},
 	}
@@ -450,17 +450,17 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 func testServiceNodeFailure(t *testing.T, data *TestData) {
 	tests := []struct {
 		name       string
-		ipRange    v1alpha2.IPRange
+		ipRange    v1beta1.IPRange
 		expectedIP string
 	}{
 		{
 			name:       "IPv4 cluster",
-			ipRange:    v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
+			ipRange:    v1beta1.IPRange{CIDR: "169.254.100.0/30"},
 			expectedIP: "169.254.100.1",
 		},
 		{
 			name:       "IPv6 cluster",
-			ipRange:    v1alpha2.IPRange{CIDR: "2021:4::aaa0/124"},
+			ipRange:    v1beta1.IPRange{CIDR: "2021:4::aaa0/124"},
 			expectedIP: "2021:4::aaa1",
 		},
 	}
@@ -572,7 +572,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 				skipIfNotIPv4Cluster(t)
 			}
 			nodes := []string{nodeName(0), nodeName(1)}
-			ipRange := v1alpha2.IPRange{CIDR: tt.externalIPCIDR}
+			ipRange := v1beta1.IPRange{CIDR: tt.externalIPCIDR}
 			ipPool := data.createExternalIPPool(t, "ippool-", ipRange, nil, nil)
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 			agnhosts := []string{"agnhost-0", "agnhost-1"}

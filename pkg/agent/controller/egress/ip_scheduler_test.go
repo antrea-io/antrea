@@ -34,7 +34,7 @@ import (
 	"antrea.io/antrea/pkg/agent/consistenthash"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 )
@@ -85,17 +85,17 @@ func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters .
 
 func TestSchedule(t *testing.T) {
 	egresses := []runtime.Object{
-		&crdv1a2.Egress{
+		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
 		},
-		&crdv1a2.Egress{
+		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB", CreationTimestamp: metav1.NewTime(time.Unix(2, 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.11", ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.11", ExternalIPPool: "pool1"},
 		},
-		&crdv1a2.Egress{
+		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC", CreationTimestamp: metav1.NewTime(time.Unix(3, 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.21", ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.21", ExternalIPPool: "pool1"},
 		},
 	}
 	tests := []struct {
@@ -186,7 +186,7 @@ func TestSchedule(t *testing.T) {
 			fakeCluster := newFakeMemberlistCluster(tt.nodes)
 			crdClient := fakeversioned.NewSimpleClientset(egresses...)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-			egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+			egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 			clientset := fake.NewSimpleClientset()
 			informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 			nodeInformer := informerFactory.Core().V1().Nodes()
@@ -209,9 +209,9 @@ func TestSchedule(t *testing.T) {
 func BenchmarkSchedule(b *testing.B) {
 	var egresses []runtime.Object
 	for i := 0; i < 1000; i++ {
-		egresses = append(egresses, &crdv1a2.Egress{
+		egresses = append(egresses, &crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("egress-%d", i), UID: types.UID(fmt.Sprintf("uid-%d", i)), CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: fmt.Sprintf("1.1.%d.%d", rand.Intn(256), rand.Intn(256)), ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: fmt.Sprintf("1.1.%d.%d", rand.Intn(256), rand.Intn(256)), ExternalIPPool: "pool1"},
 		})
 	}
 	var nodes []string
@@ -221,7 +221,7 @@ func BenchmarkSchedule(b *testing.B) {
 	fakeCluster := newFakeMemberlistCluster(nodes)
 	crdClient := fakeversioned.NewSimpleClientset(egresses...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
@@ -243,17 +243,17 @@ func BenchmarkSchedule(b *testing.B) {
 func TestRun(t *testing.T) {
 	ctx := context.Background()
 	egresses := []runtime.Object{
-		&crdv1a2.Egress{
+		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
 		},
-		&crdv1a2.Egress{
+		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB", CreationTimestamp: metav1.NewTime(time.Unix(2, 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.11", ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.11", ExternalIPPool: "pool1"},
 		},
-		&crdv1a2.Egress{
+		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC", CreationTimestamp: metav1.NewTime(time.Unix(3, 0))},
-			Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.21", ExternalIPPool: "pool1"},
+			Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.21", ExternalIPPool: "pool1"},
 		},
 	}
 	node1 := &corev1.Node{
@@ -271,7 +271,7 @@ func TestRun(t *testing.T) {
 	fakeCluster := newFakeMemberlistCluster([]string{"node1", "node2"})
 	crdClient := fakeversioned.NewSimpleClientset(egresses...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	clientset := fake.NewSimpleClientset(node1, node2)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
@@ -303,7 +303,7 @@ func TestRun(t *testing.T) {
 		},
 	}
 	patchBytes, _ := json.Marshal(patch)
-	crdClient.CrdV1alpha2().Egresses().Patch(context.TODO(), "egressA", types.MergePatchType, patchBytes, metav1.PatchOptions{})
+	crdClient.CrdV1beta1().Egresses().Patch(context.TODO(), "egressA", types.MergePatchType, patchBytes, metav1.PatchOptions{})
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA"))
 	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node2", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
@@ -318,16 +318,16 @@ func TestRun(t *testing.T) {
 	assertScheduleResult(t, s, "egressC", "", "", false)
 
 	// After egressA is deleted, egressC should be assigned to node1.
-	crdClient.CrdV1alpha2().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{})
+	crdClient.CrdV1beta1().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{})
 	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA", "egressC"))
 	assertScheduleResult(t, s, "egressA", "", "", false)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
 
 	// After egressD is created, it should be left unassigned as the total capacity is insufficient.
-	crdClient.CrdV1alpha2().Egresses().Create(ctx, &crdv1a2.Egress{
+	crdClient.CrdV1beta1().Egresses().Create(ctx, &crdv1b1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidD", CreationTimestamp: metav1.NewTime(time.Unix(4, 0))},
-		Spec:       crdv1a2.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
+		Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
 	}, metav1.CreateOptions{})
 	assertReceivedItems(t, egressUpdates, sets.New[string]())
 	assertScheduleResult(t, s, "egressD", "", "", false)

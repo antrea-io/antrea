@@ -85,6 +85,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicyList":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress":                                     schema_pkg_apis_crd_v1beta1_Egress(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressList":                                 schema_pkg_apis_crd_v1beta1_EgressList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec":                                 schema_pkg_apis_crd_v1beta1_EgressSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus":                               schema_pkg_apis_crd_v1beta1_EgressStatus(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool":                             schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
@@ -3202,6 +3206,202 @@ func schema_pkg_apis_crd_v1beta1_ControllerCondition(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Egress defines which egress (SNAT) IP the traffic from the selected Pods to the external network should use.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the desired behavior of Egress.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressStatus represents the current status of an Egress.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_EgressList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Egress"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EgressSpec defines the desired state for Egress.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"appliedTo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AppliedTo selects Pods to which the Egress will be applied.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+						},
+					},
+					"egressIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressIP specifies the SNAT IP address for the selected workloads. If ExternalIPPool is empty, it must be specified manually. If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically. If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"egressIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressIPs specifies multiple SNAT IP addresses for the selected workloads. Cannot be set with EgressIP.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"externalIPPool": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalIPPool specifies the IP Pool that the EgressIP should be allocated from. If it is empty, the specified EgressIP must be assigned to a Node manually. If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover to a different Node when the Node becomes unreachable.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"externalIPPools": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the same index in EgressIPs and ExternalIPPools are correlated. Cannot be set with ExternalIPPool.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"appliedTo"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EgressStatus represents the current status of an Egress.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"egressNode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of the Node that holds the Egress IP.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"egressIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressIP indicates the effective Egress IP for the selected workloads. It could be empty if the Egress IP in spec is not assigned to any Node. It's also useful when there are more than one Egress IP specified in spec.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"egressNode", "egressIP"},
+			},
+		},
 	}
 }
 

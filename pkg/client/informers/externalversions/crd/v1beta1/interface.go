@@ -30,6 +30,8 @@ type Interface interface {
 	ClusterGroups() ClusterGroupInformer
 	// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
 	ClusterNetworkPolicies() ClusterNetworkPolicyInformer
+	// Egresses returns a EgressInformer.
+	Egresses() EgressInformer
 	// ExternalIPPools returns a ExternalIPPoolInformer.
 	ExternalIPPools() ExternalIPPoolInformer
 	// Groups returns a GroupInformer.
@@ -69,6 +71,11 @@ func (v *version) ClusterGroups() ClusterGroupInformer {
 // ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
 func (v *version) ClusterNetworkPolicies() ClusterNetworkPolicyInformer {
 	return &clusterNetworkPolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Egresses returns a EgressInformer.
+func (v *version) Egresses() EgressInformer {
+	return &egressInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ExternalIPPools returns a ExternalIPPoolInformer.

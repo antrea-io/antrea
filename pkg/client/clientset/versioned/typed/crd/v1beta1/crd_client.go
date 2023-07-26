@@ -30,6 +30,7 @@ type CrdV1beta1Interface interface {
 	AntreaControllerInfosGetter
 	ClusterGroupsGetter
 	ClusterNetworkPoliciesGetter
+	EgressesGetter
 	ExternalIPPoolsGetter
 	GroupsGetter
 	NetworkPoliciesGetter
@@ -55,6 +56,10 @@ func (c *CrdV1beta1Client) ClusterGroups() ClusterGroupInterface {
 
 func (c *CrdV1beta1Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {
 	return newClusterNetworkPolicies(c)
+}
+
+func (c *CrdV1beta1Client) Egresses() EgressInterface {
+	return newEgresses(c)
 }
 
 func (c *CrdV1beta1Client) ExternalIPPools() ExternalIPPoolInterface {
