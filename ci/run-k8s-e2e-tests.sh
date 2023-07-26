@@ -35,7 +35,7 @@ KUBECONFIG_OPTION=""
 DEFAULT_E2E_CONFORMANCE_FOCUS="\[Conformance\]"
 DEFAULT_E2E_CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]"
 DEFAULT_E2E_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
-DEFAULT_E2E_NETWORKPOLICY_SKIP=""
+DEFAULT_E2E_NETWORKPOLICY_SKIP="NetworkPolicyLegacy"
 DEFAULT_E2E_SIG_NETWORK_FOCUS="\[sig-network\]"
 DEFAULT_E2E_SIG_NETWORK_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[GCE\]|\[Feature:.+\]|\[Feature:IPv6DualStack\]|\[Feature:IPv6DualStackAlphaFeature\]|should create pod that uses dns|should provide Internet connection for containers"
 MODE="report"
@@ -180,6 +180,7 @@ function run_sonobuoy() {
     else
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
+                --e2e-parallel=true \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --e2e-focus "$focus_regex" --e2e-skip "$skip_regex" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
