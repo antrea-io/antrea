@@ -91,7 +91,7 @@ func (m *MockOVSAppctlRunner) EXPECT() *MockOVSAppctlRunnerMockRecorder {
 }
 
 // RunAppctlCmd mocks base method
-func (m *MockOVSAppctlRunner) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, *ExecError) {
+func (m *MockOVSAppctlRunner) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
@@ -99,7 +99,7 @@ func (m *MockOVSAppctlRunner) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...strin
 	}
 	ret := m.ctrl.Call(m, "RunAppctlCmd", varargs...)
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(*ExecError)
+	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
