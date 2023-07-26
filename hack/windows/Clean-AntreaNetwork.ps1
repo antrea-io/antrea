@@ -11,12 +11,17 @@
   as true, this script would remove the two Windows services from the host. Otherwise, we consider that these
   services are supposed to be running on the host, so the script would try to recover them if their statuses are
   not as expected.
+  .PARAMETER OVSRunMode
+  OVS run mode can be <container> if OVS userspace processes were running inside a container in antrea-agent Pod 
+  or <service> if OVS userspace processes were running as a Service on host. Default mode is <service>.
 #>
 Param(
     [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
     [parameter(Mandatory = $false)] [bool] $RenewIPConfig   = $false,
-    [parameter(Mandatory = $false)] [bool] $RemoveOVS       = $false
+    [parameter(Mandatory = $false)] [bool] $RemoveOVS       = $false,
+    [parameter(Mandatory = $false)] [ValidateSet("service", "container")] [string] $OVSRunMode = "service"
 )
+$ErrorActionPreference = 'Stop'
 
 # Replace the path using the actual path where ovs-vswitchd.pid locates. It is always under path $OVSInstallDir\var\run\openvswitch.
 $OVS_PID_PATH = "$OVSInstallDir\var\run\openvswitch\ovs-vswitchd.pid"
@@ -28,10 +33,16 @@ $OVS_BR_ADAPTER = "br-int"
 $AntreaHnsNetworkName = "antrea-hnsnetwork"
 
 function RemoveOVSService() {
-    stop-service ovs-vswitchd
-    sc.exe delete ovs-vswitchd
-    stop-service ovsdb-server
-    sc.exe delete ovsdb-server
+    $ovsSvc = Get-Service ovs-vswitchd -ErrorAction SilentlyContinue
+    if ($ovsSvc -ne $null ) {
+        stop-service ovs-vswitchd
+        sc.exe delete ovs-vswitchd
+    }
+    $ovsdbSvc = Get-Service ovsdb-server -ErrorAction SilentlyContinue
+    if ($ovsdbSvc -ne $null ) {
+        stop-service ovsdb-server
+        sc.exe delete ovsdb-server
+    }
 }
 
 function ResetOVSService() {
@@ -103,15 +114,26 @@ function ClearHnsNetwork() {
 
 clearOVSBridge
 ClearHnsNetwork
-if ($RemoveOVS) {
-    RemoveOVSService
-} else {
-    # ResetOVSService is called to recover Windows Services "ovsdb-server" and "ovs-vswitchd" if they are removed
-    # unexpectedly or their status is not correct, e.g., ovs-vswitchd fails to go into Running.
-    # This might happen after the Windows host is restarted abnormally, in which case some stale configurations
-    # can prevent ovs-vswitchd from running, like a stale pid file or misconfigurations in OVSDB.
-    ResetOVSService
+switch ($OVSRunMode) 
+{
+    "service" {
+        if ($RemoveOVS) {
+            RemoveOVSService
+        } else {
+            # ResetOVSService is called to recover Windows Services "ovsdb-server" and "ovs-vswitchd" if they are removed
+            # unexpectedly or their status is not correct, e.g., ovs-vswitchd fails to go into Running.
+            # This might happen after the Windows host is restarted abnormally, in which case some stale configurations
+            # can prevent ovs-vswitchd from running, like a stale pid file or misconfigurations in OVSDB.
+            ResetOVSService
+        }
+    }
+    "container" {
+        if (Test-Path -Path $OVS_DB_PATH) {
+            Remove-Item -Path $OVS_DB_PATH -Force
+        }
+    }
 }
+
 if ($RenewIPConfig) {
     ipconfig /renew
 }

@@ -20,11 +20,60 @@ data:
     $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/')
     $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/k/antrea/bin"
     & antrea-agent --config=$mountPath/etc/antrea/antrea-agent.conf --logtostderr=false --log_dir=c:/var/log/antrea --alsologtostderr --log_file_max_size=100 --log_file_max_num=4 --v=0
+  Run-AntreaOVS-Containerd.ps1: |
+    $ErrorActionPreference = "Stop"
+    $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
+    $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
+    $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
+    $OVS_DB_SCHEMA_PATH = "$mountPath/openvswitch/usr/share/openvswitch/vswitch.ovsschema"
+    $OVS_DB_PATH = "C:\openvswitch\etc\openvswitch\conf.db"
+    if ($(Test-Path $OVS_DB_SCHEMA_PATH) -and !$(Test-Path $OVS_DB_PATH)) {
+        ovsdb-tool create "$OVS_DB_PATH" "$OVS_DB_SCHEMA_PATH"
+    }
+    ovsdb-server $OVS_DB_PATH -vfile:info --remote=punix:db.sock --log-file=/var/log/antrea/openvswitch/ovsdb-server.log --pidfile --detach
+    ovs-vsctl --no-wait init
+
+    # Set OVS version.
+    $OVS_VERSION=$(Get-Item $mountPath\openvswitch\driver\OVSExt.sys).VersionInfo.ProductVersion
+    ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION
+
+    ovs-vswitchd --log-file=/var/log/antrea/openvswitch/ovs-vswitchd.log --pidfile -vfile:info --detach
+
+    $SleepInterval = 30
+    Write-Host "Started the loop that checks OVS status every $SleepInterval seconds"
+    while ($true) {
+        if ( !( Get-Process ovsdb-server ) ) {
+            Write-Host "ovsdb-server is not running, starting it again..."
+            ovsdb-server $OVS_DB_PATH -vfile:info --remote=punix:db.sock --log-file=/var/log/antrea/openvswitch/ovsdb-server.log --pidfile --detach
+        }
+        if ( !( Get-Process ovs-vswitchd ) ) {
+            Write-Host "ovs-vswitchd is not running, starting it again..."
+            ovs-vswitchd --log-file=/var/log/antrea/openvswitch/ovs-vswitchd.log --pidfile -vfile:info --detach
+        }
+        Start-Sleep -Seconds $SleepInterval
+    }
+  VMSwitchExtension-AntreaAgent-Containerd.ps1: |
+    Param(
+        [parameter(Mandatory = $false)] [ValidateSet("enable", "disable")] [string] $VMSwitchExtension = "disable"
+    )
+    $networkName = "antrea-hnsnetwork"
+    $net=$(Get-HnsNetwork | Where-Object {$_.Name -eq $networkName})
+    if ($net -ne $null) {
+        switch ($VMSwitchExtension)
+        {
+            "enable" {
+                Enable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName
+            }
+            "disable" {
+                Disable-VMSwitchExtension -Name "Open vSwitch Extension" -VMSwitchName $networkName
+            }
+        }
+    }
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-c6tftd5ttg
+  name: antrea-agent-windows-b848hc8m8h
   namespace: kube-system
 ---
 apiVersion: v1
@@ -236,6 +285,23 @@ spec:
               fieldPath: spec.nodeName
         image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - powershell
+              - -file
+              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1
+              - -VMSwitchExtension
+              - enable
+          preStop:
+            exec:
+              command:
+              - powershell
+              - -file
+              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1
+              - -VMSwitchExtension
+              - disable
         name: antrea-agent
         volumeMounts:
         - mountPath: /etc/antrea
@@ -244,6 +310,20 @@ spec:
           name: antrea-agent-windows
         - mountPath: /var/log/antrea/
           name: var-log-antrea
+      - args:
+        - -file
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaOVS-Containerd.ps1
+        command:
+        - powershell
+        image: antrea/windows-ovs:1809-3.0.5
+        imagePullPolicy: IfNotPresent
+        name: antrea-ovs
+        volumeMounts:
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows
+        - mountPath: /var/log/openvswitch
+          name: var-log-antrea
+          subPath: openvswitch
       hostNetwork: true
       initContainers:
       - args:
@@ -279,7 +359,7 @@ spec:
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-c6tftd5ttg
+          name: antrea-agent-windows-b848hc8m8h
         name: antrea-agent-windows
       - hostPath:
           path: /var/log/antrea/
