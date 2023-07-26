@@ -34,7 +34,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -2094,7 +2093,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	}
 
 	egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressIP)
-	defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	testcaseLocalEgress := testcase{
 		name:      "egressFromLocalNode",
@@ -2154,14 +2153,14 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 
 	toUpdate := egress.DeepCopy()
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		toUpdate.Spec.AppliedTo = v1alpha2.AppliedTo{
+		toUpdate.Spec.AppliedTo = v1beta1.AppliedTo{
 			PodSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"antrea-e2e": remotePodNames[0]},
 			},
 		}
-		_, err := data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		_, err := data.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if err != nil && errors.IsConflict(err) {
-			toUpdate, _ = data.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			toUpdate, _ = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 		}
 		return err
 	})

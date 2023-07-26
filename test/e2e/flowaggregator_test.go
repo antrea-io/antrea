@@ -559,7 +559,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
 		}
 		t.Logf("Egress %s is realized with Egress IP %s", egress.Name, egressNodeIP)
-		defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 		if !isIPv6 {
 			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
@@ -599,7 +599,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
 		}
 		t.Logf("Egress %s is realized with Egress IP %s", egress.Name, egressNodeIP)
-		defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 		if !isIPv6 {
 			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {

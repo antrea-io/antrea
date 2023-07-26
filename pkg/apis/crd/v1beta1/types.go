@@ -810,3 +810,63 @@ type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
 	SNI string `json:"sni,omitempty"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Egress defines which egress (SNAT) IP the traffic from the selected Pods to
+// the external network should use.
+type Egress struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of Egress.
+	Spec EgressSpec `json:"spec"`
+
+	// EgressStatus represents the current status of an Egress.
+	Status EgressStatus `json:"status"`
+}
+
+// EgressStatus represents the current status of an Egress.
+type EgressStatus struct {
+	// The name of the Node that holds the Egress IP.
+	EgressNode string `json:"egressNode"`
+	// EgressIP indicates the effective Egress IP for the selected workloads. It could be empty if the Egress IP in spec
+	// is not assigned to any Node. It's also useful when there are more than one Egress IP specified in spec.
+	EgressIP string `json:"egressIP"`
+}
+
+// EgressSpec defines the desired state for Egress.
+type EgressSpec struct {
+	// AppliedTo selects Pods to which the Egress will be applied.
+	AppliedTo AppliedTo `json:"appliedTo"`
+	// EgressIP specifies the SNAT IP address for the selected workloads.
+	// If ExternalIPPool is empty, it must be specified manually.
+	// If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically.
+	// If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.
+	EgressIP string `json:"egressIP,omitempty"`
+	// EgressIPs specifies multiple SNAT IP addresses for the selected workloads.
+	// Cannot be set with EgressIP.
+	EgressIPs []string `json:"egressIPs,omitempty"`
+	// ExternalIPPool specifies the IP Pool that the EgressIP should be allocated from.
+	// If it is empty, the specified EgressIP must be assigned to a Node manually.
+	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
+	// to a different Node when the Node becomes unreachable.
+	ExternalIPPool string `json:"externalIPPool,omitempty"`
+	// ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the
+	// same index in EgressIPs and ExternalIPPools are correlated.
+	// Cannot be set with ExternalIPPool.
+	ExternalIPPools []string `json:"externalIPPools,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type EgressList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Egress `json:"items"`
+}

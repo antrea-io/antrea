@@ -65,7 +65,7 @@ data:
 A typical Egress resource example:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: Egress
 metadata:
   name: egress-prod-web
@@ -188,7 +188,7 @@ Then create two `Egress` resources, each of which applies to web apps in one
 Namespace.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: Egress
 metadata:
   name: egress-prod-web
@@ -202,7 +202,7 @@ spec:
         app: web
   externalIPPool: external-ip-pool
 ---
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: Egress
 metadata:
   name: egress-staging-web
@@ -248,7 +248,7 @@ Since the Egress IPs have been configured to the Nodes, we can create `Egress`
 resources with specific IPs directly.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: Egress
 metadata:
   name: egress-prod
@@ -259,7 +259,7 @@ spec:
         kubernetes.io/metadata.name: prod
   egressIP: 10.10.0.104   # node-4's IP
 ---
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: Egress
 metadata:
   name: egress-staging
