@@ -26,15 +26,17 @@ import (
 	mock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	types "k8s.io/apimachinery/pkg/types"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 )
 
 const (
@@ -82,18 +84,23 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 	return testConns, testConnKeys
 }
 
-func prepareInterfaceConfigs(contID, podName, podNS, ifName string, ip *net.IP) *interfacestore.InterfaceConfig {
-	podConfig := &interfacestore.ContainerInterfaceConfig{
-		ContainerID:  contID,
-		PodName:      podName,
-		PodNamespace: podNS,
+func preparePodInformation(podName string, podNS string, ip *net.IP) *v1.Pod {
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: podNS,
+			Name:      podName,
+			UID:       types.UID(podName),
+		},
+		Status: v1.PodStatus{
+			Phase: v1.PodPending,
+			PodIPs: []v1.PodIP{
+				{
+					IP: ip.String(),
+				},
+			},
+		},
 	}
-	iface := &interfacestore.InterfaceConfig{
-		InterfaceName:            ifName,
-		IPs:                      []net.IP{*ip},
-		ContainerInterfaceConfig: podConfig,
-	}
-	return iface
+	return pod
 }
 
 // TestConnectionStoreAndFlowRecords covers two scenarios: (i.) Add connections to connection store through connectionStore.Poll
@@ -102,14 +109,15 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Test setup
 	ctrl := mock.NewController(t)
 
-	// Prepare connections and interface config for test
+	// Prepare connections and pod store for test
 	testConns, testConnKeys := createConnsForTest()
-	testIfConfigs := make([]*interfacestore.InterfaceConfig, 2)
-	testIfConfigs[0] = prepareInterfaceConfigs("1", "pod1", "ns1", "interface1", &testConns[0].FlowKey.SourceAddress)
-	testIfConfigs[1] = prepareInterfaceConfigs("2", "pod2", "ns2", "interface2", &testConns[1].FlowKey.DestinationAddress)
+	testPods := make([]*v1.Pod, 2)
+	testPods[0] = preparePodInformation("pod1", "ns1", &testConns[0].FlowKey.SourceAddress)
+	testPods[1] = preparePodInformation("pod2", "ns2", &testConns[1].FlowKey.DestinationAddress)
+
 	// Create connectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
-	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
 	o := &flowexporter.FlowExporterOptions{
@@ -117,17 +125,17 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,
 		PollInterval:           testPollInterval}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, ifStoreMock, nil, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, o)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
 	for i, testConn := range testConns {
 		if i == 0 {
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.SourceAddress.String()).Return(testIfConfigs[i], true)
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.DestinationAddress.String()).Return(nil, false)
+			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.SourceAddress.String(), mock.Any()).Return(testPods[i], true)
+			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.DestinationAddress.String(), mock.Any()).Return(nil, false)
 		} else {
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.SourceAddress.String()).Return(nil, false)
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.DestinationAddress.String()).Return(testIfConfigs[i], true)
+			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.SourceAddress.String(), mock.Any()).Return(nil, false)
+			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.DestinationAddress.String(), mock.Any()).Return(testPods[i], true)
 		}
 	}
 	// Execute connStore.Poll
@@ -139,11 +147,11 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Check if connections in connectionStore are same as testConns or not
 	for i, expConn := range testConns {
 		if i == 0 {
-			expConn.SourcePodName = testIfConfigs[i].PodName
-			expConn.SourcePodNamespace = testIfConfigs[i].PodNamespace
+			expConn.SourcePodName = testPods[i].ObjectMeta.Name
+			expConn.SourcePodNamespace = testPods[i].ObjectMeta.Namespace
 		} else {
-			expConn.DestinationPodName = testIfConfigs[i].PodName
-			expConn.DestinationPodNamespace = testIfConfigs[i].PodNamespace
+			expConn.DestinationPodName = testPods[i].ObjectMeta.Name
+			expConn.DestinationPodNamespace = testPods[i].ObjectMeta.Name
 		}
 		actualConn, found := conntrackConnStore.GetConnByKey(*testConnKeys[i])
 		assert.Equal(t, found, true, "testConn should be present in connection store")

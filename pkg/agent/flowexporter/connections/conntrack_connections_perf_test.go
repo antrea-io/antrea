@@ -28,16 +28,16 @@ import (
 
 	"github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
@@ -78,15 +78,18 @@ func BenchmarkPoll(b *testing.B) {
 func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connectionstest.MockConnTrackDumper) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
-	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	testInterface := &interfacestore.InterfaceConfig{
-		Type: interfacestore.ContainerInterface,
-		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-			PodName:      "pod",
-			PodNamespace: "pod-ns",
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "pod-ns",
+			Name:      "pod",
+			UID:       "pod",
+		},
+		Status: v1.PodStatus{
+			Phase: v1.PodPending,
 		},
 	}
-	mockIfaceStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(testInterface, true).AnyTimes()
+	mockPodStore.EXPECT().GetPodByIPAndTime(gomock.Any(), gomock.Any()).Return(pod, true).AnyTimes()
 
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	mockConnDumper.EXPECT().GetMaxConnections().Return(100000, nil).AnyTimes()
@@ -104,7 +107,7 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockIfaceStore, nil, testFlowExporterOptions), mockConnDumper
+	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, nil, testFlowExporterOptions), mockConnDumper
 }
 
 func generateConns() []*flowexporter.Connection {

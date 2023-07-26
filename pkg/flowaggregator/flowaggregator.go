@@ -28,11 +28,7 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
-	corev1 "k8s.io/api/core/v1"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -41,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/util/podstore"
 )
 
 var (
@@ -84,9 +81,6 @@ const (
 	udpTransport         = "udp"
 	tcpTransport         = "tcp"
 	collectorAddress     = "0.0.0.0:4739"
-
-	// PodInfo index name for Pod cache.
-	podInfoIndex = "podInfo"
 )
 
 // these are used for unit testing
@@ -115,7 +109,7 @@ type flowAggregator struct {
 	flowAggregatorAddress       string
 	includePodLabels            bool
 	k8sClient                   kubernetes.Interface
-	podInformer                 coreinformers.PodInformer
+	podStore                    podstore.Interface
 	numRecordsExported          int64
 	updateCh                    chan *options.Options
 	configFile                  string
@@ -127,12 +121,11 @@ type flowAggregator struct {
 	s3Exporter                  exporter.Interface
 	logExporter                 exporter.Interface
 	logTickerDuration           time.Duration
-	podLister                   corelisters.PodLister
 }
 
 func NewFlowAggregator(
 	k8sClient kubernetes.Interface,
-	podInformer coreinformers.PodInformer,
+	podStore podstore.Interface,
 	configFile string,
 ) (*flowAggregator, error) {
 	if len(configFile) == 0 {
@@ -170,14 +163,13 @@ func NewFlowAggregator(
 		flowAggregatorAddress:       opt.Config.FlowAggregatorAddress,
 		includePodLabels:            opt.Config.RecordContents.PodLabels,
 		k8sClient:                   k8sClient,
-		podInformer:                 podInformer,
+		podStore:                    podStore,
 		updateCh:                    make(chan *options.Options),
 		configFile:                  configFile,
 		configWatcher:               configWatcher,
 		configData:                  data,
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
-		podLister:                   podInformer.Lister(),
 	}
 	err = fa.InitCollectingProcess()
 	if err != nil {
@@ -211,23 +203,7 @@ func NewFlowAggregator(
 	if opt.Config.FlowCollector.Enable {
 		fa.ipfixExporter = newIPFIXExporter(k8sClient, opt, registry)
 	}
-	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
 	return fa, nil
-}
-
-func podInfoIndexFunc(obj interface{}) ([]string, error) {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		return nil, fmt.Errorf("obj is not pod: %+v", obj)
-	}
-	if len(pod.Status.PodIPs) > 0 && pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-		indexes := make([]string, len(pod.Status.PodIPs))
-		for i := range pod.Status.PodIPs {
-			indexes[i] = pod.Status.PodIPs[i].IP
-		}
-		return indexes, nil
-	}
-	return nil, nil
 }
 
 func (fa *flowAggregator) InitCollectingProcess() error {
@@ -315,6 +291,7 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	if fa.logExporter != nil {
 		fa.logExporter.Start()
 	}
+	go fa.podStore.Run(stopCh)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -403,12 +380,16 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 
 func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, record *ipfixintermediate.AggregationFlowRecord) error {
 	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
+	startTime, err := fa.getRecordStartTime(record.Record)
+	if err != nil {
+		return fmt.Errorf("cannot find record start time: %v", err)
+	}
 	if !fa.aggregationProcess.AreCorrelatedFieldsFilled(*record) {
-		fa.fillK8sMetadata(key, record.Record)
+		fa.fillK8sMetadata(key, record.Record, *startTime)
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record, true)
 	}
 	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
-		fa.fillPodLabels(record.Record)
+		fa.fillPodLabels(key, record.Record, *startTime)
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
 	if fa.ipfixExporter != nil {
@@ -440,16 +421,12 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 
 // fillK8sMetadata fills Pod name, Pod namespace and Node name for inter-Node flows
 // that have incomplete info due to deny network policy.
-func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
+func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record ipfixentities.Record, startTime time.Time) {
 	// fill source Pod info when sourcePodName is empty
 	if sourcePodName, _, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
 		if sourcePodName.GetStringValue() == "" {
-			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.SourceAddress)
-			if err == nil && len(pods) > 0 {
-				pod, ok := pods[0].(*corev1.Pod)
-				if !ok {
-					klog.Warningf("Invalid Pod obj in cache")
-				}
+			pod, exist := fa.podStore.GetPodByIPAndTime(key.SourceAddress, startTime)
+			if exist {
 				sourcePodName.SetStringValue(pod.Name)
 				if sourcePodNamespace, _, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
 					sourcePodNamespace.SetStringValue(pod.Namespace)
@@ -458,19 +435,15 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 					sourceNodeName.SetStringValue(pod.Spec.NodeName)
 				}
 			} else {
-				klog.Warning(err)
+				klog.ErrorS(nil, "Cannot find Pod information", "sourceAddress", key.SourceAddress, "flowStartTime", startTime)
 			}
 		}
 	}
 	// fill destination Pod info when destinationPodName is empty
 	if destinationPodName, _, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
 		if destinationPodName.GetStringValue() == "" {
-			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.DestinationAddress)
-			if len(pods) > 0 && err == nil {
-				pod, ok := pods[0].(*corev1.Pod)
-				if !ok {
-					klog.Warningf("Invalid Pod obj in cache")
-				}
+			pod, exist := fa.podStore.GetPodByIPAndTime(key.DestinationAddress, startTime)
+			if exist {
 				destinationPodName.SetStringValue(pod.Name)
 				if destinationPodNamespace, _, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
 					destinationPodNamespace.SetStringValue(pod.Namespace)
@@ -479,16 +452,25 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 					destinationNodeName.SetStringValue(pod.Spec.NodeName)
 				}
 			} else {
-				klog.Warning(err)
+				klog.ErrorS(nil, "Cannot find Pod information", "destinationAddress", key.DestinationAddress, "flowStartTime", startTime)
 			}
 		}
 	}
 }
 
-func (fa *flowAggregator) fetchPodLabels(podNamespace string, podName string) string {
-	pod, err := fa.podLister.Pods(podNamespace).Get(podName)
-	if err != nil {
-		klog.InfoS("Failed to get Pod", "namespace", podNamespace, "name", podName, "err", err)
+func (fa *flowAggregator) getRecordStartTime(record ipfixentities.Record) (*time.Time, error) {
+	flowStartSeconds, _, exist := record.GetInfoElementWithValue("flowStartSeconds")
+	if !exist {
+		return nil, fmt.Errorf("flowStartSeconds filed is empty")
+	}
+	startTime := time.Unix(int64(flowStartSeconds.GetUnsigned32Value()), 0)
+	return &startTime, nil
+}
+
+func (fa *flowAggregator) fetchPodLabels(ip string, startTime time.Time) string {
+	pod, exist := fa.podStore.GetPodByIPAndTime(ip, startTime)
+	if !exist {
+		klog.ErrorS(nil, "Error when getting Pod information from podInformer", "ip", ip, "startTime", startTime)
 		return ""
 	}
 	labelsJSON, err := json.Marshal(pod.GetLabels())
@@ -499,17 +481,18 @@ func (fa *flowAggregator) fetchPodLabels(podNamespace string, podName string) st
 	return string(labelsJSON)
 }
 
-func (fa *flowAggregator) fillPodLabelsForSide(record ipfixentities.Record, podNamespaceIEName, podNameIEName, podLabelsIEName string) error {
+func (fa *flowAggregator) fillPodLabelsForSide(ip string, record ipfixentities.Record, startTime time.Time, podNamespaceIEName, podNameIEName, podLabelsIEName string) error {
 	podLabelsString := ""
 	if podName, _, ok := record.GetInfoElementWithValue(podNameIEName); ok {
 		podNameString := podName.GetStringValue()
 		if podNamespace, _, ok := record.GetInfoElementWithValue(podNamespaceIEName); ok {
 			podNamespaceString := podNamespace.GetStringValue()
 			if podNameString != "" && podNamespaceString != "" {
-				podLabelsString = fa.fetchPodLabels(podNamespaceString, podNameString)
+				podLabelsString = fa.fetchPodLabels(ip, startTime)
 			}
 		}
 	}
+
 	podLabelsElement, err := fa.registry.GetInfoElement(podLabelsIEName, ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
 		podLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(podLabelsElement, bytes.NewBufferString(podLabelsString).Bytes())
@@ -526,11 +509,11 @@ func (fa *flowAggregator) fillPodLabelsForSide(record ipfixentities.Record, podN
 	return nil
 }
 
-func (fa *flowAggregator) fillPodLabels(record ipfixentities.Record) {
-	if err := fa.fillPodLabelsForSide(record, "sourcePodNamespace", "sourcePodName", "sourcePodLabels"); err != nil {
+func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ipfixentities.Record, startTime time.Time) {
+	if err := fa.fillPodLabelsForSide(key.SourceAddress, record, startTime, "sourcePodNamespace", "sourcePodName", "sourcePodLabels"); err != nil {
 		klog.ErrorS(err, "Error when filling pod labels", "side", "source")
 	}
-	if err := fa.fillPodLabelsForSide(record, "destinationPodNamespace", "destinationPodName", "destinationPodLabels"); err != nil {
+	if err := fa.fillPodLabelsForSide(key.DestinationAddress, record, startTime, "destinationPodNamespace", "destinationPodName", "destinationPodLabels"); err != nil {
 		klog.ErrorS(err, "Error when filling pod labels", "side", "destination")
 	}
 }
