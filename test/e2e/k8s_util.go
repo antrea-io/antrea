@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -95,7 +95,7 @@ var ErrPodNotFound = errors.New("Pod not found")
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get Pod in Namespace %s with label pod=%s", ns, name)
+		return nil, fmt.Errorf("unable to get Pod in Namespace %s with label pod=%s: %w", ns, name, err)
 	}
 	if len(pods) == 0 {
 		return nil, ErrPodNotFound
@@ -108,7 +108,7 @@ func (k *KubernetesUtils) getPodsUncached(ns string, key, val string) ([]v1.Pod,
 		LabelSelector: fmt.Sprintf("%v=%v", key, val),
 	})
 	if err != nil {
-		return nil, errors.WithMessage(err, "unable to list pods")
+		return nil, fmt.Errorf("unable to list pods: %w", err)
 	}
 	return v1PodList.Items, nil
 }
@@ -123,7 +123,7 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 
 	v1PodList, err := k.getPodsUncached(ns, key, val)
 	if err != nil {
-		return nil, errors.WithMessage(err, "unable to list pods")
+		return nil, fmt.Errorf("unable to list pods: %w", err)
 	}
 	k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)] = v1PodList
 	return v1PodList, nil
@@ -629,7 +629,7 @@ func (data *TestData) DeleteService(ns, name string) error {
 	log.Infof("Deleting Service %s in ns %s", name, ns)
 	err := data.clientset.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete Service %s", name)
+		return fmt.Errorf("unable to delete Service %s: %w", name, err)
 	}
 	return nil
 }
@@ -639,7 +639,7 @@ func (data *TestData) CleanServices(namespaces map[string]string) error {
 	for _, ns := range namespaces {
 		l, err := data.clientset.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return errors.Wrapf(err, "unable to list Services in ns %s", ns)
+			return fmt.Errorf("unable to list Services in ns %s: %w", ns, err)
 		}
 		for _, svc := range l.Items {
 			if err := data.DeleteService(svc.Namespace, svc.Name); err != nil {
@@ -690,7 +690,7 @@ func (data *TestData) DeleteServiceAccount(ns, name string) error {
 	log.Infof("Deleting ServiceAccount %s in ns %s", name, ns)
 	err := data.clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete ServiceAccount %s in ns %s", name, ns)
+		return fmt.Errorf("unable to delete ServiceAccount %s in ns %s: %w", name, ns, err)
 	}
 	return nil
 }
@@ -722,7 +722,7 @@ func (data *TestData) DeleteNetworkPolicy(ns, name string) error {
 	log.Infof("Deleting NetworkPolicy '%s/%s'", ns, name)
 	err := data.clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete NetworkPolicy '%s'", name)
+		return fmt.Errorf("unable to delete NetworkPolicy '%s': %w", name, err)
 	}
 	return nil
 }
@@ -732,7 +732,7 @@ func (data *TestData) CleanNetworkPolicies(namespaces map[string]string) error {
 	for _, ns := range namespaces {
 		l, err := data.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return errors.Wrapf(err, "unable to list NetworkPolicy in Namespace '%s'", ns)
+			return fmt.Errorf("unable to list NetworkPolicy in Namespace '%s': %w", ns, err)
 		}
 		for _, np := range l.Items {
 			if err = data.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
@@ -777,11 +777,11 @@ func (data *TestData) UpdateTier(tier *crdv1beta1.Tier) (*crdv1beta1.Tier, error
 func (data *TestData) DeleteTier(name string) error {
 	_, err := data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to get tier %s", name)
+		return fmt.Errorf("unable to get tier %s: %w", name, err)
 	}
 	log.Infof("Deleting tier %s", name)
 	if err = data.crdClient.CrdV1beta1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
-		return errors.Wrapf(err, "unable to delete tier %s", name)
+		return fmt.Errorf("unable to delete tier %s: %w", name, err)
 	}
 	return nil
 }
@@ -849,7 +849,7 @@ func (data *TestData) DeleteCG(name string) error {
 	log.Infof("deleting ClusterGroup %s", name)
 	err := data.crdClient.CrdV1beta1().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
+		return fmt.Errorf("unable to delete ClusterGroup %s: %w", name, err)
 	}
 	return nil
 }
@@ -859,7 +859,7 @@ func (k *KubernetesUtils) DeleteGroup(namespace, name string) error {
 	log.Infof("deleting Group %s/%s", namespace, name)
 	err := k.crdClient.CrdV1beta1().Groups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete Group %s/%s", namespace, name)
+		return fmt.Errorf("unable to delete Group %s/%s: %w", namespace, name, err)
 	}
 	return nil
 }
@@ -868,7 +868,7 @@ func (k *KubernetesUtils) DeleteGroup(namespace, name string) error {
 func (data *TestData) CleanCGs() error {
 	l, err := data.crdClient.CrdV1beta1().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to list ClusterGroups in v1beta1")
+		return fmt.Errorf("unable to list ClusterGroups in v1beta1: %w", err)
 	}
 	for _, cg := range l.Items {
 		if err := data.DeleteCG(cg.Name); err != nil {
@@ -882,7 +882,7 @@ func (data *TestData) CleanCGs() error {
 func (k *KubernetesUtils) CleanGroups(namespace string) error {
 	l, err := k.crdClient.CrdV1beta1().Groups(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to list Groups in v1beta1")
+		return fmt.Errorf("unable to list Groups in v1beta1: %w", err)
 	}
 	for _, g := range l.Items {
 		if err := k.DeleteGroup(namespace, g.Name); err != nil {
@@ -926,7 +926,7 @@ func (data *TestData) DeleteACNP(name string) error {
 	log.Infof("Deleting AntreaClusterNetworkPolicies %s", name)
 	err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", name)
+		return fmt.Errorf("unable to delete ClusterNetworkPolicy %s: %w", name, err)
 	}
 	return nil
 }
@@ -935,7 +935,7 @@ func (data *TestData) DeleteACNP(name string) error {
 func (data *TestData) CleanACNPs() error {
 	l, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
+		return fmt.Errorf("unable to list AntreaClusterNetworkPolicies: %w", err)
 	}
 	for _, cnp := range l.Items {
 		if err = data.DeleteACNP(cnp.Name); err != nil {
@@ -974,7 +974,7 @@ func (data *TestData) DeleteANNP(ns, name string) error {
 	log.Infof("Deleting Antrea NetworkPolicy '%s/%s'", ns, name)
 	err := data.crdClient.CrdV1alpha1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", name)
+		return fmt.Errorf("unable to delete Antrea NetworkPolicy %s: %w", name, err)
 	}
 	return nil
 }
@@ -984,7 +984,7 @@ func (data *TestData) CleanANNPs(namespaces []string) error {
 	for _, ns := range namespaces {
 		l, err := data.crdClient.CrdV1alpha1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+			return fmt.Errorf("unable to list Antrea NetworkPolicies in ns %s: %w", ns, err)
 		}
 		for _, annp := range l.Items {
 			if err = data.DeleteANNP(annp.Namespace, annp.Name); err != nil {
@@ -1028,12 +1028,12 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 	for {
 		k8sPod, err := k.GetPodByLabel(ns, pod)
 		if err != nil && err != ErrPodNotFound {
-			return nil, errors.WithMessagef(err, "unable to get Pod '%s/%s'", ns, pod)
+			return nil, fmt.Errorf("unable to get Pod '%s/%s': %w", ns, pod, err)
 		}
 
 		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
 			if k8sPod.Status.PodIP == "" {
-				return nil, errors.WithMessagef(err, "unable to get IP of Pod '%s/%s'", ns, pod)
+				return nil, fmt.Errorf("unable to get IP of Pod '%s/%s': %w", ns, pod, err)
 			}
 			var podIPs []string
 			for _, podIP := range k8sPod.Status.PodIPs {
@@ -1078,7 +1078,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 		}
 		time.Sleep(defaultInterval)
 	}
-	return errors.Errorf("after %d tries, HTTP servers are not ready", maxTries)
+	return fmt.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
 func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
@@ -1165,7 +1165,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 		if createNamespaces {
 			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
 			if err != nil {
-				return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
+				return nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
 			}
 		}
 		for _, pod := range pods {
@@ -1173,7 +1173,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 			deployment := ns + pod
 			_, err := k.CreateOrUpdateDeployment(ns, deployment, 1, map[string]string{"pod": pod, "app": pod})
 			if err != nil {
-				return nil, errors.WithMessagef(err, "unable to create/update Deployment '%s/%s'", ns, pod)
+				return nil, fmt.Errorf("unable to create/update Deployment '%s/%s': %w", ns, pod, err)
 			}
 		}
 	}
@@ -1187,7 +1187,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 	for _, pod := range allPods {
 		ips, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
 		if ips == nil || err != nil {
-			return nil, errors.WithMessagef(err, "unable to wait for Pod '%s/%s'", pod.Namespace(), pod.PodName())
+			return nil, fmt.Errorf("unable to wait for Pod '%s/%s': %w", pod.Namespace(), pod.PodName(), err)
 		}
 		podIPs[pod.String()] = ips
 	}
