@@ -2200,7 +2200,7 @@ func (data *TestData) runWgetCommandOnBusyboxWithRetry(podName string, ns string
 func (data *TestData) runWgetCommandFromTestPodWithRetry(podName string, ns string, containerName string, url string, maxAttempts int) (string, string, error) {
 	var stdout, stderr string
 	var err error
-	cmd := []string{"wget", "-O", "-", url, "-T", "1"}
+	cmd := []string{"wget", "-O", "-", url, "-T", "5"}
 	for i := 0; i < maxAttempts; i++ {
 		stdout, stderr, err = data.RunCommandFromPod(ns, podName, containerName, cmd)
 		if err != nil {
