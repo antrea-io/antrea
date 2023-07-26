@@ -24,8 +24,8 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/util/podstore"
 )
 
 const (
@@ -34,7 +34,7 @@ const (
 
 type connectionStore struct {
 	connections            map[flowexporter.ConnectionKey]*flowexporter.Connection
-	ifaceStore             interfacestore.InterfaceStore
+	podStore               podstore.Interface
 	antreaProxier          proxy.Proxier
 	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
 	staleConnectionTimeout time.Duration
@@ -42,12 +42,12 @@ type connectionStore struct {
 }
 
 func NewConnectionStore(
-	ifaceStore interfacestore.InterfaceStore,
+	podStore podstore.Interface,
 	proxier proxy.Proxier,
 	o *flowexporter.FlowExporterOptions) connectionStore {
 	return connectionStore{
 		connections:            make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
-		ifaceStore:             ifaceStore,
+		podStore:               podStore,
 		antreaProxier:          proxier,
 		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
 		staleConnectionTimeout: o.StaleConnectionTimeout,
@@ -98,26 +98,26 @@ func (cs *connectionStore) AddConnToMap(connKey *flowexporter.ConnectionKey, con
 }
 
 func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
-	if cs.ifaceStore == nil {
-		klog.V(4).Info("Interface store is not available to retrieve local Pods information.")
+	if cs.podStore == nil {
+		klog.V(4).Info("Pod store is not available to retrieve local Pods information.")
 		return
 	}
 	// sourceIP/destinationIP are mapped only to local pods and not remote pods.
 	srcIP := conn.FlowKey.SourceAddress.String()
 	dstIP := conn.FlowKey.DestinationAddress.String()
 
-	sIface, srcFound := cs.ifaceStore.GetInterfaceByIP(srcIP)
-	dIface, dstFound := cs.ifaceStore.GetInterfaceByIP(dstIP)
+	srcPod, srcFound := cs.podStore.GetPodByIPAndTime(srcIP, conn.StartTime)
+	dstPod, dstFound := cs.podStore.GetPodByIPAndTime(dstIP, conn.StartTime)
 	if !srcFound && !dstFound {
 		klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", srcIP, dstIP)
 	}
-	if srcFound && sIface.Type == interfacestore.ContainerInterface {
-		conn.SourcePodName = sIface.ContainerInterfaceConfig.PodName
-		conn.SourcePodNamespace = sIface.ContainerInterfaceConfig.PodNamespace
+	if srcFound {
+		conn.SourcePodName = srcPod.Name
+		conn.SourcePodNamespace = srcPod.Namespace
 	}
-	if dstFound && dIface.Type == interfacestore.ContainerInterface {
-		conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
-		conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
+	if dstFound {
+		conn.DestinationPodName = dstPod.Name
+		conn.DestinationPodNamespace = dstPod.Namespace
 	}
 }
 

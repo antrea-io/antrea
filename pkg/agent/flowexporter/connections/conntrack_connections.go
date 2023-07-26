@@ -25,11 +25,11 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/podstore"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{
@@ -53,7 +53,7 @@ func NewConntrackConnectionStore(
 	v4Enabled bool,
 	v6Enabled bool,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
-	ifaceStore interfacestore.InterfaceStore,
+	podStore podstore.Interface,
 	proxier proxy.Proxier,
 	o *flowexporter.FlowExporterOptions,
 ) *ConntrackConnectionStore {
@@ -63,7 +63,7 @@ func NewConntrackConnectionStore(
 		v6Enabled:             v6Enabled,
 		networkPolicyQuerier:  npQuerier,
 		pollInterval:          o.PollInterval,
-		connectionStore:       NewConnectionStore(ifaceStore, proxier, o),
+		connectionStore:       NewConnectionStore(podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 	}
 }

@@ -70,6 +70,7 @@ MOCKGEN_TARGETS=(
   "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier,EgressQuerier testing"
   "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
   "pkg/flowaggregator/s3uploader S3UploaderAPI testing"
+  "pkg/util/podstore Interface testing"
   "third_party/proxy Provider testing"
 )
 
