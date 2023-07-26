@@ -315,7 +315,7 @@ spec:
         - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaOVS-Containerd.ps1
         command:
         - powershell
-        image: antrea/windows-ovs:1809-3.0.5
+        image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
         name: antrea-ovs
         volumeMounts:
