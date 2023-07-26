@@ -63,9 +63,6 @@ func GetPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 	defer conn.Close()
 
 	client := podresourcesv1alpha1.NewPodResourcesListerClient(conn)
-	if client == nil {
-		return []string{}, fmt.Errorf("error getting the lister client for Pod resources")
-	}
 
 	podResources, err := client.List(ctx, &podresourcesv1alpha1.ListPodResourcesRequest{})
 	if err != nil {

@@ -15,8 +15,8 @@
 package ovsctl
 
 import (
-	"fmt"
-	"strings"
+	"context"
+	"os/exec"
 )
 
 type ovsOfctlRunner struct {
@@ -24,18 +24,14 @@ type ovsOfctlRunner struct {
 }
 
 func (r *ovsOfctlRunner) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
-	return runOfctlCmd(true, cmd, r.bridge, args...)
+	return runOfctlCmd(context.TODO(), true, cmd, r.bridge, args...)
 }
 
-func runOfctlCmd(openflow15 bool, cmd string, bridge string, args ...string) ([]byte, error) {
-	cmdStr := fmt.Sprintf("ovs-ofctl %s %s", cmd, bridge)
-	cmdStr = cmdStr + " " + strings.Join(args, " ")
+func runOfctlCmd(ctx context.Context, openflow15 bool, cmd string, bridge string, args ...string) ([]byte, error) {
+	cmdArgs := append([]string{cmd, bridge}, args...)
 	if openflow15 {
-		cmdStr += " -O Openflow15"
+		cmdArgs = append(cmdArgs, "-O", "Openflow15")
 	}
-	out, err := getOVSCommand(cmdStr).Output()
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+	ovsCmd := exec.CommandContext(ctx, "ovs-ofctl", cmdArgs...)
+	return ovsCmd.Output()
 }
