@@ -233,13 +233,13 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
-			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
-				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
-					policy.SourceRef.ToString())
+			if !c.antreaPolicyEnabled && v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
+				klog.InfoS("Ignore Antrea-native policy since AntreaPolicy feature gate is not enabled",
+					"policyName", policy.SourceRef.ToString())
 				return nil
 			}
 			c.ruleCache.AddNetworkPolicy(policy)
-			klog.Infof("NetworkPolicy %s applied to Pods on this Node", policy.SourceRef.ToString())
+			klog.InfoS("NetworkPolicy applied to Pods on this Node", "policyName", policy.SourceRef.ToString())
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
@@ -247,15 +247,15 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
-			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
-				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
-					policy.SourceRef.ToString())
+			if !c.antreaPolicyEnabled && v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
+				klog.InfoS("Ignore Antrea-native policy since AntreaPolicy feature gate is not enabled",
+					"policyName", policy.SourceRef.ToString())
 				return nil
 			}
 			updated := c.ruleCache.UpdateNetworkPolicy(policy)
 			// If any rule or the generation changes, we ensure statusManager will resync the policy's status once, in
 			// case the changes don't cause any actual rule update but the whole policy's generation is changed.
-			if c.statusManagerEnabled && updated && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+			if c.statusManagerEnabled && updated && v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
 				c.statusManager.Resync(policy.UID)
 			}
 			return nil
@@ -265,13 +265,13 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
-			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
-				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
-					policy.SourceRef.ToString())
+			if !c.antreaPolicyEnabled && v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
+				klog.InfoS("Ignore Antrea-native policy since AntreaPolicy feature gate is not enabled",
+					"policyName", policy.SourceRef.ToString())
 				return nil
 			}
 			c.ruleCache.DeleteNetworkPolicy(policy)
-			klog.Infof("NetworkPolicy %s no longer applied to Pods on this Node", policy.SourceRef.ToString())
+			klog.InfoS("NetworkPolicy no longer applied to Pods on this Node", "policyName", policy.SourceRef.ToString())
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
@@ -282,17 +282,17 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
 				}
-				if !c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
-					klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
-						policies[i].SourceRef.ToString())
+				if !c.antreaPolicyEnabled && v1beta2.IsSourceAntreaNativePolicy(policies[i].SourceRef) {
+					klog.InfoS("Ignore Antrea-native policy since AntreaPolicy feature gate is not enabled",
+						"policyName", policies[i].SourceRef.ToString())
 					return nil
 				}
-				klog.Infof("NetworkPolicy %s applied to Pods on this Node", policies[i].SourceRef.ToString())
+				klog.InfoS("NetworkPolicy applied to Pods on this Node", "policyName", policies[i].SourceRef.ToString())
 				// When ReplaceFunc is called, either the controller restarted or this was a regular reconnection.
 				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
 				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
 				// two cases. Anyway there's no harm to do a periodical resync.
-				if c.statusManagerEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(policies[i].SourceRef) {
 					c.statusManager.Resync(policies[i].UID)
 				}
 			}
@@ -669,7 +669,7 @@ func (c *Controller) syncRule(key string) error {
 	if err != nil {
 		return err
 	}
-	if c.statusManagerEnabled && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+	if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
 		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
 	}
 	return nil
@@ -711,7 +711,7 @@ func (c *Controller) syncRules(keys []string) error {
 	}
 	if c.statusManagerEnabled {
 		for _, rule := range allRules {
-			if rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+			if v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
 				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
 			}
 		}

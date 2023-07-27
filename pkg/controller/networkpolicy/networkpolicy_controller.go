@@ -43,6 +43,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha1"
+	policylisters "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha1"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -205,6 +207,20 @@ type NetworkPolicyController struct {
 	// grpListerSynced is a function which returns true if the Group shared informer has been synced at least
 	// once.
 	grpListerSynced cache.InformerSynced
+
+	adminNetworkPolicyInformer policyinformers.AdminNetworkPolicyInformer
+	// adminNetworkPolicyLister is able to list/get AdminNetworkPolicy objects.
+	adminNetworkPolicyLister policylisters.AdminNetworkPolicyLister
+	// AdminNetworkPolicySynced is a function which returns true if the AdminNetworkPolicy shared informer has
+	// been synced at least once.
+	adminNetworkPolicyListerSynced cache.InformerSynced
+
+	banpInformer policyinformers.BaselineAdminNetworkPolicyInformer
+	// banpLister is able to list/get BaselineAdminNetworkPolicy objects.
+	banpLister policylisters.BaselineAdminNetworkPolicyLister
+	// banpListerSynced is a function which returns true if the BaselineAdminNetworkPolicy shared informer has
+	// been synced at least once.
+	banpListerSynced cache.InformerSynced
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
@@ -382,6 +398,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	acnpInformer crdv1b1informers.ClusterNetworkPolicyInformer,
 	annpInformer crdv1b1informers.NetworkPolicyInformer,
+	adminNPInformer policyinformers.AdminNetworkPolicyInformer,
+	banpInformer policyinformers.BaselineAdminNetworkPolicyInformer,
 	tierInformer crdv1b1informers.TierInformer,
 	cgInformer crdv1b1informers.ClusterGroupInformer,
 	grpInformer crdv1b1informers.GroupInformer,
@@ -391,23 +409,29 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	internalGroupStore storage.Interface,
 	stretchedNPEnabled bool) *NetworkPolicyController {
 	n := &NetworkPolicyController{
-		kubeClient:                 kubeClient,
-		crdClient:                  crdClient,
-		networkPolicyInformer:      networkPolicyInformer,
-		networkPolicyLister:        networkPolicyInformer.Lister(),
-		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
-		addressGroupStore:          addressGroupStore,
-		appliedToGroupStore:        appliedToGroupStore,
-		internalNetworkPolicyStore: internalNetworkPolicyStore,
-		internalGroupStore:         internalGroupStore,
-		appliedToGroupQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
-		addressGroupQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
-		internalNetworkPolicyQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
-		internalGroupQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
-		groupingInterface:          groupingInterface,
-		groupingInterfaceSynced:    groupingInterface.HasSynced,
-		labelIdentityInterface:     labelIdentityInterface,
-		stretchNPEnabled:           stretchedNPEnabled,
+		kubeClient:                     kubeClient,
+		crdClient:                      crdClient,
+		networkPolicyInformer:          networkPolicyInformer,
+		networkPolicyLister:            networkPolicyInformer.Lister(),
+		networkPolicyListerSynced:      networkPolicyInformer.Informer().HasSynced,
+		adminNetworkPolicyInformer:     adminNPInformer,
+		adminNetworkPolicyLister:       adminNPInformer.Lister(),
+		adminNetworkPolicyListerSynced: adminNPInformer.Informer().HasSynced,
+		banpInformer:                   banpInformer,
+		banpLister:                     banpInformer.Lister(),
+		banpListerSynced:               banpInformer.Informer().HasSynced,
+		addressGroupStore:              addressGroupStore,
+		appliedToGroupStore:            appliedToGroupStore,
+		internalNetworkPolicyStore:     internalNetworkPolicyStore,
+		internalGroupStore:             internalGroupStore,
+		appliedToGroupQueue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
+		addressGroupQueue:              workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
+		internalNetworkPolicyQueue:     workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
+		internalGroupQueue:             workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
+		groupingInterface:              groupingInterface,
+		groupingInterfaceSynced:        groupingInterface.HasSynced,
+		labelIdentityInterface:         labelIdentityInterface,
+		stretchNPEnabled:               stretchedNPEnabled,
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
@@ -422,6 +446,24 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
+	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
+		adminNPInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addAdminNP,
+				UpdateFunc: n.updateAdminNP,
+				DeleteFunc: n.deleteAdminNP,
+			},
+			resyncPeriod,
+		)
+		banpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addBANP,
+				UpdateFunc: n.updateBANP,
+				DeleteFunc: n.deleteBANP,
+			},
+			resyncPeriod,
+		)
+	}
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		n.namespaceInformer = namespaceInformer
@@ -1445,6 +1487,20 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			return nil
 		}
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processNetworkPolicy(knp)
+	case controlplane.AdminNetworkPolicy:
+		anp, err := n.adminNetworkPolicyLister.Get(key.Name)
+		if err != nil || anp.UID != key.UID {
+			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
+			return nil
+		}
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processAdminNetworkPolicy(anp)
+	case controlplane.BaselineAdminNetworkPolicy:
+		banp, err := n.banpLister.Get(key.Name)
+		if err != nil || banp.UID != key.UID {
+			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
+			return nil
+		}
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processBaselineAdminNetworkPolicy(banp)
 	}
 
 	newNodeNames, err := func() (sets.Set[string], error) {
