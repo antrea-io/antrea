@@ -111,8 +111,6 @@ Tiers have the following characteristics:
 
 ### Static tiers
 
-Antrea release 0.9.x introduced support for 5 static tiers. These static tiers
-have been removed in favor of Tier CRDs as mentioned in the previous section.
 On startup, antrea-controller will create 5 static, read-only Tier CRD resources
 corresponding to the static tiers for default consumption, as well as a "baseline"
 Tier CRD object, that will be enforced after developer-created K8s NetworkPolicies.
@@ -1764,7 +1762,7 @@ Similar RBAC is applied to the ClusterGroup resource.
 - If there are multiple Antrea-native policy rules created at the same rule-level
   priority (same policy Tier, policy priority and rule priority), and happen to select
   overlapping traffic patterns but have conflicting rule actions (e.g.`Allow`v.s.`Deny`),
-  the behavior of such traffic will be undeterministic. **In general, we recommended
+  the behavior of such traffic will be nondeterministic. **In general, we recommended
   against creating rules with conflicting actions in policy resources at the same
   priority.** For example, consider two AntreaNetworkPolicies created in the same Namespace
   and Tier with the same policy priority. The first policy applies to all `app=web` Pods in
@@ -1775,4 +1773,4 @@ Similar RBAC is applied to the ClusterGroup resource.
   labels initiates traffic towards the `app=web` Pods in the Namespace, both rules will be
   matched at the same priority with conflicting actions. It will be the policy writer's
   responsibility to identify such ambiguities in rule definitions and avoid potential
-  undeterministic rule enforcement results.
+  nondeterministic rule enforcement results.
