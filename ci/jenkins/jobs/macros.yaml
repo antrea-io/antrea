@@ -3,7 +3,7 @@
     builders:
       - shell: |-
           cp /var/lib/jenkins/utils/defaults.yaml ci/jenkins/jobs
-          find ci/jenkins/jobs/ | grep ci/jenkins/jobs/projects | grep -v projects-{jenkins_location}.yaml | xargs rm
+          find ci/jenkins/jobs -name "projects-*" ! -name "projects-{jenkins_location}.yaml" | xargs rm
           jenkins-jobs update -r ci/jenkins/jobs
           rm ci/jenkins/jobs/defaults.yaml
 
