@@ -17,19 +17,24 @@ if ($DeleteBridges) {
     }
 }
 
-# Stop and delete ovs-vswitchd service
-stop-service ovs-vswitchd
-sc.exe delete ovs-vswitchd
+# Stop and delete ovs-vswitchd service if it exists
 if (Get-Service ovs-vswitchd -ErrorAction SilentlyContinue) {
-    Write-Host "Failed to delete ovs-vswitchd service, exit."
-    exit 1
+    stop-service ovs-vswitchd
+    sc.exe delete ovs-vswitchd
+    if (Get-Service ovs-vswitchd -ErrorAction SilentlyContinue) {
+        Write-Host "Failed to delete ovs-vswitchd service, exit."
+        exit 1
+    }
 }
-# Stop and delete ovsdb-service service
-stop-service ovsdb-server
-sc.exe delete ovsdb-server
+
+# Stop and delete ovsdb-service service if it exists
 if (Get-Service ovsdb-server -ErrorAction SilentlyContinue) {
-    Write-Host "Failed to delete ovs-vswitchd service, exit."
-    exit 1
+    stop-service ovsdb-server
+    sc.exe delete ovsdb-server
+    if (Get-Service ovsdb-server -ErrorAction SilentlyContinue) {
+        Write-Host "Failed to delete ovs-vswitchd service, exit."
+        exit 1
+    }
 }
 # Uninstall OVS kernel driver
 cmd /c "cd $OVSDriverDir && uninstall.cmd"

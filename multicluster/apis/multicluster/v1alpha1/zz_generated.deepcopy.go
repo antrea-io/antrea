@@ -20,8 +20,8 @@
 package v1alpha1
 
 import (
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	apisv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -808,7 +808,7 @@ func (in *ResourceExportSpec) DeepCopyInto(out *ResourceExportSpec) {
 	}
 	if in.ClusterNetworkPolicy != nil {
 		in, out := &in.ClusterNetworkPolicy, &out.ClusterNetworkPolicy
-		*out = new(crdv1alpha1.ClusterNetworkPolicySpec)
+		*out = new(v1beta1.ClusterNetworkPolicySpec)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.LabelIdentity != nil {
@@ -982,7 +982,7 @@ func (in *ResourceImportSpec) DeepCopyInto(out *ResourceImportSpec) {
 	}
 	if in.ClusterNetworkPolicy != nil {
 		in, out := &in.ClusterNetworkPolicy, &out.ClusterNetworkPolicy
-		*out = new(crdv1alpha1.ClusterNetworkPolicySpec)
+		*out = new(v1beta1.ClusterNetworkPolicySpec)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.LabelIdentity != nil {

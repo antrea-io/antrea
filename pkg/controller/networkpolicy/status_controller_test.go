@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreafakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
@@ -38,31 +38,31 @@ import (
 
 type fakeNetworkPolicyControl struct {
 	sync.Mutex
-	annpStatus *crdv1alpha1.NetworkPolicyStatus
-	acnpStatus *crdv1alpha1.NetworkPolicyStatus
+	annpStatus *crdv1beta1.NetworkPolicyStatus
+	acnpStatus *crdv1beta1.NetworkPolicyStatus
 }
 
-func (c *fakeNetworkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha1.NetworkPolicyStatus) error {
+func (c *fakeNetworkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1beta1.NetworkPolicyStatus) error {
 	c.Lock()
 	defer c.Unlock()
 	c.annpStatus = status
 	return nil
 }
 
-func (c *fakeNetworkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha1.NetworkPolicyStatus) error {
+func (c *fakeNetworkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1beta1.NetworkPolicyStatus) error {
 	c.Lock()
 	defer c.Unlock()
 	c.acnpStatus = status
 	return nil
 }
 
-func (c *fakeNetworkPolicyControl) getAntreaNetworkPolicyStatus() *crdv1alpha1.NetworkPolicyStatus {
+func (c *fakeNetworkPolicyControl) getAntreaNetworkPolicyStatus() *crdv1beta1.NetworkPolicyStatus {
 	c.Lock()
 	defer c.Unlock()
 	return c.annpStatus
 }
 
-func (c *fakeNetworkPolicyControl) getAntreaClusterNetworkPolicyStatus() *crdv1alpha1.NetworkPolicyStatus {
+func (c *fakeNetworkPolicyControl) getAntreaClusterNetworkPolicyStatus() *crdv1beta1.NetworkPolicyStatus {
 	c.Lock()
 	defer c.Unlock()
 	return c.acnpStatus
@@ -75,8 +75,8 @@ func newTestStatusController(initialObjects ...runtime.Object) (*StatusControlle
 	antreaInformerFactory := antreainformers.NewSharedInformerFactory(antreaClientset, 0)
 	networkPolicyControl := &fakeNetworkPolicyControl{}
 
-	acnpInformer := antreaInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
-	annpInformer := antreaInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	acnpInformer := antreaInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
+	annpInformer := antreaInformerFactory.Crd().V1beta1().NetworkPolicies()
 	statusController := &StatusController{
 		npControlInterface:         networkPolicyControl,
 		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicy"),
@@ -119,7 +119,7 @@ func newNetworkPolicyStatus(name string, nodeName string, generation int64, erro
 
 func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 	if inp.SourceRef.Type == controlplane.AntreaNetworkPolicy {
-		return &crdv1alpha1.NetworkPolicy{
+		return &crdv1beta1.NetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Namespace:  inp.SourceRef.Namespace,
 				Name:       inp.SourceRef.Name,
@@ -127,7 +127,7 @@ func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 			},
 		}
 	}
-	return &crdv1alpha1.ClusterNetworkPolicy{
+	return &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: v1.ObjectMeta{
 			Name:       inp.SourceRef.Name,
 			Generation: inp.Generation,
@@ -150,11 +150,11 @@ func newAntreaClusterNetworkPolicyReference(name string) *controlplane.NetworkPo
 	}
 }
 
-func generateRealizationFailureConditions(failedNodeCount int, failedNodeDetails string) []crdv1alpha1.NetworkPolicyCondition {
+func generateRealizationFailureConditions(failedNodeCount int, failedNodeDetails string) []crdv1beta1.NetworkPolicyCondition {
 	conditions := GenerateNetworkPolicyCondition(nil)
 	failureMessage := fmt.Sprintf("Failed Nodes count %d: %s", failedNodeCount, failedNodeDetails)
-	conditions = append(conditions, crdv1alpha1.NetworkPolicyCondition{
-		Type:               crdv1alpha1.NetworkPolicyConditionRealizationFailure,
+	conditions = append(conditions, crdv1beta1.NetworkPolicyCondition{
+		Type:               crdv1beta1.NetworkPolicyConditionRealizationFailure,
 		Status:             v1.ConditionTrue,
 		LastTransitionTime: v1.Now(),
 		Reason:             "NetworkPolicyRealizationFailedOnNode",
@@ -168,8 +168,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 		name                         string
 		networkPolicy                []*types.NetworkPolicy
 		collectedNetworkPolicyStatus []*controlplane.NetworkPolicyStatus
-		expectedANNPStatus           *crdv1alpha1.NetworkPolicyStatus
-		expectedACNPStatus           *crdv1alpha1.NetworkPolicyStatus
+		expectedANNPStatus           *crdv1beta1.NetworkPolicyStatus
+		expectedACNPStatus           *crdv1beta1.NetworkPolicyStatus
 	}{
 		{
 			name: "no realization status",
@@ -177,15 +177,15 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newInternalNetworkPolicy("annp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "annp1")),
 				newInternalNetworkPolicy("acnp1", 1, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("acnp1")),
 			},
-			expectedANNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+			expectedANNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyRealizing,
 				ObservedGeneration:   1,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
 				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
-			expectedACNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+			expectedACNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyRealizing,
 				ObservedGeneration:   1,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
@@ -204,15 +204,15 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newNetworkPolicyStatus("acnp1", "node1", 2, ""),
 				newNetworkPolicyStatus("acnp1", "node2", 3, ""),
 			},
-			expectedANNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+			expectedANNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyRealizing,
 				ObservedGeneration:   2,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
 				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
-			expectedACNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+			expectedACNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyRealizing,
 				ObservedGeneration:   3,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
@@ -231,15 +231,15 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newNetworkPolicyStatus("acnp1", "node1", 4, ""),
 				newNetworkPolicyStatus("acnp1", "node2", 4, ""),
 			},
-			expectedANNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealized,
+			expectedANNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyRealized,
 				ObservedGeneration:   3,
 				CurrentNodesRealized: 2,
 				DesiredNodesRealized: 2,
 				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
-			expectedACNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyRealized,
+			expectedACNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyRealized,
 				ObservedGeneration:   4,
 				CurrentNodesRealized: 2,
 				DesiredNodesRealized: 2,
@@ -258,15 +258,15 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newNetworkPolicyStatus("acnp1", "node1", 5, "agent failure"),
 				newNetworkPolicyStatus("acnp1", "node2", 5, "agent crash"),
 			},
-			expectedANNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyFailed,
+			expectedANNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyFailed,
 				ObservedGeneration:   4,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
 				Conditions:           generateRealizationFailureConditions(1, `"node1":"agent failure"`),
 			},
-			expectedACNPStatus: &crdv1alpha1.NetworkPolicyStatus{
-				Phase:                crdv1alpha1.NetworkPolicyFailed,
+			expectedACNPStatus: &crdv1beta1.NetworkPolicyStatus{
+				Phase:                crdv1beta1.NetworkPolicyFailed,
 				ObservedGeneration:   5,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
@@ -327,15 +327,15 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	statusController.UpdateStatus(newNetworkPolicyStatus("acnp1", "node5", 2, ""))
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
-	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
-		Phase:                crdv1alpha1.NetworkPolicyRealized,
+	assert.True(t, NetworkPolicyStatusEqual(crdv1beta1.NetworkPolicyStatus{
+		Phase:                crdv1beta1.NetworkPolicyRealized,
 		ObservedGeneration:   1,
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
 		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
-	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
-		Phase:                crdv1alpha1.NetworkPolicyRealized,
+	assert.True(t, NetworkPolicyStatusEqual(crdv1beta1.NetworkPolicyStatus{
+		Phase:                crdv1beta1.NetworkPolicyRealized,
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 3,
 		DesiredNodesRealized: 3,
@@ -348,15 +348,15 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	networkPolicyStore.Update(acnp1Updated)
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
-	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
-		Phase:                crdv1alpha1.NetworkPolicyRealizing,
+	assert.True(t, NetworkPolicyStatusEqual(crdv1beta1.NetworkPolicyStatus{
+		Phase:                crdv1beta1.NetworkPolicyRealizing,
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 0,
 		DesiredNodesRealized: 3,
 		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
-	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
-		Phase:                crdv1alpha1.NetworkPolicyRealizing,
+	assert.True(t, NetworkPolicyStatusEqual(crdv1beta1.NetworkPolicyStatus{
+		Phase:                crdv1beta1.NetworkPolicyRealizing,
 		ObservedGeneration:   3,
 		CurrentNodesRealized: 0,
 		DesiredNodesRealized: 2,

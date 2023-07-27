@@ -29,8 +29,11 @@ type CrdV1beta1Interface interface {
 	AntreaAgentInfosGetter
 	AntreaControllerInfosGetter
 	ClusterGroupsGetter
+	ClusterNetworkPoliciesGetter
+	EgressesGetter
 	ExternalIPPoolsGetter
 	GroupsGetter
+	NetworkPoliciesGetter
 	TiersGetter
 }
 
@@ -51,12 +54,24 @@ func (c *CrdV1beta1Client) ClusterGroups() ClusterGroupInterface {
 	return newClusterGroups(c)
 }
 
+func (c *CrdV1beta1Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {
+	return newClusterNetworkPolicies(c)
+}
+
+func (c *CrdV1beta1Client) Egresses() EgressInterface {
+	return newEgresses(c)
+}
+
 func (c *CrdV1beta1Client) ExternalIPPools() ExternalIPPoolInterface {
 	return newExternalIPPools(c)
 }
 
 func (c *CrdV1beta1Client) Groups(namespace string) GroupInterface {
 	return newGroups(c, namespace)
+}
+
+func (c *CrdV1beta1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
+	return newNetworkPolicies(c, namespace)
 }
 
 func (c *CrdV1beta1Client) Tiers() TierInterface {

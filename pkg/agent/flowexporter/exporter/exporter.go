@@ -33,7 +33,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -42,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/env"
 	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/podstore"
 )
 
 // When initializing flowExporter, a slice is allocated with a fixed size to
@@ -129,6 +129,7 @@ type FlowExporter struct {
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
 	expiredConns           []flowexporter.Connection
 	egressQuerier          querier.EgressQuerier
+	podStore               podstore.Interface
 }
 
 func genObservationID(nodeName string) uint32 {
@@ -153,7 +154,7 @@ func prepareExporterInputArgs(collectorProto, nodeName string) exporter.Exporter
 	return expInput
 }
 
-func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
+func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions,
 	egressQuerier querier.EgressQuerier) (*FlowExporter, error) {
@@ -169,8 +170,8 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
-	denyConnStore := connections.NewDenyConnectionStore(ifaceStore, proxier, o)
-	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, ifaceStore, proxier, o)
+	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, o)
 
 	return &FlowExporter{
 		collectorAddr:          o.FlowCollectorAddr,
@@ -189,6 +190,7 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
 		egressQuerier:          egressQuerier,
+		podStore:               podStore,
 	}, nil
 }
 
@@ -197,6 +199,7 @@ func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 }
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
+	go exp.podStore.Run(stopCh)
 	// Start the goroutine to periodically delete stale deny connections.
 	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
 

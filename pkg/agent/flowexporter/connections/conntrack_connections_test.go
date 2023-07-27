@@ -27,36 +27,43 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
+	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 var (
-	tuple1         = flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	tuple2         = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	tuple3         = flowexporter.Tuple{SourceAddress: net.IP{10, 10, 10, 10}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 60000, DestinationPort: 100}
-	podConfigFlow1 = &interfacestore.ContainerInterfaceConfig{
-		ContainerID:  "1",
-		PodName:      "pod1",
-		PodNamespace: "ns1",
-	}
-	interfaceFlow1 = &interfacestore.InterfaceConfig{
-		InterfaceName:            "interface1",
-		IPs:                      []net.IP{{8, 7, 6, 5}},
-		ContainerInterfaceConfig: podConfigFlow1,
+	tuple1 = flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple2 = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple3 = flowexporter.Tuple{SourceAddress: net.IP{10, 10, 10, 10}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 60000, DestinationPort: 100}
+	pod1   = &v1.Pod{
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{
+				{
+					IP: net.IP{8, 7, 6, 5}.String(),
+				},
+				{
+					IP: net.IP{4, 3, 2, 1}.String(),
+				},
+			},
+			Phase: v1.PodRunning,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod1",
+			Namespace: "ns1",
+		},
 	}
 	servicePortName = k8sproxy.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -72,7 +79,7 @@ var (
 		Name:      "bar",
 		UID:       "uid1",
 	}
-	action = secv1alpha1.RuleActionAllow
+	action = secv1beta1.RuleActionAllow
 	rule1  = agenttypes.PolicyRule{
 		Direction: cpv1beta.DirectionIn,
 		From:      []agenttypes.Address{},
@@ -208,12 +215,12 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			},
 		},
 	}
-	// Mock interface store with one of the couple of IPs correspond to Pods
-	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockIfaceStore, mockProxier, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
 
 	for _, c := range tc {
 		t.Run(c.name, func(t *testing.T) {
@@ -221,7 +228,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			if c.oldConn != nil {
 				addConnToStore(conntrackConnStore, c.oldConn)
 			} else {
-				testAddNewConn(mockIfaceStore, mockProxier, npQuerier, c.newConn)
+				testAddNewConn(mockPodStore, mockProxier, npQuerier, c.newConn)
 			}
 			conntrackConnStore.AddOrUpdateConn(&c.newConn)
 			actualConn, exist := conntrackConnStore.GetConnByKey(flowexporter.NewConnectionKey(&c.newConn))
@@ -234,9 +241,9 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 }
 
 // testAddNewConn tests podInfo, Services, network policy mapping.
-func testAddNewConn(mockIfaceStore *interfacestoretest.MockInterfaceStore, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn flowexporter.Connection) {
-	mockIfaceStore.EXPECT().GetInterfaceByIP(conn.FlowKey.SourceAddress.String()).Return(nil, false)
-	mockIfaceStore.EXPECT().GetInterfaceByIP(conn.FlowKey.DestinationAddress.String()).Return(interfaceFlow1, true)
+func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn flowexporter.Connection) {
+	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
+	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 
 	protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
 	serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress.String(), conn.DestinationServicePort, protocol)
@@ -294,8 +301,8 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	// For testing purposes, set the metric
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
-	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockIfaceStore, nil, testFlowExporterOptions)
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
+	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -316,9 +323,9 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 
 	testFlows := make([]*flowexporter.Connection, 0)
 	// Create connectionStore
-	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockIfaceStore, nil, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, testFlowExporterOptions)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000

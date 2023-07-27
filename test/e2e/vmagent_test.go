@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/externalnode"
 	. "antrea.io/antrea/test/e2e/utils"
@@ -466,17 +467,17 @@ func testANPOnVMs(t *testing.T, data *TestData, vmList []vmInfo, osType string) 
 	// Test TCP rules in ANP
 	t.Run("testANPOnExternalNodeWithTCP", func(t *testing.T) {
 		// Use ExternalEntity in an ingress rule configuration.
-		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-tcp-entity", namespace, *appliedToVM, peerVM, ProtocolTCP, true, crdv1alpha1.RuleActionDrop, true)
+		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-tcp-entity", namespace, *appliedToVM, peerVM, ProtocolTCP, true, crdv1beta1.RuleActionDrop, true)
 		// Use IP in an egress rule configuration.
-		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-egress-tcp-ip", namespace, *appliedToVM, peerVM, ProtocolTCP, false, crdv1alpha1.RuleActionDrop, false)
+		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-egress-tcp-ip", namespace, *appliedToVM, peerVM, ProtocolTCP, false, crdv1beta1.RuleActionDrop, false)
 	})
 	// Test UDP rules in ANP
 	t.Run("testANPOnExternalNodeWithUDP", func(t *testing.T) {
-		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-udp-entity", namespace, *appliedToVM, peerVM, ProtocolUDP, true, crdv1alpha1.RuleActionReject, false)
+		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-udp-entity", namespace, *appliedToVM, peerVM, ProtocolUDP, true, crdv1beta1.RuleActionReject, false)
 	})
 	// Test ICMP rules in ANP
 	t.Run("testANPOnExternalNodeWithICMP", func(t *testing.T) {
-		testANPProtocolICMP(t, data, "anp-vmagent-ingress-icmp-ip", namespace, *appliedToVM, crdv1alpha1.RuleActionDrop)
+		testANPProtocolICMP(t, data, "anp-vmagent-ingress-icmp-ip", namespace, *appliedToVM, crdv1beta1.RuleActionDrop)
 	})
 	// Test FQDN rules in ANP
 	t.Run("testANPOnExternalNodeWithFQDN", func(t *testing.T) {
@@ -499,21 +500,21 @@ func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string
 	var err error
 	allURLs := append(append(allowedURLs, droppedURLs...), rejectedURLs...)
 	for _, url := range allURLs {
-		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
+		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1beta1.RuleActionAllow)
 		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
 	}
 
-	fqdnSettings := make(map[string]*crdv1alpha1.RuleAction, 0)
+	fqdnSettings := make(map[string]*crdv1beta1.RuleAction, 0)
 	for _, url := range allowedURLs {
-		action := crdv1alpha1.RuleActionAllow
+		action := crdv1beta1.RuleActionAllow
 		fqdnSettings[url] = &action
 	}
 	for _, url := range droppedURLs {
-		action := crdv1alpha1.RuleActionDrop
+		action := crdv1beta1.RuleActionDrop
 		fqdnSettings[url] = &action
 	}
 	for _, url := range rejectedURLs {
-		action := crdv1alpha1.RuleActionReject
+		action := crdv1beta1.RuleActionReject
 		fqdnSettings[url] = &action
 	}
 
@@ -525,7 +526,7 @@ func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string
 	err = data.DeleteANNP(anp.Namespace, anp.Name)
 	require.Nil(t, err)
 	for _, url := range allURLs {
-		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
+		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1beta1.RuleActionAllow)
 		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
 	}
 }
@@ -534,7 +535,7 @@ func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string
 // Note: master Node is used as the client in the test. This is because the Windows native ping utility always uses 256
 // as the identifier in any ICMP echo request packet, and this setting introduces a mis-match in OVS conntrack when
 // identifying a new connection.
-func testANPProtocolICMP(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, ruleAction crdv1alpha1.RuleAction) {
+func testANPProtocolICMP(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, ruleAction crdv1beta1.RuleAction) {
 	// The initial network connectivity is working as expected before ANP is created.
 	err := runPingCommandOnVM(data, appliedToVM, true)
 	require.NoError(t, err, "Failed to verify connectivity before applying ANP")
@@ -548,7 +549,7 @@ func testANPProtocolICMP(t *testing.T, data *TestData, name string, namespace st
 	t.Logf("ANP test with nameE %s is done", name)
 }
 
-func testANPProtocolTCPOrUDP(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, peerVM *vmInfo, proto AntreaPolicyProtocol, ingress bool, ruleAction crdv1alpha1.RuleAction, matchPeerEntity bool) {
+func testANPProtocolTCPOrUDP(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, peerVM *vmInfo, proto AntreaPolicyProtocol, ingress bool, ruleAction crdv1beta1.RuleAction, matchPeerEntity bool) {
 	var srcVM, dstVM vmInfo
 	if ingress {
 		srcVM = *peerVM
@@ -577,7 +578,7 @@ func testANPProtocolTCPOrUDP(t *testing.T, data *TestData, name string, namespac
 }
 
 func createANPForExternalNode(t *testing.T, data *TestData, name, namespace string, ingress bool, proto AntreaPolicyProtocol,
-	appliedToVM vmInfo, peerVM *vmInfo, matchLabel bool, ruleAction crdv1alpha1.RuleAction) *crdv1alpha1.NetworkPolicy {
+	appliedToVM vmInfo, peerVM *vmInfo, matchLabel bool, ruleAction crdv1beta1.RuleAction) *crdv1beta1.NetworkPolicy {
 	eeSelector := map[string]string{externalNodeLabelKey: appliedToVM.nodeName}
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.
@@ -620,7 +621,7 @@ func createANPForExternalNode(t *testing.T, data *TestData, name, namespace stri
 	return anp
 }
 
-func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, fqdnSettings map[string]*crdv1alpha1.RuleAction) *crdv1alpha1.NetworkPolicy {
+func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, fqdnSettings map[string]*crdv1beta1.RuleAction) *crdv1beta1.NetworkPolicy {
 	eeSelector := map[string]string{externalNodeLabelKey: appliedToVM.nodeName}
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.
@@ -631,9 +632,9 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 	i := 0
 	for fqdn, action := range fqdnSettings {
 		ruleName := fmt.Sprintf("name-%d", i)
-		policyPeer := []crdv1alpha1.NetworkPolicyPeer{{FQDN: fqdn}}
+		policyPeer := []crdv1beta1.NetworkPolicyPeer{{FQDN: fqdn}}
 		ports, _ := GenPortsOrProtocols(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-		newRule := crdv1alpha1.Rule{
+		newRule := crdv1beta1.Rule{
 			To:     policyPeer,
 			Ports:  ports,
 			Action: action,
@@ -669,7 +670,7 @@ func runPingCommandOnVM(data *TestData, dstVM vmInfo, connected bool) error {
 	return err
 }
 
-func runIperfCommandOnVMs(t *testing.T, data *TestData, srcVM vmInfo, dstVM vmInfo, connected bool, isUDP bool, ruleAction crdv1alpha1.RuleAction) error {
+func runIperfCommandOnVMs(t *testing.T, data *TestData, srcVM vmInfo, dstVM vmInfo, connected bool, isUDP bool, ruleAction crdv1beta1.RuleAction) error {
 	svrIP := net.ParseIP(dstVM.ip)
 	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
 		if err := runIperfClient(t, data, srcVM, svrIP, iperfPort, isUDP, connected, ruleAction); err != nil {
@@ -707,7 +708,7 @@ func stopIperfCommand(t *testing.T, data *TestData, vm vmInfo) error {
 	return nil
 }
 
-func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP, dstPort int32, isUDP bool, connected bool, ruleAction crdv1alpha1.RuleAction) error {
+func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP, dstPort int32, isUDP bool, connected bool, ruleAction crdv1beta1.RuleAction) error {
 	cmd := getIperf3Command(targetVM.osType, svrIP, dstPort, isUDP, false)
 	cmdStr := strings.Join(cmd, " ")
 	if targetVM.osType == windowsOS {
@@ -716,9 +717,9 @@ func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP,
 	expectedOutput := "iperf Done"
 	if !connected {
 		switch ruleAction {
-		case crdv1alpha1.RuleActionDrop:
+		case crdv1beta1.RuleActionDrop:
 			expectedOutput = "Connection timed out"
-		case crdv1alpha1.RuleActionReject:
+		case crdv1beta1.RuleActionReject:
 			if isUDP {
 				expectedOutput = "No route to host"
 			} else {
@@ -751,17 +752,17 @@ func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP,
 	}
 }
 
-func runCurlCommandOnVM(data *TestData, targetVM vmInfo, url string, action crdv1alpha1.RuleAction) error {
+func runCurlCommandOnVM(data *TestData, targetVM vmInfo, url string, action crdv1beta1.RuleAction) error {
 	cmd := getCurlCommand(targetVM.osType, url)
 	cmdStr := strings.Join(cmd, " ")
 
 	var expectedErr, expectedOutput string
 	switch action {
-	case crdv1alpha1.RuleActionAllow:
+	case crdv1beta1.RuleActionAllow:
 		expectedOutput = "HTTP/1.1"
-	case crdv1alpha1.RuleActionDrop:
+	case crdv1beta1.RuleActionDrop:
 		expectedErr = "Connection timed out"
-	case crdv1alpha1.RuleActionReject:
+	case crdv1beta1.RuleActionReject:
 		expectedErr = "Connection refused"
 	}
 	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {

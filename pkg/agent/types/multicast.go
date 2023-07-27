@@ -20,11 +20,11 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 type IGMPNPRuleInfo struct {
-	RuleAction v1alpha1.RuleAction
+	RuleAction v1beta1.RuleAction
 	UUID       apitypes.UID
 	NPType     *v1beta2.NetworkPolicyType
 	Name       string

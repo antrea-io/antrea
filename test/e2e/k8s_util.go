@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/test/e2e/utils"
 )
@@ -893,12 +892,12 @@ func (k *KubernetesUtils) CleanGroups(namespace string) error {
 }
 
 // CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
-func (data *TestData) CreateOrUpdateACNP(cnp *crdv1alpha1.ClusterNetworkPolicy) (*crdv1alpha1.ClusterNetworkPolicy, error) {
+func (data *TestData) CreateOrUpdateACNP(cnp *crdv1beta1.ClusterNetworkPolicy) (*crdv1beta1.ClusterNetworkPolicy, error) {
 	log.Infof("Creating/updating ClusterNetworkPolicy %s", cnp.Name)
-	cnpReturned, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
+	cnpReturned, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Debugf("Creating ClusterNetworkPolicy %s", cnp.Name)
-		cnp, err = data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
+		cnp, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create ClusterNetworkPolicy: %s", err)
 		}
@@ -906,15 +905,15 @@ func (data *TestData) CreateOrUpdateACNP(cnp *crdv1alpha1.ClusterNetworkPolicy) 
 	} else if cnpReturned.Name != "" {
 		log.Debugf("ClusterNetworkPolicy with name %s already exists, updating", cnp.Name)
 		cnpReturned.Spec = cnp.Spec
-		cnp, err = data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
+		cnp, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
 		return cnp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
 }
 
 // GetACNP is a convenience function for getting AntreaClusterNetworkPolicies.
-func (data *TestData) GetACNP(name string) (*crdv1alpha1.ClusterNetworkPolicy, error) {
-	res, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+func (data *TestData) GetACNP(name string) (*crdv1beta1.ClusterNetworkPolicy, error) {
+	res, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +923,7 @@ func (data *TestData) GetACNP(name string) (*crdv1alpha1.ClusterNetworkPolicy, e
 // DeleteACNP is a convenience function for deleting ACNP by name.
 func (data *TestData) DeleteACNP(name string) error {
 	log.Infof("Deleting AntreaClusterNetworkPolicies %s", name)
-	err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to delete ClusterNetworkPolicy %s: %w", name, err)
 	}
@@ -933,7 +932,7 @@ func (data *TestData) DeleteACNP(name string) error {
 
 // CleanACNPs is a convenience function for deleting all Antrea ClusterNetworkPolicies in the cluster.
 func (data *TestData) CleanACNPs() error {
-	l, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
+	l, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to list AntreaClusterNetworkPolicies: %w", err)
 	}
@@ -946,33 +945,33 @@ func (data *TestData) CleanACNPs() error {
 }
 
 // CreateOrUpdateANNP is a convenience function for updating/creating Antrea NetworkPolicies.
-func (data *TestData) CreateOrUpdateANNP(annp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
+func (data *TestData) CreateOrUpdateANNP(annp *crdv1beta1.NetworkPolicy) (*crdv1beta1.NetworkPolicy, error) {
 	log.Infof("Creating/updating Antrea NetworkPolicy %s/%s", annp.Namespace, annp.Name)
-	cnpReturned, err := data.crdClient.CrdV1alpha1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
+	cnpReturned, err := data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Debugf("Creating Antrea NetworkPolicy %s", annp.Name)
-		annp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
+		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Create(context.TODO(), annp, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create Antrea NetworkPolicy: %s", err)
 		}
 		return annp, err
 	} else if cnpReturned.Name != "" {
 		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", annp.Name)
-		annp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
+		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
 		return annp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", annp.Name)
 }
 
 // GetANNP is a convenience function for getting AntreaNetworkPolicies.
-func (data *TestData) GetANNP(namespace, name string) (*crdv1alpha1.NetworkPolicy, error) {
-	return data.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+func (data *TestData) GetANNP(namespace, name string) (*crdv1beta1.NetworkPolicy, error) {
+	return data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteANNP is a convenience function for deleting ANNP by name and Namespace.
 func (data *TestData) DeleteANNP(ns, name string) error {
 	log.Infof("Deleting Antrea NetworkPolicy '%s/%s'", ns, name)
-	err := data.crdClient.CrdV1alpha1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.crdClient.CrdV1beta1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to delete Antrea NetworkPolicy %s: %w", name, err)
 	}
@@ -982,7 +981,7 @@ func (data *TestData) DeleteANNP(ns, name string) error {
 // CleanANNPs is a convenience function for deleting all Antrea NetworkPolicies in provided namespaces.
 func (data *TestData) CleanANNPs(namespaces []string) error {
 	for _, ns := range namespaces {
-		l, err := data.crdClient.CrdV1alpha1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		l, err := data.crdClient.CrdV1beta1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to list Antrea NetworkPolicies in ns %s: %w", ns, err)
 		}
@@ -998,11 +997,11 @@ func (data *TestData) CleanANNPs(namespaces []string) error {
 func (data *TestData) WaitForANNPCreationAndRealization(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
 	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		annp, err := data.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
-		return annp.Status.ObservedGeneration == annp.Generation && annp.Status.Phase == crdv1alpha1.NetworkPolicyRealized, nil
+		return annp.Status.ObservedGeneration == annp.Generation && annp.Status.Phase == crdv1beta1.NetworkPolicyRealized, nil
 	}); err != nil {
 		return fmt.Errorf("error when waiting for ANNP '%s/%s' to be realized: %v", namespace, name, err)
 	}
@@ -1012,11 +1011,11 @@ func (data *TestData) WaitForANNPCreationAndRealization(t *testing.T, namespace 
 func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be created and realized", name)
 	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		acnp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
-		return acnp.Status.ObservedGeneration == acnp.Generation && acnp.Status.Phase == crdv1alpha1.NetworkPolicyRealized, nil
+		return acnp.Status.ObservedGeneration == acnp.Generation && acnp.Status.Phase == crdv1beta1.NetworkPolicyRealized, nil
 	}); err != nil {
 		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
 	}

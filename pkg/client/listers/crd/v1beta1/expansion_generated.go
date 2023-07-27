@@ -28,6 +28,14 @@ type AntreaControllerInfoListerExpansion interface{}
 // ClusterGroupLister.
 type ClusterGroupListerExpansion interface{}
 
+// ClusterNetworkPolicyListerExpansion allows custom methods to be added to
+// ClusterNetworkPolicyLister.
+type ClusterNetworkPolicyListerExpansion interface{}
+
+// EgressListerExpansion allows custom methods to be added to
+// EgressLister.
+type EgressListerExpansion interface{}
+
 // ExternalIPPoolListerExpansion allows custom methods to be added to
 // ExternalIPPoolLister.
 type ExternalIPPoolListerExpansion interface{}
@@ -39,6 +47,14 @@ type GroupListerExpansion interface{}
 // GroupNamespaceListerExpansion allows custom methods to be added to
 // GroupNamespaceLister.
 type GroupNamespaceListerExpansion interface{}
+
+// NetworkPolicyListerExpansion allows custom methods to be added to
+// NetworkPolicyLister.
+type NetworkPolicyListerExpansion interface{}
+
+// NetworkPolicyNamespaceListerExpansion allows custom methods to be added to
+// NetworkPolicyNamespaceLister.
+type NetworkPolicyNamespaceListerExpansion interface{}
 
 // TierListerExpansion allows custom methods to be added to
 // TierLister.

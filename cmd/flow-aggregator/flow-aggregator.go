@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
+	"antrea.io/antrea/pkg/util/podstore"
 )
 
 const informerDefaultResync = 12 * time.Hour
@@ -49,10 +50,11 @@ func run(configFile string) error {
 
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
+	podStore := podstore.NewPodStore(podInformer.Informer())
 
 	flowAggregator, err := aggregator.NewFlowAggregator(
 		k8sClient,
-		podInformer,
+		podStore,
 		configFile,
 	)
 

@@ -38,12 +38,24 @@ func (c *FakeCrdV1beta1) ClusterGroups() v1beta1.ClusterGroupInterface {
 	return &FakeClusterGroups{c}
 }
 
+func (c *FakeCrdV1beta1) ClusterNetworkPolicies() v1beta1.ClusterNetworkPolicyInterface {
+	return &FakeClusterNetworkPolicies{c}
+}
+
+func (c *FakeCrdV1beta1) Egresses() v1beta1.EgressInterface {
+	return &FakeEgresses{c}
+}
+
 func (c *FakeCrdV1beta1) ExternalIPPools() v1beta1.ExternalIPPoolInterface {
 	return &FakeExternalIPPools{c}
 }
 
 func (c *FakeCrdV1beta1) Groups(namespace string) v1beta1.GroupInterface {
 	return &FakeGroups{c, namespace}
+}
+
+func (c *FakeCrdV1beta1) NetworkPolicies(namespace string) v1beta1.NetworkPolicyInterface {
+	return &FakeNetworkPolicies{c, namespace}
 }
 
 func (c *FakeCrdV1beta1) Tiers() v1beta1.TierInterface {

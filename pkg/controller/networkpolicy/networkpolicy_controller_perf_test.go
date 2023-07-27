@@ -39,8 +39,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 /*
@@ -227,7 +227,7 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 		switch policy := obj.(type) {
 		case *networkingv1.NetworkPolicy:
 			k8sObjs = append(k8sObjs, policy)
-		case *v1alpha1.NetworkPolicy:
+		case *v1beta1.NetworkPolicy:
 			crdObjs = append(crdObjs, policy)
 		}
 	}
@@ -469,48 +469,48 @@ func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, i
 	return policy
 }
 
-func newANNPAppliedToExternalEntity(namespace, name string, externalEntitySelector, ingressExternalEntitySelector, ingressNamespaceSelector, egressExternalEntitySelector, egressNamespaceSelector map[string]string) *v1alpha1.NetworkPolicy {
+func newANNPAppliedToExternalEntity(namespace, name string, externalEntitySelector, ingressExternalEntitySelector, ingressNamespaceSelector, egressExternalEntitySelector, egressNamespaceSelector map[string]string) *v1beta1.NetworkPolicy {
 	if name == "" {
 		name = "annp-" + rand.String(8)
 	}
-	annp := &v1alpha1.NetworkPolicy{
+	annp := &v1beta1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String())},
-		Spec: v1alpha1.NetworkPolicySpec{
-			AppliedTo: []v1alpha1.AppliedTo{
+		Spec: v1beta1.NetworkPolicySpec{
+			AppliedTo: []v1beta1.AppliedTo{
 				{
 					ExternalEntitySelector: &metav1.LabelSelector{MatchLabels: externalEntitySelector},
 				},
 			},
 		},
 	}
-	allowAction := v1alpha1.RuleActionAllow
+	allowAction := v1beta1.RuleActionAllow
 	if ingressExternalEntitySelector != nil || ingressNamespaceSelector != nil {
-		peer := v1alpha1.NetworkPolicyPeer{}
+		peer := v1beta1.NetworkPolicyPeer{}
 		if ingressExternalEntitySelector != nil {
 			peer.ExternalEntitySelector = &metav1.LabelSelector{MatchLabels: ingressExternalEntitySelector}
 		}
 		if ingressNamespaceSelector != nil {
 			peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: ingressNamespaceSelector}
 		}
-		annp.Spec.Ingress = []v1alpha1.Rule{
+		annp.Spec.Ingress = []v1beta1.Rule{
 			{
 				Action: &allowAction,
-				From:   []v1alpha1.NetworkPolicyPeer{peer},
+				From:   []v1beta1.NetworkPolicyPeer{peer},
 			},
 		}
 	}
 	if egressExternalEntitySelector != nil || egressNamespaceSelector != nil {
-		peer := v1alpha1.NetworkPolicyPeer{}
+		peer := v1beta1.NetworkPolicyPeer{}
 		if egressExternalEntitySelector != nil {
 			peer.ExternalEntitySelector = &metav1.LabelSelector{MatchLabels: egressExternalEntitySelector}
 		}
 		if egressNamespaceSelector != nil {
 			peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: egressNamespaceSelector}
 		}
-		annp.Spec.Egress = []v1alpha1.Rule{
+		annp.Spec.Egress = []v1beta1.Rule{
 			{
 				Action: &allowAction,
-				To:     []v1alpha1.NetworkPolicyPeer{peer},
+				To:     []v1beta1.NetworkPolicyPeer{peer},
 			},
 		}
 	}
@@ -602,7 +602,7 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		switch policy := obj.(type) {
 		case *networkingv1.NetworkPolicy:
 			k8sObjs = append(k8sObjs, policy)
-		case *v1alpha1.NetworkPolicy:
+		case *v1beta1.NetworkPolicy:
 			crdObjs = append(crdObjs, policy)
 		}
 	}
@@ -652,7 +652,7 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 			switch policy := obj.(type) {
 			case *networkingv1.NetworkPolicy:
 				c.addNetworkPolicy(policy)
-			case *v1alpha1.NetworkPolicy:
+			case *v1beta1.NetworkPolicy:
 				c.addANNP(policy)
 			}
 		}

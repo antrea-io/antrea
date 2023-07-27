@@ -16,7 +16,7 @@ package types
 
 import (
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -82,7 +82,7 @@ type PolicyRule struct {
 	Service       []v1beta2.Service
 	L7Protocols   []v1beta2.L7Protocol
 	L7RuleVlanID  *uint32
-	Action        *secv1alpha1.RuleAction
+	Action        *secv1beta1.RuleAction
 	Priority      *uint16
 	Name          string
 	FlowID        uint32

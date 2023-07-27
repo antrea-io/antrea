@@ -77,6 +77,7 @@ import (
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/podstore"
 	"antrea.io/antrea/pkg/version"
 )
 
@@ -108,7 +109,7 @@ func run(o *Options) error {
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
-	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	trafficControlInformer := crdInformerFactory.Crd().V1alpha2().TrafficControls()
 	nodeInformer := informerFactory.Core().V1().Nodes()
@@ -123,7 +124,6 @@ func run(o *Options) error {
 	if *o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
-
 	// Create ovsdb and openflow clients.
 	ovsdbAddress := ovsconfig.GetConnAddress(o.config.OVSRunDir)
 	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS(ovsdbAddress)
@@ -139,6 +139,7 @@ func run(o *Options) error {
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
+	enableFLowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
 
 	nodeIPTracker := nodeip.NewTracker(nodeInformer)
 	// Bridging mode will connect the uplink interface to the OVS bridge.
@@ -156,7 +157,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
-		features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable,
+		enableFLowExporter,
 		o.config.AntreaProxy.ProxyAll,
 		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
 		connectUplinkToBridge,
@@ -164,6 +165,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
 		enableMulticlusterGW,
 		groupIDAllocator,
+		*o.config.EnablePrometheusMetrics,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -317,7 +319,7 @@ func run(o *Options) error {
 	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
 	// StretchedNetworkPolicyController, and secondary network controller.
 	var localPodInformer cache.SharedIndexInformer
-	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP ||
+	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFLowExporter ||
 		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
 		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
 		listOptions := func(options *metav1.ListOptions) {
@@ -602,7 +604,8 @@ func run(o *Options) error {
 	}
 
 	var flowExporter *exporter.FlowExporter
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
+	if enableFLowExporter {
+		podStore := podstore.NewPodStore(localPodInformer)
 		flowExporterOptions := &flowexporter.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,
@@ -612,7 +615,7 @@ func run(o *Options) error {
 			PollInterval:           o.pollInterval,
 			ConnectUplinkToBridge:  connectUplinkToBridge}
 		flowExporter, err = exporter.NewFlowExporter(
-			ifaceStore,
+			podStore,
 			proxier,
 			k8sClient,
 			nodeRouteController,
@@ -873,11 +876,11 @@ func run(o *Options) error {
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier, agentAPICertData)
 	go agentMonitor.Run(stopCh)
 
-	// Start PacketIn
-	go ofClient.StartPacketInHandler(stopCh)
+	// Start PacketIn and OVS meter stats collection for Prometheus
+	go ofClient.Run(stopCh)
 
 	// Start the goroutine to periodically export IPFIX flow records.
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
+	if enableFLowExporter {
 		go flowExporter.Run(stopCh)
 	}
 

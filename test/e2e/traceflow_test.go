@@ -34,7 +34,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -117,7 +117,7 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
 	time.Sleep(time.Second * 1)
 
-	var denyIngress *v1alpha1.NetworkPolicy
+	var denyIngress *v1beta1.NetworkPolicy
 	denyIngressName := "test-annp-deny-ingress"
 	if denyIngress, err = data.createANNPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName, false); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
@@ -130,7 +130,7 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	if err = data.waitForANNPRealized(t, data.testNamespace, denyIngressName, policyRealizedTimeout); err != nil {
 		t.Fatal(err)
 	}
-	var rejectIngress *v1alpha1.NetworkPolicy
+	var rejectIngress *v1beta1.NetworkPolicy
 	rejectIngressName := "test-annp-reject-ingress"
 	if rejectIngress, err = data.createANNPDenyIngress("antrea-e2e", node1Pods[2], rejectIngressName, true); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
@@ -2093,7 +2093,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	}
 
 	egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressIP)
-	defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	testcaseLocalEgress := testcase{
 		name:      "egressFromLocalNode",
@@ -2153,14 +2153,14 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 
 	toUpdate := egress.DeepCopy()
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		toUpdate.Spec.AppliedTo = v1alpha2.AppliedTo{
+		toUpdate.Spec.AppliedTo = v1beta1.AppliedTo{
 			PodSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"antrea-e2e": remotePodNames[0]},
 			},
 		}
-		_, err := data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		_, err := data.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if err != nil && errors.IsConflict(err) {
-			toUpdate, _ = data.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			toUpdate, _ = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 		}
 		return err
 	})
@@ -2281,22 +2281,22 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 }
 
 // createANNPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
-func (data *TestData) createANNPDenyIngress(key string, value string, name string, isReject bool) (*v1alpha1.NetworkPolicy, error) {
-	dropACT := v1alpha1.RuleActionDrop
+func (data *TestData) createANNPDenyIngress(key string, value string, name string, isReject bool) (*v1beta1.NetworkPolicy, error) {
+	dropACT := v1beta1.RuleActionDrop
 	if isReject {
-		dropACT = v1alpha1.RuleActionReject
+		dropACT = v1beta1.RuleActionReject
 	}
-	annp := v1alpha1.NetworkPolicy{
+	annp := v1beta1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
 				"antrea-e2e": name,
 			},
 		},
-		Spec: v1alpha1.NetworkPolicySpec{
+		Spec: v1beta1.NetworkPolicySpec{
 			Tier:     defaultTierName,
 			Priority: 250,
-			AppliedTo: []v1alpha1.AppliedTo{
+			AppliedTo: []v1beta1.AppliedTo{
 				{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -2305,18 +2305,18 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 					},
 				},
 			},
-			Ingress: []v1alpha1.Rule{
+			Ingress: []v1beta1.Rule{
 				{
 					Action: &dropACT,
-					Ports:  []v1alpha1.NetworkPolicyPort{},
-					From:   []v1alpha1.NetworkPolicyPeer{},
-					To:     []v1alpha1.NetworkPolicyPeer{},
+					Ports:  []v1beta1.NetworkPolicyPort{},
+					From:   []v1beta1.NetworkPolicyPeer{},
+					To:     []v1beta1.NetworkPolicyPeer{},
 				},
 			},
-			Egress: []v1alpha1.Rule{},
+			Egress: []v1beta1.Rule{},
 		},
 	}
-	annpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Create(context.TODO(), &annp, metav1.CreateOptions{})
+	annpCreated, err := k8sUtils.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Create(context.TODO(), &annp, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -2324,8 +2324,8 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 }
 
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
-func (data *TestData) deleteAntreaNetworkpolicy(policy *v1alpha1.NetworkPolicy) error {
-	if err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
+func (data *TestData) deleteAntreaNetworkpolicy(policy *v1beta1.NetworkPolicy) error {
+	if err := k8sUtils.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}
 	return nil

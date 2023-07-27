@@ -26,6 +26,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
@@ -1549,4 +1550,22 @@ func GetFlowModMessages(flows []binding.Flow, op binding.OFOperation) []*openflo
 func getFlowModMessage(flow binding.Flow, op binding.OFOperation) *openflow15.FlowMod {
 	messages := GetFlowModMessages([]binding.Flow{flow}, op)
 	return messages[0]
+}
+
+// getMeterStats sends a multipart request to get all the meter statistics and
+// sets values for antrea_agent_ovs_meter_packet_dropped_count.
+func (c *client) getMeterStats() {
+	handleMeterStatsReply := func(meterID int, packetCount int64) {
+		switch meterID {
+		case PacketInMeterIDNP:
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterNetworkPolicy").Set(float64(packetCount))
+		case PacketInMeterIDTF:
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterTraceflow").Set(float64(packetCount))
+		default:
+			klog.V(4).InfoS("Received unexpected meterID", "meterID", meterID)
+		}
+	}
+	if err := c.bridge.GetMeterStats(handleMeterStatsReply); err != nil {
+		klog.ErrorS(err, "Failed to get OVS meter stats")
+	}
 }

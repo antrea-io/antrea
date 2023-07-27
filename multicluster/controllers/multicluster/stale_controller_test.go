@@ -35,7 +35,7 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 var ctx = context.Background()
@@ -141,42 +141,42 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 		Spec: mcv1alpha1.ResourceImportSpec{
 			Name: acnpImportName,
 			Kind: constants.AntreaClusterNetworkPolicyKind,
-			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
+			ClusterNetworkPolicy: &v1beta1.ClusterNetworkPolicySpec{
 				Tier:     "securityops",
 				Priority: 1.0,
-				AppliedTo: []v1alpha1.AppliedTo{
+				AppliedTo: []v1beta1.AppliedTo{
 					{NamespaceSelector: &metav1.LabelSelector{}},
 				},
 			},
 		},
 	}
-	acnp1 := v1alpha1.ClusterNetworkPolicy{
+	acnp1 := v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        common.AntreaMCSPrefix + acnpImportName,
 			Annotations: map[string]string{common.AntreaMCACNPAnnotation: "true"},
 		},
 	}
-	acnp2 := v1alpha1.ClusterNetworkPolicy{
+	acnp2 := v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        common.AntreaMCSPrefix + "some-deleted-resimp",
 			Annotations: map[string]string{common.AntreaMCACNPAnnotation: "true"},
 		},
 	}
-	acnp3 := v1alpha1.ClusterNetworkPolicy{
+	acnp3 := v1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "non-mcs-acnp",
 		},
 	}
 	tests := []struct {
 		name                  string
-		existingACNPList      *v1alpha1.ClusterNetworkPolicyList
+		existingACNPList      *v1beta1.ClusterNetworkPolicyList
 		existingResImpList    *mcv1alpha1.ResourceImportList
 		expectedACNPRemaining sets.Set[string]
 	}{
 		{
 			name: "cleanup stale ACNP",
-			existingACNPList: &v1alpha1.ClusterNetworkPolicyList{
-				Items: []v1alpha1.ClusterNetworkPolicy{
+			existingACNPList: &v1beta1.ClusterNetworkPolicyList{
+				Items: []v1beta1.ClusterNetworkPolicy{
 					acnp1, acnp2, acnp3,
 				},
 			},
@@ -201,7 +201,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
 			}
 			ctx := context.TODO()
-			acnpList := &v1alpha1.ClusterNetworkPolicyList{}
+			acnpList := &v1beta1.ClusterNetworkPolicyList{}
 			if err := fakeClient.List(ctx, acnpList, &client.ListOptions{}); err != nil {
 				t.Errorf("Error when listing the ACNPs after cleanup")
 			}

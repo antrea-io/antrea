@@ -34,11 +34,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	egressv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	egressv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	egressinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	egresslisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	egressinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
+	egresslisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/grouping"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -122,7 +122,7 @@ func NewEgressController(crdClient clientset.Interface,
 	)
 	// externalIPPoolIndex will be used to get all Egresses associated with a given ExternalIPPool.
 	egressInformer.Informer().AddIndexers(cache.Indexers{externalIPPoolIndex: func(obj interface{}) (strings []string, e error) {
-		egress, ok := obj.(*egressv1alpha2.Egress)
+		egress, ok := obj.(*egressv1beta1.Egress)
 		if !ok {
 			return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 		}
@@ -163,7 +163,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 }
 
 // restoreIPAllocations restores the existing EgressIPs of Egresses and records the successful ones in ipAllocationMap.
-func (c *EgressController) restoreIPAllocations(egresses []*egressv1alpha2.Egress) {
+func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress) {
 	var previousIPAllocations []externalippool.IPAllocation
 	for _, egress := range egresses {
 		// Ignore Egress that is not associated to ExternalIPPool or doesn't have EgressIP assigned.
@@ -239,7 +239,7 @@ func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolNam
 }
 
 // syncEgressIP is responsible for releasing stale EgressIP and allocating new EgressIP for an Egress if applicable.
-func (c *EgressController) syncEgressIP(egress *egressv1alpha2.Egress) (net.IP, error) {
+func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, error) {
 	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
 	if exists {
 		// The EgressIP and the ExternalIPPool don't change, do nothing.
@@ -296,7 +296,7 @@ func (c *EgressController) syncEgressIP(egress *egressv1alpha2.Egress) (net.IP, 
 }
 
 // updateEgressIP updates the Egress's EgressIP in Kubernetes API.
-func (c *EgressController) updateEgressIP(egress *egressv1alpha2.Egress, ip string) error {
+func (c *EgressController) updateEgressIP(egress *egressv1beta1.Egress, ip string) error {
 	var egressIPPtr *string
 	if len(ip) > 0 {
 		egressIPPtr = &ip
@@ -307,7 +307,7 @@ func (c *EgressController) updateEgressIP(egress *egressv1alpha2.Egress, ip stri
 		},
 	}
 	patchBytes, _ := json.Marshal(patch)
-	if _, err := c.crdClient.CrdV1alpha2().Egresses().Patch(context.TODO(), egress.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
+	if _, err := c.crdClient.CrdV1beta1().Egresses().Patch(context.TODO(), egress.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("error when updating EgressIP for Egress %s: %v", egress.Name, err)
 	}
 	return nil
@@ -401,7 +401,7 @@ func (c *EgressController) enqueueEgressGroup(key string) {
 
 // addEgress processes Egress ADD events and creates corresponding EgressGroup.
 func (c *EgressController) addEgress(obj interface{}) {
-	egress := obj.(*egressv1alpha2.Egress)
+	egress := obj.(*egressv1beta1.Egress)
 	klog.InfoS("Processing Egress ADD event", "egress", egress.Name, "selector", egress.Spec.AppliedTo)
 	// Create an EgressGroup object corresponding to this Egress and enqueue task to the workqueue.
 	egressGroup := &antreatypes.EgressGroup{
@@ -417,8 +417,8 @@ func (c *EgressController) addEgress(obj interface{}) {
 
 // updateEgress processes Egress UPDATE events and updates corresponding EgressGroup.
 func (c *EgressController) updateEgress(old, cur interface{}) {
-	oldEgress := old.(*egressv1alpha2.Egress)
-	curEgress := cur.(*egressv1alpha2.Egress)
+	oldEgress := old.(*egressv1beta1.Egress)
+	curEgress := cur.(*egressv1beta1.Egress)
 	klog.InfoS("Processing Egress UPDATE event", "egress", curEgress.Name, "selector", curEgress.Spec.AppliedTo)
 	// TODO: Define custom Equal function to be more efficient.
 	if !reflect.DeepEqual(oldEgress.Spec.AppliedTo, curEgress.Spec.AppliedTo) {
@@ -433,7 +433,7 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events and deletes corresponding EgressGroup.
 func (c *EgressController) deleteEgress(obj interface{}) {
-	egress := obj.(*egressv1alpha2.Egress)
+	egress := obj.(*egressv1beta1.Egress)
 	klog.InfoS("Processing Egress DELETE event", "egress", egress.Name)
 	c.egressGroupStore.Delete(egress.Name)
 	// Unregister the group from the grouping interface.
@@ -445,7 +445,7 @@ func (c *EgressController) deleteEgress(obj interface{}) {
 func (c *EgressController) enqueueEgresses(poolName string) {
 	objects, _ := c.egressIndexer.ByIndex(externalIPPoolIndex, poolName)
 	for _, object := range objects {
-		egress := object.(*egressv1alpha2.Egress)
+		egress := object.(*egressv1beta1.Egress)
 		c.queue.Add(egress.Name)
 	}
 }
