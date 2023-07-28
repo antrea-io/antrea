@@ -33,3 +33,5 @@ type GroupExpansion interface{}
 type NetworkPolicyExpansion interface{}
 
 type TierExpansion interface{}
+
+type TraceflowExpansion interface{}

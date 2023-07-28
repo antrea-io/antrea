@@ -62,6 +62,10 @@ func (c *FakeCrdV1beta1) Tiers() v1beta1.TierInterface {
 	return &FakeTiers{c}
 }
 
+func (c *FakeCrdV1beta1) Traceflows() v1beta1.TraceflowInterface {
+	return &FakeTraceflows{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeCrdV1beta1) RESTClient() rest.Interface {

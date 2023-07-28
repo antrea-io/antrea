@@ -40,6 +40,8 @@ type Interface interface {
 	NetworkPolicies() NetworkPolicyInformer
 	// Tiers returns a TierInformer.
 	Tiers() TierInformer
+	// Traceflows returns a TraceflowInformer.
+	Traceflows() TraceflowInformer
 }
 
 type version struct {
@@ -96,4 +98,9 @@ func (v *version) NetworkPolicies() NetworkPolicyInformer {
 // Tiers returns a TierInformer.
 func (v *version) Tiers() TierInformer {
 	return &tierInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Traceflows returns a TraceflowInformer.
+func (v *version) Traceflows() TraceflowInformer {
+	return &traceflowInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

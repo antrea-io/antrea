@@ -32,12 +32,13 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	"antrea.io/antrea/pkg/agent/util"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/features"
@@ -99,7 +100,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	mockOFClient := openflowtest.NewMockClient(controller)
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
+	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
 	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
 	ifaceStore := interfacestore.NewInterfaceStore()
@@ -123,7 +124,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		nodeConfig:            nodeConfig,
 		serviceCIDR:           serviceCIDRNet,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
-		runningTraceflows:     make(map[uint8]*traceflowState),
+		runningTraceflows:     make(map[int8]*traceflowState),
 	}
 
 	return &fakeTraceflowController{
@@ -153,7 +154,7 @@ func addPodInterface(ifaceStore interfacestore.InterfaceStore, podNamespace, pod
 func TestPreparePacket(t *testing.T) {
 	tcs := []struct {
 		name           string
-		tf             *crdv1alpha1.Traceflow
+		tf             *crdv1beta1.Traceflow
 		intf           *interfacestore.InterfaceConfig
 		receiverOnly   bool
 		expectedPacket *binding.Packet
@@ -161,14 +162,14 @@ func TestPreparePacket(t *testing.T) {
 	}{
 		{
 			name: "invalid destination IPv4",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						IP: "1.1.1.300",
 					},
 				},
@@ -177,10 +178,10 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "empty destination with no live traffic",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf2", UID: "uid2"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
@@ -190,16 +191,17 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "receive only from a source IPv4 to destination Pod1 in live traffic traceflow",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						IP: "192.168.12.4",
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Pod: pod1.Name,
 					},
 					LiveTraffic: true,
+					Packet:      crdv1beta1.Packet{IPHeader: &crdv1beta1.IPHeader{}},
 				},
 			},
 			receiverOnly: true,
@@ -210,23 +212,23 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "tcp packet",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
-					Packet: crdv1alpha1.Packet{
-						TransportHeader: crdv1alpha1.TransportHeader{
-							TCP: &crdv1alpha1.TCPHeader{
+					Packet: crdv1beta1.Packet{
+						TransportHeader: crdv1beta1.TransportHeader{
+							TCP: &crdv1beta1.TCPHeader{
 								SrcPort: 80,
 								DstPort: 81,
-								Flags:   11,
+								Flags:   pointer.Int32(11),
 							},
 						},
 					},
@@ -246,20 +248,20 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "tcp packet without flag",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
-					Packet: crdv1alpha1.Packet{
-						TransportHeader: crdv1alpha1.TransportHeader{
-							TCP: &crdv1alpha1.TCPHeader{
+					Packet: crdv1beta1.Packet{
+						TransportHeader: crdv1beta1.TransportHeader{
+							TCP: &crdv1beta1.TCPHeader{
 								SrcPort: 80,
 								DstPort: 81,
 							},
@@ -281,20 +283,20 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "udp packet",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf5", UID: "uid5"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
-					Packet: crdv1alpha1.Packet{
-						TransportHeader: crdv1alpha1.TransportHeader{
-							UDP: &crdv1alpha1.UDPHeader{
+					Packet: crdv1beta1.Packet{
+						TransportHeader: crdv1beta1.TransportHeader{
+							UDP: &crdv1beta1.UDPHeader{
 								SrcPort: 90,
 								DstPort: 100,
 							},
@@ -315,20 +317,20 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "icmp packet",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf6", UID: "uid6"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
-					Packet: crdv1alpha1.Packet{
-						TransportHeader: crdv1alpha1.TransportHeader{
-							ICMP: &crdv1alpha1.ICMPEchoRequestHeader{
+					Packet: crdv1beta1.Packet{
+						TransportHeader: crdv1beta1.TransportHeader{
+							ICMP: &crdv1beta1.ICMPEchoRequestHeader{
 								ID:       10,
 								Sequence: 20,
 							},
@@ -350,7 +352,7 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "source Pod without IPv4 address",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf7", UID: "uid7"},
 			},
 			intf:        &interfacestore.InterfaceConfig{},
@@ -358,11 +360,11 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "source Pod without IPv6 address",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf8", UID: "uid8"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Packet: crdv1alpha1.Packet{
-						IPv6Header: &crdv1alpha1.IPv6Header{},
+				Spec: crdv1beta1.TraceflowSpec{
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{},
 					},
 				},
 			},
@@ -371,15 +373,15 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "destination IP family different from packet",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf9", UID: "uid9"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						IP: "192.168.1.2",
 					},
 					LiveTraffic: true,
-					Packet: crdv1alpha1.Packet{
-						IPv6Header: &crdv1alpha1.IPv6Header{},
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{},
 					},
 				},
 			},
@@ -387,15 +389,15 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "source IP family different from packet for receiver only case",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf10", UID: "uid10"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						IP: "192.168.1.2",
 					},
 					LiveTraffic: true,
-					Packet: crdv1alpha1.Packet{
-						IPv6Header: &crdv1alpha1.IPv6Header{},
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{},
 					},
 				},
 			},
@@ -404,10 +406,10 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "destination Pod unavailable",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf11", UID: "uid11"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						Pod:       "unknown pod",
 						Namespace: "default",
 					},
@@ -417,10 +419,10 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "destination Pod without IPv4 address in live traffic traceflow",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf12", UID: "uid12"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						Pod:       pod3.Name,
 						Namespace: pod3.Namespace,
 					},
@@ -431,16 +433,16 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "destination Pod without IPv6 address in live traffic traceflow",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf13", UID: "uid13"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						Pod:       pod3.Name,
 						Namespace: pod3.Namespace,
 					},
 					LiveTraffic: true,
-					Packet: crdv1alpha1.Packet{
-						IPv6Header: &crdv1alpha1.IPv6Header{},
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{},
 					},
 				},
 			},
@@ -448,19 +450,19 @@ func TestPreparePacket(t *testing.T) {
 		},
 		{
 			name: "Pod-to-IPv6 liveTraffic traceflow",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf14", UID: "uid14"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						IP: "2001:db8::68",
 					},
 					LiveTraffic: true,
-					Packet: crdv1alpha1.Packet{
-						IPv6Header: &crdv1alpha1.IPv6Header{
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{
 							NextHeader: &protocolICMPv6,
 						},
 					},
@@ -495,29 +497,29 @@ func TestPreparePacket(t *testing.T) {
 }
 
 func TestErrTraceflowCRD(t *testing.T) {
-	tf := &crdv1alpha1.Traceflow{
+	tf := &crdv1beta1.Traceflow{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "tf",
 			UID:  "uid",
 		},
-		Spec: crdv1alpha1.TraceflowSpec{
-			Source: crdv1alpha1.Source{
+		Spec: crdv1beta1.TraceflowSpec{
+			Source: crdv1beta1.Source{
 				Namespace: pod1.Namespace,
 				Pod:       pod1.Name,
 			},
-			Destination: crdv1alpha1.Destination{
+			Destination: crdv1beta1.Destination{
 				Namespace: pod2.Namespace,
 				Pod:       pod2.Name,
 			},
 		},
-		Status: crdv1alpha1.TraceflowStatus{
-			Phase:        crdv1alpha1.Running,
+		Status: crdv1beta1.TraceflowStatus{
+			Phase:        crdv1beta1.Running,
 			DataplaneTag: 1,
 		},
 	}
 	expectedTf := tf
 	reason := "failed"
-	expectedTf.Status.Phase = crdv1alpha1.Failed
+	expectedTf.Status.Phase = crdv1beta1.Failed
 	expectedTf.Status.Reason = reason
 
 	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil, nil, nil)
@@ -530,7 +532,7 @@ func TestErrTraceflowCRD(t *testing.T) {
 func TestStartTraceflow(t *testing.T) {
 	tcs := []struct {
 		name           string
-		tf             *crdv1alpha1.Traceflow
+		tf             *crdv1beta1.Traceflow
 		ofPort         uint32
 		receiverOnly   bool
 		packet         *binding.Packet
@@ -541,20 +543,20 @@ func TestStartTraceflow(t *testing.T) {
 	}{
 		{
 			name: "Pod-to-Pod traceflow",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
 				},
-				Status: crdv1alpha1.TraceflowStatus{
-					Phase:        crdv1alpha1.Running,
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
 					DataplaneTag: 1,
 				},
 			},
@@ -569,7 +571,7 @@ func TestStartTraceflow(t *testing.T) {
 				ICMPType:       8,
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
-				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, crdv1alpha1.DefaultTraceflowTimeout)
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
 				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
 					SourceIP:       net.ParseIP(pod1IPv4),
 					SourceMAC:      pod1MAC,
@@ -583,19 +585,19 @@ func TestStartTraceflow(t *testing.T) {
 		},
 		{
 			name: "Pod-to-IPv4 traceflow",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf2", UID: "uid2"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						IP: dstIPv4,
 					},
 				},
-				Status: crdv1alpha1.TraceflowStatus{
-					Phase:        crdv1alpha1.Running,
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
 					DataplaneTag: 1,
 				},
 			},
@@ -609,7 +611,7 @@ func TestStartTraceflow(t *testing.T) {
 				ICMPType:      8,
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
-				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, crdv1alpha1.DefaultTraceflowTimeout)
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, ofPortPod1, uint16(crdv1beta1.DefaultTraceflowTimeout))
 				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), &binding.Packet{
 					SourceIP:      net.ParseIP(pod1IPv4),
 					SourceMAC:     pod1MAC,
@@ -622,17 +624,17 @@ func TestStartTraceflow(t *testing.T) {
 		},
 		{
 			name: "empty source and destination Pod",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
 			},
 			expectedErrLog: "Traceflow tf3 has neither source nor destination Pod specified",
 		},
 		{
 			name: "empty source Pod",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
@@ -642,19 +644,19 @@ func TestStartTraceflow(t *testing.T) {
 		},
 		{
 			name: "invalid destination IPv4",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf5", UID: "uid5"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						IP: "192.168.1.300",
 					},
 				},
-				Status: crdv1alpha1.TraceflowStatus{
-					Phase:        crdv1alpha1.Running,
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
 					DataplaneTag: 1,
 				},
 			},
@@ -665,23 +667,23 @@ func TestStartTraceflow(t *testing.T) {
 		},
 		{
 			name: "live traceflow receive only",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf6", UID: "uid6"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
 					LiveTraffic: true,
 				},
-				Status: crdv1alpha1.TraceflowStatus{
-					Phase:        crdv1alpha1.Running,
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
 					DataplaneTag: 1,
 				},
 			},
 			ofPort: ofPortPod2,
 			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
-				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, false, true, &binding.Packet{DestinationMAC: pod2MAC}, ofPortPod2, crdv1alpha1.DefaultTraceflowTimeout)
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), true, false, true, &binding.Packet{DestinationMAC: pod2MAC}, ofPortPod2, uint16(crdv1beta1.DefaultTraceflowTimeout))
 			},
 		},
 	}
@@ -717,26 +719,26 @@ func TestStartTraceflow(t *testing.T) {
 func TestSyncTraceflow(t *testing.T) {
 	tcs := []struct {
 		name          string
-		tf            *crdv1alpha1.Traceflow
+		tf            *crdv1beta1.Traceflow
 		tfState       *traceflowState
 		expectedCalls func(mockOFClient *openflowtest.MockClient)
 	}{
 		{
 			name: "traceflow in running phase",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
 				},
-				Status: crdv1alpha1.TraceflowStatus{
-					Phase:        crdv1alpha1.Running,
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
 					DataplaneTag: 1,
 				},
 			},
@@ -747,20 +749,20 @@ func TestSyncTraceflow(t *testing.T) {
 		},
 		{
 			name: "traceflow in failed phase",
-			tf: &crdv1alpha1.Traceflow{
+			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
-				Spec: crdv1alpha1.TraceflowSpec{
-					Source: crdv1alpha1.Source{
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1alpha1.Destination{
+					Destination: crdv1beta1.Destination{
 						Namespace: pod2.Namespace,
 						Pod:       pod2.Name,
 					},
 				},
-				Status: crdv1alpha1.TraceflowStatus{
-					Phase:        crdv1alpha1.Failed,
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Failed,
 					DataplaneTag: 1,
 				},
 			},
@@ -795,26 +797,26 @@ func TestSyncTraceflow(t *testing.T) {
 
 func TestProcessTraceflowItem(t *testing.T) {
 	tc := struct {
-		tf           *crdv1alpha1.Traceflow
+		tf           *crdv1beta1.Traceflow
 		ofPort       uint32
 		receiverOnly bool
 		packet       *binding.Packet
 		expected     bool
 	}{
-		tf: &crdv1alpha1.Traceflow{
+		tf: &crdv1beta1.Traceflow{
 			ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
-			Spec: crdv1alpha1.TraceflowSpec{
-				Source: crdv1alpha1.Source{
+			Spec: crdv1beta1.TraceflowSpec{
+				Source: crdv1beta1.Source{
 					Namespace: pod1.Namespace,
 					Pod:       pod1.Name,
 				},
-				Destination: crdv1alpha1.Destination{
+				Destination: crdv1beta1.Destination{
 					Namespace: pod2.Namespace,
 					Pod:       pod2.Name,
 				},
 			},
-			Status: crdv1alpha1.TraceflowStatus{
-				Phase:        crdv1alpha1.Running,
+			Status: crdv1beta1.TraceflowStatus{
+				Phase:        crdv1beta1.Running,
 				DataplaneTag: 1,
 			},
 		},
@@ -837,8 +839,8 @@ func TestProcessTraceflowItem(t *testing.T) {
 	tfc.crdInformerFactory.Start(stopCh)
 	tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 
-	tfc.mockOFClient.EXPECT().InstallTraceflowFlows(tc.tf.Status.DataplaneTag, tc.tf.Spec.LiveTraffic, tc.tf.Spec.DroppedOnly, tc.receiverOnly, nil, tc.ofPort, crdv1alpha1.DefaultTraceflowTimeout)
-	tfc.mockOFClient.EXPECT().SendTraceflowPacket(tc.tf.Status.DataplaneTag, tc.packet, tc.ofPort, int32(-1))
+	tfc.mockOFClient.EXPECT().InstallTraceflowFlows(uint8(tc.tf.Status.DataplaneTag), tc.tf.Spec.LiveTraffic, tc.tf.Spec.DroppedOnly, tc.receiverOnly, nil, tc.ofPort, uint16(crdv1beta1.DefaultTraceflowTimeout))
+	tfc.mockOFClient.EXPECT().SendTraceflowPacket(uint8(tc.tf.Status.DataplaneTag), tc.packet, tc.ofPort, int32(-1))
 	tfc.enqueueTraceflow(tc.tf)
 	got := tfc.processTraceflowItem()
 	assert.Equal(t, tc.expected, got)
@@ -847,15 +849,15 @@ func TestProcessTraceflowItem(t *testing.T) {
 func TestValidateTraceflow(t *testing.T) {
 	tcs := []struct {
 		name               string
-		tf                 *crdv1alpha1.Traceflow
+		tf                 *crdv1beta1.Traceflow
 		antreaProxyEnabled bool
 		expectedErr        string
 	}{
 		{
 			name: "AntreaProxy feature disabled with destination as service",
-			tf: &crdv1alpha1.Traceflow{
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+			tf: &crdv1beta1.Traceflow{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						Service: "svcTest",
 					},
 				},
@@ -864,9 +866,9 @@ func TestValidateTraceflow(t *testing.T) {
 		},
 		{
 			name: "invalid destination IPv4",
-			tf: &crdv1alpha1.Traceflow{
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+			tf: &crdv1beta1.Traceflow{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						IP: "192.168.1.300",
 					},
 				},
@@ -876,9 +878,9 @@ func TestValidateTraceflow(t *testing.T) {
 		},
 		{
 			name: "AntreaProxy feature disabled with ClusterIP destination",
-			tf: &crdv1alpha1.Traceflow{
-				Spec: crdv1alpha1.TraceflowSpec{
-					Destination: crdv1alpha1.Destination{
+			tf: &crdv1beta1.Traceflow{
+				Spec: crdv1beta1.TraceflowSpec{
+					Destination: crdv1beta1.Destination{
 						IP: "10.96.1.1",
 					},
 				},
