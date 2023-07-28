@@ -51,4 +51,6 @@ COPY --from=antrea-build-windows /wins/wins.exe /k/antrea/utils/wins.exe
 COPY --from=windows-ovs /Windows/System32/vcruntime140.dll /Windows/System32/
 COPY --from=windows-ovs /Windows/System32/libeay32.dll /Windows/System32/
 COPY --from=windows-ovs /Windows/System32/ssleay32.dll /Windows/System32/
-COPY --from=windows-ovs /openvswitch/usr/bin /k/antrea/bin/
+
+RUN mkdir C:\openvswitch
+COPY --from=windows-ovs /openvswitch /openvswitch/
