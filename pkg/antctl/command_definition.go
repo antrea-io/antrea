@@ -72,6 +72,7 @@ const (
 	get
 	query
 	mc
+	upgrade
 )
 
 var groupCommands = map[commandGroup]*cobra.Command{
@@ -89,6 +90,11 @@ var groupCommands = map[commandGroup]*cobra.Command{
 		Use:   "mc",
 		Short: "Sub-commands of multi-cluster feature",
 		Long:  "Sub-commands of multi-cluster feature",
+	},
+	upgrade: {
+		Use:   "upgrade",
+		Short: "Sub-commands for upgrade operations",
+		Long:  "Sub-commands for upgrade operations",
 	},
 }
 
