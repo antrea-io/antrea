@@ -20,13 +20,18 @@ package util
 import (
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"testing"
+
+	antreasyscalltest "antrea.io/antrea/pkg/agent/util/syscall/testing"
 
 	"github.com/Microsoft/hcsshim"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/windows"
 
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	"antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -40,6 +45,19 @@ func TestRouteString(t *testing.T) {
 	}
 	gotRoute := testRoute.String()
 	assert.Equal(t, "LinkIndex: 1, DestinationSubnet: 192.168.2.0/24, GatewayAddress: 192.168.2.0, RouteMetric: 256", gotRoute)
+}
+
+func TestRouteTranslation(t *testing.T) {
+	_, subnet, _ := net.ParseCIDR("1.1.1.0/28")
+	oriRoute := &Route{
+		LinkIndex:         27,
+		RouteMetric:       35,
+		DestinationSubnet: subnet,
+		GatewayAddress:    net.ParseIP("1.1.1.254"),
+	}
+	row := oriRoute.toMibIPForwardRow()
+	newRoute := routeFromIPForwardRow(row)
+	assert.Equal(t, oriRoute, newRoute)
 }
 
 func TestNeighborString(t *testing.T) {
@@ -70,12 +88,12 @@ func TestIsVirtualAdapter(t *testing.T) {
 		wantIsVirtual bool
 	}{
 		{
-			name:          "Virtual Adapter",
+			name:          "Virtual adapter",
 			commandOut:    " true ",
 			wantIsVirtual: true,
 		},
 		{
-			name:          "Virtual Adapter Err",
+			name:          "Virtual adapter Err",
 			commandErr:    testInvalidErr,
 			wantIsVirtual: false,
 		},
@@ -230,7 +248,7 @@ func TestSetAdapterMACAddress(t *testing.T) {
 		wantErr    error
 	}{
 		{
-			name:       "Set Adapter MAC",
+			name:       "Set adapter MAC",
 			commandOut: "success",
 		},
 		{
@@ -262,7 +280,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 		GatewayAddress:    gw,
 		RouteMetric:       MetricDefault,
 	}}
-	testRoutes := createTestRoutes(routes)
+	testRoutes := convertTestRoutes(routes)
 	testSubnetCIDR := &net.IPNet{
 		IP:   net.ParseIP("8.8.8.7"),
 		Mask: net.CIDRMask(32, 32),
@@ -282,8 +300,6 @@ func TestPrepareHNSNetwork(t *testing.T) {
 	}
 	newIPCmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s -DefaultGateway %s`, VirtualAdapterName("0"), nodeZeroIPNetStr[0], nodeZeroIPNetStr[1], "testGateway")
 	setServerCmd := fmt.Sprintf(`Set-DnsClientServerAddress -InterfaceAlias "%s" -ServerAddresses "%s"`, VirtualAdapterName("0"), testDNSServer)
-	newRouteCmd := fmt.Sprintf("New-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop %v -RouteMetric %d -Verbose",
-		routes[0].LinkIndex, routes[0].DestinationSubnet.String(), routes[0].GatewayAddress.String(), routes[0].RouteMetric)
 	getAdapterCmd := fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -SwitchName "%s" | ? MacAddress -EQ "%s" | Select-Object -Property Name | Format-Table -HideTableHeaders`, LocalHNSNetwork, testUplinkMACStr)
 	renameAdapterCmd := fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -Name "%s" | Rename-VMNetworkAdapter -NewName "%s"`, testAdapterName, testNewName)
 	renameNetCmd := fmt.Sprintf(`Get-NetAdapter -Name "%s" | Rename-NetAdapter -NewName "%s"`, VirtualAdapterName(testNewName), testNewName)
@@ -299,6 +315,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 		commandErr             error
 		hnsNetworkRequestError error
 		testNetInterfaceErr    error
+		createRowErr           error
 		wantCmds               []string
 		wantErr                error
 	}{
@@ -320,7 +337,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			wantErr:             fmt.Errorf("error creating HNSNetwork: invalid"),
 		},
 		{
-			name:                "Adapter Err",
+			name:                "adapter Err",
 			nodeIPNet:           &ipv4PublicIPNet,
 			dnsServers:          testDNSServer,
 			ipFound:             true,
@@ -359,7 +376,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			nodeIPNet:  &ipv4ZeroIPNet,
 			dnsServers: testDNSServer,
 			ipFound:    false,
-			wantCmds:   []string{newIPCmd, setServerCmd, newRouteCmd, getVMCmd, setVMCmd},
+			wantCmds:   []string{newIPCmd, setServerCmd, getVMCmd, setVMCmd},
 		},
 		{
 			name:       "IP Not Found Configure Default Err",
@@ -371,7 +388,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			wantErr:    testInvalidErr,
 		},
 		{
-			name:       "IP Not Found Set Adapter Err",
+			name:       "IP Not Found Set adapter Err",
 			nodeIPNet:  &ipv4ZeroIPNet,
 			dnsServers: testDNSServer,
 			ipFound:    false,
@@ -380,12 +397,12 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			wantErr:    alreadyExistsErr,
 		},
 		{
-			name:       "IP Not Found New Net Route Err",
-			nodeIPNet:  &ipv4ZeroIPNet,
-			ipFound:    false,
-			commandErr: alreadyExistsErr,
-			wantCmds:   []string{newIPCmd, newRouteCmd},
-			wantErr:    alreadyExistsErr,
+			name:         "IP Not Found New Net Route Err",
+			nodeIPNet:    &ipv4ZeroIPNet,
+			ipFound:      false,
+			createRowErr: fmt.Errorf("ip route not found"),
+			wantCmds:     []string{newIPCmd},
+			wantErr:      fmt.Errorf("failed to create new IPForward row: ip route not found"),
 		},
 	}
 
@@ -397,25 +414,62 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			defer mockHNSNetworkRequest(nil, tc.hnsNetworkRequestError)()
 			defer mockHNSNetworkCreate(tc.hnsNetworkCreateErr)()
 			defer mockHNSNetworkDelete(nil)()
+			defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{CreateIPForwardEntryErr: tc.createRowErr})()
 			gotErr := PrepareHNSNetwork(testSubnetCIDR, tc.nodeIPNet, testUplinkAdapter, "testGateway", tc.dnsServers, testRoutes, tc.newName)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}
 }
 
-func TestInterfaceIndexing(t *testing.T) {
+func TestGetDefaultGatewayByInterfaceIndex(t *testing.T) {
+	_, subnet, _ := net.ParseCIDR("0.0.0.0/0")
+	testIndex := uint32(27)
+	testIPForwardRow := createTestMibIPForwardRow(testIndex, subnet, net.ParseIP("1.1.1.254"))
+	listIPForwardRowsErr := fmt.Errorf("unable to list Windows IPForward rows: ip route not found")
+	tests := []struct {
+		name        string
+		listRows    []antreasyscall.MibIPForwardRow
+		listRowsErr error
+		wantGateway string
+		wantErr     error
+	}{
+		{
+			name:        "Index Success",
+			listRows:    []antreasyscall.MibIPForwardRow{testIPForwardRow},
+			wantGateway: "1.1.1.254",
+		},
+		{
+			name:        "Index Error",
+			listRowsErr: fmt.Errorf("ip route not found"),
+			wantErr:     listIPForwardRowsErr,
+		},
+		{
+			name:     "Routes not found",
+			listRows: []antreasyscall.MibIPForwardRow{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{ListIPForwardRowsErr: tc.listRowsErr, IPForwardRows: tc.listRows})()
+			gotGateway, err := GetDefaultGatewayByInterfaceIndex((int)(testIndex))
+			assert.Equal(t, tc.wantGateway, gotGateway)
+			assert.Equal(t, tc.wantErr, err)
+		})
+	}
+}
+
+func TestGetDNServersByInterfaceIndex(t *testing.T) {
 	testIndex := 1
 	tests := []struct {
 		name          string
 		commandOut    string
 		commandErr    error
-		wantDefaultGW string
 		wantDNSServer string
 	}{
 		{
 			name:          "Index Success",
 			commandOut:    "hello\r\nworld\r\n\r\n",
-			wantDefaultGW: "helloworld",
 			wantDNSServer: "hello,world",
 		},
 		{
@@ -428,13 +482,8 @@ func TestInterfaceIndexing(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockRunCommand(t, []string{
-				fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", testIndex),
 				fmt.Sprintf("$(Get-DnsClientServerAddress -InterfaceIndex %d -AddressFamily IPv4).ServerAddresses", testIndex),
 			}, tc.commandOut, tc.commandErr, true)()
-			gotDefaultGW, err := GetDefaultGatewayByInterfaceIndex(testIndex)
-			assert.Equal(t, tc.wantDefaultGW, gotDefaultGW)
-			assert.Equal(t, tc.commandErr, err)
-
 			gotDNSServer, err := GetDNServersByInterfaceIndex(testIndex)
 			assert.Equal(t, tc.wantDNSServer, gotDNSServer)
 			assert.Equal(t, tc.commandErr, err)
@@ -443,153 +492,146 @@ func TestInterfaceIndexing(t *testing.T) {
 }
 
 func TestHostInterfaceExists(t *testing.T) {
-	generateWantCmd := func(str string) []string {
-		return []string{fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s"`, str)}
-	}
 	tests := []struct {
 		name                 string
 		testNetInterfaceName string
-		testNetInterfaceErr  error
-		commandErr           error
-		wantCmds             []string
-		wantExists           bool
+		testAdapterAddresses *windows.IpAdapterAddresses
 	}{
 		{
 			name:                 "Normal Exist",
 			testNetInterfaceName: "host",
-			wantExists:           true,
+			testAdapterAddresses: createTestAdapterAddresses("host"),
 		},
 		{
-			name:                 "Container vnic",
-			testNetInterfaceName: "vnic",
-			testNetInterfaceErr:  fmt.Errorf("not found"),
-			wantCmds:             generateWantCmd("vnic"),
-			wantExists:           true,
-		},
-		{
-			name:                 "Interface not exist",
-			testNetInterfaceName: "0",
-			testNetInterfaceErr:  fmt.Errorf("not found"),
-			commandErr:           testInvalidErr,
-			wantCmds:             generateWantCmd("0"),
-			wantExists:           false,
+			name: "Interface not exist",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			defer mockRunCommand(t, tc.wantCmds, "success", tc.commandErr, true)()
-			defer mockNetInterfaceByName(&net.Interface{}, tc.testNetInterfaceErr)()
+			defer mockGetAdaptersAddresses(tc.testAdapterAddresses, nil)()
 			gotExists := HostInterfaceExists(tc.testNetInterfaceName)
-			assert.Equal(t, tc.wantExists, gotExists)
+			assert.Equal(t, tc.testNetInterfaceName != "", gotExists)
 		})
 	}
 }
 
 func TestSetInterfaceMTU(t *testing.T) {
+	testName := "host"
+	testAdapterAddresses := createTestAdapterAddresses(testName)
+	testMTU := 2
 	tests := []struct {
-		name       string
-		commandOut string
-		commandErr error
-		wantErr    error
+		name                 string
+		testNetInterfaceName string
+		testAdapterAddresses *windows.IpAdapterAddresses
+		getIPInterfaceErr    error
+		setIPInterfaceErr    error
+		wantErr              error
 	}{
 		{
-			name:       "Set Interface MTU",
-			commandOut: "success",
+			name:                 "Set Success",
+			testNetInterfaceName: testName,
+			testAdapterAddresses: testAdapterAddresses,
 		},
 		{
-			name:       "Set Err",
-			commandErr: testInvalidErr,
-			wantErr:    testInvalidErr,
+			name: "Interface name invalid",
+			wantErr: fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %v", "",
+				&net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errInvalidInterfaceName}),
+		},
+		{
+			name:                 "Get Interface Err",
+			testNetInterfaceName: testName,
+			testAdapterAddresses: testAdapterAddresses,
+			getIPInterfaceErr:    fmt.Errorf("IP interface not found"),
+			wantErr: fmt.Errorf("unable to set IPInterface with MTU %d: %v", testMTU,
+				fmt.Errorf("unable to get IPInterface entry with Index %d: IP interface not found", (int)(testAdapterAddresses.IfIndex))),
+		},
+		{
+			name:                 "Set Interface Err",
+			testNetInterfaceName: testName,
+			testAdapterAddresses: testAdapterAddresses,
+			setIPInterfaceErr:    fmt.Errorf("IP interface set error"),
+			wantErr:              fmt.Errorf("unable to set IPInterface with MTU %d: IP interface set error", testMTU),
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			defer mockRunCommand(t, []string{
-				fmt.Sprintf("Set-NetIPInterface -IncludeAllCompartments -InterfaceAlias \"%s\" -NlMtuBytes %d",
-					"test", 1),
-			}, tc.commandOut, tc.commandErr, true)()
-			gotErr := SetInterfaceMTU("test", 1)
+			defer mockGetAdaptersAddresses(tc.testAdapterAddresses, nil)()
+			defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{GetIPInterfaceEntryErr: tc.getIPInterfaceErr, SetIPInterfaceEntryErr: tc.setIPInterfaceErr})()
+			gotErr := SetInterfaceMTU(tc.testNetInterfaceName, testMTU)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}
 }
 
 func TestReplaceNetRoute(t *testing.T) {
-	_, testSubnet, _ := net.ParseCIDR("192.168.2.0/32")
-	testRoute := &Route{
-		LinkIndex:         0,
-		DestinationSubnet: testSubnet,
-		GatewayAddress:    net.ParseIP("192.168.2.0"),
+	_, subnet, _ := net.ParseCIDR("1.1.1.0/28")
+	testIP := net.ParseIP("1.1.1.254")
+	testIndex := uint32(27)
+	testIPForwardRow := createTestMibIPForwardRow(testIndex, subnet, testIP)
+	testRoute := Route{
+		LinkIndex:         (int)(testIPForwardRow.Index),
+		DestinationSubnet: subnet,
+		GatewayAddress:    net.ParseIP("1.1.1.254"),
 		RouteMetric:       MetricDefault,
 	}
-	getCmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -DestinationPrefix %s -ErrorAction Ignore | Format-Table -HideTableHeaders",
-		testRoute.LinkIndex, testRoute.DestinationSubnet.String())
-	newCmd := fmt.Sprintf("New-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop %v -RouteMetric %d -Verbose",
-		testRoute.LinkIndex, testRoute.DestinationSubnet.String(), testRoute.GatewayAddress.String(), testRoute.RouteMetric)
-	removeCmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -Verbose -Confirm:$false",
-		testRoute.LinkIndex, testRoute.DestinationSubnet.String())
+	listIPForwardRowsErr := fmt.Errorf("unable to list Windows IPForward rows: unable to list IP forward entry")
+	deleteIPForwardEntryErr := fmt.Errorf("failed to delete existing route with nextHop %s: unable to delete IP forward entry", testRoute.GatewayAddress)
+	createIPForwardEntryErr := fmt.Errorf("failed to create new IPForward row: unable to create IP forward entry")
 	tests := []struct {
-		name       string
-		route      *Route
-		commandOut string
-		commandErr error
-		wantCmds   []string
-		wantErrStr string
+		name               string
+		listRows           []antreasyscall.MibIPForwardRow
+		listRowsErr        error
+		createIPForwardErr error
+		deleteIPForwardErr error
+		wantErr            error
 	}{
 		{
-			name:       "Replace Route",
-			route:      testRoute,
-			commandOut: "0 192.168.1.0/24 192.168.1.0 256 nil nil",
-			wantCmds:   []string{getCmd, removeCmd, newCmd},
+			name:     "Replace Success",
+			listRows: []antreasyscall.MibIPForwardRow{createTestMibIPForwardRow(testIndex, subnet, net.ParseIP("1.1.1.1"))},
 		},
 		{
-			name:       "Get Route Err",
-			route:      testRoute,
-			commandOut: "err 192.168.1.0/24 192.168.1.0 256 nil nil",
-			wantCmds:   []string{getCmd},
-			wantErrStr: "failed to parse the LinkIndex",
+			name:     "Same GatewayAddress",
+			listRows: []antreasyscall.MibIPForwardRow{createTestMibIPForwardRow(testIndex, subnet, testIP)},
 		},
 		{
-			name:     "Get Route Not Exist",
-			route:    testRoute,
-			wantCmds: []string{getCmd, newCmd},
+			name:        "List Rows Err",
+			listRowsErr: fmt.Errorf("unable to list IP forward entry"),
+			wantErr:     listIPForwardRowsErr,
 		},
 		{
-			name:       "New Route Err",
-			route:      testRoute,
-			commandErr: testInvalidErr,
-			wantCmds:   []string{getCmd, newCmd},
-			wantErrStr: "invalid",
+			name:               "Delete Ip Forward Entry Err",
+			listRows:           []antreasyscall.MibIPForwardRow{createTestMibIPForwardRow(testIndex, subnet, net.ParseIP("1.1.1.1"))},
+			deleteIPForwardErr: fmt.Errorf("unable to delete IP forward entry"),
+			wantErr:            deleteIPForwardEntryErr,
 		},
 		{
-			name:       "Duplicate Route",
-			route:      testRoute,
-			commandOut: "0 192.168.2.0/24 192.168.2.0 256 nil nil",
-			wantCmds:   []string{getCmd},
-		},
-		{
-			name:       "Remove Route Err",
-			route:      testRoute,
-			commandOut: "0 192.168.1.0/24 192.168.1.0 256 nil nil",
-			commandErr: testInvalidErr,
-			wantCmds:   []string{getCmd, removeCmd},
-			wantErrStr: "invalid",
+			name:               "Add Route Err",
+			listRows:           []antreasyscall.MibIPForwardRow{createTestMibIPForwardRow(testIndex, subnet, net.ParseIP("1.1.1.1"))},
+			createIPForwardErr: fmt.Errorf("unable to create IP forward entry"),
+			wantErr:            createIPForwardEntryErr,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			defer mockRunCommand(t, tc.wantCmds, tc.commandOut, tc.commandErr, true)()
-			gotErr := ReplaceNetRoute(tc.route)
-			if tc.wantErrStr == "" {
-				require.NoError(t, gotErr)
-			} else {
-				assert.ErrorContains(t, gotErr, tc.wantErrStr)
-			}
+			defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{CreateIPForwardEntryErr: tc.createIPForwardErr, DeleteIPForwardEntryErr: tc.deleteIPForwardErr, ListIPForwardRowsErr: tc.listRowsErr, IPForwardRows: tc.listRows})()
+			gotErr := ReplaceNetRoute(&testRoute)
+			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}
+}
+
+func TestGetNetRoutesAll(t *testing.T) {
+	gw, subnet, _ := net.ParseCIDR("192.168.2.0/24")
+	testRow := createTestMibIPForwardRow(0, subnet, gw)
+	listRows := []antreasyscall.MibIPForwardRow{testRow}
+	wantRoutes := []Route{*routeFromIPForwardRow(&testRow)}
+	defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{IPForwardRows: listRows, ListIPForwardRowsErr: nil})()
+	gotRoutes, gotErr := GetNetRoutesAll()
+	assert.Equal(t, wantRoutes, gotRoutes)
+	assert.Nil(t, gotErr)
 }
 
 func TestNewNetNat(t *testing.T) {
@@ -830,72 +872,50 @@ func TestVirtualAdapterName(t *testing.T) {
 
 func TestGetInterfaceConfig(t *testing.T) {
 	gw, subnet, _ := net.ParseCIDR("192.168.2.0/24")
-	routes := []Route{{
-		LinkIndex:         0,
-		DestinationSubnet: subnet,
-		GatewayAddress:    gw,
-		RouteMetric:       MetricDefault,
-	}}
-	testRoutes := createTestRoutes(routes)
+	testRow := createTestMibIPForwardRow(0, subnet, gw)
+	routes := []Route{*routeFromIPForwardRow(&testRow)}
+	testRoutes := convertTestRoutes(routes)
 	testNetInterface := generateNetInterface("0")
-	wantCmds := []string{fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -ErrorAction Ignore | Format-Table -HideTableHeaders", 0)}
 	tests := []struct {
 		name                string
 		testNetInterfaceErr error
-		commandOut          string
+		listRows            []antreasyscall.MibIPForwardRow
+		listRowsErr         error
 		wantAddrs           []*net.IPNet
 		wantRoutes          []interface{}
-		wantCmds            []string
-		wantErrStr          string
+		wantErr             error
 	}{
 		{
 			name:       "Get Interface Config Success",
-			commandOut: "0 192.168.2.0/24 192.168.2.0 256 nil nil nil",
+			listRows:   []antreasyscall.MibIPForwardRow{testRow},
 			wantAddrs:  []*net.IPNet{&ipv4PublicIPNet},
 			wantRoutes: testRoutes,
-			wantCmds:   wantCmds,
 		},
 		{
 			name:                "Interface Err",
 			testNetInterfaceErr: testInvalidErr,
-			commandOut:          "0 192.168.2.0/24 192.168.2.0 256 nil nil nil",
-			wantErrStr:          "failed to get interface 0: invalid",
+			wantErr:             fmt.Errorf("failed to get interface %s: %v", "0", testInvalidErr),
 		},
 		{
-			name:       "Route Index Err",
-			commandOut: "err 192.168.2.0/24 192.168.2.0 256 nil nil nil",
-			wantErrStr: "failed to parse the LinkIndex",
-			wantCmds:   wantCmds,
-		},
-		{
-			name:       "Route Subnet Err",
-			commandOut: "0 err 192.168.2.0 256 nil nil nil",
-			wantErrStr: "failed to parse the DestinationSubnet",
-			wantCmds:   wantCmds,
-		},
-		{
-			name:       "Route Metric Err",
-			commandOut: "0 192.168.2.0/24 192.168.2.0 err nil nil nil",
-			wantErrStr: "failed to parse the RouteMetric",
-			wantCmds:   wantCmds,
+			name:        "Route Err",
+			listRows:    []antreasyscall.MibIPForwardRow{testRow},
+			listRowsErr: fmt.Errorf("unable to list IP forward rows"),
+			wantErr: fmt.Errorf("failed to get routes for interface index %d: %v", testNetInterface.Index,
+				fmt.Errorf("failed to get routes: unable to list Windows IPForward rows: unable to list IP forward rows")),
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			defer mockRunCommand(t, tc.wantCmds, tc.commandOut, nil, true)()
 			defer mockNetInterfaceByName(&testNetInterface, tc.testNetInterfaceErr)()
 			defer mockNetInterfaceAddrs(testNetInterface, nil)()
+			defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{IPForwardRows: tc.listRows, ListIPForwardRowsErr: tc.listRowsErr})()
 			gotInterface, gotAddrs, gotRoutes, gotErr := GetInterfaceConfig("0")
+			if tc.wantErr == nil {
+				assert.EqualValues(t, testNetInterface, *gotInterface)
+			}
 			assert.Equal(t, tc.wantAddrs, gotAddrs)
 			assert.EqualValues(t, tc.wantRoutes, gotRoutes)
-			if tc.wantErrStr == "" {
-				assert.EqualValues(t, testNetInterface, *gotInterface)
-				require.NoError(t, gotErr)
-			} else {
-				assert.Nil(t, gotInterface)
-				assert.ErrorContains(t, gotErr, tc.wantErrStr)
-			}
+			assert.Equal(t, tc.wantErr, gotErr)
 		})
 	}
 }
@@ -1055,12 +1075,119 @@ func TestGenHostInterfaceName(t *testing.T) {
 	assert.Equal(t, "host", hostInterface)
 }
 
-func createTestRoutes(routes []Route) []interface{} {
+func TestGetAdapterInAllCompartmentsByName(t *testing.T) {
+	testName := "host"
+	testFlags := net.FlagUp | net.FlagBroadcast | net.FlagPointToPoint | net.FlagMulticast
+	testAdapter := adapter{
+		Interface: net.Interface{
+			Index:        1,
+			Name:         testName,
+			Flags:        testFlags,
+			MTU:          1,
+			HardwareAddr: testMACAddr,
+		},
+		compartmentID: 1,
+	}
+	tests := []struct {
+		name            string
+		testName        string
+		testAdapters    *windows.IpAdapterAddresses
+		testAdaptersErr error
+		wantAdapters    *adapter
+		wantErr         error
+	}{
+		{
+			name:         "Normal",
+			testName:     testName,
+			testAdapters: createTestAdapterAddresses(testName),
+			wantAdapters: &testAdapter,
+		},
+		{
+			name:    "Invalid name",
+			wantErr: &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errInvalidInterfaceName},
+		},
+		{
+			name:            "adapter Err",
+			testName:        testName,
+			testAdaptersErr: windows.ERROR_FILE_NOT_FOUND,
+			wantErr:         &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: os.NewSyscallError("getadaptersaddresses", windows.ERROR_FILE_NOT_FOUND)},
+		},
+		{
+			name:     "adapter not found",
+			testName: testName,
+			wantErr:  &net.OpError{Op: "route", Net: "ip+net", Source: nil, Addr: nil, Err: errNoSuchInterface},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockGetAdaptersAddresses(tc.testAdapters, tc.testAdaptersErr)()
+			gotAdapters, gotErr := getAdapterInAllCompartmentsByName(tc.testName)
+			assert.EqualValues(t, tc.wantAdapters, gotAdapters)
+			assert.EqualValues(t, tc.wantErr, gotErr)
+		})
+	}
+}
+
+func convertTestRoutes(routes []Route) []interface{} {
 	testRoutes := make([]interface{}, len(routes))
 	for i, v := range routes {
 		testRoutes[i] = v
 	}
 	return testRoutes
+}
+
+func createTestAdapterAddresses(name string) *windows.IpAdapterAddresses {
+	testPhysicalAddress := [8]byte{}
+	copy(testPhysicalAddress[:6], testMACAddr)
+	testName, _ := windows.UTF16FromString(name)
+	return &windows.IpAdapterAddresses{
+		FriendlyName:          &testName[0],
+		IfIndex:               1,
+		OperStatus:            windows.IfOperStatusUp,
+		IfType:                windows.IF_TYPE_ATM,
+		Mtu:                   1,
+		PhysicalAddressLength: 6,
+		PhysicalAddress:       testPhysicalAddress,
+		CompartmentId:         1,
+	}
+}
+
+func createTestMibIPForwardRow(index uint32, subnet *net.IPNet, ip net.IP) antreasyscall.MibIPForwardRow {
+	return antreasyscall.MibIPForwardRow{
+		Index:             index,
+		Metric:            MetricDefault,
+		DestinationPrefix: *antreasyscall.NewAddressPrefixFromIPNet(subnet),
+		NextHop:           *antreasyscall.NewRawSockAddrInetFromIP(ip),
+	}
+}
+
+func mockAntreaNetIO(mockNetIO *antreasyscalltest.MockNetIO) func() {
+	originalNetIO := antreaNetIO
+	antreaNetIO = mockNetIO
+	return func() {
+		antreaNetIO = originalNetIO
+	}
+}
+
+func mockGetAdaptersAddresses(testAdaptersAddresses *windows.IpAdapterAddresses, err error) func() {
+	originalGetAdaptersAddresses := getAdaptersAddresses
+	getAdaptersAddresses = func(family uint32, flags uint32, reserved uintptr, adapterAddresses *windows.IpAdapterAddresses, sizePointer *uint32) (errcode error) {
+		if adapterAddresses != nil && testAdaptersAddresses != nil {
+			adapterAddresses.IfIndex = testAdaptersAddresses.IfIndex
+			adapterAddresses.FriendlyName = testAdaptersAddresses.FriendlyName
+			adapterAddresses.OperStatus = testAdaptersAddresses.OperStatus
+			adapterAddresses.IfType = testAdaptersAddresses.IfType
+			adapterAddresses.Mtu = testAdaptersAddresses.Mtu
+			adapterAddresses.PhysicalAddressLength = testAdaptersAddresses.PhysicalAddressLength
+			adapterAddresses.PhysicalAddress = testAdaptersAddresses.PhysicalAddress
+			adapterAddresses.CompartmentId = testAdaptersAddresses.CompartmentId
+		}
+		return err
+	}
+	return func() {
+		getAdaptersAddresses = originalGetAdaptersAddresses
+	}
 }
 
 // mockRunCommand mocks runCommand with a custom command output and error message.
