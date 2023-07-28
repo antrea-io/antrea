@@ -28,9 +28,9 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/openflow"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
@@ -60,7 +60,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if packet != nil {
 			update.Status.CapturedPacket = packet
 		}
-		_, err = c.traceflowClient.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
+		_, err = c.traceflowClient.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("update Traceflow failed: %w", err)
 		}
@@ -73,7 +73,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	return nil
 }
 
-func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Traceflow, *crdv1alpha1.NodeResult, *crdv1alpha1.Packet, error) {
+func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflow, *crdv1beta1.NodeResult, *crdv1beta1.Packet, error) {
 	matchers := pktIn.GetMatches()
 
 	// Get data plane tag.
@@ -123,7 +123,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 
 	firstPacket := false
 	c.runningTraceflowsMutex.RLock()
-	tfState, exists := c.runningTraceflows[tag]
+	tfState, exists := c.runningTraceflows[int8(tag)]
 	if exists {
 		firstPacket = !tfState.receivedPacket
 		tfState.receivedPacket = true
@@ -133,7 +133,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		return nil, nil, nil, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", tag)
 	}
 
-	var capturedPacket *crdv1alpha1.Packet
+	var capturedPacket *crdv1beta1.Packet
 	if tfState.liveTraffic {
 		// Live Traceflow only considers the first packet of each
 		// connection. However, it is possible for 2 connections to
@@ -167,17 +167,17 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	ns = tf.Spec.Source.Namespace
 	srcPod = tf.Spec.Source.Pod
 
-	obs := []crdv1alpha1.Observation{}
+	obs := []crdv1beta1.Observation{}
 	tableID := pktIn.TableId
 	if tfState.isSender {
-		ob := new(crdv1alpha1.Observation)
-		ob.Component = crdv1alpha1.ComponentSpoofGuard
-		ob.Action = crdv1alpha1.ActionForwarded
+		ob := new(crdv1beta1.Observation)
+		ob.Component = crdv1beta1.ComponentSpoofGuard
+		ob.Action = crdv1beta1.ActionForwarded
 		obs = append(obs, *ob)
 	} else {
-		ob := new(crdv1alpha1.Observation)
-		ob.Component = crdv1alpha1.ComponentForwarding
-		ob.Action = crdv1alpha1.ActionReceived
+		ob := new(crdv1beta1.Observation)
+		ob.Component = crdv1beta1.ComponentForwarding
+		ob.Action = crdv1beta1.ActionReceived
 		obs = append(obs, *ob)
 	}
 
@@ -187,9 +187,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	//   state is that ipSrc != ctNwSrc (in SNAT CT zone). The state in DNAT CT zone cannot be recognized in SNAT CT zone.
 	if !tfState.receiverOnly {
 		if isValidCtNw(ctNwDst) && ipDst != ctNwDst || isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
-			ob := &crdv1alpha1.Observation{
-				Component:       crdv1alpha1.ComponentLB,
-				Action:          crdv1alpha1.ActionForwarded,
+			ob := &crdv1beta1.Observation{
+				Component:       crdv1beta1.ComponentLB,
+				Action:          crdv1beta1.ActionForwarded,
 				TranslatedDstIP: ipDst,
 			}
 			if isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
@@ -239,7 +239,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 					ob.NetworkPolicy = npRef.ToString()
 				}
 				if ruleRef.Action != nil && *ruleRef.Action == crdv1beta1.RuleActionReject {
-					ob.Action = crdv1alpha1.ActionRejected
+					ob.Action = crdv1beta1.ActionRejected
 				}
 			}
 		}
@@ -251,7 +251,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 
 	// Get output table.
 	if tableID == openflow.OutputTable.GetID() {
-		ob := new(crdv1alpha1.Observation)
+		ob := new(crdv1beta1.Observation)
 		tunnelDstIP := ""
 		// decide according to packet.
 		isIPv6 := etherData.Ethertype == protocol.IPv6_MSG
@@ -291,9 +291,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 				obs = append(obs, *obEgress)
 			}
 			ob.TunnelDstIP = tunnelDstIP
-			ob.Action = crdv1alpha1.ActionForwarded
+			ob.Action = crdv1beta1.ActionForwarded
 		} else if ipDst == gatewayIP.String() && outputPort == gwPort {
-			ob.Action = crdv1alpha1.ActionDelivered
+			ob.Action = crdv1beta1.ActionDelivered
 		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort {
 			var pktMark uint32
 			if match := getMatchPktMarkField(matchers); match != nil {
@@ -317,19 +317,19 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 				obEgress := getEgressObservation(true, egressIP, egress)
 				obs = append(obs, *obEgress)
 			}
-			ob.Action = crdv1alpha1.ActionForwardedOutOfOverlay
+			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
 		} else if outputPort == gwPort { // noEncap
-			ob.Action = crdv1alpha1.ActionForwarded
+			ob.Action = crdv1beta1.ActionForwarded
 		} else {
 			// Output port is Pod port, packet is delivered.
-			ob.Action = crdv1alpha1.ActionDelivered
+			ob.Action = crdv1beta1.ActionDelivered
 		}
 		ob.ComponentInfo = openflow.OutputTable.GetName()
-		ob.Component = crdv1alpha1.ComponentForwarding
+		ob.Component = crdv1beta1.ComponentForwarding
 		obs = append(obs, *ob)
 	}
 
-	nodeResult := crdv1alpha1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
+	nodeResult := crdv1beta1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
 	return tf, &nodeResult, capturedPacket, nil
 }
 
@@ -409,36 +409,36 @@ func getCTSrcValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
 	return regValue.String(), nil
 }
 
-func getNetworkPolicyObservation(tableID uint8, ingress bool) *crdv1alpha1.Observation {
-	ob := new(crdv1alpha1.Observation)
-	ob.Component = crdv1alpha1.ComponentNetworkPolicy
+func getNetworkPolicyObservation(tableID uint8, ingress bool) *crdv1beta1.Observation {
+	ob := new(crdv1beta1.Observation)
+	ob.Component = crdv1beta1.ComponentNetworkPolicy
 	if ingress {
 		switch tableID {
 		case openflow.IngressMetricTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.IngressMetricTable.GetName()
-			ob.Action = crdv1alpha1.ActionDropped
+			ob.Action = crdv1beta1.ActionDropped
 		case openflow.IngressDefaultTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.IngressDefaultTable.GetName()
-			ob.Action = crdv1alpha1.ActionDropped
+			ob.Action = crdv1beta1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.IngressRuleTable.GetName()
-			ob.Action = crdv1alpha1.ActionForwarded
+			ob.Action = crdv1beta1.ActionForwarded
 		}
 	} else {
 		switch tableID {
 		case openflow.EgressMetricTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.EgressMetricTable.GetName()
-			ob.Action = crdv1alpha1.ActionDropped
+			ob.Action = crdv1beta1.ActionDropped
 		case openflow.EgressDefaultTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.EgressDefaultTable.GetName()
-			ob.Action = crdv1alpha1.ActionDropped
+			ob.Action = crdv1beta1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.EgressRuleTable.GetName()
-			ob.Action = crdv1alpha1.ActionForwarded
+			ob.Action = crdv1beta1.ActionForwarded
 		}
 	}
 	return ob
@@ -457,36 +457,34 @@ func isValidCtNw(ipStr string) bool {
 	return true
 }
 
-func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1alpha1.Packet {
+func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1beta1.Packet {
 	pkt, _ := binding.ParsePacketIn(pktIn)
-	capturedPacket := crdv1alpha1.Packet{SrcIP: pkt.SourceIP.String(), DstIP: pkt.DestinationIP.String(), Length: pkt.IPLength}
+	capturedPacket := crdv1beta1.Packet{SrcIP: pkt.SourceIP.String(), DstIP: pkt.DestinationIP.String(), Length: int32(pkt.IPLength)}
 	if pkt.IsIPv6 {
 		ipProto := int32(pkt.IPProto)
-		capturedPacket.IPv6Header = &crdv1alpha1.IPv6Header{NextHeader: &ipProto, HopLimit: int32(pkt.TTL)}
+		capturedPacket.IPv6Header = &crdv1beta1.IPv6Header{NextHeader: &ipProto, HopLimit: int32(pkt.TTL)}
 	} else {
-		capturedPacket.IPHeader.Protocol = int32(pkt.IPProto)
-		capturedPacket.IPHeader.TTL = int32(pkt.TTL)
-		capturedPacket.IPHeader.Flags = int32(pkt.IPFlags)
+		capturedPacket.IPHeader = &crdv1beta1.IPHeader{Protocol: int32(pkt.IPProto), TTL: int32(pkt.TTL), Flags: int32(pkt.IPFlags)}
 	}
 	if pkt.IPProto == protocol.Type_TCP {
-		capturedPacket.TransportHeader.TCP = &crdv1alpha1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: int32(pkt.TCPFlags)}
+		capturedPacket.TransportHeader.TCP = &crdv1beta1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: pointer.Int32(int32(pkt.TCPFlags))}
 	} else if pkt.IPProto == protocol.Type_UDP {
-		capturedPacket.TransportHeader.UDP = &crdv1alpha1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
+		capturedPacket.TransportHeader.UDP = &crdv1beta1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
 	} else if pkt.IPProto == protocol.Type_ICMP || pkt.IPProto == protocol.Type_IPv6ICMP {
-		capturedPacket.TransportHeader.ICMP = &crdv1alpha1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
+		capturedPacket.TransportHeader.ICMP = &crdv1beta1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
 	}
 	return &capturedPacket
 }
 
-func getEgressObservation(isEgressNode bool, egressIP, egressName string) *crdv1alpha1.Observation {
-	ob := new(crdv1alpha1.Observation)
-	ob.Component = crdv1alpha1.ComponentEgress
+func getEgressObservation(isEgressNode bool, egressIP, egressName string) *crdv1beta1.Observation {
+	ob := new(crdv1beta1.Observation)
+	ob.Component = crdv1beta1.ComponentEgress
 	ob.EgressIP = egressIP
 	ob.Egress = egressName
 	if isEgressNode {
-		ob.Action = crdv1alpha1.ActionMarkedForSNAT
+		ob.Action = crdv1beta1.ActionMarkedForSNAT
 	} else {
-		ob.Action = crdv1alpha1.ActionForwardedToEgressNode
+		ob.Action = crdv1beta1.ActionForwardedToEgressNode
 	}
 	return ob
 }

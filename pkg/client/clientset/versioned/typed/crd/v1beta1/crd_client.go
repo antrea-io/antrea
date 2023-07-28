@@ -35,6 +35,7 @@ type CrdV1beta1Interface interface {
 	GroupsGetter
 	NetworkPoliciesGetter
 	TiersGetter
+	TraceflowsGetter
 }
 
 // CrdV1beta1Client is used to interact with features provided by the crd.antrea.io group.
@@ -76,6 +77,10 @@ func (c *CrdV1beta1Client) NetworkPolicies(namespace string) NetworkPolicyInterf
 
 func (c *CrdV1beta1Client) Tiers() TierInterface {
 	return newTiers(c)
+}
+
+func (c *CrdV1beta1Client) Traceflows() TraceflowInterface {
+	return newTraceflows(c)
 }
 
 // NewForConfig creates a new CrdV1beta1Client for the given config.

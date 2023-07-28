@@ -141,7 +141,7 @@ func run(o *Options) error {
 	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
 	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
-	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
+	tfInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	grpInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
