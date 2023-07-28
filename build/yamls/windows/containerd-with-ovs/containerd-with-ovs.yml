@@ -15,7 +15,7 @@ spec:
               exec:
                 command: ["powershell", "-file", "$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1", "-VMSwitchExtension", "enable"]
         - name: antrea-ovs
-          image: antrea/windows-ovs:1809-3.0.5
+          image: antrea-windows
           imagePullPolicy: IfNotPresent
           args:
             - -file
