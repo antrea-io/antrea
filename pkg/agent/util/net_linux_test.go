@@ -407,7 +407,7 @@ func TestSetAdapterMACAddress(t *testing.T) {
 		wantErr       error
 	}{
 		{
-			name: "Set Adapter MAC",
+			name: "Set adapter MAC",
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.LinkByName("test-en0").Return(testLink, nil)
 				mockNetlink.LinkSetHardwareAddr(testLink, testMACAddr).Return(nil)

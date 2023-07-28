@@ -92,12 +92,10 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	i.nodeConfig.UplinkNetConfig.Index = adapter.Index
 	defaultGW, err := util.GetDefaultGatewayByInterfaceIndex(adapter.Index)
 	if err != nil {
-		if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects found") {
-			klog.InfoS("No default gateway found on interface", "interface", adapter.Name)
-			defaultGW = ""
-		} else {
-			return err
-		}
+		return err
+	}
+	if defaultGW == "" {
+		klog.InfoS("No default gateway found on interface", "interface", adapter.Name)
 	}
 	i.nodeConfig.UplinkNetConfig.Gateway = defaultGW
 	dnsServers, err := util.GetDNServersByInterfaceIndex(adapter.Index)

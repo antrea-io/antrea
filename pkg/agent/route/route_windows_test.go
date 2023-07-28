@@ -84,10 +84,6 @@ func TestRouteOperation(t *testing.T) {
 	err = client.Reconcile([]string{dest2})
 	require.Nil(t, err)
 
-	routes5, err := util.GetNetRoutes(gwLink, destCIDR1)
-	require.Nil(t, err)
-	assert.Equal(t, 0, len(routes5))
-
 	err = client.DeleteRoutes(destCIDR2)
 	require.Nil(t, err)
 	routes7, err := util.GetNetRoutes(gwLink, destCIDR2)

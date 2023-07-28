@@ -209,7 +209,7 @@ It is processed and forwarded by OVS, and controlled with OpenFlow entries.
 
 ### Service Traffic
 
-Kube-proxy userspace mode is configured to provide NodePort Service function. A specific Network Adapter named
+Kube-proxy userspace mode is configured to provide NodePort Service function. A specific Network adapter named
 "HNS Internal NIC" is provided to kube-proxy to configure Service addresses. The OpenFlow entries for the
 NodePort Service traffic on Windows are the same as those on Linux.
 
