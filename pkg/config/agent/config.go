@@ -196,6 +196,8 @@ type AgentConfig struct {
 	ExternalNode ExternalNodeConfig `yaml:"externalNode,omitempty"`
 	// Antrea's native secondary network configuration.
 	SecondaryNetwork SecondaryNetworkConfig `yaml:"secondaryNetwork,omitempty"`
+	// AuditLogging supports configuring log rotation for audit logs.
+	AuditLogging AuditLoggingConfig `yaml:"auditLogging,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -386,4 +388,18 @@ type SecondaryNetworkOVSConfig struct {
 	OVSDatapathType string `yaml:"ovsDatapathType,omitempty"`
 	// OVS patch port which connects the integration and transport bridge.
 	OVSPatchPort string `yaml:"ovsPatchPort,omitempty"`
+}
+
+type AuditLoggingConfig struct {
+	// MaxSize is the maximum size in MB of a log file before it gets rotated. Defaults to 500MB.
+	MaxSize int32 `yaml:"maxSize,omitempty"`
+	// MaxBackups is the maximum number of old log files to retain. If set to 0, all log files
+	// will be retained (unless MaxAge causes them to be deleted). Defaults to 3.
+	MaxBackups *int32 `yaml:"maxBackups,omitempty"`
+	// MaxAge is the maximum number of days to retain old log files based on the timestamp
+	// encoded in their filename. If set to 0, old log files are not removed based on age.
+	// Defaults to 28.
+	MaxAge *int32 `yaml:"maxAge,omitempty"`
+	// Compress enables gzip compression on rotated files. Defaults to true.
+	Compress *bool `yaml:"compress,omitempty"`
 }

@@ -52,6 +52,13 @@ type AntreaPolicyLogger struct {
 	logDeduplication logRecordDedupMap
 }
 
+type AntreaPolicyLoggerOptions struct {
+	MaxSize    int
+	MaxBackups int
+	MaxAge     int
+	Compress   bool
+}
+
 // logInfo will be set by retrieving info from packetin and register.
 type logInfo struct {
 	tableName    string // name of the table sending packetin
@@ -161,7 +168,7 @@ func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 
 // newAntreaPolicyLogger is called while newing Antrea network policy agent controller.
 // Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
-func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
+func newAntreaPolicyLogger(options *AntreaPolicyLoggerOptions) (*AntreaPolicyLogger, error) {
 	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
 	logFile := filepath.Join(logDir, logfileName)
 	_, err := os.Stat(logDir)
@@ -174,10 +181,10 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 	// Use lumberjack log file rotation.
 	logOutput := &lumberjack.Logger{
 		Filename:   logFile,
-		MaxSize:    500,  // allow max 500 megabytes for one log file
-		MaxBackups: 3,    // allow max 3 old log file backups
-		MaxAge:     28,   // allow max 28 days maintenance of old log files
-		Compress:   true, // compress the old log files for backup
+		MaxSize:    options.MaxSize,
+		MaxBackups: options.MaxBackups,
+		MaxAge:     options.MaxAge,
+		Compress:   options.Compress,
 	}
 
 	antreaPolicyLogger := &AntreaPolicyLogger{

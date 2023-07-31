@@ -431,6 +431,15 @@ func run(o *Options) error {
 	// if AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
 	loggingEnabled := antreaPolicyEnabled
+	var auditLoggerOptions *networkpolicy.AntreaPolicyLoggerOptions
+	if loggingEnabled {
+		auditLoggerOptions = &networkpolicy.AntreaPolicyLoggerOptions{
+			MaxSize:    int(o.config.AuditLogging.MaxSize),
+			MaxBackups: int(*o.config.AuditLogging.MaxBackups),
+			MaxAge:     int(*o.config.AuditLogging.MaxAge),
+			Compress:   *o.config.AuditLogging.Compress,
+		}
+	}
 
 	var gwPort, tunPort uint32
 	if o.nodeType == config.K8sNode {
@@ -456,7 +465,7 @@ func run(o *Options) error {
 		antreaProxyEnabled,
 		statusManagerEnabled,
 		multicastEnabled,
-		loggingEnabled,
+		auditLoggerOptions,
 		asyncRuleDeleteInterval,
 		o.dnsServerOverride,
 		o.nodeType,

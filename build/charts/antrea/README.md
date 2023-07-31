@@ -47,6 +47,10 @@ Kubernetes: `>= 1.16.0-0`
 | antreaProxy.proxyLoadBalancerIPs | bool | `true` | When set to false, AntreaProxy no longer load-balances traffic destined to the External IPs of LoadBalancer Services. |
 | antreaProxy.serviceProxyName | string | `""` | The value of the "service.kubernetes.io/service-proxy-name" label for AntreaProxy to match. If it is set, then AntreaProxy will only handle Services with the label that equals the provided value. If it is not set, then AntreaProxy will only handle Services without the "service.kubernetes.io/service-proxy-name" label, but ignore Services with the label no matter what is the value. |
 | antreaProxy.skipServices | list | `[]` | List of Services which should be ignored by AntreaProxy. |
+| auditLogging.compress | bool | `true` | Compress enables gzip compression on rotated files. |
+| auditLogging.maxAge | int | `28` | MaxAge is the maximum number of days to retain old log files based on the timestamp encoded in their filename. If set to 0, old log files are not removed based on age. |
+| auditLogging.maxBackups | int | `3` | MaxBackups is the maximum number of old log files to retain. If set to 0, all log files will be retained (unless MaxAge causes them to be deleted). |
+| auditLogging.maxSize | int | `500` | MaxSize is the maximum size in MB of a log file before it gets rotated. |
 | clientCAFile | string | `""` | File path of the certificate bundle for all the signers that is recognized for incoming client certificates. |
 | cni.hostBinPath | string | `"/opt/cni/bin"` | Installation path of CNI binaries on the host. |
 | cni.plugins | object | `{"bandwidth":true,"portmap":true}` | Chained plugins to use alongside antrea-cni. |

@@ -159,6 +159,19 @@ nodeIPAM:
   # -- Mask size for IPv6 Node CIDR in IPv6 or dual-stack cluster.
   nodeCIDRMaskSizeIPv6: 64
 
+auditLogging:
+  # -- MaxSize is the maximum size in MB of a log file before it gets rotated.
+  maxSize: 500
+  # -- MaxBackups is the maximum number of old log files to retain. If set to 0,
+  # all log files will be retained (unless MaxAge causes them to be deleted).
+  maxBackups: 3
+  # -- MaxAge is the maximum number of days to retain old log files based on the
+  # timestamp encoded in their filename. If set to 0, old log files are not
+  # removed based on age.
+  maxAge: 28
+  # -- Compress enables gzip compression on rotated files.
+  compress: true
+
 # -- Address of Kubernetes apiserver, to override any value provided in
 # kubeconfig or InClusterConfig.
 kubeAPIServerOverride: ""
