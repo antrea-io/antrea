@@ -90,14 +90,29 @@ func GenerateNodeTunnelInterfaceKey(nodeName string) string {
 }
 
 // GenerateContainerInterfaceName generates a unique interface name using the
-// Pod's namespace, name and containerID. The output should be deterministic (so that
-// multiple calls to GenerateContainerInterfaceName with the same parameters
-// return the same value). The output has the length of interfaceNameLength(15).
+// Pod's Namespace, name and container ID. The output should be deterministic
+// (so that multiple calls to GenerateContainerInterfaceName with the same
+// parameters return the same value). The output has the length of
+// interfaceNameLength(15).
 // The probability of collision should be neglectable.
 func GenerateContainerInterfaceName(podName, podNamespace, containerID string) string {
 	// Use the podName as the prefix and the containerID as the hashing key.
 	// podNamespace is not used currently.
 	return generateInterfaceName(containerID, podName, true)
+}
+
+// GenerateContainerHostVethName generates a unique interface name using the
+// Pod's Name, container ID, and the container veth interface name. The output
+// should be deterministic.
+func GenerateContainerHostVethName(podName, podNamespace, containerID, containerVeth string) string {
+	var key string
+	if containerVeth == "eth0" {
+		key = containerID
+	} else {
+		// Secondary interface.
+		key = containerID + containerVeth
+	}
+	return generateInterfaceName(key, podName, true)
 }
 
 // GenerateNodeTunnelInterfaceName generates a unique interface name for the

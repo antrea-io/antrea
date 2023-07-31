@@ -98,7 +98,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Ifname = ifname
 		cniConfig.Netns = "invalid_netns"
 		sriovVFDeviceID := ""
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
@@ -109,7 +109,7 @@ func TestValidatePrevResult(t *testing.T) {
 		cniConfig.Netns = "invalid_netns"
 		sriovVFDeviceID := "0000:03:00.6"
 		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", true, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
+		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", true, false, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
 		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
 	})
@@ -122,7 +122,7 @@ func TestRemoveInterface(t *testing.T) {
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	podConfigurator, err := newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
+	podConfigurator, err := newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
 
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
@@ -203,7 +203,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, ipamDriver ip
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
+	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	cniServer.enableSecondaryNetworkIPAM = enableSecondaryNetworkIPAM
 	cniServer.isChaining = isChaining
 	cniServer.secondaryNetworkEnabled = secondaryNetworkEnabled
@@ -494,8 +494,7 @@ func TestCmdDel(t *testing.T) {
 			cniserver.podConfigurator.ifConfigurator = testIfaceConfigurator
 			if tc.secondaryNetworkEnabled {
 				cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: supportedCNIVersion, PodName: tc.podName, PodNamespace: testPodNamespace,
-					ContainerID: containerID, ContainerNetNS: netns, PodCNIDeleted: false,
-					MTU: 1450}
+					ContainerID: containerID, ContainerNetNS: netns, PodCNIDeleted: false}
 				cniserver.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)
 			}
 			if tc.ipamDel {
@@ -639,7 +638,7 @@ func TestReconcile(t *testing.T) {
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
+	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
 	cniServer.nodeConfig = &config.NodeConfig{
 		Name: nodeName,

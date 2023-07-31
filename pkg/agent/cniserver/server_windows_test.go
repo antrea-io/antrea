@@ -293,7 +293,7 @@ func newMockCNIServer(t *testing.T, controller *gomock.Controller, podUpdateNoti
 	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
 	cniServer.nodeConfig = &config.NodeConfig{Name: "node1", PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, podUpdateNotifier, nil, false)
+	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, podUpdateNotifier, nil)
 	return cniServer
 }
 
@@ -947,7 +947,7 @@ func TestReconcile(t *testing.T) {
 	pod4IfaceName := "iface4"
 	pod4Iface := containerIfaces["iface4"]
 	waiter := newAsyncWaiter(pod4Iface.PodName, pod4Iface.ContainerID)
-	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, waiter.notifier, nil, false)
+	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, waiter.notifier, nil)
 	cniServer.nodeConfig = &config.NodeConfig{Name: nodeName}
 
 	// Re-install Pod1 flows
