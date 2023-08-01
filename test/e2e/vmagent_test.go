@@ -481,7 +481,7 @@ func testANPOnVMs(t *testing.T, data *TestData, vmList []vmInfo, osType string) 
 	})
 	// Test FQDN rules in ANP
 	t.Run("testANPOnExternalNodeWithFQDN", func(t *testing.T) {
-		testANPWithFQDN(t, data, "anp-vmagent-fqdn", namespace, *appliedToVM, []string{"www.facebook.com"}, []string{"docs.google.com"}, []string{"maps.google.com"})
+		testANPWithFQDN(t, data, "anp-vmagent-fqdn", namespace, *appliedToVM, []string{"www.facebook.com"}, []string{"docs.google.com"}, []string{"github.com"})
 	})
 }
 
