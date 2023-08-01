@@ -22,7 +22,7 @@ function echoerr {
 
 CLUSTER=""
 REGION="us-west-2"
-K8S_VERSION="1.24"
+K8S_VERSION="1.27"
 AWS_NODE_TYPE="t3.medium"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
@@ -46,7 +46,7 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
 
         --cluster-name                The cluster name to be used for the generated EKS cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig                  Path to save kubeconfig of generated EKS cluster.
-        --k8s-version                 EKS K8s cluster version. Defaults to 1.24.
+        --k8s-version                 EKS K8s cluster version. Defaults to $K8S_VERSION.
         --aws-access-key              AWS Acess Key for logging in to awscli.
         --aws-secret-key              AWS Secret Key for logging in to awscli.
         --aws-service-user-role-arn   AWS Service User Role ARN for logging in to awscli.
@@ -309,7 +309,8 @@ function run_conformance() {
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip ${skip_regex} \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log && \
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "Netpol" \
+    # Skip legacy NetworkPolicy tests
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "NetworkPolicyLegacy" \
       --kubernetes-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/eks-test.log || \
     TEST_SCRIPT_RC=$?
