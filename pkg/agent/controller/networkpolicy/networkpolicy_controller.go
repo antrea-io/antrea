@@ -88,8 +88,6 @@ type Controller struct {
 	statusManagerEnabled bool
 	// multicastEnabled indicates whether multicast is enabled.
 	multicastEnabled bool
-	// loggingEnabled indicates where Antrea policy audit logging is enabled.
-	loggingEnabled bool
 	// nodeType indicates type of the Node where Antrea Agent is running on.
 	nodeType config.NodeType
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
@@ -149,7 +147,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	antreaProxyEnabled bool,
 	statusManagerEnabled bool,
 	multicastEnabled bool,
-	loggingEnabled bool,
+	loggerOptions *AntreaPolicyLoggerOptions, // use nil to disable logging
 	asyncRuleDeleteInterval time.Duration,
 	dnsServerOverride string,
 	nodeType config.NodeType,
@@ -168,7 +166,6 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		antreaProxyEnabled:     antreaProxyEnabled,
 		statusManagerEnabled:   statusManagerEnabled,
 		multicastEnabled:       multicastEnabled,
-		loggingEnabled:         loggingEnabled,
 		gwPort:                 gwPort,
 		tunPort:                tunPort,
 		nodeConfig:             nodeConfig,
@@ -204,9 +201,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	if c.ofClient != nil && antreaPolicyEnabled {
 		// Register packetInHandler
 		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
-		if loggingEnabled {
+		if loggerOptions != nil {
 			// Initiate logger for Antrea Policy audit logging
-			antreaPolicyLogger, err := newAntreaPolicyLogger()
+			antreaPolicyLogger, err := newAntreaPolicyLogger(loggerOptions)
 			if err != nil {
 				return nil, err
 			}
