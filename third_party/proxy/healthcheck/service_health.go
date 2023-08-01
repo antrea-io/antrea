@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -236,6 +237,7 @@ func (h hcHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Header().Set("X-Content-Type-Options", "nosniff")
+	resp.Header().Set("X-Load-Balancing-Endpoint-Weight", strconv.Itoa(count))
 	if count == 0 {
 		resp.WriteHeader(http.StatusServiceUnavailable)
 	} else {
