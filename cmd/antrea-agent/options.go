@@ -55,6 +55,10 @@ const (
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNodeType                = config.K8sNode
 	defaultMaxEgressIPsPerNode     = 255
+	defaultAuditLogsMaxSize        = 100
+	defaultAuditLogsMaxBackups     = 3
+	defaultAuditLogsMaxAge         = 28
+	defaultAuditLogsCompressed     = true
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -480,6 +484,25 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		if o.config.Egress.MaxEgressIPsPerNode == 0 {
 			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
+		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		auditLogging := &o.config.AuditLogging
+		if auditLogging.MaxSize == 0 {
+			auditLogging.MaxSize = defaultAuditLogsMaxAge
+		}
+		if auditLogging.MaxBackups == nil {
+			maxBackups := int32(defaultAuditLogsMaxBackups)
+			auditLogging.MaxBackups = &maxBackups
+		}
+		if auditLogging.MaxAge == nil {
+			maxAge := int32(defaultAuditLogsMaxAge)
+			auditLogging.MaxAge = &maxAge
+		}
+		if auditLogging.Compress == nil {
+			compress := defaultAuditLogsCompressed
+			auditLogging.Compress = &compress
 		}
 	}
 }

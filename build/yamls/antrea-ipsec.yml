@@ -5834,6 +5834,20 @@ data:
       wireGuard:
         # WireGuard tunnel port for cross-cluster traffic.
         port: 51821
+
+    # Log rotation configuration for audit logs.
+    auditLogging:
+      # MaxSize is the maximum size in MB of a log file before it gets rotated.
+      maxSize: 500
+      # MaxBackups is the maximum number of old log files to retain. If set to 0,
+      # all log files will be retained (unless MaxAge causes them to be deleted).
+      maxBackups: 3
+      # MaxAge is the maximum number of days to retain old log files based on the
+      # timestamp encoded in their filename. If set to 0, old log files are not
+      # removed based on age.
+      maxAge: 28
+      # Compress enables gzip compression on rotated files.
+      compress: true
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -6817,7 +6831,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: dce874662f16b9a7b37ec65575d517e85d4e031e6af8731f8cf92535ebf53451
+        checksum/config: 8112dfd2bdeb470b13327fb1f9ec81f325038749bcf91b8c5852709ed789267b
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -7102,7 +7116,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: dce874662f16b9a7b37ec65575d517e85d4e031e6af8731f8cf92535ebf53451
+        checksum/config: 8112dfd2bdeb470b13327fb1f9ec81f325038749bcf91b8c5852709ed789267b
       labels:
         app: antrea
         component: antrea-controller
