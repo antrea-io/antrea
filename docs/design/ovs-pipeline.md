@@ -571,7 +571,7 @@ Flow 7 is used to match non-Service packet.
 ### AntreaPolicyEgressRuleTable (45)
 
 For this table, you will need to keep in mind the ACNP
-[specification](#antrea-networkpolicy-crd-implementation)
+[specification](#antrea-native-policies-implementation)
 that we are using.
 
 This table is used to implement the egress rules across all Antrea-native policies,
@@ -938,7 +938,7 @@ All other Tiers   ->  AntreaPolicyIngressRuleTable(85)
 ```
 
 Again for this table, you will need to keep in mind the ACNP
-[specification](#antrea-networkpolicy-crd-implementation) that we are using.
+[specification](#antrea-native-policies-implementation) that we are using.
 Since the example ACNP resides in the Application tier, if you dump the flows
 for table 85, you should see something like this:
 
