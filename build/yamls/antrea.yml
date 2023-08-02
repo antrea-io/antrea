@@ -5776,7 +5776,7 @@ data:
       # capabilities (e.g. TLS termination) and it is desirable for Pod-to-ExternalIP traffic to be sent to the
       # external LoadBalancer instead of being load-balanced to an Endpoint directly by AntreaProxy.
       # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
-      # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
+      # kube-proxy is removed from the cluster, otherwise kube-proxy will still load-balance this traffic.
       proxyLoadBalancerIPs: true
       # The value of the "service.kubernetes.io/service-proxy-name" label for AntreaProxy to match. If it is set,
       # then AntreaProxy will only handle Services with the label that equals the provided value. If it is not set,
@@ -6818,7 +6818,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 79fc8296df5258525c48b088ec5ce71f6c7dad28169071408a29324dee10061c
+        checksum/config: 7218db7d40a2ba0043ebc518f71ed1e5c38a715360a732492ae762964e11c884
       labels:
         app: antrea
         component: antrea-agent
@@ -7057,7 +7057,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 79fc8296df5258525c48b088ec5ce71f6c7dad28169071408a29324dee10061c
+        checksum/config: 7218db7d40a2ba0043ebc518f71ed1e5c38a715360a732492ae762964e11c884
       labels:
         app: antrea
         component: antrea-controller
