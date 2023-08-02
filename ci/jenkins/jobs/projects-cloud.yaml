@@ -1036,7 +1036,6 @@
                       default-excludes: true
                       fingerprint: false
                       only-if-success: false
-
       - '{name}-{test_name}-for-pull-request':
           test_name: multicluster-e2e
           node: 'antrea-multicluster-node'
@@ -1077,3 +1076,63 @@
                     default-excludes: true
                     fingerprint: false
                     only-if-success: false
+      - '{name}-{test_name}-for-period':
+          test_name: daily-capa-aws-clean-up
+          node: 'capa-test'
+          description: 'This is for cleaning up old AWS capa clusters daily.'
+          builders:
+            - builder-capa-aws-clean-up
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: '' # 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []
+      - '{name}-{test_name}-matrix-compatibility-test':
+          test_name: weekly-capa-aws
+          node: 'capa-test'
+          description: 'This is weekly matrix compatibility test for testing AWS capa + antrea.'
+          axes:
+              - axis:
+                  type: user-defined
+                  name: K8S_VERSION
+                  values:
+                  - v1.23.1
+                  - v1.24.1
+                  - v1.25.1
+                  - v1.26.1
+              - axis:
+                  type: slave # TODO: use different term when Jenkins & Jenkins Job Builder are updated
+                  name: labels
+                  values:
+                  - capa-test
+          builders:
+              - builder-capa-matrix
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: '' #'H 20 * * 6'
+          ignore_post_commit_hooks: false
+          parameters: []
+          publishers: []
+          wrappers:
+          - credentials-binding:
+              - text:
+                  credential-id: AWS_SERVICE_USER_ACCESS_KEY
+                  variable: AWS_ACCESS_KEY
+              - text:
+                  credential-id: AWS_SERVICE_USER_SECRET_KEY
+                  variable: AWS_SECRET_KEY
+              - text:
+                  credential-id: AWS_SERVICE_USER_NAME
+                  variable: AWS_SERVICE_USER_NAME
+              - text:
+                  credential-id: AWS_SERVICE_USER_ROLE_ARN
+                  variable: AWS_SERVICE_USER_ROLE_ARN
+              - text:
+                  credential-id: CAPA_VPC
+                  variable: CAPA_VPC
+              - text:
+                  credential-id: CAPA_SUBNET
+                  variable: CAPA_SUBNE  

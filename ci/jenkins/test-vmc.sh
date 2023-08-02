@@ -38,6 +38,13 @@ TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
+provider="vsphere"
+SSH_USERNAME='capv'
+AWS_ACCESS_KEY_ID=""
+AWS_SECRET_ACCESS_KEY=""
+AWS_SERVICE_USER_ROLE_ARN=""
+AWS_SERVICE_USER_NAME=""
+SKIP_LIST=""
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -56,7 +63,15 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
         --coverage               Run e2e with coverage.
         --test-only              Only run test on current cluster. Not set up/clean up the cluster.
         --codecov-token          Token used to upload coverage report(s) to Codecov.
-        --registry               Using private registry to pull images."
+        --registry               Using private registry to pull images.
+        --provider               Select the cloud provider for the testbed.
+        --aws-region             AWS region to use.
+        --aws-access-key-id      AWS access key id.
+        --aws-secret-access-key  AWS secret access key.
+        --aws-service-user-role  AWS Service User Role ARN.
+        --aws-service-user-name  AWS Service User Name.
+        --aws-vpc-id             AWS VPC id.
+        --aws-subnet-id          AWS subnet id."
 
 function print_usage {
     echoerr "$_usage"
@@ -131,6 +146,43 @@ case $key in
     CODECOV_TOKEN="$2"
     shift 2
     ;;
+    --provider)
+    provider="$2"
+    shift 2
+    if [ "$provider" = "aws" ]; then
+      SSH_USERNAME=ubuntu
+      SKIP_LIST="TestEgress|TestProxy|TestProxyHairpinIPv4"
+      export AWS_PROFILE=default
+    fi
+    ;;
+    --aws-region)
+    export AWS_REGION="$2"
+    shift 2
+    ;;
+    --aws-access-key-id)
+    AWS_ACCESS_KEY_ID="$2"
+    shift 2
+    ;;
+    --aws-secret-access-key)
+    AWS_SECRET_ACCESS_KEY="$2"
+    shift 2
+    ;;
+    --aws-service-user-role)
+    AWS_SERVICE_USER_ROLE_ARN="$2"
+    shift 2
+    ;;
+    --aws-service-user-name)
+    AWS_SERVICE_USER_NAME="$2"
+    shift 2
+    ;;
+    --aws-vpc-id)
+    AWS_VPC_ID="$2"
+    shift 2
+    ;;
+    --aws-subnet-id)
+    AWS_SUBNET_ID="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -185,10 +237,138 @@ function release_static_ip() {
     echo Released IP
 }
 
-function setup_cluster() {
+function setup_aws_sg() {
+    # New control plane security group
+    set +e
+    clusterawsadm bootstrap iam create-cloudformation-stack --region $AWS_REGION
+    set +x
+    export AWS_B64ENCODED_CREDENTIALS=$(clusterawsadm bootstrap credentials encode-as-profile --region $AWS_REGION)
+    set -x
+    export GOPROXY=direct
+    clusterctl init --infrastructure aws
+    unset GOPROXY
+    
+    aws ec2 create-security-group --description capi-controlplane --group-name capi-controlplane --vpc-id $AWS_VPC_ID --region $AWS_REGION
+    export CONTROLPLANE_SGID=$(aws ec2 describe-security-groups --region $AWS_REGION --group-names capi-controlplane --query 'SecurityGroups[0].GroupId' --output text)
+    # Allow all from subnet
+    aws ec2 authorize-security-group-ingress --region $AWS_REGION --group-id $CONTROLPLANE_SGID --protocol "-1" --cidr 0.0.0.0/0
+    # New node security group
+    aws ec2 create-security-group --description capi-node --group-name capi-node --vpc-id $AWS_VPC_ID --region $AWS_REGION
+    export NODE_SGID=$(aws ec2 describe-security-groups --region $AWS_REGION --group-names capi-node --query 'SecurityGroups[0].GroupId' --output text)
+    # All allow from subnet
+    aws ec2 authorize-security-group-ingress --region $AWS_REGION --group-id $NODE_SGID --protocol "-1" --cidr 0.0.0.0/0
+    set -e
+}
+
+function setup_aws_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.28.0
+      export K8S_VERSION=v1.28.2
+    fi
+    export TEST_OS=ubuntu-22.04
+    rm -rf ${GIT_CHECKOUT_DIR}/jenkins || true
+    mkdir -p ~/.aws
+    cat > ~/.aws/config <<EOF
+[default]
+region = $AWS_REGION
+role_arn = $AWS_SERVICE_USER_ROLE_ARN
+source_profile = $AWS_SERVICE_USER_NAME
+output = json
+EOF
+    cat > ~/.aws/credentials <<EOF
+[$AWS_SERVICE_USER_NAME]
+aws_access_key_id = $AWS_ACCESS_KEY_ID
+aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
+EOF
+
+    unset AWS_ACCESS_KEY
+    unset AWS_SECRET_KEY
+    export AWS_CONTROLLER_IAM_ROLE=$AWS_SERVICE_USER_ROLE_ARN
+    export AMI_ID=$(clusterawsadm ami list --kubernetes-version=$K8S_VERSION --os=$TEST_OS --region=$AWS_REGION | grep ami- | awk '{print $5}' | head -1)
+    if [ -z "$AMI_ID" ]; then
+        echo "Failed to locate the ami id for kubernetes-version=$K8S_VERSION os=$TEST_OS region=$AWS_REGION" 
+        return 1
+    fi
+
+    echo '=== Copying key pair ==='
+    mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/key
+    cp $AWS_SSH_KEY  "${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
+
+    echo "=== Setup AWS security group ==="
+    setup_aws_sg
+
+    echo "=== namespace value substitution ==="
+    mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/out
+    cp ${GIT_CHECKOUT_DIR}/ci/cluster-api/aws/templates/* ${GIT_CHECKOUT_DIR}/jenkins/out
+    sed -i "s/VPCID/${AWS_VPC_ID}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/SUBNETID/${AWS_SUBNET_ID}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/CONTROLPLANESG/${CONTROLPLANE_SGID}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/NODESG/${NODE_SGID}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+
+    sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/K8SVERSION/${K8S_VERSION}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/AMIID/${AMI_ID}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/CLUSTERNAME/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/SSHAUTHORIZEDKEYS/default/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml
+
+    sleep 15s
+    echo '=== Create a cluster in management cluster ==='
+    kubectl apply -f "${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml"
+    kubectl apply -f "${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml"
+
+    echo '=== Wait for 20 mins to get workload cluster secret ==='
+    for t in {1..20}
+    do
+        sleep 1m
+        echo '=== Get kubeconfig (try for 1m) ==='
+        if kubectl get secret/${CLUSTER}-kubeconfig -n${CLUSTER} ; then
+            kubectl get secret/${CLUSTER}-kubeconfig -n${CLUSTER} -o json \
+            | jq -r .data.value \
+            | base64 --decode \
+            > "${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig"
+            echo '=== Retrieving kubeconfig ==='
+            SECRET_EXIST=true
+            break
+        fi
+    done
+
+    if [[ "$SECRET_EXIST" == false ]]; then
+        echo "=== Failed to get secret ${CLUSTER}-kubeconfig ==="
+        saveLogs
+        kubectl delete ns ${CLUSTER}
+        exit 1
+    else
+        export KUBECONFIG="${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig"
+        echo "=== Waiting for 20 minutes for all nodes to be up ==="
+
+        set +e
+        for t in {1..20}
+        do
+            sleep 1m
+            echo "=== Get node (try for 1m) ==="
+            mdNum="$(kubectl get node --no-headers=true | grep -v master | grep -c none)"
+            if [ "${mdNum}" == "2" ]; then
+                echo "=== Setup workload cluster succeeded ==="
+                CLUSTER_READY=true
+                break
+            fi
+        done
+        set -e
+
+        if [[ "$CLUSTER_READY" == false ]]; then
+            echo "=== Failed to bring up all the nodes ==="
+            saveLogs
+            KUBECONFIG=$KUBECONFIG_PATH kubectl delete ns ${CLUSTER}
+            exit 1
+        fi
+    fi
+}
+
+function setup_vc_cluster() {
+    export KUBECONFIG=$KUBECONFIG_PATH
+    if [ -z $K8S_VERSION ]; then
+      export K8S_VERSION=v1.28.1
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-2004
@@ -278,26 +458,34 @@ function setup_cluster() {
     fi
 }
 
+function setup_cluster() {
+    if [[ $provider == 'vsphere' ]]; then
+        setup_vc_cluster
+    else
+        setup_aws_cluster
+    fi
+}
+
 function copy_image {
   filename=$1
   image=$2
   IP=$3
   version=$4
   need_cleanup=$5
-  ${SCP_WITH_ANTREA_CI_KEY} $filename capv@${IP}:/home/capv
+  ${SCP_WITH_ANTREA_CI_KEY} $filename $SSH_USERNAME@${IP}:~
   if [ $TEST_OS == 'centos-7' ]; then
-      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
+      ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
       if [[ $need_cleanup == 'true' ]]; then
-          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
+          ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
       fi
-      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${IP} "ctr -n=k8s.io images import ~/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
   else
       if [[ $need_cleanup == 'true' ]]; then
-          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
+          ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
       fi
-      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${IP} "sudo ctr -n=k8s.io images import ~/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
   fi
-  ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+  ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
 # We run the function in a subshell with "set -e" to ensure that it exits in
@@ -431,12 +619,11 @@ function deliver_antrea {
     fi
 
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
+    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml $SSH_USERNAME@${control_plane_ip}:~
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
     for i in "${!IPs[@]}"
     do
-        ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
         if [[ "$COVERAGE" == true ]]; then
             copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
             copy_image flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
@@ -492,14 +679,15 @@ function run_e2e {
         cp "${GIT_CHECKOUT_DIR}/ci/jenkins/ssh-config" "${CLUSTER_SSHCONFIG}.new"
         sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${CLUSTER_SSHCONFIG}.new"
         sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${CLUSTER_SSHCONFIG}.new"
+        sed -i "s/capv/${SSH_USERNAME}/g" "${CLUSTER_SSHCONFIG}.new"
         echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> "${CLUSTER_SSHCONFIG}.new"
         cat "${CLUSTER_SSHCONFIG}.new" >> "${CLUSTER_SSHCONFIG}"
     done
 
     echo "=== Move kubeconfig to control-plane Node ==="
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-    ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig $SSH_USERNAME@${control_plane_ip}:~/.kube/config
 
     set +e
     kubectl taint nodes --selector='!node-role.kubernetes.io/control-plane' node.cluster.x-k8s.io/uninitialized-
@@ -509,11 +697,11 @@ function run_e2e {
         mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
         # HACK: see https://github.com/antrea-io/antrea/issues/2292
         go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
-        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
+        go test -v -timeout=100m antrea.io/antrea/test/e2e --run TestAntctl --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage --skip ${SKIP_LIST} --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
     else
         # HACK: see https://github.com/antrea-io/antrea/issues/2292
         go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
-        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
+        go test -v -timeout=100m antrea.io/antrea/test/e2e --run TestAntctl --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --skip ${SKIP_LIST} --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
     fi
 
     test_rc=$?
@@ -566,8 +754,8 @@ function run_conformance {
 
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     echo "=== Move kubeconfig to control-plane Node ==="
-    ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    ${SSH_WITH_ANTREA_CI_KEY} -n $SSH_USERNAME@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig $SSH_USERNAME@${control_plane_ip}:~/.kube/config
 
     set +e
     kubectl taint nodes --selector='!node-role.kubernetes.io/control-plane' node.cluster.x-k8s.io/uninitialized-
@@ -618,7 +806,7 @@ function collect_coverage() {
         done
 }
 
-function cleanup_cluster() {
+function cleanup_vc_cluster() {
     echo "=== Cleaning up VMC cluster ${CLUSTER} ==="
     export KUBECONFIG=$KUBECONFIG_PATH
 
@@ -627,6 +815,51 @@ function cleanup_cluster() {
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 
     release_static_ip
+}
+
+function cleanup_aws_cluster() {
+    echo "=== Cleaning up AWS cluster ${CLUSTER} ==="
+    export KUBECONFIG=$KUBECONFIG_PATH
+
+    echo "=== Cleaning up Resources ===="
+    export AWS_CONTROLLER_IAM_ROLE=$AWS_SERVICE_USER_ROLE_ARN
+    clusterctl delete --infrastructure aws
+    export AWS_B64ENCODED_CREDENTIALS=$(clusterawsadm bootstrap credentials encode-as-profile --region $AWS_REGION)
+    clusterctl init --infrastructure aws
+    
+    kubectl delete cluster ${CLUSTER} -n ${CLUSTER}
+
+    echo "=== Cleaning up Instances ==="
+    instance_ids=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${CLUSTER}-*" --query "Reservations[*].Instances[*].InstanceId" --output text)
+    for instance_id in $instance_ids; do
+        aws ec2 terminate-instances --instance-ids "$instance_id"
+    done
+
+    echo "=== Cleaning up Load Balancer ==="
+    loadbalancer_name=$(aws elb describe-load-balancers --query "LoadBalancerDescriptions[?SourceSecurityGroup.GroupName=='${CLUSTER}-apiserver-lb'].LoadBalancerName" --output text)
+    aws elb delete-load-balancer --load-balancer-name ${loadbalancer_name}
+    sleep 90s
+    
+    echo "=== Cleaning up Security Groups ==="
+    security_groups=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=${CLUSTER}-*" --query "SecurityGroups[*].GroupId" --output text)
+    for security_group in $security_groups; do
+        aws ec2 delete-security-group --group-id "$security_group"
+    done
+    aws ec2 delete-security-group --group-name "capi-node"
+    aws ec2 delete-security-group --group-name "capi-controlplane"
+
+    clusterctl delete --infrastructure aws
+    rm -rf "${GIT_CHECKOUT_DIR}/jenkins"
+    rm -rf "~/.aws"
+    echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
+}
+
+function cleanup_cluster() {
+    if [[ $provider == 'vsphere' ]]; then
+        cleanup_vc_cluster
+    else
+        cleanup_aws_cluster
+    fi
 }
 
 function garbage_collection() {

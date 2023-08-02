@@ -301,3 +301,47 @@
            #!/bin/bash
            set -e
            ./ci/jenkins/stop-stale-jobs.sh --pull-request "${ghprbPullId}" --jenkins "${JENKINS_URL}"
+
+- builder:
+    name: builder-capa-matrix
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          export JOB_NAME="matrix-${TEST_OS}-k8s-${K8S_VERSION//./-}-build-num"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only --provider aws --aws-region "us-west-2" --aws-access-key-id "${AWS_ACCESS_KEY}" --aws-secret-access-key "${AWS_SECRET_KEY}" --aws-service-user-name "${AWS_SERVICE_USER_NAME}" --aws-service-user-role "${AWS_SERVICE_USER_ROLE_ARN}" --aws-vpc-id "${CAPA_VPC}" --aws-subnet-id "${CAPA_SUBNET}" 
+          testcases=("e2e" "conformance" "networkpolicy")
+          failure=0
+          for testcase in "${testcases[@]}"; do
+            ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase "$testcase" --test-only --provider aws --aws-region "us-west-2" --aws-access-key-id "${AWS_ACCESS_KEY}" --aws-secret-access-key "${AWS_SECRET_KEY}" --aws-service-user-name "${AWS_SERVICE_USER_NAME}" --aws-service-user-role "${AWS_SERVICE_USER_ROLE_ARN}" --aws-vpc-id "${CAPA_VPC}" --aws-subnet-id "${CAPA_SUBNET}"
+            if [ "$?" -ne 0 ]; then
+              echo Test $testcase Failed
+              failure=failure+1
+            fi
+          done
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only --provider aws
+          exit $failure
+
+- builder:
+    name: builder-capa-aws-clean-up
+    builders:
+      - shell: |-
+          #!/bin/bash
+          for clustername in `kubectl get clusters -A -l jenkins-test --no-headers | grep test | awk '{print $1}'`; do 
+              echo "Verifying the creation timestamp of the cluster $clustername";
+              timestamp="$(kubectl get clusters -o jsonpath="{.metadata.creationTimestamp}" $clustername -n $clustername)"
+              t1=$(date -d "$timestamp" "+%s")
+              now=$( date "+%s")
+              delta=$((now-t1))
+              if [ "$delta" -gt "14400" ]; then 
+                timeout 2m echo ./ci/jenkins/test-vmc.sh --cluster-name "$clustername" --cleanup-only --provider 
+                result=$?
+                if [[ $result == 124 ]]; then
+                  echo "Error: Clean up job of ${clustername} timeout"
+                fi
+                if [[ $result == 124 ]]; then
+                  echo "Delete old job successfully"
+                fi
+              fi
+          done
