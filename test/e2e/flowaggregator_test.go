@@ -670,7 +670,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		for _, args := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
 			command := []string{}
 			if testOptions.enableCoverage {
-				antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+				antctlCovArgs := antctlCoverageArgs("antctl-coverage", "")
 				command = append(antctlCovArgs, args...)
 			} else {
 				command = append([]string{"antctl", "-v"}, args...)
@@ -710,7 +710,7 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 	var command []string
 	args := []string{"get", "flowrecords", "-o", "json", "--srcip", srcIP, "--srcport", srcPort}
 	if testOptions.enableCoverage {
-		antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+		antctlCovArgs := antctlCoverageArgs("antctl-coverage", "")
 		command = append(antctlCovArgs, args...)
 	} else {
 		command = append([]string{"antctl"}, args...)

@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -74,54 +75,55 @@ const (
 	defaultInterval = 1 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
-	antreaNamespace            string = "kube-system"
-	kubeNamespace              string = "kube-system"
-	flowAggregatorNamespace    string = "flow-aggregator"
-	antreaConfigVolume         string = "antrea-config"
-	antreaWindowsConfigVolume  string = "antrea-windows-config"
-	flowAggregatorConfigVolume string = "flow-aggregator-config"
-	antreaDaemonSet            string = "antrea-agent"
-	antreaWindowsDaemonSet     string = "antrea-agent-windows"
-	antreaDeployment           string = "antrea-controller"
-	flowAggregatorDeployment   string = "flow-aggregator"
-	flowAggregatorCHSecret     string = "clickhouse-ca"
-	antreaDefaultGW            string = "antrea-gw0"
-	testAntreaIPAMNamespace    string = "antrea-ipam-test"
-	testAntreaIPAMNamespace11  string = "antrea-ipam-test-11"
-	testAntreaIPAMNamespace12  string = "antrea-ipam-test-12"
-	busyboxContainerName       string = "busybox"
-	mcjoinContainerName        string = "mcjoin"
-	tcpdumpContainerName       string = "netshoot"
-	agnhostContainerName       string = "agnhost"
-	controllerContainerName    string = "antrea-controller"
-	ovsContainerName           string = "antrea-ovs"
-	agentContainerName         string = "antrea-agent"
-	antreaYML                  string = "antrea.yml"
-	antreaIPSecYML             string = "antrea-ipsec.yml"
-	antreaCovYML               string = "antrea-coverage.yml"
-	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
-	flowAggregatorYML          string = "flow-aggregator.yml"
-	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
-	flowVisibilityYML          string = "flow-visibility.yml"
-	flowVisibilityTLSYML       string = "flow-visibility-tls.yml"
-	chOperatorYML              string = "clickhouse-operator-install-bundle.yml"
-	flowVisibilityCHPodName    string = "chi-clickhouse-clickhouse-0-0-0"
-	flowVisibilityNamespace    string = "flow-visibility"
-	defaultBridgeName          string = "br-int"
-	monitoringNamespace        string = "monitoring"
+	antreaNamespace            = "kube-system"
+	kubeNamespace              = "kube-system"
+	flowAggregatorNamespace    = "flow-aggregator"
+	antreaConfigVolume         = "antrea-config"
+	antreaWindowsConfigVolume  = "antrea-windows-config"
+	flowAggregatorConfigVolume = "flow-aggregator-config"
+	antreaDaemonSet            = "antrea-agent"
+	antreaWindowsDaemonSet     = "antrea-agent-windows"
+	antreaDeployment           = "antrea-controller"
+	flowAggregatorDeployment   = "flow-aggregator"
+	flowAggregatorCHSecret     = "clickhouse-ca"
+	antreaDefaultGW            = "antrea-gw0"
+	testAntreaIPAMNamespace    = "antrea-ipam-test"
+	testAntreaIPAMNamespace11  = "antrea-ipam-test-11"
+	testAntreaIPAMNamespace12  = "antrea-ipam-test-12"
+	busyboxContainerName       = "busybox"
+	mcjoinContainerName        = "mcjoin"
+	tcpdumpContainerName       = "netshoot"
+	agnhostContainerName       = "agnhost"
+	controllerContainerName    = "antrea-controller"
+	ovsContainerName           = "antrea-ovs"
+	agentContainerName         = "antrea-agent"
+	antreaYML                  = "antrea.yml"
+	antreaIPSecYML             = "antrea-ipsec.yml"
+	antreaCovYML               = "antrea-coverage.yml"
+	antreaIPSecCovYML          = "antrea-ipsec-coverage.yml"
+	flowAggregatorYML          = "flow-aggregator.yml"
+	flowAggregatorCovYML       = "flow-aggregator-coverage.yml"
+	flowVisibilityYML          = "flow-visibility.yml"
+	flowVisibilityTLSYML       = "flow-visibility-tls.yml"
+	chOperatorYML              = "clickhouse-operator-install-bundle.yml"
+	flowVisibilityCHPodName    = "chi-clickhouse-clickhouse-0-0-0"
+	flowVisibilityNamespace    = "flow-visibility"
+	defaultBridgeName          = "br-int"
+	monitoringNamespace        = "monitoring"
 
-	antreaControllerCovBinary string = "antrea-controller-coverage"
-	antreaAgentCovBinary      string = "antrea-agent-coverage"
-	flowAggregatorCovBinary   string = "flow-aggregator-coverage"
-	antreaControllerCovFile   string = "antrea-controller.cov.out"
-	antreaAgentCovFile        string = "antrea-agent.cov.out"
-	flowAggregatorCovFile     string = "flow-aggregator.cov.out"
+	antreaControllerCovBinary = "antrea-controller-coverage"
+	antreaAgentCovBinary      = "antrea-agent-coverage"
+	flowAggregatorCovBinary   = "flow-aggregator-coverage"
+	antreaControllerCovFile   = "antrea-controller.cov.out"
+	antreaAgentCovFile        = "antrea-agent.cov.out"
+	flowAggregatorCovFile     = "flow-aggregator.cov.out"
+	cpNodeCoverageDir         = "/tmp/antrea-e2e-coverage"
 
-	antreaAgentConfName      string = "antrea-agent.conf"
-	antreaControllerConfName string = "antrea-controller.conf"
-	flowAggregatorConfName   string = "flow-aggregator.conf"
+	antreaAgentConfName      = "antrea-agent.conf"
+	antreaControllerConfName = "antrea-controller.conf"
+	flowAggregatorConfName   = "flow-aggregator.conf"
 
-	nameSuffixLength int = 8
+	nameSuffixLength = 8
 
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.29"
 	busyboxImage        = "projects.registry.vmware.com/antrea/busybox"
@@ -1236,6 +1238,7 @@ type PodBuilder struct {
 	MutateFunc         func(*corev1.Pod)
 	ResourceRequests   corev1.ResourceList
 	ResourceLimits     corev1.ResourceList
+	ReadinessProbe     *corev1.Probe
 }
 
 func NewPodBuilder(name, ns, image string) *PodBuilder {
@@ -1341,6 +1344,25 @@ func (b *PodBuilder) MountConfigMap(configMapName string, mountPath string, volu
 	return b.AddVolume([]corev1.Volume{volume}).AddVolumeMount([]corev1.VolumeMount{volumeMount})
 }
 
+func (b *PodBuilder) MountHostPath(hostPath string, hostPathType corev1.HostPathType, mountPath string, volumeName string) *PodBuilder {
+	volumeMount := corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
+	volume := corev1.Volume{
+		Name: volumeName,
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: hostPath,
+				Type: &hostPathType,
+			},
+		},
+	}
+	return b.AddVolume([]corev1.Volume{volume}).AddVolumeMount([]corev1.VolumeMount{volumeMount})
+}
+
+func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
+	b.ReadinessProbe = probe
+	return b
+}
+
 func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
@@ -1363,7 +1385,8 @@ func (b *PodBuilder) Create(data *TestData) error {
 				SecurityContext: &corev1.SecurityContext{
 					Privileged: &b.IsPrivileged,
 				},
-				VolumeMounts: b.VolumeMounts,
+				VolumeMounts:   b.VolumeMounts,
+				ReadinessProbe: b.ReadinessProbe,
 			},
 		},
 		Volumes:            b.Volumes,
@@ -2649,9 +2672,9 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 	// copy antctl coverage files from node to the coverage directory
 	var cmd string
 	if testOptions.providerName == "kind" {
-		cmd = "/bin/sh -c find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
+		cmd = fmt.Sprintf("/bin/sh -c find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
 	} else {
-		cmd = "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
+		cmd = fmt.Sprintf("find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
 	}
 	rc, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
@@ -3017,4 +3040,23 @@ func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP st
 	}
 	cmds = append(cmds, fmt.Sprintf("ip netns exec %s %s", netns, cmd))
 	return strings.Join(cmds, " && "), netns
+}
+
+// GetPodLogs returns the current logs for the specified Pod container. If container is empty, it
+// defaults to only container when there is one container in the Pod.
+func (data *TestData) GetPodLogs(ctx context.Context, namespace, name, container string) (string, error) {
+	req := data.clientset.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{
+		Container: container,
+	})
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		return "", fmt.Errorf("error when opening stream to retrieve logs for Pod '%s/%s': %w", namespace, name, err)
+	}
+	defer podLogs.Close()
+
+	var b bytes.Buffer
+	if _, err := io.Copy(&b, podLogs); err != nil {
+		return "", fmt.Errorf("error when copying logs for Pod '%s/%s': %w", namespace, name, err)
+	}
+	return b.String(), nil
 }
