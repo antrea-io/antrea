@@ -138,7 +138,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-e2e
+            - builder-e2e-jumper
           trigger_phrase: ^(?!Thanks for your PR).*/test-ipv6-(e2e|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
@@ -198,7 +198,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-conformance:
+            - builder-conformance-jumper:
                 conformance_type: 'conformance'
           trigger_phrase: ^(?!Thanks for your PR).*/test-ipv6-(conformance|all).*
           white_list_target_branches: []
@@ -259,7 +259,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-conformance:
+            - builder-conformance-jumper:
                 conformance_type: 'networkpolicy'
           trigger_phrase: ^(?!Thanks for your PR).*/test-ipv6-(networkpolicy|all).*
           white_list_target_branches: []
@@ -320,7 +320,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-e2e
+            - builder-e2e-jumper
           trigger_phrase: ^(?!Thanks for your PR).*/test-ipv6-only-(e2e|all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
@@ -380,7 +380,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-conformance:
+            - builder-conformance-jumper:
                 conformance_type: 'conformance'
           trigger_phrase: ^(?!Thanks for your PR).*/test-ipv6-only-(conformance|all).*
           white_list_target_branches: []
@@ -441,7 +441,7 @@
           branches:
           - ${{sha1}}
           builders:
-            - builder-conformance:
+            - builder-conformance-jumper:
                 conformance_type: 'networkpolicy'
           trigger_phrase: ^(?!Thanks for your PR).*/test-ipv6-only-(networkpolicy|all).*
           white_list_target_branches: []
