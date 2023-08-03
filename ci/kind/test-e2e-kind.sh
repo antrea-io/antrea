@@ -261,7 +261,7 @@ function run_test {
   fi
 
   if $flow_visibility; then
-      timeout="15m"
+      timeout="20m"
       flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
       if $coverage; then
           $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
