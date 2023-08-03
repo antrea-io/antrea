@@ -111,8 +111,8 @@ type Controller struct {
 	// l7VlanIDAllocator allocates a VLAN ID for every L7 rule.
 	l7VlanIDAllocator *l7VlanIDAllocator
 	// ofClient registers packetin for Antrea Policy logging.
-	ofClient           openflow.Client
-	antreaPolicyLogger *AntreaPolicyLogger
+	ofClient    openflow.Client
+	auditLogger *AuditLogger
 	// statusManager syncs NetworkPolicy statuses with the antrea-controller.
 	// It's only for Antrea NetworkPolicies.
 	statusManager         StatusManager
@@ -147,7 +147,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	antreaProxyEnabled bool,
 	statusManagerEnabled bool,
 	multicastEnabled bool,
-	loggerOptions *AntreaPolicyLoggerOptions, // use nil to disable logging
+	loggerOptions *AuditLoggerOptions, // use nil to disable logging
 	asyncRuleDeleteInterval time.Duration,
 	dnsServerOverride string,
 	nodeType config.NodeType,
@@ -198,16 +198,16 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
 	c.fullSyncGroup.Add(3)
 
-	if c.ofClient != nil && antreaPolicyEnabled {
+	if c.ofClient != nil {
 		// Register packetInHandler
 		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
 		if loggerOptions != nil {
 			// Initialize logger for Antrea Policy audit logging
-			antreaPolicyLogger, err := newAntreaPolicyLogger(loggerOptions)
+			auditLogger, err := newAuditLogger(loggerOptions)
 			if err != nil {
 				return nil, err
 			}
-			c.antreaPolicyLogger = antreaPolicyLogger
+			c.auditLogger = auditLogger
 		}
 	}
 

@@ -43,16 +43,16 @@ const (
 	nullPlaceholder        = "<nil>"
 )
 
-// AntreaPolicyLogger is used for Antrea policy audit logging.
+// AuditLogger is used for network policy audit logging.
 // Includes a lumberjack logger and a map used for log deduplication.
-type AntreaPolicyLogger struct {
+type AuditLogger struct {
 	bufferLength     time.Duration
 	clock            clock.Clock // enable the use of a "virtual" clock for unit tests
-	anpLogger        *log.Logger
+	npLogger         *log.Logger
 	logDeduplication logRecordDedupMap
 }
 
-type AntreaPolicyLoggerOptions struct {
+type AuditLoggerOptions struct {
 	MaxSize    int
 	MaxBackups int
 	MaxAge     int
@@ -91,34 +91,34 @@ type logRecordDedupMap struct {
 }
 
 // getLogKey returns the log record in logDeduplication map by logMsg.
-func (l *AntreaPolicyLogger) getLogKey(logMsg string) *logDedupRecord {
+func (l *AuditLogger) getLogKey(logMsg string) *logDedupRecord {
 	l.logDeduplication.logMutex.Lock()
 	defer l.logDeduplication.logMutex.Unlock()
 	return l.logDeduplication.logMap[logMsg]
 }
 
 // logAfterTimer runs concurrently until buffer timer stops, then call terminateLogKey.
-func (l *AntreaPolicyLogger) logAfterTimer(logMsg string) {
+func (l *AuditLogger) logAfterTimer(logMsg string) {
 	ch := l.getLogKey(logMsg).bufferTimerCh
 	<-ch
 	l.terminateLogKey(logMsg)
 }
 
 // terminateLogKey logs and deletes the log record in logDeduplication map by logMsg.
-func (l *AntreaPolicyLogger) terminateLogKey(logMsg string) {
+func (l *AuditLogger) terminateLogKey(logMsg string) {
 	l.logDeduplication.logMutex.Lock()
 	defer l.logDeduplication.logMutex.Unlock()
 	logRecord := l.logDeduplication.logMap[logMsg]
 	if logRecord.count == 1 {
-		l.anpLogger.Printf(logMsg)
+		l.npLogger.Printf(logMsg)
 	} else {
-		l.anpLogger.Printf("%s [%d packets in %s]", logMsg, logRecord.count, time.Since(logRecord.initTime))
+		l.npLogger.Printf("%s [%d packets in %s]", logMsg, logRecord.count, time.Since(logRecord.initTime))
 	}
 	delete(l.logDeduplication.logMap, logMsg)
 }
 
 // updateLogKey initiates record or increases the count in logDeduplication corresponding to given logMsg.
-func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Duration) bool {
+func (l *AuditLogger) updateLogKey(logMsg string, bufferLength time.Duration) bool {
 	l.logDeduplication.logMutex.Lock()
 	defer l.logDeduplication.logMutex.Unlock()
 	_, exists := l.logDeduplication.logMap[logMsg]
@@ -151,11 +151,11 @@ func buildLogMsg(ob *logInfo) string {
 }
 
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
-func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
+func (l *AuditLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
 	logMsg := buildLogMsg(ob)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
-		l.anpLogger.Printf(logMsg)
+		l.npLogger.Printf(logMsg)
 	} else {
 		// Increase count if duplicated within 1 sec, create buffer otherwise.
 		exists := l.updateLogKey(logMsg, l.bufferLength)
@@ -166,16 +166,16 @@ func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	}
 }
 
-// newAntreaPolicyLogger is called while newing Antrea network policy agent controller.
-// Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
-func newAntreaPolicyLogger(options *AntreaPolicyLoggerOptions) (*AntreaPolicyLogger, error) {
+// newAuditLogger is called while newing network policy agent controller.
+// Customize AuditLogger specifically for audit logging through agent configuration.
+func newAuditLogger(options *AuditLoggerOptions) (*AuditLogger, error) {
 	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
 	logFile := filepath.Join(logDir, logfileName)
 	_, err := os.Stat(logDir)
 	if os.IsNotExist(err) {
 		os.Mkdir(logDir, 0755)
 	} else if err != nil {
-		return nil, fmt.Errorf("received error while accessing Antrea network policy log directory: %v", err)
+		return nil, fmt.Errorf("received error while accessing network policy log directory: %v", err)
 	}
 
 	// Use lumberjack log file rotation.
@@ -187,14 +187,14 @@ func newAntreaPolicyLogger(options *AntreaPolicyLoggerOptions) (*AntreaPolicyLog
 		Compress:   options.Compress,
 	}
 
-	antreaPolicyLogger := &AntreaPolicyLogger{
+	auditLogger := &AuditLogger{
 		bufferLength:     time.Second,
 		clock:            clock.RealClock{},
-		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
+		npLogger:         log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
 	klog.InfoS("Initialized Antrea-native Policy Logger for audit logging", "logFile", logFile, "options", options)
-	return antreaPolicyLogger, nil
+	return auditLogger, nil
 }
 
 // getNetworkPolicyInfo fills in tableName, npName, ofPriority, disposition of logInfo ob.
@@ -252,11 +252,11 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 
 	// Get K8s default deny action, if traffic is default deny, no conjunction could be matched.
 	if match = getMatchRegField(matchers, openflow.APDenyRegMark.GetField()); match != nil {
-		cnpDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
+		apDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
 		if err != nil {
 			return fmt.Errorf("received error while unloading deny mark from reg: %v", err)
 		}
-		isK8sDefaultDeny := (cnpDenyRegVal == 0) && (disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej)
+		isK8sDefaultDeny := (apDenyRegVal == 0) && (disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej)
 		if isK8sDefaultDeny {
 			// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
 			ob.npRef = string(v1beta2.K8sNetworkPolicy)
@@ -328,6 +328,6 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	getPacketInfo(packet, ob)
 
 	// Log the ob info to corresponding file w/ deduplication.
-	c.antreaPolicyLogger.LogDedupPacket(ob)
+	c.auditLogger.LogDedupPacket(ob)
 	return nil
 }

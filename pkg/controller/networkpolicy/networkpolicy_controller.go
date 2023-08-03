@@ -438,6 +438,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	n.groupingInterface.AddEventHandler(internalGroupType, n.enqueueInternalGroup)
 	n.labelIdentityInterface.AddEventHandler(n.triggerPolicyResyncForLabelIdentityUpdates)
 	// Add handlers for NetworkPolicy events.
+	n.namespaceInformer = namespaceInformer
+	n.namespaceLister = namespaceInformer.Lister()
+	n.namespaceListerSynced = namespaceInformer.Informer().HasSynced
 	networkPolicyInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    n.addNetworkPolicy,
@@ -466,9 +469,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	}
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		n.namespaceInformer = namespaceInformer
-		n.namespaceLister = namespaceInformer.Lister()
-		n.namespaceListerSynced = namespaceInformer.Informer().HasSynced
 		n.serviceInformer = serviceInformer
 		n.serviceLister = serviceInformer.Lister()
 		n.serviceListerSynced = serviceInformer.Informer().HasSynced
