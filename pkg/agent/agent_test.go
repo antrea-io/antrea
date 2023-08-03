@@ -30,8 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	clockutils "k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
@@ -210,12 +212,15 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 	transportAddresses := strings.Join([]string{testTransportIface.ipV4Net.IP.String(), testTransportIface.ipV6Net.IP.String()}, ",")
 	tests := []struct {
 		name                      string
+		getNodeReaction           k8stesting.ReactionFunc
 		trafficEncapMode          config.TrafficEncapModeType
 		transportIfName           string
 		transportIfCIDRs          []string
 		transportInterface        *testTransInterface
 		tunnelType                ovsconfig.TunnelType
 		mtu                       int
+		podCIDR                   string
+		expectedErr               string
 		expectedMTU               int
 		expectedNodeLocalIfaceMTU int
 		expectedNodeAnnotation    map[string]string
@@ -224,6 +229,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			name:                      "noencap mode",
 			trafficEncapMode:          config.TrafficEncapModeNoEncap,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1500,
 			expectedNodeAnnotation:    map[string]string{types.NodeMACAddressAnnotationKey: macAddr.String()},
@@ -232,6 +238,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			name:                      "hybrid mode",
 			trafficEncapMode:          config.TrafficEncapModeHybrid,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1500,
 			expectedNodeAnnotation:    map[string]string{types.NodeMACAddressAnnotationKey: macAddr.String()},
@@ -241,6 +248,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			trafficEncapMode:          config.TrafficEncapModeEncap,
 			tunnelType:                ovsconfig.GeneveTunnel,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1450,
 			expectedNodeAnnotation:    nil,
@@ -250,6 +258,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			trafficEncapMode:          config.TrafficEncapModeEncap,
 			tunnelType:                ovsconfig.GeneveTunnel,
 			mtu:                       1400,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1400,
 			expectedNodeAnnotation:    nil,
@@ -260,6 +269,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportIfName:           testTransportIface.iface.Name,
 			transportInterface:        testTransportIface,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1500,
 			expectedNodeAnnotation: map[string]string{
@@ -273,6 +283,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportIfName:           testTransportIface.iface.Name,
 			transportInterface:        testTransportIface,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1500,
 			expectedNodeAnnotation: map[string]string{
@@ -287,6 +298,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportInterface:        testTransportIface,
 			tunnelType:                ovsconfig.GeneveTunnel,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1450,
 			expectedNodeAnnotation: map[string]string{
@@ -300,6 +312,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportInterface:        testTransportIface,
 			tunnelType:                ovsconfig.GeneveTunnel,
 			mtu:                       1400,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1400,
 			expectedNodeAnnotation: map[string]string{
@@ -312,6 +325,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportIfCIDRs:          transportCIDRs,
 			transportInterface:        testTransportIface,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1500,
 			expectedNodeAnnotation: map[string]string{
@@ -325,6 +339,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportIfCIDRs:          transportCIDRs,
 			transportInterface:        testTransportIface,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1500,
 			expectedNodeAnnotation: map[string]string{
@@ -339,6 +354,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportInterface:        testTransportIface,
 			tunnelType:                ovsconfig.GeneveTunnel,
 			mtu:                       0,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1450,
 			expectedNodeAnnotation: map[string]string{
@@ -352,11 +368,27 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			transportInterface:        testTransportIface,
 			tunnelType:                ovsconfig.GeneveTunnel,
 			mtu:                       1400,
+			podCIDR:                   podCIDRStr,
 			expectedNodeLocalIfaceMTU: 1500,
 			expectedMTU:               1400,
 			expectedNodeAnnotation: map[string]string{
 				types.NodeTransportAddressAnnotationKey: transportAddresses,
 			},
+		},
+		{
+			name: "error getting Node",
+			getNodeReaction: func(action k8stesting.Action) (handled bool, ret k8sruntime.Object, err error) {
+				return true, nil, fmt.Errorf("connection error")
+			},
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			tunnelType:       ovsconfig.GeneveTunnel,
+			expectedErr:      "failed to get Node with name node1 from K8s: connection error",
+		},
+		{
+			name:             "empty node podCIDR",
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			tunnelType:       ovsconfig.GeneveTunnel,
+			expectedErr:      "Spec.PodCIDR is empty for Node node1",
 		},
 	}
 	for _, tt := range tests {
@@ -366,7 +398,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 					Name: nodeName,
 				},
 				Spec: corev1.NodeSpec{
-					PodCIDR: podCIDRStr,
+					PodCIDR: tt.podCIDR,
 				},
 				Status: corev1.NodeStatus{
 					Addresses: []corev1.NodeAddress{
@@ -378,6 +410,10 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 				},
 			}
 			client := fake.NewSimpleClientset(node)
+			if tt.getNodeReaction != nil {
+				client.PrependReactor("get", "nodes", tt.getNodeReaction)
+			}
+
 			ifaceStore := interfacestore.NewInterfaceStore()
 			expectedNodeConfig := config.NodeConfig{
 				Name:                       nodeName,
@@ -417,12 +453,18 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			}
 			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
 			defer mockNodeNameEnv(nodeName)()
+			defer mockGetNodeTimeout(100 * time.Millisecond)
 
-			require.NoError(t, initializer.initK8sNodeLocalConfig(nodeName))
-			assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
-			node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedNodeAnnotation, node.Annotations)
+			err := initializer.initK8sNodeLocalConfig(nodeName)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
+				node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedNodeAnnotation, node.Annotations)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			}
 		})
 	}
 }
@@ -438,6 +480,12 @@ func mockGetIPNetDeviceFromIP(ipNet *net.IPNet, ipDevice *net.Interface) func() 
 func mockNodeNameEnv(name string) func() {
 	_ = os.Setenv(env.NodeNameEnvKey, name)
 	return func() { os.Unsetenv(env.NodeNameEnvKey) }
+}
+
+func mockGetNodeTimeout(timeout time.Duration) func() {
+	prevTimeout := getNodeTimeout
+	getNodeTimeout = timeout
+	return func() { getNodeTimeout = prevTimeout }
 }
 
 func mockGetTransportIPNetDeviceByName(ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) func() {
