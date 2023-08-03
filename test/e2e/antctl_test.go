@@ -53,7 +53,7 @@ func TestAntctl(t *testing.T) {
 
 	// This is used to determine the Antrea container image being tested. We will use the same
 	// image when creating a Pod to run antctl.
-	// Note that this is the Linux image, so we will alwaus schedule the antctl Pod on the
+	// Note that this is the Linux image, so we will always schedule the antctl Pod on the
 	// control-plane Node, which is guaranteed to be a Linux Node.
 	ds, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
 	require.NoError(t, err, "Error when getting antrea DaemonSet")
@@ -372,7 +372,7 @@ func createAntctlServiceAccount(t *testing.T, data *TestData, name string) {
 
 	t.Cleanup(func() {
 		err := data.clientset.CoreV1().ServiceAccounts(data.testNamespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
-		assert.NoError(t, err, "Error when deleting ClusterRoleBinding")
+		assert.NoError(t, err, "Error when deleting ServiceAccount")
 	})
 
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
