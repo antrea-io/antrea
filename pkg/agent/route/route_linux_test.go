@@ -100,17 +100,17 @@ func TestSyncIPSet(t *testing.T) {
 	podCIDRv6Str := "2001:ab03:cd04:55ef::/64"
 	_, podCIDRv6, _ := net.ParseCIDR(podCIDRv6Str)
 	tests := []struct {
-		name                  string
-		proxyAll              bool
-		multicastEnabled      bool
-		connectUplinkToBridge bool
-		networkConfig         *config.NetworkConfig
-		nodeConfig            *config.NodeConfig
-		nodePortsIPv4         []string
-		nodePortsIPv6         []string
-		clusterNodeIPs        map[string]string
-		clusterNodeIP6s       map[string]string
-		expectedCalls         func(ipset *ipsettest.MockInterfaceMockRecorder)
+		name               string
+		proxyAll           bool
+		multicastEnabled   bool
+		enableBridgingMode bool
+		networkConfig      *config.NetworkConfig
+		nodeConfig         *config.NodeConfig
+		nodePortsIPv4      []string
+		nodePortsIPv6      []string
+		clusterNodeIPs     map[string]string
+		clusterNodeIP6s    map[string]string
+		expectedCalls      func(ipset *ipsettest.MockInterfaceMockRecorder)
 	}{
 		{
 			name: "networkPolicyOnly",
@@ -174,8 +174,8 @@ func TestSyncIPSet(t *testing.T) {
 			},
 		},
 		{
-			name:                  "noencap, connectUplinkToBridge=true",
-			connectUplinkToBridge: true,
+			name:               "noencap, enableBridgingMode=true",
+			enableBridgingMode: true,
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: config.TrafficEncapModeNoEncap,
 				IPv4Enabled:      true,
@@ -200,15 +200,15 @@ func TestSyncIPSet(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ipset := ipsettest.NewMockInterface(ctrl)
 			c := &Client{ipset: ipset,
-				networkConfig:         tt.networkConfig,
-				nodeConfig:            tt.nodeConfig,
-				proxyAll:              tt.proxyAll,
-				multicastEnabled:      tt.multicastEnabled,
-				connectUplinkToBridge: tt.connectUplinkToBridge,
-				nodePortsIPv4:         sync.Map{},
-				nodePortsIPv6:         sync.Map{},
-				clusterNodeIPs:        sync.Map{},
-				clusterNodeIP6s:       sync.Map{},
+				networkConfig:      tt.networkConfig,
+				nodeConfig:         tt.nodeConfig,
+				proxyAll:           tt.proxyAll,
+				multicastEnabled:   tt.multicastEnabled,
+				enableBridgingMode: tt.enableBridgingMode,
+				nodePortsIPv4:      sync.Map{},
+				nodePortsIPv6:      sync.Map{},
+				clusterNodeIPs:     sync.Map{},
+				clusterNodeIP6s:    sync.Map{},
 			}
 			for _, nodePortIPv4 := range tt.nodePortsIPv4 {
 				c.nodePortsIPv4.Store(nodePortIPv4, struct{}{})
@@ -235,6 +235,7 @@ func TestSyncIPTables(t *testing.T) {
 		proxyAll              bool
 		multicastEnabled      bool
 		connectUplinkToBridge bool
+		enableBridgingMode    bool
 		networkConfig         *config.NetworkConfig
 		nodeConfig            *config.NodeConfig
 		nodePortsIPv4         []string
@@ -425,6 +426,7 @@ COMMIT
 		{
 			name:                  "noencap,connectUplinkToBridge=true",
 			connectUplinkToBridge: true,
+			enableBridgingMode:    true,
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: config.TrafficEncapModeNoEncap,
 				IPv4Enabled:      true,
@@ -486,6 +488,7 @@ COMMIT
 				isCloudEKS:            tt.isCloudEKS,
 				multicastEnabled:      tt.multicastEnabled,
 				connectUplinkToBridge: tt.connectUplinkToBridge,
+				enableBridgingMode:    tt.enableBridgingMode,
 				markToSNATIP:          sync.Map{},
 			}
 			for mark, snatIP := range tt.markToSNATIP {
@@ -1556,40 +1559,40 @@ func TestDeleteExternalIPRoute(t *testing.T) {
 
 func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	tests := []struct {
-		name                  string
-		nodeConfig            *config.NodeConfig
-		connectUplinkToBridge bool
-		podAddresses          []net.IP
-		expectedCalls         func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+		name               string
+		nodeConfig         *config.NodeConfig
+		enableBridgingMode bool
+		podAddresses       []net.IP
+		expectedCalls      func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
 	}{
 		{
-			name: "connectUplinkToBridge=false",
+			name: "enableBridgingMode=false",
 			nodeConfig: &config.NodeConfig{
 				PodIPv4CIDR: ip.MustParseCIDR("1.1.1.0/24"),
 				PodIPv6CIDR: ip.MustParseCIDR("aabb::/64"),
 			},
-			connectUplinkToBridge: false,
-			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
-			expectedCalls:         func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+			enableBridgingMode: false,
+			podAddresses:       []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls:      func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
 		},
 		{
-			name: "connectUplinkToBridge=true,nodeIPAMPod",
+			name: "enableBridgingMode=false,nodeIPAMPod",
 			nodeConfig: &config.NodeConfig{
 				PodIPv4CIDR: ip.MustParseCIDR("1.1.1.0/24"),
 				PodIPv6CIDR: ip.MustParseCIDR("aabb::/64"),
 			},
-			connectUplinkToBridge: false,
-			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
-			expectedCalls:         func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+			enableBridgingMode: false,
+			podAddresses:       []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls:      func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
 		},
 		{
-			name: "connectUplinkToBridge=true,antreaIPAMPod",
+			name: "enableBridgingMode=true,antreaIPAMPod",
 			nodeConfig: &config.NodeConfig{
 				PodIPv4CIDR: ip.MustParseCIDR("1.1.1.0/24"),
 				PodIPv6CIDR: ip.MustParseCIDR("aabb::/64"),
 			},
-			connectUplinkToBridge: true,
-			podAddresses:          []net.IP{net.ParseIP("1.1.2.1"), net.ParseIP("aabc::1")},
+			enableBridgingMode: true,
+			podAddresses:       []net.IP{net.ParseIP("1.1.2.1"), net.ParseIP("aabc::1")},
 			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
 				mockIPSet.AddEntry(localAntreaFlexibleIPAMPodIPSet, "1.1.2.1")
 				mockIPSet.AddEntry(localAntreaFlexibleIPAMPodIP6Set, "aabc::1")
@@ -1601,9 +1604,9 @@ func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{
-				ipset:                 mockIPSet,
-				nodeConfig:            tt.nodeConfig,
-				connectUplinkToBridge: tt.connectUplinkToBridge,
+				ipset:              mockIPSet,
+				nodeConfig:         tt.nodeConfig,
+				enableBridgingMode: tt.enableBridgingMode,
 			}
 			tt.expectedCalls(mockIPSet.EXPECT())
 
@@ -1615,21 +1618,21 @@ func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 func TestDeleteLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
 	tests := []struct {
-		name                  string
-		connectUplinkToBridge bool
-		podAddresses          []net.IP
-		expectedCalls         func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+		name               string
+		enableBridgingMode bool
+		podAddresses       []net.IP
+		expectedCalls      func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:                  "connectUplinkToBridge=false",
-			connectUplinkToBridge: false,
-			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
-			expectedCalls:         func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+			name:               "enableBridgingMode=false",
+			enableBridgingMode: false,
+			podAddresses:       []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls:      func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
 		},
 		{
-			name:                  "connectUplinkToBridge=true",
-			connectUplinkToBridge: true,
-			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			name:               "enableBridgingMode=true",
+			enableBridgingMode: true,
+			podAddresses:       []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
 			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
 				mockIPSet.DelEntry(localAntreaFlexibleIPAMPodIPSet, "1.1.1.1")
 				mockIPSet.DelEntry(localAntreaFlexibleIPAMPodIP6Set, "aabb::1")
@@ -1641,9 +1644,9 @@ func TestDeleteLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{
-				ipset:                 mockIPSet,
-				nodeConfig:            nodeConfig,
-				connectUplinkToBridge: tt.connectUplinkToBridge,
+				ipset:              mockIPSet,
+				nodeConfig:         nodeConfig,
+				enableBridgingMode: tt.enableBridgingMode,
 			}
 			tt.expectedCalls(mockIPSet.EXPECT())
 

@@ -192,7 +192,7 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 			if f.enableMulticast {
 				tables = append(tables, PipelineIPClassifierTable)
 			}
-			if f.connectUplinkToBridge {
+			if f.enableBridgingMode {
 				tables = append(tables, VLANTable)
 			}
 		}

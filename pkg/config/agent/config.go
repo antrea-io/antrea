@@ -119,6 +119,9 @@ type AgentConfig struct {
 	// IPv4 and Linux Nodes, and can be enabled only when `ovsDatapathType` is `system`,
 	// `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
 	EnableBridgingMode bool `yaml:"enableBridgingMode,omitempty"`
+	// Enable applying Antrea Cluster Network Policy to K8s Node. Node's transport interface
+	// is connected to the OVS bridge.
+	EnableClusterNetworkPolicyApplyToNode bool `yaml:"enableClusterNetworkPolicyApplyToNode,omitempty"`
 	// Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the
 	// datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum.
 	// It affects Pods running on Linux Nodes only.

@@ -79,16 +79,18 @@ func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
 }
 
 type clientOptions struct {
-	enableProxy           bool
-	enableAntreaPolicy    bool
-	enableEgress          bool
-	proxyAll              bool
-	enableDSR             bool
-	connectUplinkToBridge bool
-	enableMulticast       bool
-	enableTrafficControl  bool
-	enableMulticluster    bool
-	enableL7NetworkPolicy bool
+	enableProxy                           bool
+	enableAntreaPolicy                    bool
+	enableEgress                          bool
+	proxyAll                              bool
+	enableDSR                             bool
+	connectUplinkToBridge                 bool
+	enableBridgingMode                    bool
+	enableClusterNetworkPolicyApplyToNode bool
+	enableMulticast                       bool
+	enableTrafficControl                  bool
+	enableMulticluster                    bool
+	enableL7NetworkPolicy                 bool
 }
 
 type clientOptionsFn func(*clientOptions)
@@ -119,6 +121,10 @@ func disableEgress(o *clientOptions) {
 
 func enableConnectUplinkToBridge(o *clientOptions) {
 	o.connectUplinkToBridge = true
+}
+
+func enableBridgingMode(o *clientOptions) {
+	o.enableBridgingMode = true
 }
 
 func enableMulticast(o *clientOptions) {
@@ -346,16 +352,18 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	options ...clientOptionsFn) *client {
 
 	o := &clientOptions{
-		enableProxy:           true,
-		enableAntreaPolicy:    true,
-		enableEgress:          true,
-		proxyAll:              false,
-		enableDSR:             false,
-		connectUplinkToBridge: false,
-		enableMulticast:       false,
-		enableTrafficControl:  false,
-		enableMulticluster:    false,
-		enableL7NetworkPolicy: false,
+		enableProxy:                           true,
+		enableAntreaPolicy:                    true,
+		enableEgress:                          true,
+		proxyAll:                              false,
+		enableDSR:                             false,
+		connectUplinkToBridge:                 false,
+		enableBridgingMode:                    false,
+		enableClusterNetworkPolicyApplyToNode: false,
+		enableMulticast:                       false,
+		enableTrafficControl:                  false,
+		enableMulticluster:                    false,
+		enableL7NetworkPolicy:                 false,
 	}
 	for _, fn := range options {
 		fn(o)
@@ -372,6 +380,8 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.proxyAll,
 		o.enableDSR,
 		o.connectUplinkToBridge,
+		o.enableBridgingMode,
+		o.enableClusterNetworkPolicyApplyToNode,
 		o.enableMulticast,
 		o.enableTrafficControl,
 		o.enableMulticluster,
@@ -571,7 +581,7 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 			name:             "IPv4 NoEncap Linux",
 			enableIPv4:       true,
 			skipWindows:      true,
-			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge},
+			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge, enableBridgingMode},
 			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
 			tunnelPeerIPs:    &utilip.DualStackIPs{},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
@@ -585,7 +595,7 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 			name:             "IPv4 NoEncap Windows",
 			enableIPv4:       true,
 			skipLinux:        true,
-			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge},
+			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge, enableBridgingMode},
 			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
 			tunnelPeerIPs:    &utilip.DualStackIPs{},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
@@ -599,7 +609,7 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 			name:             "IPv6 NoEncap",
 			enableIPv6:       true,
 			skipWindows:      true,
-			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge},
+			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge, enableBridgingMode},
 			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv6: peerGwIPv6},
 			tunnelPeerIPs:    &utilip.DualStackIPs{},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
@@ -770,7 +780,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 		{
 			name:             "IPv4,Antrea IPAM",
 			enableIPv4:       true,
-			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge},
+			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge, enableBridgingMode},
 			podInterfaceIPs:  []net.IP{antreaIPAMPodIPv4},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			expectedFlows: []string{
@@ -786,7 +796,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 		{
 			name:             "IPv4,Antrea IPAM,VLAN",
 			enableIPv4:       true,
-			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge},
+			clientOptions:    []clientOptionsFn{disableEgress, enableConnectUplinkToBridge, enableBridgingMode},
 			podInterfaceIPs:  []net.IP{antreaIPAMPodIPv4},
 			vlanID:           1,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
@@ -1815,7 +1825,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, nil, false)
 	m := ovsoftest.NewMockBridge(ctrl)
 	ofClient.bridge = m
 	bridge := binding.OFBridge{}
@@ -2484,7 +2494,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	expectedFlows := append(pipelineDefaultFlows(false, true, true), egressInitFlows(true)...)
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(fc.ovsMetersAreSupported, false, false)...)
-	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, true)...)
+	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
 
 	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {

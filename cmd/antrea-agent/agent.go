@@ -135,6 +135,7 @@ func run(o *Options) error {
 
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
+	enableClusterNetworkPolicyApplyToNode := o.config.EnableClusterNetworkPolicyApplyToNode
 	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
@@ -142,8 +143,8 @@ func run(o *Options) error {
 	enableFLowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
 
 	nodeIPTracker := nodeip.NewTracker(nodeInformer)
-	// Bridging mode will connect the uplink interface to the OVS bridge.
-	connectUplinkToBridge := enableBridgingMode
+	// Bridging mode or enable Cluster Network policy apply to Node will connect the uplink interface to the OVS bridge.
+	connectUplinkToBridge := enableBridgingMode || enableClusterNetworkPolicyApplyToNode
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
@@ -161,6 +162,8 @@ func run(o *Options) error {
 		o.config.AntreaProxy.ProxyAll,
 		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
 		connectUplinkToBridge,
+		enableBridgingMode,
+		enableClusterNetworkPolicyApplyToNode,
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
 		enableMulticlusterGW,
@@ -211,7 +214,7 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
-	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge, multicastEnabled, serviceCIDRProvider)
+	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge, enableBridgingMode, multicastEnabled, serviceCIDRProvider)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}

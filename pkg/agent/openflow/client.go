@@ -555,7 +555,7 @@ func (c *client) InstallNodeFlows(hostname string,
 		if c.enableEgress {
 			flows = append(flows, c.featureEgress.snatSkipNodeFlow(tunnelPeerIP))
 		}
-		if c.connectUplinkToBridge {
+		if c.enableBridgingMode {
 			// flow to catch traffic from AntreaFlexibleIPAM Pod to remote Per-Node IPAM Pod
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaUplink(remoteGatewayMAC, *peerPodCIDR, true))
 		}
@@ -584,7 +584,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 
 	podInterfaceIPv4 := util.GetIPv4Addr(podInterfaceIPs)
 	// TODO(gran): support IPv6
-	isAntreaFlexibleIPAM := c.connectUplinkToBridge && c.nodeConfig.PodIPv4CIDR != nil && !c.nodeConfig.PodIPv4CIDR.Contains(podInterfaceIPv4)
+	isAntreaFlexibleIPAM := c.enableBridgingMode && c.nodeConfig.PodIPv4CIDR != nil && !c.nodeConfig.PodIPv4CIDR.Contains(podInterfaceIPv4)
 
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
@@ -875,6 +875,8 @@ func (c *client) generatePipelines() {
 			c.nodeConfig,
 			c.networkConfig,
 			c.connectUplinkToBridge,
+			c.enableBridgingMode,
+			c.enableClusterNetworkPolicyApplyToNode,
 			c.enableMulticast,
 			c.proxyAll,
 			c.enableDSR,
@@ -893,7 +895,8 @@ func (c *client) generatePipelines() {
 			c.enableProxy,
 			c.proxyAll,
 			c.enableDSR,
-			c.connectUplinkToBridge)
+			c.connectUplinkToBridge,
+			c.enableBridgingMode)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureService)
 		c.traceableFeatures = append(c.traceableFeatures, c.featureService)
 	}
@@ -914,6 +917,7 @@ func (c *client) generatePipelines() {
 		c.enableMulticast,
 		c.proxyAll,
 		c.connectUplinkToBridge,
+		c.enableBridgingMode,
 		c.nodeType,
 		c.groupIDAllocator)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)

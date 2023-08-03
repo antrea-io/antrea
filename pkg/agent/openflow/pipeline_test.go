@@ -179,7 +179,7 @@ func Test_client_defaultFlows(t *testing.T) {
 			enableIPv4:       true,
 			nodeType:         config.K8sNode,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			clientOptions:    []clientOptionsFn{enableTrafficControl, enableMulticast, enableConnectUplinkToBridge},
+			clientOptions:    []clientOptionsFn{enableTrafficControl, enableMulticast, enableConnectUplinkToBridge, enableBridgingMode},
 			expectedFlows:    pipelineDefaultFlows(false, false, true),
 		},
 		{

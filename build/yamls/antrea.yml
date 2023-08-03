@@ -5607,6 +5607,10 @@ data:
     # `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
     enableBridgingMode: false
 
+    # Enable applying Antrea Cluster Network Policy to K8s Nodes. 
+    # Node's transport interface is connected to the OVS bridge.
+    enableClusterNetworkPolicyApplyToNode: false
+
     # Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the
     # datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum.
     # It affects Pods running on Linux Nodes only.

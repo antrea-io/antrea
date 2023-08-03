@@ -38,6 +38,7 @@ var (
 		enableAntreaPolicy:    true,
 		proxyAll:              false,
 		connectUplinkToBridge: false,
+		enableBridgingMode:    false,
 		enableMulticast:       false,
 		enableTrafficControl:  false,
 		enableMulticluster:    false,
@@ -53,6 +54,7 @@ func newTestFeaturePodConnectivity(ipProtocols []binding.Protocol, options ...cl
 	return &featurePodConnectivity{
 		ipProtocols:           ipProtocols,
 		connectUplinkToBridge: o.connectUplinkToBridge,
+		enableBridgingMode:    o.enableBridgingMode,
 		enableMulticast:       o.enableMulticast,
 		enableTrafficControl:  o.enableTrafficControl,
 		proxyAll:              o.proxyAll,
@@ -244,7 +246,7 @@ func TestBuildPipeline(t *testing.T) {
 			name:    "K8s Node, IPv4 only, with TrafficControl and connectUplinkToBridge enabled",
 			ipStack: ipv6Only,
 			features: []feature{
-				newTestFeaturePodConnectivity(ipStackMap[ipv4Only], enableTrafficControl, enableConnectUplinkToBridge),
+				newTestFeaturePodConnectivity(ipStackMap[ipv4Only], enableTrafficControl, enableConnectUplinkToBridge, enableBridgingMode),
 				newTestFeatureNetworkPolicy(config.K8sNode),
 				newTestFeatureService(),
 				newTestFeatureEgress(),

@@ -419,23 +419,25 @@ type flowCategoryCache struct {
 }
 
 type client struct {
-	enableProxy             bool
-	proxyAll                bool
-	enableDSR               bool
-	enableAntreaPolicy      bool
-	enableL7NetworkPolicy   bool
-	enableDenyTracking      bool
-	enableEgress            bool
-	enableMulticast         bool
-	enableTrafficControl    bool
-	enableMulticluster      bool
-	enablePrometheusMetrics bool
-	connectUplinkToBridge   bool
-	nodeType                config.NodeType
-	roundInfo               types.RoundInfo
-	cookieAllocator         cookie.Allocator
-	bridge                  binding.Bridge
-	groupIDAllocator        GroupAllocator
+	enableProxy                           bool
+	proxyAll                              bool
+	enableDSR                             bool
+	enableAntreaPolicy                    bool
+	enableL7NetworkPolicy                 bool
+	enableDenyTracking                    bool
+	enableEgress                          bool
+	enableMulticast                       bool
+	enableTrafficControl                  bool
+	enableMulticluster                    bool
+	enablePrometheusMetrics               bool
+	connectUplinkToBridge                 bool
+	enableBridgingMode                    bool
+	enableClusterNetworkPolicyApplyToNode bool
+	nodeType                              config.NodeType
+	roundInfo                             types.RoundInfo
+	cookieAllocator                       cookie.Allocator
+	bridge                                binding.Bridge
+	groupIDAllocator                      GroupAllocator
 
 	featurePodConnectivity          *featurePodConnectivity
 	featureService                  *featureService
@@ -1339,7 +1341,7 @@ func (f *featurePodConnectivity) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr
 		} else {
 			// This generates the flow to match the packets with RewriteMACRegMark and destined for a local per-Node IPAM Pod.
 			regMarksToMatch := []*binding.RegMark{RewriteMACRegMark}
-			if f.connectUplinkToBridge {
+			if f.enableBridgingMode {
 				// Only overwrite MAC for untagged traffic which destination is a local per-Node IPAM Pod.
 				regMarksToMatch = append(regMarksToMatch, binding.NewRegMark(VLANIDField, 0))
 			}
@@ -1471,7 +1473,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaGW(localGatewayMAC net.Hard
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	ipProtocol := getIPProtocol(peerSubnet.IP)
 	var regMarksToMatch []*binding.RegMark
-	if f.connectUplinkToBridge {
+	if f.enableBridgingMode {
 		regMarksToMatch = append(regMarksToMatch, NotAntreaFlexibleIPAMRegMark) // Exclude the packets from Antrea IPAM Pods.
 	}
 	// This generates the flow to match the packets destined for remote Pods. Note that, this flow is installed in Linux Nodes
@@ -1583,7 +1585,7 @@ func (f *featurePodConnectivity) podIPSpoofGuardFlow(ifIPs []net.IP, ifMAC net.H
 	for _, ifIP := range ifIPs {
 		var regMarksToLoad []*binding.RegMark
 		ipProtocol := getIPProtocol(ifIP)
-		if f.connectUplinkToBridge {
+		if f.enableBridgingMode {
 			regMarksToLoad = append(regMarksToLoad, f.ipCtZoneTypeRegMarks[ipProtocol], binding.NewRegMark(VLANIDField, uint32(vlanID)))
 		}
 		flows = append(flows, SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
@@ -1654,7 +1656,7 @@ func (f *featurePodConnectivity) gatewayIPSpoofGuardFlows() []binding.Flow {
 	for _, ipProtocol := range f.ipProtocols {
 		var regMarksToLoad []*binding.RegMark
 		// Set CtZoneTypeField based on ipProtocol and keep VLANIDField=0
-		if f.connectUplinkToBridge {
+		if f.enableBridgingMode {
 			regMarksToLoad = append(regMarksToLoad, f.ipCtZoneTypeRegMarks[ipProtocol])
 		}
 		flows = append(flows, SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
@@ -2882,6 +2884,8 @@ func NewClient(bridgeName string,
 	proxyAll bool,
 	enableDSR bool,
 	connectUplinkToBridge bool,
+	enableBridgingMode bool,
+	enableClusterNetworkPolicyApplyToNode bool,
 	enableMulticast bool,
 	enableTrafficControl bool,
 	enableMulticluster bool,
@@ -2890,25 +2894,27 @@ func NewClient(bridgeName string,
 ) *client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
-		bridge:                  bridge,
-		nodeIPChecker:           nodeIPCheck,
-		enableProxy:             enableProxy,
-		proxyAll:                proxyAll,
-		enableDSR:               enableDSR,
-		enableAntreaPolicy:      enableAntreaPolicy,
-		enableL7NetworkPolicy:   enableL7NetworkPolicy,
-		enableDenyTracking:      enableDenyTracking,
-		enableEgress:            enableEgress,
-		enableMulticast:         enableMulticast,
-		enableTrafficControl:    enableTrafficControl,
-		enableMulticluster:      enableMulticluster,
-		enablePrometheusMetrics: enablePrometheusMetrics,
-		connectUplinkToBridge:   connectUplinkToBridge,
-		pipelines:               make(map[binding.PipelineID]binding.Pipeline),
-		packetInHandlers:        map[uint8]PacketInHandler{},
-		ovsctlClient:            ovsctl.NewClient(bridgeName),
-		ovsMetersAreSupported:   ovsMetersAreSupported(),
-		groupIDAllocator:        groupIDAllocator,
+		bridge:                                bridge,
+		nodeIPChecker:                         nodeIPCheck,
+		enableProxy:                           enableProxy,
+		proxyAll:                              proxyAll,
+		enableDSR:                             enableDSR,
+		enableAntreaPolicy:                    enableAntreaPolicy,
+		enableL7NetworkPolicy:                 enableL7NetworkPolicy,
+		enableDenyTracking:                    enableDenyTracking,
+		enableEgress:                          enableEgress,
+		enableMulticast:                       enableMulticast,
+		enableTrafficControl:                  enableTrafficControl,
+		enableMulticluster:                    enableMulticluster,
+		enablePrometheusMetrics:               enablePrometheusMetrics,
+		connectUplinkToBridge:                 connectUplinkToBridge,
+		enableBridgingMode:                    enableBridgingMode,
+		enableClusterNetworkPolicyApplyToNode: enableClusterNetworkPolicyApplyToNode,
+		pipelines:                             make(map[binding.PipelineID]binding.Pipeline),
+		packetInHandlers:                      map[uint8]PacketInHandler{},
+		ovsctlClient:                          ovsctl.NewClient(bridgeName),
+		ovsMetersAreSupported:                 ovsMetersAreSupported(),
+		groupIDAllocator:                      groupIDAllocator,
 	}
 	c.ofEntryOperations = c
 	return c
@@ -2933,7 +2939,7 @@ func (f *featurePodConnectivity) l3FwdFlowToLocalPodCIDR() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
 	regMarksToMatch := []*binding.RegMark{NotRewriteMACRegMark}
-	if f.connectUplinkToBridge {
+	if f.enableBridgingMode {
 		regMarksToMatch = append(regMarksToMatch, binding.NewRegMark(VLANIDField, 0))
 	}
 	for ipProtocol, cidr := range f.localCIDRs {
@@ -2953,7 +2959,7 @@ func (f *featurePodConnectivity) l3FwdFlowToLocalPodCIDR() []binding.Flow {
 func (f *featurePodConnectivity) l3FwdFlowToNode() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var regMarksToMatch []*binding.RegMark
-	if f.connectUplinkToBridge {
+	if f.enableBridgingMode {
 		regMarksToMatch = append(regMarksToMatch, binding.NewRegMark(VLANIDField, 0))
 	}
 	var flows []binding.Flow
@@ -3168,8 +3174,8 @@ func getCachedFlowMessages(cache *flowCategoryCache) []*openflow15.FlowMod {
 	return flows
 }
 
-func getZoneSrcField(connectUplinkToBridge bool) *binding.RegField {
-	if connectUplinkToBridge {
+func getZoneSrcField(enableBridgingMode bool) *binding.RegField {
+	if enableBridgingMode {
 		return CtZoneField
 	}
 	return nil

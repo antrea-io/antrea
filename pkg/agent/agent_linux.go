@@ -49,7 +49,7 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	if !i.connectUplinkToBridge {
 		return nil
 	}
-	klog.Infof("Preparing OVS bridge for AntreaFlexibleIPAM")
+	klog.Infof("Preparing OVS bridge for AntreaFlexibleIPAM or ClusterNetworkPolicyApplyToNode")
 	// Get uplink network configuration.
 	// TODO(gran): support IPv6
 	_, _, adapter, err := i.getNodeInterfaceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeIPv4Addr.IP})

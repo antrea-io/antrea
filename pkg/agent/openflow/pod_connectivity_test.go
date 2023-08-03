@@ -23,7 +23,7 @@ import (
 	"antrea.io/antrea/pkg/util/runtime"
 )
 
-func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, connectUplinkToBridge, isIPv4, trafficControlEnabled, multicastEnabled bool) []string {
+func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, connectUplinkToBridge, enableBridgingMode, isIPv4, trafficControlEnabled, multicastEnabled bool) []string {
 	var flows []string
 	switch trafficEncapMode {
 	case config.TrafficEncapModeEncap:
@@ -163,7 +163,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			flows = append(flows,
 				"cookie=0x1010000000000, table=IngressSecurityClassifier, priority=210,pkt_mark=0x80000000/0x80000000,ct_state=-rpl+trk,ip actions=goto_table:ConntrackCommit",
 			)
-			if connectUplinkToBridge {
+			if connectUplinkToBridge && enableBridgingMode {
 				flows = append(flows,
 					"cookie=0x1010000000000, table=ARPSpoofGuard, priority=210,arp,in_port=4 actions=NORMAL",
 					"cookie=0x1010000000000, table=ARPSpoofGuard, priority=210,arp,in_port=4294967294 actions=NORMAL",
@@ -285,49 +285,49 @@ func Test_featurePodConnectivity_initFlows(t *testing.T) {
 			name:             "IPv4 Encap",
 			enableIPv4:       true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, false, true, false, false),
 		},
 		{
 			name:             "IPv4 NoEncap",
 			enableIPv4:       true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, false, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, false, false, true, false, false),
 		},
 		{
 			name:             "IPv4 NoEncap with Antrea IPAM",
 			enableIPv4:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			clientOptions:    []clientOptionsFn{enableConnectUplinkToBridge},
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, true, true, false, false),
+			clientOptions:    []clientOptionsFn{enableConnectUplinkToBridge, enableBridgingMode},
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, true, true, true, false, false),
 		},
 		{
 			name:             "IPv4 NetworkPolicyOnly Linux",
 			enableIPv4:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, false, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, false, false, true, false, false),
 		},
 		{
 			name:             "IPv6 Encap",
 			enableIPv6:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, false, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, false, false, false, false),
 		},
 		{
 			name:             "IPv6 NoEncap",
 			enableIPv6:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, false, false, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, false, false, false, false, false),
 		},
 		{
 			name:             "IPv6 NetworkPolicyOnly",
 			enableIPv6:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, false, false, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, false, false, false, false, false),
 		},
 		{
 			name:             "IPv4 Encap with TrafficControl",
@@ -335,7 +335,7 @@ func Test_featurePodConnectivity_initFlows(t *testing.T) {
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			clientOptions:    []clientOptionsFn{enableTrafficControl},
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, false, true, true, false),
 		},
 	}
 	for _, tc := range testCases {

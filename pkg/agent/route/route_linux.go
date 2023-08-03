@@ -106,6 +106,7 @@ type Client struct {
 	iptablesInitialized   chan struct{}
 	proxyAll              bool
 	connectUplinkToBridge bool
+	enableBridgingMode    bool
 	multicastEnabled      bool
 	isCloudEKS            bool
 	// serviceRoutes caches ip routes about Services.
@@ -125,13 +126,14 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool, serviceCIDRProvider servicecidr.Interface) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, enableBridgingMode, multicastEnabled bool, serviceCIDRProvider servicecidr.Interface) (*Client, error) {
 	return &Client{
 		networkConfig:         networkConfig,
 		noSNAT:                noSNAT,
 		proxyAll:              proxyAll,
 		multicastEnabled:      multicastEnabled,
 		connectUplinkToBridge: connectUplinkToBridge,
+		enableBridgingMode:    enableBridgingMode,
 		ipset:                 ipset.NewClient(),
 		netlink:               &netlink.Handle{},
 		isCloudEKS:            env.IsCloudEKS(),
@@ -348,7 +350,7 @@ func (c *Client) syncIPSet() error {
 		})
 	}
 
-	if c.connectUplinkToBridge {
+	if c.enableBridgingMode {
 		if err := c.ipset.CreateIPSet(localAntreaFlexibleIPAMPodIPSet, ipset.HashIP, false); err != nil {
 			return err
 		}
@@ -661,7 +663,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.AcceptTarget,
 	}...)
-	if c.connectUplinkToBridge {
+	if c.enableBridgingMode {
 		// Add accept rules for local AntreaFlexibleIPAM
 		// AntreaFlexibleIPAM Pods -> HostPort Pod
 		// AntreaFlexibleIPAM Pods -> NodePort Service -> Backend Pod
@@ -777,7 +779,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	// Below traffic models are already covered by portmap CNI:
 	//   01. AntreaIPAM VLAN Pod      -- hostPort [request]              --> AntreaIPAM VLAN Pod (same subnet)
 	//   02. Regular Pod (local)      -- hostPort [request]              --> AntreaIPAM VLAN Pod
-	if c.connectUplinkToBridge {
+	if c.enableBridgingMode {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade traffic to local AntreaIPAM hostPort Pod"`,
@@ -1468,7 +1470,7 @@ func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
 // AddLocalAntreaFlexibleIPAMPodRule is used to add IP to target ip set when an AntreaFlexibleIPAM Pod is added. An entry is added
 // for every Pod IP.
 func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
-	if !c.connectUplinkToBridge {
+	if !c.enableBridgingMode {
 		return nil
 	}
 	for i := range podAddresses {
@@ -1494,7 +1496,7 @@ func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error 
 
 // DeletLocaleAntreaFlexibleIPAMPodRule is used to delete related IP set entries when an AntreaFlexibleIPAM Pod is deleted.
 func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
-	if !c.connectUplinkToBridge {
+	if !c.enableBridgingMode {
 		return nil
 	}
 	for i := range podAddresses {

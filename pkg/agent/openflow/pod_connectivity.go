@@ -45,13 +45,15 @@ type featurePodConnectivity struct {
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
 
-	connectUplinkToBridge bool
-	ctZoneSrcField        *binding.RegField
-	ipCtZoneTypeRegMarks  map[binding.Protocol]*binding.RegMark
-	enableMulticast       bool
-	proxyAll              bool
-	enableDSR             bool
-	enableTrafficControl  bool
+	connectUplinkToBridge                 bool
+	enableBridgingMode                    bool
+	enableClusterNetworkPolicyApplyToNode bool
+	ctZoneSrcField                        *binding.RegField
+	ipCtZoneTypeRegMarks                  map[binding.Protocol]*binding.RegMark
+	enableMulticast                       bool
+	proxyAll                              bool
+	enableDSR                             bool
+	enableTrafficControl                  bool
 
 	category cookie.Category
 }
@@ -66,6 +68,8 @@ func newFeaturePodConnectivity(
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
 	connectUplinkToBridge bool,
+	enableBridgingMode bool,
+	enableClusterNetworkPolicyApplyToNode bool,
 	enableMulticast bool,
 	proxyAll bool,
 	enableDSR bool,
@@ -105,29 +109,31 @@ func newFeaturePodConnectivity(
 	}
 
 	return &featurePodConnectivity{
-		cookieAllocator:       cookieAllocator,
-		ipProtocols:           ipProtocols,
-		nodeCachedFlows:       newFlowCategoryCache(),
-		podCachedFlows:        newFlowCategoryCache(),
-		tcCachedFlows:         newFlowCategoryCache(),
-		gatewayIPs:            gatewayIPs,
-		gatewayPort:           gatewayPort,
-		uplinkPort:            uplinkPort,
-		hostIfacePort:         nodeConfig.HostInterfaceOFPort,
-		tunnelPort:            nodeConfig.TunnelOFPort,
-		ctZones:               ctZones,
-		localCIDRs:            localCIDRs,
-		nodeIPs:               nodeIPs,
-		nodeConfig:            nodeConfig,
-		networkConfig:         networkConfig,
-		connectUplinkToBridge: connectUplinkToBridge,
-		enableTrafficControl:  enableTrafficControl,
-		ipCtZoneTypeRegMarks:  ipCtZoneTypeRegMarks,
-		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
-		enableMulticast:       enableMulticast,
-		proxyAll:              proxyAll,
-		enableDSR:             enableDSR,
-		category:              cookie.PodConnectivity,
+		cookieAllocator:                       cookieAllocator,
+		ipProtocols:                           ipProtocols,
+		nodeCachedFlows:                       newFlowCategoryCache(),
+		podCachedFlows:                        newFlowCategoryCache(),
+		tcCachedFlows:                         newFlowCategoryCache(),
+		gatewayIPs:                            gatewayIPs,
+		gatewayPort:                           gatewayPort,
+		uplinkPort:                            uplinkPort,
+		hostIfacePort:                         nodeConfig.HostInterfaceOFPort,
+		tunnelPort:                            nodeConfig.TunnelOFPort,
+		ctZones:                               ctZones,
+		localCIDRs:                            localCIDRs,
+		nodeIPs:                               nodeIPs,
+		nodeConfig:                            nodeConfig,
+		networkConfig:                         networkConfig,
+		connectUplinkToBridge:                 connectUplinkToBridge,
+		enableBridgingMode:                    enableBridgingMode,
+		enableClusterNetworkPolicyApplyToNode: enableClusterNetworkPolicyApplyToNode,
+		enableTrafficControl:                  enableTrafficControl,
+		ipCtZoneTypeRegMarks:                  ipCtZoneTypeRegMarks,
+		ctZoneSrcField:                        getZoneSrcField(enableBridgingMode),
+		enableMulticast:                       enableMulticast,
+		proxyAll:                              proxyAll,
+		enableDSR:                             enableDSR,
+		category:                              cookie.PodConnectivity,
 	}
 }
 
@@ -141,7 +147,7 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 		} else if ipProtocol == binding.ProtocolIP {
 			flows = append(flows, f.arpNormalFlow())
 			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, f.gatewayPort))
-			if f.connectUplinkToBridge {
+			if f.enableBridgingMode {
 				flows = append(flows, f.arpResponderFlow(f.gatewayIPs[ipProtocol], gatewayMAC))
 				flows = append(flows, f.arpSpoofGuardFlow(f.nodeConfig.NodeIPv4Addr.IP, gatewayMAC, f.gatewayPort))
 				flows = append(flows, f.hostBridgeUplinkVLANFlows()...)
@@ -152,7 +158,7 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 			}
 		}
 	}
-	if f.connectUplinkToBridge {
+	if f.enableBridgingMode {
 		flows = append(flows, f.l3FwdFlowToNode()...)
 	}
 	flows = append(flows, f.l3FwdFlowToExternal())

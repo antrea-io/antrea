@@ -73,7 +73,8 @@ func newFeatureService(
 	enableProxy,
 	proxyAll,
 	enableDSR,
-	connectUplinkToBridge bool) *featureService {
+	connectUplinkToBridge,
+	enableBridgingMode bool) *featureService {
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	virtualIPs := make(map[binding.Protocol]net.IP)
 	virtualNodePortDNATIPs := make(map[binding.Protocol]net.IP)
@@ -135,7 +136,7 @@ func newFeatureService(
 		proxyAll:               proxyAll,
 		enableDSR:              enableDSR,
 		connectUplinkToBridge:  connectUplinkToBridge,
-		ctZoneSrcField:         getZoneSrcField(connectUplinkToBridge),
+		ctZoneSrcField:         getZoneSrcField(enableBridgingMode),
 		category:               cookie.Service,
 	}
 }

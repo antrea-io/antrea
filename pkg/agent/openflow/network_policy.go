@@ -2103,6 +2103,7 @@ func newFeatureNetworkPolicy(
 	enableMulticast bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
+	enableBridgingMode bool,
 	nodeType config.NodeType,
 	grpAllocator GroupAllocator) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
@@ -2120,7 +2121,7 @@ func newFeatureNetworkPolicy(
 		enableAntreaPolicy:       enableAntreaPolicy,
 		proxyAll:                 proxyAll,
 		category:                 cookie.NetworkPolicy,
-		ctZoneSrcField:           getZoneSrcField(connectUplinkToBridge),
+		ctZoneSrcField:           getZoneSrcField(enableBridgingMode),
 		loggingGroupCache:        sync.Map{},
 		groupAllocator:           grpAllocator,
 	}

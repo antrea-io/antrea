@@ -145,6 +145,10 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("nodeType %s requires feature gate ExternalNode to be enabled", o.config.NodeType)
 	}
 
+	if o.config.EnableBridgingMode && o.config.EnableClusterNetworkPolicyApplyToNode {
+		return fmt.Errorf("both BridgingMode and ClusterNetworkPolicyApplyToNode are not supported together")
+	}
+
 	if o.config.NodeType == config.ExternalNode.String() {
 		o.nodeType = config.ExternalNode
 		return o.validateExternalNodeOptions()
