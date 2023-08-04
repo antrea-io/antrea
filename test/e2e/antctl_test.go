@@ -153,12 +153,14 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 }
 
 func runAntctlPod(t *testing.T, data *TestData, podName string, antctlServiceAccountName string, antctlImage string, covDir string) {
-	require.NoError(t, NewPodBuilder(podName, data.testNamespace, antctlImage).WithServiceAccountName(antctlServiceAccountName).
+	b := NewPodBuilder(podName, data.testNamespace, antctlImage).WithServiceAccountName(antctlServiceAccountName).
 		WithContainerName("antctl").WithCommand([]string{"sleep", "3600"}).
+		OnNode(controlPlaneNodeName()).InHostNetwork()
+	if testOptions.enableCoverage {
 		// collectAntctlCovFilesFromControlPlaneNode expects coverage data in this directory
-		MountHostPath(cpNodeCoverageDir, corev1.HostPathDirectory, covDir, "antctl-coverage").
-		OnNode(controlPlaneNodeName()).InHostNetwork().
-		Create(data))
+		b = b.MountHostPath(cpNodeCoverageDir, corev1.HostPathDirectory, covDir, "antctl-coverage")
+	}
+	require.NoError(t, b.Create(data))
 	t.Cleanup(func() {
 		data.DeletePod(data.testNamespace, podName)
 	})
