@@ -96,6 +96,8 @@ var (
 	// Declared as variables for testing.
 	defaultFs                       = afero.NewOsFs()
 	clock     clockutils.WithTicker = &clockutils.RealClock{}
+
+	getNodeTimeout = 30 * time.Second
 )
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
@@ -905,7 +907,7 @@ func (i *Initializer) setTunnelCsum(tunnelPortName string, enable bool) error {
 // host gateway interface.
 func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 	var node *v1.Node
-	if err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
+	if err := wait.PollImmediate(5*time.Second, getNodeTimeout, func() (bool, error) {
 		var err error
 		node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
@@ -916,18 +918,19 @@ func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 		if !i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 			// Validate that PodCIDR has been configured.
 			if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
-				klog.V(2).Info("Waiting for Node PodCIDR configuration to complete")
+				klog.InfoS("Waiting for Node PodCIDR configuration to complete", "nodeName", nodeName)
 				return false, nil
 			}
 		}
 		return true, nil
 	}); err != nil {
-		if node != nil && node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
+		if err == wait.ErrWaitTimeout {
 			klog.ErrorS(err, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
-				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", "nodeName", nodeName)
-			return fmt.Errorf("CIDR string is empty for Node %s", nodeName)
+				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range, or nodeIPAM is "+
+				"enabled for antrea-controller", "nodeName", nodeName)
+			return fmt.Errorf("Spec.PodCIDR is empty for Node %s", nodeName)
 		}
-		return fmt.Errorf("node retrieval failed with the following error: %v", err)
+		return err
 	}
 
 	// nodeInterface is the interface that has K8s Node IP. transportInterface is the interface that is used for
