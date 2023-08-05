@@ -194,8 +194,6 @@ type AgentConfig struct {
 	NodeType string `yaml:"nodeType,omitempty"`
 	// ExternalNode related configurations.
 	ExternalNode ExternalNodeConfig `yaml:"externalNode,omitempty"`
-	// Antrea's native secondary network configuration.
-	SecondaryNetwork SecondaryNetworkConfig `yaml:"secondaryNetwork,omitempty"`
 	// AuditLogging supports configuring log rotation for audit logs.
 	AuditLogging AuditLoggingConfig `yaml:"auditLogging,omitempty"`
 }
@@ -368,26 +366,6 @@ type PolicyBypassRule struct {
 	CIDR string `json:"cidr,omitempty"`
 	// The destination port of the given protocol.
 	Port int `yaml:"port,omitempty"`
-}
-
-type SecondaryNetworkConfig struct {
-	// Secondary network specific OVS configuration.
-	OVS SecondaryNetworkOVSConfig `yaml:"ovs,omitempty"`
-	// TunnelType to be used for node to node transport, which is part of the same virtual network.
-	TunnelType string `yaml:"tunnelType,omitempty"`
-}
-
-type SecondaryNetworkOVSConfig struct {
-	// Enable Antrea's native secondary network OVS configuration.
-	Enable bool `yaml:"enable,omitempty"`
-	// OVS integration bridge name.
-	OVSIntegrationBridgeName string `yaml:"ovsIntegrationBridgeName,omitempty"`
-	// OVS transport bridge name.
-	OVSTransportBridgeName string `yaml:"ovsTransportBridgeName,omitempty"`
-	// OVS Datapath type to use for the OpenVSwitch bridge created by Antrea.
-	OVSDatapathType string `yaml:"ovsDatapathType,omitempty"`
-	// OVS patch port which connects the integration and transport bridge.
-	OVSPatchPort string `yaml:"ovsPatchPort,omitempty"`
 }
 
 type AuditLoggingConfig struct {

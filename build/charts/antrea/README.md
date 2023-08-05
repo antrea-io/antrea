@@ -111,12 +111,6 @@ Kubernetes: `>= 1.16.0-0`
 | nodePortLocal.portRange | string | `"61000-62000"` | Port range used by NodePortLocal when creating Pod port mappings. |
 | ovs.bridgeName | string | `"br-int"` | Name of the OVS bridge antrea-agent will create and use. |
 | ovs.hwOffload | bool | `false` | Enable hardware offload for the OVS bridge (required additional configuration). |
-| secondaryNetwork.ovs.datapathType | string | `"system"` | 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run OVS in userspace mode. Userspace mode requires the tun device driver to be available. |
-| secondaryNetwork.ovs.enable | bool | `false` | Enable OVS bridge configuration for secondary network. |
-| secondaryNetwork.ovs.integrationBridgeName | string | `"br-secnet-int"` | Secondary network OVS integration bridge name. |
-| secondaryNetwork.ovs.patchPort | string | `"br-secnet-patch0"` | Name of the OVS patch port which connects the integration and transport bridge. |
-| secondaryNetwork.ovs.transportBridgeName | string | `"br-secnet-trans"` | Secondary network OVS transport bridge name. |
-| secondaryNetwork.tunnelType | string | `"geneve"` | Tunnel protocol used for encapsulating traffic across Nodes. It must be one of "geneve", "vxlan", "gre", "stt". |
 | serviceCIDR | string | `""` | IPv4 CIDR range used for Services. Required when AntreaProxy is disabled. |
 | serviceCIDRv6 | string | `""` | IPv6 CIDR range used for Services. Required when AntreaProxy is disabled. |
 | testing.coverage | bool | `false` | Enable code coverage measurement (used when testing Antrea only). |
