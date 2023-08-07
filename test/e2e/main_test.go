@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -55,7 +56,7 @@ func (tOptions *TestOptions) setupLogging() func() {
 }
 
 // setupCoverage checks if the directory provided by the user exists.
-func (tOptions *TestOptions) setupCoverage() func() {
+func (tOptions *TestOptions) setupCoverage(data *TestData) func() {
 	if tOptions.coverageDir != "" {
 		fInfo, err := os.Stat(tOptions.coverageDir)
 		if err != nil {
@@ -66,8 +67,18 @@ func (tOptions *TestOptions) setupCoverage() func() {
 		}
 
 	}
-	// no-op cleanup function
-	return func() {}
+	// cpNodeCoverageDir is a directory on the control-plane Node, where tests can deposit test
+	// coverage data.
+	log.Printf("Creating directory '%s' on Node '%s'\n", cpNodeCoverageDir, controlPlaneNodeName())
+	rc, _, _, err := data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("mkdir -p %s", cpNodeCoverageDir))
+	if err != nil || rc != 0 {
+		log.Fatalf("Failed to create directory '%s' on control-plane Node", cpNodeCoverageDir)
+	}
+	return func() {
+		log.Printf("Removing directory '%s' on Node '%s'\n", cpNodeCoverageDir, controlPlaneNodeName())
+		// best effort
+		data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("rm -rf %s", cpNodeCoverageDir))
+	}
 
 }
 
@@ -134,24 +145,24 @@ func testMain(m *testing.M) int {
 		log.Fatalf("Error when getting antrea-config configmap: %v", err)
 	}
 	rand.Seed(time.Now().UnixNano())
-	defer testOptions.setupCoverage()
-	defer gracefulExitAntrea(testData)
+	if testOptions.enableCoverage {
+		cleanupCoverage := testOptions.setupCoverage(testData)
+		defer cleanupCoverage()
+		defer gracefulExitAntrea(testData)
+	}
 	ret := m.Run()
 	return ret
 }
 
 func gracefulExitAntrea(testData *TestData) {
-	if testOptions.enableCoverage {
-		if err := testData.gracefulExitAntreaController(testOptions.coverageDir); err != nil {
-			log.Fatalf("Error when gracefully exit antrea controller: %v", err)
-		}
-		if err := testData.gracefulExitAntreaAgent(testOptions.coverageDir, "all"); err != nil {
-			log.Fatalf("Error when gracefully exit antrea agent: %v", err)
-		}
-		if err := testData.collectAntctlCovFilesFromControlPlaneNode(testOptions.coverageDir); err != nil {
-			log.Fatalf("Error when collecting antctl coverage files from control-plane Node: %v", err)
-		}
-
+	if err := testData.gracefulExitAntreaController(testOptions.coverageDir); err != nil {
+		log.Fatalf("Error when gracefully exit antrea controller: %v", err)
+	}
+	if err := testData.gracefulExitAntreaAgent(testOptions.coverageDir, "all"); err != nil {
+		log.Fatalf("Error when gracefully exit antrea agent: %v", err)
+	}
+	if err := testData.collectAntctlCovFilesFromControlPlaneNode(testOptions.coverageDir); err != nil {
+		log.Fatalf("Error when collecting antctl coverage files from control-plane Node: %v", err)
 	}
 }
 

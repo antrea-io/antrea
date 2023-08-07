@@ -522,11 +522,11 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			}
 			// The Agent on the original Node is paused. Run antctl from the expected migrated Node instead.
 			err = wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
-				assigndNode, err := data.getServiceAssignedNode(expectedMigratedNode, service)
+				assignedNode, err := data.getServiceAssignedNode(expectedMigratedNode, service)
 				if err != nil {
 					return false, nil
 				}
-				return assigndNode == expectedMigratedNode, nil
+				return assignedNode == expectedMigratedNode, nil
 			})
 			assert.NoError(t, err)
 			restoreAgent(originalNode)
@@ -600,7 +600,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			}
 			waitExternalIPConfigured := func(service *v1.Service) (string, string, error) {
 				var ip string
-				var assigndNode string
+				var assignedNode string
 				err := wait.PollImmediate(200*time.Millisecond, 5*time.Second, func() (done bool, err error) {
 					service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 					if err != nil {
@@ -609,14 +609,14 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP == "" {
 						return false, nil
 					}
-					assigndNode, err = data.getServiceAssignedNode("", service)
+					assignedNode, err = data.getServiceAssignedNode("", service)
 					if err != nil {
 						return false, nil
 					}
 					ip = service.Status.LoadBalancer.Ingress[0].IP
 					return true, nil
 				})
-				return ip, assigndNode, err
+				return ip, assignedNode, err
 			}
 			for _, et := range externalIPTestCases {
 				t.Run(et.name, func(t *testing.T) {
