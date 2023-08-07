@@ -489,11 +489,11 @@ func mockGetNodeTimeout(timeout time.Duration) func() {
 }
 
 func mockGetTransportIPNetDeviceByName(ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) func() {
-	prevGetIPNetDeviceByName := getTransportIPNetDeviceByName
-	getTransportIPNetDeviceByName = func(ifName, brName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+	prevGetIPNetDeviceByName := getTransportIPNetDeviceByNameFn
+	getTransportIPNetDeviceByNameFn = func(ifName, brName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 		return ipV4Net, ipV6Net, ipDevice, nil
 	}
-	return func() { getTransportIPNetDeviceByName = prevGetIPNetDeviceByName }
+	return func() { getTransportIPNetDeviceByNameFn = prevGetIPNetDeviceByName }
 }
 
 func mockGetIPNetDeviceByCIDRs(ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) func() {

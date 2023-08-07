@@ -93,8 +93,9 @@ ipsec:
 egress:
   # -- CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
   exceptCIDRs: []
-  # -- The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
-  # the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255.
+  # -- The maximum number of Egress IPs that can be assigned to a Node. It is
+  # useful when the Node network restricts the number of secondary IPs a Node
+  # can have, e.g. EKS. It must not be greater than 255.
   maxEgressIPsPerNode: 255
 
 nodePortLocal:
@@ -121,8 +122,8 @@ antreaProxy:
   # will only handle Services without the "service.kubernetes.io/service-proxy-name"
   # label, but ignore Services with the label no matter what is the value.
   serviceProxyName: ""
-  # -- Determines how external traffic is processed when it's load balanced across Nodes by default. It must be one of "nat" or
-  # "dsr".
+  # -- Determines how external traffic is processed when it's load balanced
+  # across Nodes by default. It must be one of "nat" or "dsr".
   defaultLoadBalancerMode: "nat"
 
 nodeIPAM:
@@ -155,8 +156,8 @@ auditLogging:
 # -- Address of Kubernetes apiserver, to override any value provided in
 # kubeconfig or InClusterConfig.
 kubeAPIServerOverride: ""
-# -- Address of DNS server, to override the kube-dns service. It's used to
-# resolve hostname in FQDN policy.
+# -- Address of DNS server, to override the kube-dns Service. It's used to
+# resolve hostnames in a FQDN policy.
 dnsServerOverride: ""
 # -- IPv4 CIDR range used for Services. Required when AntreaProxy is disabled.
 serviceCIDR: ""
@@ -179,6 +180,15 @@ clientCAFile: ""
 # defaults, add an entry to the dictionary with the FeatureGate's name as the
 # key and a boolean as the value.
 featureGates: {}
+
+secondaryNetwork:
+  # -- Configuration of OVS bridges for secondary network. At the moment, at
+  # most one OVS bridge can be specified. If the specified bridge does not exist
+  # on the Node, antrea-agent will create it based on the configuration.
+  # The following configuration specifies an OVS bridge with name "br1" and a
+  # physical interface "eth1":
+  # [{bridgeName: "br1", physicalInterfaces: ["eth1"]}]
+  ovsBridges: []
 
 agent:
   # -- Port for the antrea-agent APIServer to serve on.

@@ -147,13 +147,14 @@ type AgentConfig struct {
 	NodePortLocal NodePortLocalConfig `yaml:"nodePortLocal,omitempty"`
 	// FlowExporter configuration options.
 	FlowExporter FlowExporterConfig `yaml:"flowExporter,omitempty"`
-	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
-	// It is typically used when kube-proxy is not deployed (replaced by AntreaProxy).
+	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or
+	// InClusterConfig. It is typically used when kube-proxy is not deployed (replaced by AntreaProxy).
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
-	// Provide the address of DNS server, to override the kube-dns service. It's used to resolve hostname in FQDN policy.
-	// Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10, 10.96.0.10:53,
-	// [fd00:10:96::a]:53).
+	// Provide the address of DNS server, to override the kube-dns Service. It's used to resolve
+	// hostnames in a FQDN policy.
+	// Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10,
+	// 10.96.0.10:53, [fd00:10:96::a]:53).
 	DNSServerOverride string `yaml:"dnsServerOverride,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
@@ -196,6 +197,8 @@ type AgentConfig struct {
 	ExternalNode ExternalNodeConfig `yaml:"externalNode,omitempty"`
 	// AuditLogging supports configuring log rotation for audit logs.
 	AuditLogging AuditLoggingConfig `yaml:"auditLogging,omitempty"`
+	// Antrea's native secondary network configuration.
+	SecondaryNetwork SecondaryNetworkConfig `yaml:"secondaryNetwork,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -380,4 +383,17 @@ type AuditLoggingConfig struct {
 	MaxAge *int32 `yaml:"maxAge,omitempty"`
 	// Compress enables gzip compression on rotated files. Defaults to true.
 	Compress *bool `yaml:"compress,omitempty"`
+}
+
+type SecondaryNetworkConfig struct {
+	// Configuration of OVS bridges for secondary networks. At the moment, only a
+	// single OVS bridge is supported.
+	OVSBridges []OVSBridgeConfig `yaml:"ovsBridges,omitempty"`
+}
+
+type OVSBridgeConfig struct {
+	BridgeName string `yaml:"bridgeName"`
+	// Names of physical interfaces to be connected to the bridge. At the moment,
+	// only a single physical interface is supported.
+	PhysicalInterfaces []string `yaml:"physicalInterfaces,omitempty"`
 }

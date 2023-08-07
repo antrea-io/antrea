@@ -459,6 +459,34 @@ func TestGetIPNetsByLink(t *testing.T) {
 	}
 }
 
+func TestGenerateOVSDatapathID(t *testing.T) {
+	tests := []struct {
+		name       string
+		mac        net.HardwareAddr
+		expectedID string
+	}{
+		{
+			name:       "valid MAC",
+			mac:        net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+			expectedID: "001122334455",
+		},
+		{
+			name: "empty MAC",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			id := GenerateOVSDatapathID(tc.mac.String())
+			if tc.expectedID != "" {
+				assert.Equal(t, "0000"+tc.expectedID, id)
+			} else {
+				assert.Equal(t, 16, len(id))
+				assert.True(t, strings.HasPrefix(id, "0000"))
+			}
+		})
+	}
+}
+
 func generateNetInterfaceAddrs(idx int) []net.Addr {
 	netAddrsIPv4 := []net.Addr{&ipv4PublicIPNet}
 	netAddrsIPv6 := []net.Addr{

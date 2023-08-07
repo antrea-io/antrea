@@ -98,7 +98,7 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 }
 
 // NewOVSBridge creates and returns a new OVSBridge struct.
-func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB) *OVSBridge {
+func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB) OVSBridgeClient {
 	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, "", false, []int32{}}
 }
 
