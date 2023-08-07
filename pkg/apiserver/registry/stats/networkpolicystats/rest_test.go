@@ -326,6 +326,7 @@ func TestRESTConvertToTable(t *testing.T) {
 			Sessions: 5,
 		},
 	}
+	expectedFormattedCreationTimestamp := stats.CreationTimestamp.UTC().Format(time.RFC3339)
 	tests := []struct {
 		name          string
 		object        runtime.Object
@@ -338,7 +339,7 @@ func TestRESTConvertToTable(t *testing.T) {
 				ColumnDefinitions: tableColumnDefinitions,
 				Rows: []metav1.TableRow{
 					{
-						Cells:  []interface{}{"bar", int64(5), int64(10), int64(2000), stats.CreationTimestamp.Format("2006-01-02T15:04:05Z")},
+						Cells:  []interface{}{"bar", int64(5), int64(10), int64(2000), expectedFormattedCreationTimestamp},
 						Object: runtime.RawExtension{Object: stats},
 					},
 				},
@@ -351,7 +352,7 @@ func TestRESTConvertToTable(t *testing.T) {
 				ColumnDefinitions: tableColumnDefinitions,
 				Rows: []metav1.TableRow{
 					{
-						Cells:  []interface{}{"bar", int64(5), int64(10), int64(2000), stats.CreationTimestamp.Format("2006-01-02T15:04:05Z")},
+						Cells:  []interface{}{"bar", int64(5), int64(10), int64(2000), expectedFormattedCreationTimestamp},
 						Object: runtime.RawExtension{Object: stats},
 					},
 				},

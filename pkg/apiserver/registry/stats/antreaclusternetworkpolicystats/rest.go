@@ -114,6 +114,10 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 
 var swaggerMetadataDescriptions = metav1.ObjectMeta{}.SwaggerDoc()
 
+func formatTimestamp(t metav1.Time) string {
+	return t.UTC().Format(time.RFC3339)
+}
+
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	table := &metav1.Table{
 		ColumnDefinitions: tableColumnDefinitions,
@@ -131,7 +135,7 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 	var err error
 	table.Rows, err = metatable.MetaToTableRow(obj, func(obj runtime.Object, m metav1.Object, name, age string) ([]interface{}, error) {
 		stats := obj.(*statsv1alpha1.AntreaClusterNetworkPolicyStats)
-		return []interface{}{name, stats.TrafficStats.Sessions, stats.TrafficStats.Packets, stats.TrafficStats.Bytes, m.GetCreationTimestamp().Time.UTC().Format(time.RFC3339)}, nil
+		return []interface{}{name, stats.TrafficStats.Sessions, stats.TrafficStats.Packets, stats.TrafficStats.Bytes, formatTimestamp(m.GetCreationTimestamp())}, nil
 	})
 	return table, err
 }
