@@ -620,6 +620,10 @@ func (o *Options) validateK8sNodeOptions() error {
 		o.dnsServerOverride = hostPort
 	}
 
+	if err := o.validateSecondaryNetworkConfig(); err != nil {
+		return fmt.Errorf("failed to validate secondary network config: %v", err)
+	}
+
 	return nil
 }
 
@@ -706,4 +710,26 @@ func (o *Options) setMulticlusterDefaultOptions() {
 			o.config.Multicluster.WireGuard.Port = apis.MulticlusterWireGuardListenPort
 		}
 	}
+}
+
+func (o *Options) validateSecondaryNetworkConfig() error {
+	if !features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		return nil
+	}
+
+	if len(o.config.SecondaryNetwork.OVSBridges) == 0 {
+		return nil
+	}
+	if len(o.config.SecondaryNetwork.OVSBridges) > 1 {
+		return fmt.Errorf("only one OVS bridge can be specified for secondary network")
+	}
+	brConfig := o.config.SecondaryNetwork.OVSBridges[0]
+	if brConfig.BridgeName == "" {
+		return fmt.Errorf("bridge name is not provided for the secondary network OVS bridge")
+	}
+	if len(brConfig.PhysicalInterfaces) > 1 {
+		return fmt.Errorf("at most one physical interface can be specified for the secondary network OVS bridge")
+	}
+
+	return nil
 }

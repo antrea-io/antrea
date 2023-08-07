@@ -5698,14 +5698,15 @@ data:
     # directed to that port will be forwarded to the Pod.
       portRange: "61000-62000"
 
-    # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
-    # It is typically used when kube-proxy is not deployed (replaced by AntreaProxy).
+    # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or
+    # InClusterConfig. It is typically used when kube-proxy is not deployed (replaced by AntreaProxy).
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
     kubeAPIServerOverride: ""
 
-    # Provide the address of DNS server, to override the kube-dns service. It's used to resolve hostname in FQDN policy.
-    # Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10, 10.96.0.10:53,
-    # [fd00:10:96::a]:53).
+    # Provide the address of DNS server, to override the kube-dns Service. It's used to resolve
+    # hostnames in a FQDN policy.
+    # Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10,
+    # 10.96.0.10:53, [fd00:10:96::a]:53).
     dnsServerOverride: ""
 
     # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
@@ -6818,7 +6819,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7218db7d40a2ba0043ebc518f71ed1e5c38a715360a732492ae762964e11c884
+        checksum/config: cc9b64c3b915bfd5a500d76f39a5b650f86819e144dbccea5019b4ecd4192292
       labels:
         app: antrea
         component: antrea-agent
@@ -7057,7 +7058,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7218db7d40a2ba0043ebc518f71ed1e5c38a715360a732492ae762964e11c884
+        checksum/config: cc9b64c3b915bfd5a500d76f39a5b650f86819e144dbccea5019b4ecd4192292
       labels:
         app: antrea
         component: antrea-controller

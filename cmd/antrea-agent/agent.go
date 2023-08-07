@@ -58,8 +58,8 @@ import (
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/secondarynetwork"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/stats"
 	support "antrea.io/antrea/pkg/agent/supportbundlecollection"
@@ -691,21 +691,15 @@ func run(o *Options) error {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		// Create the NetworkAttachmentDefinition client, which handles access to secondary network object definition from the API Server.
-		netAttachDefClient, err := k8s.CreateNetworkAttachDefClient(o.config.ClientConnection, o.config.KubeAPIServerOverride)
-		if err != nil {
-			return fmt.Errorf("NetworkAttachmentDefinition client creation failed. %v", err)
-		}
-		// Create podController to handle secondary network configuration for Pods with k8s.v1.cni.cncf.io/networks Annotation defined.
-		podWatchController := podwatch.NewPodController(
-			k8sClient,
-			netAttachDefClient,
-			localPodInformer,
-			nodeConfig.Name,
-			cniPodInfoStore,
+		if err := secondarynetwork.Initialize(
+			o.config.ClientConnection, o.config.KubeAPIServerOverride,
+			k8sClient, localPodInformer, nodeConfig.Name, cniPodInfoStore,
 			// safe to call given that cniServer.Initialize has been called already.
-			cniServer.GetPodConfigurator())
-		go podWatchController.Run(stopCh)
+			cniServer.GetPodConfigurator(),
+			stopCh,
+			&o.config.SecondaryNetwork, ovsdbConnection); err != nil {
+			return fmt.Errorf("failed to initialize secondary network: %v", err)
+		}
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.TrafficControl) {
