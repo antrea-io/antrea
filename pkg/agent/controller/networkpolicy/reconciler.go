@@ -1292,7 +1292,12 @@ func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1be
 		// as the port name is matched.
 		if port.Name == service.Port.StrVal && (service.Protocol == nil || port.Protocol == *service.Protocol) {
 			resolvedPort := intstr.FromInt(int(port.Port))
-			return &v1beta2.Service{Protocol: service.Protocol, Port: &resolvedPort}
+			resolvedProtocol := service.Protocol
+			if resolvedProtocol == nil {
+				// Derive named port protocol from the container spec
+				resolvedProtocol = &port.Protocol
+			}
+			return &v1beta2.Service{Protocol: resolvedProtocol, Port: &resolvedPort}
 		}
 	}
 	klog.InfoS("Cannot resolve Service port for endpoints", "port", service.Port.StrVal, "member", member)

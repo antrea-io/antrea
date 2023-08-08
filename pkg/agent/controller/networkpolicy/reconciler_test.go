@@ -66,12 +66,13 @@ var (
 	portHTTP  = intstr.FromString("http")
 	portHTTPS = intstr.FromString("https")
 
-	serviceTCP80   = v1beta2.Service{Protocol: &protocolTCP, Port: &port80}
-	serviceTCP443  = v1beta2.Service{Protocol: &protocolTCP, Port: &port443}
-	serviceTCP8080 = v1beta2.Service{Protocol: &protocolTCP, Port: &port8080}
-	serviceTCP     = v1beta2.Service{Protocol: &protocolTCP}
-	serviceHTTP    = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTP}
-	serviceHTTPS   = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTPS}
+	serviceTCP80          = v1beta2.Service{Protocol: &protocolTCP, Port: &port80}
+	serviceTCP443         = v1beta2.Service{Protocol: &protocolTCP, Port: &port443}
+	serviceTCP8080        = v1beta2.Service{Protocol: &protocolTCP, Port: &port8080}
+	serviceTCP            = v1beta2.Service{Protocol: &protocolTCP}
+	serviceHTTPNoProtocol = v1beta2.Service{Port: &portHTTP}
+	serviceHTTP           = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTP}
+	serviceHTTPS          = v1beta2.Service{Protocol: &protocolTCP, Port: &portHTTPS}
 
 	services1    = []v1beta2.Service{serviceTCP80}
 	servicesKey1 = normalizeServices(services1)
@@ -91,6 +92,11 @@ var (
 		Type: v1beta2.AntreaClusterNetworkPolicy,
 		Name: "name1",
 		UID:  "uid1",
+	}
+	anp1 = v1beta2.NetworkPolicyReference{
+		Type: v1beta2.AdminNetworkPolicy,
+		Name: "anp1",
+		UID:  "uid2",
 	}
 
 	transientError = errors.New("Transient OVS error")
@@ -391,6 +397,31 @@ func TestReconcilerReconcile(t *testing.T) {
 					To:        ofPortsToOFAddresses(sets.New[int32](1, 3)),
 					Service:   []v1beta2.Service{serviceTCP80},
 					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"ingress-rule-with-namedport-no-protocol",
+			&CompletedRule{
+				rule: &rule{
+					ID:             "ingress-rule",
+					Direction:      v1beta2.DirectionIn,
+					Services:       []v1beta2.Service{serviceHTTPNoProtocol},
+					SourceRef:      &anp1,
+					TierPriority:   &tierPriority,
+					PolicyPriority: &policyPriority,
+					Priority:       1,
+				},
+				TargetMembers: appliedToGroupWithSameContainerPort,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      []types.Address{},
+					To:        ofPortsToOFAddresses(sets.New[int32](1, 3)),
+					Service:   []v1beta2.Service{serviceTCP80},
+					PolicyRef: &anp1,
 				},
 			},
 			false,

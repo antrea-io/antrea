@@ -64,7 +64,7 @@ func getBANPReference(banp *v1alpha1.BaselineAdminNetworkPolicy) *controlplane.N
 func (n *NetworkPolicyController) addAdminNP(obj interface{}) {
 	defer n.heartbeat("addAdminNP")
 	anp := obj.(*v1alpha1.AdminNetworkPolicy)
-	klog.V(2).InfoS("Processing AdminNetworkPolicy ADD event", "anp", anp.Name)
+	klog.InfoS("Processing AdminNetworkPolicy ADD event", "anp", anp.Name)
 	n.enqueueInternalNetworkPolicy(getAdminNPReference(anp))
 }
 
@@ -73,7 +73,7 @@ func (n *NetworkPolicyController) addAdminNP(obj interface{}) {
 func (n *NetworkPolicyController) updateAdminNP(_, cur interface{}) {
 	defer n.heartbeat("updateAdminNP")
 	curANP := cur.(*v1alpha1.AdminNetworkPolicy)
-	klog.V(2).InfoS("Processing AdminNetworkPolicy UPDATE event", "anp", curANP.Name)
+	klog.InfoS("Processing AdminNetworkPolicy UPDATE event", "anp", curANP.Name)
 	n.enqueueInternalNetworkPolicy(getAdminNPReference(curANP))
 }
 
@@ -94,7 +94,7 @@ func (n *NetworkPolicyController) deleteAdminNP(old interface{}) {
 		}
 	}
 	defer n.heartbeat("deleteAdminNP")
-	klog.V(2).InfoS("Processing AdminNetworkPolicy DELETE event", "anp", anp.Name)
+	klog.InfoS("Processing AdminNetworkPolicy DELETE event", "anp", anp.Name)
 	n.enqueueInternalNetworkPolicy(getAdminNPReference(anp))
 }
 
@@ -103,7 +103,7 @@ func (n *NetworkPolicyController) deleteAdminNP(old interface{}) {
 func (n *NetworkPolicyController) addBANP(obj interface{}) {
 	defer n.heartbeat("addBANP")
 	banp := obj.(*v1alpha1.BaselineAdminNetworkPolicy)
-	klog.V(2).InfoS("Processing BaselineAdminNetworkPolicy ADD event", "banp", banp.Name)
+	klog.InfoS("Processing BaselineAdminNetworkPolicy ADD event", "banp", banp.Name)
 	n.enqueueInternalNetworkPolicy(getBANPReference(banp))
 }
 
@@ -112,7 +112,7 @@ func (n *NetworkPolicyController) addBANP(obj interface{}) {
 func (n *NetworkPolicyController) updateBANP(_, cur interface{}) {
 	defer n.heartbeat("updateBANP")
 	curBANP := cur.(*v1alpha1.BaselineAdminNetworkPolicy)
-	klog.V(2).InfoS("Processing BaselineAdminNetworkPolicy UPDATE event", "banp", curBANP.Name)
+	klog.InfoS("Processing BaselineAdminNetworkPolicy UPDATE event", "banp", curBANP.Name)
 	n.enqueueInternalNetworkPolicy(getBANPReference(curBANP))
 }
 
@@ -133,7 +133,7 @@ func (n *NetworkPolicyController) deleteBANP(old interface{}) {
 		}
 	}
 	defer n.heartbeat("deleteBANP")
-	klog.V(2).InfoS("Processing BaselineAdminNetworkPolicy DELETE event", "banp", banp.Name)
+	klog.InfoS("Processing BaselineAdminNetworkPolicy DELETE event", "banp", banp.Name)
 	n.enqueueInternalNetworkPolicy(getBANPReference(banp))
 }
 
