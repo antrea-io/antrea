@@ -69,9 +69,6 @@ func (r *REST) NewList() runtime.Object {
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
-	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return &statsv1alpha1.MulticastGroupList{}, nil
-	}
 	if !features.DefaultFeatureGate.Enabled(features.Multicast) {
 		return &statsv1alpha1.MulticastGroupList{}, nil
 	}
@@ -82,9 +79,6 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return &statsv1alpha1.MulticastGroup{}, nil
-	}
 	if !features.DefaultFeatureGate.Enabled(features.Multicast) {
 		return &statsv1alpha1.MulticastGroup{}, nil
 	}
