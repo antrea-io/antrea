@@ -87,35 +87,28 @@ func TestREST(t *testing.T) {
 
 func TestRESTList(t *testing.T) {
 	tests := []struct {
-		name                      string
-		networkPolicyStatsEnabled bool
-		multicastEnabled          bool
-		stats                     map[string]*statsv1alpha1.MulticastGroup
-		groupName                 string
-		expectedObj               runtime.Object
+		name             string
+		multicastEnabled bool
+		stats            map[string]*statsv1alpha1.MulticastGroup
+		expectedObj      runtime.Object
 	}{
-		{
-			name:                      "NetworkPolicyStats feature disabled",
-			networkPolicyStatsEnabled: false,
-			groupName:                 group1.Name,
-			expectedObj:               &statsv1alpha1.MulticastGroupList{},
-		},
 		{
 			name:             "Multicast feature disabled",
 			multicastEnabled: false,
-			groupName:        group1.Name,
+			stats: map[string]*statsv1alpha1.MulticastGroup{
+				group1.Name: group1,
+				group2.Name: group2,
+			},
+			expectedObj: &statsv1alpha1.MulticastGroupList{},
+		},
+		{
+			name:             "empty group",
+			multicastEnabled: true,
 			expectedObj:      &statsv1alpha1.MulticastGroupList{},
 		},
 		{
-			name:                      "empty group",
-			networkPolicyStatsEnabled: true,
-			multicastEnabled:          true,
-			expectedObj:               &statsv1alpha1.MulticastGroupList{},
-		},
-		{
-			name:                      "multiple groups",
-			networkPolicyStatsEnabled: true,
-			multicastEnabled:          true,
+			name:             "multiple groups",
+			multicastEnabled: true,
 			stats: map[string]*statsv1alpha1.MulticastGroup{
 				group1.Name: group1,
 				group2.Name: group2,
@@ -127,7 +120,6 @@ func TestRESTList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.NetworkPolicyStats, tt.networkPolicyStatsEnabled)()
 			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)()
 
 			r := &REST{
@@ -142,38 +134,41 @@ func TestRESTList(t *testing.T) {
 
 func TestRESTGet(t *testing.T) {
 	tests := []struct {
-		name                      string
-		networkPolicyStatsEnabled bool
-		multicastEnabled          bool
-		groups                    map[string]*statsv1alpha1.MulticastGroup
-		groupName                 string
-		expectedObj               runtime.Object
-		expectedErr               error
+		name             string
+		multicastEnabled bool
+		groups           map[string]*statsv1alpha1.MulticastGroup
+		groupName        string
+		expectedObj      runtime.Object
+		expectedErr      error
 	}{
 		{
-			name:                      "NetworkPolicyStats feature disabled",
-			networkPolicyStatsEnabled: false,
-			groupName:                 group1.Name,
-			expectedObj:               &statsv1alpha1.MulticastGroup{},
+			name:             "NetworkPolicyStats feature disabled",
+			multicastEnabled: true,
+			groupName:        group1.Name,
+			groups: map[string]*statsv1alpha1.MulticastGroup{
+				group1.Name: group1,
+			},
+			expectedObj: group1,
 		},
 		{
 			name:             "Multicast feature disabled",
 			multicastEnabled: false,
 			groupName:        group1.Name,
-			expectedObj:      &statsv1alpha1.MulticastGroup{},
+			groups: map[string]*statsv1alpha1.MulticastGroup{
+				group1.Name: group1,
+			},
+			expectedObj: &statsv1alpha1.MulticastGroup{},
 		},
 		{
-			name:                      "group not found",
-			networkPolicyStatsEnabled: true,
-			multicastEnabled:          true,
-			groups:                    nil,
-			groupName:                 group1.Name,
-			expectedErr:               errors.NewNotFound(statsv1alpha1.Resource("multicastgroup"), "224.0.0.10"),
+			name:             "group not found",
+			multicastEnabled: true,
+			groups:           nil,
+			groupName:        group1.Name,
+			expectedErr:      errors.NewNotFound(statsv1alpha1.Resource("multicastgroup"), "224.0.0.10"),
 		},
 		{
-			name:                      "group found",
-			networkPolicyStatsEnabled: true,
-			multicastEnabled:          true,
+			name:             "group found",
+			multicastEnabled: true,
 			groups: map[string]*statsv1alpha1.MulticastGroup{
 				group1.Name: group1,
 			},
@@ -183,7 +178,6 @@ func TestRESTGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.NetworkPolicyStats, tt.networkPolicyStatsEnabled)()
 			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, tt.multicastEnabled)()
 
 			r := &REST{
