@@ -193,7 +193,7 @@ func newAntreaPolicyLogger(options *AntreaPolicyLoggerOptions) (*AntreaPolicyLog
 		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
-	klog.InfoS("Initialized Antrea-native Policy Logger for audit logging", "logFile", logFile)
+	klog.InfoS("Initialized Antrea-native Policy Logger for audit logging", "logFile", logFile, "options", options)
 	return antreaPolicyLogger, nil
 }
 
