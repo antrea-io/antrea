@@ -191,7 +191,7 @@ func (mr *MockOVSCtlClientMockRecorder) GetDPFeatures() *gomock.Call {
 }
 
 // RunAppctlCmd mocks base method
-func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, *ovsctl.ExecError) {
+func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
@@ -199,7 +199,7 @@ func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) 
 	}
 	ret := m.ctrl.Call(m, "RunAppctlCmd", varargs...)
 	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(*ovsctl.ExecError)
+	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
