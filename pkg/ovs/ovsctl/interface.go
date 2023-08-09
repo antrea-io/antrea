@@ -19,7 +19,7 @@ import (
 )
 
 type OVSAppctlRunner interface {
-	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
+	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, error)
 }
 
 type OVSOfctlRunner interface {
