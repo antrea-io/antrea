@@ -17,13 +17,11 @@
 
 package ovsctl
 
-import "os/exec"
+import (
+	"context"
+)
 
 // ovsVSwitchdUDS returns the file path of the ovs-vswitchd control named pipe.
-func ovsVSwitchdUDS() string {
-	return "c:/openvswitch/var/run/openvswitch/ovs-vswitchd.ctl"
-}
-
-func getOVSCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("cmd.exe", "/c", cmdStr)
+func ovsVSwitchdUDS(ctx context.Context) (string, error) {
+	return "c:/openvswitch/var/run/openvswitch/ovs-vswitchd.ctl", nil
 }

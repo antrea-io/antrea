@@ -18,9 +18,9 @@
 package ovsctl
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -44,7 +44,7 @@ func readOVSVSwitchdPID() (int, error) {
 }
 
 // ovsVSwitchdUDS returns the file path of the ovs-vswitchd control UNIX domain socket.
-func ovsVSwitchdUDS() string {
+func ovsVSwitchdUDS(ctx context.Context) (string, error) {
 	// It is a bit sub-optimal to read the PID every time we need it, but ovs-vswitchd restarts
 	// are possible. Besides, this value is only used when invoking ovs-appctl (as a new
 	// process) at the moment, so the overhead of reading the PID from file should not be a
@@ -53,7 +53,7 @@ func ovsVSwitchdUDS() string {
 	var readErr error
 	startTime := time.Now()
 	hasFailure := false
-	pollErr := wait.PollImmediate(50*time.Millisecond, 5*time.Second, func() (bool, error) {
+	err := wait.PollImmediateWithContext(ctx, 50*time.Millisecond, 5*time.Second, func(ctx context.Context) (bool, error) {
 		pid, readErr = readOVSVSwitchdPID()
 		if readErr != nil {
 			hasFailure = true
@@ -61,17 +61,11 @@ func ovsVSwitchdUDS() string {
 		}
 		return true, nil
 	})
-	if pollErr != nil {
-		klog.ErrorS(readErr, "Failed to read ovs-vswitchd PID")
-		// that seems like a reasonable value to return if we cannot read the PID
-		return "/var/run/openvswitch/ovs-vswitchd.*.ctl"
+	if err != nil {
+		return "", fmt.Errorf("failed to read ovs-vswitchd PID: %w", readErr)
 	}
 	if hasFailure {
 		klog.V(2).InfoS("Waited for ovs-vswitchd PID to be ready", "duration", time.Since(startTime))
 	}
-	return fmt.Sprintf("/var/run/openvswitch/ovs-vswitchd.%d.ctl", pid)
-}
-
-func getOVSCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("/bin/sh", "-c", cmdStr)
+	return fmt.Sprintf("/var/run/openvswitch/ovs-vswitchd.%d.ctl", pid), nil
 }
