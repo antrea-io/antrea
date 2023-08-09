@@ -69,7 +69,31 @@ func getTestMembersBasic() map[string]controlplane.GroupMemberSet {
 	}
 }
 
-func getTestMembersPagination() map[string]controlplane.GroupMemberSet {
+func getTestMembersPagination(ifExternalEntity bool) map[string]controlplane.GroupMemberSet {
+	if ifExternalEntity {
+		return map[string]controlplane.GroupMemberSet{
+			"cgB": {
+				"memberKey1": &controlplane.GroupMember{
+					ExternalEntity: &controlplane.ExternalEntityReference{
+						Name:      "ee2",
+						Namespace: "ns1",
+					},
+					IPs: []controlplane.IPAddress{
+						[]byte{127, 10, 0, 1},
+					},
+				},
+				"memberKey2": &controlplane.GroupMember{
+					ExternalEntity: &controlplane.ExternalEntityReference{
+						Name:      "ee1",
+						Namespace: "ns1",
+					},
+					IPs: []controlplane.IPAddress{
+						[]byte{127, 10, 0, 1},
+					},
+				},
+			},
+		}
+	}
 	return map[string]controlplane.GroupMemberSet{
 		"cgA": {
 			"memberKey1": &controlplane.GroupMember{
@@ -224,6 +248,7 @@ func TestRESTGetPagination(t *testing.T) {
 	tests := []struct {
 		name              string
 		groupName         string
+		ifExternalEntity  bool
 		paginationOptions runtime.Object
 		expectedObj       runtime.Object
 		expectedErr       bool
@@ -282,6 +307,32 @@ func TestRESTGetPagination(t *testing.T) {
 					},
 				},
 				TotalMembers: 3,
+				TotalPages:   2,
+				CurrentPage:  2,
+			},
+			expectedErr: false,
+		},
+		{
+			name:              "page1/2-group-member-pagination",
+			groupName:         "cgB",
+			ifExternalEntity:  true,
+			paginationOptions: &controlplane.PaginationGetOptions{Page: 2, Limit: 1},
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgB",
+				},
+				EffectiveMembers: []controlplane.GroupMember{
+					{
+						ExternalEntity: &controlplane.ExternalEntityReference{
+							Name:      "ee2",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+				},
+				TotalMembers: 2,
 				TotalPages:   2,
 				CurrentPage:  2,
 			},
@@ -358,8 +409,8 @@ func TestRESTGetPagination(t *testing.T) {
 			expectedErr:       true,
 		},
 	}
-	rest := NewREST(fakeQuerier{members: getTestMembersPagination()})
 	for _, tt := range tests {
+		rest := NewREST(fakeQuerier{members: getTestMembersPagination(tt.ifExternalEntity)})
 		actualGroupList, err := rest.Get(request.NewDefaultContext(), tt.groupName, tt.paginationOptions)
 		if tt.expectedErr {
 			require.Error(t, err)

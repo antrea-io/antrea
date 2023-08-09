@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 // addGroup is responsible for processing the ADD event of a Group resource.
@@ -181,7 +182,7 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	//   2. All its child groups are created and realized.
 	if len(grp.ChildGroups) > 0 {
 		for _, cgName := range grp.ChildGroups {
-			internalGroup, found, _ := n.internalGroupStore.Get(grp.SourceReference.Namespace + "/" + cgName)
+			internalGroup, found, _ := n.internalGroupStore.Get(k8s.NamespacedName(grp.SourceReference.Namespace, cgName))
 			if !found || internalGroup.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
 				membersComputed = false
 				break

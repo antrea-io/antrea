@@ -879,7 +879,7 @@ func TestGetAssociatedGroups(t *testing.T) {
 	}
 }
 
-func TestGetGroupMembers(t *testing.T) {
+func TestGetClusterGroupMembers(t *testing.T) {
 	pod1MemberSet := controlplane.GroupMemberSet{}
 	pod1MemberSet.Insert(podToGroupMember(testPods[0], true))
 	pod12MemberSet := controlplane.GroupMemberSet{}
