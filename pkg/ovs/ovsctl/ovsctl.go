@@ -17,6 +17,7 @@ package ovsctl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -181,7 +182,7 @@ func (c *ovsCtlClient) runTracing(flow string) (string, error) {
 	return string(out), nil
 }
 
-func (c *ovsCtlClient) RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError) {
+func (c *ovsCtlClient) RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, error) {
 	return c.ovsAppctlRunner.RunAppctlCmd(cmd, needsBridge, args...)
 }
 
@@ -399,7 +400,7 @@ func (c *ovsCtlClient) DumpPortsDesc() ([][]string, error) {
 func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 	// This command does not have standard output, and only has standard err when running with error.
 	// NOTE THAT, THIS CONFIGURATION MUST WORK WITH OpenFlow10.
-	_, err := runOfctlCmd(false, "mod-port", c.bridge, strconv.FormatUint(uint64(ofport), 10), "no-flood")
+	_, err := runOfctlCmd(context.TODO(), false, "mod-port", c.bridge, strconv.FormatUint(uint64(ofport), 10), "no-flood")
 	if err != nil {
 		return fmt.Errorf("fail to set no-food config for port %d on bridge %s: %v", ofport, c.bridge, err)
 	}
