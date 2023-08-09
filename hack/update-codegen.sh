@@ -18,7 +18,7 @@ set -o errexit
 set -o pipefail
 
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
-IMAGE_NAME="antrea/codegen:kubernetes-1.26.4"
+IMAGE_NAME="antrea/codegen:kubernetes-1.26.4-build.0"
 
 # Recent versions of Git will not access .git directories which are owned by
 # another user (as a security measure), unless the directories are explicitly
@@ -30,6 +30,8 @@ IMAGE_NAME="antrea/codegen:kubernetes-1.26.4"
 # directory to the list of "safe" directories. We are still looking into the
 # possibility of running the Docker container as the "current host user".
 function docker_run() {
+  # Silence CLI suggestions.
+  export DOCKER_CLI_HINTS=false
   docker pull ${IMAGE_NAME}
   set -x
   ANTREA_PATH="/go/src/antrea.io/antrea"

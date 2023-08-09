@@ -21,7 +21,6 @@ package e2e
 import (
 	"flag"
 	"log"
-	"math/rand"
 	"os"
 	"path"
 	"testing"
@@ -90,7 +89,6 @@ func testMain(m *testing.M) int {
 	if err := testData.initProviders(); err != nil {
 		log.Fatalf("Error when initializing providers for ClusterSet: %v", err)
 	}
-	rand.Seed(time.Now().UnixNano())
 
 	ret := m.Run()
 	if ret != 0 {
