@@ -15,6 +15,7 @@
 package grouping
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -102,6 +103,75 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			assert.NoError(t, wait.Poll(10*time.Millisecond, time.Second, func() (done bool, err error) {
 				return index.HasSynced(), nil
 			}), "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
+		})
+	}
+}
+
+func TestPodIPsIndexFunc(t *testing.T) {
+	type args struct {
+		obj interface{}
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:    "invalid input",
+			args:    args{obj: &struct{}{}},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "nil IPs",
+			args:    args{obj: &v1.Pod{}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name:    "zero IPs",
+			args:    args{obj: &v1.Pod{Status: v1.PodStatus{PodIPs: []v1.PodIP{}}}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name: "PodFailed with podIPs",
+			args: args{
+				obj: &v1.Pod{
+					Status: v1.PodStatus{
+						PodIPs: []v1.PodIP{{IP: "1.2.3.4"}, {IP: "aaaa::bbbb"}},
+						Phase:  v1.PodFailed,
+					},
+				},
+			},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name: "PodRunning with podIPs",
+			args: args{
+				obj: &v1.Pod{
+					Status: v1.PodStatus{
+						PodIPs: []v1.PodIP{{IP: "1.2.3.4"}, {IP: "aaaa::bbbb"}},
+						Phase:  v1.PodRunning,
+					},
+				},
+			},
+			want:    []string{"1.2.3.4", "aaaa::bbbb"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := PodIPsIndexFunc(tt.args.obj)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("podIPsIndexFunc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("podIPsIndexFunc() got = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
