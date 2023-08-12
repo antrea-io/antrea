@@ -274,7 +274,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 			}
 		}
 
-		klog.V(2).Infof("Configuring IP address for container %s", containerID)
+		klog.V(2).InfoS("Configuring IP address for container interface", "result", *result)
 		// result.Interfaces must be set before this.
 		if err := ipamConfigureIface(containerIface.Name, result); err != nil {
 			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)

@@ -42,9 +42,12 @@ func GarbageCollectContainerIPs(network string, desiredIPs sets.Set[string]) err
 	dir := networkDir(network)
 
 	info, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		klog.V(2).InfoS("Host-local IPAM data directory does not exist, nothing to do", "dir", dir)
-		return nil
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.V(2).InfoS("Host-local IPAM data directory does not exist, nothing to do", "dir", dir)
+			return nil
+		}
+		return err
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("path '%s' is not a directory: %w", dir, err)

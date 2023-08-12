@@ -48,7 +48,7 @@ import (
 )
 
 const (
-	antreaCNIType = "antrea"
+	AntreaCNIType = "antrea"
 
 	// networkReadyTimeout is the maximum time the CNI server will wait for network ready when processing CNI Add
 	// requests. If timeout occurs, tryAgainLaterResponse will be returned.
@@ -102,17 +102,16 @@ func (arbitrator *containerAccessArbitrator) unlockContainer(containerKey string
 }
 
 type CNIServer struct {
-	cniSocket            string
-	supportedCNIVersions map[string]bool
-	serverVersion        string
-	nodeConfig           *config.NodeConfig
-	hostProcPathPrefix   string
-	kubeClient           clientset.Interface
-	containerAccess      *containerAccessArbitrator
-	podConfigurator      *podConfigurator
-	routeClient          route.Interface
-	isChaining           bool
-	enableBridgingMode   bool
+	cniSocket          string
+	serverVersion      string
+	nodeConfig         *config.NodeConfig
+	hostProcPathPrefix string
+	kubeClient         clientset.Interface
+	containerAccess    *containerAccessArbitrator
+	podConfigurator    *podConfigurator
+	routeClient        route.Interface
+	isChaining         bool
+	enableBridgingMode bool
 	// Enable AntreaIPAM for secondary networks implementd by other CNIs.
 	enableSecondaryNetworkIPAM bool
 	disableTXChecksumOffload   bool
@@ -133,6 +132,11 @@ type CNIConfig struct {
 	*cnipb.CniCmdArgs
 	// K8s CNI_ARGS passed to the CNI plugin.
 	*types.K8sArgs
+}
+
+func IsCNIVersionSupported(reqVersion string) bool {
+	_, exist := supportedCNIVersionSet[reqVersion]
+	return exist
 }
 
 // updateResultIfaceConfig processes the result from the IPAM plugin and does the following:
@@ -200,17 +204,12 @@ func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig,
 	return &cniConfig, nil
 }
 
-func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
-	_, exist := s.supportedCNIVersions[reqVersion]
-	return exist
-}
-
 func (s *CNIServer) validateCNIAndIPAMType(cniConfig *CNIConfig) *cnipb.CniCmdResponse {
 	var ipamType string
 	if cniConfig.IPAM != nil {
 		ipamType = cniConfig.IPAM.Type
 	}
-	if cniConfig.Type == antreaCNIType {
+	if cniConfig.Type == AntreaCNIType {
 		if s.isChaining {
 			return nil
 		}
@@ -247,7 +246,7 @@ func (s *CNIServer) validateRequestMessage(request *cnipb.CniCmdRequest) (*CNICo
 
 	cniVersion := cniConfig.CNIVersion
 	// Check if CNI version in the request is supported
-	if !s.isCNIVersionSupported(cniVersion) {
+	if !IsCNIVersionSupported(cniVersion) {
 		klog.ErrorS(nil, "Unsupported CNI version", "requested", cniVersion, "supported", version.All.SupportedVersions())
 		return nil, s.incompatibleCniVersionResponse(cniVersion)
 	}
@@ -633,7 +632,6 @@ func New(
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
-		supportedCNIVersions:       supportedCNIVersionSet,
 		serverVersion:              cni.AntreaCNIVersion,
 		nodeConfig:                 nodeConfig,
 		hostProcPathPrefix:         hostProcPathPrefix,

@@ -52,8 +52,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/querier AgentQuerier testing"
   "pkg/agent/route Interface testing"
   "pkg/agent/ipassigner IPAssigner testing"
-  "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator testing"
-  "pkg/agent/secondarynetwork/ipam IPAMDelegator testing"
+  "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator,IPAMAllocator testing"
   "pkg/agent/servicecidr Interface testing"
   "pkg/agent/util/ipset Interface testing"
   "pkg/agent/util/iptables Interface testing mock_iptables_linux.go" # Must specify linux.go suffix, otherwise compilation would fail on windows platform as source file has linux build tag.

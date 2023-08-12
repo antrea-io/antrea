@@ -33,8 +33,6 @@ type InterfaceInfo struct {
 	HostInterfaceName string
 	// OVS port UUID for a VLAN interface.
 	OVSPortUUID string
-	// NOTE: Interface specific network/CNI config required to be maintained for IPAM clean-up needs.
-	CNIConfig []byte
 }
 
 type CNIPodInfoStore interface {

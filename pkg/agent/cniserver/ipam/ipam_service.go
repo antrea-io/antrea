@@ -25,12 +25,11 @@ import (
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
-// List of ordered IPAM drivers
+// Ordered list of IPAM drivers.
 // The first driver in list that claims to own this request will proceed to
-// handle allocation/release
-// This model is useful for antrea IPAM feature that should trigger antrea
-// IPAM only if corresponding annotation is specified for Pod/Namespace
-// Otherwise IPAM should be handled by host-local plugin.
+// handle allocation/release. This model is useful for antrea IPAM feature that
+// should trigger Antrea IPAM only if a corresponding annotation is specified
+// for Pod/Namespace; otherwise IPAM should be handled by the host-local plugin.
 var ipamDrivers map[string][]IPAMDriver
 
 // A cache of IPAM results.
@@ -151,7 +150,11 @@ func IsIPAMTypeValid(ipamType string) bool {
 // Antrea IPAM for secondary network.
 func SecondaryNetworkAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) (*current.Result, error) {
 	args := argsFromEnv(cniArgs)
-	return getAntreaIPAMDriver().secondaryNetworkAdd(args, k8sArgs, networkConfig)
+	ipamResult, err := getAntreaIPAMDriver().secondaryNetworkAdd(args, k8sArgs, networkConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &ipamResult.Result, nil
 
 }
 
@@ -182,4 +185,10 @@ func ResetIPAMDriver(ipamType string, driver IPAMDriver) {
 
 func AddIPAMResult(key string, result *IPAMResult) {
 	ipamResults.Store(key, result)
+}
+
+// GetSecondaryNetworkAllocator returns the Antrea IPAM driver as the
+// SecondaryNetworkIPAMAllocator implementation.
+func GetSecondaryNetworkAllocator() *AntreaIPAM {
+	return getAntreaIPAMDriver()
 }

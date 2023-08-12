@@ -30,15 +30,16 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	invoke "github.com/containernetworking/cni/pkg/invoke"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/cniserver/types"
 	cnipodcache "antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/ipam"
+	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -62,16 +63,15 @@ const (
 	vlanIDMax           = 4094
 )
 
-var (
-	// ipamDelegator is used to request IP addresses for secondary network
-	// interfaces. It can be overridden by unit tests.
-	ipamDelegator ipam.IPAMDelegator = ipam.NewIPAMDelegator()
-)
-
 type InterfaceConfigurator interface {
 	ConfigureSriovSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, podSriovVFDeviceID string, result *current.Result) error
 	ConfigureVLANSecondaryInterface(podName, podNamespace, containerID, containerNetNS, containerInterfaceName string, mtu int, vlanID uint16, result *current.Result) (string, error)
 	DeleteVLANSecondaryInterface(containerID, hostInterfaceName, ovsPortUUID string) error
+}
+
+type IPAMAllocator interface {
+	SecondaryNetworkAllocate(podOwner *crdv1a2.PodOwner, networkConfig *types.NetworkConfig) (*ipam.IPAMResult, error)
+	SecondaryNetworkRelease(podOwner *crdv1a2.PodOwner) error
 }
 
 type PodController struct {
@@ -81,8 +81,9 @@ type PodController struct {
 	podInformer           cache.SharedIndexInformer
 	nodeName              string
 	podCache              cnipodcache.CNIPodInfoStore
-	interfaceConfigurator InterfaceConfigurator
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
+	interfaceConfigurator InterfaceConfigurator
+	ipamAllocator         IPAMAllocator
 	vfDeviceIDUsageMap    sync.Map
 }
 
@@ -105,8 +106,9 @@ func NewPodController(
 		podInformer:           podInformer,
 		nodeName:              nodeName,
 		podCache:              podCache,
-		interfaceConfigurator: interfaceConfigurator,
 		ovsBridgeClient:       ovsBridgeClient,
+		interfaceConfigurator: interfaceConfigurator,
+		ipamAllocator:         ipam.GetSecondaryNetworkAllocator(),
 	}
 	podInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -140,29 +142,14 @@ func generatePodSecondaryIfaceName(podCNIInfo *cnipodcache.CNIConfigInfo) (strin
 	return "", fmt.Errorf("no more interface names")
 }
 
-func whereaboutsArgsBuilder(cmd string, interfaceName string, podCNIInfo *cnipodcache.CNIConfigInfo) *invoke.Args {
-	// PluginArgs added to provide additional arguments required for whereabouts v0.5.1 and above.
-	return &invoke.Args{Command: cmd, ContainerID: podCNIInfo.ContainerID,
-		NetNS: podCNIInfo.ContainerNetNS, IfName: interfaceName,
-		Path: cniPath, PluginArgs: [][2]string{
-			{"K8S_POD_NAME", podCNIInfo.PodName},
-			{"K8S_POD_NAMESPACE", podCNIInfo.PodNamespace},
-			{"K8S_POD_INFRA_CONTAINER_ID", podCNIInfo.ContainerID},
-		}}
-
-}
-
 func (pc *PodController) deletePodSecondaryNetwork(podCNIInfo *cnipodcache.CNIConfigInfo) error {
-	var cmdArgs *invoke.Args
-	// Clean-up IPAM at Whereabouts DB (etcd or Kubernetes API server) for all secondary
-	// networks of the Pod which is getting removed.
+	// Release IPAM allocation for all secondary networks of the Pod which is getting removed.
 	// NOTE: SR-IOV VF interface clean-up, upon Pod delete will be handled by SR-IOV device
 	// plugin. Not handled here.
-	// PluginArgs added to provide additional arguments required for Whereabouts v0.5.1 and
-	// above.
-	cmdArgs = whereaboutsArgsBuilder("DEL", "", podCNIInfo)
-	// example: podCNIInfo.Interfaces = {"eth1": net1-cniconfig, "eth2": net2-cniconfig}
-	for secNetInstIface, interfaceInfo := range podCNIInfo.Interfaces {
+	for iface, interfaceInfo := range podCNIInfo.Interfaces {
+		klog.V(1).InfoS("Deleting secondary interface",
+			"Pod", klog.KRef(podCNIInfo.PodNamespace, podCNIInfo.PodName),
+			"interface", iface, "interfaceInfo", *interfaceInfo)
 		if interfaceInfo.NetworkType == vlanNetworkType {
 			if err := pc.interfaceConfigurator.DeleteVLANSecondaryInterface(podCNIInfo.ContainerID,
 				interfaceInfo.HostInterfaceName, interfaceInfo.OVSPortUUID); err != nil {
@@ -170,15 +157,18 @@ func (pc *PodController) deletePodSecondaryNetwork(podCNIInfo *cnipodcache.CNICo
 			}
 		}
 
-		cmdArgs.IfName = secNetInstIface
-		// Do DelIPAMSubnetAddress on network config (secNetInstConfig) and command argument (updated with interface name).
-		err := ipamDelegator.DelIPAMSubnetAddress(interfaceInfo.CNIConfig, cmdArgs)
-		if err != nil {
+		podOwner := &crdv1a2.PodOwner{
+			Name:        podCNIInfo.PodName,
+			Namespace:   podCNIInfo.PodNamespace,
+			ContainerID: podCNIInfo.ContainerID,
+			IFName:      iface,
+		}
+		if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
 			return fmt.Errorf("Failed to clean-up whereabouts IPAM %v", err)
 		}
 
 		// Delete map entry for secNetInstIface, secNetInstConfig
-		delete(podCNIInfo.Interfaces, secNetInstIface)
+		delete(podCNIInfo.Interfaces, iface)
 	}
 	return nil
 }
@@ -216,7 +206,7 @@ func (pc *PodController) handleAddUpdatePod(obj interface{}) error {
 	secondaryNetwork, ok := checkForPodSecondaryNetworkAttachement(pod)
 	if !ok {
 		// NOTE: We do not handle Pod annotation deletion/update scenario at present.
-		klog.InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", klog.KObj(pod))
+		klog.V(2).InfoS("Pod does not have a NetworkAttachmentDefinition", "Pod", klog.KObj(pod))
 		return nil
 	}
 	// Retrieve Pod specific cache entry which has "PodCNIDeleted = false"
@@ -227,7 +217,7 @@ func (pc *PodController) handleAddUpdatePod(obj interface{}) error {
 	// Avoid processing Pod annotation, if we already have at least one secondary network successfully configured on this Pod.
 	// We do not support/handle Annotation updates yet.
 	if len(podCNIInfo.Interfaces) > 0 {
-		klog.InfoS("Secondary network already configured on this Pod and annotation update not supported, skipping update", "pod", klog.KObj(pod))
+		klog.V(1).InfoS("Secondary network already configured on this Pod and annotation update not supported, skipping update", "pod", klog.KObj(pod))
 		return nil
 	}
 
@@ -307,7 +297,6 @@ func (pc *PodController) configureSecondaryInterface(
 	pod *corev1.Pod,
 	network *netdefv1.NetworkSelectionElement,
 	podCNIInfo *cnipodcache.CNIConfigInfo,
-	cniConfig []byte,
 	networkConfig *SecondaryNetworkConfig) error {
 	// Generate a new interface name, if the secondary interface name was not provided in the
 	// Pod annotation.
@@ -319,16 +308,18 @@ func (pc *PodController) configureSecondaryInterface(
 			return nil
 		}
 	}
-	// PluginArgs added to provide additional arguments required for whereabouts v0.5.1 and above.
-	cmdArgs := whereaboutsArgsBuilder("ADD", network.InterfaceRequest, podCNIInfo)
-	ipamResult, err := ipamDelegator.GetIPAMSubnetAddress(cniConfig, cmdArgs)
+
+	podOwner := &crdv1a2.PodOwner{
+		Name:        pod.Name,
+		Namespace:   pod.Namespace,
+		ContainerID: podCNIInfo.ContainerID,
+		IFName:      network.InterfaceRequest,
+	}
+	ipamResult, err := pc.ipamAllocator.SecondaryNetworkAllocate(podOwner, &networkConfig.NetworkConfig)
 	if err != nil {
 		return fmt.Errorf("secondary network IPAM failed: %v", err)
 	}
-	result := &current.Result{CNIVersion: podCNIInfo.CNIVersion}
-	result.IPs = ipamResult.IPs
-	result.Routes = ipamResult.Routes
-	// Set result.Interface to container interface.
+	result := &ipamResult.Result
 	for _, ip := range result.IPs {
 		ip.Interface = current.Int(1)
 	}
@@ -339,16 +330,21 @@ func (pc *PodController) configureSecondaryInterface(
 	case sriovNetworkType:
 		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, podCNIInfo, int(networkConfig.MTU), result)
 	case vlanNetworkType:
+		vlanID := ipamResult.VLANID
+		if networkConfig.VLAN > 0 {
+			// Let VLAN ID in the CNI network configuration override the IPPool subnet
+			// VLAN.
+			vlanID = uint16(networkConfig.VLAN)
+		}
 		ovsPortUUID, ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
 			podCNIInfo.PodName, podCNIInfo.PodNamespace,
 			podCNIInfo.ContainerID, podCNIInfo.ContainerNetNS, network.InterfaceRequest,
-			int(networkConfig.MTU), uint16(networkConfig.VLAN),
-			result)
+			int(networkConfig.MTU), vlanID, result)
 	}
 
 	if ifConfigErr != nil {
-		// SRIOV interface creation failed. Free allocated IP address
-		if err := ipamDelegator.DelIPAMSubnetAddress(cniConfig, cmdArgs); err != nil {
+		// Interface creation failed. Free allocated IP address
+		if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
 			klog.ErrorS(err, "IPAM de-allocation failed: ", err)
 		}
 		return ifConfigErr
@@ -365,8 +361,7 @@ func (pc *PodController) configureSecondaryInterface(
 	interfaceInfo := cnipodcache.InterfaceInfo{
 		NetworkType:       networkConfig.NetworkType,
 		HostInterfaceName: hostInterfaceName,
-		OVSPortUUID:       ovsPortUUID,
-		CNIConfig:         cniConfig}
+		OVSPortUUID:       ovsPortUUID}
 	podCNIInfo.Interfaces[network.InterfaceRequest] = &interfaceInfo
 	return nil
 }
@@ -381,46 +376,64 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkli
 		}
 		cniConfig, err := netdefutils.GetCNIConfig(netDefCRD, "")
 		if err != nil {
-			// NetworkAttachmentDefinition Spec.Config parsing failed. return error to re-queue and re-try.
-			return fmt.Errorf("net-attach-def: CNI config spec read error: %v", err)
+			// NetworkAttachmentDefinition Spec.Config parsing failed. Return error to re-queue and re-try.
+			return fmt.Errorf("NetworkAttachmentDefinition CNI config spec read error: %v", err)
 		}
-		var networkConfig SecondaryNetworkConfig
-		if err := json.Unmarshal(cniConfig, &networkConfig); err != nil {
-			return fmt.Errorf("invalid NetworkAttachmentDefinition: %v", err)
-		}
-		if networkConfig.Type != "antrea" {
-			// note that at the moment, even if the type is updated, we will not process
-			// the request again.
-			klog.InfoS("NetworkAttachmentDefinition is not of type 'antrea', ignoring", "NetworkAttachmentDefinition", klog.KObj(netDefCRD))
-			continue
-		}
-		if networkConfig.NetworkType != sriovNetworkType && networkConfig.NetworkType != vlanNetworkType {
-			// same as above, if updated, we will not process the request again.
-			klog.ErrorS(err, "Secondary network type not supported", "NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KObj(pod))
-			continue
-		}
-		if networkConfig.NetworkType == vlanNetworkType {
-			if networkConfig.VLAN > vlanIDMax || networkConfig.VLAN < 0 {
-				klog.ErrorS(nil, "Invalid VLAN ID", "NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KObj(pod), "VLAN", networkConfig.VLAN)
+		networkConfig, err := validateNetworkConfig(cniConfig)
+		if err != nil {
+			if networkConfig != nil && networkConfig.Type != cniserver.AntreaCNIType {
+				// Ignore non-Antrea CNI type.
+				klog.InfoS("Not Antrea CNI type in NetworkAttachmentDefinition, ignoring",
+					"NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KRef(pod.Namespace, pod.Name))
 				continue
 			}
-		}
-		if networkConfig.MTU < 0 {
-			klog.ErrorS(nil, "Invalid MTU", "NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KObj(pod), "MTU", networkConfig.MTU)
+			klog.ErrorS(err, "NetworkConfig validation failed",
+				"NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KRef(pod.Namespace, pod.Name))
 			continue
 		}
-		if networkConfig.MTU == 0 {
-			// TODO: use the physical interface MTU as the default.
-			networkConfig.MTU = interfaceDefaultMTU
-		}
 		// secondary network information retrieved from API server. Proceed to configure secondary interface now.
-		if err = pc.configureSecondaryInterface(pod, network, podCNIInfo, cniConfig, &networkConfig); err != nil {
-			klog.ErrorS(err, "Secondary interface configuration failed", "Pod", klog.KObj(pod), "networkType", networkConfig.NetworkType)
+		if err = pc.configureSecondaryInterface(pod, network, podCNIInfo, networkConfig); err != nil {
+			klog.ErrorS(err, "Secondary interface configuration failed",
+				"Pod", klog.KRef(pod.Namespace, pod.Name), "networkType", networkConfig.NetworkType)
 			// Secondary interface configuration failed. return error to re-queue and re-try.
 			return fmt.Errorf("secondary interface configuration failed: %v", err)
 		}
 	}
 	return nil
+}
+
+func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
+	var networkConfig SecondaryNetworkConfig
+	if err := json.Unmarshal(cniConfig, &networkConfig); err != nil {
+		return nil, fmt.Errorf("invalid CNI configuration: %v", err)
+	}
+	if !cniserver.IsCNIVersionSupported(networkConfig.CNIVersion) {
+		return &networkConfig, fmt.Errorf("unsupported CNI version %s", networkConfig.CNIVersion)
+	}
+	if networkConfig.Type != cniserver.AntreaCNIType {
+		return &networkConfig, fmt.Errorf("not Antrea CNI type '%s'", networkConfig.Type)
+
+	}
+	if networkConfig.NetworkType != sriovNetworkType && networkConfig.NetworkType != vlanNetworkType {
+		return &networkConfig, fmt.Errorf("secondary network type '%s' not supported", networkConfig.NetworkType)
+	}
+	if networkConfig.NetworkType == vlanNetworkType {
+		if networkConfig.VLAN > vlanIDMax || networkConfig.VLAN < 0 {
+			return &networkConfig, fmt.Errorf("invalid VLAN ID %d", networkConfig.VLAN)
+		}
+	}
+	if networkConfig.MTU < 0 {
+		return &networkConfig, fmt.Errorf("invalid MTU %d", networkConfig.MTU)
+	}
+	if networkConfig.IPAM.Type != ipam.AntreaIPAMType {
+		return &networkConfig, fmt.Errorf("unsupported IPAM type %s", networkConfig.IPAM.Type)
+	}
+
+	if networkConfig.MTU == 0 {
+		// TODO: use the physical interface MTU as the default.
+		networkConfig.MTU = interfaceDefaultMTU
+	}
+	return &networkConfig, nil
 }
 
 func (pc *PodController) Run(stopCh <-chan struct{}) {
