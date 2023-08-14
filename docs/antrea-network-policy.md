@@ -1774,11 +1774,5 @@ Similar RBAC is applied to the ClusterGroup resource.
   matched at the same priority with conflicting actions. It will be the policy writer's
   responsibility to identify such ambiguities in rule definitions and avoid potential
   nondeterministic rule enforcement results.
-- Antrea has a higher-priority rule for the established connections, which is expected to take
-  the same "allow" action for the subsequent packets as it did for the first packet.
-  An existing connection was set up before a drop/reject rule was realized, meaning it was
-  expected to "allow" such traffic when the connection was established. So the subsequent valid
-  packets in this connection are also processed with "allow" action.
-  After traffic stops, the existing connection record may be removed from conntrack cache after a
-  timeout interval, and then the drop/reject rule will be applied to the new connection with same
-  attributes.
+- NetworPolicy is connection/flow oriented and stateful. It applies to connections, instead of
+  individual packets, which means established connections won't be blocked by new rules.
