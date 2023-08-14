@@ -18,6 +18,9 @@ flowAggregatorAddress: ""
 recordContents:
   # -- Determine whether source and destination Pod labels will be included in the flow records.
   podLabels: false
+# -- HostAliases to be injected into the Pod's hosts file.
+# For example: `[{"ip": "8.8.8.8", "hostnames": ["clickhouse.example.com"]}]`
+hostAliases: []
 # apiServer contains APIServer related configuration options.
 apiServer:
   # -- The port for the Flow Aggregator APIServer to serve on.

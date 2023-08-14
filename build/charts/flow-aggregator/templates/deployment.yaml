@@ -15,6 +15,14 @@ spec:
       labels:
         app: flow-aggregator
     spec:
+      hostAliases:
+      {{- range .Values.hostAliases }}
+        - ip: {{ .ip }}
+          hostnames:
+          {{- range $hostname := .hostnames }}
+            - {{ $hostname }}
+          {{- end }}
+      {{- end }}
       containers:
       - name: flow-aggregator
         image: {{ include "flowAggregatorImage" . | quote }}
