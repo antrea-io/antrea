@@ -1661,6 +1661,7 @@ func (f *featurePodConnectivity) gatewayIPSpoofGuardFlows() []binding.Flow {
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchInPort(f.gatewayPort).
+			MatchSrcMAC(f.nodeConfig.GatewayConfig.MAC).
 			Action().LoadRegMark(regMarksToLoad...).
 			Action().GotoTable(targetTables[ipProtocol]).
 			Done(),

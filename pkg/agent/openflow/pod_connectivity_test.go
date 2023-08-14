@@ -33,7 +33,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=2,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=2 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,ipv6_src=fe80::/10 actions=goto_table:IPv6",
-				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=2 actions=goto_table:IPv6",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=135,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=136,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,ipv6,ipv6_dst=ff00::/8 actions=NORMAL",
@@ -74,9 +74,9 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 		}
 		if !multicastEnabled {
-			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:UnSNAT")
+			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:UnSNAT")
 		} else {
-			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:PipelineIPClassifier")
+			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:PipelineIPClassifier")
 		}
 		if runtime.IsWindowsPlatform() {
 			flows = append(flows,
@@ -109,7 +109,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 		if !isIPv4 {
 			return []string{
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,ipv6_src=fe80::/10 actions=goto_table:IPv6",
-				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=2 actions=goto_table:IPv6",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=135,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=136,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,ipv6,ipv6_dst=ff00::/8 actions=NORMAL",
@@ -182,11 +182,11 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				)
 				if !multicastEnabled {
 					flows = append(flows,
-						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=set_field:0x1000/0xf000->reg8,goto_table:UnSNAT",
+						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=set_field:0x1000/0xf000->reg8,goto_table:UnSNAT",
 					)
 				} else {
 					flows = append(flows,
-						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=set_field:0x1000/0xf000->reg8,goto_table:PipelineIPClassifier",
+						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=set_field:0x1000/0xf000->reg8,goto_table:PipelineIPClassifier",
 					)
 				}
 			} else {
@@ -197,11 +197,11 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				)
 				if !multicastEnabled {
 					flows = append(flows,
-						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:UnSNAT",
+						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:UnSNAT",
 					)
 				} else {
 					flows = append(flows,
-						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:PipelineIPClassifier",
+						"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:PipelineIPClassifier",
 					)
 				}
 			}
@@ -222,7 +222,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 		if !isIPv4 {
 			return []string{
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,ipv6_src=fe80::/10 actions=goto_table:IPv6",
-				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=2 actions=goto_table:IPv6",
+				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=135,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=136,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,ipv6,ipv6_dst=ff00::/8 actions=NORMAL",
@@ -250,7 +250,7 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=ARPResponder, priority=190,arp actions=NORMAL",
 			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=2,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=2 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
-			"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:UnSNAT",
+			"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2,dl_src=0a:00:00:00:00:01 actions=goto_table:UnSNAT",
 			"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520,nat)",
 			"cookie=0x1010000000000, table=ConntrackState, priority=200,ct_state=+inv+trk,ip actions=drop",
 			"cookie=0x1010000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x0/0x10,ip actions=goto_table:AntreaPolicyEgressRule",
