@@ -116,7 +116,7 @@ function clean_antrea {
     kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true
     # The cleanup and stats are best-effort.
     set +e
-    docker image prune -f --filter "until=1h" > /dev/null
+    docker system prune --force --all until=1h > /dev/null
     docker system df -v
     set -e
 }

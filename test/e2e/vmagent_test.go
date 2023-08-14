@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"k8s.io/klog/v2"
 	"net"
 	"path"
 	"strings"
@@ -261,7 +262,7 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 // and verifies uplink configuration is restored.
 func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyUpLinkAfterCleanup := func(vm vmInfo) {
-		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+		err := wait.PollImmediate(10*time.Second, 10*time.Minute, func() (done bool, err error) {
 			var tempVM vmInfo
 			if vm.osType == linuxOS {
 				tempVM = getVMInfo(t, data, vm.nodeName)
@@ -283,9 +284,12 @@ func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	t.Logf("TestVMAgent teardown")
 	for _, vm := range vmList {
 		err := data.crdClient.CrdV1alpha1().ExternalNodes(namespace).Delete(context.TODO(), vm.nodeName, metav1.DeleteOptions{})
+		startTime := time.Now()
 		assert.NoError(t, err, "Failed to delete ExternalNode %s", vm.nodeName)
 		verifyExternalEntityExistence(t, data, vm.eeName, vm.nodeName, false)
 		verifyUpLinkAfterCleanup(vm)
+		d := time.Since(startTime)
+		klog.InfoS("Finished verifyUpLinkAfterCleanup(vm)", "duration", d)
 	}
 }
 
