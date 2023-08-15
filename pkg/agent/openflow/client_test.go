@@ -2611,6 +2611,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 		}{
 			{id: PacketInMeterIDNP, rate: PacketInMeterRateNP},
 			{id: PacketInMeterIDTF, rate: PacketInMeterRateTF},
+			{id: PacketInMeterIDDNS, rate: PacketInMeterRateDNS},
 		} {
 			meter := ovsoftest.NewMockMeter(ctrl)
 			meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)

@@ -797,6 +797,9 @@ func (c *client) initialize() error {
 		if err := c.genPacketInMeter(PacketInMeterIDTF, PacketInMeterRateTF).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, PacketInMeterRateTF, err)
 		}
+		if err := c.genPacketInMeter(PacketInMeterIDDNS, PacketInMeterRateDNS).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %v", PacketInMeterIDDNS, PacketInMeterRateDNS, err)
+		}
 	}
 
 	for _, activeFeature := range c.activatedFeatures {
@@ -1561,6 +1564,8 @@ func (c *client) getMeterStats() {
 			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterNetworkPolicy).Set(float64(packetCount))
 		case PacketInMeterIDTF:
 			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterTraceflow).Set(float64(packetCount))
+		case PacketInMeterIDDNS:
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterDNSInterception).Set(float64(packetCount))
 		default:
 			klog.V(4).InfoS("Received unexpected meterID", "meterID", meterID)
 		}

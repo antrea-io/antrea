@@ -1607,6 +1607,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTSrcPort(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcPort), arg0)
 }
 
+// MatchCTState mocks base method
+func (m *MockFlowBuilder) MatchCTState(arg0 *openflow15.CTStates) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTState", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTState indicates an expected call of MatchCTState
+func (mr *MockFlowBuilderMockRecorder) MatchCTState(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTState", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTState), arg0)
+}
+
 // MatchCTStateDNAT mocks base method
 func (m *MockFlowBuilder) MatchCTStateDNAT(arg0 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
