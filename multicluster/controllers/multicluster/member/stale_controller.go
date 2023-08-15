@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Antrea Authors.
+Copyright 2023 Antrea Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package multicluster
+package member
 
 import (
 	"context"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,56 +25,48 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/workqueue"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
-const (
-	LeaderCluster = "leader"
-	MemberCluster = "member"
-
-	memberClusterAnnounceStaleTime = 5 * time.Minute
-)
-
 // StaleResCleanupController will clean up ServiceImport, MC Service, ACNP, ClusterInfoImport and LabelIdentity
 // resources if no corresponding ResourceImports in the leader cluster and remove stale ResourceExports
 // in the leader cluster if no corresponding ServiceExport or Gateway in the member cluster when it runs in
-// the member cluster.
-// It will clean up stale MemberClusterAnnounce resources in the leader cluster if no corresponding member
-// cluster in the ClusterSet.Spec.Members when it runs in the leader cluster.
+// the member cluster. StaleResCleanupController one-time runner will run only once in the member cluster
+// during Multi-cluster Controller starts, and it will retry only if there is an error.
+// StaleResCleanupController's reconciler will handle ClusterSet deletion event to clean up all
+// automatically created resources for the ClusterSet.
 type StaleResCleanupController struct {
 	client.Client
-	Scheme           *runtime.Scheme
-	localClusterID   string
-	commonAreaGetter commonarea.RemoteCommonAreaGetter
-	namespace        string
-	clusterRole      string
-	// queue only ever has one item, but it has nice error handling backoff/retry semantics
-	queue workqueue.RateLimitingInterface
+	Scheme               *runtime.Scheme
+	commonAreaCreationCh chan struct{}
+	localClusterID       string
+	commonAreaGetter     commonarea.RemoteCommonAreaGetter
+	namespace            string
 }
 
 func NewStaleResCleanupController(
 	Client client.Client,
 	Scheme *runtime.Scheme,
+	commonAreaCreationCh chan struct{},
 	namespace string,
 	commonAreaGetter commonarea.RemoteCommonAreaGetter,
-	clusterRole string,
 ) *StaleResCleanupController {
 	reconciler := &StaleResCleanupController{
-		Client:           Client,
-		Scheme:           Scheme,
-		namespace:        namespace,
-		commonAreaGetter: commonAreaGetter,
-		clusterRole:      clusterRole,
-		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "StaleResCleanupController"),
+		Client:               Client,
+		Scheme:               Scheme,
+		commonAreaCreationCh: commonAreaCreationCh,
+		namespace:            namespace,
+		commonAreaGetter:     commonAreaGetter,
 	}
 	return reconciler
 }
@@ -85,28 +76,25 @@ func NewStaleResCleanupController(
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;
 // +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;delete
 
-func (c *StaleResCleanupController) cleanup(ctx context.Context) error {
-	switch c.clusterRole {
-	case LeaderCluster:
-		return c.cleanupStaleResourcesOnLeader(ctx)
-	case MemberCluster:
-		return c.cleanupStaleResourcesOnMember(ctx)
+func (c *StaleResCleanupController) CleanUp(ctx context.Context) error {
+	var err error
+	clusterSets := &mcv1alpha2.ClusterSetList{}
+	if err = c.Client.List(ctx, clusterSets, &client.ListOptions{}); err != nil {
+		return err
 	}
+
+	if len(clusterSets.Items) == 0 {
+		klog.InfoS("There is no existing ClusterSet, try to clean up all auto-generated resources by Antrea Multi-cluster")
+		if err = cleanUpResourcesCreatedByMC(ctx, c.Client); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupStaleResourcesOnLeader(ctx context.Context) error {
-	return c.cleanupMemberClusterAnnounces(ctx)
-}
-
-func (c *StaleResCleanupController) cleanupStaleResourcesOnMember(ctx context.Context) error {
-	var err error
-	var commonArea commonarea.RemoteCommonArea
-	commonArea, c.localClusterID, err = c.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
-	if err != nil {
-		return err
-	}
-	svcImpList := &k8smcsv1alpha1.ServiceImportList{}
+func (c *StaleResCleanupController) cleanUpStaleResourcesOnMember(ctx context.Context, commonArea commonarea.RemoteCommonArea) error {
+	svcImpList := &k8smcv1alpha1.ServiceImportList{}
 	if err := c.List(ctx, svcImpList, &client.ListOptions{}); err != nil {
 		return err
 	}
@@ -118,65 +106,68 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember(ctx context.Co
 	if err := c.List(ctx, acnpList, &client.ListOptions{}); err != nil {
 		return err
 	}
-	ciImpList := &mcsv1alpha1.ClusterInfoImportList{}
+	ciImpList := &mcv1alpha1.ClusterInfoImportList{}
 	if err := c.List(ctx, ciImpList, &client.ListOptions{}); err != nil {
 		return err
 	}
-	labelIdentityList := &mcsv1alpha1.LabelIdentityList{}
+	labelIdentityList := &mcv1alpha1.LabelIdentityList{}
 	if err := c.List(ctx, labelIdentityList, &client.ListOptions{}); err != nil {
 		return err
 	}
 	// All previously imported resources need to be listed before ResourceImports are listed.
 	// This prevents race condition between stale_controller and other reconcilers.
 	// See https://github.com/antrea-io/antrea/issues/4854
-	resImpList := &mcsv1alpha1.ResourceImportList{}
+	resImpList := &mcv1alpha1.ResourceImportList{}
 	if err := commonArea.List(ctx, resImpList, &client.ListOptions{Namespace: commonArea.GetNamespace()}); err != nil {
 		return err
 	}
 	// Clean up any imported Services that do not have corresponding ResourceImport anymore
-	if err := c.cleanupStaleServiceResources(ctx, svcImpList, svcList, resImpList); err != nil {
+	if err := c.cleanUpStaleServiceResources(ctx, svcImpList, svcList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported Services")
 		return err
 	}
 	// Clean up any imported ACNPs that do not have corresponding ResourceImport anymore
-	if err := c.cleanupACNPResources(ctx, acnpList, resImpList); err != nil {
+	if err := c.cleanUpACNPResources(ctx, acnpList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported ACNPs")
 		return err
 	}
 	// Clean up any imported ClusterInfos that do not have corresponding ResourceImport anymore
-	if err := c.cleanupClusterInfoImport(ctx, ciImpList, resImpList); err != nil {
+	if err := c.cleanUpClusterInfoImports(ctx, ciImpList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale ClusterInfoImports")
 		return err
 	}
 	// Clean up any imported LabelIdentities that do not have corresponding ResourceImport anymore
-	if err := c.cleanupLabelIdentities(ctx, labelIdentityList, resImpList); err != nil {
+	if err := c.cleanUpLabelIdentities(ctx, labelIdentityList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported LabelIdentities")
 		return err
 	}
+	return nil
+}
 
-	// Clean up stale ResourceExports in the leader cluster.
-	if err := c.cleanupClusterInfoResourceExport(ctx, commonArea); err != nil {
+// Clean up stale ResourceExports in the leader cluster for a member cluster.
+func (c *StaleResCleanupController) cleanUpStaleResourceExportsOnLeader(ctx context.Context, commonArea commonarea.RemoteCommonArea) error {
+	if err := c.cleanUpClusterInfoResourceExports(ctx, commonArea); err != nil {
 		return err
 	}
-	resExpList := &mcsv1alpha1.ResourceExportList{}
+	resExpList := &mcv1alpha1.ResourceExportList{}
 	if err := commonArea.List(ctx, resExpList, &client.ListOptions{Namespace: commonArea.GetNamespace()}); err != nil {
 		return err
 	}
 	if len(resExpList.Items) == 0 {
 		return nil
 	}
-	if err := c.cleanupServiceResourceExport(ctx, commonArea, resExpList); err != nil {
+	if err := c.cleanUpServiceResourceExports(ctx, commonArea, resExpList); err != nil {
 		return err
 	}
-	if err := c.cleanupLabelIdentityResourceExport(ctx, commonArea, resExpList); err != nil {
+	if err := c.cleanUpLabelIdentityResourceExports(ctx, commonArea, resExpList); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupStaleServiceResources(ctx context.Context, svcImpList *k8smcsv1alpha1.ServiceImportList,
-	svcList *corev1.ServiceList, resImpList *mcsv1alpha1.ResourceImportList) error {
-	svcImpItems := map[string]k8smcsv1alpha1.ServiceImport{}
+func (c *StaleResCleanupController) cleanUpStaleServiceResources(ctx context.Context, svcImpList *k8smcv1alpha1.ServiceImportList,
+	svcList *corev1.ServiceList, resImpList *mcv1alpha1.ResourceImportList) error {
+	svcImpItems := map[string]k8smcv1alpha1.ServiceImport{}
 	for _, svcImp := range svcImpList.Items {
 		svcImpItems[svcImp.Namespace+"/"+svcImp.Name] = svcImp
 	}
@@ -211,8 +202,8 @@ func (c *StaleResCleanupController) cleanupStaleServiceResources(ctx context.Con
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupACNPResources(ctx context.Context, acnpList *crdv1beta1.ClusterNetworkPolicyList,
-	resImpList *mcsv1alpha1.ResourceImportList) error {
+func (c *StaleResCleanupController) cleanUpACNPResources(ctx context.Context, acnpList *crdv1beta1.ClusterNetworkPolicyList,
+	resImpList *mcv1alpha1.ResourceImportList) error {
 	staleMCACNPItems := map[string]crdv1beta1.ClusterNetworkPolicy{}
 	for _, acnp := range acnpList.Items {
 		if _, ok := acnp.Annotations[common.AntreaMCACNPAnnotation]; ok {
@@ -235,9 +226,9 @@ func (c *StaleResCleanupController) cleanupACNPResources(ctx context.Context, ac
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupClusterInfoImport(ctx context.Context, ciImpList *mcsv1alpha1.ClusterInfoImportList,
-	resImpList *mcsv1alpha1.ResourceImportList) error {
-	staleCIImps := map[string]mcsv1alpha1.ClusterInfoImport{}
+func (c *StaleResCleanupController) cleanUpClusterInfoImports(ctx context.Context, ciImpList *mcv1alpha1.ClusterInfoImportList,
+	resImpList *mcv1alpha1.ResourceImportList) error {
+	staleCIImps := map[string]mcv1alpha1.ClusterInfoImport{}
 	for _, item := range ciImpList.Items {
 		staleCIImps[item.Name] = item
 	}
@@ -256,9 +247,9 @@ func (c *StaleResCleanupController) cleanupClusterInfoImport(ctx context.Context
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupLabelIdentities(ctx context.Context, labelIdentityList *mcsv1alpha1.LabelIdentityList,
-	resImpList *mcsv1alpha1.ResourceImportList) error {
-	staleLabelIdentities := map[string]mcsv1alpha1.LabelIdentity{}
+func (c *StaleResCleanupController) cleanUpLabelIdentities(ctx context.Context, labelIdentityList *mcv1alpha1.LabelIdentityList,
+	resImpList *mcv1alpha1.ResourceImportList) error {
+	staleLabelIdentities := map[string]mcv1alpha1.LabelIdentity{}
 	for _, labelIdentityObj := range labelIdentityList.Items {
 		staleLabelIdentities[labelIdentityObj.Name] = labelIdentityObj
 	}
@@ -275,16 +266,16 @@ func (c *StaleResCleanupController) cleanupLabelIdentities(ctx context.Context, 
 	return nil
 }
 
-// cleanupServiceResourceExport removes any Service/Endpoint kind of ResourceExports when there is no
+// cleanUpServiceResourceExports removes any Service/Endpoint kind of ResourceExports when there is no
 // corresponding ServiceExport in the local cluster.
-func (c *StaleResCleanupController) cleanupServiceResourceExport(ctx context.Context, commonArea commonarea.RemoteCommonArea, resExpList *mcsv1alpha1.ResourceExportList) error {
-	svcExpList := &k8smcsv1alpha1.ServiceExportList{}
+func (c *StaleResCleanupController) cleanUpServiceResourceExports(ctx context.Context, commonArea commonarea.RemoteCommonArea, resExpList *mcv1alpha1.ResourceExportList) error {
+	svcExpList := &k8smcv1alpha1.ServiceExportList{}
 	if err := c.List(ctx, svcExpList, &client.ListOptions{}); err != nil {
 		return err
 	}
 	allResExpItems := resExpList.Items
 	svcExpItems := svcExpList.Items
-	staleResExpItems := map[string]mcsv1alpha1.ResourceExport{}
+	staleResExpItems := map[string]mcv1alpha1.ResourceExport{}
 
 	for _, resExp := range allResExpItems {
 		if resExp.Spec.Kind == constants.ServiceKind && resExp.Labels[constants.SourceClusterID] == c.localClusterID {
@@ -310,7 +301,7 @@ func (c *StaleResCleanupController) cleanupServiceResourceExport(ctx context.Con
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(ctx context.Context, commonArea commonarea.RemoteCommonArea, resExpList *mcsv1alpha1.ResourceExportList) error {
+func (c *StaleResCleanupController) cleanUpLabelIdentityResourceExports(ctx context.Context, commonArea commonarea.RemoteCommonArea, resExpList *mcv1alpha1.ResourceExportList) error {
 	podList, nsList := &corev1.PodList{}, &corev1.NamespaceList{}
 	if err := c.List(ctx, podList, &client.ListOptions{}); err != nil {
 		return err
@@ -319,7 +310,7 @@ func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(ctx conte
 		return err
 	}
 	allResExpItems := resExpList.Items
-	staleResExpItems := map[string]mcsv1alpha1.ResourceExport{}
+	staleResExpItems := map[string]mcv1alpha1.ResourceExport{}
 	for _, resExp := range allResExpItems {
 		if resExp.Spec.Kind == constants.LabelIdentityKind && resExp.Labels[constants.SourceClusterID] == c.localClusterID {
 			staleResExpItems[resExp.Spec.LabelIdentity.NormalizedLabel] = resExp
@@ -352,16 +343,16 @@ func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(ctx conte
 	return nil
 }
 
-// cleanupClusterInfoResourceExport removes any ClusterInfo kind of ResourceExports when there is no
+// cleanUpClusterInfoResourceExports removes any ClusterInfo kind of ResourceExports when there is no
 // Gateway in the local cluster.
-func (c *StaleResCleanupController) cleanupClusterInfoResourceExport(ctx context.Context, commonArea commonarea.RemoteCommonArea) error {
-	var gws mcsv1alpha1.GatewayList
+func (c *StaleResCleanupController) cleanUpClusterInfoResourceExports(ctx context.Context, commonArea commonarea.RemoteCommonArea) error {
+	var gws mcv1alpha1.GatewayList
 	if err := c.Client.List(ctx, &gws, &client.ListOptions{}); err != nil {
 		return err
 	}
 
 	if len(gws.Items) == 0 {
-		ciExport := &mcsv1alpha1.ResourceExport{
+		ciExport := &mcv1alpha1.ResourceExport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: commonArea.GetNamespace(),
 				Name:      common.NewClusterInfoResourceExportName(c.localClusterID),
@@ -375,80 +366,156 @@ func (c *StaleResCleanupController) cleanupClusterInfoResourceExport(ctx context
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanupMemberClusterAnnounces(ctx context.Context) error {
-	memberClusterAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
-	if err := c.List(ctx, memberClusterAnnounceList, &client.ListOptions{}); err != nil {
+// Run starts the StaleResCleanupController and blocks until stopCh is closed.
+func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
+	klog.InfoS("Starting StaleResCleanupController")
+	defer klog.InfoS("Shutting down StaleResCleanupController")
+
+	ctx, _ := wait.ContextForChannel(stopCh)
+
+	go func() {
+		for range c.commonAreaCreationCh {
+			retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
+				func() error {
+					if err := c.cleanUpStaleResources(ctx); err != nil {
+						klog.ErrorS(err, "Failed to clean up stale resources after a ClusterSet is created, will retry later")
+						return err
+					}
+					return nil
+				})
+		}
+	}()
+
+	retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
+		func() error {
+			return c.CleanUp(ctx)
+		})
+	<-stopCh
+}
+
+func (c *StaleResCleanupController) cleanUpStaleResources(ctx context.Context) error {
+	var err error
+	var commonArea commonarea.RemoteCommonArea
+	commonArea, c.localClusterID, err = c.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
+	if err != nil {
 		return err
 	}
 
-	for _, m := range memberClusterAnnounceList.Items {
-		memberClusterAnnounce := m
-		lastUpdateTime, err := time.Parse(time.RFC3339, memberClusterAnnounce.Annotations[commonarea.TimestampAnnotationKey])
-		if err == nil && time.Since(lastUpdateTime) < memberClusterAnnounceStaleTime {
-			continue
-		}
-		if err == nil {
-			klog.InfoS("Cleaning up stale MemberClusterAnnounce. It has not been updated within the agreed period", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce), "agreedPeriod", memberClusterAnnounceStaleTime)
-		} else {
-			klog.InfoS("Cleaning up stale MemberClusterAnnounce. The latest update time is not in RFC3339 format", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
-		}
+	klog.InfoS("Clean up all stale imported and exported resources created by Antrea Multi-cluster Controller")
+	if err = c.cleanUpStaleResourcesOnMember(ctx, commonArea); err != nil {
+		return err
+	}
+	// Clean up stale ResourceExports in the leader cluster for a member cluster.
+	if err := c.cleanUpStaleResourceExportsOnLeader(ctx, commonArea); err != nil {
+		return err
+	}
+	return nil
+}
 
-		if err := c.Client.Delete(ctx, &memberClusterAnnounce, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to delete stale MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
+func cleanUpResourcesCreatedByMC(ctx context.Context, mgrClient client.Client) error {
+	var err error
+	if err = cleanUpMCServicesAndServiceImports(ctx, mgrClient); err != nil {
+		return err
+	}
+	if err = cleanUpReplicatedACNPs(ctx, mgrClient); err != nil {
+		return err
+	}
+	if err = cleanUpLabelIdentities(ctx, mgrClient); err != nil {
+		return err
+	}
+	if err = cleanUpClusterInfoImports(ctx, mgrClient); err != nil {
+		return err
+	}
+	if err = cleanUpGateways(ctx, mgrClient); err != nil {
+		return err
+	}
+	return nil
+}
+
+func cleanUpMCServicesAndServiceImports(ctx context.Context, mgrClient client.Client) error {
+	svcImpList := &k8smcv1alpha1.ServiceImportList{}
+	err := mgrClient.List(ctx, svcImpList, &client.ListOptions{})
+	if err != nil {
+		return err
+	}
+	for _, svcImp := range svcImpList.Items {
+		svcImpTmp := svcImp
+		mcsvc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: svcImp.Namespace,
+				Name:      common.ToMCResourceName(svcImp.Name),
+			},
+		}
+		err = mgrClient.Delete(ctx, mcsvc, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		err = mgrClient.Delete(ctx, &svcImpTmp, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
 	return nil
 }
 
-// Enqueue will be called after StaleResCleanupController is initialized.
-func (c *StaleResCleanupController) Enqueue() {
-	// The key can be anything as we only have single item.
-	c.queue.Add("key")
-}
-
-// Run starts the StaleResCleanupController and blocks until stopCh is closed.
-// it will run only once to clean up stale resources if no error happens.
-func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
-	defer c.queue.ShutDown()
-
-	klog.InfoS("Starting StaleResCleanupController")
-	defer klog.InfoS("Shutting down StaleResCleanupController")
-
-	ctx, _ := wait.ContextForChannel(stopCh)
-	if err := c.RunOnce(ctx); err != nil {
-		c.Enqueue()
-		go wait.UntilWithContext(ctx, c.runWorker, time.Second)
-	}
-	<-stopCh
-}
-
-func (c *StaleResCleanupController) runWorker(ctx context.Context) {
-	for c.processNextWorkItem(ctx) {
-	}
-}
-
-func (c *StaleResCleanupController) processNextWorkItem(ctx context.Context) bool {
-	key, quit := c.queue.Get()
-	if quit {
-		return false
-	}
-	defer c.queue.Done(key)
-	err := c.cleanup(ctx)
-	if err == nil {
-		c.queue.Forget(key)
-		return true
-	}
-
-	klog.ErrorS(err, "Error removing stale resources, re-queuing it")
-	c.queue.AddRateLimited(key)
-	return true
-}
-
-func (c *StaleResCleanupController) RunOnce(ctx context.Context) error {
-	err := c.cleanup(ctx)
-	if err != nil {
+func cleanUpReplicatedACNPs(ctx context.Context, mgrClient client.Client) error {
+	acnpList := &crdv1beta1.ClusterNetworkPolicyList{}
+	if err := mgrClient.List(ctx, acnpList, &client.ListOptions{}); err != nil {
 		return err
+	}
+	for _, acnp := range acnpList.Items {
+		acnpTmp := acnp
+		if metav1.HasAnnotation(acnp.ObjectMeta, common.AntreaMCACNPAnnotation) {
+			err := mgrClient.Delete(ctx, &acnpTmp, &client.DeleteOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func cleanUpLabelIdentities(ctx context.Context, mgrClient client.Client) error {
+	labelIdentityList := &mcv1alpha1.LabelIdentityList{}
+	if err := mgrClient.List(ctx, labelIdentityList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	for _, labelIdt := range labelIdentityList.Items {
+		labelIdtTmp := labelIdt
+		err := mgrClient.Delete(ctx, &labelIdtTmp, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanUpClusterInfoImports(ctx context.Context, mgrClient client.Client) error {
+	ciImpList := &mcv1alpha1.ClusterInfoImportList{}
+	if err := mgrClient.List(ctx, ciImpList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	for _, ciImp := range ciImpList.Items {
+		ciImpTmp := ciImp
+		err := mgrClient.Delete(ctx, &ciImpTmp, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanUpGateways(ctx context.Context, mgrClient client.Client) error {
+	gwList := &mcv1alpha1.GatewayList{}
+	if err := mgrClient.List(ctx, gwList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	for _, gw := range gwList.Items {
+		gwTmp := gw
+		err := mgrClient.Delete(ctx, &gwTmp, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
 	}
 	return nil
 }

@@ -72,10 +72,12 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
+		if r.clusterSetConfig != nil && r.clusterSetConfig.Name != req.Name {
+			return ctrl.Result{}, nil
+		}
 		r.clusterSetConfig = nil
 		r.clusterID = common.InvalidClusterID
 		r.clusterSetID = common.InvalidClusterSetID
-
 		return ctrl.Result{}, nil
 	}
 
@@ -120,7 +122,7 @@ func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&mcv1alpha2.ClusterSet{}).
 		WithEventFilter(instance).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: common.DefaultWorkerCount,
+			MaxConcurrentReconciles: 1,
 		}).
 		Complete(r)
 }

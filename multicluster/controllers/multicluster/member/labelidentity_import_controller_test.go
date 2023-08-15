@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
@@ -121,10 +122,10 @@ func TestLabelIdentityResourceImportReconcile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existLabelIdentity).Build()
-			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(&tt.existResImp).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existLabelIdentity).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(&tt.existResImp).Build()
 			remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-			r := newLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
+			r := newLabelIdentityResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
 
 			resImpReq := ctrl.Request{NamespacedName: tt.resImportNamespacedName}
 			_, err := r.Reconcile(ctx, resImpReq)

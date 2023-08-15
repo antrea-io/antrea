@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	antreaAgentSAName = "antrea-agent"
+	antreaAgentSAName  = "antrea-agent"
+	mcControllerSAName = "antrea-mc-controller"
 )
 
 //+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-gateway,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=gateways,verbs=create;update,versions=v1alpha1,name=vgateway.kb.io,admissionReviewVersions={v1,v1beta1}

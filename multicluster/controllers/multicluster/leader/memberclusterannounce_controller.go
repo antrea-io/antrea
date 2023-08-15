@@ -20,7 +20,6 @@ package leader
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -79,7 +78,6 @@ func NewMemberClusterAnnounceReconciler(client client.Client, scheme *runtime.Sc
 // Reconcile implements cluster status management on the leader cluster
 func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	memberAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
-	memberID := getIDFromName(req.Name)
 	err := r.Get(ctx, req.NamespacedName, memberAnnounce)
 	if err != nil {
 		// If MemberClusterAnnounce is deleted, no further processing is needed, as cleanup
@@ -87,15 +85,10 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	memberID := common.ClusterID(memberAnnounce.ClusterID)
 	finalizer := fmt.Sprintf("%s/%s", MemberClusterAnnounceFinalizer, memberAnnounce.ClusterID)
 	if !memberAnnounce.DeletionTimestamp.IsZero() {
 		r.removeMemberStatus(memberID)
-		memberAnnounce.Finalizers = common.RemoveStringFromSlice(memberAnnounce.Finalizers, finalizer)
-		if err := r.Update(context.TODO(), memberAnnounce); err != nil {
-			klog.ErrorS(err, "Failed to update MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberAnnounce))
-			return ctrl.Result{}, err
-		}
-
 		return ctrl.Result{}, nil
 	}
 
@@ -215,10 +208,6 @@ func (r *MemberClusterAnnounceReconciler) removeMemberStatus(memberID common.Clu
 
 	delete(r.memberStatusMap, memberID)
 	klog.InfoS("Removed member cluster", "cluster", memberID)
-}
-
-func getIDFromName(name string) common.ClusterID {
-	return common.ClusterID(strings.TrimPrefix(name, "member-announce-from-"))
 }
 
 /******************************* MemberClusterStatusManager methods *******************************/

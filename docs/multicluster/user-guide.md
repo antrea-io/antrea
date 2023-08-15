@@ -7,16 +7,25 @@
 - [Installation](#installation)
   - [Preparation](#preparation)
   - [Deploy Antrea Multi-cluster Controller](#deploy-antrea-multi-cluster-controller)
+    - [Deploy in a Dedicated Leader Cluster](#deploy-in-a-dedicated-leader-cluster)
+    - [Deploy in a Member Cluster](#deploy-in-a-member-cluster)
+    - [Deploy Leader and Member in One Cluster](#deploy-leader-and-member-in-one-cluster)
   - [Create ClusterSet](#create-clusterset)
+    - [Set up Access to Leader Cluster](#set-up-access-to-leader-cluster)
+    - [Initialize ClusterSet](#initialize-clusterset)
+    - [Initialize ClusterSet for a Dual-role Cluster](#initialize-clusterset-for-a-dual-role-cluster)
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
   - [Multi-cluster WireGuard Encryption](#multi-cluster-wireguard-encryption)
 - [Multi-cluster Service](#multi-cluster-service)
-- [Multi-cluster Pod to Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
+- [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 - [Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy)
-  - [Egress Rule to Multi-cluster Services](#egress-rule-to-multi-cluster-service)
+  - [Egress Rule to Multi-cluster Service](#egress-rule-to-multi-cluster-service)
   - [Ingress Rule](#ingress-rule)
 - [ClusterNetworkPolicy Replication](#clusternetworkpolicy-replication)
 - [Build Antrea Multi-cluster Controller Image](#build-antrea-multi-cluster-controller-image)
+- [Uninstallation](#uninstallation)
+  - [Remove a Member Cluster](#remove-a-member-cluster)
+  - [Remove a Leader Cluster](#remove-a-leader-cluster)
 - [Known Issue](#known-issue)
 <!-- /toc -->
 
@@ -811,6 +820,66 @@ will get a new image named `antrea/antrea-mc-controller:latest` locally.
 the image.
 3. Copy the image file `antrea-mcs.tar` to the Nodes of your local cluster.
 4. Run `docker load < antrea-mcs.tar` in each Node of your local cluster.
+
+## Uninstallation
+
+### Remove a Member Cluster
+
+If you want to remove a member cluster from a ClusterSet and uninstall Antrea
+Multi-cluster, please follow the following steps.
+
+Note: please replace `kube-system` with the right Namespace in the example
+commands and manifest if Antrea Multi-cluster is not deployed in
+the default Namespace.
+
+1. Delete all ServiceExports and the Multi-cluster Gateway annotation on the
+Gateway Nodes.
+
+2. Delete the ClusterSet CR. Antrea Multi-cluster Controller will be
+responsible for cleaning up all resources created by itself automatically.
+
+3. Delete the Antrea Multi-cluster Deployment:
+
+```bash
+kubectl delete -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
+```
+
+### Remove a Leader Cluster
+
+If you want to delete a ClusterSet and uninstall Antrea Multi-cluster in
+a leader cluster, please follow the following steps. You should first
+[remove all member clusters](#remove-a-member-cluster) before removing
+a leader cluster from a ClusterSet.
+
+Note: please replace `antrea-multicluster` with the right Namespace in the
+following example commands and manifest if Antrea Multi-cluster is not
+deployed in the default Namespace.
+
+1. Delete AntreaClusterNetworkPolicy ResourceExports in the leader cluster.
+
+2. Verify that there is no remaining MemberClusterAnnounces.
+
+    ```bash
+    kubectl get memberclusterannounce -n antrea-multicluster
+    ```
+
+3. Delete the ClusterSet CR. Antrea Multi-cluster Controller will be
+responsible for cleaning up all resources created by itself automatically.
+
+4. Check there is no remaining ResourceExports and ResourceImports:
+
+    ```bash
+    kubectl get resourceexports -n antrea-multicluster
+    kubectl get resourceimports -n antrea-multicluster
+    ```
+
+    Note: you can follow the [Known Issue section](#known-issue) to delete the left-over ResourceExports.
+
+5. Delete the Antrea Multi-cluster Deployment:
+
+    ```bash
+    kubectl delete -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader.yml
+    ```
 
 ## Known Issue
 
