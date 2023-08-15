@@ -92,6 +92,19 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", r.clusterID)
 			return ctrl.Result{}, err
 		}
+
+		if clusterSet.Spec.ClusterID == "" {
+			// ClusterID is a required feild, and the empty value case should only happen
+			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
+			// Here we try to update the ClusterSet's ClusterID when it's configured in an
+			// existing ClusterClaim.
+			clusterSet.Spec.ClusterID = string(r.clusterID)
+			err = r.Update(context.TODO(), clusterSet)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update ClusterSet's ClusterID", "clusterset", req.NamespacedName)
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	r.clusterSetConfig = clusterSet.DeepCopy()
@@ -199,14 +212,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		status.Conditions = []mcv1alpha2.ClusterSetCondition{overallCondition}
 	}
 	clusterSet.Status = status
-	if clusterSet.Spec.ClusterID == "" {
-		// When the common area is not empty but ClusterID is empty, it means the
-		// CR was created by an old version of ClusterSet CRD. We can use the ClusterID
-		// from ClusterClaim to update the CR, otherwise, the update will fail due
-		// to invalid ClusterID.
-		clusterSet.Spec.ClusterID = string(r.clusterID)
-	}
-	err = r.Update(context.TODO(), clusterSet)
+	err = r.Status().Update(context.TODO(), clusterSet)
 	if err != nil {
 		klog.ErrorS(err, "Failed to update Status of ClusterSet", "name", namespacedName)
 	}
