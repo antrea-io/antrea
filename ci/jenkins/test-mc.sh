@@ -198,7 +198,6 @@ function wait_for_multicluster_controller_ready {
     export leader_cluster_pod_cidr
     perl -0777 -pi -e 's|    podCIDRs\:\n      - \"\"|    podCIDRs\:\n      - $ENV{leader_cluster_pod_cidr}|g' ./multicluster/test/yamls/leader-manifest.yml
     kubectl create ns antrea-multicluster  "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-leader-global.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/test/yamls/leader-manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl rollout status deployment/antrea-mc-controller -n antrea-multicluster "${LEADER_CLUSTER_CONFIG}" || true
     kubectl create -f ./multicluster/test/yamls/leader-access-token-secret.yml "${LEADER_CLUSTER_CONFIG}" || true

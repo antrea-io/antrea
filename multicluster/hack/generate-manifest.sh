@@ -20,15 +20,15 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--release|-r] [--global|-g] [--leader|-l <namespace>] [--member|-m] [--help|-h]
+_usage="Usage: $0 [--release|-r] [--global|-g] [--leader-ns|-n <namespace>] [--leader|-l] [--member|-m] [--help|-h]
 Generate a YAML manifest for Antrea MultiCluster using Kustomize and print it to stdout.
-        --release | -r                      Enable release mode which will set correct release variant.
-        --global  | -g                      Generate a global manifest for a Cluster as leader in a ClusterSet
-        --leader  | -l                      Generate a per-namespace manifest for a Cluster as leader in a ClusterSet.
-                                            All resources will be in the given namespace
-        --member  | -m                      Generate a manifest for a Cluster as member in a ClusterSet
-        --coverage| -c                      Generate a manifest which supports measuring code coverage
-        --help    | -h                      Print this message and exit
+        --release    | -r                      Enable release mode which will set correct release variant.
+        --global     | -g                      Generate a global manifest for a Cluster as leader in a ClusterSet
+        --leader-ns  | -n                      Generate a per-namespace manifest for a Cluster as leader in a ClusterSet.
+        --leader     | -l                      Generate an all-in-one manifest for a Cluster as leader in a ClusterSet.
+        --member     | -m                      Generate a manifest for a Cluster as member in a ClusterSet
+        --coverage   | -c                      Generate a manifest which supports measuring code coverage
+        --help       | -h                      Print this message and exit
 
 Environment variables IMG_NAME and IMG_TAG must be set when release mode is enabled.
 "
@@ -58,7 +58,7 @@ case $key in
     COVERAGE=true
     shift
     ;;
-    --leader|-l)
+    --leader-ns|-n)
     OVERLAY=leader-ns
     NAMESPACE="$2"
     shift 2
@@ -66,6 +66,11 @@ case $key in
     --global|-g)
     OVERLAY=leader-global
     shift
+    ;;
+    --leader|-l)
+    OVERLAY=leader
+    NAMESPACE="$2"
+    shift 2
     ;;
     --member|-m)
     OVERLAY=member
@@ -113,12 +118,12 @@ cd $KUSTOMIZATION_DIR
 TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
 pushd $TMP_DIR > /dev/null
 
-if [ "$OVERLAY" == "leader-ns" ] ;
+if [ "$OVERLAY" == "leader-ns" ] || [ "$OVERLAY" == "leader" ] ;
 then
     mkdir config && cd config
-    cp $KUSTOMIZATION_DIR/overlays/leader-ns/prefix_transformer.yaml .
+    cp $KUSTOMIZATION_DIR/overlays/$OVERLAY/prefix_transformer.yaml .
     sed -ie "s/antrea-multicluster/$NAMESPACE/g" prefix_transformer.yaml
-    cp $KUSTOMIZATION_DIR/overlays/leader-ns/webhook_patch.yaml .
+    cp $KUSTOMIZATION_DIR/overlays/$OVERLAY/webhook_patch.yaml .
     sed -ie "s/antrea-multicluster/$NAMESPACE/g" webhook_patch.yaml
 
     cat << EOF > kustomization.yaml
