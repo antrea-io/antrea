@@ -2094,6 +2094,9 @@ func (f *featureNetworkPolicy) addFlowMatch(fb binding.FlowBuilder, matchKey *ty
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
 		tcpFlag := matchValue.(TCPFlags)
 		fb = fb.MatchTCPFlags(tcpFlag.Flag, tcpFlag.Mask)
+	case MatchCTState:
+		ctState := matchValue.(*openflow15.CTStates)
+		fb = fb.MatchCTState(ctState)
 	}
 	return fb
 }
@@ -2177,13 +2180,16 @@ func (f *featureNetworkPolicy) multiClusterNetworkPolicySecurityDropFlow(table b
 // dnsPacketInFlow generates the flow to send dns response packets of fqdn policy selected Pods to the fqdnController for
 // processing.
 func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flow {
-	return AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priorityDNSIntercept).
+	fb := AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priorityDNSIntercept).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchConjID(conjunctionID).
-		// FQDN should pause DNS response packets and send them to the controller. After
-		// the controller processes DNS response packets, like creating related flows in
-		// the OVS or no operations are needed, the controller will resume those packets.
-		Action().SendToController([]byte{uint8(PacketInCategoryDNS)}, true).
+		MatchConjID(conjunctionID)
+	if f.ovsMetersAreSupported {
+		fb = fb.Action().Meter(PacketInMeterIDDNS)
+	}
+	// FQDN should pause DNS response packets and send them to the controller. After
+	// the controller processes DNS response packets, like creating related flows in
+	// the OVS or no operations are needed, the controller will resume those packets.
+	return fb.Action().SendToController([]byte{uint8(PacketInCategoryDNS)}, true).
 		Action().GotoTable(IngressMetricTable.GetID()).
 		Done()
 }

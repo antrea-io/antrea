@@ -123,6 +123,11 @@ func (b *ofFlowBuilder) MatchRegFieldWithValue(field *RegField, data uint32) Flo
 	return b.matchRegRange(field.regID, data, field.rng)
 }
 
+func (b *ofFlowBuilder) MatchCTState(ctStates *openflow15.CTStates) FlowBuilder {
+	b.ctStates = ctStates
+	return b
+}
+
 func (b *ofFlowBuilder) MatchCTStateNew(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow15.NewCTStates()
