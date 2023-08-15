@@ -35,108 +35,9 @@ import (
 )
 
 var (
-	fakeRemoteClient                    client.Client
-	leaderClusterSetReconcilerUnderTest LeaderClusterSetReconciler
-	mockStatusManager                   *MockMemberClusterStatusManager
-)
-
-func TestLeaderClusterSetAdd(t *testing.T) {
-	existingClusterSet := &mcv1alpha2.ClusterSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:  "mcs1",
-			Name:       "clusterset1",
-			Generation: 1,
-		},
-		Spec: mcv1alpha2.ClusterSetSpec{
-			ClusterID: "leader1",
-			Leaders: []mcv1alpha2.LeaderClusterInfo{
-				{
-					ClusterID: "leader1",
-				}},
-			Namespace: "mcs1",
-		},
-	}
-
-	scheme := runtime.NewScheme()
-	mcv1alpha2.AddToScheme(scheme)
-	fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(existingClusterSet).Build()
-
-	mockCtrl := gomock.NewController(t)
-	mockStatusManager = NewMockMemberClusterStatusManager(mockCtrl)
-	leaderClusterSetReconcilerUnderTest = LeaderClusterSetReconciler{
-		Client:        fakeRemoteClient,
-		Scheme:        scheme,
-		StatusManager: mockStatusManager,
-	}
-
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Namespace: "mcs1",
-			Name:      "clusterset1",
-		},
-	}
-	_, err := leaderClusterSetReconcilerUnderTest.Reconcile(context.TODO(), req)
-	assert.Equal(t, nil, err)
-
-	assert.Equal(t, "clusterset1", string(leaderClusterSetReconcilerUnderTest.clusterSetID))
-	assert.Equal(t, "leader1", string(leaderClusterSetReconcilerUnderTest.clusterID))
-}
-
-func TestLeaderClusterSetUpdate(t *testing.T) {
-	TestLeaderClusterSetAdd(t)
-	clusterSet := &mcv1alpha2.ClusterSet{}
-	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
-	assert.Equal(t, nil, err)
-
-	clusterSet.Spec = mcv1alpha2.ClusterSetSpec{
-		Leaders: []mcv1alpha2.LeaderClusterInfo{
-			{
-				ClusterID: "leader1",
-			}},
-		Namespace: "mcs1",
-	}
-	err = fakeRemoteClient.Update(context.TODO(), clusterSet)
-	assert.Equal(t, nil, err)
-
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "clusterset1",
-			Namespace: "mcs1",
-		},
-	}
-	_, err = leaderClusterSetReconcilerUnderTest.Reconcile(context.Background(), req)
-	assert.Equal(t, nil, err)
-}
-
-func TestLeaderClusterSetDelete(t *testing.T) {
-	TestLeaderClusterSetAdd(t)
-	clusterSet := &mcv1alpha2.ClusterSet{}
-	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
-	assert.Equal(t, nil, err)
-
-	err = fakeRemoteClient.Delete(context.TODO(), clusterSet)
-	assert.Equal(t, nil, err)
-
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "clusterset1",
-			Namespace: "mcs1",
-		},
-	}
-	_, err = leaderClusterSetReconcilerUnderTest.Reconcile(context.Background(), req)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, common.InvalidClusterID, leaderClusterSetReconcilerUnderTest.clusterID)
-	assert.Equal(t, common.InvalidClusterSetID, leaderClusterSetReconcilerUnderTest.clusterSetID)
-}
-
-func TestLeaderClusterStatus(t *testing.T) {
-	TestLeaderClusterSetAdd(t)
-
-	eventTime := time.Date(2021, 12, 12, 12, 12, 12, 0, time.Local)
-	metaTime := metav1.Time{Time: eventTime}
-
-	statuses := []mcv1alpha2.ClusterStatus{
+	eventTime = time.Date(2021, 12, 12, 12, 12, 12, 0, time.Local)
+	metaTime  = metav1.Time{Time: eventTime}
+	statuses  = []mcv1alpha2.ClusterStatus{
 		{
 			ClusterID: "east",
 			Conditions: []mcv1alpha2.ClusterCondition{
@@ -162,9 +63,169 @@ func TestLeaderClusterStatus(t *testing.T) {
 			},
 		},
 	}
+	existingClusterSet = &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "mcs1",
+			Name:       "clusterset1",
+			Generation: 1,
+		},
+		Spec: mcv1alpha2.ClusterSetSpec{
+			ClusterID: "leader1",
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
+				{
+					ClusterID: "leader1",
+				}},
+			Namespace: "mcs1",
+		},
+	}
+)
+
+func createMockClients(t *testing.T, objects ...client.Object) (*runtime.Scheme, client.Client, *MockMemberClusterStatusManager) {
+	scheme := runtime.NewScheme()
+	mcv1alpha2.AddToScheme(scheme)
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(objects...).Build()
+
+	mockCtrl := gomock.NewController(t)
+	mockStatusManager := NewMockMemberClusterStatusManager(mockCtrl)
+	return scheme, fakeRemoteClient, mockStatusManager
+}
+
+func TestLeaderClusterSetAdd(t *testing.T) {
+	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
+		Client:        fakeRemoteClient,
+		Scheme:        scheme,
+		StatusManager: mockStatusManager,
+	}
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "mcs1",
+			Name:      "clusterset1",
+		},
+	}
+	_, err := leaderClusterSetReconcilerUnderTest.Reconcile(context.TODO(), req)
+	assert.Equal(t, nil, err)
+
+	assert.Equal(t, "clusterset1", string(leaderClusterSetReconcilerUnderTest.clusterSetID))
+	assert.Equal(t, "leader1", string(leaderClusterSetReconcilerUnderTest.clusterID))
+}
+
+func TestLeaderClusterSetAddWithoutClusterID(t *testing.T) {
+	clusterSetWithoutClusterID := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "mcs1",
+			Name:       "clusterset1",
+			Generation: 1,
+		},
+		Spec: mcv1alpha2.ClusterSetSpec{
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
+				{
+					ClusterID: "leader1",
+				}},
+			Namespace: "mcs1",
+		},
+	}
+	clusterClaim := &mcv1alpha2.ClusterClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "mcs1",
+			Name:      "id.k8s.io",
+		},
+		Value: "leader1",
+	}
+	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, clusterSetWithoutClusterID, clusterClaim)
+	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
+		Client:                   fakeRemoteClient,
+		Scheme:                   scheme,
+		StatusManager:            mockStatusManager,
+		ClusterCalimCRDAvailable: true,
+	}
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "mcs1",
+			Name:      "clusterset1",
+		},
+	}
+	_, err := leaderClusterSetReconcilerUnderTest.Reconcile(context.TODO(), req)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "clusterset1", string(leaderClusterSetReconcilerUnderTest.clusterSetID))
+	assert.Equal(t, "leader1", string(leaderClusterSetReconcilerUnderTest.clusterID))
+
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	err = fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "leader1", clusterSet.Spec.ClusterID)
+}
+
+func TestLeaderClusterSetUpdate(t *testing.T) {
+	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
+		Client:           fakeRemoteClient,
+		Scheme:           scheme,
+		StatusManager:    mockStatusManager,
+		clusterSetConfig: existingClusterSet.DeepCopy(),
+	}
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
+	assert.Equal(t, nil, err)
+
+	clusterSet.Spec = mcv1alpha2.ClusterSetSpec{
+		Leaders: []mcv1alpha2.LeaderClusterInfo{
+			{
+				ClusterID: "leader1",
+			}},
+		Namespace: "mcs1",
+	}
+	err = fakeRemoteClient.Update(context.TODO(), clusterSet)
+	assert.Equal(t, nil, err)
+
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "clusterset1",
+			Namespace: "mcs1",
+		},
+	}
+	_, err = leaderClusterSetReconcilerUnderTest.Reconcile(context.Background(), req)
+	assert.Equal(t, nil, err)
+}
+
+func TestLeaderClusterSetDelete(t *testing.T) {
+	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
+		Client:           fakeRemoteClient,
+		Scheme:           scheme,
+		StatusManager:    mockStatusManager,
+		clusterSetConfig: existingClusterSet.DeepCopy(),
+	}
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
+	assert.Equal(t, nil, err)
+
+	err = fakeRemoteClient.Delete(context.TODO(), clusterSet)
+	assert.Equal(t, nil, err)
+
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "clusterset1",
+			Namespace: "mcs1",
+		},
+	}
+	_, err = leaderClusterSetReconcilerUnderTest.Reconcile(context.Background(), req)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, common.InvalidClusterID, leaderClusterSetReconcilerUnderTest.clusterID)
+	assert.Equal(t, common.InvalidClusterSetID, leaderClusterSetReconcilerUnderTest.clusterSetID)
+}
+
+func TestLeaderClusterStatus(t *testing.T) {
+	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
+		Client:           fakeRemoteClient,
+		Scheme:           scheme,
+		StatusManager:    mockStatusManager,
+		clusterSetConfig: existingClusterSet.DeepCopy(),
+	}
 
 	mockStatusManager.EXPECT().GetMemberClusterStatuses().Return(statuses).Times(1)
-
 	leaderClusterSetReconcilerUnderTest.updateStatus()
 
 	clusterSet := &mcv1alpha2.ClusterSet{}
