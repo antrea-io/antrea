@@ -1774,5 +1774,6 @@ Similar RBAC is applied to the ClusterGroup resource.
   matched at the same priority with conflicting actions. It will be the policy writer's
   responsibility to identify such ambiguities in rule definitions and avoid potential
   nondeterministic rule enforcement results.
-- NetworPolicy is connection/flow oriented and stateful. It applies to connections, instead of
-  individual packets, which means established connections won't be blocked by new rules.
+- NetworPolicies are connection/flow oriented and stateful. They apply to
+  connections, instead of individual packets, which means established connections
+  won't be blocked by new rules.
