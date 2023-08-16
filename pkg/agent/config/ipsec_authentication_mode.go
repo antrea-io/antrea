@@ -38,6 +38,9 @@ func GetIPsecConfigModes() []IPsecAuthenticationMode {
 
 // String returns value in string.
 func (am IPsecAuthenticationMode) String() string {
+	if am == IPsecAuthenticationModeInvalid {
+		return "invalid"
+	}
 	return supportedIPsecAuthenticationModeStrs[am]
 }
 
