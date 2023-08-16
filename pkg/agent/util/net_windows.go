@@ -1265,13 +1265,19 @@ func getAdaptersByName(name string) ([]adapter, error) {
 // flags to return addresses in all routing compartments.
 const GAA_FLAG_INCLUDE_ALL_COMPARTMENTS = 0x00000200
 
+// GAA_FLAG_INCLUDE_ALL_INTERFACES is used in windows.GetAdapterAddresses parameter
+// flags to return addresses for all NDIS interfaces.
+const GAA_FLAG_INCLUDE_ALL_INTERFACES = 0x00000100
+
 // adapterAddresses returns a list of IpAdapterAddresses structures. The structure
 // contains an IP adapter and flattened multiple IP addresses including unicast, anycast
 // and multicast addresses.
 // This function is copied from go/src/net/interface_windows.go, with a change that flag
-// GAA_FLAG_INCLUDE_ALL_COMPARTMENTS is introduced to query interfaces in all compartments.
+// GAA_FLAG_INCLUDE_ALL_COMPARTMENTS is introduced to query interfaces in all compartments,
+// and GAA_FLAG_INCLUDE_ALL_INTERFACES is introduced to query all NDIS interfaces even they
+// are not configured with any IP addresses, e.g., uplink.
 func adapterAddresses() ([]*windows.IpAdapterAddresses, error) {
-	flags := uint32(windows.GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_INCLUDE_ALL_COMPARTMENTS)
+	flags := uint32(windows.GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_INCLUDE_ALL_COMPARTMENTS | GAA_FLAG_INCLUDE_ALL_INTERFACES)
 	var b []byte
 	l := uint32(15000) // recommended initial size
 	for {
