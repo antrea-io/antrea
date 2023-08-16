@@ -23,11 +23,6 @@ data:
     # Service traffic.
     #  AntreaProxy: true
 
-    # Enable EndpointSlice support in AntreaProxy. Don't enable this feature unless that EndpointSlice
-    # API version v1beta1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
-    # this flag will not take effect.
-    #  EndpointSlice: true
-
     # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
     #  NodePortLocal: true
 
@@ -177,7 +172,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-cb2hmgg648
+  name: antrea-windows-config-c2c7f4kbbc
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -265,7 +260,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-cb2hmgg648
+          name: antrea-windows-config-c2c7f4kbbc
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
