@@ -326,7 +326,7 @@ func GetNormalizedLabel(nsLabels, podLabels map[string]string, ns string) string
 		// label is guaranteed to have Namespace name information.
 		nsLabels[v1.LabelMetadataName] = ns
 	}
-	return "ns:" + labels.FormatLabels(nsLabels) + "&pod:" + labels.FormatLabels(podLabels)
+	return "ns:" + labels.Set(nsLabels).String() + "&pod:" + labels.Set(podLabels).String()
 }
 
 // getResourceExportNameForLabelIdentity retrieves the ResourceExport name for exporting

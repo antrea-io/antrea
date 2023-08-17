@@ -42,6 +42,8 @@ var (
 	selectorC     = types.NewGroupSelector("", pSelDB, nil, nil, nil)
 	selectorD     = types.NewGroupSelector("testing", pSelDB, nil, nil, nil)
 	selectorE     = types.NewGroupSelector("random", pSelDB, nil, nil, nil)
+	selectorF     = types.NewGroupSelector("", nil, nsSelTest, nil, nil)
+	selectorG     = types.NewGroupSelector("testing", nil, nil, nil, nil)
 	selectorItemA = &selectorItem{
 		selector: selectorA,
 	}
@@ -57,9 +59,16 @@ var (
 	selectorItemE = &selectorItem{
 		selector: selectorE,
 	}
+	selectorItemF = &selectorItem{
+		selector: selectorF,
+	}
+	selectorItemG = &selectorItem{
+		selector: selectorG,
+	}
 	labelA = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:app=web"
 	labelB = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:app=db"
 	labelC = "ns:kubernetes.io/metadata.name=nomatch,purpose=nomatch&pod:app=db"
+	labelD = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:"
 )
 
 func TestLabelIdentityMatch(t *testing.T) {
@@ -127,6 +136,41 @@ func TestLabelIdentityMatch(t *testing.T) {
 			label:       labelC,
 			selector:    selectorItemE,
 			expectMatch: false,
+		},
+		{
+			label:       labelD,
+			selector:    selectorItemA,
+			expectMatch: false,
+		},
+		{
+			label:       labelD,
+			selector:    selectorItemB,
+			expectMatch: false,
+		},
+		{
+			label:       labelD,
+			selector:    selectorItemD,
+			expectMatch: false,
+		},
+		{
+			label:       labelD,
+			selector:    selectorItemF,
+			expectMatch: true,
+		},
+		{
+			label:       labelA,
+			selector:    selectorItemG,
+			expectMatch: true,
+		},
+		{
+			label:       labelC,
+			selector:    selectorItemG,
+			expectMatch: false,
+		},
+		{
+			label:       labelD,
+			selector:    selectorItemG,
+			expectMatch: true,
 		},
 	}
 	for _, tt := range tests {

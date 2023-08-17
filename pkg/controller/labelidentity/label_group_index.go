@@ -124,6 +124,9 @@ func (l *labelIdentityMatch) matches(s *selectorItem) bool {
 // constructMapFromLabelString parses label string of format "app=client,env=dev" into a map.
 func constructMapFromLabelString(s string) map[string]string {
 	m := map[string]string{}
+	if s == "" {
+		return m
+	}
 	kvs := strings.Split(s, ",")
 	for _, kv := range kvs {
 		kvpair := strings.Split(kv, "=")
