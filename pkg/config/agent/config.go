@@ -208,9 +208,10 @@ type AgentConfig struct {
 }
 
 type AntreaProxyConfig struct {
+	// To disable AntreaProxy, set this to false.
+	Enable *bool `yaml:"enable,omitempty"`
 	// ProxyAll tells antrea-agent to proxy all Service traffic, including NodePort, LoadBalancer, and ClusterIP traffic,
-	// regardless of where they come from. Therefore, running kube-proxy is no longer required. This requires the AntreaProxy
-	// feature to be enabled.
+	// regardless of where they come from. Therefore, running kube-proxy is no longer required.
 	ProxyAll bool `yaml:"proxyAll,omitempty"`
 	// A string array of values which specifies the host IPv4/IPv6 addresses for NodePorts. Values may be valid IP blocks.
 	// (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.

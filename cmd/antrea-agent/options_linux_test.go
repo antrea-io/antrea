@@ -109,7 +109,7 @@ func TestMulticlusterOptions(t *testing.T) {
 			if tt.encryptionMode != "" {
 				config.TrafficEncryptionMode = tt.encryptionMode
 			}
-			o := &Options{config: config}
+			o := &Options{config: config, enableAntreaProxy: true}
 			features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 			o.setDefaults()
 			if tt.mcConfig.Enable && tt.featureGate {

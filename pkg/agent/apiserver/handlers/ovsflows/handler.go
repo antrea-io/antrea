@@ -25,7 +25,6 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/antctl/transform/common"
-	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/querier"
 )
@@ -207,7 +206,7 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			// Pod Namespace must be provided to dump flows of a Pod.
 			resps, err = getPodFlows(aq, pod, namespace)
 		} else if service != "" {
-			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+			if aq.GetProxier() == nil {
 				http.Error(w, "AntreaProxy is not enabled", http.StatusServiceUnavailable)
 				return
 			}

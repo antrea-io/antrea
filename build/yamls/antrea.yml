@@ -5493,7 +5493,8 @@ data:
 
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic.
+    # Service traffic. Note that this feature gate is deprecated since this feature was
+    # promoted to GA in v1.14.
     #  AntreaProxy: true
 
     # Enable TopologyAwareHints in AntreaProxy. This requires AntreaProxy and EndpointSlice to be
@@ -5790,9 +5791,10 @@ data:
 
     # Option antreaProxy contains AntreaProxy related configuration options.
     antreaProxy:
+      # To disable AntreaProxy, set this to false.
+      enable: true
       # ProxyAll tells antrea-agent to proxy all Service traffic, including NodePort, LoadBalancer, and ClusterIP traffic,
-      # regardless of where they come from. Therefore, running kube-proxy is no longer required. This requires the AntreaProxy
-      # feature to be enabled.
+      # regardless of where they come from. Therefore, running kube-proxy is no longer required.
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
       proxyAll: false
@@ -6852,7 +6854,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9c01298a6bca328841f5a2dbfda10dd531b76a0e1cda22588307e4cf97124a13
+        checksum/config: 4fe41384930f331013210dfda5fa13d1c229f3d208742e6c26700f0563250cc1
       labels:
         app: antrea
         component: antrea-agent
@@ -7091,7 +7093,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9c01298a6bca328841f5a2dbfda10dd531b76a0e1cda22588307e4cf97124a13
+        checksum/config: 4fe41384930f331013210dfda5fa13d1c229f3d208742e6c26700f0563250cc1
       labels:
         app: antrea
         component: antrea-controller

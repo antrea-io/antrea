@@ -26,7 +26,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled
-        --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
+        --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. TrafficControl=true,Egress=false.
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.

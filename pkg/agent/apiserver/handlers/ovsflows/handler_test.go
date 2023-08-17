@@ -148,7 +148,7 @@ func TestServiceFlows(t *testing.T) {
 		tc := testcases[i]
 		p := proxytest.NewMockProxier(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
-		q.EXPECT().GetProxier().Return(p).Times(1)
+		q.EXPECT().GetProxier().Return(p).Times(2)
 
 		if tc.expectedStatus != http.StatusNotFound {
 			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)

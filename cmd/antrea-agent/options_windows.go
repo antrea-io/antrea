@@ -64,7 +64,7 @@ func (o *Options) checkUnsupportedFeatures() error {
 		return fmt.Errorf("unsupported features on Windows: {%s}", strings.Join(unsupported, ", "))
 	}
 
-	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if !o.enableAntreaProxy {
 		klog.Warning("AntreaProxy is not enabled. NetworkPolicies might not be enforced correctly for Service traffic!")
 	}
 	return nil

@@ -1379,7 +1379,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		{
 			name: "serviceTraceflowIPv4",
 			skipIfNeeded: func(t *testing.T) {
-				skipIfProxyDisabled(t)
+				skipIfProxyDisabled(t, data)
 			},
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
@@ -1455,7 +1455,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		{
 			name: "hairpinServiceTraceflowIPv4",
 			skipIfNeeded: func(t *testing.T) {
-				skipIfProxyDisabled(t)
+				skipIfProxyDisabled(t, data)
 			},
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
