@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -68,6 +69,7 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 		name           string
 		policy         *v1beta2.NetworkPolicy
 		realizedRules  int
+		failedRules    int
 		expectedStatus *v1beta2.NetworkPolicyStatus
 	}{
 		{
@@ -99,6 +101,25 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:          "some rules failed",
+			policy:        policyWithMultipleRules,
+			realizedRules: 1,
+			failedRules:   1,
+			expectedStatus: &v1beta2.NetworkPolicyStatus{
+				ObjectMeta: v1.ObjectMeta{
+					Name: policyWithMultipleRules.Name,
+				},
+				Nodes: []v1beta2.NetworkPolicyNodeStatus{
+					{
+						NodeName:           testNode1,
+						Generation:         1,
+						RealizationFailure: true,
+						Message:            `[{"ruleID":"a46618b858dda750","policyID":"uid1","reason":"proxyAll is not enabled"}]`,
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,12 +131,20 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 			ruleCache.AddNetworkPolicy(tt.policy)
 			ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 			rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(tt.policy.UID))
+			// Sort the rules to ensure consistent order, as they are initially retrieved in a random sequence.
+			sort.Slice(rules, func(i, j int) bool {
+				return rules[i].ID < rules[j].ID
+			})
+
 			for i, rule := range rules {
 				// Only make specified number of rules realized.
-				if i >= tt.realizedRules {
+				if i <= tt.realizedRules-1 {
+					statusController.SetRuleRealization(rule.ID, tt.policy.UID, reconcileErrorNil)
+				} else if tt.failedRules != 0 {
+					statusController.SetRuleRealization(rule.ID, tt.policy.UID, reconcileErrorProxyAllIsNotEnabled)
+				} else {
 					break
 				}
-				statusController.SetRuleRealization(rule.ID, tt.policy.UID)
 			}
 			// TODO: Use a determinate mechanism.
 			time.Sleep(500 * time.Millisecond)
@@ -135,7 +164,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	policy.Generation = 1
 	ruleCache.AddNetworkPolicy(policy)
 	rule1 := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))[0]
-	statusController.SetRuleRealization(rule1.ID, policy.UID)
+	statusController.SetRuleRealization(rule1.ID, policy.UID, "")
 
 	matchGeneration := func(generation int64) error {
 		return wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (done bool, err error) {
@@ -158,7 +187,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	for _, rule := range rules {
 		// Only call SetRuleRealization for new rule.
 		if rule.ID != rule1.ID {
-			statusController.SetRuleRealization(rule.ID, policy.UID)
+			statusController.SetRuleRealization(rule.ID, policy.UID, "")
 		}
 	}
 	assert.NoError(t, matchGeneration(policy.Generation), "The generation should be updated to %v but was not updated", policy.Generation)
@@ -191,7 +220,7 @@ func BenchmarkSyncHandler(b *testing.B) {
 	ruleCache.AddNetworkPolicy(policy)
 	rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
 	for _, rule := range rules {
-		statusController.SetRuleRealization(rule.ID, policy.UID)
+		statusController.SetRuleRealization(rule.ID, policy.UID, "")
 	}
 
 	b.ReportAllocs()

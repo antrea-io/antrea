@@ -58,6 +58,11 @@ const (
 	dnsInterceptRuleID = uint32(1)
 )
 
+const (
+	reconcileErrorProxyAllIsNotEnabled = "proxyAll is not enabled"
+	reconcileErrorNil                  = ""
+)
+
 type L7RuleReconciler interface {
 	AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta2.L7Protocol, enableLogging bool) error
 	DeleteRule(ruleID string, vlanID uint32) error
@@ -145,6 +150,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	antreaPolicyEnabled bool,
 	l7NetworkPolicyEnabled bool,
 	antreaProxyEnabled bool,
+	proxyAllEnabled bool,
 	statusManagerEnabled bool,
 	multicastEnabled bool,
 	loggerOptions *AuditLoggerOptions, // use nil to disable logging
@@ -186,8 +192,16 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryDNS), c.fqdnController)
 		}
 	}
-	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
-		v4Enabled, v6Enabled, antreaPolicyEnabled, multicastEnabled)
+	c.reconciler = newReconciler(ofClient,
+		ifaceStore,
+		idAllocator,
+		c.fqdnController,
+		groupCounters,
+		v4Enabled,
+		v6Enabled,
+		antreaPolicyEnabled,
+		multicastEnabled,
+		proxyAllEnabled)
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, externalEntityUpdateSubscriber, groupIDUpdates, nodeType)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
@@ -664,10 +678,16 @@ func (c *Controller) syncRule(key string) error {
 		c.fqdnController.notifyRuleUpdate(key, err)
 	}
 	if err != nil {
+		if err.Error() == reconcileErrorProxyAllIsNotEnabled {
+			if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
+				c.statusManager.SetRuleRealization(key, rule.PolicyUID, reconcileErrorProxyAllIsNotEnabled)
+			}
+			return nil
+		}
 		return err
 	}
 	if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
+		c.statusManager.SetRuleRealization(key, rule.PolicyUID, reconcileErrorNil)
 	}
 	return nil
 }
@@ -709,7 +729,7 @@ func (c *Controller) syncRules(keys []string) error {
 	if c.statusManagerEnabled {
 		for _, rule := range allRules {
 			if v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
+				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID, reconcileErrorNil)
 			}
 		}
 	}

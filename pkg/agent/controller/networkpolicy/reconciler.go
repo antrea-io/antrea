@@ -230,6 +230,9 @@ type reconciler struct {
 
 	// multicastEnabled indicates whether multicast is enabled
 	multicastEnabled bool
+
+	// proxyAllEnabled indicates whether AntreaProxy proxyAll is enabled
+	proxyAllEnabled bool
 }
 
 // newReconciler returns a new *reconciler.
@@ -242,6 +245,7 @@ func newReconciler(ofClient openflow.Client,
 	v6Enabled bool,
 	antreaPolicyEnabled bool,
 	multicastEnabled bool,
+	proxyAllEnabled bool,
 ) *reconciler {
 	priorityAssigners := map[uint8]*tablePriorityAssigner{}
 	if antreaPolicyEnabled {
@@ -277,6 +281,7 @@ func newReconciler(ofClient openflow.Client,
 		fqdnController:    fqdnController,
 		groupCounters:     groupCounters,
 		multicastEnabled:  multicastEnabled,
+		proxyAllEnabled:   proxyAllEnabled,
 	}
 	// Check if ofClient is nil or not to be compatible with unit tests.
 	if ofClient != nil {
@@ -295,6 +300,14 @@ func (r *reconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
 // Reconcile checks whether the provided rule have been enforced or not, and
 // invoke the add or update method accordingly.
 func (r *reconciler) Reconcile(rule *CompletedRule) error {
+	if !r.proxyAllEnabled && rule.isAppliedToServicesIngressPolicyRule() {
+		klog.InfoS("Skipping ingress NetworkPolicy policy rule applied to Services since proxyAll is not enabled", "rule", rule.ID, "policy", rule.SourceRef.ToString())
+		return fmt.Errorf(reconcileErrorProxyAllIsNotEnabled)
+	}
+	if !r.proxyAllEnabled && rule.isToServicesEgressPolicyRule() {
+		klog.InfoS("Skipping egress NetworkPolicy policy rule to Services since proxyAll is not enabled", "rule", rule.ID, "policy", rule.SourceRef.ToString())
+		return fmt.Errorf(reconcileErrorProxyAllIsNotEnabled)
+	}
 	klog.InfoS("Reconciling NetworkPolicy rule", "rule", rule.ID, "policy", rule.SourceRef.ToString())
 	var err error
 	var ofPriority *uint16
