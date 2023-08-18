@@ -192,6 +192,7 @@ func (o *Options) setDefaults() {
 	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
 	}
+	o.setAuditLoggingDefaultOptions()
 }
 
 func (o *Options) validateTLSOptions() error {
@@ -486,25 +487,6 @@ func (o *Options) setK8sNodeDefaultOptions() {
 			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
 		}
 	}
-
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		auditLogging := &o.config.AuditLogging
-		if auditLogging.MaxSize == 0 {
-			auditLogging.MaxSize = defaultAuditLogsMaxAge
-		}
-		if auditLogging.MaxBackups == nil {
-			maxBackups := int32(defaultAuditLogsMaxBackups)
-			auditLogging.MaxBackups = &maxBackups
-		}
-		if auditLogging.MaxAge == nil {
-			maxAge := int32(defaultAuditLogsMaxAge)
-			auditLogging.MaxAge = &maxAge
-		}
-		if auditLogging.Compress == nil {
-			compress := defaultAuditLogsCompressed
-			auditLogging.Compress = &compress
-		}
-	}
 }
 
 func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) error {
@@ -708,6 +690,27 @@ func (o *Options) setMulticlusterDefaultOptions() {
 	if trafficEncryptionModeType == config.TrafficEncryptionModeWireGuard {
 		if o.config.Multicluster.WireGuard.Port == 0 {
 			o.config.Multicluster.WireGuard.Port = apis.MulticlusterWireGuardListenPort
+		}
+	}
+}
+
+func (o *Options) setAuditLoggingDefaultOptions() {
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		auditLogging := &o.config.AuditLogging
+		if auditLogging.MaxSize == 0 {
+			auditLogging.MaxSize = defaultAuditLogsMaxAge
+		}
+		if auditLogging.MaxBackups == nil {
+			maxBackups := int32(defaultAuditLogsMaxBackups)
+			auditLogging.MaxBackups = &maxBackups
+		}
+		if auditLogging.MaxAge == nil {
+			maxAge := int32(defaultAuditLogsMaxAge)
+			auditLogging.MaxAge = &maxAge
+		}
+		if auditLogging.Compress == nil {
+			compress := defaultAuditLogsCompressed
+			auditLogging.Compress = &compress
 		}
 	}
 }
