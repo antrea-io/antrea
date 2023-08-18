@@ -14,12 +14,14 @@
 
 package agent
 
-func mockSetInterfaceMTU(returnErr error) func() {
+import (
+	"testing"
+)
+
+func mockSetInterfaceMTU(t *testing.T, returnErr error) {
 	originalSetInterfaceMTU := setInterfaceMTU
 	setInterfaceMTU = func(ifaceName string, mtu int) error {
 		return returnErr
 	}
-	return func() {
-		setInterfaceMTU = originalSetInterfaceMTU
-	}
+	t.Cleanup(func() { setInterfaceMTU = originalSetInterfaceMTU })
 }

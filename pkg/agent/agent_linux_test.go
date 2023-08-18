@@ -30,16 +30,23 @@ import (
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
-func mockSetInterfaceMTU(returnErr error) func() {
-	return func() {}
+func mockSetInterfaceMTU(t *testing.T, returnErr error) {
 }
 
-func mockGetInterfaceByName(ipDevice *net.Interface) func() {
+func mockGetInterfaceByName(t *testing.T, ipDevice *net.Interface) {
 	prevGetInterfaceByName := getInterfaceByName
 	getInterfaceByName = func(name string) (*net.Interface, error) {
 		return ipDevice, nil
 	}
-	return func() { getInterfaceByName = prevGetInterfaceByName }
+	t.Cleanup(func() { getInterfaceByName = prevGetInterfaceByName })
+}
+
+func mockGetAllIPNetsByName(t *testing.T, ips []*net.IPNet) {
+	prevGetAllIPNetsByName := getAllIPNetsByName
+	getAllIPNetsByName = func(name string) ([]*net.IPNet, error) {
+		return ips, nil
+	}
+	t.Cleanup(func() { getAllIPNetsByName = prevGetAllIPNetsByName })
 }
 
 func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
@@ -110,8 +117,9 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			initializer.nodeType = config.K8sNode
 			initializer.connectUplinkToBridge = tt.connectUplinkToBridge
 			initializer.nodeConfig = nodeConfig
-			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
-			defer mockGetInterfaceByName(ipDevice)()
+			mockGetIPNetDeviceFromIP(t, nodeIPNet, ipDevice)
+			mockGetInterfaceByName(t, ipDevice)
+			mockGetAllIPNetsByName(t, []*net.IPNet{nodeIPNet})
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(mockOVSBridgeClient)
 			}
