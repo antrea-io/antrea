@@ -82,16 +82,20 @@ func TestVMAgent(t *testing.T) {
 	t.Run("testExternalNodeSupportBundleCollection", func(t *testing.T) { testExternalNodeSupportBundleCollection(t, data, vmList) })
 }
 
-func (data *TestData) waitForDeploymentRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
-	t.Logf("Waiting for Deployment '%s/%s' to be realized", namespace, name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, name string, timeout time.Duration) error {
+	t.Logf("Waiting for Deployment '%s/%s' to be ready", namespace, name)
+	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
 		dp, err := data.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
 		return dp.Status.ObservedGeneration == dp.Generation && dp.Status.ReadyReplicas == *dp.Spec.Replicas, nil
-	}); err != nil {
-		return fmt.Errorf("error when waiting for Deployment '%s/%s' to be realized: %v", namespace, name, err)
+	})
+	if err == wait.ErrWaitTimeout {
+		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod -l app=sftp", namespace))
+		return fmt.Errorf("some replicas for Deployment '%s/%s' are not ready after %v:\n%v", namespace, name, timeout, stdout)
+	} else if err != nil {
+		return fmt.Errorf("error when waiting for Deployment '%s/%s' to be ready: %w", namespace, name, err)
 	}
 	return nil
 }
@@ -133,6 +137,7 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 	}
 	applySFTPYamlCommand := fmt.Sprintf("kubectl apply -f %s -n %s", sftpServiceYAML, data.testNamespace)
 	code, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), applySFTPYamlCommand)
+	require.NoError(t, err)
 	defer func() {
 		deleteSFTPYamlCommand := fmt.Sprintf("kubectl delete -f %s -n %s", sftpServiceYAML, data.testNamespace)
 		data.RunCommandOnNode(controlPlaneNodeName(), deleteSFTPYamlCommand)
@@ -141,8 +146,7 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 	if code != 0 {
 		t.Errorf("Error when applying %s: %v", sftpServiceYAML, stderr)
 	}
-	require.NoError(t, err)
-	failOnError(data.waitForDeploymentRealized(t, data.testNamespace, "sftp", 30*time.Second), t)
+	failOnError(data.waitForDeploymentReady(t, data.testNamespace, "sftp", defaultTimeout), t)
 	sec := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: secretName,
