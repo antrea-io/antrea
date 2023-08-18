@@ -202,7 +202,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		// Register packetInHandler
 		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
 		if loggerOptions != nil {
-			// Initiate logger for Antrea Policy audit logging
+			// Initialize logger for Antrea Policy audit logging
 			antreaPolicyLogger, err := newAntreaPolicyLogger(loggerOptions)
 			if err != nil {
 				return nil, err
