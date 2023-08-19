@@ -197,3 +197,7 @@ func (f *featureService) replayGroups() []binding.OFEntry {
 func (f *featureService) initGroups() []binding.OFEntry {
 	return nil
 }
+
+func (f *featureService) replayMeters() []binding.OFEntry {
+	return nil
+}

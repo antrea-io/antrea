@@ -157,6 +157,7 @@ var (
 	// Tables in stageRouting:
 	L3ForwardingTable = newTable("L3Forwarding", stageRouting, pipelineIP)
 	EgressMarkTable   = newTable("EgressMark", stageRouting, pipelineIP)
+	EgressQoSTable    = newTable("EgressQoS", stageRouting, pipelineIP)
 	L3DecTTLTable     = newTable("L3DecTTL", stageRouting, pipelineIP)
 
 	// Tables in stagePostRouting:
@@ -419,23 +420,24 @@ type flowCategoryCache struct {
 }
 
 type client struct {
-	enableProxy             bool
-	proxyAll                bool
-	enableDSR               bool
-	enableAntreaPolicy      bool
-	enableL7NetworkPolicy   bool
-	enableDenyTracking      bool
-	enableEgress            bool
-	enableMulticast         bool
-	enableTrafficControl    bool
-	enableMulticluster      bool
-	enablePrometheusMetrics bool
-	connectUplinkToBridge   bool
-	nodeType                config.NodeType
-	roundInfo               types.RoundInfo
-	cookieAllocator         cookie.Allocator
-	bridge                  binding.Bridge
-	groupIDAllocator        GroupAllocator
+	enableProxy                bool
+	proxyAll                   bool
+	enableDSR                  bool
+	enableAntreaPolicy         bool
+	enableL7NetworkPolicy      bool
+	enableDenyTracking         bool
+	enableEgress               bool
+	enableEgressTrafficShaping bool
+	enableMulticast            bool
+	enableTrafficControl       bool
+	enableMulticluster         bool
+	enablePrometheusMetrics    bool
+	connectUplinkToBridge      bool
+	nodeType                   config.NodeType
+	roundInfo                  types.RoundInfo
+	cookieAllocator            cookie.Allocator
+	bridge                     binding.Bridge
+	groupIDAllocator           GroupAllocator
 
 	featurePodConnectivity          *featurePodConnectivity
 	featureService                  *featureService
@@ -2311,16 +2313,21 @@ func (f *featureEgress) snatSkipNodeFlow(nodeIP net.IP) binding.Flow {
 // packet's tunnel destination IP.
 func (f *featureEgress) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
 	ipProtocol := getIPProtocol(snatIP)
-	return EgressMarkTable.ofTable.BuildFlow(priorityNormal).
+	fb := EgressMarkTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(ipProtocol).
-		MatchCTStateNew(true).
 		MatchCTStateTrk(true).
 		MatchTunnelDst(snatIP).
 		Action().LoadPktMarkRange(mark, snatPktMarkRange).
-		Action().LoadRegMark(ToGatewayRegMark).
-		Action().GotoStage(stageSwitching).
-		Done()
+		Action().LoadRegMark(ToGatewayRegMark)
+	if f.enableEgressTrafficShaping {
+		// To apply rate-limit on all traffic, instead of just the first one, remove ct_state=+new.
+		fb = fb.Action().GotoTable(EgressQoSTable.GetID())
+	} else {
+		fb = fb.MatchCTStateNew(true).
+			Action().GotoStage(stageSwitching)
+	}
+	return fb.Done()
 }
 
 // snatRuleFlow generates the flow that applies the SNAT rule for a local Pod. If the SNAT IP exists on the local Node,
@@ -2331,16 +2338,21 @@ func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint
 	ipProtocol := getIPProtocol(snatIP)
 	if snatMark != 0 {
 		// Local SNAT IP.
-		return EgressMarkTable.ofTable.BuildFlow(priorityNormal).
+		fb := EgressMarkTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
-			MatchCTStateNew(true).
 			MatchCTStateTrk(true).
 			MatchInPort(ofPort).
 			Action().LoadPktMarkRange(snatMark, snatPktMarkRange).
-			Action().LoadRegMark(ToGatewayRegMark).
-			Action().GotoStage(stageSwitching).
-			Done()
+			Action().LoadRegMark(ToGatewayRegMark)
+		if f.enableEgressTrafficShaping {
+			// To apply rate-limit on all traffic, instead of just the first one, remove ct_state=+new.
+			fb = fb.Action().GotoTable(EgressQoSTable.GetID())
+		} else {
+			fb = fb.MatchCTStateNew(true).
+				Action().GotoStage(stageSwitching)
+		}
+		return fb.Done()
 	}
 	// SNAT IP should be on a remote Node.
 	return EgressMarkTable.ofTable.BuildFlow(priorityNormal).
@@ -2351,6 +2363,22 @@ func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint
 		Action().SetDstMAC(GlobalVirtualMAC).
 		Action().SetTunnelDst(snatIP). // Set tunnel destination to the SNAT IP.
 		Action().LoadRegMark(ToTunnelRegMark, RemoteSNATRegMark).
+		Action().GotoStage(stageSwitching).
+		Done()
+}
+
+func (f *featureEgress) egressQoSFlow(mark uint32) binding.Flow {
+	return EgressQoSTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchPktMark(mark, &types.SNATIPMarkMask).
+		Action().Meter(mark).
+		Action().GotoStage(stageSwitching).
+		Done()
+}
+
+func (f *featureEgress) egressQoSDefaultFlow() binding.Flow {
+	return EgressQoSTable.ofTable.BuildFlow(priorityLow).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		Action().GotoStage(stageSwitching).
 		Done()
 }
@@ -2757,15 +2785,14 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 	return conj.ActionFlowPriorities(), nil
 }
 
-// genPacketInMeter generates a meter entry with specific meterID and rate.
-// `rate` is represented as number of packets per second.
-// Packets which exceed the rate will be dropped.
-func (c *client) genPacketInMeter(meterID binding.MeterIDType, rate uint32) binding.Meter {
-	meter := c.bridge.NewMeter(meterID, ofctrl.MeterBurst|ofctrl.MeterPktps).
+// genOFMeter generates a meter entry with specific meterID, meterFlag, rate and
+// burst. Packets which exceed the rate will be dropped.
+func (c *client) genOFMeter(meterID binding.MeterIDType, meterFlags ofctrl.MeterFlag, rate uint32, burst uint32) binding.Meter {
+	meter := c.bridge.NewMeter(meterID, meterFlags).
 		MeterBand().
 		MeterType(ofctrl.MeterDrop).
 		Rate(rate).
-		Burst(2 * rate).
+		Burst(burst).
 		Done()
 	return meter
 }
@@ -2896,6 +2923,7 @@ func NewClient(bridgeName string,
 	enableAntreaPolicy bool,
 	enableL7NetworkPolicy bool,
 	enableEgress bool,
+	enableEgressTrafficShaping bool,
 	enableDenyTracking bool,
 	proxyAll bool,
 	enableDSR bool,
@@ -2909,26 +2937,27 @@ func NewClient(bridgeName string,
 ) *client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
-		bridge:                  bridge,
-		nodeIPChecker:           nodeIPCheck,
-		enableProxy:             enableProxy,
-		proxyAll:                proxyAll,
-		enableDSR:               enableDSR,
-		enableAntreaPolicy:      enableAntreaPolicy,
-		enableL7NetworkPolicy:   enableL7NetworkPolicy,
-		enableDenyTracking:      enableDenyTracking,
-		enableEgress:            enableEgress,
-		enableMulticast:         enableMulticast,
-		enableTrafficControl:    enableTrafficControl,
-		enableMulticluster:      enableMulticluster,
-		enablePrometheusMetrics: enablePrometheusMetrics,
-		connectUplinkToBridge:   connectUplinkToBridge,
-		pipelines:               make(map[binding.PipelineID]binding.Pipeline),
-		packetInHandlers:        map[uint8]PacketInHandler{},
-		ovsctlClient:            ovsctl.NewClient(bridgeName),
-		ovsMetersAreSupported:   ovsMetersAreSupported(),
-		packetInRate:            packetInRate,
-		groupIDAllocator:        groupIDAllocator,
+		bridge:                     bridge,
+		nodeIPChecker:              nodeIPCheck,
+		enableProxy:                enableProxy,
+		proxyAll:                   proxyAll,
+		enableDSR:                  enableDSR,
+		enableAntreaPolicy:         enableAntreaPolicy,
+		enableL7NetworkPolicy:      enableL7NetworkPolicy,
+		enableDenyTracking:         enableDenyTracking,
+		enableEgress:               enableEgress,
+		enableEgressTrafficShaping: enableEgressTrafficShaping,
+		enableMulticast:            enableMulticast,
+		enableTrafficControl:       enableTrafficControl,
+		enableMulticluster:         enableMulticluster,
+		enablePrometheusMetrics:    enablePrometheusMetrics,
+		connectUplinkToBridge:      connectUplinkToBridge,
+		pipelines:                  make(map[binding.PipelineID]binding.Pipeline),
+		packetInHandlers:           map[uint8]PacketInHandler{},
+		ovsctlClient:               ovsctl.NewClient(bridgeName),
+		ovsMetersAreSupported:      OVSMetersAreSupported(),
+		packetInRate:               packetInRate,
+		groupIDAllocator:           groupIDAllocator,
 	}
 	c.ofEntryOperations = c
 	return c

@@ -265,6 +265,20 @@ func (mr *MockClientMockRecorder) Initialize(arg0, arg1, arg2, arg3, arg4, arg5 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockClient)(nil).Initialize), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
+// InstallEgressQoS mocks base method.
+func (m *MockClient) InstallEgressQoS(arg0, arg1, arg2 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallEgressQoS", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallEgressQoS indicates an expected call of InstallEgressQoS.
+func (mr *MockClientMockRecorder) InstallEgressQoS(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEgressQoS", reflect.TypeOf((*MockClient)(nil).InstallEgressQoS), arg0, arg1, arg2)
+}
+
 // InstallEndpointFlows mocks base method.
 func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
@@ -831,6 +845,20 @@ func (m *MockClient) SubscribePacketIn(arg0 byte, arg1 *openflow.PacketInQueue) 
 func (mr *MockClientMockRecorder) SubscribePacketIn(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePacketIn", reflect.TypeOf((*MockClient)(nil).SubscribePacketIn), arg0, arg1)
+}
+
+// UninstallEgressQoS mocks base method.
+func (m *MockClient) UninstallEgressQoS(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallEgressQoS", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallEgressQoS indicates an expected call of UninstallEgressQoS.
+func (mr *MockClientMockRecorder) UninstallEgressQoS(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEgressQoS", reflect.TypeOf((*MockClient)(nil).UninstallEgressQoS), arg0)
 }
 
 // UninstallEndpointFlows mocks base method.

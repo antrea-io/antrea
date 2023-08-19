@@ -161,6 +161,10 @@ func (f *featureExternalNodeConnectivity) replayGroups() []binding.OFEntry {
 	return nil
 }
 
+func (f *featureExternalNodeConnectivity) replayMeters() []binding.OFEntry {
+	return nil
+}
+
 func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flowBuilder binding.FlowBuilder

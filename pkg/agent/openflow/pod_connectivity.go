@@ -282,3 +282,7 @@ func (f *featurePodConnectivity) initGroups() []binding.OFEntry {
 func (f *featurePodConnectivity) replayGroups() []binding.OFEntry {
 	return nil
 }
+
+func (f *featurePodConnectivity) replayMeters() []binding.OFEntry {
+	return nil
+}

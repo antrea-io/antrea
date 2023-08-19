@@ -2366,6 +2366,16 @@ spec:
                   type: array
                   items:
                     type: string
+                bandwidth:
+                  type: object
+                  required:
+                    - rate
+                    - burst
+                  properties:
+                    rate:
+                      type: string
+                    burst:
+                      type: string
             status:
               type: object
               properties:

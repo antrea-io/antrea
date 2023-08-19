@@ -55,6 +55,7 @@ edit the Agent configuration in the
 | `SupportBundleCollection`     | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `L7NetworkPolicy`             | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `AdminNetworkPolicy`          | Controller         | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
+| `EgressTrafficShaping`        | Agent              | `false` | Alpha | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                |
 
 ## Description and Requirements of Features
 
@@ -402,3 +403,13 @@ this [document](antrea-l7-network-policy.md#prerequisites) for more information 
 
 The `AdminNetworkPolicy` API (which currently includes the AdminNetworkPolicy and BaselineAdminNetworkPolicy objects)
 complements the Antrea-native policies and help cluster administrators to set security postures in a portable manner.
+
+### EgressTrafficShaping
+
+The `EgressTrafficShaping` feature gate of Antrea Agent enables traffic shaping of Egress, which could limit the
+bandwidth for all egress traffic belonging to an Egress. Refer to this [document](egress.md#trafficshaping)
+
+#### Requirements for this Feature
+
+This feature leverages OVS meters to do the actual rate-limiting, therefore this feature requires OVS meters
+to be supported in the datapath.

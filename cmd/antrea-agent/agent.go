@@ -160,6 +160,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
+		features.DefaultFeatureGate.Enabled(features.EgressTrafficShaping),
 		enableFlowExporter,
 		o.config.AntreaProxy.ProxyAll,
 		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
@@ -514,6 +515,7 @@ func run(o *Options) error {
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
 			memberlistCluster, egressInformer, nodeInformer, podUpdateChannel, serviceCIDRProvider, o.config.Egress.MaxEgressIPsPerNode,
+			features.DefaultFeatureGate.Enabled(features.EgressTrafficShaping),
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)

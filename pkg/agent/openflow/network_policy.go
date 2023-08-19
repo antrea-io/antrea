@@ -2301,6 +2301,10 @@ func (f *featureNetworkPolicy) initGroups() []binding.OFEntry {
 	return groups
 }
 
+func (f *featureNetworkPolicy) replayMeters() []binding.OFEntry {
+	return nil
+}
+
 func (f *featureNetworkPolicy) getLoggingAndResubmitGroupID(nextTable uint8) binding.GroupIDType {
 	groupKey := fmt.Sprintf("%d", nextTable)
 	group, _ := f.loggingGroupCache.Load(groupKey)
