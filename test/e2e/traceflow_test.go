@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -36,7 +37,6 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/util/k8s"
 )
 
 type testcase struct {
@@ -86,6 +86,9 @@ func TestTraceflow(t *testing.T) {
 		skipIfAntreaIPAMTest(t)
 		skipIfEgressDisabled(t)
 		testTraceflowEgress(t, data)
+	})
+	t.Run("testTraceflowValidation", func(t *testing.T) {
+		testTraceflowValidation(t, data)
 	})
 }
 
@@ -310,7 +313,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	}
 	node1 := nodeName(nodeIdx)
 
-	agentPod, _ := data.getAntreaPodOnNode(node1)
 	node1Pods, node1IPs, node1CleanupFn := createTestAgnhostPods(t, data, 3, data.testNamespace, node1)
 	defer node1CleanupFn()
 	// Give a little time for Windows containerd Nodes to setup OVS.
@@ -597,48 +599,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			},
 			expectedPhase:   v1alpha1.Failed,
 			expectedReasons: []string{fmt.Sprintf("Node: %s, error: failed to get the destination Pod: pods \"%s\" not found", node1, "non-existing-pod")},
-		},
-		{
-			name:      "nonExistingSrcPodIPv4",
-			ipVersion: 4,
-			tf: &v1alpha1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, "non-existing-pod", data.testNamespace, node1Pods[1])),
-				},
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
-						Namespace: data.testNamespace,
-						Pod:       "non-existing-pod",
-					},
-					Destination: v1alpha1.Destination{
-						Namespace: data.testNamespace,
-						Pod:       node1Pods[1],
-					},
-				},
-			},
-			expectedPhase:   v1alpha1.Failed,
-			expectedReasons: []string{fmt.Sprintf("Invalid Traceflow request, err: %+v", fmt.Errorf("requested source Pod %s not found", k8s.NamespacedName(data.testNamespace, "non-existing-pod")))},
-		},
-		{
-			name:      "hostNetworkSrcPodIPv4",
-			ipVersion: 4,
-			tf: &v1alpha1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", antreaNamespace, agentPod, data.testNamespace, node1Pods[1])),
-				},
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
-						Namespace: antreaNamespace,
-						Pod:       agentPod,
-					},
-					Destination: v1alpha1.Destination{
-						Namespace: data.testNamespace,
-						Pod:       node1Pods[1],
-					},
-				},
-			},
-			expectedPhase:   v1alpha1.Failed,
-			expectedReasons: []string{fmt.Sprintf("Invalid Traceflow request, err: %+v", fmt.Errorf("using hostNetwork Pod as source in non-live-traffic Traceflow is not supported"))},
 		},
 		{
 			name:      "intraNodeICMPDstIPLiveTraceflowIPv4",
@@ -2235,6 +2195,85 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 	t.Run(testcaseRemoteEgress.name, func(t *testing.T) {
 		runTestTraceflow(t, data, testcaseRemoteEgress)
 	})
+}
+
+func testTraceflowValidation(t *testing.T, data *TestData) {
+	podNames, podIPs, cleanupFn := createTestPods(t, data, 1, data.testNamespace, nodeName(0), true, data.createAgnhostPodOnNode)
+	defer cleanupFn()
+	podName := podNames[0]
+	podIP := podIPs[0].ipv4
+
+	testCases := []struct {
+		name         string
+		spec         *v1alpha1.TraceflowSpec
+		allowed      bool
+		deniedReason string
+	}{
+		{
+			name: "Source Pod must be specified in non-live-traffic Traceflow",
+			spec: &v1alpha1.TraceflowSpec{
+				Destination: v1alpha1.Destination{IP: podIP.String()},
+			},
+			deniedReason: "source Pod must be specified in non-live-traffic Traceflow",
+		},
+		{
+			name: "Traceflow should have either source or destination Pod assigned",
+			spec: &v1alpha1.TraceflowSpec{
+				LiveTraffic: true,
+			},
+			deniedReason: "Traceflow {{name}} has neither source nor destination Pod specified",
+		},
+		{
+			name: "Assigned source pod must exist",
+			spec: &v1alpha1.TraceflowSpec{
+				Source: v1alpha1.Source{
+					Namespace: "foo",
+					Pod:       "bar",
+				},
+			},
+			deniedReason: "requested source Pod foo/bar not found",
+		},
+		{
+			name: "Using hostNetwork Pod as source in non-live-traffic Traceflow is not supported",
+			spec: &v1alpha1.TraceflowSpec{
+				Source: v1alpha1.Source{
+					Namespace: data.testNamespace,
+					Pod:       podName,
+				},
+			},
+			deniedReason: "using hostNetwork Pod as source in non-live-traffic Traceflow is not supported",
+		},
+		{
+			name: "Valid request",
+			spec: &v1alpha1.TraceflowSpec{
+				LiveTraffic: true,
+				Source: v1alpha1.Source{
+					Namespace: data.testNamespace,
+					Pod:       podName,
+				},
+			},
+			allowed: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tf := &v1alpha1.Traceflow{
+				Spec: *tc.spec,
+			}
+			tf.Name = randName("")
+			_, err := data.crdClient.CrdV1alpha1().Traceflows().Create(context.TODO(), tf, metav1.CreateOptions{})
+			if tc.allowed {
+				assert.Nil(t, err)
+			} else {
+				tc.deniedReason = strings.Replace(tc.deniedReason, "{{name}}", tf.Name, -1)
+				expected := "admission webhook \"traceflowvalidator.antrea.io\" denied the request: " + tc.deniedReason
+				assert.Equal(t, expected, err.Error())
+			}
+		})
+	}
+
 }
 
 func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {

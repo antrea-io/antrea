@@ -623,49 +623,6 @@ func TestStartTraceflow(t *testing.T) {
 			},
 		},
 		{
-			name: "empty source and destination Pod",
-			tf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
-			},
-			expectedErrLog: "Traceflow tf3 has neither source nor destination Pod specified",
-		},
-		{
-			name: "empty source Pod",
-			tf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
-				Spec: crdv1beta1.TraceflowSpec{
-					Destination: crdv1beta1.Destination{
-						Namespace: pod2.Namespace,
-						Pod:       pod2.Name,
-					},
-				},
-			},
-			expectedErrLog: "Traceflow tf4 does not have source Pod specified",
-		},
-		{
-			name: "invalid destination IPv4",
-			tf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{Name: "tf5", UID: "uid5"},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: "192.168.1.300",
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			nodeConfig: &config.NodeConfig{
-				Name: "node-1",
-			},
-			expectedErr: "destination IP is not valid: 192.168.1.300",
-		},
-		{
 			name: "live traceflow receive only",
 			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf6", UID: "uid6"},
@@ -863,18 +820,6 @@ func TestValidateTraceflow(t *testing.T) {
 				},
 			},
 			expectedErr: "using Service destination requires AntreaProxy feature enabled",
-		},
-		{
-			name: "invalid destination IPv4",
-			tf: &crdv1beta1.Traceflow{
-				Spec: crdv1beta1.TraceflowSpec{
-					Destination: crdv1beta1.Destination{
-						IP: "192.168.1.300",
-					},
-				},
-			},
-			antreaProxyEnabled: true,
-			expectedErr:        "destination IP is not valid: 192.168.1.300",
 		},
 		{
 			name: "AntreaProxy feature disabled with ClusterIP destination",

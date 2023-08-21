@@ -300,16 +300,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 		return err
 	}
 
-	liveTraffic := tf.Spec.LiveTraffic
-	if tf.Spec.Source.Pod == "" && tf.Spec.Destination.Pod == "" {
-		klog.Errorf("Traceflow %s has neither source nor destination Pod specified", tf.Name)
-		return nil
-	}
-	if tf.Spec.Source.Pod == "" && !liveTraffic {
-		klog.Errorf("Traceflow %s does not have source Pod specified", tf.Name)
-		return nil
-	}
-
 	receiverOnly := false
 	var pod, ns string
 	if tf.Spec.Source.Pod != "" {
@@ -327,6 +317,7 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
 	isSender := len(podInterfaces) > 0 && !receiverOnly
 
+	liveTraffic := tf.Spec.LiveTraffic
 	var packet, matchPacket *binding.Packet
 	var ofPort uint32
 	if len(podInterfaces) > 0 {
@@ -388,9 +379,6 @@ func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
 	}
 	if tf.Spec.Destination.IP != "" {
 		destIP := net.ParseIP(tf.Spec.Destination.IP)
-		if destIP == nil {
-			return fmt.Errorf("destination IP is not valid: %s", tf.Spec.Destination.IP)
-		}
 		// When AntreaProxy is enabled, serviceCIDR is not required and may be set to a
 		// default value which does not match the cluster configuration.
 		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && c.serviceCIDR.Contains(destIP) {

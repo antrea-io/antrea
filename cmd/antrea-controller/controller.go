@@ -115,6 +115,7 @@ var allowedPaths = []string{
 	"/validate/group",
 	"/validate/ippool",
 	"/validate/supportbundlecollection",
+	"/validate/traceflow",
 	"/convert/clustergroup",
 }
 
@@ -298,6 +299,7 @@ func run(o *Options) error {
 		egressController,
 		statsAggregator,
 		bundleCollectionController,
+		traceflowController,
 		*o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])
@@ -490,6 +492,7 @@ func createAPIServerConfig(kubeconfig string,
 	egressController *egress.EgressController,
 	statsAggregator *stats.Aggregator,
 	bundleCollectionStore *supportbundlecollection.Controller,
+	traceflowController *traceflow.Controller,
 	enableMetrics bool,
 	cipherSuites []uint16,
 	tlsMinVersion uint16) (*apiserver.Config, error) {
@@ -556,5 +559,6 @@ func createAPIServerConfig(kubeconfig string,
 		endpointQuerier,
 		npController,
 		egressController,
-		bundleCollectionStore), nil
+		bundleCollectionStore,
+		traceflowController), nil
 }
