@@ -432,18 +432,16 @@ func run(o *Options) error {
 	asyncRuleDeleteInterval := o.pollInterval
 	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
 	antreaProxyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaProxy)
-	// In Antrea agent, status manager and audit logging will automatically be enabled
-	// if AntreaPolicy feature is enabled.
+	// In Antrea agent, status manager will automatically be enabled if
+	// AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
-	loggingEnabled := antreaPolicyEnabled
-	var auditLoggerOptions *networkpolicy.AntreaPolicyLoggerOptions
-	if loggingEnabled {
-		auditLoggerOptions = &networkpolicy.AntreaPolicyLoggerOptions{
-			MaxSize:    int(o.config.AuditLogging.MaxSize),
-			MaxBackups: int(*o.config.AuditLogging.MaxBackups),
-			MaxAge:     int(*o.config.AuditLogging.MaxAge),
-			Compress:   *o.config.AuditLogging.Compress,
-		}
+
+	var auditLoggerOptions *networkpolicy.AuditLoggerOptions
+	auditLoggerOptions = &networkpolicy.AuditLoggerOptions{
+		MaxSize:    int(o.config.AuditLogging.MaxSize),
+		MaxBackups: int(*o.config.AuditLogging.MaxBackups),
+		MaxAge:     int(*o.config.AuditLogging.MaxAge),
+		Compress:   *o.config.AuditLogging.Compress,
 	}
 
 	var gwPort, tunPort uint32

@@ -74,7 +74,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, nil, groupCounters, ch2, true, true, true, true, false, nil, testAsyncDeleteInterval, "8.8.8.8:53", config.K8sNode, true, false, config.HostGatewayOFPort, config.DefaultTunOFPort, &config.NodeConfig{})
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
-	controller.antreaPolicyLogger = nil
+	controller.auditLogger = nil
 	return controller, clientset, reconciler
 }
 
