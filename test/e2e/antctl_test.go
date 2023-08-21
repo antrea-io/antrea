@@ -315,7 +315,7 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 
 	require.NoError(t, NewPodBuilder(testPodName, data.testNamespace, toolboxImage).WithContainerName(testContainerName).OnNode(controlPlaneNodeName()).InHostNetwork().Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, testPodName, data.testNamespace)
-	require.NoError(t, data.podWaitForRunning(30*time.Second, testPodName, data.testNamespace), "test Pod not in the Running state")
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, testPodName, data.testNamespace), "test Pod not in the Running state")
 
 	// getEndpointStatus will return "Success", "Failure", or the empty string when out is not a
 	// marshalled metav1.Status object.
