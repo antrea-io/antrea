@@ -78,12 +78,12 @@ func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofc
 	}
 	// Get match from ingress/egress reg if disposition is Allow or Pass.
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
-		if tableID == table.GetID() {
+		if table.IsInitialized() && tableID == table.GetID() {
 			return getMatchRegField(matchers, openflow.TFEgressConjIDField)
 		}
 	}
 	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable) {
-		if tableID == table.GetID() {
+		if table.IsInitialized() && tableID == table.GetID() {
 			return getMatchRegField(matchers, openflow.TFIngressConjIDField)
 		}
 	}
@@ -189,7 +189,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 
 func isAntreaPolicyIngressTable(tableID uint8) bool {
 	for _, table := range openflow.GetAntreaPolicyIngressTables() {
-		if table.GetID() == tableID {
+		if table.IsInitialized() && table.GetID() == tableID {
 			return true
 		}
 	}
@@ -198,7 +198,7 @@ func isAntreaPolicyIngressTable(tableID uint8) bool {
 
 func isAntreaPolicyEgressTable(tableID uint8) bool {
 	for _, table := range openflow.GetAntreaPolicyEgressTables() {
-		if table.GetID() == tableID {
+		if table.IsInitialized() && table.GetID() == tableID {
 			return true
 		}
 	}
