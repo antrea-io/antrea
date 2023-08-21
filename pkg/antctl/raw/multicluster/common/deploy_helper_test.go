@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package deploy
+package common
 
 import (
 	"errors"
@@ -166,7 +166,7 @@ kind: Config`)
 				httpGet = http.Get
 				getAPIGroupResources = getAPIGroupResourcesWrapper
 			}()
-			gotErr := deploy(cmd, "leader", "latest", "kube-system", "")
+			gotErr := DeployOrRemove(cmd, "leader", "latest", "kube-system", "", "deploy")
 			if tt.expectedErr != "" {
 				if gotErr != nil {
 					assert.Contains(t, gotErr.Error(), tt.expectedErr)

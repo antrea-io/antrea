@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package deploy
+package clean
 
 import (
 	"fmt"
@@ -33,13 +33,10 @@ type memberClusterOptions struct {
 var memberClusterOpts *memberClusterOptions
 
 var memberClusterExamples = strings.Trim(`
-# Deploy Antrea Multi-cluster of the specified version into a Namespace
-  $ antctl mc deploy membercluster --antrea-version <ANTREA_VERSION> -n <NAMESPACE>
-# Deploy Antrea Multi-cluster using a pre-downloaded manifest
-  $ antctl mc deploy membercluster -f <PATH_TO_MANIFEST>
-
-The following CRDs will be defined:
-- CRDs: ClusterSet, MemberClusterAnnounce, ResourceExport, ResourceImport, ServiceExport, ServiceImport
+# Clean up Antrea Multi-cluster of the specified version in a given Namespace
+  $ antctl mc clean membercluster --antrea-version <ANTREA_VERSION> -n <NAMESPACE>
+# Clean Antrea Multi-cluster using a pre-downloaded manifest
+  $ antctl mc clean membercluster -f <PATH_TO_MANIFEST>
 `, "\n")
 
 func (o *memberClusterOptions) validateAndComplete() error {
@@ -62,8 +59,8 @@ func NewMemberClusterCmd() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "membercluster",
 		Args:    cobra.MaximumNArgs(0),
-		Short:   "Deploy Antrea Multi-cluster to a member cluster",
-		Long:    "Deploy Antrea Multi-cluster to a member cluster in a Namespace",
+		Short:   "Clean up Antrea Multi-cluster on a member cluster",
+		Long:    "Clean up Antrea Multi-cluster on a member cluster in a Namespace",
 		Example: memberClusterExamples,
 		RunE:    memberClusterRunE,
 	}
@@ -71,7 +68,7 @@ func NewMemberClusterCmd() *cobra.Command {
 	memberClusterOpts = o
 	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace to deploy Antrea Multi-cluster")
 	command.Flags().StringVarP(&o.antreaVersion, "antrea-version", "", "",
-		"version of Antrea Multi-cluster to deploy. If not specified, the latest version from Antrea main branch will be used. "+
+		"version of Antrea Multi-cluster to remove. If not specified, the latest version from Antrea main branch will be used. "+
 			"When manifest-file is not provided, the Antrea Multi-cluster deployment manifest of the specified version will be downloaded and applied; "+
 			"when manifest-file is provided, this option will be ignored")
 	command.Flags().StringVarP(&o.filename, "manifest-file", "f", "", "path to the Antrea Multi-cluster deployment manifest file for member cluster")

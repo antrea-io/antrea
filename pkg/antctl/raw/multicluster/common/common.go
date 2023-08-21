@@ -43,6 +43,9 @@ const (
 
 	CreateByAntctlAnnotation = "multicluster.antrea.io/created-by-antctl"
 
+	AntreaMCServiceAnnotation = "multicluster.antrea.io/imported-service"
+	AntreaMCACNPAnnotation    = "multicluster.antrea.io/imported-acnp"
+
 	DefaultMemberNamespace = "kube-system"
 	DefaultLeaderNamespace = "antrea-multicluster"
 )

@@ -805,6 +805,60 @@ the image.
 3. Copy the image file `antrea-mcs.tar` to the Nodes of your local cluster.
 4. Run `docker load < antrea-mcs.tar` in each Node of your local cluster.
 
+## Remove a Member Cluster
+
+When you want to remove a member cluster in a ClusterSet, there are two options you can follow
+to clean up all Multi-cluster related resources.
+
+1. Using antctl to remove a member cluster automatically: `antctl mc clean membercluster`
+2. Follow the following steps to remove all resources manually.
+   1.  Delete the ClusterSet CR: `kubectl delete clusterset $CLUSTERSET_ID -n kube-system`
+   2. Scale the member cluster's controller replica to zero to skip handling any new changes.
+   from a member cluster. `kubectl scale deploy antrea-mc-controller -n kube-system --replicas=0`
+   3. Save below scripts as a file `cleanup.sh` and execute it to delete resources which are created
+  automatically by Antrea Multi-cluster Controller. The purpose of this script is to remove all
+  Antrea ClusterNetworkPolicies with the annotation `multicluster.antrea.io/imported-acnp="true"`,
+  all Services with the annotation `multicluster.antrea.io/imported-service="true"`, and remove
+  the annotation `multicluster.antrea.io/gateway=true` from all Gateway Nodes.
+    
+    ```bash
+    cat << 'EOF' > cleanup.sh
+    kubectl get nodes -o=jsonpath='{.items[?(@.metadata.annotations.multicluster\.antrea\.io/gateway=="true")].metadata.name}' | xargs -I{} kubectl annotate node {} multicluster.antrea.io/gateway-
+    acnps=$(kubectl get acnp -o=jsonpath='{.items[?(@.metadata.annotations.multicluster\.antrea\.io/imported-acnp=="true")].metadata.name}')
+    if [[ $acnps != "" ]];then
+      echo -n $acnps | xargs -n 1 kubectl delete acnp
+    fi
+    svcs=$(kubectl get svc -o json -A | jq -r '.items[]|select(.metadata.annotations."multicluster.antrea.io/imported-service"=="true")|[.metadata.name,.metadata.namespace]|join(" ")')
+    if [[ $svcs != "" ]];then
+      echo -n $svcs | xargs -n2 bash -c 'kubectl delete svc $0 -n $1'
+    fi
+    EOF
+    bash cleanup.sh
+    ```
+  
+   4. Delete Antrea Multi-cluster Controller deployment: `kubectl delete -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml`
+
+## Remove a Leader Cluster
+
+When you want to remove the leader cluster in a ClusterSet, there are two options you can follow
+to clean up all Multi-cluster related resources.
+
+1. Using antctl to remove a member cluster automatically: `antctl mc clean leadercluster`
+2. Follow the following steps to remove all resources manually.
+   1. Delete all ResourceExports:
+   
+   ```bash
+   kubectl get resourceexports -n antrea-multicluster -o=jsonpath='{.items[*].metadata.name}' | xargs -n 1 | xargs -I{} kubectl delete resourceexports.multicluster.crd.antrea.io/{} -n antrea-multicluster
+   ```
+   
+   2. Delete Antrea Multi-cluster Controller deployment: `kubectl delete -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader.yml`.
+   
+   Note: If you are running a cluster as a shared leader cluster, please run below command to get the file `antrea-multicluster-leader-namespaced.yml` and replace `antrea-multicluster` with the target Namespace to delete namespaced deployment only. The example given here is using `kube-system` as the target Namespace.
+   
+   ```bash
+   curl -L https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml | sed 's/antrea-multicluster/kube-system/g' | kubectl delete -f -
+   ```
+
 ## Known Issue
 
 We recommend user to redeploy or update Antrea Multi-cluster Controller through

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package deploy
+package clean
 
 import (
 	"fmt"
@@ -34,13 +34,10 @@ var leaderClusterOpts *leaderClusterOptions
 
 var leaderClusterExamples = strings.Trim(`
 
-# Deploy Antrea Multi-cluster of the specified version into a Namespace
-  $ antctl mc deploy leadercluster --antrea-version <ANTREA_VERSION> -n <NAMESPACE>
-# Deploy Antrea Multi-cluster using a pre-downloaded manifest
-  $ antctl mc deploy leadercluster -f <PATH_TO_MANIFEST>
-
-The following CRDs will be defined:
-- CRDs: ClusterSet, MemberClusterAnnounce, ResourceExport, ResourceImport
+# Clean up Antrea Multi-cluster of the specified version in a given Namespace
+  $ antctl mc clean leadercluster --antrea-version <ANTREA_VERSION> -n <NAMESPACE>
+# Clean up Antrea Multi-cluster using a pre-downloaded manifest
+  $ antctl mc clean leadercluster -f <PATH_TO_MANIFEST>
 `, "\n")
 
 func (o *leaderClusterOptions) validateAndComplete() error {
@@ -62,16 +59,16 @@ func NewLeaderClusterCmd() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "leadercluster",
 		Args:    cobra.MaximumNArgs(0),
-		Short:   "Deploy Antrea Multi-cluster to a leader cluster",
-		Long:    "Deploy Antrea Multi-cluster to a leader cluster in a Namespace",
+		Short:   "Clean up Antrea Multi-cluster on a leader cluster",
+		Long:    "Clean up Antrea Multi-cluster on a leader cluster in a Namespace",
 		Example: leaderClusterExamples,
 		RunE:    leaderClusterRunE,
 	}
 	o := &leaderClusterOptions{}
 	leaderClusterOpts = o
-	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace to deploy Antrea Multi-cluster")
+	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace to remove Antrea Multi-cluster deployment")
 	command.Flags().StringVarP(&o.antreaVersion, "antrea-version", "", "",
-		"version of Antrea Multi-cluster to deploy. If not specified, the latest version from Antrea main branch will be used. "+
+		"version of Antrea Multi-cluster to remove. If not specified, the latest version from Antrea main branch will be used. "+
 			"When manifest-file is not provided, the Antrea Multi-cluster deployment manifest of the specified version will be downloaded and applied; "+
 			"when manifest-file is provided, this option will be ignored")
 	command.Flags().StringVarP(&o.filename, "manifest-file", "f", "", "path to the Antrea Multi-cluster deployment manifest file for leader cluster")
@@ -83,6 +80,5 @@ func leaderClusterRunE(cmd *cobra.Command, _ []string) error {
 	if err := leaderClusterOpts.validateAndComplete(); err != nil {
 		return err
 	}
-
-	return common.DeployOrRemove(cmd, common.LeaderRole, leaderClusterOpts.antreaVersion, leaderClusterOpts.namespace, leaderClusterOpts.filename, "deploy")
+	return common.DeployOrRemove(cmd, common.LeaderRole, leaderClusterOpts.antreaVersion, leaderClusterOpts.namespace, leaderClusterOpts.filename, "remove")
 }
