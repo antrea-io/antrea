@@ -140,8 +140,10 @@ func run(o *Options) error {
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 	enableFLowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
-
-	nodeIPTracker := nodeip.NewTracker(nodeInformer)
+	var nodeIPTracker *nodeip.Tracker
+	if o.nodeType == config.K8sNode {
+		nodeIPTracker = nodeip.NewTracker(nodeInformer)
+	}
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
@@ -169,14 +171,15 @@ func run(o *Options) error {
 	)
 
 	var serviceCIDRNet *net.IPNet
+	var serviceCIDRProvider *servicecidr.Discoverer
 	if o.nodeType == config.K8sNode {
 		_, serviceCIDRNet, _ = net.ParseCIDR(o.config.ServiceCIDR)
+		serviceCIDRProvider = servicecidr.NewServiceCIDRDiscoverer(serviceInformer)
 	}
 	var serviceCIDRNetv6 *net.IPNet
 	if o.config.ServiceCIDRv6 != "" {
 		_, serviceCIDRNetv6, _ = net.ParseCIDR(o.config.ServiceCIDRv6)
 	}
-	serviceCIDRProvider := servicecidr.NewServiceCIDRDiscoverer(serviceInformer)
 
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
@@ -232,8 +235,10 @@ func run(o *Options) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Must start after registering all event handlers.
-	go serviceCIDRProvider.Run(stopCh)
+	if o.nodeType == config.K8sNode {
+		// Must start after registering all event handlers.
+		go serviceCIDRProvider.Run(stopCh)
+	}
 
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
