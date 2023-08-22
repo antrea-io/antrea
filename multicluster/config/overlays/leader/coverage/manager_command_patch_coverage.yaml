@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - command: ["/bin/sh"]
+          args: ["-c", "/antrea-mc-controller-coverage -test.run=TestBincoverRunMain -test.coverprofile=antrea-mc-controller.cov.out leader --config=/controller_manager_config.yaml; while true; do sleep 5 & wait $!; done"]
+          name: antrea-mc-controller
+          image: antrea/antrea-mc-controller-coverage:latest

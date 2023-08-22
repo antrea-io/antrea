@@ -117,19 +117,13 @@ To deploy Multi-cluster Controller in a dual-role cluster, please refer to
 
 #### Deploy in a Dedicated Leader Cluster
 
-1. Run the following command to import Multi-cluster CRDs in the leader cluster:
-
-   ```bash
-   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml
-   ```
-
-2. Install Multi-cluster Controller in the leader cluster. Since Multi-cluster
-   Controller runs as a namespaced Deployment, you should create the Namespace
-   first, and then apply the deployment manifest with the Namespace.
+Run the following command to install Multi-cluster Controller in the leader cluster.
+Multi-cluster Controller is deployed into a Namespace. You must create the Namespace
+first, and then apply the deployment manifest in the Namespace.
 
    ```bash
    kubectl create ns antrea-multicluster
-   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
+   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader.yml
    ```
 
 The Multi-cluster Controller in the leader cluster will be deployed in Namespace `antrea-multicluster`
