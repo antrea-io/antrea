@@ -2198,34 +2198,36 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 }
 
 func testTraceflowValidation(t *testing.T, data *TestData) {
-	podNames, podIPs, cleanupFn := createTestPods(t, data, 1, data.testNamespace, nodeName(0), true, data.createAgnhostPodOnNode)
+	podNames, _, cleanupFn := createTestPods(t, data, 1, data.testNamespace, nodeName(0), true, data.createAgnhostPodOnNode)
 	defer cleanupFn()
 	podName := podNames[0]
-	podIP := podIPs[0].ipv4
 
 	testCases := []struct {
 		name         string
-		spec         *v1alpha1.TraceflowSpec
+		spec         v1alpha1.TraceflowSpec
 		allowed      bool
 		deniedReason string
 	}{
 		{
 			name: "Source Pod must be specified in non-live-traffic Traceflow",
-			spec: &v1alpha1.TraceflowSpec{
-				Destination: v1alpha1.Destination{IP: podIP.String()},
+			spec: v1alpha1.TraceflowSpec{
+				Destination: v1alpha1.Destination{
+					Namespace: data.testNamespace,
+					Pod:       podName,
+				},
 			},
 			deniedReason: "source Pod must be specified in non-live-traffic Traceflow",
 		},
 		{
 			name: "Traceflow should have either source or destination Pod assigned",
-			spec: &v1alpha1.TraceflowSpec{
+			spec: v1alpha1.TraceflowSpec{
 				LiveTraffic: true,
 			},
 			deniedReason: "Traceflow {{name}} has neither source nor destination Pod specified",
 		},
 		{
 			name: "Assigned source pod must exist",
-			spec: &v1alpha1.TraceflowSpec{
+			spec: v1alpha1.TraceflowSpec{
 				Source: v1alpha1.Source{
 					Namespace: "foo",
 					Pod:       "bar",
@@ -2235,7 +2237,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 		},
 		{
 			name: "Using hostNetwork Pod as source in non-live-traffic Traceflow is not supported",
-			spec: &v1alpha1.TraceflowSpec{
+			spec: v1alpha1.TraceflowSpec{
 				Source: v1alpha1.Source{
 					Namespace: data.testNamespace,
 					Pod:       podName,
@@ -2245,7 +2247,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 		},
 		{
 			name: "Valid request",
-			spec: &v1alpha1.TraceflowSpec{
+			spec: v1alpha1.TraceflowSpec{
 				LiveTraffic: true,
 				Source: v1alpha1.Source{
 					Namespace: data.testNamespace,
@@ -2260,7 +2262,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			tf := &v1alpha1.Traceflow{
-				Spec: *tc.spec,
+				Spec: tc.spec,
 			}
 			tf.Name = randName("")
 			_, err := data.crdClient.CrdV1alpha1().Traceflows().Create(context.TODO(), tf, metav1.CreateOptions{})
@@ -2269,7 +2271,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 			} else {
 				tc.deniedReason = strings.Replace(tc.deniedReason, "{{name}}", tf.Name, -1)
 				expected := "admission webhook \"traceflowvalidator.antrea.io\" denied the request: " + tc.deniedReason
-				assert.Equal(t, expected, err.Error())
+				assert.EqualError(t, err, expected)
 			}
 		})
 	}
