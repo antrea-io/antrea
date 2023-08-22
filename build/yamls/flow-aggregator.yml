@@ -450,6 +450,7 @@ spec:
           name: host-var-log-antrea-flow-aggregator
         - mountPath: /etc/flow-aggregator/certs
           name: clickhouse-ca
+      hostAliases: null
       nodeSelector:
         kubernetes.io/arch: amd64
         kubernetes.io/os: linux
