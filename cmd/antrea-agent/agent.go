@@ -145,7 +145,9 @@ func run(o *Options) error {
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+	groupIDAllocator := openflow.NewGroupAllocator(false)
+	ofClient := openflow.NewClient(o.config.OVSBridge,
+		ovsBridgeMgmtAddr,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
@@ -156,6 +158,7 @@ func run(o *Options) error {
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
 		enableMulticlusterGW,
+		groupIDAllocator,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -373,15 +376,21 @@ func run(o *Options) error {
 		)
 	}
 
-	var groupCounters []proxytypes.GroupCounter
-	groupIDUpdates := make(chan string, 100)
-	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
-	v4GroupCounter := proxytypes.NewGroupCounter(v4GroupIDAllocator, groupIDUpdates)
-	v6GroupIDAllocator := openflow.NewGroupAllocator(true)
-	v6GroupCounter := proxytypes.NewGroupCounter(v6GroupIDAllocator, groupIDUpdates)
-
 	v4Enabled := networkConfig.IPv4Enabled
 	v6Enabled := networkConfig.IPv6Enabled
+
+	var groupCounters []proxytypes.GroupCounter
+	groupIDUpdates := make(chan string, 100)
+	var v4GroupCounter, v6GroupCounter proxytypes.GroupCounter
+	if v4Enabled {
+		v4GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)
+		groupCounters = append(groupCounters, v4GroupCounter)
+	}
+	if v6Enabled {
+		v6GroupCounter = proxytypes.NewGroupCounter(groupIDAllocator, groupIDUpdates)
+		groupCounters = append(groupCounters, v6GroupCounter)
+	}
+
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		proxyAll := o.config.AntreaProxy.ProxyAll
@@ -759,7 +768,7 @@ func run(o *Options) error {
 		}
 		mcastController = multicast.NewMulticastController(
 			ofClient,
-			v4GroupIDAllocator,
+			groupIDAllocator,
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,

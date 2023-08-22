@@ -135,7 +135,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table ID
-	tableID := pktIn.TableId
+	tableID := getPacketInTableID(pktIn)
 	// Get disposition Allow, Drop or Reject
 	match = getMatchRegField(matchers, openflow.APDispositionField)
 	id, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
@@ -203,4 +203,24 @@ func isAntreaPolicyEgressTable(tableID uint8) bool {
 		}
 	}
 	return false
+}
+
+// getPacketInTableID returns the OVS table ID in which the packet is sent to antrea-agent. Since L2ForwardOutput is
+// the table where all Antrea-native policies logging packets are sent to antrea-agent, "PacketInTableField" is used
+// to store the real table requiring "sendToController" action. This function first parses the direct table where
+// the packet leaves OVS pipeline, then checks whether "PacketInTableField" is set with a valid value or not. The value
+// in the field is returned if yes.
+func getPacketInTableID(pktIn *ofctrl.PacketIn) uint8 {
+	tableID := pktIn.TableId
+	matchers := pktIn.GetMatches()
+	if match := getMatchRegField(matchers, openflow.PacketInTableField); match != nil {
+		tableVal, err := getInfoInReg(match, openflow.PacketInTableField.GetRange().ToNXRange())
+		if err == nil {
+			return uint8(tableVal)
+		} else {
+			// This is not expected, so we log an error.
+			klog.ErrorS(err, "Unable to parse table ID from PacketInTableField in PacketIn message, using the packetIn.TableId", "table", tableID)
+		}
+	}
+	return tableID
 }

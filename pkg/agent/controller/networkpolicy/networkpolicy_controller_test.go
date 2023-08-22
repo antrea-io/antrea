@@ -54,6 +54,7 @@ var mockOFTables = map[*openflow.Table]uint8{
 	openflow.AntreaPolicyIngressRuleTable: uint8(12),
 	openflow.IngressRuleTable:             uint8(13),
 	openflow.IngressDefaultTable:          uint8(14),
+	openflow.OutputTable:                  uint8(28),
 }
 
 type antreaClientGetter struct {

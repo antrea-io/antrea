@@ -37,6 +37,7 @@ func (fh *fakeHandler) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 func Test_RegisterPacketInHandler(t *testing.T) {
 	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
 	fakeHandler := &fakeHandler{
 		callChannel: make(chan ofpPacketInCategory),
 		category:    PacketInCategoryTF,
@@ -47,6 +48,7 @@ func Test_RegisterPacketInHandler(t *testing.T) {
 
 func Test_StartPacketInHandler(t *testing.T) {
 	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
 	callChannel := make(chan ofpPacketInCategory)
 	fc.packetInHandlers[uint8(PacketInCategoryTF)] = &fakeHandler{
 		callChannel: callChannel,

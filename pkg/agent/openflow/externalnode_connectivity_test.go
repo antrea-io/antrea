@@ -38,8 +38,8 @@ func Test_client_InstallVMUplinkFlows(t *testing.T) {
 	hostPort := int32(20)
 	uplinkPort := int32(21)
 	expectedFlows := []string{
-		"cookie=0x1080000000000, table=L2ForwardingCalc, priority=200,ip,in_port=20 actions=set_field:0x100/0x100->reg0,set_field:0x15->reg1,goto_table:IngressSecurityClassifier",
-		"cookie=0x1080000000000, table=L2ForwardingCalc, priority=200,ip,in_port=21 actions=set_field:0x100/0x100->reg0,set_field:0x14->reg1,goto_table:IngressSecurityClassifier",
+		"cookie=0x1080000000000, table=L2ForwardingCalc, priority=200,ip,in_port=20 actions=set_field:0x200000/0x600000->reg0,set_field:0x15->reg1,goto_table:IngressSecurityClassifier",
+		"cookie=0x1080000000000, table=L2ForwardingCalc, priority=200,ip,in_port=21 actions=set_field:0x200000/0x600000->reg0,set_field:0x14->reg1,goto_table:IngressSecurityClassifier",
 		"cookie=0x1080000000000, table=NonIP, priority=200,in_port=20 actions=output:21",
 		"cookie=0x1080000000000, table=NonIP, priority=200,in_port=21 actions=output:20",
 	}
@@ -108,7 +108,7 @@ func Test_featureExternalInodeConnectivity_initFlows(t *testing.T) {
 		"cookie=0x1080000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520)",
 		"cookie=0x1080000000000, table=ConntrackState, priority=210,ct_state=+inv+trk,ip actions=drop",
 		"cookie=0x1080000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk,ip actions=ct(commit,table=Output,zone=65520)",
-		"cookie=0x1080000000000, table=Output, priority=200,reg0=0x100/0x100 actions=output:NXM_NX_REG1[]",
+		"cookie=0x1080000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
 	}
 
 	flows := getFlowStrings(fc.featureExternalNodeConnectivity.initFlows())

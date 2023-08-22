@@ -70,7 +70,7 @@ func (f *featureExternalNodeConnectivity) vmUplinkFlows(hostOFPort, uplinkOFPort
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolIP).
 			MatchInPort(hostOFPort).
-			Action().LoadRegMark(OFPortFoundRegMark).
+			Action().LoadRegMark(OutputToOFPortRegMark).
 			Action().LoadToRegField(TargetOFPortField, uplinkOFPort).
 			Action().NextTable().
 			Done(),
@@ -80,7 +80,7 @@ func (f *featureExternalNodeConnectivity) vmUplinkFlows(hostOFPort, uplinkOFPort
 			Cookie(cookieID).
 			MatchInPort(uplinkOFPort).
 			MatchProtocol(binding.ProtocolIP).
-			Action().LoadRegMark(OFPortFoundRegMark).
+			Action().LoadRegMark(OutputToOFPortRegMark).
 			Action().LoadToRegField(TargetOFPortField, hostOFPort).
 			Action().NextTable().
 			Done(),
@@ -104,9 +104,9 @@ func (f *featureExternalNodeConnectivity) vmUplinkFlows(hostOFPort, uplinkOFPort
 func (f *featureExternalNodeConnectivity) initFlows() []*openflow15.FlowMod {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := []binding.Flow{
-		L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal).
+		OutputTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
-			MatchRegMark(OFPortFoundRegMark).
+			MatchRegMark(OutputToOFPortRegMark).
 			Action().OutputToRegField(TargetOFPortField).
 			Done(),
 	}
@@ -151,6 +151,14 @@ func (f *featureExternalNodeConnectivity) replayFlows() []*openflow15.FlowMod {
 	}
 	f.uplinkFlowCache.Range(rangeFunc)
 	return flows
+}
+
+func (f *featureExternalNodeConnectivity) initGroups() []binding.OFEntry {
+	return nil
+}
+
+func (f *featureExternalNodeConnectivity) replayGroups() []binding.OFEntry {
+	return nil
 }
 
 func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) binding.Flow {
