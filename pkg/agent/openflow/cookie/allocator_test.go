@@ -18,7 +18,6 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -37,7 +36,6 @@ func TestConcurrentAllocate(t *testing.T) {
 	eachTotal := 10000
 	concurrentNum := 8
 
-	rand.Seed(time.Now().UnixNano())
 	// #nosec G404: random number generator not used for security purposes
 	round := rand.Uint64() >> (64 - BitwidthRound)
 	a := NewAllocator(round)

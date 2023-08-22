@@ -20,6 +20,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                            | Change                                  |
 | :----------------------------- | --------------------------------------- |
+| kubernetes-1.26.4-build.0      | Upgraded Go to v1.21                    |
 | kubernetes-1.26.4              | Upgraded K8s libraries to v1.26.4       |
 | kubernetes-1.24.0-build.2      | Upgraded base image to ubuntu:22.04     |
 | kubernetes-1.24.0-build.1      | Upgraded Go to v1.19                    |

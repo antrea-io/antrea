@@ -145,7 +145,14 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			stdout, stderr, err := runAntctl(podName, args, data)
-			if err != nil && !strings.HasSuffix(stderr, "not enabled\n") {
+			// After upgrading from Go v1.19 to Go v1.21, stderr will also include the
+			// following warning in the error case:
+			//    warning: GOCOVERDIR not set, no coverage data emitted
+			// As a result, we temporarily replace strings.HasSuffix with strings.Contains.
+			// We can revert this change when the following issue is addressed:
+			// https://github.com/antrea-io/antrea/issues/4962
+			// if err != nil && !strings.HasSuffix(stderr, "not enabled\n") {
+			if err != nil && !strings.Contains(stderr, "not enabled\n") {
 				t.Fatalf("Error when running `antctl %s` from %s: %v\n%s", c, podName, err, antctlOutput(stdout, stderr))
 			}
 		})
@@ -308,7 +315,7 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 
 	require.NoError(t, NewPodBuilder(testPodName, data.testNamespace, toolboxImage).WithContainerName(testContainerName).OnNode(controlPlaneNodeName()).InHostNetwork().Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, testPodName, data.testNamespace)
-	require.NoError(t, data.podWaitForRunning(30*time.Second, testPodName, data.testNamespace), "test Pod not in the Running state")
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, testPodName, data.testNamespace), "test Pod not in the Running state")
 
 	// getEndpointStatus will return "Success", "Failure", or the empty string when out is not a
 	// marshalled metav1.Status object.
