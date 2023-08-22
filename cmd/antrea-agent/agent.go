@@ -697,8 +697,6 @@ func run(o *Options) error {
 		if err := secondarynetwork.Initialize(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer, nodeConfig.Name, cniPodInfoStore,
-			// safe to call given that cniServer.Initialize has been called already.
-			cniServer.GetPodConfigurator(),
 			stopCh,
 			&o.config.SecondaryNetwork, ovsdbConnection); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
