@@ -23,6 +23,9 @@ import (
 const (
 	metricNamespaceAntrea = "antrea"
 	metricSubsystemAgent  = "agent"
+
+	LabelPacketInMeterNetworkPolicy = "PacketInMeterNetworkPolicy"
+	LabelPacketInMeterTraceflow     = "PacketInMeterTraceflow"
 )
 
 var (
@@ -232,11 +235,13 @@ func InitializeOVSMetrics() {
 	}
 	// Initialize OpenFlow operations metrics with label add, modify and delete
 	// since those metrics won't come out until observation.
-	opsArray := [3]string{"add", "modify", "delete"}
-	for _, ops := range opsArray {
+	for _, ops := range []string{"add", "modify", "delete"} {
 		OVSFlowOpsCount.WithLabelValues(ops)
 		OVSFlowOpsErrorCount.WithLabelValues(ops)
 		OVSFlowOpsLatency.WithLabelValues(ops)
+	}
+	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow} {
+		OVSMeterPacketDroppedCount.WithLabelValues(label)
 	}
 }
 
