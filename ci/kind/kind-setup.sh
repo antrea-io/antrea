@@ -29,6 +29,7 @@ SERVICE_CIDR=""
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
 SUBNETS=""
+EXTRA_NETWORKS=""
 ENCAP_MODE=""
 PROXY=true
 KUBE_PROXY_MODE="iptables"
@@ -58,14 +59,18 @@ where:
   --no-proxy: disable Antrea proxy
   --no-kube-proxy: disable Kube proxy
   --no-kube-node-ipam: disable NodeIPAM in kube-controller-manager
-  --antrea-cni: install Antrea CNI in Kind cluster; by default the cluster is created without a CNI installed
+  --antrea-cni: install Antrea CNI in Kind cluster; by default the cluster is created without a CNI installed.
   --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
-  --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
-    Node connected to default docker bridge network created by Kind.
+  --subnets: a subnet creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned subnet. A worker
+    Node will be connected to one of those network. Default is empty: all worker Nodes connected to the default Docker
+    bridge network created by kind.
+  --extra-networks: an extra network creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned
+    subnet. All worker Nodes will be connected to all the extra networks, in addition to the default Docker bridge
+    network. Note, '--extra-networks' and '--subnets' cannot be specified together.
   --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY.
-  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty
+  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
   --all: delete all kind clusters
   --until: delete kind clusters that have been created before the specified duration.
 "
@@ -113,7 +118,6 @@ function configure_networks {
 
   # remove old networks
   nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
-  node_cnt=$(kind get nodes --name $CLUSTER_NAME | grep worker | wc -l)
   nodes=$(echo $nodes)
   networks+=" kind"
   echo "removing worker nodes $nodes from networks $networks"
@@ -191,12 +195,37 @@ function configure_networks {
   done
 
   nodes="$(kind get nodes --name $CLUSTER_NAME)"
-  nodes="$(echo $nodes)"
   for node in $nodes; do
     # disable tx checksum offload
     # otherwise we observe that inter-Node tunnelled traffic crossing Docker networks is dropped
     # because of an invalid outer checksum.
     docker exec "$node" ethtool -K eth0 tx off
+  done
+}
+
+function configure_extra_networks {
+  if [[ -z $EXTRA_NETWORKS ]]; then
+    return
+  fi
+  echo "Configuring extra networks"
+
+  # create new bridge networks
+  i=0
+  networks=()
+  for s in $EXTRA_NETWORKS ; do
+    network=antrea-$i
+    echo "creating network $network with $s"
+    docker network create -d bridge --subnet $s $network >/dev/null 2>&1
+    networks+=($network)
+    i=$((i+1))
+  done
+
+  nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
+  for node in $nodes; do
+    for network in $networks; do
+      docker network connect $network $node >/dev/null 2>&1
+      echo "connected worker $node to network $network"
+    done
   done
 }
 
@@ -325,6 +354,7 @@ EOF
   kubectl patch deployment coredns -p "$patch" -n kube-system
 
   configure_networks
+  configure_extra_networks
   load_images
 
   if [[ $ANTREA_CNI == true ]]; then
@@ -343,7 +373,7 @@ EOF
 
   # wait for cluster info
   while [[ -z $(kubectl cluster-info dump | grep cluster-cidr) ]]; do
-    echo "waiting for k8s cluster readying"
+    echo "waiting for K8s cluster readying"
     sleep 2
   done
 }
@@ -367,7 +397,7 @@ function printUnixTimestamp {
 }
 
 function clean_kind {
-    echo "=== Cleaning up stale Kind clusters ==="
+    echo "=== Cleaning up stale kind clusters ==="
     read -a all_kind_clusters <<< $(kind get clusters)
     for kind_cluster_name in "${all_kind_clusters[@]}"; do
         creationTimestamp=$(kubectl get nodes --context kind-$kind_cluster_name -o json -l node-role.kubernetes.io/control-plane | \
@@ -377,7 +407,7 @@ function clean_kind {
         diff=$((now-creation))
         timeout=$(($UNTIL_TIME_IN_MINS*60))
         if [[ $diff -gt $timeout ]]; then
-           echo "=== Kind ${kind_cluster_name} present from more than $UNTIL_TIME_IN_MINS minutes ==="
+           echo "=== kind ${kind_cluster_name} present from more than $UNTIL_TIME_IN_MINS minutes ==="
            kind delete cluster --name $kind_cluster_name
         fi
     done
@@ -445,6 +475,11 @@ while [[ $# -gt 0 ]]
     --subnets)
       add_option "--subnets" "create"
       SUBNETS="$2"
+      shift 2
+      ;;
+    --extra-networks)
+      add_option "--extra-networks" "create"
+      EXTRA_NETWORKS="$2"
       shift 2
       ;;
     --images)
@@ -538,5 +573,9 @@ if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; th
 fi
 
 if [[ $ACTION == "create" ]]; then
-      create
+    if [[ ! -z $SUBNETS ]] && [[ ! -z $EXTRA_NETWORKS ]]; then
+        echoerr "Only one of '--subnets' and '--extra-networks' can be specified"
+        exit 1
+    fi
+    create
 fi
