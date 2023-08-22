@@ -18,12 +18,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
-	"golang.org/x/exp/rand"
 	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	seed uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
+	seed = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
 
 	perfTestAppLabel                = "antrea-perf-test"
 	podsConnectionNetworkPolicyName = "pods.ingress"
@@ -95,8 +95,11 @@ func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
 	withPerfTestSetup(func(data *TestData) { networkPolicyRealize(*customizePolicyRules, data, b) }, b)
 }
 
-func randCidr(rndSrc rand.Source) string {
-	return fmt.Sprintf("%d.%d.%d.%d/32", rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1, rndSrc.Uint64()%255+1)
+func randCidr(rnd *rand.Rand) string {
+	getByte := func() int {
+		return rnd.Intn(255) + 1
+	}
+	return fmt.Sprintf("%d.%d.%d.%d/32", getByte(), getByte(), getByte(), getByte())
 }
 
 // createPerfTestPodDefinition creates the Pod specification for the perf test.
@@ -148,12 +151,13 @@ func setupTestPodsConnection(data *TestData) error {
 
 func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 	ingressRules := make([]networkv1.NetworkPolicyPeer, policyRules)
-	rndSrc := rand.NewSource(seed)
+	// #nosec G404: random number generator not used for security purposes
+	rnd := rand.New(rand.NewSource(seed))
 	existingCIDRs := make(map[string]struct{}) // ensure no duplicated cidrs
 	for i := 0; i < policyRules; i++ {
-		cidr := randCidr(rndSrc)
+		cidr := randCidr(rnd)
 		for _, ok := existingCIDRs[cidr]; ok; {
-			cidr = randCidr(rndSrc)
+			cidr = randCidr(rnd)
 		}
 		existingCIDRs[cidr] = struct{}{}
 		ingressRules[i] = networkv1.NetworkPolicyPeer{IPBlock: &networkv1.IPBlock{CIDR: cidr}}
