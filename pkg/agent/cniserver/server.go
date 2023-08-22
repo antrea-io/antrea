@@ -387,10 +387,6 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, prevResult *cu
 	return nil
 }
 
-func (s *CNIServer) GetPodConfigurator() *podConfigurator {
-	return s.podConfigurator
-}
-
 // Declared variables for testing
 var (
 	ipamSecondaryNetworkAdd   = ipam.SecondaryNetworkAdd
@@ -531,8 +527,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	if s.secondaryNetworkEnabled {
 		// Go cache the CNI server info at CNIConfigInfo cache, for podWatch usage
 		cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: cniVersion, PodName: podName, PodNamespace: podNamespace,
-			ContainerID: cniConfig.ContainerId, ContainerNetNS: netNS, PodCNIDeleted: false,
-			MTU: cniConfig.MTU}
+			ContainerID: cniConfig.ContainerId, ContainerNetNS: netNS, PodCNIDeleted: false}
 		s.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)
 	}
 
@@ -668,9 +663,9 @@ func (s *CNIServer) Initialize(
 
 	s.podConfigurator, err = newPodConfigurator(
 		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
-		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(), podUpdateNotifier,
-		podInfoStore, s.disableTXChecksumOffload,
-	)
+		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(),
+		s.disableTXChecksumOffload,
+		podUpdateNotifier, podInfoStore)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
 	}

@@ -98,9 +98,6 @@ func TestCreateOVSBridge(t *testing.T) {
 			ovsBridges:         []string{"br1"},
 			physicalInterfaces: []string{nonExistingInterface, "eth2"},
 			expectedErr:        "failed to get interface",
-			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().Create().Return(nil)
-			},
 		},
 		{
 			name:               "create port error",
@@ -132,11 +129,15 @@ func TestCreateOVSBridge(t *testing.T) {
 				tc.expectedCalls(mockOVSBridgeClient)
 			}
 
-			err := createOVSBridge(bridges, nil)
+			brClient, err := createOVSBridge(bridges, nil)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
+				assert.Nil(t, brClient)
 			} else {
 				require.NoError(t, err)
+				if tc.expectedCalls != nil {
+					assert.NotNil(t, brClient)
+				}
 			}
 		})
 	}

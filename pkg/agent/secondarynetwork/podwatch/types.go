@@ -14,6 +14,8 @@
 
 package podwatch
 
+import "antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
+
 type RouteInfo struct {
 	Dst string `json:"dst,omitempty"`
 }
@@ -28,7 +30,8 @@ type IPAMConfig struct {
 }
 
 const (
-	sriovNetworkType = "sriov"
+	sriovNetworkType cnipodcache.NetworkType = "sriov"
+	vlanNetworkType  cnipodcache.NetworkType = "vlan"
 )
 
 type SecondaryNetworkConfig struct {
@@ -37,6 +40,9 @@ type SecondaryNetworkConfig struct {
 	// Set type to "antrea"
 	Type string `json:"type,omitempty"`
 	// Set networkType to "sriov"
-	NetworkType string     `json:"networkType,omitempty"`
-	IPAM        IPAMConfig `json:"ipam,omitempty"`
+	NetworkType cnipodcache.NetworkType `json:"networkType,omitempty"`
+
+	MTU  int32      `json:"mtu,omitempty"`
+	VLAN int32      `json:"vlan,omitempty"`
+	IPAM IPAMConfig `json:"ipam,omitempty"`
 }

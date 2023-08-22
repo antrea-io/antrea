@@ -84,9 +84,9 @@ func newPodConfigurator(
 	gatewayMAC net.HardwareAddr,
 	ovsDatapathType ovsconfig.OVSDatapathType,
 	isOvsHardwareOffloadEnabled bool,
+	disableTXChecksumOffload bool,
 	podUpdateNotifier channel.Notifier,
 	podInfoStore cnipodcache.CNIPodInfoStore,
-	disableTXChecksumOffload bool,
 ) (*podConfigurator, error) {
 	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled, disableTXChecksumOffload)
 	if err != nil {
@@ -259,7 +259,8 @@ func (pc *podConfigurator) configureInterfaces(
 	// Note that the IP address should be advertised after Pod OpenFlow entries are installed, otherwise the packet might
 	// be dropped by OVS.
 	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, &result.Result); err != nil {
-		klog.Errorf("Failed to advertise IP address for container %s: %v", containerID, err)
+		// Do not return an error and fail the interface creation.
+		klog.ErrorS(err, "Failed to advertise IP address for container", "container ID", containerID)
 	}
 	// Mark the manipulation as success to cancel deferred operations.
 	success = true

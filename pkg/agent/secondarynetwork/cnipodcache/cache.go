@@ -35,19 +35,19 @@ type CNIPodInfoCache struct {
 }
 
 // Add CNIPodInfo to local cache store.
-func (c *CNIPodInfoCache) AddCNIConfigInfo(CNIConfig *CNIConfigInfo) {
-	c.cache.Add(CNIConfig)
+func (c *CNIPodInfoCache) AddCNIConfigInfo(cniConfig *CNIConfigInfo) {
+	c.cache.Add(cniConfig)
 }
 
 // Delete CNIPodInfo from local cache store.
-func (c *CNIPodInfoCache) DeleteCNIConfigInfo(CNIConfig *CNIConfigInfo) {
-	c.cache.Delete(CNIConfig)
+func (c *CNIPodInfoCache) DeleteCNIConfigInfo(cniConfig *CNIConfigInfo) {
+	c.cache.Delete(cniConfig)
 }
 
-func (c *CNIPodInfoCache) SetPodCNIDeleted(CNIConfig *CNIConfigInfo) {
+func (c *CNIPodInfoCache) SetPodCNIDeleted(cniConfig *CNIConfigInfo) {
 	c.Lock()
 	defer c.Unlock()
-	CNIConfig.PodCNIDeleted = true
+	cniConfig.PodCNIDeleted = true
 }
 
 // Retrieve a valid CNI cache (PodCNIDeleted is not true) entry for the given Pod name and namespace.
