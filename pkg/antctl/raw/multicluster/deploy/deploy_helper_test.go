@@ -44,12 +44,11 @@ func TestGenerateManifests(t *testing.T) {
 		expectedErr       string
 	}{
 		{
-			name:    "generate latest leader manifests",
+			name:    "generate latest leader manifest",
 			role:    "leader",
 			version: "latest",
 			expectedManifests: []string{
-				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-leader-global.yml",
-				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-leader-namespaced.yml",
+				"https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls/antrea-multicluster-leader.yml",
 			},
 		},
 		{
@@ -63,18 +62,17 @@ func TestGenerateManifests(t *testing.T) {
 		{
 			name:    "generate versioned leader manifests",
 			role:    "leader",
-			version: "v1.7.0",
+			version: "v1.14.0",
 			expectedManifests: []string{
-				"https://github.com/antrea-io/antrea/releases/download/v1.7.0/antrea-multicluster-leader-global.yml",
-				"https://github.com/antrea-io/antrea/releases/download/v1.7.0/antrea-multicluster-leader-namespaced.yml",
+				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-leader.yml",
 			},
 		},
 		{
 			name:    "generate versioned member manifests",
 			role:    "member",
-			version: "v1.7.0",
+			version: "v1.14.0",
 			expectedManifests: []string{
-				"https://github.com/antrea-io/antrea/releases/download/v1.7.0/antrea-multicluster-member.yml",
+				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-member.yml",
 			},
 		},
 		{

@@ -43,11 +43,10 @@ const (
 	leaderRole = "leader"
 	memberRole = "member"
 
-	latestVersionURL     = "https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls"
-	downloadURL          = "https://github.com/antrea-io/antrea/releases/download"
-	leaderGlobalYAML     = "antrea-multicluster-leader-global.yml"
-	leaderNamespacedYAML = "antrea-multicluster-leader-namespaced.yml"
-	memberYAML           = "antrea-multicluster-member.yml"
+	latestVersionURL = "https://raw.githubusercontent.com/antrea-io/antrea/main/multicluster/build/yamls"
+	downloadURL      = "https://github.com/antrea-io/antrea/releases/download"
+	leaderYAML       = "antrea-multicluster-leader.yml"
+	memberYAML       = "antrea-multicluster-member.yml"
 )
 
 var httpGet = http.Get
@@ -58,13 +57,11 @@ func generateManifests(role string, version string) ([]string, error) {
 	switch role {
 	case leaderRole:
 		manifests = []string{
-			fmt.Sprintf("%s/%s", latestVersionURL, leaderGlobalYAML),
-			fmt.Sprintf("%s/%s", latestVersionURL, leaderNamespacedYAML),
+			fmt.Sprintf("%s/%s", latestVersionURL, leaderYAML),
 		}
 		if version != "latest" {
 			manifests = []string{
-				fmt.Sprintf("%s/%s/%s", downloadURL, version, leaderGlobalYAML),
-				fmt.Sprintf("%s/%s/%s", downloadURL, version, leaderNamespacedYAML),
+				fmt.Sprintf("%s/%s/%s", downloadURL, version, leaderYAML),
 			}
 		}
 	case memberRole:
