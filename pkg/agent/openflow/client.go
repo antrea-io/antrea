@@ -1558,9 +1558,9 @@ func (c *client) getMeterStats() {
 	handleMeterStatsReply := func(meterID int, packetCount int64) {
 		switch meterID {
 		case PacketInMeterIDNP:
-			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterNetworkPolicy").Set(float64(packetCount))
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterNetworkPolicy).Set(float64(packetCount))
 		case PacketInMeterIDTF:
-			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterTraceflow").Set(float64(packetCount))
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterTraceflow).Set(float64(packetCount))
 		default:
 			klog.V(4).InfoS("Received unexpected meterID", "meterID", meterID)
 		}
