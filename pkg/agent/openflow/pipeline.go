@@ -113,7 +113,7 @@ var (
 	// Tables of pipelineARP are declared below.
 
 	// Tables in stageValidation:
-	ARPSpoofGuardTable = newTable("ARPSpoofGuard", stageValidation, pipelineARP)
+	ARPSpoofGuardTable = newTable("ARPSpoofGuard", stageValidation, pipelineARP, defaultDrop)
 
 	// Tables in stageOutput:
 	ARPResponderTable = newTable("ARPResponder", stageOutput, pipelineARP)
