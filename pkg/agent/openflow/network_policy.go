@@ -75,14 +75,16 @@ var (
 	MatchLabelID        = types.NewMatchKey(binding.ProtocolIP, types.LabelIDAddr, "tun_id")
 	MatchTCPFlags       = types.NewMatchKey(binding.ProtocolTCP, types.TCPFlagsAddr, "tcp_flags")
 	MatchTCPv6Flags     = types.NewMatchKey(binding.ProtocolTCPv6, types.TCPFlagsAddr, "tcp_flags")
-	Unsupported         = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
+	// MatchCTState should be used with ct_state condition as matchValue.
+	// MatchValue example: `+rpl+trk`.
+	MatchCTState = types.NewMatchKey(binding.ProtocolIP, types.CTStateAddr, "ct_state")
+	Unsupported  = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
 	// metricFlowIdentifier is used to identify metric flows in metric table.
 	// There could be other flows like default flow and Traceflow flows in the table. Only metric flows are supposed to
 	// have normal priority.
 	metricFlowIdentifier = fmt.Sprintf("priority=%d,", priorityNormal)
 
-	protocolUDP = v1beta2.ProtocolUDP
 	protocolTCP = v1beta2.ProtocolTCP
 	dnsPort     = int32(53)
 )
@@ -706,53 +708,67 @@ func (c *client) NewDNSPacketInConjunction(id uint32) error {
 	if err := c.ofEntryOperations.AddAll(conj.actionFlows); err != nil {
 		return fmt.Errorf("error when adding action flows for the DNS conjunction: %w", err)
 	}
-	udpService := v1beta2.Service{
-		Protocol: &protocolUDP,
-		SrcPort:  &dnsPort,
-	}
+
 	dnsPriority := priorityDNSIntercept
+	dnsCTState := &openflow15.CTStates{
+		// Use ct_state=+trk+rpl as matching condition.
+		// CTState bit-state map:
+		// dnat | snat | trk | inv | rpl | rel | est | new
+		Data: 0b00101000,
+		Mask: 0b00101000,
+	}
+	dnsPortMatchValue := types.BitRange{Value: uint16(dnsPort)}
+
 	conj.serviceClause = conj.newClause(1, 2, getTableByID(conj.ruleTableID), nil)
 	conj.toClause = conj.newClause(2, 2, getTableByID(conj.ruleTableID), nil)
 	c.featureNetworkPolicy.conjMatchFlowLock.Lock()
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
-	ctxChanges := conj.serviceClause.addServiceFlows(c.featureNetworkPolicy, []v1beta2.Service{udpService}, &dnsPriority, false)
-
-	tcpFlags := TCPFlags{
-		// URG|ACK|PSH|RST|SYN|FIN|
-		Flag: 0b011000,
-		Mask: 0b011000,
-	}
-	tcpDNSPort := types.BitRange{Value: uint16(dnsPort)}
+	var ctxChanges []*conjMatchFlowContextChange
 	for _, proto := range c.featureNetworkPolicy.ipProtocols {
-		tcpServiceMatch := &conjunctiveMatch{
+		tcpMatch := &conjunctiveMatch{
 			tableID:  conj.serviceClause.ruleTable.GetID(),
 			priority: &dnsPriority,
+			matchPairs: []matchPair{
+				{
+					matchKey:   MatchCTState,
+					matchValue: dnsCTState,
+				},
+			},
+		}
+		udpMatch := &conjunctiveMatch{
+			tableID:  conj.serviceClause.ruleTable.GetID(),
+			priority: &dnsPriority,
+			matchPairs: []matchPair{
+				// Add CTState for UDP as well to make sure only solicited DNS responses are sent
+				// to userspace.
+				{
+					matchKey:   MatchCTState,
+					matchValue: dnsCTState,
+				},
+			},
 		}
 		if proto == binding.ProtocolIP {
-			tcpServiceMatch.matchPairs = []matchPair{
-				{
-					matchKey:   MatchTCPSrcPort,
-					matchValue: tcpDNSPort,
-				},
-				{
-					matchKey:   MatchTCPFlags,
-					matchValue: tcpFlags,
-				},
-			}
+			tcpMatch.matchPairs = append(tcpMatch.matchPairs, matchPair{
+				matchKey:   MatchTCPSrcPort,
+				matchValue: dnsPortMatchValue,
+			})
+			udpMatch.matchPairs = append(udpMatch.matchPairs, matchPair{
+				matchKey:   MatchUDPSrcPort,
+				matchValue: dnsPortMatchValue,
+			})
 		} else if proto == binding.ProtocolIPv6 {
-			tcpServiceMatch.matchPairs = []matchPair{
-				{
-					matchKey:   MatchTCPv6SrcPort,
-					matchValue: tcpDNSPort,
-				},
-				{
-					matchKey:   MatchTCPv6Flags,
-					matchValue: tcpFlags,
-				},
-			}
+			tcpMatch.matchPairs = append(tcpMatch.matchPairs, matchPair{
+				matchKey:   MatchTCPv6SrcPort,
+				matchValue: dnsPortMatchValue,
+			})
+			udpMatch.matchPairs = append(udpMatch.matchPairs, matchPair{
+				matchKey:   MatchUDPv6SrcPort,
+				matchValue: dnsPortMatchValue,
+			})
 		}
-		ctxChange := conj.serviceClause.addConjunctiveMatchFlow(c.featureNetworkPolicy, tcpServiceMatch, false, false)
-		ctxChanges = append(ctxChanges, ctxChange)
+		tcpCtxChange := conj.serviceClause.addConjunctiveMatchFlow(c.featureNetworkPolicy, tcpMatch, false, false)
+		udpCtxChange := conj.serviceClause.addConjunctiveMatchFlow(c.featureNetworkPolicy, udpMatch, false, false)
+		ctxChanges = append(ctxChanges, tcpCtxChange, udpCtxChange)
 	}
 	if err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err

@@ -78,12 +78,14 @@ const (
 
 	// We use OpenFlow Meter for packetIn rate limiting on OVS side.
 	// Meter Entry ID.
-	PacketInMeterIDNP = 1
-	PacketInMeterIDTF = 2
+	PacketInMeterIDNP  = 1
+	PacketInMeterIDTF  = 2
+	PacketInMeterIDDNS = 3
 	// Meter Entry Rate. It is represented as number of events per second.
 	// Packets which exceed the rate will be dropped.
-	PacketInMeterRateNP = 100
-	PacketInMeterRateTF = 100
+	PacketInMeterRateNP  = 100
+	PacketInMeterRateTF  = 100
+	PacketInMeterRateDNS = 100
 
 	// PacketInQueueSize defines the size of PacketInQueue.
 	// When PacketInQueue reaches PacketInQueueSize, new packetIn will be dropped.
