@@ -271,6 +271,13 @@ func TestGetNormalizedLabel(t *testing.T) {
 			map[string]string{"region": "west"},
 			"ns:kubernetes.io/metadata.name=test-ns,region=west&pod:purpose=test",
 		},
+		{
+			"no Pod label",
+			"test-ns",
+			map[string]string{},
+			map[string]string{"region": "west"},
+			"ns:kubernetes.io/metadata.name=test-ns,region=west&pod:",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
