@@ -137,7 +137,7 @@ func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) 
 		if !ok {
 			return nil, err
 		}
-		return nil, generateMessageForStatusErr(opt.commandDefinition, opt.args, statusErr)
+		return nil, generateMessage(opt.commandDefinition, opt.args, false /* isResourceRequest */, statusErr)
 	}
 	return bytes.NewReader(result), nil
 }
@@ -178,7 +178,7 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	}
 	result := resGetter.Do(context.TODO())
 	if result.Error() != nil {
-		return nil, generateMessage(opt, result)
+		return nil, generateMessage(opt.commandDefinition, opt.args, true /* isResourceRequest */, result.Error())
 	}
 	raw, err := result.Raw()
 	if err != nil {
