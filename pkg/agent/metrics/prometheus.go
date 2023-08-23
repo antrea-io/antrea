@@ -24,8 +24,9 @@ const (
 	metricNamespaceAntrea = "antrea"
 	metricSubsystemAgent  = "agent"
 
-	LabelPacketInMeterNetworkPolicy = "PacketInMeterNetworkPolicy"
-	LabelPacketInMeterTraceflow     = "PacketInMeterTraceflow"
+	LabelPacketInMeterNetworkPolicy   = "PacketInMeterNetworkPolicy"
+	LabelPacketInMeterTraceflow       = "PacketInMeterTraceflow"
+	LabelPacketInMeterDNSInterception = "PacketInMeterDNSInterception"
 )
 
 var (
@@ -240,7 +241,7 @@ func InitializeOVSMetrics() {
 		OVSFlowOpsErrorCount.WithLabelValues(ops)
 		OVSFlowOpsLatency.WithLabelValues(ops)
 	}
-	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow} {
+	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow, LabelPacketInMeterDNSInterception} {
 		OVSMeterPacketDroppedCount.WithLabelValues(label)
 	}
 }

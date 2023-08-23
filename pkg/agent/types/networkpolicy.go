@@ -58,6 +58,7 @@ const (
 	IGMPAddr
 	LabelIDAddr
 	TCPFlagsAddr
+	CTStateAddr
 	UnSupported
 )
 
