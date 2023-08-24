@@ -37,7 +37,7 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	pods = []string{"a", "b", "c"}
 	namespaces = make(map[string]string)
 	regularNamespaces := make(map[string]string)
-	suffix := randName("")
+	suffix := RandName("")
 	namespaces["x"] = "antrea-x-" + suffix
 	regularNamespaces["x"] = namespaces["x"]
 	// This function "initializeAntreaIPAM" will be used more than once, and variable "allPods" is global.
@@ -73,11 +73,11 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	// Create AntreaIPAM IPPool and test Namespace
 	for _, namespace := range antreaIPAMNamespaces {
@@ -169,7 +169,7 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		// different Node VMs which are themselves on different ESX hosts. We are
 		// investigating the issue and disabling the tests for IPv6 clusters in the
 		// meantime.
-		skipIfIPv6Cluster(t)
+		SkipIfIPv6Cluster(t)
 	}
 	var ruleAction crdv1beta1.RuleAction
 	switch action {

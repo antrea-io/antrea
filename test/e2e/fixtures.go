@@ -93,7 +93,7 @@ func skipIfNotIPv4Cluster(tb testing.TB) {
 	}
 }
 
-func skipIfIPv6Cluster(tb testing.TB) {
+func SkipIfIPv6Cluster(tb testing.TB) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		tb.Skipf("Skipping test as it is not supported in IPv6 cluster")
 	}
@@ -216,7 +216,7 @@ func (data *TestData) setupLogDirectoryForTest(testName string) error {
 	return nil
 }
 
-func setupTest(tb testing.TB) (*TestData, error) {
+func SetupTest(tb testing.TB) (*TestData, error) {
 	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err
@@ -237,7 +237,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	replacer := strings.NewReplacer("/", "-", ",", "-", ":", "-")
 	name = replacer.Replace(name)
 	name = strings.ToLower(name)
-	testData.testNamespace = randName(name + "-")
+	testData.testNamespace = RandName(name + "-")
 	tb.Logf("Creating '%s' K8s Namespace", testData.testNamespace)
 	if err := ensureAntreaRunning(testData); err != nil {
 		return nil, err
@@ -252,7 +252,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 func setupTestForFlowAggregator(tb testing.TB, o flowVisibilityTestOptions) (*TestData, bool, bool, error) {
 	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
 	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
-	testData, err := setupTest(tb)
+	testData, err := SetupTest(tb)
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
@@ -480,7 +480,7 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	}
 }
 
-func teardownTest(tb testing.TB, data *TestData) {
+func TeardownTest(tb testing.TB, data *TestData) {
 	exportLogs(tb, data, "beforeTeardown", true)
 	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
 		_ = os.Remove(data.logsDirForTestCase)
@@ -539,7 +539,7 @@ func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName 
 	}
 
 	createPodAndGetIP := func() (string, *PodIPs, error) {
-		podName := randName("test-pod-")
+		podName := RandName("test-pod-")
 		tb.Logf("Creating a test Pod '%s' and waiting for IP", podName)
 		if err := createFunc(podName, ns, nodeName, hostNetwork); err != nil {
 			tb.Errorf("Error when creating test Pod '%s': %v", podName, err)

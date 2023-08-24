@@ -45,11 +45,11 @@ func skipIfNetworkPolicyStatsDisabled(tb testing.TB) {
 func TestNetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testNetworkPolicyStats", func(t *testing.T) {
 		t.Cleanup(exportLogsForSubtest(t, data))
@@ -298,7 +298,7 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			},
 		}},
 	}
-	np, err := data.createNetworkPolicy(randName("test-networkpolicy-allow-client0-to-http"), spec)
+	np, err := data.createNetworkPolicy(RandName("test-networkpolicy-allow-client0-to-http"), spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
@@ -930,7 +930,7 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 }
 
 func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, namePrefix string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
-	name := randName(namePrefix)
+	name := RandName(namePrefix)
 	return createAndWaitForPodWithExactName(t, data, createFunc, name, nodeName, ns, hostNetwork)
 }
 
@@ -951,7 +951,7 @@ func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc f
 }
 
 func createAndWaitForPodWithServiceAccount(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error, namePrefix string, nodeName string, ns string, hostNetwork bool, serviceAccountName string) (string, *PodIPs, func()) {
-	name := randName(namePrefix)
+	name := RandName(namePrefix)
 	if err := createFunc(name, ns, nodeName, hostNetwork, serviceAccountName); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}

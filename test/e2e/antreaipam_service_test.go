@@ -23,11 +23,11 @@ import (
 func TestAntreaIPAMService(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	// Create AntreaIPAM IPPool and test Namespace
 	var ipPools []string

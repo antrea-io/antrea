@@ -245,11 +245,11 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfAntreaIPAMTest(t)
 	skipIfFeatureDisabled(t, features.AntreaIPAM, true, true)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
 	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})

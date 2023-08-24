@@ -77,11 +77,11 @@ func TestAntreaPolicyStats(t *testing.T) {
 	skipIfAntreaPolicyDisabled(t)
 	skipIfNetworkPolicyStatsDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testANNPNetworkPolicyStatsWithDropAction", func(t *testing.T) {
 		testANNPNetworkPolicyStatsWithDropAction(t, data)
@@ -117,7 +117,7 @@ func initialize(t *testing.T, data *TestData) {
 	p8085 = 8085
 	pods = []string{"a", "b", "c"}
 	namespaces = make(map[string]string)
-	suffix := randName("")
+	suffix := RandName("")
 	namespaces["x"] = "x-" + suffix
 	namespaces["y"] = "y-" + suffix
 	namespaces["z"] = "z-" + suffix
@@ -589,7 +589,7 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProtocol
 		// different Node VMs which are themselves on different ESX hosts. We are
 		// investigating the issue and disabling the tests for IPv6 clusters in the
 		// meantime.
-		skipIfIPv6Cluster(t)
+		SkipIfIPv6Cluster(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-allow-x-ingress-y-egress-z").
@@ -626,7 +626,7 @@ func testACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 		// different Node VMs which are themselves on different ESX hosts. We are
 		// investigating the issue and disabling the tests for IPv6 clusters in the
 		// meantime.
-		skipIfIPv6Cluster(t)
+		SkipIfIPv6Cluster(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-z-egress").
@@ -1420,8 +1420,8 @@ func testANNPGroupServiceRefPodAdd(t *testing.T, data *TestData) {
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, grp2Name, "")
 
-	svc1PodName := randName("test-pod-svc1-")
-	svc2PodName := randName("test-pod-svc2-")
+	svc1PodName := RandName("test-pod-svc1-")
+	svc2PodName := RandName("test-pod-svc2-")
 	cp := []*CustomProbe{
 		{
 			SourcePod: CustomPod{
@@ -1613,7 +1613,7 @@ func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 
 func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	svc1 := k8sUtils.BuildService("svc1", namespaces["x"], 80, 80, map[string]string{"app": "a"}, nil)
-	svc1PodName := randName("test-pod-svc1-")
+	svc1PodName := RandName("test-pod-svc1-")
 	grp1Name, grp2Name, grp3Name := "grp-svc-x-a", "grp-select-x-b", "grp-select-x-c"
 	grpBuilder1 := &GroupSpecBuilder{}
 	grpBuilder1 = grpBuilder1.SetName(grp1Name).SetNamespace(namespaces["x"]).SetServiceReference(namespaces["x"], "svc1")
@@ -2425,7 +2425,7 @@ func testANNPBasic(t *testing.T) {
 // NetworkPolicy that applies to multiple AppliedTos, one of which doesn't select any Pod. It also ensures the Policy is
 // updated correctly when one of its AppliedToGroup starts and stops selecting Pods.
 func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
-	tempLabel := randName("temp-")
+	tempLabel := RandName("temp-")
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(namespaces["y"], "np-multiple-appliedto").SetPriority(1.0)
 	// Make it apply to an extra dummy AppliedTo to ensure it handles multiple AppliedToGroups correctly.
@@ -2839,8 +2839,8 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	// Test update selector of Service referred in cg-svc1, and update serviceReference of cg-svc2.
 	svc1Updated := k8sUtils.BuildService("svc1", namespaces["x"], 80, 80, map[string]string{"app": "b"}, nil)
 	svc3 := k8sUtils.BuildService("svc3", namespaces["y"], 80, 80, map[string]string{"app": "a"}, nil)
-	svc1PodName := randName("test-pod-svc1-")
-	svc3PodName := randName("test-pod-svc3-")
+	svc1PodName := RandName("test-pod-svc1-")
+	svc3PodName := RandName("test-pod-svc3-")
 	cgBuilder2Updated := cgBuilder2.SetServiceReference(namespaces["y"], "svc3")
 	cp := []*CustomProbe{
 		{
@@ -2896,7 +2896,7 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 
 func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	svc1 := k8sUtils.BuildService("svc1", namespaces["x"], 80, 80, map[string]string{"app": "a"}, nil)
-	svc1PodName := randName("test-pod-svc1-")
+	svc1PodName := RandName("test-pod-svc1-")
 	cg1Name, cg2Name, cg3Name := "cg-svc-x-a", "cg-select-y-b", "cg-select-y-c"
 	cgBuilder1 := &ClusterGroupSpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference(namespaces["x"], "svc1")
@@ -4275,11 +4275,11 @@ func TestAntreaPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	initialize(t, data)
 
@@ -4411,11 +4411,11 @@ func TestAntreaPolicyStatus(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName(), data.testNamespace, false)
 	defer cleanupFunc()
@@ -4461,11 +4461,11 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	server0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName(), data.testNamespace, false)
 	defer cleanupFunc()
@@ -4536,11 +4536,11 @@ func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	initialize(t, data)
 

@@ -46,11 +46,11 @@ func TestProxy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testProxyServiceSessionAffinityCase", func(t *testing.T) {
 		testProxyServiceSessionAffinityCase(t, data)
@@ -152,11 +152,11 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a busybox Pod on every Node. The busybox Pod is used as a client.
@@ -292,11 +292,11 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	nodes := []string{nodeName(0), nodeName(1)}
@@ -399,11 +399,11 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 	skipIfProxyDisabled(t)
 	skipIfEgressDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap) // Egress works for encap mode only.
 
@@ -519,11 +519,11 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
@@ -550,11 +550,11 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	svcName := fmt.Sprintf("nodeport-external-traffic-policy-test-ipv6-%v", isIPv6)
@@ -607,7 +607,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 
 func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	nginx := randName("nginx-")
+	nginx := RandName("nginx-")
 
 	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
@@ -621,7 +621,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, data.testNamespace)
 	require.NoError(t, err)
 
-	busyboxPod := randName("busybox-")
+	busyboxPod := RandName("busybox-")
 	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, data.testNamespace, nodeName, false))
 	defer data.DeletePodAndWait(defaultTimeout, busyboxPod, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, data.testNamespace))
@@ -671,11 +671,11 @@ func TestProxyHairpinIPv6(t *testing.T) {
 }
 
 func testProxyHairpin(t *testing.T, isIPv6 bool) {
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	node := nodeName(1)
 	workerNodeIP := workerNodeIPv4(1)
@@ -878,11 +878,11 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
@@ -896,7 +896,7 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 
 func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	nginx := randName("nginx-")
+	nginx := RandName("nginx-")
 	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
@@ -972,11 +972,11 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
@@ -990,7 +990,7 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 
 func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	nginx := randName("nginx-")
+	nginx := RandName("nginx-")
 
 	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
 	defer data.DeletePodAndWait(defaultTimeout, nginx, data.testNamespace)
@@ -1091,9 +1091,9 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 	skipIfAntreaIPAMTest(t)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	require.NoError(t, err, "Error when setting up test")
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
@@ -1144,7 +1144,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			externalIPPrefix := 24
 
 			// Create another netns to fake an external network on the host network Pod.
-			externalClient := randName("external-client-")
+			externalClient := RandName("external-client-")
 			cmd, externalNetns := getCommandInFakeExternalNetwork("sleep infinity", externalIPPrefix, externalClientIP, externalClientGateway)
 			err := NewPodBuilder(externalClient, data.testNamespace, toolboxImage).OnNode(ingressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data)
 			require.NoError(t, err, "Failed to create external client")

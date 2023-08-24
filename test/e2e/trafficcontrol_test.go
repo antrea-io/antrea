@@ -56,11 +56,11 @@ func TestTrafficControl(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfFeatureDisabled(t, features.TrafficControl, true, false)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	tcTestConfig.nodeName = controlPlaneNodeName()
 

@@ -90,11 +90,11 @@ func TestPrometheus(t *testing.T) {
 	skipIfPrometheusDisabled(t)
 	skipIfHasWindowsNodes(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	t.Run("testPrometheusMetricsOnController", func(t *testing.T) { testPrometheusMetricsOnController(t, data) })
 	t.Run("testPrometheusMetricsOnAgent", func(t *testing.T) { testPrometheusMetricsOnAgent(t, data) })
 	t.Run("testPrometheusServerControllerMetrics", func(t *testing.T) { testPrometheusServerControllerMetrics(t, data) })

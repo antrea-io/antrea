@@ -37,11 +37,11 @@ func TestClusterIPv6(t *testing.T) {
 func testClusterIP(t *testing.T, isIPv6 bool) {
 	skipIfNumNodesLessThan(t, 2)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	data.testClusterIP(t, isIPv6, data.testNamespace, data.testNamespace)
 }
@@ -133,11 +133,11 @@ func testClusterIPFromPod(t *testing.T, data *TestData, url, nodeName, podName s
 func TestNodePortWindows(t *testing.T) {
 	skipIfNoWindowsNodes(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	data.testNodePort(t, true, data.testNamespace, data.testNamespace)
 }

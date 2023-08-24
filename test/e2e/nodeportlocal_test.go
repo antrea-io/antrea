@@ -76,11 +76,11 @@ func TestNodePortLocal(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	skipIfNodePortLocalDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	configureNPLForAgent(t, data, defaultStartPort, defaultEndPort)
 	t.Run("testNPLAddPod", func(t *testing.T) { testNPLAddPod(t, data) })
@@ -383,13 +383,13 @@ func NPLTestMultiplePods(t *testing.T, data *TestData) {
 	var testPods []string
 
 	for i := 0; i < 3; i++ {
-		testPodName := randName("test-pod-")
+		testPodName := RandName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err := testData.createNginxPodOnNode(testPodName, data.testNamespace, serverNode, false)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	err := testData.createAgnhostPodOnNode(clientName, data.testNamespace, clientNode, false)
 	r.NoError(err, "Error creating AgnhostPod %s: %v", clientName)
 
@@ -418,7 +418,7 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 	r := require.New(t)
 
 	clientNode, serverNode := getTwoNodes()
-	testPodName := randName("test-pod-")
+	testPodName := RandName("test-pod-")
 
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
@@ -455,7 +455,7 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName, nil)
 
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	err = testData.createAgnhostPodOnNode(clientName, data.testNamespace, clientNode, false)
 	r.NoError(err, "Error when creating AgnhostPod %s", clientName)
 
@@ -481,7 +481,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 	r := require.New(t)
 
 	clientNode, serverNode := getTwoNodes()
-	testPodName := randName("test-pod-")
+	testPodName := RandName("test-pod-")
 
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
@@ -505,7 +505,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName, nil)
 
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	err = testData.createAgnhostPodOnNode(clientName, data.testNamespace, clientNode, false)
 	r.NoError(err, "Error when creating AgnhostPod %s", clientName)
 
@@ -541,11 +541,11 @@ func NPLTestLocalAccess(t *testing.T, data *TestData) {
 	testData.createNginxClusterIPServiceWithAnnotations(serverNode, false, &ipFamily, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 
-	testPodName := randName("test-pod-")
+	testPodName := RandName("test-pod-")
 	err := testData.createNginxPodOnNode(testPodName, data.testNamespace, serverNode, false)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	err = testData.createAgnhostPodOnNode(clientName, data.testNamespace, clientNode, false)
 	r.NoError(err, "Error when creating AgnhostPod %s", clientName)
 
@@ -583,13 +583,13 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	var testPods []string
 	var err error
 	for i := 0; i < 4; i++ {
-		testPodName := randName("test-pod-")
+		testPodName := RandName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPodOnNode(testPodName, data.testNamespace, serverNode, false)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	err = data.createAgnhostPodOnNode(clientName, data.testNamespace, clientNode, false)
 	r.NoError(err, "Error when creating AgnhostPod %s", clientName)
 
@@ -654,13 +654,13 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	var testPods []string
 	var err error
 	for i := 0; i < 4; i++ {
-		testPodName := randName("test-pod-")
+		testPodName := RandName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPodOnNode(testPodName, data.testNamespace, serverNode, false)
 		r.NoError(err, "Error Creating test Pod: %v", err)
 	}
 
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	err = data.createAgnhostPodOnNode(clientName, data.testNamespace, clientNode, false)
 	r.NoError(err, "Error when creating AgnhostPod %s", clientName)
 

@@ -49,11 +49,11 @@ func TestEgress(t *testing.T) {
 	skipIfAntreaIPAMTest(t)
 	skipIfEgressDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	// Egress works for encap mode only.
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 

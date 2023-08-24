@@ -65,11 +65,11 @@ type vmInfo struct {
 func TestVMAgent(t *testing.T) {
 	skipIfFeatureDisabled(t, features.ExternalNode, false, true)
 	skipIfNoVMs(t)
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	vmList, err := setupVMAgentTest(t, data)
 	if err != nil {
 		t.Fatalf("Error when setting up VMAgent test: %v", err)

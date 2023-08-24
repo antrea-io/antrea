@@ -32,11 +32,11 @@ func TestBandwidth(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testPodTrafficShaping", func(t *testing.T) { testPodTrafficShaping(t, data) })
 }
@@ -47,11 +47,11 @@ func TestBenchmarkBandwidth(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfHasWindowsNodes(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testBenchmarkBandwidthServiceLocalAccess", func(t *testing.T) {
 		testBenchmarkBandwidthServiceLocalAccess(t, data)
@@ -132,7 +132,7 @@ func testBenchmarkBandwidthServiceRemoteAccess(t *testing.T, data *TestData) {
 func testPodTrafficShaping(t *testing.T, data *TestData) {
 	// Test is flaky on dual-stack clusters: https://github.com/antrea-io/antrea/issues/1543.
 	// So we disable it except for IPv4 single-stack clusters for now.
-	skipIfIPv6Cluster(t)
+	SkipIfIPv6Cluster(t)
 	nodeName := controlPlaneNodeName()
 	skipIfMissingKernelModule(t, data, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
 

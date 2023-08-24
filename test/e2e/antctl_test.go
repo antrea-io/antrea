@@ -45,11 +45,11 @@ type cmdAndReturnCode struct {
 func TestAntctl(t *testing.T) {
 	skipIfNotRequired(t, "mode-irrelevant")
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	// This is used to determine the Antrea container image being tested. We will use the same
 	// image when creating a Pod to run antctl.
@@ -62,7 +62,7 @@ func TestAntctl(t *testing.T) {
 	// This ServiceAccount is granted the antctl ClusterRole and will be used for antctl test
 	// Pods. We do not use the "default" ServiceAccount for the test Namespace, as we do not
 	// want other test Pods to be granted the antctl ClusterRole.
-	antctlServiceAccountName := randName("antctl-antrea-e2e-")
+	antctlServiceAccountName := RandName("antctl-antrea-e2e-")
 	createAntctlServiceAccount(t, data, antctlServiceAccountName)
 
 	t.Run("testAntctlAgentLocalAccess", func(t *testing.T) {

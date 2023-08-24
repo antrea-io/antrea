@@ -205,8 +205,8 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 		}
 		t.Run(o.name, func(t *testing.T) {
 			defer func() {
-				teardownTest(t, data)
-				// Execute teardownFlowAggregator later than teardownTest to ensure that the log
+				TeardownTest(t, data)
+				// Execute teardownFlowAggregator later than TeardownTest to ensure that the log
 				// of Flow Aggregator has been exported.
 				teardownFlowAggregator(t, data)
 			}()
@@ -235,8 +235,8 @@ func TestFlowAggregator(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer func() {
-		teardownTest(t, data)
-		// Execute teardownFlowAggregator later than teardownTest to ensure that the log
+		TeardownTest(t, data)
+		// Execute teardownFlowAggregator later than TeardownTest to ensure that the log
 		// of Flow Aggregator has been exported.
 		teardownFlowAggregator(t, data)
 	}()

@@ -30,17 +30,17 @@ import (
 // TestIPSec is the top-level test which contains all subtests for
 // IPsec related test cases so they can share setup, teardown.
 func TestIPSec(t *testing.T) {
-	skipIfIPv6Cluster(t)
+	SkipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
 	skipIfProviderIs(t, "kind", "IPsec tests take too long to run and do not work with multiple Docker bridges")
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
 	data.redeployAntrea(t, deployAntreaIPsec)

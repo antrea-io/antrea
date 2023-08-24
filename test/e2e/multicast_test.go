@@ -51,11 +51,11 @@ func TestMulticast(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfMulticastDisabled(t, data)
 
 	nodeMulticastInterfaces, err := computeMulticastInterfaces(t, data)

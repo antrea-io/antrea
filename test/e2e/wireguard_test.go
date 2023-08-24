@@ -35,7 +35,7 @@ func TestWireGuard(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 	for _, node := range clusterInfo.nodes {
 		skipIfMissingKernelModule(t, data, node.name, []string{"wireguard"})
@@ -44,7 +44,7 @@ func TestWireGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	ac := func(config *agentconfig.AgentConfig) {
 		config.TrafficEncryptionMode = "wireguard"

@@ -37,11 +37,11 @@ func TestL7NetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfFeatureDisabled(t, features.L7NetworkPolicy, true, true)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	ac := func(config *agentconfig.AgentConfig) { config.DisableTXChecksumOffload = true }
 	if err = data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {

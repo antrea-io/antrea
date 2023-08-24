@@ -43,8 +43,8 @@ const (
 )
 
 var (
-	benchNginxPodName = randName(nginxContainerName + "-")
-	toolboxPodName    = randName(toolboxContainerName + "-")
+	benchNginxPodName = RandName(nginxContainerName + "-")
+	toolboxPodName    = RandName(toolboxContainerName + "-")
 
 	customizeRequests    = flag.Int("perf.http.requests", 0, "Number of http requests")
 	customizePolicyRules = flag.Int("perf.http.policy_rules", 0, "Number of CIDRs in the network policy")
@@ -313,11 +313,11 @@ func withPerfTestSetup(fn func(data *TestData), b *testing.B) {
 	b.ResetTimer()
 	defer b.StopTimer()
 
-	data, err := setupTest(b)
+	data, err := SetupTest(b)
 	if err != nil {
 		b.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(b, data)
+	defer TeardownTest(b, data)
 
 	b.Logf("Deleting Antrea Agent DaemonSet to flush ovs cache")
 	if err := data.deleteAntrea(defaultTimeout); err != nil {

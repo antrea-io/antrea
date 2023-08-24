@@ -46,11 +46,11 @@ func TestServiceExternalIP(t *testing.T) {
 	skipIfAntreaIPAMTest(t)
 	skipIfFeatureDisabled(t, features.ServiceExternalIP, true, true)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testServiceWithExternalIPCRUD", func(t *testing.T) { testServiceWithExternalIPCRUD(t, data) })
 	t.Run("testServiceUpdateExternalIP", func(t *testing.T) { testServiceUpdateExternalIP(t, data) })

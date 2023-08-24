@@ -118,11 +118,11 @@ var (
 func TestAntreaIPAM(t *testing.T) {
 	skipIfNotAntreaIPAMTest(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	// Create AntreaIPAM IPPool and test Namespace
 	var ipPools []string
@@ -257,12 +257,12 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 	numPods := 2 // Two AntreaIPAM Pods, can be increased
 	podInfos := make([]podInfo, numPods)
 	for idx := range podInfos {
-		podInfos[idx].name = randName(fmt.Sprintf("test-antrea-ipam-pod-%d-", idx))
+		podInfos[idx].name = RandName(fmt.Sprintf("test-antrea-ipam-pod-%d-", idx))
 		podInfos[idx].namespace = testAntreaIPAMNamespace
 	}
 	// One Per-Node IPAM Pod
 	podInfos = append(podInfos, podInfo{
-		name:      randName("test-pod-0-"),
+		name:      RandName("test-pod-0-"),
 		namespace: data.testNamespace,
 	})
 	workerNode := workerNodeName(1)
@@ -294,7 +294,7 @@ func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 }
 
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {
-	stsName := randName("sts-test-")
+	stsName := RandName("sts-test-")
 	ipPoolName := subnetIPv4RangesMap[testAntreaIPAMNamespace].Name
 	if dedicatedIPPoolKey != nil {
 		ipPoolName = subnetIPv4RangesMap[*dedicatedIPPoolKey].Name
@@ -331,7 +331,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
 
-	podName := randName("test-standalone-pod-")
+	podName := RandName("test-standalone-pod-")
 	podAnnotations := map[string]string{}
 	if dedicatedIPPoolKey != nil {
 		podAnnotations[annotation.AntreaIPAMAnnotationKey] = ipPoolName

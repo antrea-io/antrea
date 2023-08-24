@@ -36,11 +36,11 @@ const pingCount = 5
 // TestConnectivity is the top-level test which contains all subtests for
 // Connectivity related test cases so they can share setup, teardown.
 func TestConnectivity(t *testing.T) {
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testPodConnectivityOnSameNode", func(t *testing.T) {
 		testPodConnectivityOnSameNode(t, data)
@@ -123,7 +123,7 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	numPods := 2 // can be increased
 	podInfos := make([]podInfo, numPods)
 	for idx := range podInfos {
-		podInfos[idx].name = randName(fmt.Sprintf("test-pod-%d-", idx))
+		podInfos[idx].name = RandName(fmt.Sprintf("test-pod-%d-", idx))
 	}
 	// If there are Windows Nodes, set workerNode to one of them.
 	workerNode := workerNodeName(1)
@@ -151,7 +151,7 @@ func testPodConnectivityOnSameNode(t *testing.T, data *TestData) {
 
 func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace, serverNamespace string) {
 	// Create a server Pod with hostPort set to 8080.
-	hpPodName := randName("test-host-port-pod-")
+	hpPodName := RandName("test-host-port-pod-")
 	hpPodPort := int32(8080)
 	if err := data.createServerPod(hpPodName, serverNamespace, "", hpPodPort, true, false); err != nil {
 		t.Fatalf("Error when creating HostPort server Pod: %v", err)
@@ -166,7 +166,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace,
 	}
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
-	clientName := randName("test-client-")
+	clientName := RandName("test-client-")
 	if err := data.createBusyboxPodOnNode(clientName, clientNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
@@ -391,7 +391,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	numPods := 2
 	podInfos := make([]podInfo, numPods)
 	for i := range podInfos {
-		podInfos[i].name = randName(fmt.Sprintf("test-pod-%d-", i))
+		podInfos[i].name = RandName(fmt.Sprintf("test-pod-%d-", i))
 		podInfos[i].namespace = namespace
 	}
 	workerNode := workerNodeName(1)

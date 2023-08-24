@@ -43,11 +43,11 @@ func TestBasic(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, data.testNamespace, "", "") })
 	t.Run("testDeletePod", func(t *testing.T) { testDeletePod(t, data, data.testNamespace) })
@@ -62,7 +62,7 @@ func TestBasic(t *testing.T) {
 // deploying a busybox Pod, then waiting for the K8s apiserver to report the new IP address for that
 // Pod, and finally verifying that the IP address is in the Pod Network CIDR for the cluster.
 func testPodAssignIP(t *testing.T, data *TestData, namespace string, podV4NetworkCIDR, podV6NetworkCIDR string) {
-	podName := randName("test-pod-")
+	podName := RandName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
 	if err := data.createBusyboxPodOnNode(podName, namespace, "", false); err != nil {
@@ -241,7 +241,7 @@ func testDeletePod(t *testing.T, data *TestData, namespace string) {
 	}
 
 	nodeName := nodeName(nodeIdx)
-	podName := randName("test-pod-")
+	podName := RandName("test-pod-")
 
 	t.Logf("Creating an agnhost test Pod on '%s'", nodeName)
 	if err := data.createAgnhostPodOnNode(podName, namespace, nodeName, false); err != nil {
@@ -283,8 +283,8 @@ func testAntreaGracefulExit(t *testing.T, data *TestData) {
 // assumes that IP addresses are assigned in-order and not randomly.
 func testIPAMRestart(t *testing.T, data *TestData, namespace string) {
 	nodeName := nodeName(0)
-	podName1 := randName("test-pod-")
-	podName2 := randName("test-pod-")
+	podName1 := RandName("test-pod-")
+	podName2 := RandName("test-pod-")
 	pods := make([]string, 0, 2)
 	var podIP1, podIP2 *PodIPs
 	var err error
@@ -340,11 +340,11 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		t.Logf("Running IPv4 test")
@@ -514,11 +514,11 @@ func TestCleanStaleClusterIPRoutes(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a backend Pod for test Service: if a Service has no backend Pod, no ClusterIP route will be installed.
@@ -813,7 +813,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 // traffic. So we just check the number of ARP packets is greater than 3.
 func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	skipIfNotIPv4Cluster(t)
-	podName := randName("test-pod-")
+	podName := RandName("test-pod-")
 	nodeName := workerNodeName(1)
 
 	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)

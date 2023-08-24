@@ -45,14 +45,14 @@ func TestUpgrade(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	nodeName := nodeName(0)
-	podName := randName("test-pod-")
+	podName := RandName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
 	if err := data.createBusyboxPodOnNode(podName, data.testNamespace, nodeName, false); err != nil {
@@ -62,7 +62,7 @@ func TestUpgrade(t *testing.T) {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 
-	namespace := randName("test-namespace-")
+	namespace := RandName("test-namespace-")
 
 	t.Logf("Creating namespace '%s'", namespace)
 	if err := data.CreateNamespace(namespace, nil); err != nil {

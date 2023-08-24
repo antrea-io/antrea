@@ -2078,8 +2078,8 @@ func randSeq(n int) string {
 	return string(b)
 }
 
-// randName generates a DNS-1123 subdomain name
-func randName(prefix string) string {
+// RandName generates a DNS-1123 subdomain name
+func RandName(prefix string) string {
 	return prefix + randSeq(nameSuffixLength)
 }
 

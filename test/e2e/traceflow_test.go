@@ -58,11 +58,11 @@ type testcase struct {
 func TestTraceflow(t *testing.T) {
 	skipIfTraceflowDisabled(t)
 
-	data, err := setupTest(t)
+	data, err := SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	defer TeardownTest(t, data)
 
 	t.Run("testTraceflowIntraNodeANNP", func(t *testing.T) {
 		skipIfAntreaPolicyDisabled(t)
@@ -153,7 +153,7 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -201,7 +201,7 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[2])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[2])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -249,7 +249,7 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -383,7 +383,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -436,7 +436,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node1Pods[2])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node1Pods[2])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -488,7 +488,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -539,7 +539,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -584,7 +584,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, "non-existing-pod")),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, "non-existing-pod")),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -605,7 +605,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -656,7 +656,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, pod0IPv4Str, node1Pods[1])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, pod0IPv4Str, node1Pods[1])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -708,7 +708,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node1Pods[1])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -761,7 +761,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node1Pods[2])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node1Pods[2])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -813,7 +813,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -864,7 +864,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -909,7 +909,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, "non-existing-pod")),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, "non-existing-pod")),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -935,7 +935,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -985,7 +985,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], gwIPv4Str)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], gwIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1033,7 +1033,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(gwIPv6Str, ":", "--"))),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(gwIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1189,7 +1189,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node2Pods[0])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node2Pods[0])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1256,7 +1256,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1321,7 +1321,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node2Pods[1])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node2Pods[1])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1384,7 +1384,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, node1Pods[0], svcIPv4Name)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, node1Pods[0], svcIPv4Name)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1460,7 +1460,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, agnhostPodName, svcIPv4Name)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, agnhostPodName, svcIPv4Name)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1520,7 +1520,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node2Pods[0])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node2Pods[0])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1577,7 +1577,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node2Pods[0])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, node1Pods[0], data.testNamespace, node2Pods[0])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1647,7 +1647,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1712,7 +1712,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1771,7 +1771,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, node1Pods[0], svcIPv6Name)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, node1Pods[0], svcIPv6Name)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1844,7 +1844,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, agnhostPodName, svcIPv6Name)),
+					Name: RandName(fmt.Sprintf("%s-%s-to-svc-%s-", data.testNamespace, agnhostPodName, svcIPv6Name)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1904,7 +1904,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node2Pods[0])),
+					Name: RandName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, node1Pods[0], node2Pods[0])),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1997,7 +1997,7 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 		ipVersion: 4,
 		tf: &v1alpha1.Traceflow{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, podNames[0], data.testNamespace, strings.ReplaceAll(nodeIP, ":", "--"))),
+				Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, podNames[0], data.testNamespace, strings.ReplaceAll(nodeIP, ":", "--"))),
 			},
 			Spec: v1alpha1.TraceflowSpec{
 				Source: v1alpha1.Source{
@@ -2060,7 +2060,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 		ipVersion: 4,
 		tf: &v1alpha1.Traceflow{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, localPodNames[0], data.testNamespace, strings.ReplaceAll(externalDstIP, ":", "--"))),
+				Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, localPodNames[0], data.testNamespace, strings.ReplaceAll(externalDstIP, ":", "--"))),
 			},
 			Spec: v1alpha1.TraceflowSpec{
 				Source: v1alpha1.Source{
@@ -2131,7 +2131,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 		ipVersion: 4,
 		tf: &v1alpha1.Traceflow{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, remotePodNames[0], data.testNamespace, strings.ReplaceAll(externalDstIP, ":", "--"))),
+				Name: RandName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, remotePodNames[0], data.testNamespace, strings.ReplaceAll(externalDstIP, ":", "--"))),
 			},
 			Spec: v1alpha1.TraceflowSpec{
 				Source: v1alpha1.Source{
@@ -2264,7 +2264,7 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 			tf := &v1alpha1.Traceflow{
 				Spec: tc.spec,
 			}
-			tf.Name = randName("")
+			tf.Name = RandName("")
 			_, err := data.crdClient.CrdV1alpha1().Traceflows().Create(context.TODO(), tf, metav1.CreateOptions{})
 			if tc.allowed {
 				assert.Nil(t, err)
