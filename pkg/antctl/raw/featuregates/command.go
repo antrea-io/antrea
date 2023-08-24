@@ -187,12 +187,8 @@ func output(resps []featuregates.Response, runtimeMode string, output io.Writer)
 	maxStatusLen := len("STATUS")
 
 	for _, r := range resps {
-		if len(r.Name) > maxNameLen {
-			maxNameLen = len(r.Name)
-		}
-		if len(r.Status) > maxStatusLen {
-			maxStatusLen = len(r.Status)
-		}
+		maxNameLen = max(maxNameLen, len(r.Name))
+		maxStatusLen = max(maxStatusLen, len(r.Status))
 	}
 
 	formatter := fmt.Sprintf("%%-%ds%%-%ds%%-s\n", maxNameLen+5, maxStatusLen+5)

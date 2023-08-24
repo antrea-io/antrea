@@ -57,14 +57,15 @@ const (
 // The handler function populates Antrea featuregates information to the response.
 func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		antreaConfigName := env.GetAntreaConfigMapName()
-		antreaConfig, err := k8sclient.CoreV1().ConfigMaps(env.GetAntreaNamespace()).Get(context.TODO(), antreaConfigName, metav1.GetOptions{})
+		antreaConfigMapName := env.GetAntreaConfigMapName()
+		antreaNamespace := env.GetAntreaNamespace()
+		antreaConfig, err := k8sclient.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), antreaConfigMapName, metav1.GetOptions{})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.ErrorS(err, "Error when getting config map", antreaConfigName)
+			klog.ErrorS(err, "Error when getting config map", "ConfigMap", klog.KRef(antreaNamespace, antreaConfigMapName))
 			return
 		}
-		configMaps, err := k8sclient.CoreV1().ConfigMaps(env.GetAntreaNamespace()).List(context.TODO(), metav1.ListOptions{
+		configMaps, err := k8sclient.CoreV1().ConfigMaps(antreaNamespace).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: "app=antrea",
 		})
 		if err != nil {
@@ -83,7 +84,8 @@ func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 		err = yaml.Unmarshal([]byte(antreaConfig.Data[agentConfigName]), agentConfig)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.ErrorS(err, "Failed to unmarshal Antrea", agentConfigName)
+			klog.ErrorS(err, "Failed to unmarshal Antrea agent config",
+				"ConfigMap", klog.KRef(antreaNamespace, antreaConfigMapName), "Config", agentConfigName)
 			return
 		}
 
@@ -91,7 +93,8 @@ func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 		err = yaml.Unmarshal([]byte(antreaConfig.Data[controllerConfigName]), controllerConfig)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.ErrorS(err, "Failed to unmarshal Antrea", controllerConfigName)
+			klog.ErrorS(err, "Failed to unmarshal Antrea controller config",
+				"ConfigMap", klog.KRef(antreaNamespace, antreaConfigMapName), "Config", controllerConfigName)
 			return
 		}
 
@@ -104,10 +107,12 @@ func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 				return antreaWindowsConfigMaps[i].CreationTimestamp.After(antreaWindowsConfigMaps[j].CreationTimestamp.Time)
 			})
 			agentWindowsConfig := &Config{}
-			err = yaml.Unmarshal([]byte(configMaps.Items[0].Data[agentConfigName]), agentWindowsConfig)
+			antreaWindowsConfigMap := antreaWindowsConfigMaps[0]
+			err = yaml.Unmarshal([]byte(antreaWindowsConfigMap.Data[agentConfigName]), agentWindowsConfig)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				klog.ErrorS(err, "Failed to unmarshal Antrea windows", agentConfigName)
+				klog.ErrorS(err, "Failed to unmarshal Antrea agent windows config",
+					"ConfigMap", klog.KRef(antreaNamespace, antreaWindowsConfigMap.Name), "Config", agentConfigName)
 				return
 			}
 			agentWindowsfeatureGates := getFeatureGatesResponse(agentWindowsConfig, agentWindowsMode)
@@ -143,7 +148,7 @@ func getFeatureGatesResponse(cfg *Config, component string) []Response {
 			})
 		}
 	}
-	sort.SliceStable(gatesResp, func(i, j int) bool {
+	sort.Slice(gatesResp, func(i, j int) bool {
 		return gatesResp[i].Name < gatesResp[j].Name
 	})
 	return gatesResp

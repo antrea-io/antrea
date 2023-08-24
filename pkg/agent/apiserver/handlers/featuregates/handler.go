@@ -46,7 +46,7 @@ func HandleFunc() http.HandlerFunc {
 				})
 			}
 		}
-		sort.SliceStable(featureGates, func(i, j int) bool {
+		sort.Slice(featureGates, func(i, j int) bool {
 			return featureGates[i].Name < featureGates[j].Name
 		})
 		err := json.NewEncoder(w).Encode(featureGates)

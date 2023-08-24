@@ -82,3 +82,11 @@ func TestSupportedOnExternalNode(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultAntreaFeatureGates(t *testing.T) {
+	for df := range DefaultAntreaFeatureGates {
+		if !AgentGates.Has(df) && !ControllerGates.Has(df) {
+			t.Errorf("Feature gate %s is not present in AgentGates and ControllerGates", df)
+		}
+	}
+}
