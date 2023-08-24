@@ -52,6 +52,7 @@ edit the Agent configuration in the
 | `ServiceExternalIP`           | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |                                               |
 | `TrafficControl`              | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `Multicluster`                | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
+| `IPsecCertAuth`               | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `ExternalNode`                | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |                                               |
 | `SupportBundleCollection`     | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `L7NetworkPolicy`             | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
@@ -355,6 +356,10 @@ The `Multicluster` feature gate of Antrea Controller enables support for [Multi-
 Antrea Multi-cluster Controller must be deployed and the cluster must join a Multi-cluster ClusterSet to configure
 Antrea Multi-cluster features. Refer to [Antrea Multi-cluster user guide](multicluster/user-guide.md) for more
 information about Multi-cluster configuration. At the moment, Antrea Multi-cluster supports only IPv4.
+
+### IPsecCertAuth
+
+This feature enables certificate-based authentication for IPSec tunnel.
 
 ### ExternalNode
 
