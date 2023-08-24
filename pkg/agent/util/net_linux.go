@@ -33,6 +33,7 @@ import (
 	"k8s.io/klog/v2"
 
 	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
 )
 
 var (
@@ -329,6 +330,11 @@ func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
 		}
 	}
 	return nil
+}
+
+func EnsureIPv6EnabledOnInterface(ifaceName string) error {
+	path := fmt.Sprintf("ipv6/conf/%s/disable_ipv6", ifaceName)
+	return sysctl.EnsureSysctlNetValue(path, 0)
 }
 
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
