@@ -114,7 +114,7 @@ const (
 	TrafficControl featuregate.Feature = "TrafficControl"
 
 	// alpha: v1.7
-	// Enable certificated-based authentication for IPsec.
+	// Enable certificate-based authentication for IPSec tunnel.
 	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
 
 	// alpha: v1.8
