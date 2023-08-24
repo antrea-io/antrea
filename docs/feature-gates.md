@@ -52,7 +52,6 @@ edit the Agent configuration in the
 | `ServiceExternalIP`           | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |                                               |
 | `TrafficControl`              | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `Multicluster`                | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
-| `IPsecCertAuth`               | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `ExternalNode`                | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |                                               |
 | `SupportBundleCollection`     | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `L7NetworkPolicy`             | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
@@ -400,7 +399,3 @@ this [document](antrea-l7-network-policy.md#prerequisites) for more information 
 
 The `AdminNetworkPolicy` API (which currently includes the AdminNetworkPolicy and BaselineAdminNetworkPolicy objects)
 complements the Antrea-native policies and help cluster administrators to set security postures in a portable manner.
-
-### IPsecCertAuth
-
-This feature enables certificate-based authentication for IPSec tunnel.

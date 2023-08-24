@@ -5522,7 +5522,7 @@ data:
     # Enable mirroring or redirecting the traffic Pods send or receive.
     #  TrafficControl: false
 
-    # Enable certificate-based authentication for IPSec tunnel.
+    # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
 
     # Enable collecting support bundle files with SupportBundleCollection CRD.
@@ -5896,7 +5896,7 @@ data:
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: false
 
-    # Enable certificate-based authentication for IPSec tunnel.
+    # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
 
     # Enable managing ExternalNode for unmanaged VM/BM.
@@ -6819,7 +6819,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 3f29ab6bd7105c6a6b30dafad282ac88a606e7aefe5914b7787aeeaafa7b4f8d
+        checksum/config: a3168b9ac447a8852280ded74b420b5afa9cc2f6fca169e3e2da6e44b9e96428
       labels:
         app: antrea
         component: antrea-agent
@@ -7061,7 +7061,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 3f29ab6bd7105c6a6b30dafad282ac88a606e7aefe5914b7787aeeaafa7b4f8d
+        checksum/config: a3168b9ac447a8852280ded74b420b5afa9cc2f6fca169e3e2da6e44b9e96428
       labels:
         app: antrea
         component: antrea-controller
