@@ -23,9 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -62,7 +60,6 @@ const (
 
 // Controller is responsible for setting up necessary IP routes and Openflow entries for inter-node traffic.
 type Controller struct {
-	kubeClient       clientset.Interface
 	ovsBridgeClient  ovsconfig.OVSBridgeClient
 	ofClient         openflow.Client
 	ovsCtlClient     ovsctl.OVSCtlClient
@@ -79,7 +76,6 @@ type Controller struct {
 	// A node will be in the map after its flows and routes are installed successfully.
 	installedNodes  cache.Indexer
 	wireGuardClient wireguard.Interface
-	proxyAll        bool
 	// ipsecCertificateManager is useful for determining whether the ipsec certificate has been configured
 	// or not when IPsec is enabled with "cert" mode. The NodeRouteController must wait for the certificate
 	// to be configured before installing routes/flows to peer Nodes to prevent unencrypted traffic across Nodes.
@@ -89,8 +85,7 @@ type Controller struct {
 // NewNodeRouteController instantiates a new Controller object which will process Node events
 // and ensure connectivity between different Nodes.
 func NewNodeRouteController(
-	kubeClient clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
+	nodeInformer coreinformers.NodeInformer,
 	client openflow.Client,
 	ovsCtlClient ovsctl.OVSCtlClient,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
@@ -99,12 +94,9 @@ func NewNodeRouteController(
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
 	wireguardClient wireguard.Interface,
-	proxyAll bool,
 	ipsecCertificateManager ipseccertificate.Manager,
 ) *Controller {
-	nodeInformer := informerFactory.Core().V1().Nodes()
 	controller := &Controller{
-		kubeClient:              kubeClient,
 		ovsBridgeClient:         ovsBridgeClient,
 		ofClient:                client,
 		ovsCtlClient:            ovsCtlClient,
@@ -118,7 +110,6 @@ func NewNodeRouteController(
 		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
 		installedNodes:          cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
 		wireGuardClient:         wireguardClient,
-		proxyAll:                proxyAll,
 		ipsecCertificateManager: ipsecCertificateManager,
 	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(

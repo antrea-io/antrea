@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package networkpolicy provides AntreaIPAMController implementation to manage
-// and synchronize the GroupMembers and Namespaces affected by Network Policies and enforce
-// their rules.
 package ipam
 
 import (
@@ -31,8 +28,8 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -40,7 +37,6 @@ import (
 
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/client/informers/externalversions"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	annotation "antrea.io/antrea/pkg/ipam"
@@ -109,16 +105,12 @@ func statefulSetIndexFunc(obj interface{}) ([]string, error) {
 }
 
 func NewAntreaIPAMController(crdClient versioned.Interface,
-	informerFactory informers.SharedInformerFactory,
-	crdInformerFactory externalversions.SharedInformerFactory) *AntreaIPAMController {
+	ipPoolInformer crdinformers.IPPoolInformer,
+	namespaceInformer coreinformers.NamespaceInformer,
+	podInformer coreinformers.PodInformer,
+	statefulSetInformer appsinformers.StatefulSetInformer) *AntreaIPAMController {
 
-	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
 	ipPoolInformer.Informer().AddIndexers(cache.Indexers{statefulSetIndex: statefulSetIndexFunc})
-
-	namespaceInformer := informerFactory.Core().V1().Namespaces()
-	podInformer := informerFactory.Core().V1().Pods()
-
-	statefulSetInformer := informerFactory.Apps().V1().StatefulSets()
 
 	c := &AntreaIPAMController{
 		crdClient:               crdClient,

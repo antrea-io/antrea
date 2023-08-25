@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package networkpolicy provides AntreaIPAMController implementation to manage
-// and synchronize the GroupMembers and Namespaces affected by Network Policies and enforce
-// their rules.
 package ipam
 
 import (
@@ -39,6 +36,38 @@ import (
 	annotation "antrea.io/antrea/pkg/ipam"
 	"antrea.io/antrea/pkg/ipam/poolallocator"
 )
+
+type fakeAntreaIPAMController struct {
+	*AntreaIPAMController
+	fakeK8sClient      *fake.Clientset
+	fakeCRDClient      *fakecrd.Clientset
+	informerFactory    informers.SharedInformerFactory
+	crdInformerFactory crdinformers.SharedInformerFactory
+	poolLister         listers.IPPoolLister
+}
+
+func newFakeAntreaIPAMController(pool *crdv1a2.IPPool, namespace *corev1.Namespace, statefulSet *appsv1.StatefulSet) *fakeAntreaIPAMController {
+	crdClient := fakecrd.NewSimpleClientset(pool)
+	k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
+
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	namespaceInformer := informerFactory.Core().V1().Namespaces()
+	podInformer := informerFactory.Core().V1().Pods()
+	statefulSetInformer := informerFactory.Apps().V1().StatefulSets()
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+	poolLister := poolInformer.Lister()
+
+	controller := NewAntreaIPAMController(crdClient, poolInformer, namespaceInformer, podInformer, statefulSetInformer)
+	return &fakeAntreaIPAMController{
+		AntreaIPAMController: controller,
+		fakeK8sClient:        k8sClient,
+		fakeCRDClient:        crdClient,
+		informerFactory:      informerFactory,
+		crdInformerFactory:   crdInformerFactory,
+		poolLister:           poolLister,
+	}
+}
 
 func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas int32) (*corev1.Namespace, *crdv1a2.IPPool, *appsv1.StatefulSet) {
 	namespace := &corev1.Namespace{
@@ -149,19 +178,9 @@ func TestStatefulSetLifecycle(t *testing.T) {
 			defer close(stopCh)
 
 			namespace, pool, statefulSet := initTestObjects(!tt.dedicatedPool, tt.dedicatedPool, tt.replicas)
-			crdClient := fakecrd.NewSimpleClientset(pool)
-			k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
-
-			informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-
-			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-			poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
-			poolLister := poolInformer.Lister()
-
-			controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
-			require.NotNil(t, controller)
-			informerFactory.Start(stopCh)
-			crdInformerFactory.Start(stopCh)
+			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
 
 			go controller.Run(stopCh)
 
@@ -169,7 +188,7 @@ func TestStatefulSetLifecycle(t *testing.T) {
 			var err error
 			// Wait until pool propagates to the informer
 			pollErr := wait.PollImmediate(100*time.Millisecond, 3*time.Second, func() (bool, error) {
-				allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, crdClient, poolLister)
+				allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, controller.crdClient, controller.poolLister)
 				if err != nil {
 					return false, nil
 				}
@@ -179,13 +198,13 @@ func TestStatefulSetLifecycle(t *testing.T) {
 			defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
 
 			// Verify create event was handled by the controller
-			verifyPoolAllocatedSize(t, pool.Name, poolLister, tt.expectAllocatedSize)
+			verifyPoolAllocatedSize(t, pool.Name, controller.poolLister, tt.expectAllocatedSize)
 
 			// Delete StatefulSet
-			k8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
+			controller.fakeK8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
 
 			// Verify Delete event was processed
-			verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
+			verifyPoolAllocatedSize(t, pool.Name, controller.poolLister, 0)
 		})
 	}
 }
@@ -234,25 +253,15 @@ func TestReleaseStaleAddresses(t *testing.T) {
 		IPAddresses: addresses,
 	}
 
-	crdClient := fakecrd.NewSimpleClientset(pool)
-	k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
-
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-
-	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
-	poolLister := poolInformer.Lister()
-
-	controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
-	require.NotNil(t, controller)
-	informerFactory.Start(stopCh)
-	crdInformerFactory.Start(stopCh)
+	controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
 
 	go controller.Run(stopCh)
 
 	// verify two stale entries were deleted, one updated to Reserved status
 	err := wait.PollImmediate(100*time.Millisecond, 2*time.Second, func() (bool, error) {
-		pool, err := poolLister.Get(pool.Name)
+		pool, err := controller.poolLister.Get(pool.Name)
 		if err != nil {
 			return false, nil
 		}
