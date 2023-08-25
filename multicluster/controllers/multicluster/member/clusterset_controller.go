@@ -167,22 +167,11 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 	}()
 
-	// Only register this controller to reconcile the ClusterSet in the same Namespace
-	namespaceFilter := func(object client.Object) bool {
-		if clusterSet, ok := object.(*mcv1alpha2.ClusterSet); ok {
-			return clusterSet.Namespace == r.Namespace
-		}
-		return false
-	}
-	namespacePredicate := predicate.NewPredicateFuncs(namespaceFilter)
-
 	// Ignore status update event via GenerationChangedPredicate
 	generationPredicate := predicate.GenerationChangedPredicate{}
-	filter := predicate.And(generationPredicate, namespacePredicate)
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcv1alpha2.ClusterSet{}).
-		WithEventFilter(filter).
+		WithEventFilter(generationPredicate).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
