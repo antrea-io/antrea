@@ -623,17 +623,6 @@ func TestReplaceNetRoute(t *testing.T) {
 	}
 }
 
-func TestGetNetRoutesAll(t *testing.T) {
-	gw, subnet, _ := net.ParseCIDR("192.168.2.0/24")
-	testRow := createTestMibIPForwardRow(0, subnet, gw)
-	listRows := []antreasyscall.MibIPForwardRow{testRow}
-	wantRoutes := []Route{*routeFromIPForwardRow(&testRow)}
-	defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{IPForwardRows: listRows, ListIPForwardRowsErr: nil})()
-	gotRoutes, gotErr := GetNetRoutesAll()
-	assert.Equal(t, wantRoutes, gotRoutes)
-	assert.Nil(t, gotErr)
-}
-
 func TestNewNetNat(t *testing.T) {
 	notFoundErr := fmt.Errorf("received error No MSFT_NetNat objects found")
 	testNetNat := "test-nat"
@@ -901,7 +890,7 @@ func TestGetInterfaceConfig(t *testing.T) {
 			listRows:    []antreasyscall.MibIPForwardRow{testRow},
 			listRowsErr: fmt.Errorf("unable to list IP forward rows"),
 			wantErr: fmt.Errorf("failed to get routes for interface index %d: %v", testNetInterface.Index,
-				fmt.Errorf("failed to get routes: unable to list Windows IPForward rows: unable to list IP forward rows")),
+				fmt.Errorf("unable to list Windows IPForward rows: unable to list IP forward rows")),
 		},
 	}
 	for _, tc := range tests {
