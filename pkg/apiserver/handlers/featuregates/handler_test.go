@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/runtime"
@@ -76,7 +77,7 @@ func Test_getGatesResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getFeatureGatesResponse(tt.cfg, agentMode)
+			got := getFeatureGatesResponse(tt.cfg, AgentMode)
 			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea agent is not correct")
 		})
 	}
@@ -112,13 +113,13 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getFeatureGatesResponse(tt.cfg, agentWindowsMode)
+			got := getFeatureGatesResponse(tt.cfg, AgentWindowsMode)
 			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea agent windows is not correct")
 		})
 	}
 }
 
-func Test_getStatus(t *testing.T) {
+func TestGetStatus(t *testing.T) {
 	assert.Equal(t, "Enabled", getStatus(true))
 	assert.Equal(t, "Disabled", getStatus(false))
 }
@@ -171,11 +172,9 @@ func TestHandleFunc(t *testing.T) {
 	require.Nil(t, err)
 
 	for _, v := range resp {
-		for n, f := range features.DefaultAntreaFeatureGates {
-			if v.Name == string(n) {
-				assert.Equal(t, v.Status, getStatus(f.Default))
-				assert.Equal(t, v.Version, string(f.PreRelease))
-			}
+		if df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]; ok {
+			assert.Equal(t, v.Status, getStatus(df.Default))
+			assert.Equal(t, v.Version, string(df.PreRelease))
 		}
 	}
 }
@@ -206,7 +205,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getFeatureGatesResponse(&Config{}, controllerMode)
+			got := getFeatureGatesResponse(&Config{}, ControllerMode)
 			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea Controller is not correct")
 		})
 	}

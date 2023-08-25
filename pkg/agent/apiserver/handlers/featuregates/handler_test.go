@@ -22,11 +22,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/features"
 )
 
-func Test_getStatus(t *testing.T) {
+func TestGetStatus(t *testing.T) {
 	assert.Equal(t, "Enabled", getStatus(true))
 	assert.Equal(t, "Disabled", getStatus(false))
 }
@@ -45,11 +46,9 @@ func TestHandleFunc(t *testing.T) {
 	require.Nil(t, err)
 
 	for _, v := range resp {
-		for n, f := range features.DefaultAntreaFeatureGates {
-			if v.Name == string(n) {
-				assert.Equal(t, v.Status, getStatus(f.Default))
-				assert.Equal(t, v.Version, string(f.PreRelease))
-			}
+		if df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]; ok {
+			assert.Equal(t, v.Status, getStatus(df.Default))
+			assert.Equal(t, v.Version, string(df.PreRelease))
 		}
 	}
 }

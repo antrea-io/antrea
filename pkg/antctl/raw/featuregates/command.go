@@ -91,22 +91,22 @@ func featureGateRequest(cmd *cobra.Command, mode string) error {
 	var controllerGates []featuregates.Response
 	for _, v := range resp {
 		switch v.Component {
-		case runtime.ModeAgent:
+		case featuregates.AgentMode:
 			agentGates = append(agentGates, v)
-		case runtime.ModeAgentWindows:
+		case featuregates.AgentWindowsMode:
 			agentWindowsGates = append(agentWindowsGates, v)
-		case runtime.ModeController:
+		case featuregates.ControllerMode:
 			controllerGates = append(controllerGates, v)
 		}
 	}
 	if len(agentGates) > 0 {
-		output(agentGates, runtime.ModeAgent, cmd.OutOrStdout())
+		output(agentGates, featuregates.AgentMode, cmd.OutOrStdout())
 	}
 	if len(agentWindowsGates) > 0 {
-		output(agentWindowsGates, runtime.ModeAgentWindows, cmd.OutOrStdout())
+		output(agentWindowsGates, featuregates.AgentWindowsMode, cmd.OutOrStdout())
 	}
 	if len(controllerGates) > 0 {
-		output(controllerGates, runtime.ModeController, cmd.OutOrStdout())
+		output(controllerGates, featuregates.ControllerMode, cmd.OutOrStdout())
 	}
 	return nil
 }
@@ -173,12 +173,12 @@ func getFeatureGatesRequest(client *rest.RESTClient) ([]featuregates.Response, e
 
 func output(resps []featuregates.Response, runtimeMode string, output io.Writer) {
 	switch runtimeMode {
-	case runtime.ModeAgent:
+	case featuregates.AgentMode:
 		output.Write([]byte("Antrea Agent Feature Gates\n"))
-	case runtime.ModeAgentWindows:
+	case featuregates.AgentWindowsMode:
 		output.Write([]byte("\n"))
 		output.Write([]byte("Antrea Agent Feature Gates (Windows)\n"))
-	case runtime.ModeController:
+	case featuregates.ControllerMode:
 		output.Write([]byte("\n"))
 		output.Write([]byte("Antrea Controller Feature Gates\n"))
 	}
