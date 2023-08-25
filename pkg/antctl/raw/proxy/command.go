@@ -67,7 +67,7 @@ var defaultFS = afero.NewOsFs()
 // validateAndComplete checks the proxyOptions to see if there is sufficient information to run the
 // command, and adds default values when needed.
 func (o *proxyOptions) validateAndComplete() error {
-	if o.port != 0 && o.unixSocket != "" {
+	if o.port != defaultPort && o.unixSocket != "" {
 		return fmt.Errorf("cannot set --unix-socket and --port at the same time")
 	}
 
@@ -87,8 +87,6 @@ func (o *proxyOptions) validateAndComplete() error {
 			klog.InfoS("Static file directory is not a directory", "name", o.staticDir)
 		}
 	}
-
-	o.port = defaultPort
 
 	if !strings.HasSuffix(o.staticPrefix, "/") {
 		o.staticPrefix += "/"
@@ -143,7 +141,7 @@ func init() {
 	Command.Flags().StringVar(&o.rejectPaths, "reject-paths", proxy.DefaultPathRejectRE, "Regular expression for paths that the proxy should reject. Paths specified here will be rejected even accepted by --accept-paths.")
 	Command.Flags().StringVar(&o.acceptHosts, "accept-hosts", proxy.DefaultHostAcceptRE, "Regular expression for hosts that the proxy should accept.")
 	Command.Flags().StringVar(&o.rejectMethods, "reject-methods", proxy.DefaultMethodRejectRE, "Regular expression for HTTP methods that the proxy should reject (example --reject-methods='POST,PUT,PATCH'). ")
-	Command.Flags().IntVarP(&o.port, "port", "p", o.port, "The port on which to run the proxy. Set to 0 to pick a random port.")
+	Command.Flags().IntVarP(&o.port, "port", "p", defaultPort, "The port on which to run the proxy. Set to 0 to pick a random port.")
 	Command.Flags().StringVarP(&o.address, "address", "", defaultAddress, "The IP address on which to serve on.")
 	Command.Flags().BoolVar(&o.disableFilter, "disable-filter", false, "If true, disable request filtering in the proxy. This is dangerous, and can leave you vulnerable to XSRF attacks, when used with an accessible port.")
 	Command.Flags().StringVarP(&o.unixSocket, "unix-socket", "u", "", "Unix socket on which to run the proxy.")
