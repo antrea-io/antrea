@@ -28,6 +28,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util"
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 )
 
 var (
@@ -71,13 +72,13 @@ func TestRouteOperation(t *testing.T) {
 	// Add initial routes.
 	err = client.AddRoutes(destCIDR1, "node1", peerNodeIP1, gwIP1)
 	require.Nil(t, err)
-	routes1, err := util.GetNetRoutes(gwLink, destCIDR1)
+	routes1, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: destCIDR1}, util.RT_FILTER_IF|util.RT_FILTER_DST)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes1))
 
 	err = client.AddRoutes(destCIDR2, "node2", peerNodeIP2, gwIP2)
 	require.Nil(t, err)
-	routes2, err := util.GetNetRoutes(gwLink, destCIDR2)
+	routes2, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: destCIDR2}, util.RT_FILTER_IF|util.RT_FILTER_DST)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes2))
 
@@ -86,7 +87,7 @@ func TestRouteOperation(t *testing.T) {
 
 	err = client.DeleteRoutes(destCIDR2)
 	require.Nil(t, err)
-	routes7, err := util.GetNetRoutes(gwLink, destCIDR2)
+	routes7, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: destCIDR2}, util.RT_FILTER_IF|util.RT_FILTER_DST)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes7))
 }
@@ -100,7 +101,7 @@ func TestAddAndDeleteExternalIPRoute(t *testing.T) {
 
 	assert.NoError(t, c.AddExternalIPRoute(externalIP))
 	externalIPNet := util.NewIPNet(externalIP)
-	routes, err := util.GetNetRoutes(gwLink, externalIPNet)
+	routes, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: externalIPNet}, util.RT_FILTER_IF|util.RT_FILTER_DST)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes))
 
@@ -109,7 +110,7 @@ func TestAddAndDeleteExternalIPRoute(t *testing.T) {
 	assert.EqualValues(t, routes[0], *route.(*util.Route))
 
 	assert.NoError(t, c.DeleteExternalIPRoute(externalIP))
-	routes, err = util.GetNetRoutes(gwLink, externalIPNet)
+	routes, err = util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: externalIPNet}, util.RT_FILTER_IF|util.RT_FILTER_DST)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes))
 	_, ok = c.serviceRoutes.Load(externalIP.String())
