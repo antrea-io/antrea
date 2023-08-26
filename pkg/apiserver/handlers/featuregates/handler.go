@@ -70,7 +70,7 @@ func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 		})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.ErrorS(err, "Error when getting antrea-windows config map")
+			klog.ErrorS(err, "Error when listing all Antrea ConfigMaps by label")
 			return
 		}
 		antreaWindowsConfigMaps := []v1.ConfigMap{}

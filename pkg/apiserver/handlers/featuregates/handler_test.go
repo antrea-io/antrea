@@ -78,7 +78,7 @@ func Test_getGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(tt.cfg, AgentMode)
-			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea agent is not correct")
+			assert.Equal(t, got, tt.want, "The feature gates for Antrea agent are not correct")
 		})
 	}
 }
@@ -114,7 +114,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(tt.cfg, AgentWindowsMode)
-			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea agent windows is not correct")
+			assert.Equal(t, got, tt.want, "The feature gates for Antrea agent windows are not correct")
 		})
 	}
 }
@@ -172,10 +172,10 @@ func TestHandleFunc(t *testing.T) {
 	require.Nil(t, err)
 
 	for _, v := range resp {
-		if df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]; ok {
-			assert.Equal(t, v.Status, getStatus(df.Default))
-			assert.Equal(t, v.Version, string(df.PreRelease))
-		}
+		df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]
+		require.True(t, ok)
+		assert.Equal(t, v.Status, getStatus(df.Default))
+		assert.Equal(t, v.Version, string(df.PreRelease))
 	}
 }
 
@@ -206,7 +206,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(&Config{}, ControllerMode)
-			assert.EqualValues(t, got, tt.want, "The feature gates for Antrea Controller is not correct")
+			assert.Equal(t, got, tt.want, "The feature gates for Antrea Controller are not correct")
 		})
 	}
 }

@@ -171,8 +171,8 @@ func getFeatureGatesRequest(client *rest.RESTClient) ([]featuregates.Response, e
 	return resp, nil
 }
 
-func output(resps []featuregates.Response, runtimeMode string, output io.Writer) {
-	switch runtimeMode {
+func output(resps []featuregates.Response, component string, output io.Writer) {
+	switch component {
 	case featuregates.AgentMode:
 		output.Write([]byte("Antrea Agent Feature Gates\n"))
 	case featuregates.AgentWindowsMode:

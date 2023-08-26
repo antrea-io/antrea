@@ -46,9 +46,9 @@ func TestHandleFunc(t *testing.T) {
 	require.Nil(t, err)
 
 	for _, v := range resp {
-		if df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]; ok {
-			assert.Equal(t, v.Status, getStatus(df.Default))
-			assert.Equal(t, v.Version, string(df.PreRelease))
-		}
+		df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]
+		require.True(t, ok)
+		assert.Equal(t, v.Status, getStatus(df.Default))
+		assert.Equal(t, v.Version, string(df.PreRelease))
 	}
 }
