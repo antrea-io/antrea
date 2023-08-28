@@ -315,10 +315,18 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 					},
 				},
 			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-ns",
+					Name:      "test-pod-empty-labels",
+				},
+			},
 		},
 	}
 	labelNormalizedExist := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=web"
 	labelNormalizedNonExist := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=db"
+	labelNormalizedEmptyLabels := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:"
+	labelNormalizedEmptyLabelsStale := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:<none>"
 	toKeepLabelResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -335,6 +343,22 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			},
 		},
 	}
+	toKeepLabelResExportEmptyLabels := mcv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "cluster-a-" + common.HashLabelIdentity(labelNormalizedEmptyLabels),
+			Labels: map[string]string{
+				constants.SourceKind:      constants.LabelIdentityKind,
+				constants.SourceClusterID: "cluster-a",
+			},
+		},
+		Spec: mcv1alpha1.ResourceExportSpec{
+			Kind: constants.LabelIdentityKind,
+			LabelIdentity: &mcv1alpha1.LabelIdentityExport{
+				NormalizedLabel: labelNormalizedEmptyLabels,
+			},
+		},
+	}
 	toDeleteLabelResExport := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -348,6 +372,22 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			Kind: constants.LabelIdentityKind,
 			LabelIdentity: &mcv1alpha1.LabelIdentityExport{
 				NormalizedLabel: labelNormalizedNonExist,
+			},
+		},
+	}
+	toDeleteLabelResExportEmptyLabels := mcv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "cluster-a-" + common.HashLabelIdentity(labelNormalizedEmptyLabelsStale),
+			Labels: map[string]string{
+				constants.SourceKind:      constants.LabelIdentityKind,
+				constants.SourceClusterID: "cluster-a",
+			},
+		},
+		Spec: mcv1alpha1.ResourceExportSpec{
+			Kind: constants.LabelIdentityKind,
+			LabelIdentity: &mcv1alpha1.LabelIdentityExport{
+				NormalizedLabel: labelNormalizedEmptyLabelsStale,
 			},
 		},
 	}
@@ -378,6 +418,8 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 					toKeepSvcResExport,
 					toKeepLabelResExport,
 					toDeleteLabelResExport,
+					toKeepLabelResExportEmptyLabels,
+					toDeleteLabelResExportEmptyLabels,
 					svcResExportFromOtherCluster,
 				},
 			},
@@ -399,8 +441,8 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			err := fakeRemoteClient.List(context.TODO(), resExpList, &client.ListOptions{})
 			resExpLen := len(resExpList.Items)
 			if err == nil {
-				if resExpLen != 3 {
-					t.Errorf("Should only THREE valid ResourceExports left but got %v", resExpLen)
+				if resExpLen != 4 {
+					t.Errorf("Should only FOUR valid ResourceExports left but got %v", resExpLen)
 				}
 			} else {
 				t.Errorf("Should list ResourceExport successfully but got err = %v", err)
