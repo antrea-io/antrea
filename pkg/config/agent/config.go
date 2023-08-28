@@ -199,6 +199,8 @@ type AgentConfig struct {
 	AuditLogging AuditLoggingConfig `yaml:"auditLogging,omitempty"`
 	// Antrea's native secondary network configuration.
 	SecondaryNetwork SecondaryNetworkConfig `yaml:"secondaryNetwork,omitempty"`
+	// FeatureRateLimitConfig defines the rate-limiting of different features.
+	FeatureRateLimit FeatureRateLimitConfig `yaml:"featureRateLimit,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -396,4 +398,24 @@ type OVSBridgeConfig struct {
 	// Names of physical interfaces to be connected to the bridge. At the moment,
 	// only a single physical interface is supported.
 	PhysicalInterfaces []string `yaml:"physicalInterfaces,omitempty"`
+}
+
+// FeatureRateLimitConfig defines the rate-limiting of different features.
+// All numbers in this struct stand for the rate as packets per second(pps) and the
+// burst/queueSize will be automatically set to 2 times of it.
+// When burst/queue is full, new packets will be dropped.
+type FeatureRateLimitConfig struct {
+	// DNSInterception is the rate limiting of sending packets to Antrea-agent for FQDN
+	// DNS interception.
+	DNSInterception int `yaml:"dnsInterception"`
+	// Traceflow is the rate limiting of sending packets to Antrea-agent for traceflow.
+	Traceflow int `yaml:"traceflow"`
+	// NetworkPolicy is the rate limiting of sending packets to Antrea-agent for
+	// NetworkPolicy logging and reject.
+	NetworkPolicy int `yaml:"networkPolicy"`
+	// IGMP is the rate limiting of sending packets to Antrea-agent for IGMP.
+	IGMP int `yaml:"igmp"`
+	// SvcReject is the rate limiting of sending packets to Antrea-agent for Service
+	// packets not matching any Endpoints.
+	SvcReject int `yaml:"svcReject"`
 }

@@ -5617,6 +5617,25 @@ data:
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     defaultMTU: 0
 
+    # featureRateLimit defines the rate-limiting of different features. All numbers in
+    # this struct stand for the rate as packets per second(pps) and the
+    # burst/queueSize will be automatically set to 2 times of it.
+    # When burst/queue is full, new packets will be dropped.
+    featureRateLimit:
+      # dnsInterception is the rate limiting of sending packets to Antrea-agent for FQDN
+      # DNS interception.
+      dnsInterception: 500
+      # traceflow is the rate limiting of sending packets to Antrea-agent for traceflow.
+      traceflow: 500
+      # networkPolicy is the rate limiting of sending packets to Antrea-agent for
+      # NetworkPolicy logging and reject.
+      networkPolicy: 500
+      # igmp is the rate limiting of sending packets to Antrea-agent for IGMP.
+      igmp: 500
+      # svcReject is the rate limiting of sending packets to Antrea-agent for Service
+      # packets not matching any Endpoints.
+      svcReject: 500
+
     # wireGuard specifies WireGuard related configurations.
     wireGuard:
       # The port for WireGuard to receive traffic.
@@ -6819,7 +6838,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 3f29ab6bd7105c6a6b30dafad282ac88a606e7aefe5914b7787aeeaafa7b4f8d
+        checksum/config: c0dfc6324528c2ca35ef9413d75edde062b3963a3b74ea3089cbf52cb880ca44
       labels:
         app: antrea
         component: antrea-agent
@@ -7060,7 +7079,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 3f29ab6bd7105c6a6b30dafad282ac88a606e7aefe5914b7787aeeaafa7b4f8d
+        checksum/config: c0dfc6324528c2ca35ef9413d75edde062b3963a3b74ea3089cbf52cb880ca44
       labels:
         app: antrea
         component: antrea-controller

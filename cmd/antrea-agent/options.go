@@ -40,25 +40,30 @@ import (
 )
 
 const (
-	defaultOVSBridge               = "br-int"
-	defaultHostGateway             = "antrea-gw0"
-	defaultHostProcPathPrefix      = "/host"
-	defaultServiceCIDR             = "10.96.0.0/12"
-	defaultTunnelType              = ovsconfig.GeneveTunnel
-	defaultFlowCollectorAddress    = "flow-aggregator/flow-aggregator:4739:tls"
-	defaultFlowCollectorTransport  = "tls"
-	defaultFlowCollectorPort       = "4739"
-	defaultFlowPollInterval        = "5s"
-	defaultActiveFlowExportTimeout = "5s"
-	defaultIdleFlowExportTimeout   = "15s"
-	defaultIGMPQueryInterval       = 125 * time.Second
-	defaultStaleConnectionTimeout  = 5 * time.Minute
-	defaultNodeType                = config.K8sNode
-	defaultMaxEgressIPsPerNode     = 255
-	defaultAuditLogsMaxSize        = 100
-	defaultAuditLogsMaxBackups     = 3
-	defaultAuditLogsMaxAge         = 28
-	defaultAuditLogsCompressed     = true
+	defaultOVSBridge                = "br-int"
+	defaultHostGateway              = "antrea-gw0"
+	defaultHostProcPathPrefix       = "/host"
+	defaultServiceCIDR              = "10.96.0.0/12"
+	defaultTunnelType               = ovsconfig.GeneveTunnel
+	defaultFlowCollectorAddress     = "flow-aggregator/flow-aggregator:4739:tls"
+	defaultFlowCollectorTransport   = "tls"
+	defaultFlowCollectorPort        = "4739"
+	defaultFlowPollInterval         = "5s"
+	defaultActiveFlowExportTimeout  = "5s"
+	defaultIdleFlowExportTimeout    = "15s"
+	defaultIGMPQueryInterval        = 125 * time.Second
+	defaultStaleConnectionTimeout   = 5 * time.Minute
+	defaultNodeType                 = config.K8sNode
+	defaultMaxEgressIPsPerNode      = 255
+	defaultAuditLogsMaxSize         = 100
+	defaultAuditLogsMaxBackups      = 3
+	defaultAuditLogsMaxAge          = 28
+	defaultAuditLogsCompressed      = true
+	defaultDNSInterceptionRateLimit = 500
+	defaultTraceflowRateLimit       = 500
+	defaultNetworkPolicyRateLimit   = 500
+	defaultIGMPRateLimit            = 500
+	defaultSvcRejectRateLimit       = 500
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -193,6 +198,7 @@ func (o *Options) setDefaults() {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
 	}
 	o.setAuditLoggingDefaultOptions()
+	o.setFeatureRateLimitDefaultOptions()
 }
 
 func (o *Options) validateTLSOptions() error {
@@ -710,6 +716,25 @@ func (o *Options) setAuditLoggingDefaultOptions() {
 	if auditLogging.Compress == nil {
 		compress := defaultAuditLogsCompressed
 		auditLogging.Compress = &compress
+	}
+}
+
+func (o *Options) setFeatureRateLimitDefaultOptions() {
+	featureRateLimit := &o.config.FeatureRateLimit
+	if featureRateLimit.DNSInterception == 0 {
+		featureRateLimit.DNSInterception = defaultDNSInterceptionRateLimit
+	}
+	if featureRateLimit.Traceflow == 0 {
+		featureRateLimit.Traceflow = defaultTraceflowRateLimit
+	}
+	if featureRateLimit.NetworkPolicy == 0 {
+		featureRateLimit.NetworkPolicy = defaultNetworkPolicyRateLimit
+	}
+	if featureRateLimit.IGMP == 0 {
+		featureRateLimit.IGMP = defaultIGMPRateLimit
+	}
+	if featureRateLimit.SvcReject == 0 {
+		featureRateLimit.SvcReject = defaultSvcRejectRateLimit
 	}
 }
 

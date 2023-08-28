@@ -81,19 +81,27 @@ const (
 	PacketInMeterIDNP  = 1
 	PacketInMeterIDTF  = 2
 	PacketInMeterIDDNS = 3
-	// Meter Entry Rate. It is represented as number of events per second.
-	// Packets which exceed the rate will be dropped.
-	PacketInMeterRateNP  = 500
-	PacketInMeterRateTF  = 500
-	PacketInMeterRateDNS = 500
-
-	// PacketInQueueSize defines the size of PacketInQueue.
-	// When PacketInQueue reaches PacketInQueueSize, new packetIn will be dropped.
-	PacketInQueueSize = 1000
-	// PacketInQueueRate defines the maximum frequency of getting items from PacketInQueue.
-	// PacketInQueueRate is represented as number of events per second.
-	PacketInQueueRate = 500
 )
+
+// FeatureRateLimitConfig defines the rate-limiting of different features.
+// All numbers in this struct stand for the rate as packets per second(pps) and the
+// burst/queueSize will be automatically set to 2 times of it.
+// When burst/queue is full, new packets will be dropped.
+type FeatureRateLimitConfig struct {
+	// DNSInterception is the rate limiting of sending packets to Antrea-agent for FQDN
+	// DNS interception.
+	DNSInterception int `yaml:"dnsInterception"`
+	// Traceflow is the rate limiting of sending packets to Antrea-agent for traceflow.
+	Traceflow int `yaml:"traceflow"`
+	// NetworkPolicy is the rate limiting of sending packets to Antrea-agent for
+	// NetworkPolicy logging and reject.
+	NetworkPolicy int `yaml:"networkPolicy"`
+	// IGMP is the rate limiting of sending packets to Antrea-agent for IGMP.
+	IGMP int `yaml:"igmp"`
+	// SvcReject is the rate limiting of sending packets to Antrea-agent for Service
+	// packets not matching any Endpoints.
+	SvcReject int `yaml:"serviceReject"`
+}
 
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
 func (c *client) RegisterPacketInHandler(packetHandlerCategory uint8, packetInHandler interface{}) {
@@ -112,9 +120,9 @@ type featureStartPacketIn struct {
 	packetInQueue *openflow.PacketInQueue
 }
 
-func newFeatureStartPacketIn(category uint8, stopCh <-chan struct{}) *featureStartPacketIn {
+func newFeatureStartPacketIn(category uint8, stopCh <-chan struct{}, queueSize, queueRate int) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{category: category, stopCh: stopCh}
-	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(PacketInQueueSize, rate.Limit(PacketInQueueRate))
+	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(queueSize, rate.Limit(queueRate))
 
 	return &featurePacketIn
 }
@@ -124,10 +132,23 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 	if len(c.packetInHandlers) == 0 {
 		return
 	}
-
 	// Iterate through each feature that starts packetIn. Subscribe with their specified category.
 	for category := range c.packetInHandlers {
-		featurePacketIn := newFeatureStartPacketIn(category, stopCh)
+		var featurePacketIn *featureStartPacketIn
+		switch category {
+		case uint8(PacketInCategoryDNS):
+			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.DNSInterception*2, c.featureRateLimit.DNSInterception)
+		case uint8(PacketInCategoryTF):
+			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.Traceflow*2, c.featureRateLimit.Traceflow)
+		case uint8(PacketInCategoryNP):
+			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.NetworkPolicy*2, c.featureRateLimit.NetworkPolicy)
+		case uint8(PacketInCategoryIGMP):
+			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.IGMP*2, c.featureRateLimit.IGMP)
+		case uint8(PacketInCategorySvcReject):
+			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.SvcReject*2, c.featureRateLimit.SvcReject)
+		default:
+			featurePacketIn = newFeatureStartPacketIn(category, stopCh, 1000, 500)
+		}
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {
 			klog.Errorf("received error %+v while subscribing packetIn for each feature", err)
