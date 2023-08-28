@@ -36,6 +36,7 @@ CODECOV_TOKEN=""
 COVERAGE=false
 KIND=false
 DEBUG=false
+GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
@@ -284,7 +285,7 @@ function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export PATH=${GOROOT}/bin:$PATH
 
     git show --numstat
@@ -323,7 +324,7 @@ function deliver_multicluster_controller {
     echo "====== Build Antrea Multiple Cluster Controller and YAMLs ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export PATH=${GOROOT}/bin:$PATH
 
     DEFAULT_IMAGE=antrea/antrea-mc-controller:latest
@@ -387,7 +388,7 @@ function run_multicluster_e2e {
     echo "====== Running Multicluster e2e Tests ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
@@ -468,6 +469,8 @@ function collect_coverage {
 }
 
 trap clean_multicluster EXIT
+source $WORKSPACE/ci/jenkins/utils.sh
+check_and_upgrade_golang
 clean_tmp
 clean_images
 

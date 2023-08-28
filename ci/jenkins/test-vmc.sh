@@ -38,6 +38,7 @@ TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
+GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -341,7 +342,7 @@ function deliver_antrea {
 
     export GO111MODULE=on
     export GOPATH=$WORKDIR/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${GIT_CHECKOUT_DIR}/../gocache
     export PATH=$GOROOT/bin:$PATH
 
@@ -476,7 +477,7 @@ function run_e2e {
 
     export GO111MODULE=on
     export GOPATH=$WORKDIR/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=$WORKDIR/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
@@ -538,7 +539,7 @@ function run_conformance {
 
     export GO111MODULE=on
     export GOPATH=$WORKDIR/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=$WORKDIR/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
@@ -680,6 +681,8 @@ SSH_WITH_ANTREA_CI_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyC
 SSH_WITH_UTILS_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
 SCP_WITH_UTILS_KEY="scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
 
+source $WORKSPACE/ci/jenkins/utils.sh
+check_and_upgrade_golang
 clean_tmp
 if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
     garbage_collection
