@@ -124,7 +124,12 @@ func (l *labelIdentityMatch) matches(s *selectorItem) bool {
 // constructMapFromLabelString parses label string of format "app=client,env=dev" into a map.
 func constructMapFromLabelString(s string) map[string]string {
 	m := map[string]string{}
-	if s == "" {
+	// Before https://github.com/antrea-io/antrea/issues/5403 is fixed, LabelIdentities created
+	// for Pods with an empty label set will include a <none> string. Handling for such LabelIdentities
+	// are needed, as in multi-cluster controller upgrade cases, these LabelIdentities created by
+	// previous controller still need to be processed, but will be cleaned up by the stale controller
+	// eventually.
+	if s == "" || s == "<none>" {
 		return m
 	}
 	kvs := strings.Split(s, ",")
