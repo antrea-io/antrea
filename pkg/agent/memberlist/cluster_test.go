@@ -41,6 +41,11 @@ import (
 	"antrea.io/antrea/pkg/util/ip"
 )
 
+var (
+	labelsWindowsOS = map[string]string{v1.LabelOSStable: "windows"}
+	labelsLinuxOS   = map[string]string{v1.LabelOSStable: "linux"}
+)
+
 type fakeCluster struct {
 	cluster   *Cluster
 	clientSet *fake.Clientset
@@ -190,7 +195,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		NodeIPv4Addr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1)},
 	}
 	localNode := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "127.0.0.1"}}}}
 	fakeEIP1 := &crdv1a2.ExternalIPPool{
 		TypeMeta:   metav1.TypeMeta{Kind: "CustomResourceDefinition"},
@@ -239,17 +244,17 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		{
 			name:                     "Update Node with matched labels then local Node should be selected",
 			expectEgressSelectResult: true,
-			newNodeLabels:            map[string]string{"env": "pro"},
+			newNodeLabels:            map[string]string{"env": "pro", v1.LabelOSStable: "linux"},
 		},
 		{
 			name:                     "Update Node with different but matched labels then local Node should be selected",
 			expectEgressSelectResult: true,
-			newNodeLabels:            map[string]string{"env": "pro", "env1": "test"},
+			newNodeLabels:            map[string]string{"env": "pro", "env1": "test", v1.LabelOSStable: "linux"},
 		},
 		{
 			name:                     "Update Node with not matched labels then local Node should not be selected",
 			expectEgressSelectResult: false,
-			newNodeLabels:            map[string]string{"env": "test"},
+			newNodeLabels:            map[string]string{"env": "test", v1.LabelOSStable: "linux"},
 		},
 	}
 	updateNode := func(node *v1.Node) {
@@ -260,8 +265,9 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	}
 	for _, tCase := range testCasesUpdateNode {
 		t.Run(tCase.name, func(t *testing.T) {
-			localNode.Labels = tCase.newNodeLabels
-			updateNode(localNode)
+			newPod := localNode.DeepCopy()
+			newPod.Labels = tCase.newNodeLabels
+			updateNode(newPod)
 			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
 				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
 				return err == nil && res == tCase.expectEgressSelectResult, nil
@@ -270,8 +276,9 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	}
 
 	// Test updating ExternalIPPool.
-	localNode.Labels = map[string]string{"env": "test"}
-	updateNode(localNode)
+	newPod := localNode.DeepCopy()
+	newPod.Labels = map[string]string{"env": "test", v1.LabelOSStable: "linux"}
+	updateNode(newPod)
 	testCasesUpdateEIP := []struct {
 		name                     string
 		expectEgressSelectResult bool
@@ -374,7 +381,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 
 	// Test creating Node with invalid IP.
 	fakeNode := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode0"},
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode0", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "x"}}},
 	}
 	assert.NoError(t, createNode(fakeCluster.clientSet, fakeNode))
@@ -388,17 +395,26 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 			t.Fatalf("Delete Node error: %v", err)
 		}
 	}
-	deleteNode(localNode)
+	deleteNode(newPod)
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 
 	mockMemberlist.EXPECT().Join([]string{"1.1.1.1"})
 	// Test creating Node with valid IP.
 	fakeNode1 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1"},
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "1.1.1.1"}}},
 	}
 	assert.NoError(t, createNode(fakeCluster.clientSet, fakeNode1))
+	assertEgressSelectResult(fakeEgress2, false, true)
+	assertEgressSelectResult(fakeEgress1, false, false)
+
+	// Test creating Windows Node, which should be ignored.
+	fakeWinNode1 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeWinNode1", Labels: labelsWindowsOS},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "1.1.1.11"}}},
+	}
+	assert.NoError(t, createNode(fakeCluster.clientSet, fakeWinNode1))
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 }
@@ -644,16 +660,20 @@ func TestCluster_RejoinNodes(t *testing.T) {
 		NodeIPv4Addr: ip.MustParseCIDR("10.0.0.1/24"),
 	}
 	node1 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+		ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.1"}}},
 	}
 	node2 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node2"},
+		ObjectMeta: metav1.ObjectMeta{Name: "node2", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.2"}}},
 	}
 	node3 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "node3", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.3"}}},
+	}
+	winNode1 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "winnode1", Labels: labelsWindowsOS},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.11"}}},
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -661,7 +681,7 @@ func TestCluster_RejoinNodes(t *testing.T) {
 	mockMemberlist := NewMockMemberlist(controller)
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.2"})
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.3"})
-	fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3)
+	fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3, winNode1)
 
 	mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
 		{Name: "node1"},
