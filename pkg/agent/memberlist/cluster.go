@@ -80,6 +80,8 @@ var mapNodeEventType = map[memberlist.NodeEventType]nodeEventType{
 	memberlist.NodeUpdate: nodeEventTypeUpdate,
 }
 
+var linuxNodeSelector = labels.SelectorFromSet(labels.Set{corev1.LabelOSStable: "linux"})
+
 type ClusterNodeEventHandler func(objName string)
 
 type Interface interface {
@@ -200,18 +202,27 @@ func NewCluster(
 	return c, nil
 }
 
+func shouldJoinCluster(node *corev1.Node) bool {
+	// non-Linux Nodes should not join the memberlist cluster as all features relying on it is only supported on Linux.
+	return linuxNodeSelector.Matches(labels.Set(node.Labels))
+}
+
 func (c *Cluster) handleCreateNode(obj interface{}) {
 	node := obj.(*corev1.Node)
+	if !shouldJoinCluster(node) {
+		return
+	}
 	// Ignore the Node itself.
-	if node.Name != c.nodeName {
-		if member, err := c.newClusterMember(node); err == nil {
-			_, err := c.mList.Join([]string{member})
-			if err != nil {
-				klog.ErrorS(err, "Processing Node CREATE event error, join cluster failed", "member", member)
-			}
-		} else {
-			klog.ErrorS(err, "Processing Node CREATE event error", "nodeName", node.Name)
+	if node.Name == c.nodeName {
+		return
+	}
+	if member, err := c.newClusterMember(node); err == nil {
+		_, err := c.mList.Join([]string{member})
+		if err != nil {
+			klog.ErrorS(err, "Processing Node CREATE event error, join cluster failed", "member", member)
 		}
+	} else {
+		klog.ErrorS(err, "Processing Node CREATE event error", "nodeName", node.Name)
 	}
 
 	affectedEIPs := c.filterEIPsFromNodeLabels(node)
@@ -233,6 +244,9 @@ func (c *Cluster) handleDeleteNode(obj interface{}) {
 			return
 		}
 	}
+	if !shouldJoinCluster(node) {
+		return
+	}
 	affectedEIPs := c.filterEIPsFromNodeLabels(node)
 	c.enqueueExternalIPPools(affectedEIPs)
 	klog.V(2).InfoS("Processed Node DELETE event", "nodeName", node.Name, "affectedExternalIPPoolNum", affectedEIPs.Len())
@@ -240,6 +254,9 @@ func (c *Cluster) handleDeleteNode(obj interface{}) {
 
 func (c *Cluster) handleUpdateNode(oldObj, newObj interface{}) {
 	node := newObj.(*corev1.Node)
+	if !shouldJoinCluster(node) {
+		return
+	}
 	oldNode := oldObj.(*corev1.Node)
 	if reflect.DeepEqual(node.GetLabels(), oldNode.GetLabels()) {
 		klog.V(2).InfoS("Processed Node UPDATE event, labels not changed", "nodeName", node.Name)
@@ -356,7 +373,7 @@ func (c *Cluster) Run(stopCh <-chan struct{}) {
 // than 15 seconds, the agent wouldn't try to reach any other Node and would think it's the only alive Node until it's
 // restarted.
 func (c *Cluster) RejoinNodes() {
-	nodes, _ := c.nodeLister.List(labels.Everything())
+	nodes, _ := c.nodeLister.List(linuxNodeSelector)
 	aliveNodes := c.AliveNodes()
 	var membersToJoin []string
 	for _, node := range nodes {
