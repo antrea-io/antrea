@@ -421,17 +421,17 @@ func (c *NetworkPolicyController) getParentGroups(grpName string) []antreatypes.
 	return groups
 }
 
-// GetGroupMembers returns the current members of a ClusterGroup.
-// If the ClusterGroup is defined with IPBlocks, the returned members will be []controlplane.IPBlock.
+// GetGroupMembers returns the current members of a ClusterGroup/Group.
+// If the ClusterGroup/Group is defined with IPBlocks, the returned members will be []controlplane.IPBlock.
 // Otherwise, the returned members will be of type controlplane.GroupMemberSet.
-func (c *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
-	groupObj, found, _ := c.internalGroupStore.Get(cgName)
+func (c *NetworkPolicyController) GetGroupMembers(name string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
+	groupObj, found, _ := c.internalGroupStore.Get(name)
 	if found {
 		group := groupObj.(*antreatypes.Group)
 		member, ipb := c.getInternalGroupMembers(group)
 		return member, ipb, nil
 	}
-	return nil, nil, fmt.Errorf("no internal Group with name %s is found", cgName)
+	return nil, nil, fmt.Errorf("no internal Group with name %s is found", name)
 }
 
 func (c *NetworkPolicyController) GetAssociatedIPBlockGroups(ip net.IP) []antreatypes.Group {

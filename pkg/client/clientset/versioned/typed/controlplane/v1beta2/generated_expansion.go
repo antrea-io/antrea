@@ -26,6 +26,8 @@ type EgressGroupExpansion interface{}
 
 type GroupAssociationExpansion interface{}
 
+type GroupMembersExpansion interface{}
+
 type IPGroupAssociationExpansion interface{}
 
 type NodeStatsSummaryExpansion interface{}

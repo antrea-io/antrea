@@ -46,6 +46,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMembers":                      schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                    schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol":                      schema_pkg_apis_controlplane_v1beta2_HTTPProtocol(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
@@ -818,7 +819,7 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.",
+				Description: "ClusterGroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a ClusterGroup.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -1189,6 +1190,89 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a Group.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"effectiveMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+									},
+								},
+							},
+						},
+					},
+					"effectiveIPBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+									},
+								},
+							},
+						},
+					},
+					"totalMembers": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"totalPages": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"currentPage": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+				},
+				Required: []string{"effectiveMembers", "effectiveIPBlocks", "totalMembers", "totalPages", "currentPage"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
