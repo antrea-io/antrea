@@ -19,26 +19,26 @@ import (
 	"testing"
 	"time"
 
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreaTestFramework "antrea.io/antrea/test/e2e"
 	antreaTestUtil "antrea.io/antrea/test/e2e/utils"
 )
 
 var (
-	allPods                                     []antreaTestFramework.Pod
-	podsByNamespace                             map[string][]antreaTestFramework.Pod
-	k8sUtils                                    *antreaTestFramework.KubernetesUtils
-	allTestList                                 []*antreaTestFramework.TestCase
-	pods                                        []string
-	namespaces                                  map[string]string
-	podIPs                                      map[string][]string
-	p80, p81, p8080, p8081, p8082, p8085, p6443 int32
+	allPods                              []antreaTestFramework.Pod
+	podsByNamespace                      map[string][]antreaTestFramework.Pod
+	k8sUtils                             *antreaTestFramework.KubernetesUtils
+	allTestList                          []*antreaTestFramework.TestCase
+	pods                                 []string
+	namespaces                           map[string]string
+	podIPs                               map[string][]string
+	p80, p81, p8080, p8081, p8082, p8085 int32
 )
 
 // Verification of deleting/creating resources timed out.
@@ -64,17 +64,17 @@ func testANNPDropIngressEgress(t *testing.T, protocol antreaTestUtil.AntreaPolic
 	reachability.Expect(antreaTestFramework.Pod(namespaces["y"]+"/a"), antreaTestFramework.Pod(namespaces["z"]+"/c"), antreaTestFramework.Dropped)
 	testStep := []*antreaTestFramework.TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			protocol,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      protocol,
+			Duration:      0,
+			CustomProbes:  nil,
 		},
 	}
 	testCase := []*antreaTestFramework.TestCase{
-		{"ANNP Drop Ingress From X/B to Y/A And Egress From Y/A to Z/C", testStep},
+		{Name: "ANNP Drop Ingress From X/B to Y/A And Egress From Y/A to Z/C", Steps: testStep},
 	}
 	executeTests(t, testCase)
 }
@@ -97,17 +97,17 @@ func testANNPMultipleAppliedTo(t *testing.T, protocol antreaTestUtil.AntreaPolic
 	reachability.Expect(antreaTestFramework.Pod(namespaces["x"]+"/b"), antreaTestFramework.Pod(namespaces["y"]+"/c"), antreaTestFramework.Dropped)
 	testStep := []*antreaTestFramework.TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			protocol,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      protocol,
+			Duration:      0,
+			CustomProbes:  nil,
 		},
 	}
 	testCase := []*antreaTestFramework.TestCase{
-		{"ANNP Drop Ingress From X/B to Y/A", testStep},
+		{Name: "ANNP Drop Ingress From X/B to Y/A", Steps: testStep},
 	}
 	executeTests(t, testCase)
 }
