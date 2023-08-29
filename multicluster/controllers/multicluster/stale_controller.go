@@ -339,7 +339,7 @@ func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(ctx conte
 		if !ok {
 			continue
 		}
-		normalizedLabel := podNSlabel + "&pod:" + labels.FormatLabels(p.Labels)
+		normalizedLabel := podNSlabel + "&pod:" + labels.Set(p.Labels).String()
 		delete(staleResExpItems, normalizedLabel)
 	}
 	for _, r := range staleResExpItems {
