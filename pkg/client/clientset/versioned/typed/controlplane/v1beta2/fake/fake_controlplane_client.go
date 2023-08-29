@@ -46,6 +46,10 @@ func (c *FakeControlplaneV1beta2) GroupAssociations(namespace string) v1beta2.Gr
 	return &FakeGroupAssociations{c, namespace}
 }
 
+func (c *FakeControlplaneV1beta2) GroupMembers(namespace string) v1beta2.GroupMembersInterface {
+	return &FakeGroupMembers{c, namespace}
+}
+
 func (c *FakeControlplaneV1beta2) IPGroupAssociations() v1beta2.IPGroupAssociationInterface {
 	return &FakeIPGroupAssociations{c}
 }

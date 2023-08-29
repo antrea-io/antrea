@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 func TestProcessGroup(t *testing.T) {
@@ -533,6 +534,57 @@ func TestGetGroupSourceRef(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actualRef := getGroupSourceRef(tt.group)
 			assert.Equal(t, tt.expectedRef, actualRef)
+		})
+	}
+}
+
+func TestGetGroupMembers(t *testing.T) {
+	var namespacedGroups []antreatypes.Group
+	for _, group := range groups {
+		group.SourceReference.Namespace = "test-ns"
+		namespacedGroups = append(namespacedGroups, group)
+	}
+	pod1MemberSet := controlplane.GroupMemberSet{}
+	pod1MemberSet.Insert(podToGroupMember(testPods[0], true))
+	pod12MemberSet := controlplane.GroupMemberSet{}
+	pod12MemberSet.Insert(podToGroupMember(testPods[0], true))
+	pod12MemberSet.Insert(podToGroupMember(testPods[1], true))
+	tests := []struct {
+		name            string
+		group           antreatypes.Group
+		expectedMembers controlplane.GroupMemberSet
+	}{
+		{
+			"multiple-members",
+			namespacedGroups[1],
+			pod12MemberSet,
+		},
+		{
+			"single-member",
+			namespacedGroups[0],
+			pod1MemberSet,
+		},
+		{
+			"no-member",
+			namespacedGroups[2],
+			controlplane.GroupMemberSet{},
+		},
+	}
+	_, npc := newController(nil, nil)
+	for i := range testPods {
+		npc.groupingInterface.AddPod(testPods[i])
+	}
+	for j := range externalEntities {
+		npc.groupingInterface.AddExternalEntity(externalEntities[j])
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			npc.internalGroupStore.Create(&tt.group)
+			groupName := k8s.NamespacedName(tt.group.SourceReference.Namespace, tt.group.SourceReference.Name)
+			npc.groupingInterface.AddGroup(internalGroupType, groupName, tt.group.Selector)
+			members, _, err := npc.GetGroupMembers(groupName)
+			assert.Equal(t, nil, err)
+			assert.Equal(t, tt.expectedMembers, members)
 		})
 	}
 }

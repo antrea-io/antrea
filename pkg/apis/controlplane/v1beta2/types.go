@@ -98,8 +98,23 @@ type GroupMember struct {
 // +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
+// ClusterGroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	EffectiveMembers  []GroupMember `json:"effectiveMembers" protobuf:"bytes,2,rep,name=effectiveMembers"`
+	EffectiveIPBlocks []IPNet       `json:"effectiveIPBlocks" protobuf:"bytes,3,rep,name=effectiveIPBlocks"`
+	TotalMembers      int64         `json:"totalMembers" protobuf:"varint,4,opt,name=totalMembers"`
+	TotalPages        int64         `json:"totalPages" protobuf:"varint,5,opt,name=totalPages"`
+	CurrentPage       int64         `json:"currentPage" protobuf:"varint,6,opt,name=currentPage"`
+}
+
+// +genclient
+// +genclient:onlyVerbs=get
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// GroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a Group.
+type GroupMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	EffectiveMembers  []GroupMember `json:"effectiveMembers" protobuf:"bytes,2,rep,name=effectiveMembers"`

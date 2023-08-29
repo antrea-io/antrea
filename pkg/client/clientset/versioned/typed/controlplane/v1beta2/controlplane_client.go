@@ -31,6 +31,7 @@ type ControlplaneV1beta2Interface interface {
 	ClusterGroupMembersGetter
 	EgressGroupsGetter
 	GroupAssociationsGetter
+	GroupMembersGetter
 	IPGroupAssociationsGetter
 	NetworkPoliciesGetter
 	NodeStatsSummariesGetter
@@ -60,6 +61,10 @@ func (c *ControlplaneV1beta2Client) EgressGroups() EgressGroupInterface {
 
 func (c *ControlplaneV1beta2Client) GroupAssociations(namespace string) GroupAssociationInterface {
 	return newGroupAssociations(c, namespace)
+}
+
+func (c *ControlplaneV1beta2Client) GroupMembers(namespace string) GroupMembersInterface {
+	return newGroupMembers(c, namespace)
 }
 
 func (c *ControlplaneV1beta2Client) IPGroupAssociations() IPGroupAssociationInterface {

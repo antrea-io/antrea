@@ -27,7 +27,7 @@ import (
 )
 
 type REST struct {
-	querier groupMembershipQuerier
+	querier GroupMembershipQuerier
 }
 
 var (
@@ -37,11 +37,11 @@ var (
 )
 
 // NewREST returns a REST object that will work against API services.
-func NewREST(querier groupMembershipQuerier) *REST {
+func NewREST(querier GroupMembershipQuerier) *REST {
 	return &REST{querier}
 }
 
-type groupMembershipQuerier interface {
+type GroupMembershipQuerier interface {
 	GetGroupMembers(name string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error)
 }
 
@@ -53,35 +53,10 @@ func (r *REST) Destroy() {
 }
 
 func (r *REST) Get(ctx context.Context, name string, options runtime.Object) (runtime.Object, error) {
-	groupMembers, ipBlocks, err := r.querier.GetGroupMembers(name)
-	if err != nil {
-		return nil, errors.NewInternalError(err)
-	}
-	// Retrieve options used for pagination.
-	getOptions, ok := options.(*controlplane.PaginationGetOptions)
-	if !ok || getOptions == nil {
-		return nil, errors.NewInternalError(fmt.Errorf("received error while retrieving options for pagination"))
-	}
+	var err error
 	memberList := &controlplane.ClusterGroupMembers{}
-	if len(ipBlocks) > 0 {
-		effectiveIPBlocks := make([]controlplane.IPNet, 0, len(ipBlocks))
-		for _, ipb := range ipBlocks {
-			// ClusterGroup ipBlock does not support Except slices, so no need to generate an effective
-			// list of IPs by removing Except slices from allowed CIDR.
-			effectiveIPBlocks = append(effectiveIPBlocks, ipb.CIDR)
-		}
-		memberList.EffectiveIPBlocks = effectiveIPBlocks
-	}
-	if len(groupMembers) > 0 {
-		effectiveMembers := make([]controlplane.GroupMember, 0, len(groupMembers))
-		for _, member := range groupMembers {
-			effectiveMembers = append(effectiveMembers, *member)
-		}
-		memberList.EffectiveMembers = effectiveMembers
-	}
 	memberList.Name = name
-	memberList.TotalMembers = int64(len(memberList.EffectiveMembers))
-	err = paginateMemberList(memberList, getOptions)
+	memberList.EffectiveMembers, memberList.EffectiveIPBlocks, memberList.TotalMembers, memberList.TotalPages, memberList.CurrentPage, err = GetPaginatedMembers(r.querier, name, options)
 	return memberList, err
 }
 
@@ -94,46 +69,71 @@ func (r *REST) NamespaceScoped() bool {
 	return false
 }
 
-// paginateMemberList returns paginated results if meaningful options are provided, options should never be nil.
+func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options runtime.Object) (members []controlplane.GroupMember, ipNets []controlplane.IPNet, totalMembers, totalPages, currentPage int64, err error) {
+	groupMembers, ipBlocks, err := querier.GetGroupMembers(name)
+	if err != nil {
+		return nil, nil, 0, 0, 0, errors.NewInternalError(err)
+	}
+	// Retrieve options used for pagination.
+	getOptions, ok := options.(*controlplane.PaginationGetOptions)
+	if !ok || getOptions == nil {
+		return nil, nil, 0, 0, 0, errors.NewInternalError(fmt.Errorf("received error while retrieving options for pagination"))
+	}
+	if len(ipBlocks) > 0 {
+		ipNets = make([]controlplane.IPNet, 0, len(ipBlocks))
+		for _, ipb := range ipBlocks {
+			// ClusterGroup ipBlock does not support Except slices, so no need to generate an effective
+			// list of IPs by removing Except slices from allowed CIDR.
+			ipNets = append(ipNets, ipb.CIDR)
+		}
+	}
+	if len(groupMembers) > 0 {
+		members = make([]controlplane.GroupMember, 0, len(groupMembers))
+		for _, member := range groupMembers {
+			members = append(members, *member)
+		}
+	}
+	totalMembers = int64(len(members))
+	totalPages, currentPage, err = paginateMemberList(&members, getOptions)
+	return
+}
+
+// paginateMemberList returns paginated results if meaningful options are provided. Options should never be nil.
 // Paginated results are continuous only when there is no member change across multiple calls.
-// Pagination is not processed if either page number or limit = 0, thus returns full member list.
-// Returns an error for invalid options; returns empty list for page number beyond the total pages range.
-func paginateMemberList(memberList *controlplane.ClusterGroupMembers, pageInfo *controlplane.PaginationGetOptions) error {
+// Pagination is not enabled if either page number or limit = 0, in which the full member list is returned.
+// An error is returned for invalid options, and an empty list is returned for a page number out of the pages range.
+func paginateMemberList(effectiveMembers *[]controlplane.GroupMember, pageInfo *controlplane.PaginationGetOptions) (int64, int64, error) {
 	if pageInfo.Limit < 0 {
-		return errors.NewBadRequest(fmt.Sprintf("received invalid page limit %d for pagination", pageInfo.Limit))
+		return 0, 0, errors.NewBadRequest(fmt.Sprintf("received invalid page limit %d for pagination", pageInfo.Limit))
 	} else if pageInfo.Page < 0 {
-		return errors.NewBadRequest(fmt.Sprintf("received invalid page number %d for pagination", pageInfo.Page))
+		return 0, 0, errors.NewBadRequest(fmt.Sprintf("received invalid page number %d for pagination", pageInfo.Page))
 	}
-	if memberList.TotalMembers == 0 {
-		memberList.TotalPages, memberList.CurrentPage = 0, 0
-		return nil
+	if len(*effectiveMembers) == 0 {
+		return 0, 0, nil
 	}
-	// Sort members based on name of ee/pod to realize consistent pagination support.
-	sort.SliceStable(memberList.EffectiveMembers, func(i, j int) bool {
-		if memberList.EffectiveMembers[i].Pod != nil && memberList.EffectiveMembers[j].Pod != nil {
-			return memberList.EffectiveMembers[i].Pod.Name < memberList.EffectiveMembers[j].Pod.Name
-		} else if memberList.EffectiveMembers[i].ExternalEntity != nil && memberList.EffectiveMembers[j].ExternalEntity != nil {
-			return memberList.EffectiveMembers[i].ExternalEntity.Name < memberList.EffectiveMembers[j].ExternalEntity.Name
+	// Sort members based on EE/Pod names to realize consistent pagination results.
+	sort.SliceStable(*effectiveMembers, func(i, j int) bool {
+		if (*effectiveMembers)[i].Pod != nil && (*effectiveMembers)[j].Pod != nil {
+			return (*effectiveMembers)[i].Pod.Name < (*effectiveMembers)[j].Pod.Name
+		} else if (*effectiveMembers)[i].ExternalEntity != nil && (*effectiveMembers)[j].ExternalEntity != nil {
+			return (*effectiveMembers)[i].ExternalEntity.Name < (*effectiveMembers)[j].ExternalEntity.Name
 		} else {
 			return true
 		}
 	})
 	if pageInfo.Limit == 0 {
-		memberList.TotalPages, memberList.CurrentPage = 1, 1
-		return nil
+		return 1, 1, nil
 	}
-	totalPages := (int64(len(memberList.EffectiveMembers)) + pageInfo.Limit - 1) / pageInfo.Limit
-	memberList.TotalPages = totalPages
-	memberList.CurrentPage = pageInfo.Page
+	totalPages := (int64(len(*effectiveMembers)) + pageInfo.Limit - 1) / pageInfo.Limit
 	if totalPages >= pageInfo.Page && pageInfo.Page > 0 {
 		beginMember := (pageInfo.Page - 1) * pageInfo.Limit
-		memberList.EffectiveMembers = memberList.EffectiveMembers[beginMember:]
-		if pageInfo.Limit < int64(len(memberList.EffectiveMembers)) {
-			memberList.EffectiveMembers = memberList.EffectiveMembers[:pageInfo.Limit]
+		*effectiveMembers = (*effectiveMembers)[beginMember:]
+		if pageInfo.Limit < int64(len(*effectiveMembers)) {
+			*effectiveMembers = (*effectiveMembers)[:pageInfo.Limit]
 		}
 	} else if totalPages < pageInfo.Page {
-		// Returns empty memberList if page number exceeds total pages, to indicate end of list.
-		memberList.EffectiveMembers = memberList.EffectiveMembers[:0]
+		// Returns an empty member list if the page number exceeds total pages, to indicate end of list.
+		*effectiveMembers = (*effectiveMembers)[:0]
 	}
-	return nil
+	return totalPages, pageInfo.Page, nil
 }
