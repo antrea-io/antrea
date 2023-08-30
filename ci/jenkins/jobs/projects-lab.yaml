@@ -1339,3 +1339,111 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: nsxvpc-e2e
+          node: 'antrea-nsxvpc-testbed'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-e2e-jumper
+          trigger_phrase: ^(?!Thanks for your PR).*/test-nsxvpc-(e2e|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          throttle_concurrent_builds_category:
+            - e2e-lock-per-testbed
+          throttle_concurrent_builds_enabled: 'true'
+          status_context: jenkins-nsxvpc-e2e
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-nsxvpc-e2e to re-trigger.
+          error_status: Failed. Add comment /test-nsxvpc-e2e to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: antrea-test-logs.tar.gz
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: nsxvpc-networkpolicy
+          node: 'antrea-nsxvpc-testbed'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-conformance-jumper:
+                conformance_type: 'networkpolicy'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-nsxvpc-(networkpolicy|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          throttle_concurrent_builds_category:
+            - e2e-lock-per-testbed
+          throttle_concurrent_builds_enabled: 'true'
+          status_context: jenkins-nsxvpc-networkpolicy
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-nsxvpc-networkpolicy to re-trigger.
+          error_status: Failed. Add comment /test-nsxvpc-networkpolicy to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: nsxvpc-conformance
+          node: 'antrea-nsxvpc-testbed'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-conformance-jumper:
+                conformance_type: 'conformance'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-nsxvpc-(conformance|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          throttle_concurrent_builds_category:
+            - e2e-lock-per-testbed
+          throttle_concurrent_builds_enabled: 'true'
+          status_context: jenkins-nsxvpc-conformance
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-nsxvpc-conformance to re-trigger.
+          error_status: Failed. Add comment /test-nsxvpc-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: '*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+
