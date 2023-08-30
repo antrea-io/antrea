@@ -640,7 +640,7 @@ type PacketInQueue struct {
 }
 
 func NewPacketInQueue(size int, r rate.Limit) *PacketInQueue {
-	return &PacketInQueue{rateLimiter: rate.NewLimiter(r, 1), packetsCh: make(chan *ofctrl.PacketIn, size)}
+	return &PacketInQueue{rateLimiter: rate.NewLimiter(r, size), packetsCh: make(chan *ofctrl.PacketIn, size)}
 }
 
 func (q *PacketInQueue) AddOrDrop(packet *ofctrl.PacketIn) bool {
