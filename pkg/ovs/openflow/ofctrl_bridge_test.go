@@ -23,6 +23,7 @@ import (
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/time/rate"
 
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
@@ -132,4 +133,14 @@ func TestConcurrentCreateGroups(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestPacketInQueue(t *testing.T) {
+	burst := 200
+	q := NewPacketInQueue(burst, rate.Limit(100))
+	for i := 0; i < burst; i++ {
+		assert.True(t, q.AddOrDrop(nil), "Packet should not be dropped before reaching the burst")
+	}
+	assert.False(t, q.AddOrDrop(nil), "Packet should be dropped after reaching the burst")
+	assert.True(t, q.rateLimiter.AllowN(time.Now(), burst))
 }
