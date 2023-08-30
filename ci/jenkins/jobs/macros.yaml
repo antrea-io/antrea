@@ -283,7 +283,7 @@
           #!/bin/bash
           set -e
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY} --testbed-type jumper
+          ./ci/jenkins/test.sh --testcase e2e --registry ${{DOCKER_REGISTRY}} --testbed-type jumper
 
 - builder:
     name: builder-conformance-jumper
@@ -292,4 +292,4 @@
           #!/bin/bash
           set -e
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${DOCKER_REGISTRY} --testbed-type jumper
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --testbed-type jumper
