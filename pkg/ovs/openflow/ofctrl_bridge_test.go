@@ -162,3 +162,13 @@ func TestOFBridgePacketRcvd(t *testing.T) {
 		}
 	}
 }
+
+func TestPacketInQueue(t *testing.T) {
+	burst := 200
+	q := NewPacketInQueue(burst, rate.Limit(100))
+	for i := 0; i < burst; i++ {
+		assert.True(t, q.AddOrDrop(nil), "Packet should not be dropped before reaching the burst")
+	}
+	assert.False(t, q.AddOrDrop(nil), "Packet should be dropped after reaching the burst")
+	assert.Equal(t, float64(burst), q.rateLimiter.Tokens())
+}
