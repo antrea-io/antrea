@@ -24,7 +24,6 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -38,7 +37,6 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -255,7 +253,6 @@ type Controller struct {
 	installedLocalGroups      sets.Set[string]
 	installedLocalGroupsMutex sync.RWMutex
 	mRouteClient              *MRouteClient
-	ovsBridgeClient           ovsconfig.OVSBridgeClient
 	// queryInterval is the interval to send IGMP query messages.
 	queryInterval time.Duration
 	// mcastGroupTimeout is the timeout to detect a group as stale if no IGMP report is received within the time.
@@ -275,13 +272,12 @@ func NewMulticastController(ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	multicastSocket RouteInterface,
 	multicastInterfaces sets.Set[string],
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	podUpdateSubscriber channel.Subscriber,
 	igmpQueryInterval time.Duration,
 	igmpQueryVersions []uint8,
 	validator types.McastNetworkPolicyController,
 	isEncap bool,
-	informerFactory informers.SharedInformerFactory) *Controller {
+	nodeInformer coreinformers.NodeInformer) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
 	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
@@ -300,7 +296,6 @@ func NewMulticastController(ofClient openflow.Client,
 		installedLocalGroups: sets.New[string](),
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
 		mRouteClient:         multicastRouteClient,
-		ovsBridgeClient:      ovsBridgeClient,
 		queryInterval:        igmpQueryInterval,
 		mcastGroupTimeout:    igmpQueryInterval * 3,
 		queryGroupId:         v4GroupAllocator.Allocate(),
@@ -309,7 +304,7 @@ func NewMulticastController(ofClient openflow.Client,
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
 		c.installedNodes = sets.New[string]()
-		c.nodeInformer = informerFactory.Core().V1().Nodes()
+		c.nodeInformer = nodeInformer
 		c.nodeLister = c.nodeInformer.Lister()
 		c.nodeListerSynced = c.nodeInformer.Informer().HasSynced
 		c.nodeUpdateQueue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeUpdate")

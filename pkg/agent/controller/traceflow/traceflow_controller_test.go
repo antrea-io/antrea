@@ -43,7 +43,6 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -91,7 +90,6 @@ type fakeTraceflowController struct {
 	mockOFClient       *openflowtest.MockClient
 	crdClient          *fakeversioned.Clientset
 	crdInformerFactory crdinformers.SharedInformerFactory
-	ovsClient          *ovsconfigtest.MockOVSBridgeClient
 }
 
 func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, npQuerier querier.AgentNetworkPolicyInfoQuerier, egressQuerier querier.EgressQuerier) *fakeTraceflowController {
@@ -101,7 +99,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
-	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, pod1IPv4, pod1MAC.String(), int32(ofPortPod1))
@@ -111,14 +108,13 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 
 	tfController := &Controller{
 		kubeClient:            kubeClient,
-		traceflowClient:       crdClient,
+		crdClient:             crdClient,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
 		ofClient:              mockOFClient,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
-		ovsBridgeClient:       ovsClient,
 		interfaceStore:        ifaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
@@ -134,7 +130,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		mockOFClient:       mockOFClient,
 		crdClient:          crdClient,
 		crdInformerFactory: crdInformerFactory,
-		ovsClient:          ovsClient,
 	}
 }
 
