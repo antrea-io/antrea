@@ -392,10 +392,14 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 	}
 	fakeClient := fake.NewSimpleClientset()
 	fakeNodeIPChecker := nodeipmock.NewFakeNodeIPChecker()
+	informerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
 	p, _ := newProxier(hostname,
 		serviceProxyName,
 		fakeClient,
-		informers.NewSharedInformerFactory(fakeClient, 0),
+		informerFactory.Core().V1().Services(),
+		informerFactory.Core().V1().Endpoints(),
+		informerFactory.Discovery().V1().EndpointSlices(),
+		informerFactory.Core().V1().Nodes(),
 		ofClient,
 		isIPv6,
 		routeClient,

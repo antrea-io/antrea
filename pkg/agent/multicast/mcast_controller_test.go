@@ -52,7 +52,6 @@ import (
 	agentutil "antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
 
@@ -61,7 +60,6 @@ var (
 	mockMulticastSocket    *multicasttest.MockRouteInterface
 	mockIfaceStore         *ifaceStoretest.MockInterfaceStore
 	mockMulticastValidator *typestest.MockMcastNetworkPolicyController
-	ovsClient              *ovsconfigtest.MockOVSBridgeClient
 	clientset              *fake.Clientset
 	informerFactory        informers.SharedInformerFactory
 	if1                    = &interfacestore.InterfaceConfig{
@@ -1248,7 +1246,6 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 	mockIfaceStore = ifaceStoretest.NewMockInterfaceStore(controller)
 	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
 	mockMulticastValidator = typestest.NewMockMcastNetworkPolicyController(controller)
-	ovsClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
 	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).Times(1)
@@ -1257,7 +1254,8 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 
 	clientset = fake.NewSimpleClientset()
 	informerFactory = informers.NewSharedInformerFactory(clientset, 12*time.Hour)
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), ovsClient, podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, informerFactory)
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, nodeInformer)
 	return mctrl
 }
 

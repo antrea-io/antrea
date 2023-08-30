@@ -17,12 +17,12 @@ package nodeportlocal
 import (
 	"fmt"
 
-	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-
-	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
+	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
 )
 
 // InitializeNPLAgent initializes the NodePortLocal agent.
@@ -30,17 +30,16 @@ import (
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
 func InitializeNPLAgent(
 	kubeClient clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
+	serviceInformer coreinformers.ServiceInformer,
+	podInformer cache.SharedIndexInformer,
 	startPort int,
 	endPort int,
 	nodeName string,
-	podInformer cache.SharedIndexInformer,
 ) (*nplk8s.NPLController, error) {
 	portTable, err := portcache.NewPortTable(startPort, endPort)
 	if err != nil {
 		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
 	}
 
-	svcInformer := informerFactory.Core().V1().Services().Informer()
-	return nplk8s.NewNPLController(kubeClient, podInformer, svcInformer, portTable, nodeName), nil
+	return nplk8s.NewNPLController(kubeClient, podInformer, serviceInformer.Informer(), portTable, nodeName), nil
 }
