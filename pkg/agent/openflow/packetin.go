@@ -83,16 +83,16 @@ const (
 	PacketInMeterIDDNS = 3
 	// Meter Entry Rate. It is represented as number of events per second.
 	// Packets which exceed the rate will be dropped.
-	PacketInMeterRateNP  = 100
-	PacketInMeterRateTF  = 100
-	PacketInMeterRateDNS = 100
+	PacketInMeterRateNP  = 500
+	PacketInMeterRateTF  = 500
+	PacketInMeterRateDNS = 500
 
 	// PacketInQueueSize defines the size of PacketInQueue.
 	// When PacketInQueue reaches PacketInQueueSize, new packetIn will be dropped.
-	PacketInQueueSize = 200
+	PacketInQueueSize = 1000
 	// PacketInQueueRate defines the maximum frequency of getting items from PacketInQueue.
 	// PacketInQueueRate is represented as number of events per second.
-	PacketInQueueRate = 100
+	PacketInQueueRate = 500
 )
 
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
