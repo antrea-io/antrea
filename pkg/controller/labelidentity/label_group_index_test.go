@@ -65,10 +65,11 @@ var (
 	selectorItemG = &selectorItem{
 		selector: selectorG,
 	}
-	labelA = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:app=web"
-	labelB = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:app=db"
-	labelC = "ns:kubernetes.io/metadata.name=nomatch,purpose=nomatch&pod:app=db"
-	labelD = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:"
+	labelA     = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:app=web"
+	labelB     = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:app=db"
+	labelC     = "ns:kubernetes.io/metadata.name=nomatch,purpose=nomatch&pod:app=db"
+	labelD     = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:"
+	labelStale = "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:<none>"
 )
 
 func TestLabelIdentityMatch(t *testing.T) {
@@ -171,6 +172,11 @@ func TestLabelIdentityMatch(t *testing.T) {
 			label:       labelD,
 			selector:    selectorItemG,
 			expectMatch: true,
+		},
+		{
+			label:       labelStale,
+			selector:    selectorItemA,
+			expectMatch: false,
 		},
 	}
 	for _, tt := range tests {
