@@ -36,17 +36,17 @@ func TestWireGuard(t *testing.T) {
 	skipIfAntreaIPAMTest(t)
 
 	data, err := setupTest(t)
-	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-	for _, node := range clusterInfo.nodes {
-		skipIfMissingKernelModule(t, data, node.name, []string{"wireguard"})
-	}
-
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	for _, node := range clusterInfo.nodes {
+		skipIfMissingKernelModule(t, data, node.name, []string{"wireguard"})
+	}
+	var previousTrafficEncryptionMode string
 	ac := func(config *agentconfig.AgentConfig) {
+		previousTrafficEncryptionMode = config.TrafficEncryptionMode
 		config.TrafficEncryptionMode = "wireguard"
 	}
 	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
@@ -54,7 +54,7 @@ func TestWireGuard(t *testing.T) {
 	}
 	defer func() {
 		ac := func(config *agentconfig.AgentConfig) {
-			config.TrafficEncryptionMode = "none"
+			config.TrafficEncryptionMode = previousTrafficEncryptionMode
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 			t.Errorf("Failed to disable WireGuard tunnel: %v", err)
