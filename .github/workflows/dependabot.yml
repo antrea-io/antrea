@@ -31,7 +31,7 @@ jobs:
     if: ${{ github.actor == 'dependabot[bot]' && contains(github.event.pull_request.labels.*.name, 'dependencies') && contains(github.event.pull_request.labels.*.name, 'go') }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         # Check out the pull request HEAD
         ref: ${{ github.event.pull_request.head.sha }}

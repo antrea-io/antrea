@@ -42,7 +42,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.antrea-version }}
           fetch-depth: 0

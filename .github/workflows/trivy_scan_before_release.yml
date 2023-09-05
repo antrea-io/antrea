@@ -10,7 +10,7 @@ jobs:
     if: startsWith(github.event.pull_request.title, 'Release ')
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build Antrea Docker image
       run: |
         ./hack/build-antrea-linux-all.sh --pull
