@@ -62,7 +62,7 @@ func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, erro
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"POD", "NODE", "STATUS", "NETWORK-POLICIES", "ADDRESS-GROUPS", "APPLIED-TO-GROUPS", "CONNECTED-AGENTS"}
 }
 
@@ -82,7 +82,7 @@ func (r Response) GetControllerConditionStr() string {
 	return controllerCondition
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
+func (r Response) GetTableRow(maxColumnLength int, _ string) []string {
 	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
 		r.NodeRef.Name,
 		r.GetControllerConditionStr(),

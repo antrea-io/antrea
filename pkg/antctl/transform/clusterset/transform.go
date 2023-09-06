@@ -75,11 +75,11 @@ func objectTransform(clusterSet mcv1alpha2.ClusterSet, status mcv1alpha2.Cluster
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"CLUSTER-ID", "NAMESPACE", "CLUSTERSET-ID", "TYPE", "STATUS", "REASON"}
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
+func (r Response) GetTableRow(maxColumnLength int, _ string) []string {
 	return []string{r.ClusterID, r.Namespace, r.ClusterSetID, r.Type, r.Status, r.Reason}
 }
 

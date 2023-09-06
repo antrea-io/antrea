@@ -36,11 +36,12 @@ type commandList struct {
 	codec       serializer.CodecFactory
 }
 
-func (cl *commandList) applyPersistentFlagsToRoot(root *cobra.Command) {
+func applyPersistentFlagsToRoot(root *cobra.Command) {
 	root.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
 	root.PersistentFlags().StringP("kubeconfig", "k", "", "absolute path to the kubeconfig file")
 	root.PersistentFlags().DurationP("timeout", "t", 0, "time limit of the execution of the command")
 	root.PersistentFlags().StringP("server", "s", "", "address and port of the API server, taking precedence over the default endpoint and the one set in kubeconfig")
+	root.PersistentFlags().StringP("mode", "m", "", "running mode (controller, agent, vm, flowaggregator), must be specified if it is vm mode")
 }
 
 // applyToRootCommand is the "internal" version of ApplyToRootCommand, used for testing
@@ -52,19 +53,19 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 		def := &cl.definitions[i]
 		if (runtime.Mode == runtime.ModeAgent && def.agentEndpoint == nil) ||
 			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) ||
-			(runtime.Mode == runtime.ModeFlowAggregator && def.flowAggregatorEndpoint == nil) {
+			(runtime.Mode == runtime.ModeFlowAggregator && def.flowAggregatorEndpoint == nil) ||
+			(runtime.Mode == runtime.ModeVM && def.supportVM == false) {
 			continue
 		}
 		def.applySubCommandToRoot(root, client, out)
 	}
-	cl.applyPersistentFlagsToRoot(root)
-
 	for _, cmd := range cl.rawCommands {
 		if (runtime.Mode == runtime.ModeAgent && cmd.supportAgent) ||
 			(runtime.Mode == runtime.ModeController && cmd.supportController) ||
 			(runtime.Mode == runtime.ModeFlowAggregator && cmd.supportFlowAggregator) ||
-			(!runtime.InPod && cmd.commandGroup == mc) ||
-			(!runtime.InPod && cmd.commandGroup == upgrade) {
+			(runtime.Mode == runtime.ModeVM && cmd.supportVM) ||
+			(!runtime.InPod && cmd.commandGroup == mc && runtime.Mode != runtime.ModeVM) ||
+			(!runtime.InPod && cmd.commandGroup == upgrade && runtime.Mode != runtime.ModeVM) {
 			if groupCommand, ok := groupCommands[cmd.commandGroup]; ok {
 				groupCommand.AddCommand(cmd.cobraCommand)
 			} else {
@@ -95,6 +96,17 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 // each commandDefinition of it to the root command as a sub-command.
 func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 	client := newClient(cl.codec)
+	applyPersistentFlagsToRoot(root)
+	root.InitDefaultHelpFlag()
+	if err := root.ParseFlags(os.Args[1:]); err != nil {
+		klog.ErrorS(err, "Failed to parse flags")
+		return
+	}
+	// Set mode if the flag exists, and the flag must be set for VM case
+	// because the mode set during runtime init is controller which is wrong for VM.
+	if mode, _ := root.Flags().GetString("mode"); mode != "" {
+		runtime.Mode = mode
+	}
 	cl.applyToRootCommand(root, client, os.Stdout)
 }
 

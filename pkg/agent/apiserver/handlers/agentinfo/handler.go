@@ -65,7 +65,10 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 
 var _ common.TableOutput = new(AntreaAgentInfoResponse)
 
-func (r AntreaAgentInfoResponse) GetTableHeader() []string {
+func (r AntreaAgentInfoResponse) GetTableHeader(mode string) []string {
+	if mode == "vm" {
+		return []string{"NODE", "STATUS", "NETWORK-POLICIES", "ADDRESS-GROUPS", "APPLIED-TO-GROUPS"}
+	}
 	return []string{"POD", "NODE", "STATUS", "NODE-SUBNET", "NETWORK-POLICIES", "ADDRESS-GROUPS", "APPLIED-TO-GROUPS", "LOCAL-PODS"}
 }
 
@@ -85,7 +88,14 @@ func (r AntreaAgentInfoResponse) GetAgentConditionStr() string {
 	return agentCondition
 }
 
-func (r AntreaAgentInfoResponse) GetTableRow(maxColumnLength int) []string {
+func (r AntreaAgentInfoResponse) GetTableRow(maxColumnLength int, mode string) []string {
+	if mode == "vm" {
+		return []string{r.NodeRef.Name,
+			r.GetAgentConditionStr(),
+			common.Int32ToString(r.NetworkPolicyControllerInfo.NetworkPolicyNum),
+			common.Int32ToString(r.NetworkPolicyControllerInfo.AddressGroupNum),
+			common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum)}
+	}
 	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
 		r.NodeRef.Name,
 		r.GetAgentConditionStr(),

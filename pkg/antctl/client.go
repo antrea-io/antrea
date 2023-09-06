@@ -72,12 +72,12 @@ func newClient(codec serializer.CodecFactory) AntctlClient {
 // If the default kubeconfig not exists, it will try to use an in-cluster config.
 func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 	var kubeconfig *rest.Config
-	if runtime.InPod {
+	if runtime.InPod || runtime.Mode == runtime.ModeVM {
 		kubeconfig = &rest.Config{}
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
 		kubeconfig.CAData = nil
-		if runtime.Mode == runtime.ModeAgent {
+		if runtime.Mode == runtime.ModeAgent || runtime.Mode == runtime.ModeVM {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
 			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
 		} else if runtime.Mode == runtime.ModeController {
@@ -99,7 +99,7 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 
 func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
-	if runtime.Mode == runtime.ModeAgent {
+	if runtime.Mode == runtime.ModeAgent || runtime.Mode == runtime.ModeVM {
 		e = opt.commandDefinition.agentEndpoint
 	} else if runtime.Mode == runtime.ModeFlowAggregator {
 		e = opt.commandDefinition.flowAggregatorEndpoint

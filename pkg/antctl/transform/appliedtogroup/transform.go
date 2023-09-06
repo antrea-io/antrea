@@ -28,8 +28,8 @@ import (
 )
 
 type Response struct {
-	Name string               `json:"name" yaml:"name"`
-	Pods []common.GroupMember `json:"pods,omitempty"`
+	Name    string               `json:"name" yaml:"name"`
+	Members []common.GroupMember `json:"members,omitempty"`
 }
 
 func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
@@ -57,11 +57,11 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 
 func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	group := o.(*cpv1beta.AppliedToGroup)
-	var pods []common.GroupMember
-	for _, pod := range group.GroupMembers {
-		pods = append(pods, common.GroupMemberTransform(pod))
+	var members []common.GroupMember
+	for _, member := range group.GroupMembers {
+		members = append(members, common.GroupMemberTransform(member))
 	}
-	return Response{Name: group.GetName(), Pods: pods}, nil
+	return Response{Name: group.GetName(), Members: members}, nil
 }
 
 func Transform(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
@@ -76,20 +76,24 @@ func Transform(reader io.Reader, single bool, opts map[string]string) (interface
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
-	return []string{"NAME", "PODS"}
+func (r Response) GetTableHeader(_ string) []string {
+	return []string{"NAME", "PODS", "EXTERNAL-ENTITIES"}
 }
 
-func (r Response) GetPodNames(maxColumnLength int) string {
-	list := make([]string, len(r.Pods))
-	for i, pod := range r.Pods {
-		list[i] = pod.Pod.Namespace + "/" + pod.Pod.Name
+func (r Response) getNames(maxColumnLength int, memberType string) string {
+	list := make([]string, len(r.Members))
+	for i, member := range r.Members {
+		if member.Pod != nil && memberType == "PODS" {
+			list[i] = member.Pod.Namespace + "/" + member.Pod.Name
+		} else if member.ExternalEntity != nil && memberType == "EXTERNAL-ENTITIES" {
+			list[i] = member.ExternalEntity.Namespace + "/" + member.ExternalEntity.Name
+		}
 	}
 	return common.GenerateTableElementWithSummary(list, maxColumnLength)
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.Name, r.GetPodNames(maxColumnLength)}
+func (r Response) GetTableRow(maxColumnLength int, _ string) []string {
+	return []string{r.Name, r.getNames(maxColumnLength, "PODS"), r.getNames(maxColumnLength, "EXTERNAL-ENTITIES")}
 }
 
 func (r Response) SortRows() bool {
