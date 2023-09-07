@@ -315,7 +315,7 @@ kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
 
 If you want to add a new member cluster to your ClusterSet, you can follow the
 steps for cluster B to do so. Remember to update the member cluster ID `spec.clusterID`
-in `member-clusterset-template.yml` to the new member cluster's ID in step 2 of
+in `member-clusterset-template.yml` to the new member cluster's ID in the step 2 of
 joining ClusterSet. For example, you can run the following commands to join the
 ClusterSet in a member cluster with ID `test-cluster-member2`:
 
