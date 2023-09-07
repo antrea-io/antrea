@@ -409,6 +409,13 @@ member clusters. If WireGuard is enabled, the WireGuard interface and routes
 will be created by Antrea Agent on the Gateway Node, and all cross-cluster
 traffic will be encrypted and forwarded to the WireGuard tunnel.
 
+Please note that WireGuard encryption requires the `wireguard` kernel module be
+present on the Kubernetes Nodes. `wireguard` module is part of mainline kernel
+since Linux 5.6. Or, you can compile the module from source code with a kernel
+version >= 3.10. [This WireGuard installation guide](https://www.wireguard.com/install)
+documents how to install WireGuard together with the kernel module on various
+operating systems.
+
 To enable the WireGuard encryption, the `TrafficEncryptMode`
 in Multi-cluster configuration should be set to `wireGuard` and the `enableGateway`
 field should be set to `true` as follows:
