@@ -81,10 +81,10 @@ will be ignored.
 
 ### Prerequisites
 
-WireGuard encryption requires `wireguard` kernel module be present on the
+WireGuard encryption requires the `wireguard` kernel module be present on the
 Kubernetes Nodes. `wireguard` module is part of mainline kernel since Linux 5.6.
 Or, you can compile the module from source code with a kernel version >= 3.10.
-[This WireGuard web page](https://www.wireguard.com/install) documents how to
+[This WireGuard installation guide](https://www.wireguard.com/install) documents how to
 install WireGuard together with the kernel module on various operating systems.
 
 ### Antrea installation
