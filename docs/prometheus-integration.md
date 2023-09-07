@@ -468,6 +468,9 @@ GODEBUG=randautoseed=... setting.
 - **go_godebug_non_default_behavior_tarinsecurepath_events_total:** The
 number of non-default behaviors executed by the archive/tar package due to
 a non-default GODEBUG=tarinsecurepath=... setting.
+- **go_godebug_non_default_behavior_tlsmaxrsasize_events_total:** The
+number of non-default behaviors executed by the crypto/tls package due to
+a non-default GODEBUG=tlsmaxrsasize=... setting.
 - **go_godebug_non_default_behavior_x509sha1_events_total:** The number of
 non-default behaviors executed by the crypto/x509 package due to a non-default
 GODEBUG=x509sha1=... setting.
