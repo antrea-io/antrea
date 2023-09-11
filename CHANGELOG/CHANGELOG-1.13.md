@@ -1,5 +1,24 @@
 # Changelog 1.13
 
+## 1.13.1 - 2023-09-11
+
+### Changed
+
+- Change the default flow's action to `drop` in ARPSpoofGuardTable to effectively prevent ARP spoofing. ([#5378](https://github.com/antrea-io/antrea/pull/5378), [@hongliangl])
+- Stop using `/bin/sh` and invoke the binary directly for OVS commands in Antrea Agent. ([#5364](https://github.com/antrea-io/antrea/pull/5364), [@antoninbas])
+- Increase the rate limit setting of `PacketInMeter` and the size of `PacketInQueue`. ([#5460](https://github.com/antrea-io/antrea/pull/5460), [@GraysonWu])
+
+### Fixed
+
+- Fix an Antrea Controller crash issue in handling empty Pod labels for LabelIdentity when the config `enableStretchedNetworkPolicy` is enabled for Antrea Multi-cluster. ([#5404](https://github.com/antrea-io/antrea/pull/5404) [#5449](https://github.com/antrea-io/antrea/pull/5449), [@Dyanngg])
+- Remove NetworkPolicyStats dependency of MulticastGroup API to fix the empty list issue when users run `kubectl get multicastgroups` even when the Multicast is enabled. ([#5367](https://github.com/antrea-io/antrea/pull/5367), [@ceclinux])
+- Fix a bug that ClusterSet status is not updated in Antrea Multi-cluster. ([#5338](https://github.com/antrea-io/antrea/pull/5338), [@luolanzone])
+- Always initialize `ovs_meter_packet_dropped_count` metrics to fix a bug that the metrics are not showing up if OVS Meter is not supported on the system. ([#5413](https://github.com/antrea-io/antrea/pull/5413), [@tnqn])
+- Unify TCP and UDP DNS interception flows to fix invalid flow matching for DNS responses. ([#5392](https://github.com/antrea-io/antrea/pull/5392), [@GraysonWu])
+- Fix an issue that antctl proxy is not using the user specified port. ([#5435](https://github.com/antrea-io/antrea/pull/5435), [@tnqn])
+- Do not attempt to join Windows agents to the memberlist cluster to avoid misleading error logs. ([#5434](https://github.com/antrea-io/antrea/pull/5434), [@tnqn])
+- Fix the burst setting of the `PacketInQueue` to reduce the DNS response delay when a Pod has any FQDN policy applied. ([#5456](https://github.com/antrea-io/antrea/pull/5456), [@tnqn])
+
 ## 1.13.0 - 2023-07-28
 
 ### Added
