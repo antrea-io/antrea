@@ -157,7 +157,7 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPAntreaIPAMVLAN11NodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, testAntreaIPAMNamespace11) })
 	})
 	// print results for reachability tests
-	printResults()
+	PrintResults()
 
 	k8sUtils.Cleanup(namespaces)
 }
@@ -228,5 +228,5 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 	testCase := []*TestCase{
 		{fmt.Sprintf("ACNP %s for all Pods, ingress=%v", string(ruleAction), isIngress), testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }

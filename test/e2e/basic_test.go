@@ -262,7 +262,7 @@ func testAntreaGracefulExit(t *testing.T, data *TestData) {
 	// When running Antrea instrumented binary to collect e2e coverage,
 	// we need to set the maxDeleteTimeout to a larger value
 	// since it needs to collect coverage data files
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		maxDeleteTimeout = 80 * time.Second
 	}
 

@@ -85,7 +85,7 @@ func antctlOutput(stdout, stderr string) string {
 }
 
 func antctlName() string {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		return "antctl-coverage"
 	}
 	return "antctl"
@@ -134,7 +134,7 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	}
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeAgent) {
 		args := []string{}
-		if testOptions.enableCoverage {
+		if testOptions.EnableCoverage {
 			antctlCovArgs := antctlCoverageArgs("antctl-coverage", "")
 			args = append(antctlCovArgs, c...)
 		} else {
@@ -163,7 +163,7 @@ func runAntctlPod(t *testing.T, data *TestData, podName string, antctlServiceAcc
 	b := NewPodBuilder(podName, data.testNamespace, antctlImage).WithServiceAccountName(antctlServiceAccountName).
 		WithContainerName("antctl").WithCommand([]string{"sleep", "3600"}).
 		OnNode(controlPlaneNodeName()).InHostNetwork()
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		// collectAntctlCovFilesFromControlPlaneNode expects coverage data in this directory
 		b = b.MountHostPath(cpNodeCoverageDir, corev1.HostPathDirectory, covDir, "antctl-coverage")
 	}
@@ -192,7 +192,7 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
 		cmd := []string{antctlName}
-		if testOptions.enableCoverage {
+		if testOptions.EnableCoverage {
 			antctlCovArgs := antctlCoverageArgs(antctlName, covDir)
 			cmd = append(antctlCovArgs, c...)
 		}

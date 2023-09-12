@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -25,10 +24,17 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	v1net "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/agent/config"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/test/e2e/utils"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -49,6 +55,10 @@ func skipIfAntreaIPAMTest(tb testing.TB) {
 	}
 }
 
+func skipIfAntreaPolicyDisabled(tb testing.TB) {
+	skipIfFeatureDisabled(tb, features.AntreaPolicy, true, true)
+}
+
 func skipIfNotFlowVisibilityTest(tb testing.TB) {
 	if !testOptions.flowVisibility {
 		tb.Skipf("Skipping when not running flow visibility test")
@@ -62,7 +72,7 @@ func skipIfNamespaceIsNotEqual(tb testing.TB, actualNamespace, expectNamespace s
 }
 
 func skipIfProviderIs(tb testing.TB, name string, reason string) {
-	if testOptions.providerName == name {
+	if testOptions.ProviderName == name {
 		tb.Skipf("Skipping test for the '%s' provider: %s", name, reason)
 	}
 }
@@ -82,7 +92,7 @@ func skipIfNumNodesLessThan(tb testing.TB, required int) {
 }
 
 func skipIfRunCoverage(tb testing.TB, reason string) {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		tb.Skipf("Skipping test for the '%s' when run coverage: %s", tb.Name(), reason)
 	}
 }
@@ -179,8 +189,8 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 	}
 }
 
-func ensureAntreaRunning(data *TestData) error {
-	if testOptions.deployAntrea {
+func EnsureAntreaRunning(data *TestData) error {
+	if testOptions.DeployAntrea {
 		log.Println("Applying Antrea YAML")
 		if err := data.deployAntrea(deployAntreaDefault); err != nil {
 			return err
@@ -239,7 +249,7 @@ func SetupTest(tb testing.TB) (*TestData, error) {
 	name = strings.ToLower(name)
 	testData.testNamespace = RandName(name + "-")
 	tb.Logf("Creating '%s' K8s Namespace", testData.testNamespace)
-	if err := ensureAntreaRunning(testData); err != nil {
+	if err := EnsureAntreaRunning(testData); err != nil {
 		return nil, err
 	}
 	if err := testData.CreateNamespace(testData.testNamespace, nil); err != nil {
@@ -456,8 +466,279 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	}
 }
 
+// PrintResults summarizes test results for all the testcases
+func PrintResults() {
+	fmt.Printf("\n---------------- Test Results ------------------\n")
+	failCount := 0
+	for _, testCase := range allTestList {
+		fmt.Printf("Test %s:\n", testCase.Name)
+		testFailed := false
+		for _, step := range testCase.Steps {
+			if step.Reachability == nil {
+				continue
+			}
+			_, wrong, comparison := step.Reachability.Summary()
+			var result string
+			if wrong == 0 {
+				result = "success"
+			} else {
+				result = fmt.Sprintf("failure -- %d wrong results", wrong)
+				testFailed = true
+			}
+			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
+				step.Name, step.Ports, int(step.Duration.Seconds()), result)
+			if wrong != 0 {
+				fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
+			}
+		}
+		if testFailed {
+			failCount++
+		}
+	}
+	fmt.Printf("=== TEST FAILURES: %d/%d ===\n\n", failCount, len(allTestList))
+}
+
+// common for all tests.
+var (
+	allPods                                     []Pod
+	podsByNamespace                             map[string][]Pod
+	k8sUtils                                    *KubernetesUtils
+	allTestList                                 []*TestCase
+	pods                                        []string
+	namespaces                                  map[string]string
+	podIPs                                      map[string][]string
+	p80, p81, p8080, p8081, p8082, p8085, p6443 int32
+)
+
+func failOnError(err error, t *testing.T) {
+	if err != nil {
+		log.Errorf("%+v", err)
+		k8sUtils.Cleanup(namespaces)
+		t.Fatalf("test failed: %v", err)
+	}
+}
+
+func InitializeTestbed(t *testing.T, data *TestData) {
+	p80 = 80
+	p81 = 81
+	p8080 = 8080
+	p8081 = 8081
+	p8082 = 8082
+	p8085 = 8085
+	pods = []string{"a", "b", "c"}
+	namespaces = make(map[string]string)
+	suffix := RandName("")
+	namespaces["x"] = "x-" + suffix
+	namespaces["y"] = "y-" + suffix
+	namespaces["z"] = "z-" + suffix
+	// This function "InitializeTestbed" will be used more than once, and variable "allPods" is global.
+	// It should be empty every time when "InitializeTestbed" is performed, otherwise there will be unexpected
+	// results.
+	allPods = []Pod{}
+	podsByNamespace = make(map[string][]Pod)
+
+	for _, podName := range pods {
+		for _, ns := range namespaces {
+			allPods = append(allPods, NewPod(ns, podName))
+			podsByNamespace[ns] = append(podsByNamespace[ns], NewPod(ns, podName))
+		}
+	}
+	skipIfAntreaPolicyDisabled(t)
+
+	var err error
+	// k8sUtils is a global var
+	k8sUtils, err = NewKubernetesUtils(data)
+	failOnError(err, t)
+	ips, err := k8sUtils.Bootstrap(namespaces, pods, true)
+	failOnError(err, t)
+	podIPs = ips
+}
+
+func GetTestbedK8sUtils() *KubernetesUtils {
+	return k8sUtils
+}
+
+func GetTestbedNamespaces() (map[string][]Pod, map[string]string) {
+	return podsByNamespace, namespaces
+}
+
+func GetTestbedPods() ([]Pod, []string, map[string][]string) {
+	return allPods, pods, podIPs
+}
+
+// ExecuteTests runs all the tests in testList and prints results
+func ExecuteTests(t *testing.T, testList []*TestCase) {
+	executeTestsWithData(t, testList, nil)
+}
+
+func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
+	for _, testCase := range testList {
+		log.Infof("running test case %s", testCase.Name)
+		for _, step := range testCase.Steps {
+			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
+			applyTestStepResources(t, step)
+
+			reachability := step.Reachability
+			if reachability != nil {
+				start := time.Now()
+				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
+				step.Duration = time.Now().Sub(start)
+
+				_, wrong, _ := step.Reachability.Summary()
+				if wrong != 0 {
+					t.Errorf("Failure -- %d wrong results", wrong)
+					reachability.PrintSummary(true, true, true)
+				}
+			}
+			if len(step.CustomProbes) > 0 && data == nil {
+				t.Errorf("test case %s with custom probe must set test data", testCase.Name)
+				continue
+			}
+			for _, p := range step.CustomProbes {
+				doProbe(t, data, p, step.Protocol)
+			}
+		}
+		log.Debug("Cleaning-up all policies and groups created by this Testcase")
+		cleanupTestCaseResources(t, testCase)
+	}
+	allTestList = append(allTestList, testList...)
+}
+
+func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol utils.AntreaPolicyProtocol) {
+	// Bootstrap Pods
+	_, _, srcPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.SourcePod.Pod.PodName(), p.SourcePod.Pod.Namespace(), p.Port, p.SourcePod.Labels)
+	defer srcPodCleanupFunc()
+	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
+	defer dstPodCleanupFunc()
+	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
+	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol, nil, &p.ExpectConnectivity)
+	if err != nil {
+		t.Errorf("Failure -- could not complete probe: %v", err)
+	}
+	if connectivity != p.ExpectConnectivity {
+		t.Errorf("Failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v",
+			p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connectivity, p.ExpectConnectivity)
+	}
+}
+
+// applyTestStepResources creates in the resources of a testStep in specified order.
+// The ordering can be used to test different scenarios, like creating an ACNP before
+// creating its referred ClusterGroup, and vice versa.
+func applyTestStepResources(t *testing.T, step *TestStep) {
+	for _, r := range step.TestResources {
+		switch o := r.(type) {
+		case *crdv1beta1.ClusterNetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateACNP(o)
+			failOnError(err, t)
+		case *crdv1beta1.NetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateANNP(o)
+			failOnError(err, t)
+		case *v1net.NetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(o)
+			failOnError(err, t)
+		case *crdv1beta1.ClusterGroup:
+			_, err := k8sUtils.CreateOrUpdateCG(o)
+			failOnError(err, t)
+		case *crdv1beta1.Group:
+			_, err := k8sUtils.CreateOrUpdateGroup(o)
+			failOnError(err, t)
+		case *v1.Service:
+			_, err := k8sUtils.CreateOrUpdateService(o)
+			failOnError(err, t)
+		}
+
+	}
+	failOnError(waitForResourcesReady(t, 10*time.Second, step.TestResources...), t)
+}
+
+func cleanupTestCaseResources(t *testing.T, c *TestCase) {
+	// TestSteps in a TestCase may first create and then update the same resource.
+	// Use sets to avoid duplicates.
+	acnpsToDelete, annpsToDelete, npsToDelete := sets.Set[string]{}, sets.Set[string]{}, sets.Set[string]{}
+	svcsToDelete, v1a3ClusterGroupsToDelete, v1a3GroupsToDelete := sets.Set[string]{}, sets.Set[string]{}, sets.Set[string]{}
+	for _, step := range c.Steps {
+		for _, r := range step.TestResources {
+			switch o := r.(type) {
+			case *crdv1beta1.ClusterNetworkPolicy:
+				acnpsToDelete.Insert(o.Name)
+			case *crdv1beta1.NetworkPolicy:
+				annpsToDelete.Insert(o.Namespace + "/" + o.Name)
+			case *v1net.NetworkPolicy:
+				npsToDelete.Insert(o.Namespace + "/" + o.Name)
+			case *crdv1beta1.ClusterGroup:
+				v1a3ClusterGroupsToDelete.Insert(o.Name)
+			case *crdv1beta1.Group:
+				v1a3GroupsToDelete.Insert(o.Namespace + "/" + o.Name)
+			case *v1.Service:
+				svcsToDelete.Insert(o.Namespace + "/" + o.Name)
+			}
+		}
+	}
+	for acnp := range acnpsToDelete {
+		failOnError(k8sUtils.DeleteACNP(acnp), t)
+	}
+	for annp := range annpsToDelete {
+		namespace := strings.Split(annp, "/")[0]
+		name := strings.Split(annp, "/")[1]
+		failOnError(k8sUtils.DeleteANNP(namespace, name), t)
+	}
+	for np := range npsToDelete {
+		namespace := strings.Split(np, "/")[0]
+		name := strings.Split(np, "/")[1]
+		failOnError(k8sUtils.DeleteNetworkPolicy(namespace, name), t)
+	}
+	for cg := range v1a3ClusterGroupsToDelete {
+		failOnError(k8sUtils.DeleteCG(cg), t)
+	}
+	for grp := range v1a3GroupsToDelete {
+		namespace := strings.Split(grp, "/")[0]
+		name := strings.Split(grp, "/")[1]
+		failOnError(k8sUtils.DeleteGroup(namespace, name), t)
+	}
+	for svc := range svcsToDelete {
+		namespace := strings.Split(svc, "/")[0]
+		name := strings.Split(svc, "/")[1]
+		failOnError(k8sUtils.DeleteService(namespace, name), t)
+	}
+}
+
+func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object) error {
+	defer timeCost()("ready")
+	switch p := obj.(type) {
+	case *crdv1beta1.ClusterNetworkPolicy:
+		return k8sUtils.waitForACNPRealized(t, p.Name, timeout)
+	case *crdv1beta1.NetworkPolicy:
+		return k8sUtils.waitForANNPRealized(t, p.Namespace, p.Name, timeout)
+	case *v1net.NetworkPolicy:
+		time.Sleep(100 * time.Millisecond)
+	case *v1.Service:
+		// The minInterval of AntreaProxy's BoundedFrequencyRunner is 1s, which means a Service may be handled after 1s.
+		time.Sleep(1 * time.Second)
+	case *crdv1beta1.Tier:
+	case *crdv1beta1.ClusterGroup:
+	case *crdv1beta1.Group:
+	}
+	return nil
+}
+
+func waitForResourcesReady(t *testing.T, timeout time.Duration, objs ...metav1.Object) error {
+	resultCh := make(chan error, len(objs))
+	for _, obj := range objs {
+		go func(o metav1.Object) {
+			resultCh <- waitForResourceReady(t, timeout, o)
+		}(obj)
+	}
+
+	for i := 0; i < len(objs); i++ {
+		if err := <-resultCh; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
 			tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
 		}

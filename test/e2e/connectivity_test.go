@@ -357,7 +357,7 @@ func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 		t.Logf("Arping loss rate: %f%%", lossRate)
 		maxLossRate := float32(0)
 		if testOptions.enableAntreaIPAM {
-			// Enable AntreaIPAM will lose connectivity when OVS restart, and will recover after initialize.
+			// Enable AntreaIPAM will lose connectivity when OVS restart, and will recover after InitializeTestbed.
 			maxLossRate = 10
 		}
 		if lossRate > maxLossRate {

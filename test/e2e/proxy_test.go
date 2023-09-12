@@ -831,7 +831,7 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 		t.Fatalf("Failed to get encap mode: %v", err)
 	}
 	if !hostNetwork {
-		if testOptions.providerName == "kind" && (currentEncapMode == config.TrafficEncapModeEncap || currentEncapMode == config.TrafficEncapModeHybrid) {
+		if testOptions.ProviderName == "kind" && (currentEncapMode == config.TrafficEncapModeEncap || currentEncapMode == config.TrafficEncapModeHybrid) {
 			t.Skipf("Skipping test because inter-Node Pod traffic is encapsulated when testbed is Kind and traffic mode is encap/hybrid")
 		} else if currentEncapMode == config.TrafficEncapModeEncap {
 			t.Skipf("Skipping test because inter-Node Pod traffic is encapsulated when testbed is not Kind and traffic mode encap")

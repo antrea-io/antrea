@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -927,62 +926,6 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		npCheck(serverIPs.ipv6.String())
 	}
-}
-
-func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, namePrefix string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
-	name := RandName(namePrefix)
-	return createAndWaitForPodWithExactName(t, data, createFunc, name, nodeName, ns, hostNetwork)
-}
-
-func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, name string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
-	if err := createFunc(name, ns, nodeName, hostNetwork); err != nil {
-		t.Fatalf("Error when creating test Pod: %v", err)
-	}
-	cleanupFunc := func() {
-		deletePodWrapper(t, data, ns, name)
-	}
-	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
-	if err != nil {
-		cleanupFunc()
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
-	}
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
-	return name, podIP, cleanupFunc
-}
-
-func createAndWaitForPodWithServiceAccount(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error, namePrefix string, nodeName string, ns string, hostNetwork bool, serviceAccountName string) (string, *PodIPs, func()) {
-	name := RandName(namePrefix)
-	if err := createFunc(name, ns, nodeName, hostNetwork, serviceAccountName); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
-	}
-	cleanupFunc := func() {
-		deletePodWrapper(t, data, data.testNamespace, name)
-	}
-	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
-	if err != nil {
-		cleanupFunc()
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
-	}
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
-	return name, podIP, cleanupFunc
-}
-
-func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func() error) {
-	if err := createFunc(name, ns, portNum, labels); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
-	}
-	cleanupFunc := func() error {
-		if err := data.DeletePod(ns, name); err != nil {
-			return fmt.Errorf("error when deleting Pod: %v", err)
-		}
-		return nil
-	}
-	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
-	if err != nil {
-		cleanupFunc()
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
-	}
-	return name, podIP, cleanupFunc
 }
 
 func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditionType v1beta1.AgentConditionType, expectedStatus corev1.ConditionStatus) {

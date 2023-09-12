@@ -263,7 +263,7 @@ func TestGroup(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer TeardownTest(t, data)
-	initialize(t, data)
+	InitializeTestbed(t, data)
 
 	t.Run("TestGroupNamespacedGroupValidate", func(t *testing.T) {
 		t.Run("Case=IPBlockWithPodSelectorDenied", func(t *testing.T) { testInvalidGroupIPBlockWithPodSelector(t) })

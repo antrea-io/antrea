@@ -30,30 +30,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
-	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
-)
-
-// common for all tests.
-var (
-	allPods                                     []Pod
-	podsByNamespace                             map[string][]Pod
-	k8sUtils                                    *KubernetesUtils
-	allTestList                                 []*TestCase
-	pods                                        []string
-	namespaces                                  map[string]string
-	podIPs                                      map[string][]string
-	p80, p81, p8080, p8081, p8082, p8085, p6443 int32
 )
 
 const (
@@ -91,14 +76,6 @@ func TestAntreaPolicyStats(t *testing.T) {
 	})
 }
 
-func failOnError(err error, t *testing.T) {
-	if err != nil {
-		log.Errorf("%+v", err)
-		k8sUtils.Cleanup(namespaces)
-		t.Fatalf("test failed: %v", err)
-	}
-}
-
 // podToAddrTestStep is a single unit of testing the connectivity from a Pod to an
 // arbitrary destination address.
 type podToAddrTestStep struct {
@@ -106,46 +83,6 @@ type podToAddrTestStep struct {
 	destAddr             string
 	destPort             int32
 	expectedConnectivity PodConnectivityMark
-}
-
-func initialize(t *testing.T, data *TestData) {
-	p80 = 80
-	p81 = 81
-	p8080 = 8080
-	p8081 = 8081
-	p8082 = 8082
-	p8085 = 8085
-	pods = []string{"a", "b", "c"}
-	namespaces = make(map[string]string)
-	suffix := RandName("")
-	namespaces["x"] = "x-" + suffix
-	namespaces["y"] = "y-" + suffix
-	namespaces["z"] = "z-" + suffix
-	// This function "initialize" will be used more than once, and variable "allPods" is global.
-	// It should be empty every time when "initialize" is performed, otherwise there will be unexpected
-	// results.
-	allPods = []Pod{}
-	podsByNamespace = make(map[string][]Pod)
-
-	for _, podName := range pods {
-		for _, ns := range namespaces {
-			allPods = append(allPods, NewPod(ns, podName))
-			podsByNamespace[ns] = append(podsByNamespace[ns], NewPod(ns, podName))
-		}
-	}
-	skipIfAntreaPolicyDisabled(t)
-
-	var err error
-	// k8sUtils is a global var
-	k8sUtils, err = NewKubernetesUtils(data)
-	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods, true)
-	failOnError(err, t)
-	podIPs = ips
-}
-
-func skipIfAntreaPolicyDisabled(tb testing.TB) {
-	skipIfFeatureDisabled(tb, features.AntreaPolicy, true, true)
 }
 
 func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces map[string]string) error {
@@ -430,7 +367,7 @@ func testACNPAllowXBtoA(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Allow X/B to A", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPSourcePort tests ACNP source port filtering. The agnhost image used in E2E tests uses
@@ -501,7 +438,7 @@ func testACNPSourcePort(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop X/B to A based on source port", testSteps},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPAllowXBtoYA tests traffic from X/B to Y/A on named port 81, after applying the default deny
@@ -533,7 +470,7 @@ func testACNPAllowXBtoYA(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Allow X/B to Y/A", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPPriorityOverrideDefaultDeny tests priority override in ACNP. It applies a higher priority ACNP to drop
@@ -578,7 +515,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP PriorityOverride Default Deny", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPAllowNoDefaultIsolation tests that no default isolation rules are created for Policies.
@@ -615,7 +552,7 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProtocol
 	testCase := []*TestCase{
 		{"ACNP Allow No Default Isolation", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPDropEgress tests that an ACNP is able to drop egress traffic from pods labelled A to namespace Z.
@@ -654,7 +591,7 @@ func testACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From All Pod:a to NS:z", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPDropIngressInSelectedNamespace tests that an ACNP is able to drop all ingress traffic towards a specific Namespace.
@@ -687,7 +624,7 @@ func testACNPDropIngressInSelectedNamespace(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop all Ingress to Namespace x", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPNoEffectOnOtherProtocols tests that an ACNP which drops TCP traffic won't affect other protocols (e.g. UDP).
@@ -734,7 +671,7 @@ func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Ingress From All Pod:a to NS:z TCP Not UDP", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPAppliedToDenyXBtoCGWithYA tests traffic from X/B to ClusterGroup Y/A on named port 81 is dropped.
@@ -771,7 +708,7 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Deny ClusterGroup Y/A from X/B", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPIngressRuleDenyCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
@@ -807,7 +744,7 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Deny ClusterGroup X/B to Y/A", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPAppliedToRuleCGWithPodsAToNsZ tests that an ACNP is able to drop egress traffic from CG with pods labelled A namespace Z.
@@ -841,7 +778,7 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From ClusterGroup with All Pod:a to NS:z", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPEgressRulePodsAToCGWithNsZ tests that an ACNP is able to drop egress traffic from pods labelled A to a CG with namespace Z.
@@ -876,7 +813,7 @@ func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From All Pod:a to ClusterGroup with NS:z", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
@@ -927,7 +864,7 @@ func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From CG Pod:a to NS:z updated to ClusterGroup with Pod:c", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testACNPClusterGroupUpdate(t *testing.T) {
@@ -978,7 +915,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From All Pod:a to ClusterGroup with NS:z updated to ClusterGroup with NS:y", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
@@ -1139,7 +1076,7 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Ingress From x to Pod y/a to ClusterGroup with ipBlocks", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testANNPEgressRulePodsAToGrpWithPodsC tests that an ANNP is able to drop egress traffic from x/a to x/c.
@@ -1171,7 +1108,7 @@ func testANNPEgressRulePodsAToGrpWithPodsC(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Drop Egress From All Pod:x/a to Group with Pod:x/c", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testANNPIngressRuleDenyGrpWithXCtoXA tests traffic from Group with X/B to X/A on named port 81 is dropped.
@@ -1205,7 +1142,7 @@ func testANNPIngressRuleDenyGrpWithXCtoXA(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Deny Group X/B to X/A", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testANNPGroupUpdate(t *testing.T) {
@@ -1250,7 +1187,7 @@ func testANNPGroupUpdate(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Drop Egress From All Pod:x/a to Group with Pod:x/c updated to Group with Pod:x/b", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testANNPAppliedToDenyXBtoGrpWithXA tests traffic from X/B to Group X/A on named port 81 is dropped.
@@ -1285,7 +1222,7 @@ func testANNPAppliedToDenyXBtoGrpWithXA(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Deny Group X/A from X/B", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testANNPAppliedToRuleGrpWithPodsAToPodsC tests that an ANNP is able to drop egress traffic from GRP with pods labelled A to pods C.
@@ -1316,7 +1253,7 @@ func testANNPAppliedToRuleGrpWithPodsAToPodsC(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Drop Egress From Group with All Pod:a to Pod:c", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testANNPGroupUpdateAppliedTo(t *testing.T) {
@@ -1361,7 +1298,7 @@ func testANNPGroupUpdateAppliedTo(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Drop Egress From Pod:x/c to Group Pod:x/a updated to Group with Pod:x/b", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testANNPGroupAppliedToPodAdd(t *testing.T, data *TestData) {
@@ -1557,7 +1494,7 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Group Service Reference create and update", testSteps},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testANNPGroupRefRuleIPBlocks(t *testing.T) {
@@ -1608,7 +1545,7 @@ func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Drop Ingress From Group with ipBlocks to Pod: x/a", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
@@ -1756,7 +1693,7 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP baseline tier namespace isolation", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 	// Cleanup the K8s NetworkPolicy created for this test.
 	failOnError(k8sUtils.CleanNetworkPolicies(map[string]string{"x": namespaces["x"]}), t)
 	time.Sleep(networkPolicyDelay)
@@ -1833,7 +1770,7 @@ func testACNPPriorityOverride(t *testing.T) {
 		{"ACNP PriorityOverride Intermediate", testStepTwoACNP},
 		{"ACNP PriorityOverride All", testStepAll},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPTierOverride tests tier priority overriding in three Policies.
@@ -1909,7 +1846,7 @@ func testACNPTierOverride(t *testing.T) {
 		{"ACNP TierOverride Intermediate", testStepTwoACNP},
 		{"ACNP TierOverride All", testStepAll},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPTierOverride tests tier priority overriding in three Policies with custom created tiers.
@@ -1962,7 +1899,7 @@ func testACNPCustomTiers(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Custom Tier priority", testStepTwoACNP},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 	// Cleanup customed tiers. ACNPs created in those tiers need to be deleted first.
 	failOnError(k8sUtils.CleanACNPs(), t)
 	failOnError(k8sUtils.DeleteTier("high-priority"), t)
@@ -2007,7 +1944,7 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Priority Conflicting Rule", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPPriorityConflictingRule tests that if there are two rules in the cluster that conflicts with
@@ -2054,7 +1991,7 @@ func testACNPRulePriority(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Rule Priority", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPPortRange tests the port range in an ACNP can work.
@@ -2086,7 +2023,7 @@ func testACNPPortRange(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From All Pod:a to NS:z with a portRange", testSteps},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPRejectEgress tests that an ACNP is able to reject egress traffic from pods labelled A to namespace Z.
@@ -2117,7 +2054,7 @@ func testACNPRejectEgress(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Reject egress From All Pod:a to NS:z", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testACNPRejectIngress tests that an ACNP is able to reject egress traffic from pods labelled A to namespace Z.
@@ -2148,7 +2085,7 @@ func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
 	testCase := []*TestCase{
 		{"ACNP Reject ingress from NS:z to All Pod:a", testStep},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, serverNamespace string) {
@@ -2371,7 +2308,7 @@ func testANNPPortRange(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANNP Drop Egress y/b to x/c with a portRange", testSteps},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testANNPBasic tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea NetworkPolicy
@@ -2418,7 +2355,7 @@ func testANNPBasic(t *testing.T) {
 		{"ANNP Drop X/B to Y/A", testStep},
 		{"With K8s NetworkPolicy of the same name", testStep2},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 // testANNPMultipleAppliedTo tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea
@@ -2805,7 +2742,7 @@ func testAppliedToPerRule(t *testing.T) {
 		{"ANNP AppliedTo per rule", testStep},
 		{"ACNP AppliedTo per rule", testStep2},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData) {
@@ -3064,7 +3001,7 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Ingress From x to Pod y/a with nested ClusterGroup with ipBlocks", []*TestStep{testStep, testStep2}},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testACNPNamespaceIsolation(t *testing.T) {
@@ -3121,7 +3058,7 @@ func testACNPNamespaceIsolation(t *testing.T) {
 		{"ACNP Namespace isolation for all namespaces", []*TestStep{testStep1}},
 		{"ACNP Namespace isolation for namespace x", []*TestStep{testStep2}},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testACNPStrictNamespacesIsolation(t *testing.T) {
@@ -3169,7 +3106,7 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP strict Namespace isolation for all namespaces", []*TestStep{testStep1, testStep2}},
 	}
-	executeTests(t, testCase)
+	ExecuteTests(t, testCase)
 }
 
 func testFQDNPolicy(t *testing.T) {
@@ -4066,209 +4003,6 @@ func checkPacketCaptureResult(t *testing.T, data *TestData, tcpdumpName, cmd str
 	return true, nil
 }
 
-// executeTests runs all the tests in testList and prints results
-func executeTests(t *testing.T, testList []*TestCase) {
-	executeTestsWithData(t, testList, nil)
-}
-
-func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
-	for _, testCase := range testList {
-		log.Infof("running test case %s", testCase.Name)
-		for _, step := range testCase.Steps {
-			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
-			applyTestStepResources(t, step)
-
-			reachability := step.Reachability
-			if reachability != nil {
-				start := time.Now()
-				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
-				step.Duration = time.Now().Sub(start)
-
-				_, wrong, _ := step.Reachability.Summary()
-				if wrong != 0 {
-					t.Errorf("Failure -- %d wrong results", wrong)
-					reachability.PrintSummary(true, true, true)
-				}
-			}
-			if len(step.CustomProbes) > 0 && data == nil {
-				t.Errorf("test case %s with custom probe must set test data", testCase.Name)
-				continue
-			}
-			for _, p := range step.CustomProbes {
-				doProbe(t, data, p, step.Protocol)
-			}
-		}
-		log.Debug("Cleaning-up all policies and groups created by this Testcase")
-		cleanupTestCaseResources(t, testCase)
-	}
-	allTestList = append(allTestList, testList...)
-}
-
-func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol AntreaPolicyProtocol) {
-	// Bootstrap Pods
-	_, _, srcPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.SourcePod.Pod.PodName(), p.SourcePod.Pod.Namespace(), p.Port, p.SourcePod.Labels)
-	defer srcPodCleanupFunc()
-	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
-	defer dstPodCleanupFunc()
-	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol, nil, &p.ExpectConnectivity)
-	if err != nil {
-		t.Errorf("Failure -- could not complete probe: %v", err)
-	}
-	if connectivity != p.ExpectConnectivity {
-		t.Errorf("Failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v",
-			p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connectivity, p.ExpectConnectivity)
-	}
-}
-
-// applyTestStepResources creates in the resources of a testStep in specified order.
-// The ordering can be used to test different scenarios, like creating an ACNP before
-// creating its referred ClusterGroup, and vice versa.
-func applyTestStepResources(t *testing.T, step *TestStep) {
-	for _, r := range step.TestResources {
-		switch o := r.(type) {
-		case *crdv1beta1.ClusterNetworkPolicy:
-			_, err := k8sUtils.CreateOrUpdateACNP(o)
-			failOnError(err, t)
-		case *crdv1beta1.NetworkPolicy:
-			_, err := k8sUtils.CreateOrUpdateANNP(o)
-			failOnError(err, t)
-		case *v1net.NetworkPolicy:
-			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(o)
-			failOnError(err, t)
-		case *crdv1beta1.ClusterGroup:
-			_, err := k8sUtils.CreateOrUpdateCG(o)
-			failOnError(err, t)
-		case *crdv1beta1.Group:
-			_, err := k8sUtils.CreateOrUpdateGroup(o)
-			failOnError(err, t)
-		case *v1.Service:
-			_, err := k8sUtils.CreateOrUpdateService(o)
-			failOnError(err, t)
-		}
-
-	}
-	failOnError(waitForResourcesReady(t, timeout, step.TestResources...), t)
-}
-
-func cleanupTestCaseResources(t *testing.T, c *TestCase) {
-	// TestSteps in a TestCase may first create and then update the same resource.
-	// Use sets to avoid duplicates.
-	acnpsToDelete, annpsToDelete, npsToDelete := sets.Set[string]{}, sets.Set[string]{}, sets.Set[string]{}
-	svcsToDelete, v1a3ClusterGroupsToDelete, v1a3GroupsToDelete := sets.Set[string]{}, sets.Set[string]{}, sets.Set[string]{}
-	for _, step := range c.Steps {
-		for _, r := range step.TestResources {
-			switch o := r.(type) {
-			case *crdv1beta1.ClusterNetworkPolicy:
-				acnpsToDelete.Insert(o.Name)
-			case *crdv1beta1.NetworkPolicy:
-				annpsToDelete.Insert(o.Namespace + "/" + o.Name)
-			case *v1net.NetworkPolicy:
-				npsToDelete.Insert(o.Namespace + "/" + o.Name)
-			case *crdv1beta1.ClusterGroup:
-				v1a3ClusterGroupsToDelete.Insert(o.Name)
-			case *crdv1beta1.Group:
-				v1a3GroupsToDelete.Insert(o.Namespace + "/" + o.Name)
-			case *v1.Service:
-				svcsToDelete.Insert(o.Namespace + "/" + o.Name)
-			}
-		}
-	}
-	for acnp := range acnpsToDelete {
-		failOnError(k8sUtils.DeleteACNP(acnp), t)
-	}
-	for annp := range annpsToDelete {
-		namespace := strings.Split(annp, "/")[0]
-		name := strings.Split(annp, "/")[1]
-		failOnError(k8sUtils.DeleteANNP(namespace, name), t)
-	}
-	for np := range npsToDelete {
-		namespace := strings.Split(np, "/")[0]
-		name := strings.Split(np, "/")[1]
-		failOnError(k8sUtils.DeleteNetworkPolicy(namespace, name), t)
-	}
-	for cg := range v1a3ClusterGroupsToDelete {
-		failOnError(k8sUtils.DeleteCG(cg), t)
-	}
-	for grp := range v1a3GroupsToDelete {
-		namespace := strings.Split(grp, "/")[0]
-		name := strings.Split(grp, "/")[1]
-		failOnError(k8sUtils.DeleteGroup(namespace, name), t)
-	}
-	for svc := range svcsToDelete {
-		namespace := strings.Split(svc, "/")[0]
-		name := strings.Split(svc, "/")[1]
-		failOnError(k8sUtils.DeleteService(namespace, name), t)
-	}
-}
-
-// printResults summarizes test results for all the testcases
-func printResults() {
-	fmt.Printf("\n---------------- Test Results ------------------\n")
-	failCount := 0
-	for _, testCase := range allTestList {
-		fmt.Printf("Test %s:\n", testCase.Name)
-		testFailed := false
-		for _, step := range testCase.Steps {
-			if step.Reachability == nil {
-				continue
-			}
-			_, wrong, comparison := step.Reachability.Summary()
-			var result string
-			if wrong == 0 {
-				result = "success"
-			} else {
-				result = fmt.Sprintf("failure -- %d wrong results", wrong)
-				testFailed = true
-			}
-			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
-				step.Name, step.Ports, int(step.Duration.Seconds()), result)
-			if wrong != 0 {
-				fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
-			}
-		}
-		if testFailed {
-			failCount++
-		}
-	}
-	fmt.Printf("=== TEST FAILURES: %d/%d ===\n\n", failCount, len(allTestList))
-}
-
-func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object) error {
-	defer timeCost()("ready")
-	switch p := obj.(type) {
-	case *crdv1beta1.ClusterNetworkPolicy:
-		return k8sUtils.waitForACNPRealized(t, p.Name, timeout)
-	case *crdv1beta1.NetworkPolicy:
-		return k8sUtils.waitForANNPRealized(t, p.Namespace, p.Name, timeout)
-	case *v1net.NetworkPolicy:
-		time.Sleep(100 * time.Millisecond)
-	case *v1.Service:
-		// The minInterval of AntreaProxy's BoundedFrequencyRunner is 1s, which means a Service may be handled after 1s.
-		time.Sleep(1 * time.Second)
-	case *crdv1beta1.Tier:
-	case *crdv1beta1.ClusterGroup:
-	case *crdv1beta1.Group:
-	}
-	return nil
-}
-
-func waitForResourcesReady(t *testing.T, timeout time.Duration, objs ...metav1.Object) error {
-	resultCh := make(chan error, len(objs))
-	for _, obj := range objs {
-		go func(o metav1.Object) {
-			resultCh <- waitForResourceReady(t, timeout, o)
-		}(obj)
-	}
-
-	for i := 0; i < len(objs); i++ {
-		if err := <-resultCh; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // TestAntreaPolicy is the top-level test which contains all subtests for
 // AntreaPolicy related test cases so they can share setup, teardown.
 func TestAntreaPolicy(t *testing.T) {
@@ -4281,7 +4015,7 @@ func TestAntreaPolicy(t *testing.T) {
 	}
 	defer TeardownTest(t, data)
 
-	initialize(t, data)
+	InitializeTestbed(t, data)
 
 	// This test group only provides one case for each CR, including ACNP, ANNP, Tier,
 	// ClusterGroup and Group to make sure the corresponding validation webhooks is
@@ -4389,7 +4123,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, data.testNamespace) })
 	})
 	// print results for reachability tests
-	printResults()
+	PrintResults()
 
 	t.Run("TestGroupAuditLogging", func(t *testing.T) {
 		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
@@ -4542,7 +4276,7 @@ func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 	}
 	defer TeardownTest(t, data)
 
-	initialize(t, data)
+	InitializeTestbed(t, data)
 
 	testNamespace := namespaces["x"]
 	// Build a Group with namespaceSelector selecting namespaces outside testNamespace.
@@ -4625,40 +4359,6 @@ func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1beta1.ClusterNetwo
 	})
 	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
 	return acnp
-}
-
-// waitForANNPRealized waits until an ANNP is realized and returns, or times out. A policy is
-// considered realized when its Status has been updated so that the ObservedGeneration matches the
-// resource's Generation and the Phase is set to Realized.
-func (data *TestData) waitForANNPRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
-	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		return annp.Status.ObservedGeneration == annp.Generation && annp.Status.Phase == crdv1beta1.NetworkPolicyRealized, nil
-	}); err != nil {
-		return fmt.Errorf("error when waiting for ANNP '%s/%s' to be realized: %v", namespace, name, err)
-	}
-	return nil
-}
-
-// waitForACNPRealized waits until an ACNP is realized and returns, or times out. A policy is
-// considered realized when its Status has been updated so that the ObservedGeneration matches the
-// resource's Generation and the Phase is set to Realized.
-func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout time.Duration) error {
-	t.Logf("Waiting for ACNP '%s' to be realized", name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		return acnp.Status.ObservedGeneration == acnp.Generation && acnp.Status.Phase == crdv1beta1.NetworkPolicyRealized, nil
-	}); err != nil {
-		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
-	}
-	return nil
 }
 
 // testANNPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANNP if

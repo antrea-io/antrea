@@ -320,7 +320,7 @@ func TestClusterGroup(t *testing.T) {
 	}
 	defer TeardownTest(t, data)
 
-	initialize(t, data)
+	InitializeTestbed(t, data)
 
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {
 		t.Run("Case=IPBlockWithPodSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithPodSelector(t) })

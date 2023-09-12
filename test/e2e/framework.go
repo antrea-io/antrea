@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -56,6 +58,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/config"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
@@ -189,21 +192,21 @@ type ClusterInfo struct {
 var clusterInfo ClusterInfo
 
 type TestOptions struct {
-	providerName        string
-	providerConfigPath  string
+	ProviderName        string
+	ProviderConfigPath  string
 	logsExportDir       string
 	logsExportOnSuccess bool
 	withBench           bool
-	enableCoverage      bool
+	EnableCoverage      bool
 	enableAntreaIPAM    bool
 	flowVisibility      bool
 	coverageDir         string
 	skipCases           string
 	linuxVMs            string
 	windowsVMs          string
-	// deployAntrea determines whether to deploy Antrea before running tests. It requires antrea.yml to be present in
+	// DeployAntrea determines whether to deploy Antrea before running tests. It requires antrea.yml to be present in
 	// the home directory of the control-plane Node. Note it doesn't affect the tests that redeploy Antrea themselves.
-	deployAntrea bool
+	DeployAntrea bool
 }
 
 type flowVisibilityTestOptions struct {
@@ -211,7 +214,68 @@ type flowVisibilityTestOptions struct {
 	secureConnection bool
 }
 
+// setupLogging creates a temporary directory to export the test logs if necessary. If a directory
+// was provided by the user, it checks that the directory exists.
+func (tOptions *TestOptions) setupLogging() func() {
+	if tOptions.logsExportDir == "" {
+		name, err := os.MkdirTemp("", "antrea-test-")
+		if err != nil {
+			log.Fatalf("Error when creating temporary directory to export logs: %v", err)
+		}
+		log.Printf("Test logs (if any) will be exported under the '%s' directory", name)
+		tOptions.logsExportDir = name
+		// we will delete the temporary directory if no logs are exported
+		return func() {
+			if empty, _ := IsDirEmpty(name); empty {
+				log.Printf("Removing empty logs directory '%s'", name)
+				_ = os.Remove(name)
+			} else {
+				log.Printf("Logs exported under '%s', it is your responsibility to delete the directory when you no longer need it", name)
+			}
+		}
+	}
+	fInfo, err := os.Stat(tOptions.logsExportDir)
+	if err != nil {
+		log.Fatalf("Cannot stat provided directory '%s': %v", tOptions.logsExportDir, err)
+	}
+	if !fInfo.Mode().IsDir() {
+		log.Fatalf("'%s' is not a valid directory", tOptions.logsExportDir)
+	}
+	// no-op cleanup function
+	return func() {}
+}
+
+// SetupCoverage checks if the directory provided by the user exists.
+func (tOptions *TestOptions) SetupCoverage(data *TestData) func() {
+	if tOptions.coverageDir != "" {
+		fInfo, err := os.Stat(tOptions.coverageDir)
+		if err != nil {
+			log.Fatalf("Cannot stat provided directory '%s': %v", tOptions.coverageDir, err)
+		}
+		if !fInfo.Mode().IsDir() {
+			log.Fatalf("'%s' is not a valid directory", tOptions.coverageDir)
+		}
+
+	}
+	// cpNodeCoverageDir is a directory on the control-plane Node, where tests can deposit test
+	// coverage data.
+	log.Printf("Creating directory '%s' on Node '%s'\n", cpNodeCoverageDir, controlPlaneNodeName())
+	rc, _, _, err := data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("mkdir -p %s", cpNodeCoverageDir))
+	if err != nil || rc != 0 {
+		log.Fatalf("Failed to create directory '%s' on control-plane Node", cpNodeCoverageDir)
+	}
+	return func() {
+		log.Printf("Removing directory '%s' on Node '%s'\n", cpNodeCoverageDir, controlPlaneNodeName())
+		// best effort
+		data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("rm -rf %s", cpNodeCoverageDir))
+	}
+}
+
 var testOptions TestOptions
+
+func SetTestOptions(customTestOptions TestOptions) {
+	testOptions = customTestOptions
+}
 
 // podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
 type podInfo struct {
@@ -234,6 +298,67 @@ type TestData struct {
 }
 
 var testData *TestData
+
+func GetTestData() *TestData {
+	return testData
+}
+
+func InitializeTestData() {
+	testData = &TestData{}
+	if err := testData.InitProvider(testOptions.ProviderName, testOptions.ProviderConfigPath); err != nil {
+		log.Fatalf("Error when initializing provider: %v", err)
+	}
+	log.Println("Creating K8s ClientSet")
+	kubeconfigPath, err := testData.provider.GetKubeconfigPath()
+	if err != nil {
+		log.Fatalf("Error when getting Kubeconfig path: %v", err)
+	}
+	if err := testData.CreateClient(kubeconfigPath); err != nil {
+		log.Fatalf("Error when creating K8s ClientSet: %v", err)
+	}
+	log.Println("Collecting information about K8s cluster")
+	if err := testData.collectClusterInfo(); err != nil {
+		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
+	}
+	if clusterInfo.podV4NetworkCIDR != "" {
+		log.Printf("Pod IPv4 network: '%s'", clusterInfo.podV4NetworkCIDR)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		log.Printf("Pod IPv6 network: '%s'", clusterInfo.podV6NetworkCIDR)
+	}
+	if clusterInfo.svcV4NetworkCIDR != "" {
+		log.Printf("Service IPv4 network: '%s'", clusterInfo.svcV4NetworkCIDR)
+	}
+	if clusterInfo.svcV6NetworkCIDR != "" {
+		log.Printf("Service IPv6 network: '%s'", clusterInfo.svcV6NetworkCIDR)
+	}
+	log.Printf("Num nodes: %d", clusterInfo.numNodes)
+	err = EnsureAntreaRunning(testData)
+	if err != nil {
+		log.Fatalf("Error when deploying Antrea: %v", err)
+	}
+	// Collect PodCIDRs after Antrea is running as Antrea is responsible for allocating PodCIDRs in some cases.
+	// Polling is not needed here because antrea-agents won't be up and running if PodCIDRs of their Nodes are not set.
+	if err = testData.collectPodCIDRs(); err != nil {
+		log.Fatalf("Error collecting PodCIDRs: %v", err)
+	}
+	AntreaConfigMap, err = testData.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		log.Fatalf("Error when getting antrea-config configmap: %v", err)
+	}
+}
+
+func GracefulExitAntrea(testData *TestData) {
+	if err := testData.gracefulExitAntreaController(testOptions.coverageDir); err != nil {
+		log.Fatalf("Error when gracefully exit antrea controller: %v", err)
+	}
+	if err := testData.gracefulExitAntreaAgent(testOptions.coverageDir, "all"); err != nil {
+		log.Fatalf("Error when gracefully exit antrea agent: %v", err)
+	}
+	if err := testData.collectAntctlCovFilesFromControlPlaneNode(testOptions.coverageDir); err != nil {
+		log.Fatalf("Error when collecting antctl coverage files from control-plane Node: %v", err)
+	}
+}
 
 type PodIPs struct {
 	ipv4      *net.IP
@@ -765,6 +890,62 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 	return nil
 }
 
+func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, namePrefix string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
+	name := RandName(namePrefix)
+	return createAndWaitForPodWithExactName(t, data, createFunc, name, nodeName, ns, hostNetwork)
+}
+
+func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, name string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
+	if err := createFunc(name, ns, nodeName, hostNetwork); err != nil {
+		t.Fatalf("Error when creating test Pod: %v", err)
+	}
+	cleanupFunc := func() {
+		deletePodWrapper(t, data, ns, name)
+	}
+	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
+	if err != nil {
+		cleanupFunc()
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
+	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
+	return name, podIP, cleanupFunc
+}
+
+func createAndWaitForPodWithServiceAccount(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error, namePrefix string, nodeName string, ns string, hostNetwork bool, serviceAccountName string) (string, *PodIPs, func()) {
+	name := RandName(namePrefix)
+	if err := createFunc(name, ns, nodeName, hostNetwork, serviceAccountName); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	cleanupFunc := func() {
+		deletePodWrapper(t, data, data.testNamespace, name)
+	}
+	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
+	if err != nil {
+		cleanupFunc()
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
+	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, ns))
+	return name, podIP, cleanupFunc
+}
+
+func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func() error) {
+	if err := createFunc(name, ns, portNum, labels); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	cleanupFunc := func() error {
+		if err := data.DeletePod(ns, name); err != nil {
+			return fmt.Errorf("error when deleting Pod: %v", err)
+		}
+		return nil
+	}
+	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
+	if err != nil {
+		cleanupFunc()
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
+	}
+	return name, podIP, cleanupFunc
+}
+
 // deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
 func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, waitForAgentRollout bool) error {
 	// TODO: use the K8s apiserver when server side apply is available?
@@ -789,7 +970,7 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, w
 
 // deployAntrea deploys Antrea with deploy options.
 func (data *TestData) deployAntrea(option deployAntreaOptions) error {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		option = option.WithCoverage()
 	}
 	return data.deployAntreaCommon(option.DeployYML(), "", true)
@@ -890,7 +1071,7 @@ func (data *TestData) deleteClickHouseOperator() error {
 func (data *TestData) deployFlowAggregator(ipfixCollector string, o flowVisibilityTestOptions) error {
 
 	flowAggYaml := flowAggregatorYML
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		flowAggYaml = flowAggregatorCovYML
 	}
 	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
@@ -1103,6 +1284,40 @@ func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 	return nil
 }
 
+// waitForANNPRealized waits until an ANNP is realized and returns, or times out. A policy is
+// considered realized when its Status has been updated so that the ObservedGeneration matches the
+// resource's Generation and the Phase is set to Realized.
+func (data *TestData) waitForANNPRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
+	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return annp.Status.ObservedGeneration == annp.Generation && annp.Status.Phase == crdv1beta1.NetworkPolicyRealized, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for ANNP '%s/%s' to be realized: %v", namespace, name, err)
+	}
+	return nil
+}
+
+// waitForACNPRealized waits until an ACNP is realized and returns, or times out. A policy is
+// considered realized when its Status has been updated so that the ObservedGeneration matches the
+// resource's Generation and the Phase is set to Realized.
+func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout time.Duration) error {
+	t.Logf("Waiting for ACNP '%s' to be realized", name)
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return acnp.Status.ObservedGeneration == acnp.Generation && acnp.Status.Phase == crdv1beta1.NetworkPolicyRealized, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
+	}
+	return nil
+}
+
 // restartCoreDNSPods deletes all the CoreDNS Pods to force them to be re-scheduled. It then waits
 // for all the Pods to become available, by calling waitForCoreDNSPods.
 func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
@@ -1166,7 +1381,7 @@ func (data *TestData) CreateClient(kubeconfigPath string) error {
 // that the DaemonSet does not exist any more. This function is a no-op if the Antrea DaemonSet does
 // not exist at the time the function is called.
 func (data *TestData) deleteAntrea(timeout time.Duration) error {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		data.gracefulExitAntreaAgent(testOptions.coverageDir, "all")
 	}
 	var gracePeriodSeconds int64 = 5
@@ -1669,7 +1884,7 @@ func parsePodIPs(podIPStrings sets.Set[string]) (*PodIPs, error) {
 // takes for the Pod not to be visible to the client any more. It also waits for a new antrea-agent
 // Pod to be running on the Node.
 func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSeconds int64, timeout time.Duration) (time.Duration, error) {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		data.gracefulExitAntreaAgent(testOptions.coverageDir, nodeName)
 	}
 	listOptions := metav1.ListOptions{
@@ -1793,7 +2008,7 @@ func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 // restartAntreaControllerPod deletes the antrea-controller Pod to force it to be re-scheduled. It then waits
 // for the new Pod to become available, and returns it.
 func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1.Pod, error) {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		data.gracefulExitAntreaController(testOptions.coverageDir)
 	}
 	var gracePeriodSeconds int64 = 1
@@ -1843,7 +2058,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 // RestartAntreaAgentPods deletes all the antrea-agent Pods to force them to be re-scheduled. It
 // then waits for the new Pods to become available.
 func (data *TestData) RestartAntreaAgentPods(timeout time.Duration) error {
-	if testOptions.enableCoverage {
+	if testOptions.EnableCoverage {
 		data.gracefulExitAntreaAgent(testOptions.coverageDir, "all")
 	}
 	var gracePeriodSeconds int64 = 1
@@ -2468,7 +2683,7 @@ func (data *TestData) mutateAntreaConfigMap(
 		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-controller.conf"]), &controllerConf); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal Controller config from ConfigMap: %v", err)
 		}
-		// as a convenience, we initialize the FeatureGates map if it is nil
+		// as a convenience, we InitializeTestbed the FeatureGates map if it is nil
 		if controllerConf.FeatureGates == nil {
 			controllerConf.FeatureGates = make(map[string]bool)
 		}
@@ -2501,7 +2716,7 @@ func (data *TestData) mutateAntreaConfigMap(
 		if err := yaml.Unmarshal([]byte(cm.Data["antrea-agent.conf"]), &agentConf); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal Agent config from ConfigMap: %v", err)
 		}
-		// as a convenience, we initialize the FeatureGates map if it is nil
+		// as a convenience, we InitializeTestbed the FeatureGates map if it is nil
 		if agentConf.FeatureGates == nil {
 			agentConf.FeatureGates = make(map[string]bool)
 		}
@@ -2671,7 +2886,7 @@ func (data *TestData) collectAntctlCovFiles(podName string, containerName string
 func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) error {
 	// copy antctl coverage files from node to the coverage directory
 	var cmd string
-	if testOptions.providerName == "kind" {
+	if testOptions.ProviderName == "kind" {
 		cmd = fmt.Sprintf("/bin/sh -c find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
 	} else {
 		cmd = fmt.Sprintf("find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)

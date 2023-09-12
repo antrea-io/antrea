@@ -606,7 +606,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		if !senderReady {
 			// Sender pods should add an outbound multicast route except running as HostNetwork.
 			cmd := fmt.Sprintf("ip mroute show iif %s | grep %s | grep '%s'", gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))
-			if testOptions.providerName == "kind" {
+			if testOptions.ProviderName == "kind" {
 				cmd = "/bin/sh -c " + cmd
 			}
 			_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), cmd)
@@ -633,7 +633,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
 				if checkReceiverRoute {
 					cmd := fmt.Sprintf("ip mroute show iif %s | grep %s", receiverMulticastInterface, mc.group.String())
-					if testOptions.providerName == "kind" {
+					if testOptions.ProviderName == "kind" {
 						cmd = "/bin/sh -c " + cmd
 					}
 					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), cmd)
@@ -653,7 +653,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 					}
 				}
 				cmd := fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String())
-				if testOptions.providerName == "kind" {
+				if testOptions.ProviderName == "kind" {
 					cmd = "/bin/sh -c " + cmd
 				}
 				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), cmd)

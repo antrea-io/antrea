@@ -96,7 +96,7 @@ antrea-multicluster   deployment.apps/antrea-mc-controller   1/1     1          
 kube-system           deployment.apps/antrea-mc-controller   1/1     1            1           48s
 ```
 
-#### Step 2 - initialize ClusterSet
+#### Step 2 - InitializeTestbed ClusterSet
 
 Run the following commands to create a ClusterSet with cluster A to be the
 leader, and also join the ClusterSet as a member.
@@ -222,7 +222,7 @@ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antr
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
 ```
 
-#### Step 2 - initialize ClusterSet
+#### Step 2 - InitializeTestbed ClusterSet
 
 Antrea provides several template YAML manifests to set up a ClusterSet quicker.
 You can run the following commands that use the template manifests to create a
