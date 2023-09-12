@@ -63,6 +63,13 @@ func runMember(o *Options) error {
 			Client:    mgr.GetClient(),
 			namespace: env.GetPodNamespace()}})
 
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
+		&webhook.Admission{Handler: &clusterSetValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace(),
+			role:      memberRole},
+		})
+
 	clusterSetReconciler := member.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),

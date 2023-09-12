@@ -6222,6 +6222,7 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
+    - DELETE
     resources:
     - clustersets
   sideEffects: None
