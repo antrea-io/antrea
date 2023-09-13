@@ -66,24 +66,12 @@ multicast:
 # overhead if applicable.
 defaultMTU: 0
 
-# -- featureRateLimit defines the rate-limiting of different features.
-# All numbers in this struct stand for the rate as packets per second(pps) and the
-# burst/queueSize will be automatically set to 2 times of it.
-# When burst/queue is full, new packets will be dropped.
-featureRateLimit:
-  # -- dnsInterception is the rate limiting of sending packets to Antrea-agent for
-  # FQDN DNS interception.
-  dnsInterception: 500
-  # -- traceflow is the rate limiting of sending packets to Antrea-agent for traceflow.
-  traceflow: 500
-  # -- networkPolicy is the rate limiting of sending packets to Antrea-agent for
-  # NetworkPolicy logging and reject.
-  networkPolicy: 500
-  # -- igmp is the rate limiting of sending packets to Antrea-agent for IGMP.
-  igmp: 500
-  # -- svcReject is the rate limiting of sending packets to Antrea-agent for Service
-  # packets not matching any Endpoints.
-  svcReject: 500
+# -- packetInRate defines the OVS controller packet rate limits for different
+# features. All features will apply this rate-limit individually on sending
+# packet-in. The number stands for the rate as packets per second(pps) and the
+# burst/queueSize will be automatically set to 2 times of it. When burst/queue is
+# full, new packets will be dropped.
+packetInRate: 500
 
 ovs:
   # -- Name of the OVS bridge antrea-agent will create and use.

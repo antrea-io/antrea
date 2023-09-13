@@ -77,12 +77,6 @@ Kubernetes: `>= 1.16.0-0`
 | egress.maxEgressIPsPerNode | int | `255` | The maximum number of Egress IPs that can be assigned to a Node. It is useful when the Node network restricts the number of secondary IPs a Node can have, e.g. EKS. It must not be greater than 255. |
 | enableBridgingMode | bool | `false` | Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected to the OVS bridge. |
 | featureGates | object | `{}` | To explicitly enable or disable a FeatureGate and bypass the Antrea defaults, add an entry to the dictionary with the FeatureGate's name as the key and a boolean as the value. |
-| featureRateLimit | object | `{"dnsInterception":500,"igmp":500,"networkPolicy":500,"svcReject":500,"traceflow":500}` | featureRateLimit defines the rate-limiting of different features. All numbers in this struct stand for the rate as packets per second(pps) and the burst/queueSize will be automatically set to 2 times of it. When burst/queue is full, new packets will be dropped. |
-| featureRateLimit.dnsInterception | int | `500` | dnsInterception is the rate limiting of sending packets to Antrea-agent for FQDN DNS interception. |
-| featureRateLimit.igmp | int | `500` | igmp is the rate limiting of sending packets to Antrea-agent for IGMP. |
-| featureRateLimit.networkPolicy | int | `500` | networkPolicy is the rate limiting of sending packets to Antrea-agent for NetworkPolicy logging and reject. |
-| featureRateLimit.svcReject | int | `500` | svcReject is the rate limiting of sending packets to Antrea-agent for Service packets not matching any Endpoints. |
-| featureRateLimit.traceflow | int | `500` | traceflow is the rate limiting of sending packets to Antrea-agent for traceflow. |
 | flowExporter.activeFlowExportTimeout | string | `"5s"` | timeout after which a flow record is sent to the collector for active flows. |
 | flowExporter.enable | bool | `false` | Enable the flow exporter feature. |
 | flowExporter.flowCollectorAddr | string | `"flow-aggregator/flow-aggregator:4739:tls"` | IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>]. If the collector is running in-cluster as a Service, set <HOST> to <Service namespace>/<Service name>. |
@@ -117,6 +111,7 @@ Kubernetes: `>= 1.16.0-0`
 | nodePortLocal.portRange | string | `"61000-62000"` | Port range used by NodePortLocal when creating Pod port mappings. |
 | ovs.bridgeName | string | `"br-int"` | Name of the OVS bridge antrea-agent will create and use. |
 | ovs.hwOffload | bool | `false` | Enable hardware offload for the OVS bridge (required additional configuration). |
+| packetInRate | int | `500` | packetInRate defines the OVS controller packet rate limits for different features. All features will apply this rate-limit individually on sending packet-in. The number stands for the rate as packets per second(pps) and the burst/queueSize will be automatically set to 2 times of it. When burst/queue is full, new packets will be dropped. |
 | secondaryNetwork.ovsBridges | list | `[]` | Configuration of OVS bridges for secondary network. At the moment, at most one OVS bridge can be specified. If the specified bridge does not exist on the Node, antrea-agent will create it based on the configuration. The following configuration specifies an OVS bridge with name "br1" and a physical interface "eth1": [{bridgeName: "br1", physicalInterfaces: ["eth1"]}] |
 | serviceCIDR | string | `""` | IPv4 CIDR range used for Services. Required when AntreaProxy is disabled. |
 | serviceCIDRv6 | string | `""` | IPv6 CIDR range used for Services. Required when AntreaProxy is disabled. |

@@ -463,11 +463,12 @@ type client struct {
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
 	ovsMetersAreSupported bool
-	// featureRateLimit defines the rate-limiting of different features.
-	// All numbers in this struct stand for the rate as packets per second(pps) and the
-	// burst/queueSize will be automatically set to 2 times of it.
-	// When burst/queue is full, new packets will be dropped.
-	featureRateLimit FeatureRateLimitConfig
+	// packetInRate defines the OVS controller packet rate limits for different
+	// features. All features will apply this rate-limit individually on sending
+	// packet-in. The number stands for the rate as packets per second(pps) and the
+	// burst/queueSize will be automatically set to 2 times of it. When burst/queue is
+	// full, new packets will be dropped.
+	packetInRate int
 	// packetInHandlers stores handler to process PacketIn event. When a packetIn
 	// arrives, openflow send packet to registered handler in this map.
 	packetInHandlers map[uint8]PacketInHandler
@@ -2898,7 +2899,7 @@ func NewClient(bridgeName string,
 	enableMulticluster bool,
 	groupIDAllocator GroupAllocator,
 	enablePrometheusMetrics bool,
-	featureRateLimit FeatureRateLimitConfig,
+	packetInRate int,
 ) *client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
@@ -2920,7 +2921,7 @@ func NewClient(bridgeName string,
 		packetInHandlers:        map[uint8]PacketInHandler{},
 		ovsctlClient:            ovsctl.NewClient(bridgeName),
 		ovsMetersAreSupported:   ovsMetersAreSupported(),
-		featureRateLimit:        featureRateLimit,
+		packetInRate:            packetInRate,
 		groupIDAllocator:        groupIDAllocator,
 	}
 	c.ofEntryOperations = c

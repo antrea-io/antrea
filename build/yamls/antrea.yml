@@ -5617,24 +5617,12 @@ data:
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     defaultMTU: 0
 
-    # featureRateLimit defines the rate-limiting of different features. All numbers in
-    # this struct stand for the rate as packets per second(pps) and the
-    # burst/queueSize will be automatically set to 2 times of it.
-    # When burst/queue is full, new packets will be dropped.
-    featureRateLimit:
-      # dnsInterception is the rate limiting of sending packets to Antrea-agent for FQDN
-      # DNS interception.
-      dnsInterception: 500
-      # traceflow is the rate limiting of sending packets to Antrea-agent for traceflow.
-      traceflow: 500
-      # networkPolicy is the rate limiting of sending packets to Antrea-agent for
-      # NetworkPolicy logging and reject.
-      networkPolicy: 500
-      # igmp is the rate limiting of sending packets to Antrea-agent for IGMP.
-      igmp: 500
-      # svcReject is the rate limiting of sending packets to Antrea-agent for Service
-      # packets not matching any Endpoints.
-      svcReject: 500
+    # packetInRate defines the OVS controller packet rate limits for different
+    # features. All features will apply this rate-limit individually on sending
+    # packet-in. The number stands for the rate as packets per second(pps) and the
+    # burst/queueSize will be automatically set to 2 times of it. When burst/queue is
+    # full, new packets will be dropped.
+    packetInRate: 500
 
     # wireGuard specifies WireGuard related configurations.
     wireGuard:
@@ -6838,7 +6826,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a8a3928ece2d18380f29b78962d7f2ca0bbecc8184cf73b726a82fd7fc158bbc
+        checksum/config: eb380c6568d149d05d117f6a1cb91a2cbda96f7fa53fe33c491e3291d5a7c791
       labels:
         app: antrea
         component: antrea-agent
@@ -7077,7 +7065,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a8a3928ece2d18380f29b78962d7f2ca0bbecc8184cf73b726a82fd7fc158bbc
+        checksum/config: eb380c6568d149d05d117f6a1cb91a2cbda96f7fa53fe33c491e3291d5a7c791
       labels:
         app: antrea
         component: antrea-controller

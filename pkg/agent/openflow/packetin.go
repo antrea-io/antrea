@@ -83,26 +83,6 @@ const (
 	PacketInMeterIDDNS = 3
 )
 
-// FeatureRateLimitConfig defines the rate-limiting of different features.
-// All numbers in this struct stand for the rate as packets per second(pps) and the
-// burst/queueSize will be automatically set to 2 times of it.
-// When burst/queue is full, new packets will be dropped.
-type FeatureRateLimitConfig struct {
-	// DNSInterception is the rate limiting of sending packets to Antrea-agent for FQDN
-	// DNS interception.
-	DNSInterception int `yaml:"dnsInterception"`
-	// Traceflow is the rate limiting of sending packets to Antrea-agent for traceflow.
-	Traceflow int `yaml:"traceflow"`
-	// NetworkPolicy is the rate limiting of sending packets to Antrea-agent for
-	// NetworkPolicy logging and reject.
-	NetworkPolicy int `yaml:"networkPolicy"`
-	// IGMP is the rate limiting of sending packets to Antrea-agent for IGMP.
-	IGMP int `yaml:"igmp"`
-	// SvcReject is the rate limiting of sending packets to Antrea-agent for Service
-	// packets not matching any Endpoints.
-	SvcReject int `yaml:"serviceReject"`
-}
-
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
 func (c *client) RegisterPacketInHandler(packetHandlerCategory uint8, packetInHandler interface{}) {
 	handler, ok := packetInHandler.(PacketInHandler)
@@ -134,21 +114,7 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 	}
 	// Iterate through each feature that starts packetIn. Subscribe with their specified category.
 	for category := range c.packetInHandlers {
-		var featurePacketIn *featureStartPacketIn
-		switch category {
-		case uint8(PacketInCategoryDNS):
-			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.DNSInterception*2, c.featureRateLimit.DNSInterception)
-		case uint8(PacketInCategoryTF):
-			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.Traceflow*2, c.featureRateLimit.Traceflow)
-		case uint8(PacketInCategoryNP):
-			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.NetworkPolicy*2, c.featureRateLimit.NetworkPolicy)
-		case uint8(PacketInCategoryIGMP):
-			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.IGMP*2, c.featureRateLimit.IGMP)
-		case uint8(PacketInCategorySvcReject):
-			featurePacketIn = newFeatureStartPacketIn(category, stopCh, c.featureRateLimit.SvcReject*2, c.featureRateLimit.SvcReject)
-		default:
-			featurePacketIn = newFeatureStartPacketIn(category, stopCh, 1000, 500)
-		}
+		featurePacketIn := newFeatureStartPacketIn(category, stopCh, c.packetInRate*2, c.packetInRate)
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {
 			klog.Errorf("received error %+v while subscribing packetIn for each feature", err)

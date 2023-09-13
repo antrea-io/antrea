@@ -68,13 +68,7 @@ var (
 	fakeL7NPTargetOFPort = uint32(10)
 	fakeL7NPReturnOFPort = uint32(11)
 
-	defaultFeatureRateLimit = FeatureRateLimitConfig{
-		DNSInterception: 500,
-		Traceflow:       500,
-		NetworkPolicy:   500,
-		IGMP:            500,
-		SvcReject:       500,
-	}
+	defaultPacketInRate = 500
 )
 
 func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
@@ -385,7 +379,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.enableMulticluster,
 		NewGroupAllocator(),
 		false,
-		defaultFeatureRateLimit)
+		defaultPacketInRate)
 
 	var egressExceptCIDRs []net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
@@ -1824,7 +1818,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false, defaultFeatureRateLimit)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
 	m := ovsoftest.NewMockBridge(ctrl)
 	ofClient.bridge = m
 	bridge := binding.OFBridge{}
@@ -2618,9 +2612,9 @@ func Test_client_ReplayFlows(t *testing.T) {
 			id   binding.MeterIDType
 			rate uint32
 		}{
-			{id: PacketInMeterIDNP, rate: uint32(defaultFeatureRateLimit.NetworkPolicy)},
-			{id: PacketInMeterIDTF, rate: uint32(defaultFeatureRateLimit.Traceflow)},
-			{id: PacketInMeterIDDNS, rate: uint32(defaultFeatureRateLimit.DNSInterception)},
+			{id: PacketInMeterIDNP, rate: uint32(defaultPacketInRate)},
+			{id: PacketInMeterIDTF, rate: uint32(defaultPacketInRate)},
+			{id: PacketInMeterIDDNS, rate: uint32(defaultPacketInRate)},
 		} {
 			meter := ovsoftest.NewMockMeter(ctrl)
 			meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)

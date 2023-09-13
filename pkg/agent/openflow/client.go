@@ -791,14 +791,14 @@ func (c *client) initialize() error {
 	}
 
 	if c.ovsMetersAreSupported {
-		if err := c.genPacketInMeter(PacketInMeterIDNP, uint32(c.featureRateLimit.NetworkPolicy)).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, c.featureRateLimit.NetworkPolicy, err)
+		if err := c.genPacketInMeter(PacketInMeterIDNP, uint32(c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, c.packetInRate, err)
 		}
-		if err := c.genPacketInMeter(PacketInMeterIDTF, uint32(c.featureRateLimit.Traceflow)).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, c.featureRateLimit.Traceflow, err)
+		if err := c.genPacketInMeter(PacketInMeterIDTF, uint32(c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, c.packetInRate, err)
 		}
-		if err := c.genPacketInMeter(PacketInMeterIDDNS, uint32(c.featureRateLimit.DNSInterception)).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %v", PacketInMeterIDDNS, c.featureRateLimit.DNSInterception, err)
+		if err := c.genPacketInMeter(PacketInMeterIDDNS, uint32(c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %v", PacketInMeterIDDNS, c.packetInRate, err)
 		}
 	}
 

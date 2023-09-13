@@ -154,14 +154,6 @@ func run(o *Options) error {
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable
 	groupIDAllocator := openflow.NewGroupAllocator()
-	var featureRateLimitConfig openflow.FeatureRateLimitConfig
-	featureRateLimitConfig = openflow.FeatureRateLimitConfig{
-		DNSInterception: o.config.FeatureRateLimit.DNSInterception,
-		Traceflow:       o.config.FeatureRateLimit.Traceflow,
-		NetworkPolicy:   o.config.FeatureRateLimit.NetworkPolicy,
-		IGMP:            o.config.FeatureRateLimit.IGMP,
-		SvcReject:       o.config.FeatureRateLimit.SvcReject,
-	}
 	ofClient := openflow.NewClient(o.config.OVSBridge,
 		ovsBridgeMgmtAddr,
 		nodeIPTracker,
@@ -178,7 +170,7 @@ func run(o *Options) error {
 		enableMulticlusterGW,
 		groupIDAllocator,
 		*o.config.EnablePrometheusMetrics,
-		featureRateLimitConfig,
+		o.config.PacketInRate,
 	)
 
 	var serviceCIDRNet *net.IPNet
