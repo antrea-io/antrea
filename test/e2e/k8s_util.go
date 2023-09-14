@@ -199,7 +199,13 @@ func (k *KubernetesUtils) probe(
 		utils.ProtocolSCTP: "sctp",
 	}
 	cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
-	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
+	log.Infof("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
+	_, stdout, _, _ := k.RunCommandOnNode("antrea-multicast-0-0", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
+	log.Infof(stdout)
+	_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-1", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
+	log.Infof(stdout)
+	_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-2", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
+	log.Infof(stdout)
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
 	// It needs to check both err and stderr because:
 	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
