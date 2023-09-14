@@ -5631,10 +5631,10 @@ data:
     defaultMTU: 0
 
     # packetInRate defines the OVS controller packet rate limits for different
-    # features. All features will apply this rate-limit individually on sending
-    # packet-in. The number stands for the rate as packets per second(pps) and the
-    # burst/queueSize will be automatically set to 2 times of it. When burst/queue is
-    # full, new packets will be dropped.
+    # features. All features will apply this rate-limit individually on packet-in
+    # packets sending to antrea-agent. The number stands for the rate as packets per
+    # second(pps) and the burst/queueSize will be automatically set to 2 times of it.
+    # When burst/queue is full, new packets will be dropped.
     packetInRate: 500
 
     # wireGuard specifies WireGuard related configurations.
@@ -6839,7 +6839,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1883b350ab9721a30227d56548045dfb2fb9c31d36a9cd793ef819722c99f167
+        checksum/config: 43a4bed6787888fa978762bed287436733d6e9ddaa2fc272660cac13c89b2904
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -7124,7 +7124,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1883b350ab9721a30227d56548045dfb2fb9c31d36a9cd793ef819722c99f167
+        checksum/config: 43a4bed6787888fa978762bed287436733d6e9ddaa2fc272660cac13c89b2904
       labels:
         app: antrea
         component: antrea-controller

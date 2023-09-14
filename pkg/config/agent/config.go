@@ -200,10 +200,10 @@ type AgentConfig struct {
 	// Antrea's native secondary network configuration.
 	SecondaryNetwork SecondaryNetworkConfig `yaml:"secondaryNetwork,omitempty"`
 	// PacketInRate defines the OVS controller packet rate limits for different
-	// features. All features will apply this rate-limit individually on sending
-	// packet-in. The number stands for the rate as packets per second(pps) and the
-	// burst/queueSize will be automatically set to 2 times of it. When burst/queue is
-	// full, new packets will be dropped.
+	// features. All features will apply this rate-limit individually on packet-in
+	// packets sending to antrea-agent. The number stands for the rate as packets per
+	// second(pps) and the burst/queueSize will be automatically set to 2 times of it.
+	// When burst/queue is full, new packets will be dropped.
 	PacketInRate int `yaml:"packetInRate,omitempty"`
 }
 

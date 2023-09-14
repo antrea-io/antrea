@@ -464,10 +464,10 @@ type client struct {
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
 	ovsMetersAreSupported bool
 	// packetInRate defines the OVS controller packet rate limits for different
-	// features. All features will apply this rate-limit individually on sending
-	// packet-in. The number stands for the rate as packets per second(pps) and the
-	// burst/queueSize will be automatically set to 2 times of it. When burst/queue is
-	// full, new packets will be dropped.
+	// features. All features will apply this rate-limit individually on packet-in
+	// packets sending to antrea-agent. The number stands for the rate as packets per
+	// second(pps) and the burst/queueSize will be automatically set to 2 times of it.
+	// When burst/queue is full, new packets will be dropped.
 	packetInRate int
 	// packetInHandlers stores handler to process PacketIn event. When a packetIn
 	// arrives, openflow send packet to registered handler in this map.
