@@ -467,7 +467,7 @@ func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr stri
 		if strings.Contains(dstAddr, ":") {
 			dstAddr = fmt.Sprintf("[%s]", dstAddr)
 		}
-		connectivity = k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol, expectedResult,flag)
+		connectivity = k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol, expectedResult, flag)
 	}
 	return connectivity, nil
 }
@@ -1062,17 +1062,17 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 
 	serversAreReady := func() bool {
 		reachability := NewReachability(allPods, Connected)
-		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, utils.ProtocolTCP)
+		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, utils.ProtocolTCP, false)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP, 0)
+		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP, false)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP, 0)
+		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP, false)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
@@ -1148,7 +1148,7 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	oneProbe := func(podFrom, podTo Pod, port int32) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
 		expectedResult := reachability.Expected.Get(podFrom.String(), podTo.String())
-		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, remoteCluster, &expectedResult)
+		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, remoteCluster, &expectedResult, false)
 		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 	}
 	for _, pod1 := range allPods {
