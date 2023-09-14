@@ -2424,7 +2424,10 @@ func testANNPBasic(t *testing.T) {
 // testANNPMultipleAppliedTo tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea
 // NetworkPolicy that applies to multiple AppliedTos, one of which doesn't select any Pod. It also ensures the Policy is
 // updated correctly when one of its AppliedToGroup starts and stops selecting Pods.
-func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
+func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool, protocol AntreaPolicyProtocol) {
+	if protocol == ProtocolSCTP {
+		skipIfIPv6Cluster(t)
+	}
 	tempLabel := randName("temp-")
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(namespaces["y"], "np-multiple-appliedto").SetPriority(1.0)
@@ -2432,12 +2435,12 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	// See https://github.com/antrea-io/antrea/issues/2083.
 	if singleRule {
 		builder.SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}, {PodSelector: map[string]string{tempLabel: ""}}})
-		builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		builder.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
 			nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
 	} else {
-		builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		builder.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
 			nil, nil, nil, []ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}, crdv1beta1.RuleActionDrop, "", "")
-		builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		builder.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
 			nil, nil, nil, []ANNPAppliedToSpec{{PodSelector: map[string]string{tempLabel: ""}}}, crdv1beta1.RuleActionDrop, "", "")
 	}
 
@@ -2447,7 +2450,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
 	failOnError(err, t)
 	failOnError(data.waitForANNPRealized(t, annp.Namespace, annp.Name, policyRealizedTimeout), t)
-	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, protocol)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("Failure -- %d wrong results", wrong)
@@ -2466,7 +2469,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
 	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/c"), Dropped)
 	time.Sleep(networkPolicyDelay)
-	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, protocol)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("Failure -- %d wrong results", wrong)
@@ -2480,7 +2483,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability = NewReachability(allPods, Connected)
 	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
 	time.Sleep(networkPolicyDelay)
-	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, protocol)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("Failure -- %d wrong results", wrong)
@@ -3996,6 +3999,170 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	}
 }
 
+// testANNPAllowNoDefaultIsolation tests that no default isolation rules are created for Policies.
+func testANNPAllowNoDefaultIsolation(t *testing.T) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespaces["x"], "annp-allow-xa-ingress-and-egress").
+		SetPriority(1.1).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngress(ProtocolTCP, &p81, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["y"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "")
+	builder.AddEgress(ProtocolTCP, &p81, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["z"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "")
+
+	reachability := NewReachability(allPods, Connected)
+	testStep := []*TestStep{
+		{
+			"Port 81",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			[]int32{81},
+			ProtocolTCP,
+			0,
+			nil,
+		},
+	}
+	testCase := []*TestCase{
+		{"ANNP Allow No Default Isolation", testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// testANNPCompleteIsolation tests that an ANNP with default drop rules creates
+// complete pod isolation for X/A that drops all traffic from anywhere.
+func testANNPCompleteIsolation(t *testing.T) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespaces["x"], "annp-drop-xa-ingress-and-egress").
+		SetPriority(1.1).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, map[string]string{}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, map[string]string{}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.ExpectAllIngress(Pod(namespaces["x"]+"/a"), Dropped)
+	reachability.ExpectAllEgress(Pod(namespaces["x"]+"/a"), Dropped)
+	reachability.ExpectSelf(allPods, Connected)
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			[]int32{80},
+			ProtocolTCP,
+			0,
+			nil,
+		},
+	}
+	testCase := []*TestCase{
+		{"ANNP Drop Complete Isolation For Pods in X", testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// testANNPDropIngressEgress tests that an ANNP is able to drop ingress traffic
+// from X/B to Y/A and drop egress traffic from Y/A to Z/C for the provided protocol.
+func testANNPDropIngressEgress(t *testing.T, protocol AntreaPolicyProtocol) {
+	if protocol == ProtocolSCTP {
+		skipIfIPv6Cluster(t)
+	}
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespaces["y"], "annp-deny-xb-to-ya-ingress-ya-to-zc-egress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+	builder.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["z"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
+	reachability.Expect(Pod(namespaces["y"]+"/a"), Pod(namespaces["z"]+"/c"), Dropped)
+	testStep := []*TestStep{
+		{
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      protocol,
+			Duration:      0,
+			CustomProbes:  nil,
+		},
+	}
+	testCase := []*TestCase{
+		{Name: "ANNP Drop Ingress From X/B to Y/A And Egress From Y/A to Z/C", Steps: testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// testANNPConflictIngressEgress tests that conflicting policies with drop ingress
+// and allow egress from y/b to x/a results in the drop instead of allow.
+func testANNPConflictIngressEgress(t *testing.T) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespaces["x"], "annp-deny-yb-to-xa-ingress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["y"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+
+	builder2 := &AntreaNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName(namespaces["y"], "annp-allow-yb-to-xa-egress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
+	builder2.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "a"}, map[string]string{"ns": namespaces["x"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "")
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod(namespaces["y"]+"/b"), Pod(namespaces["x"]+"/a"), Dropped)
+	testStep := []*TestStep{
+		{
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+			Duration:      0,
+			CustomProbes:  nil,
+		},
+	}
+	testCase := []*TestCase{
+		{Name: "ANNP Drop Y/B to X/A with Conflicting Policies", Steps: testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// testANNPIngressDelete tests that an ANNP is no longer effective after deleted.
+func testANNPIngressDelete(t *testing.T, data *TestData) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespaces["y"], "annp-deny-xb-to-ya-ingress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
+
+	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
+	failOnError(err, t)
+	failOnError(data.waitForANNPRealized(t, annp.Namespace, annp.Name, policyRealizedTimeout), t)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
+	_, wrong, _ := reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("Failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
+	}
+
+	failOnError(k8sUtils.DeleteANNP(annp.Namespace, annp.Name), t)
+	updatedReachability := NewReachability(allPods, Connected)
+	k8sUtils.Validate(allPods, updatedReachability, []int32{80}, ProtocolTCP)
+	_, wrong, _ = reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("Failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
+	}
+}
+
 // the matchers parameter is a list of regular expressions which will be matched against the
 // contents of the audit logs. The call will "succeed" if all matches are successful.
 func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator string, matchers []*regexp.Regexp) {
@@ -4349,8 +4516,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t) })
 		t.Run("Case=ANNPPortRange", func(t *testing.T) { testANNPPortRange(t) })
 		t.Run("Case=ANNPBasic", func(t *testing.T) { testANNPBasic(t) })
-		t.Run("Case=testANNPMultipleAppliedToSingleRule", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true) })
-		t.Run("Case=testANNPMultipleAppliedToMultipleRules", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false) })
+		t.Run("Case=testANNPMultipleAppliedToSingleRule", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true, ProtocolTCP) })
+		t.Run("Case=testANNPMultipleAppliedToMultipleRules", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false, ProtocolTCP) })
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
 		t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t) })
 		t.Run("Case=ACNPStrictNamespaceIsolation", func(t *testing.T) { testACNPStrictNamespacesIsolation(t) })
@@ -4387,6 +4554,20 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })
 		t.Run("Case=ACNPICMPSupport", func(t *testing.T) { testACNPICMPSupport(t, data) })
 		t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, data.testNamespace) })
+	})
+	t.Run("ExtendedTestGroupANNP", func(t *testing.T) {
+		skipIfNotRequired(t, "mode-irrelevant")
+		t.Run("Case=ANNPAllowNoDefaultIsolation", func(t *testing.T) { testANNPAllowNoDefaultIsolation(t) })
+		t.Run("Case=ANNPCompleteIsolation", func(t *testing.T) { testANNPCompleteIsolation(t) })
+		t.Run("Case=ANNPDropIngressEgressTCP", func(t *testing.T) { testANNPDropIngressEgress(t, ProtocolTCP) })
+		t.Run("Case=ANNPDropIngressEgressUDP", func(t *testing.T) { testANNPDropIngressEgress(t, ProtocolUDP) })
+		t.Run("Case=ANNPDropIngressEgressSCTP", func(t *testing.T) { testANNPDropIngressEgress(t, ProtocolSCTP) })
+		t.Run("Case=ANNPConflictIngressEgress", func(t *testing.T) { testANNPConflictIngressEgress(t) })
+		t.Run("Case=testANNPMultipleAppliedToSingleRuleUDP", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true, ProtocolUDP) })
+		t.Run("Case=testANNPMultipleAppliedToSingleRuleSCTP", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true, ProtocolSCTP) })
+		t.Run("Case=testANNPMultipleAppliedToMultipleRulesUDP", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false, ProtocolUDP) })
+		t.Run("Case=testANNPMultipleAppliedToMultipleRulesSCTP", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false, ProtocolSCTP) })
+		t.Run("Case=testANNPIngressDelete", func(t *testing.T) { testANNPIngressDelete(t, data) })
 	})
 	// print results for reachability tests
 	printResults()
