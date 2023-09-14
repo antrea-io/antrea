@@ -229,5 +229,5 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 	testCase := []*TestCase{
 		{fmt.Sprintf("ACNP %s for all Pods, ingress=%v", string(ruleAction), isIngress), testStep},
 	}
-	executeTests(t, testCase)
+	executeTests(t, testCase, false)
 }

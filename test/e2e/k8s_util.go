@@ -192,6 +192,7 @@ func (k *KubernetesUtils) probe(
 	port int32,
 	protocol utils.AntreaPolicyProtocol,
 	expectedResult *PodConnectivityMark,
+	flag bool,
 ) PodConnectivityMark {
 	protocolStr := map[utils.AntreaPolicyProtocol]string{
 		utils.ProtocolTCP:  "tcp",
@@ -199,13 +200,15 @@ func (k *KubernetesUtils) probe(
 		utils.ProtocolSCTP: "sctp",
 	}
 	cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
-	log.Infof("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
-	_, stdout, _, _ := k.RunCommandOnNode("antrea-multicast-0-0", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
-	log.Infof(stdout)
-	_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-1", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
-	log.Infof(stdout)
-	_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-2", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
-	log.Infof(stdout)
+	if flag {
+		log.Infof("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
+		_, stdout, _, _ := k.RunCommandOnNode("antrea-multicast-0-0", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
+		log.Infof(stdout)
+		_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-1", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
+		log.Infof(stdout)
+		_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-2", "hostname;free -h; ps -e -o pid,user,%mem,rss,cmd --sort=-rss; route -n")
+		log.Infof(stdout)
+	}
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
 	// It needs to check both err and stderr because:
 	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
@@ -392,7 +395,7 @@ func (k *KubernetesUtils) digDNS(
 // installed. The connectivity from source Pod to all IPs of the target Pod
 // should be consistent. Otherwise, Error PodConnectivityMark will be returned.
 func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protocol utils.AntreaPolicyProtocol,
-	remoteCluster *KubernetesUtils, expectedResult *PodConnectivityMark) (PodConnectivityMark, error) {
+	remoteCluster *KubernetesUtils, expectedResult *PodConnectivityMark, flag bool) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
@@ -419,11 +422,11 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 	}
 	toPod := toPods[0]
 	fromPodName, toPodName := fmt.Sprintf("%s/%s", ns1, pod1), fmt.Sprintf("%s/%s", ns2, pod2)
-	return k.probeAndDecideConnectivity(fromPod, toPod, fromPodName, toPodName, port, protocol, expectedResult)
+	return k.probeAndDecideConnectivity(fromPod, toPod, fromPodName, toPodName, port, protocol, expectedResult, flag)
 }
 
 func (k *KubernetesUtils) probeAndDecideConnectivity(fromPod, toPod v1.Pod,
-	fromPodName, toPodName string, port int32, protocol utils.AntreaPolicyProtocol, expectedResult *PodConnectivityMark) (PodConnectivityMark, error) {
+	fromPodName, toPodName string, port int32, protocol utils.AntreaPolicyProtocol, expectedResult *PodConnectivityMark, flag bool) (PodConnectivityMark, error) {
 	// Both IPv4 and IPv6 address should be tested.
 	connectivity := Unknown
 	for _, eachIP := range toPod.Status.PodIPs {
@@ -434,7 +437,7 @@ func (k *KubernetesUtils) probeAndDecideConnectivity(fromPod, toPod v1.Pod,
 		}
 		// HACK: inferring container name as c80, c81 etc., for simplicity.
 		containerName := fmt.Sprintf("c%v", port)
-		curConnectivity := k.probe(&fromPod, fromPodName, containerName, toIP, toPodName, port, protocol, expectedResult)
+		curConnectivity := k.probe(&fromPod, fromPodName, containerName, toIP, toPodName, port, protocol, expectedResult, flag)
 		if connectivity == Unknown {
 			connectivity = curConnectivity
 		} else if connectivity != curConnectivity {
@@ -446,7 +449,7 @@ func (k *KubernetesUtils) probeAndDecideConnectivity(fromPod, toPod v1.Pod,
 
 // ProbeAddr execs into a Pod and checks its connectivity to an arbitrary destination
 // address.
-func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr string, port int32, protocol utils.AntreaPolicyProtocol, expectedResult *PodConnectivityMark) (PodConnectivityMark, error) {
+func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr string, port int32, protocol utils.AntreaPolicyProtocol, expectedResult *PodConnectivityMark, flag bool) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns, podLabelKey, podLabelValue)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns, err)
@@ -464,7 +467,7 @@ func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr stri
 		if strings.Contains(dstAddr, ":") {
 			dstAddr = fmt.Sprintf("[%s]", dstAddr)
 		}
-		connectivity = k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol, expectedResult)
+		connectivity = k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol, expectedResult,flag)
 	}
 	return connectivity, nil
 }
@@ -1064,12 +1067,12 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP)
+		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP, 0)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP)
+		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP, 0)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
@@ -1086,14 +1089,14 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return fmt.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
-func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
+func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol, flag bool) {
 	numProbes := len(allPods) * len(allPods)
 	resultsCh := make(chan *probeResult, numProbes)
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod, port int32) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
 		expectedResult := reachability.Expected.Get(podFrom.String(), podTo.String())
-		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, nil, &expectedResult)
+		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, nil, &expectedResult, flag)
 		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 	}
 	for _, pod1 := range allPods {
@@ -1127,7 +1130,7 @@ func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachabil
 // list of ports and a protocol. The connectivity from a Pod to another Pod should
 // be consistent across all provided ports. Otherwise, this connectivity will be
 // treated as Error.
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol) {
+func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol, flag bool) {
 	for _, port := range ports {
 		// we do not run all the probes in parallel as we have experienced that on some
 		// machines, this can cause a fraction of the probes to always fail, despite the
@@ -1135,7 +1138,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		// each one being executed in its own goroutine. For example, with 9 Pods and for
 		// ports 80, 81, 8080, 8081, 8082, 8083, 8084 and 8085, we would end up with
 		// potentially 9*9*8 = 648 simultaneous probes.
-		k.validateOnePort(allPods, reachability, port, protocol)
+		k.validateOnePort(allPods, reachability, port, protocol, flag)
 	}
 }
 

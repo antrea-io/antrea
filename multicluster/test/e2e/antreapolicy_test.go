@@ -158,7 +158,7 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 					failOnError(err, t)
 				}
 				start := time.Now()
-				k8sUtils.Validate(allPodsPerCluster, reachability, step.Ports, step.Protocol)
+				k8sUtils.Validate(allPodsPerCluster, reachability, step.Ports, step.Protocol, false)
 				step.Duration = time.Since(start)
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {
