@@ -22,14 +22,16 @@ import (
 	"fmt"
 	"net/http"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
-//+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha2-clusterset,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=clustersets,verbs=create;update,versions=v1alpha2,name=vclusterset.kb.io,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha2-clusterset,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=clustersets,verbs=create;update;delete,versions=v1alpha2,name=vclusterset.kb.io,admissionReviewVersions={v1,v1beta1}
 
 const (
 	mcControllerSAName = "antrea-mc-controller"
@@ -40,10 +42,24 @@ type clusterSetValidator struct {
 	Client    client.Client
 	decoder   *admission.Decoder
 	namespace string
+	role      string
 }
 
 // Handle handles admission requests.
 func (v *clusterSetValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+	if req.Operation == admissionv1.Delete {
+		if v.role == "leader" {
+			mcaList := &mcv1alpha1.MemberClusterAnnounceList{}
+			if err := v.Client.List(context.TODO(), mcaList, client.InNamespace(v.namespace)); err != nil {
+				return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("failed to check existing MemberClusterAnnounce before deleting the ClusterSet %s", req.Namespace+"/"+req.Name))
+			}
+			if len(mcaList.Items) > 0 {
+				return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("failed to delete the ClusterSet %s since there are still member clusters connecting to this leader cluster", req.Namespace+"/"+req.Name))
+			}
+		}
+		return admission.Allowed("")
+	}
+
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := v.decoder.Decode(req, clusterSet)
 	if err != nil {
