@@ -76,6 +76,13 @@ func runLeader(o *Options) error {
 			Client:    noCachedClient,
 			namespace: env.GetPodNamespace()}})
 
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
+		&webhook.Admission{Handler: &clusterSetValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace(),
+			role:      leaderRole},
+		})
+
 	clusterSetReconciler := &leader.LeaderClusterSetReconciler{
 		Client:                   mgr.GetClient(),
 		Scheme:                   mgr.GetScheme(),
