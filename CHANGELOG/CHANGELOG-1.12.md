@@ -1,5 +1,23 @@
 # Changelog 1.12
 
+## 1.12.2 - 2023-09-15
+
+### Changed
+
+- Change the default flow's action to `drop` in ARPSpoofGuardTable to effectively prevent ARP spoofing. ([#5378](https://github.com/antrea-io/antrea/pull/5378), [@hongliangl])
+- Stop using `/bin/sh` and invoke the binary directly for OVS commands in Antrea Agent. ([#5364](https://github.com/antrea-io/antrea/pull/5364), [@antoninbas])
+- Increase the rate limit setting of `PacketInMeter` and the size of `PacketInQueue`. ([#5460](https://github.com/antrea-io/antrea/pull/5460), [@GraysonWu])
+- Revert a change to serve the v1alpha2 version of the ClusterGroup CRD again for the consistent API promotion plan. ([#5277](https://github.com/antrea-io/antrea/pull/5277), [@GraysonWu])
+- Upgrade Open vSwitch to 2.17.7. ([#5225](https://github.com/antrea-io/antrea/pull/5225), [@antoninbas])
+
+### Fixed
+
+- Fix an Antrea Controller crash issue in handling empty Pod labels for LabelIdentity when the config `enableStretchedNetworkPolicy` is enabled for Antrea Multi-cluster. ([#5404](https://github.com/antrea-io/antrea/pull/5404) [#5449](https://github.com/antrea-io/antrea/pull/5449), [@Dyanngg])
+- Remove NetworkPolicyStats dependency of MulticastGroup API to fix the empty list issue when users run `kubectl get multicastgroups` even when the Multicast is enabled. ([#5367](https://github.com/antrea-io/antrea/pull/5367), [@ceclinux])
+- Do not attempt to join Windows agents to the memberlist cluster to avoid misleading error logs. ([#5434](https://github.com/antrea-io/antrea/pull/5434), [@tnqn])
+- Fix the burst setting of the `PacketInQueue` to reduce the DNS response delay when a Pod has any FQDN policy applied. ([#5456](https://github.com/antrea-io/antrea/pull/5456), [@tnqn])
+- Use OpenFlow group for Network Policy logging to avoid packet drops when massive connections hit the policy. ([#5061](https://github.com/antrea-io/antrea/pull/5061), [@wenyingd])
+
 ## 1.12.1 - 2023-07-04
 
 ### Fixed
