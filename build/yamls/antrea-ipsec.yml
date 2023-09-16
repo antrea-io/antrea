@@ -5735,8 +5735,7 @@ data:
 
     nodePortLocal:
     # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
-    # enable this feature, you need to set "enable" to true, and ensure that the NodePortLocal feature
-    # gate is also enabled (which is the default).
+    # enable this feature, you need to set "enable" to true.
       enable: false
     # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port
     # from that range will be assigned whenever a Pod's container defines a specific port to be exposed
@@ -6867,7 +6866,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 07ca4a42c47e93bb9fceafbbfa990de8ed812343a86ff399bc179e9c48bda7df
+        checksum/config: 55b17484eb9e47c7af06d7a9367348b851d9de4ad0cdc0e1a3f0b328b08df2d2
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -7152,7 +7151,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 07ca4a42c47e93bb9fceafbbfa990de8ed812343a86ff399bc179e9c48bda7df
+        checksum/config: 55b17484eb9e47c7af06d7a9367348b851d9de4ad0cdc0e1a3f0b328b08df2d2
       labels:
         app: antrea
         component: antrea-controller
