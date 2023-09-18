@@ -2183,6 +2183,18 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 	return flows
 }
 
+// snatSkipCIDRFlow generates the flow to skip SNAT for connection destined for the provided CIDR.
+func (f *featureEgress) snatSkipCIDRFlow(cidr net.IPNet) binding.Flow {
+	ipProtocol := getIPProtocol(cidr.IP)
+	return EgressMarkTable.ofTable.BuildFlow(priorityHigh).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(ipProtocol).
+		MatchDstIPNet(cidr).
+		Action().LoadRegMark(ToGatewayRegMark).
+		Action().GotoStage(stageSwitching).
+		Done()
+}
+
 // snatSkipNodeFlow generates the flow to skip SNAT for connection destined for the transport IP of a remote Node.
 func (f *featureEgress) snatSkipNodeFlow(nodeIP net.IP) binding.Flow {
 	ipProtocol := getIPProtocol(nodeIP)
@@ -2585,13 +2597,7 @@ func (f *featureEgress) externalFlows() []binding.Flow {
 		)
 		// This generates the flows to bypass the packets sourced from local Pods and destined for the except CIDRs for Egress.
 		for _, cidr := range f.exceptCIDRs[ipProtocol] {
-			flows = append(flows, EgressMarkTable.ofTable.BuildFlow(priorityHigh).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchDstIPNet(cidr).
-				Action().LoadRegMark(ToGatewayRegMark).
-				Action().GotoStage(stageSwitching).
-				Done())
+			flows = append(flows, f.snatSkipCIDRFlow(cidr))
 		}
 	}
 	// This generates the flow to match the packets of tracked Egress connection and forward them to stageSwitching.

@@ -134,6 +134,12 @@ type Client interface {
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
+	// InstallSNATBypassServiceFlows installs flows to prevent traffic destined for the specified Service CIDRs from
+	// being SNAT'd. Otherwise, such Pod-to-Service traffic would be forwarded to Egress Node and be load-balanced
+	// remotely, as opposed to locally, when AntreaProxy is asked to skip some Services or is not running at all.
+	// Calling the method with new CIDRs will override the flows installed for previous CIDRs.
+	InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error
+
 	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
 	// single flow is added to mark the packets tunnelled from remote Nodes
 	// that should be SNAT'd with the SNAT IP.
@@ -145,7 +151,7 @@ type Client interface {
 
 	// InstallPodSNATFlows installs the SNAT flows for a local Pod. If the
 	// SNAT IP for the Pod is on the local Node, a non-zero SNAT ID should
-	// allocated for the SNAT IP, and the installed flow sets the SNAT IP
+	// be allocated for the SNAT IP, and the installed flow sets the SNAT IP
 	// mark on the egress packets from the ofPort; if the SNAT IP is on a
 	// remote Node, snatMark should be set to 0, and the installed flow
 	// tunnels egress packets to the remote Node using the SNAT IP as the
@@ -986,6 +992,16 @@ func (c *client) generatePipelines() {
 		// generate a pipeline from the required table list.
 		c.pipelines[pipelineID] = generatePipeline(pipelineID, requiredTables)
 	}
+}
+
+func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error {
+	var flows []binding.Flow
+	for _, serviceCIDR := range serviceCIDRs {
+		flows = append(flows, c.featureEgress.snatSkipCIDRFlow(*serviceCIDR))
+	}
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.modifyFlows(c.featureEgress.cachedFlows, "svc-cidrs", flows)
 }
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
