@@ -452,6 +452,20 @@ func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0)
 }
 
+// InstallSNATBypassServiceFlows mocks base method
+func (m *MockClient) InstallSNATBypassServiceFlows(arg0 []*net.IPNet) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallSNATBypassServiceFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallSNATBypassServiceFlows indicates an expected call of InstallSNATBypassServiceFlows
+func (mr *MockClientMockRecorder) InstallSNATBypassServiceFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallSNATBypassServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallSNATBypassServiceFlows), arg0)
+}
+
 // InstallSNATMarkFlows mocks base method
 func (m *MockClient) InstallSNATMarkFlows(arg0 net.IP, arg1 uint32) error {
 	m.ctrl.T.Helper()

@@ -42,6 +42,7 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/types"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -147,6 +148,11 @@ type EgressController struct {
 	ipAssigner ipassigner.IPAssigner
 
 	egressIPScheduler *egressIPScheduler
+
+	serviceCIDRInterface servicecidr.Interface
+	serviceCIDRUpdateCh  chan struct{}
+	// Declared for testing.
+	serviceCIDRUpdateRetryDelay time.Duration
 }
 
 func NewEgressController(
@@ -161,6 +167,7 @@ func NewEgressController(
 	egressInformer crdinformers.EgressInformer,
 	nodeInformers coreinformers.NodeInformer,
 	podUpdateSubscriber channel.Subscriber,
+	serviceCIDRInterface servicecidr.Interface,
 	maxEgressIPsPerNode int,
 ) (*EgressController, error) {
 	c := &EgressController{
@@ -181,6 +188,10 @@ func NewEgressController(
 		localIPDetector:      ipassigner.NewLocalIPDetector(),
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 		cluster:              cluster,
+		serviceCIDRInterface: serviceCIDRInterface,
+		// One buffer is enough as we just use it to ensure the target handler is executed once.
+		serviceCIDRUpdateCh:         make(chan struct{}, 1),
+		serviceCIDRUpdateRetryDelay: 10 * time.Second,
 	}
 	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice)
 	if err != nil {
@@ -214,12 +225,51 @@ func NewEgressController(
 	podUpdateSubscriber.Subscribe(c.processPodUpdate)
 	c.localIPDetector.AddEventHandler(c.onLocalIPUpdate)
 	c.egressIPScheduler.AddEventHandler(c.onEgressIPSchedule)
+	c.serviceCIDRInterface.AddEventHandler(c.onServiceCIDRUpdate)
 	return c, nil
 }
 
 // onEgressIPSchedule will be called when EgressIPScheduler reschedules an Egress's IP.
 func (c *EgressController) onEgressIPSchedule(egress string) {
 	c.queue.Add(egress)
+}
+
+// onServiceCIDRUpdate will be called when ServiceCIDRs change.
+// It ensures updateServiceCIDRs will be executed once after this call.
+func (c *EgressController) onServiceCIDRUpdate(_ []*net.IPNet) {
+	select {
+	case c.serviceCIDRUpdateCh <- struct{}{}:
+	default:
+		// The previous event is not processed yet, discard the new event.
+	}
+}
+
+func (c *EgressController) updateServiceCIDRs(stopCh <-chan struct{}) {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	<-timer.C // Consume the first tick.
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-c.serviceCIDRUpdateCh:
+			klog.V(2).InfoS("Received service CIDR update")
+		case <-timer.C:
+			klog.V(2).InfoS("Service CIDR update timer expired")
+		}
+		serviceCIDRs, err := c.serviceCIDRInterface.GetServiceCIDRs()
+		if err != nil {
+			klog.ErrorS(err, "Failed to get Service CIDRs")
+			// No need to retry in this case as the Service CIDRs won't be available until it receives a service CIDRs update.
+			continue
+		}
+		err = c.ofClient.InstallSNATBypassServiceFlows(serviceCIDRs)
+		if err != nil {
+			klog.ErrorS(err, "Failed to install SNAT bypass flows for Service CIDRs, will retry", "serviceCIDRs", serviceCIDRs)
+			// Schedule a retry as it should be transient error.
+			timer.Reset(c.serviceCIDRUpdateRetryDelay)
+		}
+	}
 }
 
 // processPodUpdate will be called when CNIServer publishes a Pod update event.
@@ -313,6 +363,8 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	}
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
+
+	go c.updateServiceCIDRs(stopCh)
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
