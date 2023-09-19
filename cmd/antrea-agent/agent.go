@@ -141,7 +141,7 @@ func run(o *Options) error {
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
-	enableFLowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
+	enableFlowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
 	var nodeIPTracker *nodeip.Tracker
 	if o.nodeType == config.K8sNode {
 		nodeIPTracker = nodeip.NewTracker(nodeInformer)
@@ -161,7 +161,7 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
-		enableFLowExporter,
+		enableFlowExporter,
 		o.config.AntreaProxy.ProxyAll,
 		features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
 		connectUplinkToBridge,
@@ -324,7 +324,7 @@ func run(o *Options) error {
 	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
 	// StretchedNetworkPolicyController, and secondary network controller.
 	var localPodInformer cache.SharedIndexInformer
-	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFLowExporter ||
+	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFlowExporter ||
 		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
 		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
 		listOptions := func(options *metav1.ListOptions) {
@@ -618,7 +618,7 @@ func run(o *Options) error {
 	}
 
 	var flowExporter *exporter.FlowExporter
-	if enableFLowExporter {
+	if enableFlowExporter {
 		podStore := podstore.NewPodStore(localPodInformer)
 		flowExporterOptions := &flowexporter.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
@@ -885,7 +885,7 @@ func run(o *Options) error {
 	go ofClient.Run(stopCh)
 
 	// Start the goroutine to periodically export IPFIX flow records.
-	if enableFLowExporter {
+	if enableFlowExporter {
 		go flowExporter.Run(stopCh)
 	}
 
