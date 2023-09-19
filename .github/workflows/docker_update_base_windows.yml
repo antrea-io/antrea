@@ -25,7 +25,7 @@ jobs:
     runs-on: windows-2019
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: ${{ github.event.inputs.antrea-repository }}
         ref: ${{ github.event.inputs.antrea-ref }}
