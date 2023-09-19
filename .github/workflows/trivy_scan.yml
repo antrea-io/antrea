@@ -18,7 +18,7 @@ jobs:
     if: github.repository == 'antrea-io/antrea'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Find greatest Antrea version
       id: find-antrea-greatest-version
       env:
