@@ -36,6 +36,7 @@ jobs:
         # Check out the pull request HEAD
         ref: ${{ github.event.pull_request.head.sha }}
         token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:

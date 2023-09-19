@@ -46,6 +46,7 @@ jobs:
         with:
           ref: ${{ inputs.antrea-version }}
           fetch-depth: 0
+          show-progress: false
       - name: Check if it is a released version
         id: check-release
         run: |
