@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/test/e2e/utils"
@@ -1035,6 +1036,8 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 	log.Infof("Waiting for Pod '%s/%s'", ns, pod)
 	for {
 		k8sPod, err := k.GetPodByLabel(ns, pod)
+		log.Infof("Pod '%s/%s' is schedule to %s", ns, pod, k8sPod.Spec.NodeName)
+
 		if err != nil && err != ErrPodNotFound {
 			return nil, fmt.Errorf("unable to get Pod '%s/%s': %w", ns, pod, err)
 		}
@@ -1061,6 +1064,9 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 
 	serversAreReady := func() bool {
+		for _, pod := range allPods {
+			klog.Info("Pod %s/%s is scheduled on %s", pod.Namespace(), pod.PodName())
+		}
 		reachability := NewReachability(allPods, Connected)
 		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, utils.ProtocolTCP, false)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
