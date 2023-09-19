@@ -20,6 +20,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+
+	"github.com/google/shlex"
 )
 
 // TODO: we could use the Docker Go SDK for this, but it seems like a big dependency to pull in just
@@ -42,10 +44,14 @@ func RunDockerExecCommand(container, cmd, workdir string, envs map[string]string
 	}
 	args = append(args, "-w", workdir, container)
 
-	if strings.Contains(cmd, "/bin/sh") {
-		// Just split in to "/bin/sh" "-c" and "actual_cmd"
+	if strings.Contains(cmd, "/bin/sh") || strings.Contains(cmd, "bash") {
+		// Split in to tokens using shell-style rules for quoting and commenting.
 		// This is useful for passing piped commands in to os/exec interface.
-		args = append(args, strings.SplitN(cmd, " ", 3)...)
+		tokens, err := shlex.Split(cmd)
+		if err != nil {
+			return 0, "", "", fmt.Errorf("error when splitting command: %v", err)
+		}
+		args = append(args, tokens...)
 	} else {
 		args = append(args, strings.Fields(cmd)...)
 	}
