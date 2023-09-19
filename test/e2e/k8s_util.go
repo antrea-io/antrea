@@ -202,9 +202,9 @@ func (k *KubernetesUtils) probe(
 	cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
 	if flag {
 		log.Infof("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
-		_, stdout, _, _ := k.RunCommandOnNode("antrea-multicast-0-0", "hostname;free -h; route -n")
+		_, stdout, _, _ := k.RunCommandOnNode("antrea-multicast-0-0", "hostname;kubectl get pods -A -owide;free -h; route -n")
 		log.Infof(stdout)
-		_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-1", "hostname; route -n")
+		_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-1", "hostname;free -h; route -n")
 		log.Infof(stdout)
 		_, stdout, _, _ = k.RunCommandOnNode("antrea-multicast-0-2", "hostname;free -h;  route -n")
 		log.Infof(stdout)
