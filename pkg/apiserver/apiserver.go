@@ -49,6 +49,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupmember"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/ipgroupassociation"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
@@ -66,6 +67,7 @@ import (
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/stats"
 	controllerbundlecollection "antrea.io/antrea/pkg/controller/supportbundlecollection"
+	"antrea.io/antrea/pkg/controller/traceflow"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -116,6 +118,7 @@ type ExtraConfig struct {
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
 	bundleCollectionController    *controllerbundlecollection.Controller
+	traceflowController           *traceflow.Controller
 }
 
 // Config defines the config for Antrea apiserver.
@@ -158,7 +161,8 @@ func NewConfig(
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController,
 	egressController *egress.EgressController,
-	bundleCollectionController *controllerbundlecollection.Controller) *Config {
+	bundleCollectionController *controllerbundlecollection.Controller,
+	traceflowController *traceflow.Controller) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
@@ -178,6 +182,7 @@ func NewConfig(
 			networkPolicyStatusController: networkPolicyStatusController,
 			egressController:              egressController,
 			bundleCollectionController:    bundleCollectionController,
+			traceflowController:           traceflowController,
 		},
 	}
 }
@@ -192,6 +197,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
+	groupMembershipStorage := groupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	ipGroupAssociationStorage := ipgroupassociation.NewREST(c.extraConfig.podInformer, c.extraConfig.eeInformer, c.extraConfig.networkPolicyController, c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
@@ -208,6 +214,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
 	cpv1beta2Storage["ipgroupassociations"] = ipGroupAssociationStorage
 	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
+	cpv1beta2Storage["groupmembers"] = groupMembershipStorage
 	cpv1beta2Storage["egressgroups"] = egressGroupStorage
 	cpv1beta2Storage["supportbundlecollections"] = bundleCollectionStorage
 	cpv1beta2Storage["supportbundlecollections/status"] = bundleCollectionStatusStorage
@@ -333,6 +340,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/supportbundlecollection", webhook.HandlerForValidateFunc(c.bundleCollectionController.Validate))
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/traceflow", webhook.HandlerForValidateFunc(c.traceflowController.Validate))
 	}
 }
 

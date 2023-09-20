@@ -35,7 +35,7 @@ edit the Agent configuration in the
 | Feature Name                  | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes                                         |
 |-------------------------------|--------------------|---------|-------|---------------|--------------|------------|--------------------|-----------------------------------------------|
 | `AntreaProxy`                 | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows.                  |
-| `EndpointSlice`               | Agent              | `true`  | Beta  | v0.13.0       | v1.11        | N/A        | Yes                |                                               |
+| `EndpointSlice`               | Agent              | `true`  | GA    | v0.13.0       | v1.11        | v1.14      | Yes                |                                               |
 | `TopologyAwareHints`          | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |                                               |
 | `CleanupStaleUDPSvcConntrack` | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
 | `LoadBalancerModeDSR`         | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
@@ -52,6 +52,7 @@ edit the Agent configuration in the
 | `ServiceExternalIP`           | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |                                               |
 | `TrafficControl`              | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `Multicluster`                | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
+| `IPsecCertAuth`               | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |                                               |
 | `ExternalNode`                | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |                                               |
 | `SupportBundleCollection`     | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `L7NetworkPolicy`             | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
@@ -100,7 +101,7 @@ for more information about TopologyAwareHints.
 #### Requirements for this Feature
 
 - `AntreaProxy` is enabled.
-- `EndpointSlice` is enabled.
+- EndpointSlice API version v1 is available in Kubernetes.
 
 ### LoadBalancerModeDSR
 
@@ -355,6 +356,10 @@ The `Multicluster` feature gate of Antrea Controller enables support for [Multi-
 Antrea Multi-cluster Controller must be deployed and the cluster must join a Multi-cluster ClusterSet to configure
 Antrea Multi-cluster features. Refer to [Antrea Multi-cluster user guide](multicluster/user-guide.md) for more
 information about Multi-cluster configuration. At the moment, Antrea Multi-cluster supports only IPv4.
+
+### IPsecCertAuth
+
+This feature enables certificate-based authentication for IPSec tunnel.
 
 ### ExternalNode
 

@@ -5479,11 +5479,6 @@ data:
     # Service traffic.
     #  AntreaProxy: true
 
-    # Enable EndpointSlice support in AntreaProxy. Don't enable this feature unless that EndpointSlice
-    # API version v1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
-    # this flag will not take effect.
-    #  EndpointSlice: true
-
     # Enable TopologyAwareHints in AntreaProxy. This requires AntreaProxy and EndpointSlice to be
     # enabled, otherwise this flag will not take effect.
     #  TopologyAwareHints: true
@@ -5535,7 +5530,7 @@ data:
     # Enable mirroring or redirecting the traffic Pods send or receive.
     #  TrafficControl: false
 
-    # Enable certificated-based authentication for IPsec.
+    # Enable certificate-based authentication for IPSec tunnel.
     #  IPsecCertAuth: false
 
     # Enable collecting support bundle files with SupportBundleCollection CRD.
@@ -5629,6 +5624,13 @@ data:
     # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     defaultMTU: 0
+
+    # packetInRate defines the OVS controller packet rate limits for different
+    # features. All features will apply this rate-limit individually on packet-in
+    # messages sent to antrea-agent. The number stands for the rate as packets per
+    # second(pps) and the burst size will be automatically set to twice the rate.
+    # When the rate and burst size are exceeded, new packets will be dropped.
+    packetInRate: 500
 
     # wireGuard specifies WireGuard related configurations.
     wireGuard:
@@ -5909,7 +5911,7 @@ data:
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: false
 
-    # Enable certificated-based authentication for IPsec.
+    # Enable certificate-based authentication for IPSec tunnel.
     #  IPsecCertAuth: false
 
     # Enable managing ExternalNode for unmanaged VM/BM.
@@ -6832,7 +6834,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9d2ce5aebdb9b1a668615a90578317745bafc6052b7c29431fd009a0ba65d62a
+        checksum/config: e62ec96721f017ce67609370b6d18c96425135721347e0d3af6c7712df0bf7ca
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -7117,7 +7119,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9d2ce5aebdb9b1a668615a90578317745bafc6052b7c29431fd009a0ba65d62a
+        checksum/config: e62ec96721f017ce67609370b6d18c96425135721347e0d3af6c7712df0bf7ca
       labels:
         app: antrea
         component: antrea-controller
@@ -7477,6 +7479,21 @@ webhooks:
         apiGroups: ["crd.antrea.io"]
         apiVersions: ["v1alpha1"]
         resources: ["supportbundlecollections"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "traceflowvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: kube-system
+        path: "/validate/traceflow"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["traceflows"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None

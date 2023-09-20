@@ -39,6 +39,7 @@ const (
 
 	// alpha: v0.13
 	// beta: v1.11
+	// GA: v1.14
 	// Enable EndpointSlice support in AntreaProxy. If AntreaProxy is not enabled, this
 	// flag will not take effect.
 	EndpointSlice featuregate.Feature = "EndpointSlice"
@@ -115,7 +116,7 @@ const (
 	TrafficControl featuregate.Feature = "TrafficControl"
 
 	// alpha: v1.7
-	// Enable certificated-based authentication for IPsec.
+	// Enable certificate-based authentication for IPSec tunnel.
 	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
 
 	// alpha: v1.8
@@ -156,7 +157,7 @@ var (
 		AntreaPolicy:                {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:                 {Default: true, PreRelease: featuregate.Beta},
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
-		EndpointSlice:               {Default: true, PreRelease: featuregate.Beta},
+		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
 		CleanupStaleUDPSvcConntrack: {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},

@@ -33,7 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -1348,7 +1349,10 @@ func newProxier(
 	hostname string,
 	serviceProxyName string,
 	k8sClient clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
+	serviceInformer coreinformers.ServiceInformer,
+	endpointsInformer coreinformers.EndpointsInformer,
+	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
+	nodeInformer coreinformers.NodeInformer,
 	ofClient openflow.Client,
 	isIPv6 bool,
 	routeClient route.Interface,
@@ -1409,7 +1413,7 @@ func newProxier(
 
 	p := &proxier{
 		nodeIPChecker:               nodeIPChecker,
-		serviceConfig:               config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
+		serviceConfig:               config.NewServiceConfig(serviceInformer, resyncPeriod),
 		endpointsChanges:            newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
 		serviceChanges:              newServiceChangesTracker(recorder, ipFamily, serviceLabelSelector, skipServices),
 		serviceMap:                  k8sproxy.ServiceMap{},
@@ -1440,14 +1444,14 @@ func newProxier(
 	p.serviceConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	if endpointSliceEnabled {
-		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), resyncPeriod)
+		p.endpointSliceConfig = config.NewEndpointSliceConfig(endpointSliceInformer, resyncPeriod)
 		p.endpointSliceConfig.RegisterEventHandler(p)
 		if p.topologyAwareHintsEnabled {
-			p.nodeConfig = config.NewNodeConfig(informerFactory.Core().V1().Nodes(), resyncPeriod)
+			p.nodeConfig = config.NewNodeConfig(nodeInformer, resyncPeriod)
 			p.nodeConfig.RegisterEventHandler(p)
 		}
 	} else {
-		p.endpointsConfig = config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod)
+		p.endpointsConfig = config.NewEndpointsConfig(endpointsInformer, resyncPeriod)
 		p.endpointsConfig.RegisterEventHandler(p)
 	}
 	return p, nil
@@ -1486,7 +1490,10 @@ func newDualStackProxier(
 	hostname string,
 	serviceProxyName string,
 	k8sClient clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
+	servicesInformer coreinformers.ServiceInformer,
+	endpointInformer coreinformers.EndpointsInformer,
+	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
+	nodeInformer coreinformers.NodeInformer,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	nodeIPChecker nodeip.Checker,
@@ -1504,7 +1511,10 @@ func newDualStackProxier(
 	ipv4Proxier, err := newProxier(hostname,
 		serviceProxyName,
 		k8sClient,
-		informerFactory,
+		servicesInformer,
+		endpointInformer,
+		endpointSliceInformer,
+		nodeInformer,
 		ofClient,
 		false,
 		routeClient,
@@ -1523,7 +1533,10 @@ func newDualStackProxier(
 	ipv6Proxier, err := newProxier(hostname,
 		serviceProxyName,
 		k8sClient,
-		informerFactory,
+		servicesInformer,
+		endpointInformer,
+		endpointSliceInformer,
+		nodeInformer,
 		ofClient,
 		true,
 		routeClient,
@@ -1547,6 +1560,10 @@ func newDualStackProxier(
 
 func NewProxier(hostname string,
 	k8sClient clientset.Interface,
+	serviceInformer coreinformers.ServiceInformer,
+	endpointsInformer coreinformers.EndpointsInformer,
+	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
+	nodeInformer coreinformers.NodeInformer,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	nodeIPChecker nodeip.Checker,
@@ -1558,8 +1575,7 @@ func NewProxier(hostname string,
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	v4GroupCounter types.GroupCounter,
 	v6GroupCounter types.GroupCounter,
-	nestedServiceSupport bool,
-	informerFactory informers.SharedInformerFactory) (Proxier, error) {
+	nestedServiceSupport bool) (Proxier, error) {
 	proxyAllEnabled := proxyConfig.ProxyAll
 	skipServices := proxyConfig.SkipServices
 	proxyLoadBalancerIPs := *proxyConfig.ProxyLoadBalancerIPs
@@ -1572,7 +1588,10 @@ func NewProxier(hostname string,
 		proxier, err = newDualStackProxier(hostname,
 			serviceProxyName,
 			k8sClient,
-			informerFactory,
+			serviceInformer,
+			endpointsInformer,
+			endpointSliceInformer,
+			nodeInformer,
 			ofClient,
 			routeClient,
 			nodeIPChecker,
@@ -1592,7 +1611,10 @@ func NewProxier(hostname string,
 		proxier, err = newProxier(hostname,
 			serviceProxyName,
 			k8sClient,
-			informerFactory,
+			serviceInformer,
+			endpointsInformer,
+			endpointSliceInformer,
+			nodeInformer,
 			ofClient,
 			false,
 			routeClient,
@@ -1611,7 +1633,10 @@ func NewProxier(hostname string,
 		proxier, err = newProxier(hostname,
 			serviceProxyName,
 			k8sClient,
-			informerFactory,
+			serviceInformer,
+			endpointsInformer,
+			endpointSliceInformer,
+			nodeInformer,
 			ofClient,
 			true,
 			routeClient,

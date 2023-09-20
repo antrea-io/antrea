@@ -41,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -49,6 +50,7 @@ import (
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -128,14 +130,15 @@ func mockNewIPAssigner(ipAssigner ipassigner.IPAssigner) func() {
 
 type fakeController struct {
 	*EgressController
-	mockController     *gomock.Controller
-	mockOFClient       *openflowtest.MockClient
-	mockRouteClient    *routetest.MockInterface
-	crdClient          *fakeversioned.Clientset
-	crdInformerFactory crdinformers.SharedInformerFactory
-	informerFactory    informers.SharedInformerFactory
-	mockIPAssigner     *ipassignertest.MockIPAssigner
-	podUpdateChannel   *channel.SubscribableChannel
+	mockController           *gomock.Controller
+	mockOFClient             *openflowtest.MockClient
+	mockRouteClient          *routetest.MockInterface
+	crdClient                *fakeversioned.Clientset
+	crdInformerFactory       crdinformers.SharedInformerFactory
+	informerFactory          informers.SharedInformerFactory
+	mockIPAssigner           *ipassignertest.MockIPAssigner
+	mockServiceCIDRInterface *servicecidrtest.MockInterface
+	podUpdateChannel         *channel.SubscribableChannel
 }
 
 func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeController {
@@ -163,7 +166,8 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	addPodInterface(ifaceStore, "ns4", "pod4", 4)
 
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
-
+	mockServiceCIDRProvider := servicecidrtest.NewMockInterface(controller)
+	mockServiceCIDRProvider.EXPECT().AddEventHandler(gomock.Any())
 	egressController, _ := NewEgressController(mockOFClient,
 		&antreaClientGetter{clientset},
 		crdClient,
@@ -175,19 +179,21 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		egressInformer,
 		nodeInformer,
 		podUpdateChannel,
+		mockServiceCIDRProvider,
 		255,
 	)
 	egressController.localIPDetector = localIPDetector
 	return &fakeController{
-		EgressController:   egressController,
-		mockController:     controller,
-		mockOFClient:       mockOFClient,
-		mockRouteClient:    mockRouteClient,
-		crdClient:          crdClient,
-		crdInformerFactory: crdInformerFactory,
-		informerFactory:    informerFactory,
-		mockIPAssigner:     mockIPAssigner,
-		podUpdateChannel:   podUpdateChannel,
+		EgressController:         egressController,
+		mockController:           controller,
+		mockOFClient:             mockOFClient,
+		mockRouteClient:          mockRouteClient,
+		crdClient:                crdClient,
+		crdInformerFactory:       crdInformerFactory,
+		informerFactory:          informerFactory,
+		mockIPAssigner:           mockIPAssigner,
+		mockServiceCIDRInterface: mockServiceCIDRProvider,
+		podUpdateChannel:         podUpdateChannel,
 	}
 }
 
@@ -1132,6 +1138,51 @@ func TestGetEgressIPByMark(t *testing.T) {
 			}
 			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
 		})
+	}
+}
+
+func TestUpdateServiceCIDRs(t *testing.T) {
+	c := newFakeController(t, nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	// Retry immediately.
+	c.serviceCIDRUpdateRetryDelay = 0
+
+	serviceCIDRs := []*net.IPNet{
+		ip.MustParseCIDR("10.96.0.0/16"),
+		ip.MustParseCIDR("1096::/64"),
+	}
+	assert.Len(t, c.serviceCIDRUpdateCh, 0)
+	// Call the handler the 1st time, it should enqueue an event.
+	c.onServiceCIDRUpdate(serviceCIDRs)
+	assert.Len(t, c.serviceCIDRUpdateCh, 1)
+	// Call the handler the 2nd time, it should not block and should discard the event.
+	c.onServiceCIDRUpdate(serviceCIDRs)
+	assert.Len(t, c.serviceCIDRUpdateCh, 1)
+
+	// In the 1st round, returning the ServiceCIDRs fails, it should not retry.
+	c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(nil, fmt.Errorf("not initialized"))
+
+	go c.updateServiceCIDRs(stopCh)
+
+	// Wait for the event to be processed.
+	require.Eventually(t, func() bool {
+		return len(c.serviceCIDRUpdateCh) == 0
+	}, time.Second, 100*time.Millisecond)
+	// In the 2nd round, returning the ServiceCIDR succeeds but installing flows fails, it should retry.
+	c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(serviceCIDRs, nil)
+	c.mockOFClient.EXPECT().InstallSNATBypassServiceFlows(serviceCIDRs).Return(fmt.Errorf("transient error"))
+	// In the 3rd round, both succeed.
+	finishCh := make(chan struct{})
+	c.mockServiceCIDRInterface.EXPECT().GetServiceCIDRs().Return(serviceCIDRs, nil)
+	c.mockOFClient.EXPECT().InstallSNATBypassServiceFlows(serviceCIDRs).Do(func(_ []*net.IPNet) { close(finishCh) }).Return(nil)
+	// Enqueue only one event as the 2nd failure is supposed to trigger a retry.
+	c.onServiceCIDRUpdate(serviceCIDRs)
+
+	select {
+	case <-finishCh:
+	case <-time.After(time.Second):
+		t.Errorf("InstallSNATBypassServiceFlows didn't succeed in time")
 	}
 }
 

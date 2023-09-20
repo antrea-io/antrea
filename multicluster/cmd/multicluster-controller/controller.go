@@ -18,14 +18,14 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	clientset "k8s.io/client-go/kubernetes"
@@ -34,9 +34,9 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -162,6 +162,18 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 		o.options.CertDir = certDir
 	}
 
+	namespaceFieldSelector := fields.SelectorFromSet(fields.Set{"metadata.namespace": env.GetPodNamespace()})
+	o.options.NewCache = cache.BuilderWithOptions(cache.Options{
+		SelectorsByObject: cache.SelectorsByObject{
+			&mcv1alpha1.Gateway{}: {
+				Field: namespaceFieldSelector,
+			},
+			&mcv1alpha2.ClusterSet{}: {
+				Field: namespaceFieldSelector,
+			},
+		},
+	})
+
 	// EndpointSlice is enabled in AntreaProxy by default since v1.11, so Antrea MC
 	// will use EndpointSlice API by default to keep consistent with AntreaProxy.
 	endpointSliceAPIAvailable, err := k8sutil.EndpointSliceAPIAvailable(client)
@@ -187,12 +199,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	if err != nil {
 		return nil, fmt.Errorf("error starting manager: %v", err)
 	}
-
-	hookServer := mgr.GetWebhookServer()
-	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
-		&webhook.Admission{Handler: &clusterSetValidator{
-			Client:    mgr.GetClient(),
-			namespace: env.GetPodNamespace()}})
 
 	//+kubebuilder:scaffold:builder
 

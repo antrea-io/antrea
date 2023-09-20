@@ -17,9 +17,10 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        show-progress: false
     - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
@@ -32,7 +33,9 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Build Antrea amd64 Docker image without pushing to registry
       if: ${{ github.repository != 'antrea-io/antrea' || github.event_name != 'push' || github.ref != 'refs/heads/main' }}
       run: |
@@ -62,7 +65,9 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Build Antrea UBI8 Docker image without pushing to registry
       if: ${{ github.repository != 'antrea-io/antrea' || github.event_name != 'push' || github.ref != 'refs/heads/main' }}
       run: |
@@ -82,7 +87,9 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Build Antrea Agent Simulator Docker image
       run: make build-scale-simulator
     - name: Push Antrea Agent Simulator Docker image to registry
@@ -99,7 +106,9 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [windows-2019]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Build Antrea Windows Docker image
       run: make build-windows
     - name: Push Antrea Windows Docker image to registry
@@ -117,7 +126,9 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Build antrea-mc-controller Docker image
       run: make build-antrea-mc-controller
     - name: Push antrea-mc-controller Docker image to registry
@@ -134,7 +145,9 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Build flow-aggregator Docker image
       run: make flow-aggregator-image
     - name: Check flow-aggregator Docker image

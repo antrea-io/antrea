@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/pkg/util/ip"
@@ -366,21 +367,18 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 // The routes will be restored on the OVS bridge interface after the IP
 // configuration is moved to the OVS bridge.
 func (i *Initializer) saveHostRoutes() error {
-	routes, err := util.GetNetRoutesAll()
+	// IPv6 is not supported on Windows currently. Please refer to https://github.com/antrea-io/antrea/issues/5162
+	// for more information.
+	family := antreasyscall.AF_INET
+	filter := &util.Route{
+		LinkIndex:      i.nodeConfig.UplinkNetConfig.Index,
+		GatewayAddress: net.ParseIP(i.nodeConfig.UplinkNetConfig.Gateway),
+	}
+	routes, err := util.RouteListFiltered(family, filter, util.RT_FILTER_IF|util.RT_FILTER_GW)
 	if err != nil {
 		return err
 	}
 	for _, route := range routes {
-		if route.LinkIndex != i.nodeConfig.UplinkNetConfig.Index {
-			continue
-		}
-		if route.GatewayAddress.String() != i.nodeConfig.UplinkNetConfig.Gateway {
-			continue
-		}
-		// Skip IPv6 routes before we support IPv6 stack.
-		if route.DestinationSubnet.IP.To4() == nil {
-			continue
-		}
 		// Skip default route. The default route will be added automatically when
 		// configuring IP address on OVS bridge interface.
 		if route.DestinationSubnet.IP.IsUnspecified() {

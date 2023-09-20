@@ -115,6 +115,7 @@ var allowedPaths = []string{
 	"/validate/group",
 	"/validate/ippool",
 	"/validate/supportbundlecollection",
+	"/validate/traceflow",
 	"/convert/clustergroup",
 }
 
@@ -137,6 +138,7 @@ func run(o *Options) error {
 	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	statefulSetInformer := informerFactory.Apps().V1().StatefulSets()
 	acnpInformer := crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
 	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
 	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
@@ -147,6 +149,7 @@ func run(o *Options) error {
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
+	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
 	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
 
@@ -273,8 +276,10 @@ func run(o *Options) error {
 	var antreaIPAMController *antreaipam.AntreaIPAMController
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		antreaIPAMController = antreaipam.NewAntreaIPAMController(crdClient,
-			informerFactory,
-			crdInformerFactory)
+			ipPoolInformer,
+			namespaceInformer,
+			podInformer,
+			statefulSetInformer)
 	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
@@ -298,6 +303,7 @@ func run(o *Options) error {
 		egressController,
 		statsAggregator,
 		bundleCollectionController,
+		traceflowController,
 		*o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])
@@ -381,7 +387,7 @@ func run(o *Options) error {
 		_, serviceCIDRv6, _ := net.ParseCIDR(o.config.NodeIPAM.ServiceCIDRv6)
 		err = startNodeIPAM(
 			client,
-			informerFactory,
+			nodeInformer,
 			clusterCIDRs,
 			serviceCIDR,
 			serviceCIDRv6,
@@ -444,7 +450,7 @@ func getNodeCIDRMaskSizes(clusterCIDRs []*net.IPNet, maskSizeIPv4, maskSizeIPv6 
 }
 
 func startNodeIPAM(client clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
+	nodeInformer coreinformers.NodeInformer,
 	clusterCIDRs []*net.IPNet,
 	serviceCIDR *net.IPNet,
 	serviceCIDRv6 *net.IPNet,
@@ -454,7 +460,7 @@ func startNodeIPAM(client clientset.Interface,
 
 	nodeCIDRMaskSizes := getNodeCIDRMaskSizes(clusterCIDRs, nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6)
 	nodeIPAM, err := nodeipam.NewNodeIpamController(
-		informerFactory.Core().V1().Nodes(),
+		nodeInformer,
 		client,
 		clusterCIDRs,
 		serviceCIDR,
@@ -490,6 +496,7 @@ func createAPIServerConfig(kubeconfig string,
 	egressController *egress.EgressController,
 	statsAggregator *stats.Aggregator,
 	bundleCollectionStore *supportbundlecollection.Controller,
+	traceflowController *traceflow.Controller,
 	enableMetrics bool,
 	cipherSuites []uint16,
 	tlsMinVersion uint16) (*apiserver.Config, error) {
@@ -556,5 +563,6 @@ func createAPIServerConfig(kubeconfig string,
 		endpointQuerier,
 		npController,
 		egressController,
-		bundleCollectionStore), nil
+		bundleCollectionStore,
+		traceflowController), nil
 }

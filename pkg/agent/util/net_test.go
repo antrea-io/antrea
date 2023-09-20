@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/util/ip"
@@ -67,6 +68,97 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 	iface2 := GenerateContainerInterfaceName(podName1, podNamespace, containerID1)
 	if iface1 == iface2 {
 		t.Errorf("failed to differentiate interfaces with pods that have the same pod namespace and name")
+	}
+}
+
+func TestGenerateContainerHostVethName(t *testing.T) {
+	podName0 := "pod0"
+	podNamespace0 := "ns0"
+	containerID0 := "container0"
+	eth0 := "eth0"
+	ifaceName0 := GenerateContainerHostVethName(podName0, podNamespace0, containerID0, eth0)
+	require.LessOrEqual(t, len(ifaceName0), interfaceNameLength)
+	require.True(t, strings.HasPrefix(ifaceName0, podName0+"-"))
+
+	tests := []struct {
+		name          string
+		podName       string
+		podNS         string
+		containerID   string
+		innerName     string
+		namePrefix    string
+		equalToIface0 bool
+	}{
+		{
+			name:          "should equal iface0",
+			podName:       podName0,
+			podNS:         podNamespace0,
+			containerID:   containerID0,
+			innerName:     eth0,
+			namePrefix:    podName0 + "-",
+			equalToIface0: true,
+		},
+		{
+			name:        "eth1",
+			podName:     podName0,
+			podNS:       podNamespace0,
+			containerID: containerID0,
+			innerName:   "eth1",
+			namePrefix:  podName0 + "-",
+		},
+		{
+			name:        "pod1",
+			podName:     "pod1",
+			podNS:       podNamespace0,
+			containerID: containerID0,
+			innerName:   eth0,
+			namePrefix:  "pod1-",
+		},
+		{
+			name:        "pod0 and different container ID",
+			podName:     podName0,
+			podNS:       podNamespace0,
+			containerID: "container1",
+			innerName:   eth0,
+			namePrefix:  podName0 + "-",
+		},
+		{
+			name:          "pod0 of ns1",
+			podName:       podName0,
+			podNS:         "ns1",
+			containerID:   containerID0,
+			innerName:     "eth0",
+			namePrefix:    podName0 + "-",
+			equalToIface0: true,
+		},
+		{
+			name:        "8-char Pod name",
+			podName:     "pod12345",
+			podNS:       podNamespace0,
+			containerID: containerID0,
+			innerName:   eth0,
+			namePrefix:  "pod12345" + "-",
+		},
+		{
+			name:        "6-char Pod name",
+			podName:     "pod123456",
+			podNS:       podNamespace0,
+			containerID: containerID0,
+			innerName:   eth0,
+			namePrefix:  "pod12345" + "-",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ifaceName := GenerateContainerHostVethName(tc.podName, tc.podNS, tc.containerID, tc.innerName)
+			assert.True(t, len(ifaceName) <= interfaceNameLength)
+			assert.True(t, strings.HasPrefix(ifaceName, tc.namePrefix))
+			if tc.equalToIface0 {
+				assert.Equal(t, ifaceName, ifaceName0)
+			} else {
+				assert.NotEqual(t, ifaceName, ifaceName0)
+			}
+		})
 	}
 }
 

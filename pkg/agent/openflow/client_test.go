@@ -67,6 +67,8 @@ var (
 
 	fakeL7NPTargetOFPort = uint32(10)
 	fakeL7NPReturnOFPort = uint32(11)
+
+	defaultPacketInRate = 500
 )
 
 func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
@@ -376,7 +378,8 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.enableTrafficControl,
 		o.enableMulticluster,
 		NewGroupAllocator(),
-		false)
+		false,
+		defaultPacketInRate)
 
 	var egressExceptCIDRs []net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
@@ -1465,6 +1468,87 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
 
+func Test_client_InstallSNATBypassServiceFlows(t *testing.T) {
+	testCases := []struct {
+		name             string
+		serviceCIDRs     []*net.IPNet
+		newServiceCIDRs  []*net.IPNet
+		expectedFlows    []string
+		expectedNewFlows []string
+	}{
+		{
+			name: "IPv4",
+			serviceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/24"),
+			},
+			newServiceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/16"),
+			},
+			expectedFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/24 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/16 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
+			name: "IPv6",
+			serviceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("1096::/80"),
+			},
+			newServiceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("1096::/64"),
+			},
+			expectedFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/80 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/64 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
+			name: "dual-stack",
+			serviceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/24"),
+				utilip.MustParseCIDR("1096::/80"),
+			},
+			newServiceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/16"),
+				utilip.MustParseCIDR("1096::/64"),
+			},
+			expectedFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/24 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/80 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/16 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/64 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+			defer resetPipelines()
+
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+			assert.NoError(t, fc.InstallSNATBypassServiceFlows(tc.serviceCIDRs))
+			fCacheI, ok := fc.featureEgress.cachedFlows.Load("svc-cidrs")
+			require.True(t, ok)
+			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
+
+			m.EXPECT().BundleOps(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			assert.NoError(t, fc.InstallSNATBypassServiceFlows(tc.newServiceCIDRs))
+			fCacheI, ok = fc.featureEgress.cachedFlows.Load("svc-cidrs")
+			require.True(t, ok)
+			assert.ElementsMatch(t, tc.expectedNewFlows, getFlowStrings(fCacheI))
+		})
+	}
+}
+
 func Test_client_InstallSNATMarkFlows(t *testing.T) {
 	mark := uint32(100)
 
@@ -1815,7 +1899,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
 	m := ovsoftest.NewMockBridge(ctrl)
 	ofClient.bridge = m
 	bridge := binding.OFBridge{}
@@ -2609,8 +2693,9 @@ func Test_client_ReplayFlows(t *testing.T) {
 			id   binding.MeterIDType
 			rate uint32
 		}{
-			{id: PacketInMeterIDNP, rate: PacketInMeterRateNP},
-			{id: PacketInMeterIDTF, rate: PacketInMeterRateTF},
+			{id: PacketInMeterIDNP, rate: uint32(defaultPacketInRate)},
+			{id: PacketInMeterIDTF, rate: uint32(defaultPacketInRate)},
+			{id: PacketInMeterIDDNS, rate: uint32(defaultPacketInRate)},
 		} {
 			meter := ovsoftest.NewMockMeter(ctrl)
 			meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)

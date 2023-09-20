@@ -51,7 +51,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 	// Retry when update CRD conflict which caused by multiple agents updating one CRD at same time.
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		tf, err := c.traceflowInformer.Lister().Get(oldTf.Name)
+		tf, err := c.traceflowLister.Get(oldTf.Name)
 		if err != nil {
 			return fmt.Errorf("get Traceflow failed: %w", err)
 		}
@@ -60,7 +60,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if packet != nil {
 			update.Status.CapturedPacket = packet
 		}
-		_, err = c.traceflowClient.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
+		_, err = c.crdClient.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("update Traceflow failed: %w", err)
 		}

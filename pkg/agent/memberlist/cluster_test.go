@@ -18,16 +18,17 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/hashicorp/memberlist"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -39,6 +40,11 @@ import (
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/util/ip"
+)
+
+var (
+	labelsWindowsOS = map[string]string{v1.LabelOSStable: "windows"}
+	labelsLinuxOS   = map[string]string{v1.LabelOSStable: "linux"}
 )
 
 type fakeCluster struct {
@@ -75,18 +81,12 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, membe
 
 func createNode(cs *fake.Clientset, node *v1.Node) error {
 	_, err := cs.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func createExternalIPPool(crdClient *fakeversioned.Clientset, eip *crdv1b1.ExternalIPPool) error {
 	_, err := crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eip, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func TestCluster_Run(t *testing.T) {
@@ -115,7 +115,7 @@ func TestCluster_Run(t *testing.T) {
 			expectEgressSelectResult: true,
 		},
 		{
-			name: "Local Node not match ExternalIPPool nodeSelectors",
+			name: "Local Node does not match ExternalIPPool nodeSelectors",
 			egress: &crdv1b1.Egress{
 				Spec: crdv1b1.EgressSpec{ExternalIPPool: "", EgressIP: "1.1.1.1"},
 			},
@@ -135,11 +135,11 @@ func TestCluster_Run(t *testing.T) {
 		t.Run(tCase.name, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			stopCh := make(chan struct{})
-			stoppedCh := make(chan struct{})
+			var wg sync.WaitGroup
 			defer func() {
 				// Make sure mock controller is closed after Run() finishes.
 				close(stopCh)
-				<-stoppedCh
+				wg.Wait()
 			}()
 
 			nodeConfig := &config.NodeConfig{
@@ -147,29 +147,27 @@ func TestCluster_Run(t *testing.T) {
 				NodeIPv4Addr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 255)},
 			}
 			mockMemberlist := NewMockMemberlist(controller)
-			fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist)
-			if err != nil {
-				t.Fatalf("New fake memberlist server error: %v", err)
-			}
+			fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist, tCase.localNode)
+			require.NoError(t, err, "New fake memberlist server error")
 
 			mockMemberlist.EXPECT().Leave(time.Second)
 			mockMemberlist.EXPECT().Shutdown()
 			mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
 				{Name: localNodeName},
-			}).AnyTimes()
+			}).MinTimes(1)
 
-			assert.NoError(t, createExternalIPPool(fakeCluster.crdClient, tCase.externalIPPool))
-			assert.NoError(t, createNode(fakeCluster.clientSet, tCase.localNode))
+			require.NoError(t, createExternalIPPool(fakeCluster.crdClient, tCase.externalIPPool))
 
+			wg.Add(1)
 			go func() {
-				defer close(stoppedCh)
+				defer wg.Done()
 				fakeCluster.cluster.Run(stopCh)
 			}()
 
-			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+			assert.Eventually(t, func() bool {
 				res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, tCase.externalIPPool.Name)
-				return err == nil && res == tCase.expectEgressSelectResult, nil
-			}), "select Node result for Egress does not match")
+				return err == nil && res == tCase.expectEgressSelectResult
+			}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress does not match")
 		})
 	}
 }
@@ -177,11 +175,11 @@ func TestCluster_Run(t *testing.T) {
 func TestCluster_RunClusterEvents(t *testing.T) {
 	controller := gomock.NewController(t)
 	stopCh := make(chan struct{})
-	stoppedCh := make(chan struct{})
+	var wg sync.WaitGroup
 	defer func() {
 		// Make sure mock controller is closed after Run() finishes.
 		close(stopCh)
-		<-stoppedCh
+		wg.Wait()
 	}()
 
 	nodeName := "localNodeName"
@@ -190,7 +188,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		NodeIPv4Addr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1)},
 	}
 	localNode := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "127.0.0.1"}}}}
 	fakeEIP1 := &crdv1b1.ExternalIPPool{
 		TypeMeta:   metav1.TypeMeta{Kind: "CustomResourceDefinition"},
@@ -202,10 +200,8 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIP1.Name, EgressIP: "1.1.1.2"},
 	}
 	mockMemberlist := NewMockMemberlist(controller)
-	fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist)
-	if err != nil {
-		t.Fatalf("New fake memberlist server error: %v", err)
-	}
+	fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist, localNode)
+	require.NoError(t, err, "New fake memberlist server error")
 	// Test Cluster AddClusterEventHandler.
 	fakeCluster.cluster.AddClusterEventHandler(func(objName string) {
 		t.Logf("Detected cluster Node event, running fake handler, obj: %s", objName)
@@ -216,12 +212,11 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
 		{Name: nodeName},
 	}).AnyTimes()
-	// Create local Node and ExternalIPPool.
-	assert.NoError(t, createNode(fakeCluster.clientSet, localNode))
-	assert.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP1))
+	require.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP1))
 
+	wg.Add(1)
 	go func() {
-		defer close(stoppedCh)
+		defer wg.Done()
 		fakeCluster.cluster.Run(stopCh)
 	}()
 
@@ -239,39 +234,39 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		{
 			name:                     "Update Node with matched labels then local Node should be selected",
 			expectEgressSelectResult: true,
-			newNodeLabels:            map[string]string{"env": "pro"},
+			newNodeLabels:            map[string]string{"env": "pro", v1.LabelOSStable: "linux"},
 		},
 		{
 			name:                     "Update Node with different but matched labels then local Node should be selected",
 			expectEgressSelectResult: true,
-			newNodeLabels:            map[string]string{"env": "pro", "env1": "test"},
+			newNodeLabels:            map[string]string{"env": "pro", "env1": "test", v1.LabelOSStable: "linux"},
 		},
 		{
 			name:                     "Update Node with not matched labels then local Node should not be selected",
 			expectEgressSelectResult: false,
-			newNodeLabels:            map[string]string{"env": "test"},
+			newNodeLabels:            map[string]string{"env": "test", v1.LabelOSStable: "linux"},
 		},
 	}
 	updateNode := func(node *v1.Node) {
-		_, err = fakeCluster.clientSet.CoreV1().Nodes().Update(context.TODO(), node, metav1.UpdateOptions{})
-		if err != nil {
-			t.Fatalf("Update Node error: %v", err)
-		}
+		_, err := fakeCluster.clientSet.CoreV1().Nodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+		require.NoError(t, err, "Update Node error")
 	}
 	for _, tCase := range testCasesUpdateNode {
 		t.Run(tCase.name, func(t *testing.T) {
-			localNode.Labels = tCase.newNodeLabels
-			updateNode(localNode)
-			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+			newPod := localNode.DeepCopy()
+			newPod.Labels = tCase.newNodeLabels
+			updateNode(newPod)
+			assert.Eventually(t, func() bool {
 				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
-				return err == nil && res == tCase.expectEgressSelectResult, nil
-			}), "select Node result for Egress does not match")
+				return err == nil && res == tCase.expectEgressSelectResult
+			}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress does not match")
 		})
 	}
 
 	// Test updating ExternalIPPool.
-	localNode.Labels = map[string]string{"env": "test"}
-	updateNode(localNode)
+	newPod := localNode.DeepCopy()
+	newPod.Labels = map[string]string{"env": "test", v1.LabelOSStable: "linux"}
+	updateNode(newPod)
 	testCasesUpdateEIP := []struct {
 		name                     string
 		expectEgressSelectResult bool
@@ -302,13 +297,11 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		t.Run(tCase.name, func(t *testing.T) {
 			fakeEIP1.Spec.NodeSelector = tCase.newEIPnodeSelectors
 			_, err := fakeCluster.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), fakeEIP1, metav1.UpdateOptions{})
-			if err != nil {
-				t.Fatalf("Update ExternalIPPool error: %v", err)
-			}
-			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+			require.NoError(t, err, "Update ExternalIPPool error")
+			assert.Eventually(t, func() bool {
 				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
-				return err == nil && res == tCase.expectEgressSelectResult, nil
-			}), "select Node result for Egress does not match")
+				return err == nil && res == tCase.expectEgressSelectResult
+			}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress does not match")
 		})
 	}
 
@@ -327,16 +320,16 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress2", UID: "fakeUID2"},
 		Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIP2.Name, EgressIP: fakeEgressIP2},
 	}
-	assert.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP2))
+	require.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP2))
 
 	assertEgressSelectResult := func(egress *crdv1b1.Egress, expectedRes bool, hasSyncedErr bool) {
-		assert.NoErrorf(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+		assert.Eventuallyf(t, func() bool {
 			res, err := fakeCluster.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool)
 			if hasSyncedErr {
-				return err != nil, nil
+				return err != nil
 			}
-			return err == nil && res == expectedRes, nil
-		}), "select Node result for Egress '%s' does not match", egress.Name)
+			return err == nil && res == expectedRes
+		}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress '%s' does not match", egress.Name)
 	}
 	assertEgressSelectResult(fakeEgress2, true, false)
 	assertEgressSelectResult(fakeEgress1, false, false)
@@ -344,9 +337,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	// Test deleting ExternalIPPool.
 	deleteExternalIPPool := func(eipName string) {
 		err := fakeCluster.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipName, metav1.DeleteOptions{})
-		if err != nil {
-			t.Fatalf("Delete ExternalIPPool error: %v", err)
-		}
+		require.NoError(t, err, "Delete ExternalIPPool error")
 	}
 	deleteExternalIPPool(fakeEIP2.Name)
 	assertEgressSelectResult(fakeEgress2, false, true)
@@ -374,31 +365,38 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 
 	// Test creating Node with invalid IP.
 	fakeNode := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode0"},
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode0", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "x"}}},
 	}
-	assert.NoError(t, createNode(fakeCluster.clientSet, fakeNode))
+	require.NoError(t, createNode(fakeCluster.clientSet, fakeNode))
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 
 	// Test deleting Node.
 	deleteNode := func(node *v1.Node) {
 		err := fakeCluster.clientSet.CoreV1().Nodes().Delete(context.TODO(), node.Name, metav1.DeleteOptions{})
-		if err != nil {
-			t.Fatalf("Delete Node error: %v", err)
-		}
+		require.NoError(t, err, "Delete Node error")
 	}
-	deleteNode(localNode)
+	deleteNode(newPod)
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 
 	mockMemberlist.EXPECT().Join([]string{"1.1.1.1"})
 	// Test creating Node with valid IP.
 	fakeNode1 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1"},
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "1.1.1.1"}}},
 	}
-	assert.NoError(t, createNode(fakeCluster.clientSet, fakeNode1))
+	require.NoError(t, createNode(fakeCluster.clientSet, fakeNode1))
+	assertEgressSelectResult(fakeEgress2, false, true)
+	assertEgressSelectResult(fakeEgress1, false, false)
+
+	// Test creating Windows Node, which should be ignored.
+	fakeWinNode1 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeWinNode1", Labels: labelsWindowsOS},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "1.1.1.11"}}},
+	}
+	require.NoError(t, createNode(fakeCluster.clientSet, fakeWinNode1))
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 }
@@ -529,7 +527,7 @@ func TestCluster_ShouldSelectEgress(t *testing.T) {
 				node := fmt.Sprintf("node-%d", i)
 				fakeCluster.nodeName = node
 				selected, err := fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIP, fakeEgress.Spec.ExternalIPPool)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, node == tCase.expectedNode, selected, "Selected Node for Egress not match")
 			}
 		})
@@ -594,7 +592,7 @@ func TestCluster_SelectNodeForIP(t *testing.T) {
 				node := fmt.Sprintf("node-%d", i)
 				fakeCluster.nodeName = node
 				selected, err := fakeCluster.ShouldSelectIP(tCase.ip, fakeEIPName, tCase.filters...)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, node == tCase.expectedNode, selected, "Selected Node not match")
 			}
 		})
@@ -644,16 +642,20 @@ func TestCluster_RejoinNodes(t *testing.T) {
 		NodeIPv4Addr: ip.MustParseCIDR("10.0.0.1/24"),
 	}
 	node1 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+		ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.1"}}},
 	}
 	node2 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node2"},
+		ObjectMeta: metav1.ObjectMeta{Name: "node2", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.2"}}},
 	}
 	node3 := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node3"},
+		ObjectMeta: metav1.ObjectMeta{Name: "node3", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.3"}}},
+	}
+	winNode1 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "winnode1", Labels: labelsWindowsOS},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.11"}}},
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -661,7 +663,7 @@ func TestCluster_RejoinNodes(t *testing.T) {
 	mockMemberlist := NewMockMemberlist(controller)
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.2"})
 	mockMemberlist.EXPECT().Join([]string{"10.0.0.3"})
-	fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3)
+	fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3, winNode1)
 
 	mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
 		{Name: "node1"},

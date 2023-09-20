@@ -1,6 +1,6 @@
 module antrea.io/antrea
 
-go 1.19
+go 1.21
 
 require (
 	antrea.io/libOpenflow v0.12.1
@@ -28,7 +28,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
 	github.com/google/btree v1.1.2
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/hashicorp/memberlist v0.5.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.3.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
@@ -54,11 +54,10 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20211101163509-b10eb8fe5cf6
 	github.com/vmware/go-ipfix v0.6.2
 	golang.org/x/crypto v0.12.0
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/mod v0.12.0
 	golang.org/x/net v0.14.0
 	golang.org/x/sync v0.3.0
-	golang.org/x/sys v0.11.0
+	golang.org/x/sys v0.12.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.12.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5

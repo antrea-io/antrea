@@ -1447,6 +1447,47 @@ func Test_featureNetworkPolicy_initFlows(t *testing.T) {
 }
 
 func Test_NewDNSPacketInConjunction(t *testing.T) {
+	ovsMetersSupported := ovsMetersAreSupported()
+	ipv4ExpFlows := []string{
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+	}
+	if ovsMetersSupported {
+		ipv4ExpFlows = []string{
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:3,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+		}
+	}
+	ipv6ExpFlows := []string{
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+	}
+	if ovsMetersSupported {
+		ipv6ExpFlows = []string{
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:3,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+		}
+	}
+	dsExpFlows := []string{
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+	}
+	if ovsMetersSupported {
+		dsExpFlows = []string{
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:3,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+		}
+	}
 	for _, tc := range []struct {
 		name          string
 		enableIPv4    bool
@@ -1455,39 +1496,25 @@ func Test_NewDNSPacketInConjunction(t *testing.T) {
 		expectedFlows []string
 	}{
 		{
-			name:       "IPv4 only",
-			enableIPv4: true,
-			enableIPv6: false,
-			conjID:     1,
-			expectedFlows: []string{
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp,tp_src=53 actions=conjunction(1,1/2)",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
-			},
+			name:          "IPv4 only",
+			enableIPv4:    true,
+			enableIPv6:    false,
+			conjID:        1,
+			expectedFlows: ipv4ExpFlows,
 		},
 		{
-			name:       "IPv6 only",
-			enableIPv4: false,
-			enableIPv6: true,
-			conjID:     1,
-			expectedFlows: []string{
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp6,tp_src=53 actions=conjunction(1,1/2)",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp6,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
-			},
+			name:          "IPv6 only",
+			enableIPv4:    false,
+			enableIPv6:    true,
+			conjID:        1,
+			expectedFlows: ipv6ExpFlows,
 		},
 		{
-			name:       "dual stack",
-			enableIPv4: true,
-			enableIPv6: true,
-			conjID:     1,
-			expectedFlows: []string{
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp,tp_src=53 actions=conjunction(1,1/2)",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,udp6,tp_src=53 actions=conjunction(1,1/2)",
-				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,tcp6,tp_src=53,tcp_flags=+psh+ack actions=conjunction(1,1/2)",
-			},
+			name:          "dual stack",
+			enableIPv4:    true,
+			enableIPv6:    true,
+			conjID:        1,
+			expectedFlows: dsExpFlows,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

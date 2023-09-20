@@ -36,12 +36,20 @@ import (
 var (
 	// getInterfaceByName is meant to be overridden for testing.
 	getInterfaceByName = net.InterfaceByName
+
+	// getAllIPNetsByName is meant to be overridden for testing.
+	getAllIPNetsByName = util.GetAllIPNetsByName
 )
 
 // prepareHostNetwork returns immediately on Linux.
 func (i *Initializer) prepareHostNetwork() error {
 	return nil
 }
+
+// Assuming a page cache of 4096, based on Suricata source code from L1752-L1798
+// at https://github.com/OISF/suricata/blob/49713ebaa0b8edb057d60f1cfe9126946645a848/src/source-af-packet.c#L1757C2-L1777C129.
+// The maximum supported MTU by Suricata is 32678 after calculation.
+const maxMTUSupportedBySuricata = 32678
 
 // prepareOVSBridgeForK8sNode returns immediately on Linux if connectUplinkToBridge is false.
 func (i *Initializer) prepareOVSBridgeForK8sNode() error {
@@ -58,7 +66,11 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplinkNetConfig.Name = adapter.Name
 	uplinkNetConfig.MAC = adapter.HardwareAddr
-	uplinkNetConfig.IPs = []*net.IPNet{i.nodeConfig.NodeIPv4Addr}
+	uplinkIPs, err := getAllIPNetsByName(adapter.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get uplink IPs: %w", err)
+	}
+	uplinkNetConfig.IPs = uplinkIPs
 	uplinkNetConfig.Index = adapter.Index
 	// Gateway and DNSServers are not configured at adapter in Linux
 	// Limitation: dynamic DNS servers will be lost after DHCP lease expired
@@ -138,7 +150,7 @@ func (i *Initializer) saveHostRoutes() error {
 			klog.V(2).Infof("Skipped host route not on uplink: %+v", route)
 			continue
 		}
-		// Skip IPv6 routes before we support IPv6 stack.
+		// Skip IPv6 routes until we support IPv6 stack.
 		// TODO(gran): support IPv6
 		if route.Gw.To4() == nil {
 			klog.V(2).Infof("Skipped IPv6 host route: %+v", route)
@@ -179,21 +191,19 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	if !i.connectUplinkToBridge {
 		return nil
 	}
-	klog.Infof("Bridging uplink to OVS bridge")
+	klog.InfoS("Bridging uplink to OVS bridge")
 	var err error
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplinkName := uplinkNetConfig.Name
 	bridgedUplinkName := util.GenerateUplinkInterfaceName(uplinkNetConfig.Name)
+	uplinkIPs := uplinkNetConfig.IPs
 
 	// If the uplink port already exists, just return.
 	if uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName, false); err == nil {
 		klog.InfoS("Uplink already exists, skip the configuration", "uplink", bridgedUplinkName, "port", uplinkOFPort)
 		return nil
 	}
-	uplinkIPs, err := util.GetAllIPNetsByName(uplinkName)
-	if err != nil {
-		return fmt.Errorf("failed to get uplink IPs: err=%w", err)
-	}
+
 	if err := util.RenameInterface(uplinkName, bridgedUplinkName); err != nil {
 		return fmt.Errorf("failed to change uplink interface name: err=%w", err)
 	}
@@ -240,13 +250,31 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	if _, _, err = util.SetLinkUp(uplinkName); err != nil {
 		return err
 	}
+
+	// Check if uplink is configured with an IPv6 address: if it is, we need to ensure that IPv6
+	// is enabled on the OVS internal port as we need to move all IP addresses over.
+	uplinkHasIPv6Address := false
+	for _, ip := range uplinkIPs {
+		if ip.IP.To4() == nil {
+			uplinkHasIPv6Address = true
+			break
+		}
+	}
+	if uplinkHasIPv6Address {
+		klog.InfoS("Uplink has IPv6 address, ensuring that IPv6 is enabled on bridge local port", "port", uplinkName)
+		if err := util.EnsureIPv6EnabledOnInterface(uplinkName); err != nil {
+			klog.ErrorS(err, "Failed to ensure that IPv6 is enabled on bridge local port, moving uplink IPs to bridge is likely to fail", "port", uplinkName)
+		}
+	}
+
 	if err = util.ConfigureLinkAddresses(localLink.Attrs().Index, uplinkIPs); err != nil {
 		return err
 	}
 	if err = util.ConfigureLinkAddresses(uplinkNetConfig.Index, nil); err != nil {
 		return err
 	}
-	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
+	// Restore the host routes which are lost when moving the network configuration of the
+	// uplink interface to OVS bridge interface.
 	if err = i.restoreHostRoutes(); err != nil {
 		return err
 	}
@@ -260,7 +288,7 @@ func (i *Initializer) RestoreOVSBridge() {
 	if !i.connectUplinkToBridge {
 		return
 	}
-	klog.Infof("Restoring bridge config to uplink...")
+	klog.InfoS("Restoring bridge config to uplink...")
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplinkName := ""
 	bridgedUplinkName := ""
@@ -271,10 +299,7 @@ func (i *Initializer) RestoreOVSBridge() {
 	brName := i.ovsBridge
 
 	if uplinkName != "" {
-		uplinkIPs, err := util.GetAllIPNetsByName(uplinkName)
-		if err != nil {
-			klog.ErrorS(err, "Failed to get uplink IPs")
-		}
+		uplinkIPs := uplinkNetConfig.IPs
 		if err := util.DeleteOVSPort(brName, uplinkName); err != nil {
 			klog.ErrorS(err, "Delete OVS port failed", "port", uplinkName)
 		}
@@ -291,7 +316,7 @@ func (i *Initializer) RestoreOVSBridge() {
 			klog.ErrorS(err, "Configure route to uplink interface failed", "uplink", uplinkName)
 		}
 	}
-	klog.Infof("Finished to restore bridge config to uplink...")
+	klog.InfoS("Finished to restore bridge config to uplink...")
 }
 
 func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
@@ -358,12 +383,24 @@ func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
 	returnPort, _ := i.ifaceStore.GetInterfaceByName(config.L7NetworkPolicyReturnPortName)
 	i.l7NetworkPolicyConfig.TargetOFPort = uint32(targetPort.OFPort)
 	i.l7NetworkPolicyConfig.ReturnOFPort = uint32(returnPort.OFPort)
-	// Set the ports with no-flood to reject ARP flood packets.
+	// Set the ports with no-flood to reject ARP flood packets at every startup.
 	if err := i.ovsCtlClient.SetPortNoFlood(int(targetPort.OFPort)); err != nil {
 		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyTargetPortName, err)
 	}
 	if err := i.ovsCtlClient.SetPortNoFlood(int(returnPort.OFPort)); err != nil {
 		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyReturnPortName, err)
+	}
+	// Set MTU of the ports to the calculated MTU value at every startup.
+	if err := i.setInterfaceMTU(config.L7NetworkPolicyTargetPortName, i.networkConfig.InterfaceMTU); err != nil {
+		return err
+	}
+	if err := i.setInterfaceMTU(config.L7NetworkPolicyReturnPortName, i.networkConfig.InterfaceMTU); err != nil {
+		return err
+	}
+	// Currently, the maximum of MTU supported by L7 NetworkPolicy engine Suricata is 32678 (assuming that the page size
+	// is 4096). If the calculated MTU value is greater than 32678, Suricata may fail to start.
+	if i.networkConfig.InterfaceMTU > maxMTUSupportedBySuricata {
+		klog.ErrorS(nil, "L7 NetworkPolicy engine Suricata may fail to start since the interface MTU is greater than the maximum MTU supported by Suricata", "interfaceMTU", i.networkConfig.InterfaceMTU, "maximumMTU", maxMTUSupportedBySuricata)
 	}
 
 	return nil

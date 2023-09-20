@@ -152,6 +152,10 @@ func newTable(tableName string, stage binding.StageID, pipeline binding.Pipeline
 	return table
 }
 
+func (t *Table) IsInitialized() bool {
+	return t.ofTable != nil
+}
+
 func (t *Table) GetID() uint8 {
 	return t.ofTable.GetID()
 }

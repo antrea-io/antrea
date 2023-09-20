@@ -114,7 +114,8 @@ Secret manifest and other ClusterSet join arguments to file `join-config.yml`
 command (with the `--config-file` option) to join the ClusterSet with these
 arguments. If you want to use a separate token for each member cluster for
 security considerations, you can run the following commands to create a token
-and use the token to join the ClusterSet:
+and use the token (together with the previously generated configuration file
+`join-config.yml`) to join the ClusterSet:
 
 ```bash
 antctl mc create membertoken test-cluster-leader-token -n antrea-multicluster -o test-cluster-leader-token.yml
@@ -313,8 +314,8 @@ kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
 ### Add new member clusters
 
 If you want to add a new member cluster to your ClusterSet, you can follow the
-steps for cluster B to do so. Remember to update the member cluster ID in
-`member-clusterset-template.yml` to the new member cluster's ID in the step 2 of
+steps for cluster B to do so. Remember to update the member cluster ID `spec.clusterID`
+in `member-clusterset-template.yml` to the new member cluster's ID in the step 2 of
 joining ClusterSet. For example, you can run the following commands to join the
 ClusterSet in a member cluster with ID `test-cluster-member2`:
 

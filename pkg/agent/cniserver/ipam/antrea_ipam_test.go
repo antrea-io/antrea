@@ -326,7 +326,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		listOptions,
 	)
 
-	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory, crdInformerFactory, localPodInformer, true)
+	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().IPPools(), localPodInformer, true)
 	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 	informerFactory.Start(stopCh)
 	go localPodInformer.Run(stopCh)
@@ -614,7 +614,12 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 					listOptions,
 				)
 
-				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory, crdInformerFactory, localPodInformer, true)
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+					informerFactory.Core().V1().Namespaces(),
+					crdInformerFactory.Crd().V1alpha2().IPPools(),
+					localPodInformer,
+					true,
+				)
 				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 				createIPPools(crdClient)
 

@@ -380,7 +380,8 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
 	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
-		routes, _, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
+		var llRoute *Route
+		routes, _, llRoute, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
 			return false, err
 		}
@@ -390,6 +391,9 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 			return false, nil
 		} else if len(routes) > expectedRtNumMax {
 			return false, fmt.Errorf("found too many gateway routes, expected %d but got %d", expectedRtNumMax, len(routes))
+		}
+		if isIPv6 && llRoute == nil {
+			return false, fmt.Errorf("IPv6 link-local route not found")
 		}
 		return true, nil
 	}); err == wait.ErrWaitTimeout {
@@ -410,8 +414,8 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		_, routeToAdd.routeCIDR, _ = net.ParseCIDR("99.99.99.0/24")
 		routeToAdd.routeGW = net.ParseIP("99.99.99.1")
 	} else {
-		_, routeToAdd.routeCIDR, _ = net.ParseCIDR("fe80::0/112")
-		routeToAdd.routeGW = net.ParseIP("fe80::1")
+		_, routeToAdd.routeCIDR, _ = net.ParseCIDR("fa80::/112")
+		routeToAdd.routeGW = net.ParseIP("fa80::1")
 	}
 
 	// We run the ip command from the antrea-agent container for delete / add since they need to
@@ -474,9 +478,13 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	// We expect the agent to delete the extra route we added and add back the route we deleted
 	t.Logf("Waiting for gateway routes to converge")
 	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
-		newRoutes, _, err := getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
+		var llRoute *Route
+		newRoutes, _, llRoute, err := getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
 			return false, err
+		}
+		if isIPv6 && llRoute == nil {
+			return false, fmt.Errorf("IPv6 link-local route not found")
 		}
 		if len(newRoutes) != len(routes) {
 			return false, nil
@@ -559,7 +567,7 @@ func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 	}
 	var routes []Route
 	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
-		_, routes, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
+		_, routes, _, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
 			t.Logf("Failed to get Service gateway routes: %v", err)
 			return false, nil
@@ -650,7 +658,7 @@ type Route struct {
 	routeGW   net.IP
 }
 
-func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName string, isIPv6 bool) ([]Route, []Route, error) {
+func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName string, isIPv6 bool) ([]Route, []Route, *Route, error) {
 	var cmd []string
 	virtualIP := config.VirtualServiceIPv4
 	mask := 32
@@ -664,15 +672,20 @@ func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName strin
 	podName := getAntreaPodName(t, data, nodeName)
 	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
+		return nil, nil, nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 	}
 
 	var nodeRoutes, serviceRoutes []Route
+	var llRoute *Route
 	re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
 	for _, line := range strings.Split(stdout, "\n") {
 		var err error
 		matches := re.FindStringSubmatch(line)
 		if len(matches) == 0 {
+			if isIPv6 && strings.HasPrefix(line, "fe80::") {
+				llRoute = &Route{}
+				_, llRoute.routeCIDR, _ = net.ParseCIDR(strings.Split(line, " ")[0])
+			}
 			continue
 		}
 		if net.ParseIP(matches[1]) != nil {
@@ -680,10 +693,10 @@ func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName strin
 		}
 		route := Route{}
 		if _, route.routeCIDR, err = net.ParseCIDR(matches[1]); err != nil {
-			return nil, nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
+			return nil, nil, nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
 		}
 		if route.routeGW = net.ParseIP(matches[2]); route.routeGW == nil {
-			return nil, nil, fmt.Errorf("%s is not a valid IP", matches[2])
+			return nil, nil, nil, fmt.Errorf("%s is not a valid IP", matches[2])
 		}
 		if route.routeGW.Equal(virtualIP) {
 			// If the route is added by AntreaProxy, append it to slice serviceRoutes.
@@ -693,7 +706,7 @@ func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName strin
 			nodeRoutes = append(nodeRoutes, route)
 		}
 	}
-	return nodeRoutes, serviceRoutes, nil
+	return nodeRoutes, serviceRoutes, llRoute, nil
 }
 
 // testDeletePreviousRoundFlowsOnStartup checks that when the Antrea agent is restarted, flows from

@@ -43,7 +43,6 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -91,7 +90,6 @@ type fakeTraceflowController struct {
 	mockOFClient       *openflowtest.MockClient
 	crdClient          *fakeversioned.Clientset
 	crdInformerFactory crdinformers.SharedInformerFactory
-	ovsClient          *ovsconfigtest.MockOVSBridgeClient
 }
 
 func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, npQuerier querier.AgentNetworkPolicyInfoQuerier, egressQuerier querier.EgressQuerier) *fakeTraceflowController {
@@ -101,7 +99,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
-	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, pod1IPv4, pod1MAC.String(), int32(ofPortPod1))
@@ -111,14 +108,13 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 
 	tfController := &Controller{
 		kubeClient:            kubeClient,
-		traceflowClient:       crdClient,
+		crdClient:             crdClient,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
 		ofClient:              mockOFClient,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
-		ovsBridgeClient:       ovsClient,
 		interfaceStore:        ifaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
@@ -134,7 +130,6 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		mockOFClient:       mockOFClient,
 		crdClient:          crdClient,
 		crdInformerFactory: crdInformerFactory,
-		ovsClient:          ovsClient,
 	}
 }
 
@@ -623,49 +618,6 @@ func TestStartTraceflow(t *testing.T) {
 			},
 		},
 		{
-			name: "empty source and destination Pod",
-			tf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{Name: "tf3", UID: "uid3"},
-			},
-			expectedErrLog: "Traceflow tf3 has neither source nor destination Pod specified",
-		},
-		{
-			name: "empty source Pod",
-			tf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{Name: "tf4", UID: "uid4"},
-				Spec: crdv1beta1.TraceflowSpec{
-					Destination: crdv1beta1.Destination{
-						Namespace: pod2.Namespace,
-						Pod:       pod2.Name,
-					},
-				},
-			},
-			expectedErrLog: "Traceflow tf4 does not have source Pod specified",
-		},
-		{
-			name: "invalid destination IPv4",
-			tf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{Name: "tf5", UID: "uid5"},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: "192.168.1.300",
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			nodeConfig: &config.NodeConfig{
-				Name: "node-1",
-			},
-			expectedErr: "destination IP is not valid: 192.168.1.300",
-		},
-		{
 			name: "live traceflow receive only",
 			tf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{Name: "tf6", UID: "uid6"},
@@ -863,18 +815,6 @@ func TestValidateTraceflow(t *testing.T) {
 				},
 			},
 			expectedErr: "using Service destination requires AntreaProxy feature enabled",
-		},
-		{
-			name: "invalid destination IPv4",
-			tf: &crdv1beta1.Traceflow{
-				Spec: crdv1beta1.TraceflowSpec{
-					Destination: crdv1beta1.Destination{
-						IP: "192.168.1.300",
-					},
-				},
-			},
-			antreaProxyEnabled: true,
-			expectedErr:        "destination IP is not valid: 192.168.1.300",
 		},
 		{
 			name: "AntreaProxy feature disabled with ClusterIP destination",

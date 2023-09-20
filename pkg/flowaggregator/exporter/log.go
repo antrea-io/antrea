@@ -17,11 +17,11 @@ package exporter
 import (
 	"math"
 	"reflect"
+	"slices"
 	"sync"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
-	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"

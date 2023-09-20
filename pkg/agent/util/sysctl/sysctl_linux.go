@@ -55,13 +55,13 @@ func EnsureSysctlNetValue(sysctl string, value int) error {
 	val, err := GetSysctlNet(sysctl)
 	if err != nil {
 		// If permission error, please provide access to sysctl setting
-		klog.Errorf("Error when getting %s: %v", sysctl, err)
+		klog.ErrorS(err, "Error when getting sysctl parameter", "path", sysctl)
 		return err
 	} else if val != value {
 		err = SetSysctlNet(sysctl, value)
 		if err != nil {
 			// If permission error, please provide access to sysctl setting
-			klog.Errorf("Error when setting %s: %v", sysctl, err)
+			klog.ErrorS(err, "Error when setting sysctl parameter", "path", sysctl, "value", value)
 			return err
 		}
 	}

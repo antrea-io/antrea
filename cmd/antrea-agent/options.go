@@ -59,6 +59,7 @@ const (
 	defaultAuditLogsMaxBackups     = 3
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
+	defaultPacketInRate            = 500
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -192,6 +193,10 @@ func (o *Options) setDefaults() {
 	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
 	}
+	if o.config.PacketInRate == 0 {
+		o.config.PacketInRate = defaultPacketInRate
+	}
+	o.setAuditLoggingDefaultOptions()
 }
 
 func (o *Options) validateTLSOptions() error {
@@ -486,25 +491,6 @@ func (o *Options) setK8sNodeDefaultOptions() {
 			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
 		}
 	}
-
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		auditLogging := &o.config.AuditLogging
-		if auditLogging.MaxSize == 0 {
-			auditLogging.MaxSize = defaultAuditLogsMaxAge
-		}
-		if auditLogging.MaxBackups == nil {
-			maxBackups := int32(defaultAuditLogsMaxBackups)
-			auditLogging.MaxBackups = &maxBackups
-		}
-		if auditLogging.MaxAge == nil {
-			maxAge := int32(defaultAuditLogsMaxAge)
-			auditLogging.MaxAge = &maxAge
-		}
-		if auditLogging.Compress == nil {
-			compress := defaultAuditLogsCompressed
-			auditLogging.Compress = &compress
-		}
-	}
 }
 
 func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) error {
@@ -709,6 +695,25 @@ func (o *Options) setMulticlusterDefaultOptions() {
 		if o.config.Multicluster.WireGuard.Port == 0 {
 			o.config.Multicluster.WireGuard.Port = apis.MulticlusterWireGuardListenPort
 		}
+	}
+}
+
+func (o *Options) setAuditLoggingDefaultOptions() {
+	auditLogging := &o.config.AuditLogging
+	if auditLogging.MaxSize == 0 {
+		auditLogging.MaxSize = defaultAuditLogsMaxAge
+	}
+	if auditLogging.MaxBackups == nil {
+		maxBackups := int32(defaultAuditLogsMaxBackups)
+		auditLogging.MaxBackups = &maxBackups
+	}
+	if auditLogging.MaxAge == nil {
+		maxAge := int32(defaultAuditLogsMaxAge)
+		auditLogging.MaxAge = &maxAge
+	}
+	if auditLogging.Compress == nil {
+		compress := defaultAuditLogsCompressed
+		auditLogging.Compress = &compress
 	}
 }
 

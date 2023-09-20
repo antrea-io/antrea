@@ -32,6 +32,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--coverage] [--he
         --node-ipam                   Enables Antrea NodeIPAN.
         --multicast                   Enables Multicast.
         --flow-visibility             Only run flow visibility related e2e tests.
+        --extra-network               Creates an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --setup-only                  Only perform setting up the cluster and run test.
@@ -70,6 +71,7 @@ load_balancer_mode=""
 node_ipam=false
 multicast=false
 flow_visibility=false
+extra_network=false
 coverage=false
 skiplist=""
 setup_only=false
@@ -113,17 +115,21 @@ case $key in
     flow_visibility=true
     shift
     ;;
-    --skip)
-    skiplist="$2"
-    shift 2
-    ;;
     --encap-mode)
     mode="$2"
     shift 2
     ;;
+    --extra-network)
+    extra_network=true
+    shift
+    ;;
     --coverage)
     coverage=true
     shift
+    ;;
+    --skip)
+    skiplist="$2"
+    shift 2
     ;;
     --setup-only)
     setup_only=true
@@ -155,6 +161,11 @@ if [ -z "$HELM" ]; then
 elif ! $HELM version > /dev/null 2>&1; then
     echoerr "$HELM does not appear to be a valid helm binary"
     print_help
+    exit 1
+fi
+
+if $extra_network && [[ "$mode" == "hybrid" ]]; then
+    echoerr "--extra-network cannot be specified with hybrid mode"
     exit 1
 fi
 
@@ -238,6 +249,9 @@ function setup_cluster {
   fi
   if $node_ipam; then
     args="$args --no-kube-node-ipam"
+  fi
+  if $extra_network && [[ "$mode" != "hybrid" ]]; then
+    args="$args --extra-networks \"20.20.30.0/24\""
   fi
 
   echo "creating test bed with args $args"

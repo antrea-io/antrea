@@ -28,10 +28,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
@@ -101,6 +103,14 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 		AdmissionRequest: *leaderNewReqCopy,
 	}
 
+	deleteReq := admission.Request{
+		AdmissionRequest: v1.AdmissionRequest{
+			Name:      "clusterset1",
+			Namespace: "mcs1",
+			Operation: v1.Delete,
+		},
+	}
+
 	clusterIDNewReqCopy := newReq.DeepCopy()
 	clusterIDNewReqCopy.Object = runtime.RawExtension{
 		Raw: clusterIDUpdatedCS,
@@ -113,42 +123,70 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               string
-		req                admission.Request
-		existingClusterSet *mcv1alpha2.ClusterSet
-		newClusterSet      *mcv1alpha2.ClusterSet
-		isAllowed          bool
+		name                          string
+		req                           admission.Request
+		existingClusterSet            *mcv1alpha2.ClusterSet
+		existingMemberClusterAnnounce *mcv1alpha1.MemberClusterAnnounce
+		role                          string
+		isAllowed                     bool
 	}{
 		{
 			name:      "create a new ClusterSet",
 			req:       newReq,
+			role:      leaderRole,
 			isAllowed: true,
 		},
 		{
 			name:               "create a new ClusterSet when there is an existing ClusterSet",
 			existingClusterSet: existingClusterSet2,
 			req:                newReq,
+			role:               leaderRole,
 			isAllowed:          false,
 		},
 		{
 			name:               "update a new ClusterSet's ClusterID when there is an existing ClusterSet",
 			existingClusterSet: existingClusterSet1,
-			newClusterSet:      clusterIDUpdatedClusterSet,
 			req:                clusterIDUpdatedReq,
+			role:               leaderRole,
 			isAllowed:          false,
 		},
 		{
 			name:               "update a new ClusterSet's leader ClusterID when there is an existing ClusterSet",
 			existingClusterSet: existingClusterSet1,
-			newClusterSet:      leaderUpdatedClusterSet,
 			req:                leaderUpdatedReq,
+			role:               leaderRole,
 			isAllowed:          false,
+		},
+		{
+			name: "fail to delete a ClusterSet with a MemberClusterAnnounce in a leader cluster",
+			existingMemberClusterAnnounce: &mcv1alpha1.MemberClusterAnnounce{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "mcs1",
+					Name:      "mca-from-cluster-1",
+				},
+			},
+			req:       deleteReq,
+			role:      leaderRole,
+			isAllowed: false,
+		},
+		{
+			name:      "succeed to delete a ClusterSet without any MemberClusterAnnounce in a leader cluster",
+			req:       deleteReq,
+			role:      leaderRole,
+			isAllowed: true,
+		},
+		{
+			name:      "succeed to delete a ClusterSet in a member cluster",
+			req:       deleteReq,
+			role:      memberRole,
+			isAllowed: true,
 		},
 	}
 
 	newScheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
+	utilruntime.Must(mcv1alpha1.AddToScheme(newScheme))
 	utilruntime.Must(mcv1alpha2.AddToScheme(newScheme))
 	decoder, err := admission.NewDecoder(newScheme)
 	if err != nil {
@@ -156,13 +194,19 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		fakeClient := fake.NewClientBuilder().WithScheme(newScheme).WithObjects().Build()
+		objects := []client.Object{}
 		if tt.existingClusterSet != nil {
-			fakeClient = fake.NewClientBuilder().WithScheme(newScheme).WithObjects(tt.existingClusterSet).Build()
+			objects = append(objects, tt.existingClusterSet)
 		}
+		if tt.existingMemberClusterAnnounce != nil {
+			objects = append(objects, tt.existingMemberClusterAnnounce)
+		}
+		fakeClient := fake.NewClientBuilder().WithScheme(newScheme).WithObjects(objects...).Build()
 		clusterSetWebhookUnderTest = &clusterSetValidator{
 			Client:    fakeClient,
-			namespace: "mcs1"}
+			namespace: "mcs1",
+			role:      tt.role,
+		}
 		clusterSetWebhookUnderTest.InjectDecoder(decoder)
 
 		t.Run(tt.name, func(t *testing.T) {

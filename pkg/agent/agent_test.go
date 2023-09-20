@@ -443,17 +443,17 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 				expectedNodeConfig.NodeTransportInterfaceName = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipV4Net
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
-				defer mockGetTransportIPNetDeviceByName(tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)()
+				mockGetTransportIPNetDeviceByName(t, tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)
 			} else if len(tt.transportIfCIDRs) > 0 {
 				initializer.networkConfig.TransportIfaceCIDRs = tt.transportIfCIDRs
 				expectedNodeConfig.NodeTransportInterfaceName = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipV4Net
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
-				defer mockGetIPNetDeviceByCIDRs(tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)()
+				mockGetIPNetDeviceByCIDRs(t, tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)
 			}
-			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
-			defer mockNodeNameEnv(nodeName)()
-			defer mockGetNodeTimeout(100 * time.Millisecond)
+			mockGetIPNetDeviceFromIP(t, nodeIPNet, ipDevice)
+			mockNodeNameEnv(t, nodeName)
+			mockGetNodeTimeout(t, 100*time.Millisecond)
 
 			err := initializer.initK8sNodeLocalConfig(nodeName)
 			if tt.expectedErr == "" {
@@ -469,39 +469,39 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 	}
 }
 
-func mockGetIPNetDeviceFromIP(ipNet *net.IPNet, ipDevice *net.Interface) func() {
+func mockGetIPNetDeviceFromIP(t *testing.T, ipNet *net.IPNet, ipDevice *net.Interface) {
 	prevGetIPNetDeviceFromIP := getIPNetDeviceFromIP
 	getIPNetDeviceFromIP = func(localIP *ip.DualStackIPs, ignoredHostInterfaces sets.Set[string]) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 		return ipNet, nil, ipDevice, nil
 	}
-	return func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP }
+	t.Cleanup(func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP })
 }
 
-func mockNodeNameEnv(name string) func() {
+func mockNodeNameEnv(t *testing.T, name string) {
 	_ = os.Setenv(env.NodeNameEnvKey, name)
-	return func() { os.Unsetenv(env.NodeNameEnvKey) }
+	t.Cleanup(func() { os.Unsetenv(env.NodeNameEnvKey) })
 }
 
-func mockGetNodeTimeout(timeout time.Duration) func() {
+func mockGetNodeTimeout(t *testing.T, timeout time.Duration) {
 	prevTimeout := getNodeTimeout
 	getNodeTimeout = timeout
-	return func() { getNodeTimeout = prevTimeout }
+	t.Cleanup(func() { getNodeTimeout = prevTimeout })
 }
 
-func mockGetTransportIPNetDeviceByName(ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) func() {
+func mockGetTransportIPNetDeviceByName(t *testing.T, ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) {
 	prevGetIPNetDeviceByName := getTransportIPNetDeviceByNameFn
 	getTransportIPNetDeviceByNameFn = func(ifName, brName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 		return ipV4Net, ipV6Net, ipDevice, nil
 	}
-	return func() { getTransportIPNetDeviceByNameFn = prevGetIPNetDeviceByName }
+	t.Cleanup(func() { getTransportIPNetDeviceByNameFn = prevGetIPNetDeviceByName })
 }
 
-func mockGetIPNetDeviceByCIDRs(ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) func() {
+func mockGetIPNetDeviceByCIDRs(t *testing.T, ipV4Net, ipV6Net *net.IPNet, ipDevice *net.Interface) {
 	prevGetIPNetDeviceByCIDRs := getIPNetDeviceByCIDRs
 	getIPNetDeviceByCIDRs = func(cidr []string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 		return ipV4Net, ipV6Net, ipDevice, nil
 	}
-	return func() { getIPNetDeviceByCIDRs = prevGetIPNetDeviceByCIDRs }
+	t.Cleanup(func() { getIPNetDeviceByCIDRs = prevGetIPNetDeviceByCIDRs })
 }
 
 func TestSetupDefaultTunnelInterface(t *testing.T) {
@@ -632,9 +632,9 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 
 func TestSetupGatewayInterface(t *testing.T) {
 	fakeMAC, _ := net.ParseMAC("12:34:56:78:76:54")
-	defer mockSetLinkUp(fakeMAC, 10, nil)()
-	defer mockConfigureLinkAddress(nil)()
-	defer mockSetInterfaceMTU(nil)()
+	mockSetLinkUp(t, fakeMAC, 10, nil)
+	mockConfigureLinkAddress(t, nil)
+	mockSetInterfaceMTU(t, nil)
 
 	controller := mock.NewController(t)
 
@@ -678,24 +678,20 @@ func TestSetupGatewayInterface(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func mockSetLinkUp(returnedMAC net.HardwareAddr, returnIndex int, returnErr error) func() {
+func mockSetLinkUp(t *testing.T, returnedMAC net.HardwareAddr, returnIndex int, returnErr error) {
 	originalSetLinkUp := setLinkUp
 	setLinkUp = func(name string) (net.HardwareAddr, int, error) {
 		return returnedMAC, returnIndex, returnErr
 	}
-	return func() {
-		setLinkUp = originalSetLinkUp
-	}
+	t.Cleanup(func() { setLinkUp = originalSetLinkUp })
 }
 
-func mockConfigureLinkAddress(returnedErr error) func() {
+func mockConfigureLinkAddress(t *testing.T, returnedErr error) {
 	originalConfigureLinkAddresses := configureLinkAddresses
 	configureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
 		return returnedErr
 	}
-	return func() {
-		configureLinkAddresses = originalConfigureLinkAddresses
-	}
+	t.Cleanup(func() { configureLinkAddresses = originalConfigureLinkAddresses })
 }
 
 func TestRestorePortConfigs(t *testing.T) {
@@ -819,9 +815,9 @@ func TestSetOVSDatapath(t *testing.T) {
 	}
 }
 
-func mockIPsecPSKEnv(name string) func() {
+func mockIPsecPSKEnv(t *testing.T, name string) {
 	os.Setenv(ipsecPSKEnvKey, name)
-	return func() { os.Unsetenv(ipsecPSKEnvKey) }
+	t.Cleanup(func() { os.Unsetenv(ipsecPSKEnvKey) })
 }
 
 func TestReadIPSecPSK(t *testing.T) {
@@ -848,7 +844,7 @@ func TestReadIPSecPSK(t *testing.T) {
 				},
 			}
 			if tt.isIPsecPSK {
-				defer mockIPsecPSKEnv("key")()
+				mockIPsecPSKEnv(t, "key")
 			}
 
 			err := initializer.readIPSecPSK()
@@ -960,7 +956,7 @@ func TestInitVMLocalConfig(t *testing.T) {
 				externalNodeNamespace: "external",
 			}
 			close(stopCh)
-			defer mockGetIPNetDeviceFromIP(nil, ipDevice)()
+			mockGetIPNetDeviceFromIP(t, nil, ipDevice)
 			err := initializer.initVMLocalConfig(tt.nodeName)
 			if tt.expectedErr != "" {
 				assert.ErrorContains(t, err, tt.expectedErr)

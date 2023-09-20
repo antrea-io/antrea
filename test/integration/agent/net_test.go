@@ -19,17 +19,12 @@ import (
 	"math/rand"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/agent/util"
 )
-
-func init() {
-	rand.Seed(time.Now().UTC().UnixNano())
-}
 
 func randName() string {
 	// #nosec G404: random number generator not used for security purposes

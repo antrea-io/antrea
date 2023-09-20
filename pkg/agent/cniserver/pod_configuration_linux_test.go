@@ -476,7 +476,9 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 			name:               "advertise-failure",
 			podSriovVFDeviceID: "vf2",
 			advertiseErr:       fmt.Errorf("unable to advertise on the sriov link"),
-			expectedErr:        fmt.Errorf("failed to advertise IP address for container %s: unable to advertise on the sriov link", containerID),
+			// When advertiseContainerAddr returns an error, it is logged, but does not
+			// cause ConfigureSriovSecondaryInterface to also return an error.
+
 		}, {
 			name:               "success",
 			podSriovVFDeviceID: "vf3",
@@ -499,7 +501,7 @@ func createPodConfigurator(controller *gomock.Controller, testIfaceConfigurator 
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
-	configurator, _ := newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
+	configurator, _ := newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	configurator.ifConfigurator = testIfaceConfigurator
 	return configurator
 }

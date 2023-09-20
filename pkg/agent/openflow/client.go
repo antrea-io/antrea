@@ -134,6 +134,12 @@ type Client interface {
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
+	// InstallSNATBypassServiceFlows installs flows to prevent traffic destined for the specified Service CIDRs from
+	// being SNAT'd. Otherwise, such Pod-to-Service traffic would be forwarded to Egress Node and be load-balanced
+	// remotely, as opposed to locally, when AntreaProxy is asked to skip some Services or is not running at all.
+	// Calling the method with new CIDRs will override the flows installed for previous CIDRs.
+	InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error
+
 	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
 	// single flow is added to mark the packets tunnelled from remote Nodes
 	// that should be SNAT'd with the SNAT IP.
@@ -145,7 +151,7 @@ type Client interface {
 
 	// InstallPodSNATFlows installs the SNAT flows for a local Pod. If the
 	// SNAT IP for the Pod is on the local Node, a non-zero SNAT ID should
-	// allocated for the SNAT IP, and the installed flow sets the SNAT IP
+	// be allocated for the SNAT IP, and the installed flow sets the SNAT IP
 	// mark on the egress packets from the ofPort; if the SNAT IP is on a
 	// remote Node, snatMark should be set to 0, and the installed flow
 	// tunnels egress packets to the remote Node using the SNAT IP as the
@@ -791,11 +797,14 @@ func (c *client) initialize() error {
 	}
 
 	if c.ovsMetersAreSupported {
-		if err := c.genPacketInMeter(PacketInMeterIDNP, PacketInMeterRateNP).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, PacketInMeterRateNP, err)
+		if err := c.genPacketInMeter(PacketInMeterIDNP, uint32(c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, c.packetInRate, err)
 		}
-		if err := c.genPacketInMeter(PacketInMeterIDTF, PacketInMeterRateTF).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, PacketInMeterRateTF, err)
+		if err := c.genPacketInMeter(PacketInMeterIDTF, uint32(c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, c.packetInRate, err)
+		}
+		if err := c.genPacketInMeter(PacketInMeterIDDNS, uint32(c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %v", PacketInMeterIDDNS, c.packetInRate, err)
 		}
 	}
 
@@ -984,6 +993,16 @@ func (c *client) generatePipelines() {
 		// generate a pipeline from the required table list.
 		c.pipelines[pipelineID] = generatePipeline(pipelineID, requiredTables)
 	}
+}
+
+func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error {
+	var flows []binding.Flow
+	for _, serviceCIDR := range serviceCIDRs {
+		flows = append(flows, c.featureEgress.snatSkipCIDRFlow(*serviceCIDR))
+	}
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.modifyFlows(c.featureEgress.cachedFlows, "svc-cidrs", flows)
 }
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
@@ -1558,9 +1577,11 @@ func (c *client) getMeterStats() {
 	handleMeterStatsReply := func(meterID int, packetCount int64) {
 		switch meterID {
 		case PacketInMeterIDNP:
-			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterNetworkPolicy").Set(float64(packetCount))
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterNetworkPolicy).Set(float64(packetCount))
 		case PacketInMeterIDTF:
-			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterTraceflow").Set(float64(packetCount))
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterTraceflow).Set(float64(packetCount))
+		case PacketInMeterIDDNS:
+			metrics.OVSMeterPacketDroppedCount.WithLabelValues(metrics.LabelPacketInMeterDNSInterception).Set(float64(packetCount))
 		default:
 			klog.V(4).InfoS("Received unexpected meterID", "meterID", meterID)
 		}

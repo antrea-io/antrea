@@ -21,7 +21,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -29,7 +28,6 @@ import (
 
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/client/informers/externalversions"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	annotation "antrea.io/antrea/pkg/ipam"
@@ -72,8 +70,8 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 }
 
 func InitializeAntreaIPAMController(crdClient clientsetversioned.Interface,
-	informerFactory informers.SharedInformerFactory,
-	crdInformerFactory externalversions.SharedInformerFactory,
+	namespaceInformer coreinformers.NamespaceInformer,
+	ipPoolInformer crdinformers.IPPoolInformer,
 	podInformer cache.SharedIndexInformer, ipamAnnotations bool) (*AntreaIPAMController, error) {
 	// Order of init causes antreaIPAMDriver to be initialized first
 	// After controller is initialized by agent init, we need to make it
@@ -83,13 +81,11 @@ func InitializeAntreaIPAMController(crdClient clientsetversioned.Interface,
 	}
 
 	var antreaIPAMController *AntreaIPAMController
-	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
 	ipPoolInformer.Informer().AddIndexers(cache.Indexers{podIndex: podIndexFunc})
 
 	// Create podInformer/Lister and namespaceInformer/Lister if need to read the AntreaIPAM
 	// annotation on Pods and Namespaces.
 	if ipamAnnotations {
-		namespaceInformer := informerFactory.Core().V1().Namespaces()
 		antreaIPAMController = &AntreaIPAMController{
 			crdClient:         crdClient,
 			ipPoolInformer:    ipPoolInformer,

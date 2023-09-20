@@ -153,8 +153,10 @@ spec:
 The following example YAML manifest creates a Namespace to allocate Pod IPs from the IP pool.
 
 ```yaml
+apiVersion: v1
 kind: Namespace
 metadata:
+  name: namespace1
   annotations:
     ipam.antrea.io/ippools: 'pool1'
 ```
@@ -170,7 +172,10 @@ Pod IP annotation is supported for a single Pod to specify a fixed IP for the Po
 Examples of annotations on a Pod or PodTemplate:
 
 ```yaml
+apiVersion: apps/v1
 kind: StatefulSet
+metadata:
+  name: statefulset1
 spec:
   replicas: 1  # Do not increase replicas if there is pod-ips annotation in PodTemplate
   template:
@@ -181,7 +186,10 @@ spec:
 ```
 
 ```yaml
+apiVersion: apps/v1
 kind: StatefulSet
+metadata:
+  name: statefulset1
 spec:
   replicas: 4
   template:
@@ -192,23 +200,29 @@ spec:
 ```
 
 ```yaml
+apiVersion: v1
 kind: Pod
 metadata:
+  name: pod1
   annotations:
     ipam.antrea.io/ippools: 'pod-ip-pool1'
 ```
 
 ```yaml
+apiVersion: v1
 kind: Pod
 metadata:
+  name: pod1
   annotations:
     ipam.antrea.io/ippools: 'pod-ip-pool1'
     ipam.antrea.io/pod-ips: '<ip-in-pod-ip-pool1>'
 ```
 
 ```yaml
+apiVersion: v1
 kind: Pod
 metadata:
+  name: pod1
   annotations:
     ipam.antrea.io/pod-ips: '<ip-in-namespace-pool>'
 ```

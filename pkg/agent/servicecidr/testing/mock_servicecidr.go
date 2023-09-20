@@ -61,17 +61,17 @@ func (mr *MockInterfaceMockRecorder) AddEventHandler(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEventHandler", reflect.TypeOf((*MockInterface)(nil).AddEventHandler), arg0)
 }
 
-// GetServiceCIDR mocks base method
-func (m *MockInterface) GetServiceCIDR(arg0 bool) (*net.IPNet, error) {
+// GetServiceCIDRs mocks base method
+func (m *MockInterface) GetServiceCIDRs() ([]*net.IPNet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetServiceCIDR", arg0)
-	ret0, _ := ret[0].(*net.IPNet)
+	ret := m.ctrl.Call(m, "GetServiceCIDRs")
+	ret0, _ := ret[0].([]*net.IPNet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetServiceCIDR indicates an expected call of GetServiceCIDR
-func (mr *MockInterfaceMockRecorder) GetServiceCIDR(arg0 interface{}) *gomock.Call {
+// GetServiceCIDRs indicates an expected call of GetServiceCIDRs
+func (mr *MockInterfaceMockRecorder) GetServiceCIDRs() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceCIDR", reflect.TypeOf((*MockInterface)(nil).GetServiceCIDR), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceCIDRs", reflect.TypeOf((*MockInterface)(nil).GetServiceCIDRs))
 }

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -32,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/util"
+	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	"antrea.io/antrea/pkg/agent/util/winfirewall"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	iputil "antrea.io/antrea/pkg/util/ip"
@@ -157,18 +157,37 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 	if err != nil {
 		return err
 	}
-	for dst, rt := range routes {
-		if reflect.DeepEqual(rt.DestinationSubnet, c.nodeConfig.PodIPv4CIDR) {
+	for i := range routes {
+		// Don't remove the route entry that does not use global unicast IP address as destination, like multicast, IPv6
+		// link local or loopback.
+		if !routes[i].DestinationSubnet.IP.IsGlobalUnicast() {
 			continue
 		}
-		if desiredPodCIDRs.Has(dst) {
+		// When configuring an IP address to an interface on Windows, three route entries will be automatically added.
+		// For example, if the IP address is 10.10.0.1/24, the following three routes will be created:
+		// Network Destination   Netmask          Gateway  Interface  Metric
+		// 10.10.0.1             255.255.255.255  On-link  10.10.0.1  281
+		// 10.10.0.0             255.255.255.0    On-link  10.10.0.1  281
+		// 10.10.0.255           255.255.255.255  On-link  10.10.0.1  281
+		// The host (10.10.0.1) and broadcast (10.10.0.255) routes should be ignored since they are not supposed to be
+		// managed by Antrea. We can ignore them by comparing them to the calculated broadcast IP. Don't remove them since
+		// removing those route entries might introduce host networking issues.
+		if routes[i].DestinationSubnet.IP.Equal(iputil.GetLocalBroadcastIP(routes[i].DestinationSubnet)) {
 			continue
 		}
-		// Don't delete the routes which are added by AntreaProxy when proxyAll is enabled.
-		if c.proxyAll && c.isServiceRoute(rt) {
+		// Don't remove the route entry that uses local Pod CIDR as destination.
+		if iputil.IPNetEqual(routes[i].DestinationSubnet, c.nodeConfig.PodIPv4CIDR) {
 			continue
 		}
-		err := util.RemoveNetRoute(rt)
+		// Don't remove the route entry whose destination is included in the desired Pod CIDRs.
+		if desiredPodCIDRs.Has(routes[i].DestinationSubnet.String()) {
+			continue
+		}
+		// Don't remove the route entries which are added by AntreaProxy when proxyAll is enabled.
+		if c.proxyAll && c.isServiceRoute(&routes[i]) {
+			continue
+		}
+		err = util.RemoveNetRoute(&routes[i])
 		if err != nil {
 			return err
 		}
@@ -289,21 +308,21 @@ func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
 		if err != nil {
 			return fmt.Errorf("error listing ip routes: %w", err)
 		}
-		for _, rt := range routes {
-			if !rt.GatewayAddress.Equal(gw) {
+		for i := range routes {
+			if !routes[i].GatewayAddress.Equal(gw) {
 				continue
 			}
 			// It's the latest route we just installed.
-			if iputil.IPNetEqual(rt.DestinationSubnet, serviceCIDR) {
+			if iputil.IPNetEqual(routes[i].DestinationSubnet, serviceCIDR) {
 				continue
 			}
 			// The route covers the desired route. It was installed when the calculated ServiceCIDR is larger than the current one, which could happen after some Services are deleted.
-			if iputil.IPNetContains(rt.DestinationSubnet, serviceCIDR) {
-				staleRoutes = append(staleRoutes, rt)
+			if iputil.IPNetContains(routes[i].DestinationSubnet, serviceCIDR) {
+				staleRoutes = append(staleRoutes, &routes[i])
 			}
 			// The desired route covers the route. It was either installed when the calculated ServiceCIDR is smaller than the current one, or a per-IP route generated before v1.12.0.
-			if iputil.IPNetContains(serviceCIDR, rt.DestinationSubnet) {
-				staleRoutes = append(staleRoutes, rt)
+			if iputil.IPNetContains(serviceCIDR, routes[i].DestinationSubnet) {
+				staleRoutes = append(staleRoutes, &routes[i])
 			}
 		}
 	}
@@ -423,42 +442,10 @@ func (c *Client) isServiceRoute(route *util.Route) bool {
 	return false
 }
 
-func (c *Client) listIPRoutesOnGW() (map[string]*util.Route, error) {
-	routes, err := util.GetNetRoutesAll()
-	if err != nil {
-		return nil, err
-	}
-	rtMap := make(map[string]*util.Route)
-	for idx := range routes {
-		rt := routes[idx]
-		if rt.LinkIndex != c.nodeConfig.GatewayConfig.LinkIndex {
-			continue
-		}
-		// Only process IPv4 route entries in the loop.
-		if rt.DestinationSubnet.IP.To4() == nil {
-			continue
-		}
-		// Retrieve the route entries that use global unicast IP address as the destination. "GetNetRoutesAll" also
-		// returns the entries of loopback, broadcast, and multicast, which are added by the system when adding a new IP
-		// on the interface. Since removing those route entries might introduce the host networking issues, ignore them
-		// from the list.
-		if !rt.DestinationSubnet.IP.IsGlobalUnicast() {
-			continue
-		}
-		// When configuring an IP address to an interface on Windows, three route entries will be automatically added.
-		// For example, if the IP address is 10.10.0.1/24, the following three routes will be created:
-		// Network Destination   Netmask          Gateway  Interface  Metric
-		// 10.10.0.1             255.255.255.255  On-link  10.10.0.1  281
-		// 10.10.0.0             255.255.255.0    On-link  10.10.0.1  281
-		// 10.10.0.255           255.255.255.255  On-link  10.10.0.1  281
-		// The host (10.10.0.1) and broadcast (10.10.0.255) routes should be ignored since they are not supposed to be
-		// managed by Antrea. We can ignore them by comparing them to the calculated broadcast IP.
-		if !rt.GatewayAddress.Equal(config.VirtualServiceIPv4) && rt.DestinationSubnet.IP.Equal(iputil.GetLocalBroadcastIP(rt.DestinationSubnet)) {
-			continue
-		}
-		rtMap[rt.DestinationSubnet.String()] = &rt
-	}
-	return rtMap, nil
+func (c *Client) listIPRoutesOnGW() ([]util.Route, error) {
+	family := antreasyscall.AF_INET
+	filter := &util.Route{LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
+	return util.RouteListFiltered(family, filter, util.RT_FILTER_IF)
 }
 
 // initFwRules adds Windows Firewall rules to accept the traffic that is sent to or from local Pods.

@@ -56,7 +56,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "CleanupStaleUDPSvcConntrack", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
-				{Component: "agent", Name: "EndpointSlice", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "EndpointSlice", Status: "Enabled"},
 				{Component: "agent", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},

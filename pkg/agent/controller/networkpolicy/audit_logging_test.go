@@ -81,15 +81,15 @@ func (l *mockLogger) Write(p []byte) (n int, err error) {
 	return len(msg), nil
 }
 
-func newTestAntreaPolicyLogger(bufferLength time.Duration, clock clock.Clock) (*AntreaPolicyLogger, *mockLogger) {
-	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
-	antreaLogger := &AntreaPolicyLogger{
+func newTestAuditLogger(bufferLength time.Duration, clock clock.Clock) (*AuditLogger, *mockLogger) {
+	mockNPLogger := &mockLogger{logged: make(chan string, 100)}
+	auditLogger := &AuditLogger{
 		bufferLength:     bufferLength,
 		clock:            clock,
-		anpLogger:        log.New(mockAnpLogger, "", log.Ldate),
+		npLogger:         log.New(mockNPLogger, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
-	return antreaLogger, mockAnpLogger
+	return auditLogger, mockNPLogger
 }
 
 func newLogInfo(disposition string) (*logInfo, string) {
@@ -115,35 +115,35 @@ func expectedLogWithCount(msg string, count int) string {
 }
 
 func TestAllowPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock.RealClock{})
+	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionAllow)
 
-	antreaLogger.LogDedupPacket(ob)
-	actual := <-mockAnpLogger.logged
+	auditLogger.LogDedupPacket(ob)
+	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock.RealClock{})
+	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionDrop)
 
-	antreaLogger.LogDedupPacket(ob)
-	actual := <-mockAnpLogger.logged
+	auditLogger.LogDedupPacket(ob)
+	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
 	clock := clocktesting.NewFakeClock(time.Now())
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
+	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock)
 	ob, expected := newLogInfo(actionDrop)
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
-	antreaLogger.LogDedupPacket(ob)
+	auditLogger.LogDedupPacket(ob)
 	clock.Step(time.Millisecond)
-	antreaLogger.LogDedupPacket(ob)
+	auditLogger.LogDedupPacket(ob)
 	clock.Step(testBufferLength)
-	actual := <-mockAnpLogger.logged
+	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
@@ -154,12 +154,12 @@ func TestDropPacketDedupLog(t *testing.T) {
 // the time manually.
 func TestDropPacketMultiDedupLog(t *testing.T) {
 	clock := clocktesting.NewFakeClock(time.Now())
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
+	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock)
 	ob, expected := newLogInfo(actionDrop)
 
 	consumeLog := func() (int, error) {
 		select {
-		case l := <-mockAnpLogger.logged:
+		case l := <-mockNPLogger.logged:
 			if !strings.Contains(l, expected) {
 				return 0, fmt.Errorf("unexpected log message received")
 			}
@@ -180,10 +180,10 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	}
 
 	// t=0ms
-	antreaLogger.LogDedupPacket(ob)
+	auditLogger.LogDedupPacket(ob)
 	clock.Step(60 * time.Millisecond)
 	// t=60ms
-	antreaLogger.LogDedupPacket(ob)
+	auditLogger.LogDedupPacket(ob)
 	clock.Step(50 * time.Millisecond)
 	// t=110ms, buffer is logged 100ms after the first packet
 	c1, err := consumeLog()
@@ -191,7 +191,7 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	assert.Equal(t, 2, c1)
 	clock.Step(10 * time.Millisecond)
 	// t=120ms
-	antreaLogger.LogDedupPacket(ob)
+	auditLogger.LogDedupPacket(ob)
 	clock.Step(110 * time.Millisecond)
 	// t=230ms, buffer is logged
 	c2, err := consumeLog()
@@ -200,11 +200,11 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 }
 
 func TestRedirectPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock.RealClock{})
+	auditLogger, mockNPLogger := newTestAuditLogger(testBufferLength, clock.RealClock{})
 	ob, expected := newLogInfo(actionRedirect)
 
-	antreaLogger.LogDedupPacket(ob)
-	actual := <-mockAnpLogger.logged
+	auditLogger.LogDedupPacket(ob)
+	actual := <-mockNPLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
@@ -540,15 +540,15 @@ func prepareMockOFTablesWithCache() {
 
 func BenchmarkLogDedupPacketAllow(b *testing.B) {
 	// In the allow case, there is actually no buffering.
-	antreaLogger := &AntreaPolicyLogger{
+	auditLogger := &AuditLogger{
 		bufferLength:     testBufferLength,
 		clock:            clock.RealClock{},
-		anpLogger:        log.New(io.Discard, "", log.Ldate),
+		npLogger:         log.New(io.Discard, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
 	ob, _ := newLogInfo(actionAllow)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		antreaLogger.LogDedupPacket(ob)
+		auditLogger.LogDedupPacket(ob)
 	}
 }

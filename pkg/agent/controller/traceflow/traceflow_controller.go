@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -45,7 +45,6 @@ import (
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/querier"
 )
 
@@ -89,11 +88,10 @@ type Controller struct {
 	kubeClient             clientset.Interface
 	serviceLister          corelisters.ServiceLister
 	serviceListerSynced    cache.InformerSynced
-	traceflowClient        clientsetversioned.Interface
+	crdClient              clientsetversioned.Interface
 	traceflowInformer      crdinformers.TraceflowInformer
 	traceflowLister        crdlisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
-	ovsBridgeClient        ovsconfig.OVSBridgeClient
 	ofClient               openflow.Client
 	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	egressQuerier          querier.EgressQuerier
@@ -112,24 +110,22 @@ type Controller struct {
 // events.
 func NewTraceflowController(
 	kubeClient clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
-	traceflowClient clientsetversioned.Interface,
+	crdClient clientsetversioned.Interface,
+	serviceInformer coreinformers.ServiceInformer,
 	traceflowInformer crdinformers.TraceflowInformer,
 	client openflow.Client,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	egressQuerier querier.EgressQuerier,
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
 	serviceCIDR *net.IPNet) *Controller {
 	c := &Controller{
 		kubeClient:            kubeClient,
-		traceflowClient:       traceflowClient,
+		crdClient:             crdClient,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
-		ovsBridgeClient:       ovsBridgeClient,
 		ofClient:              client,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
@@ -154,8 +150,8 @@ func NewTraceflowController(
 	c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryTF), c)
 	// Add serviceLister if AntreaProxy enabled
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		c.serviceLister = informerFactory.Core().V1().Services().Lister()
-		c.serviceListerSynced = informerFactory.Core().V1().Services().Informer().HasSynced
+		c.serviceLister = serviceInformer.Lister()
+		c.serviceListerSynced = serviceInformer.Informer().HasSynced
 	}
 	return c
 }
@@ -300,16 +296,6 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 		return err
 	}
 
-	liveTraffic := tf.Spec.LiveTraffic
-	if tf.Spec.Source.Pod == "" && tf.Spec.Destination.Pod == "" {
-		klog.Errorf("Traceflow %s has neither source nor destination Pod specified", tf.Name)
-		return nil
-	}
-	if tf.Spec.Source.Pod == "" && !liveTraffic {
-		klog.Errorf("Traceflow %s does not have source Pod specified", tf.Name)
-		return nil
-	}
-
 	receiverOnly := false
 	var pod, ns string
 	if tf.Spec.Source.Pod != "" {
@@ -327,6 +313,7 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
 	isSender := len(podInterfaces) > 0 && !receiverOnly
 
+	liveTraffic := tf.Spec.LiveTraffic
 	var packet, matchPacket *binding.Packet
 	var ofPort uint32
 	if len(podInterfaces) > 0 {
@@ -388,9 +375,6 @@ func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
 	}
 	if tf.Spec.Destination.IP != "" {
 		destIP := net.ParseIP(tf.Spec.Destination.IP)
-		if destIP == nil {
-			return fmt.Errorf("destination IP is not valid: %s", tf.Spec.Destination.IP)
-		}
 		// When AntreaProxy is enabled, serviceCIDR is not required and may be set to a
 		// default value which does not match the cluster configuration.
 		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && c.serviceCIDR.Contains(destIP) {
@@ -581,7 +565,7 @@ func (c *Controller) errorTraceflowCRD(tf *crdv1beta1.Traceflow, reason string) 
 	}
 	patchData := Traceflow{Status: crdv1beta1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.traceflowClient.CrdV1beta1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
+	return c.crdClient.CrdV1beta1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
 // Delete Traceflow from cache.

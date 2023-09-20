@@ -95,8 +95,21 @@ type GroupMember struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
+// ClusterGroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	EffectiveMembers  []GroupMember
+	EffectiveIPBlocks []IPNet
+	TotalMembers      int64
+	TotalPages        int64
+	CurrentPage       int64
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// GroupMembers is a list of GroupMember objects or IPBlocks that are currently selected by a Group.
+type GroupMembers struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
 	EffectiveMembers  []GroupMember

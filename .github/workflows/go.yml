@@ -16,9 +16,10 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        show-progress: false
     - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
@@ -36,7 +37,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
@@ -55,11 +58,13 @@ jobs:
   test-unit-windows:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    name: Unit test (windows-2019)
-    runs-on: [windows-2019]
+    name: Unit test (windows-2022)
+    runs-on: [windows-2022]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
       - name: Set up Go using version from go.mod
         uses: actions/setup-go@v4
         with:
@@ -82,7 +87,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
       - name: Set up Go using version from go.mod
         uses: actions/setup-go@v4
         with:
@@ -114,7 +121,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
@@ -129,7 +138,9 @@ jobs:
     runs-on: [macos-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
       - name: Set up Go using version from go.mod
         uses: actions/setup-go@v4
         with:
@@ -144,7 +155,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
@@ -169,7 +182,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
@@ -184,7 +199,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
@@ -204,7 +221,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
@@ -240,7 +259,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
       - name: Set up Go using version from go.mod
         uses: actions/setup-go@v4
         with:
