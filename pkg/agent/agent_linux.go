@@ -46,6 +46,11 @@ func (i *Initializer) prepareHostNetwork() error {
 	return nil
 }
 
+// Assuming a page cache of 4096, based on Suricata source code from L1752-L1798
+// at https://github.com/OISF/suricata/blob/49713ebaa0b8edb057d60f1cfe9126946645a848/src/source-af-packet.c#L1757C2-L1777C129.
+// The maximum supported MTU by Suricata is 32678 after calculation.
+const maxMTUSupportedBySuricata = 32678
+
 // prepareOVSBridgeForK8sNode returns immediately on Linux if connectUplinkToBridge is false.
 func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	if !i.connectUplinkToBridge {
@@ -378,12 +383,24 @@ func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
 	returnPort, _ := i.ifaceStore.GetInterfaceByName(config.L7NetworkPolicyReturnPortName)
 	i.l7NetworkPolicyConfig.TargetOFPort = uint32(targetPort.OFPort)
 	i.l7NetworkPolicyConfig.ReturnOFPort = uint32(returnPort.OFPort)
-	// Set the ports with no-flood to reject ARP flood packets.
+	// Set the ports with no-flood to reject ARP flood packets at every startup.
 	if err := i.ovsCtlClient.SetPortNoFlood(int(targetPort.OFPort)); err != nil {
 		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyTargetPortName, err)
 	}
 	if err := i.ovsCtlClient.SetPortNoFlood(int(returnPort.OFPort)); err != nil {
 		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyReturnPortName, err)
+	}
+	// Set MTU of the ports to the calculated MTU value at every startup.
+	if err := i.setInterfaceMTU(config.L7NetworkPolicyTargetPortName, i.networkConfig.InterfaceMTU); err != nil {
+		return err
+	}
+	if err := i.setInterfaceMTU(config.L7NetworkPolicyReturnPortName, i.networkConfig.InterfaceMTU); err != nil {
+		return err
+	}
+	// Currently, the maximum of MTU supported by L7 NetworkPolicy engine Suricata is 32678 (assuming that the page size
+	// is 4096). If the calculated MTU value is greater than 32678, Suricata may fail to start.
+	if i.networkConfig.InterfaceMTU > maxMTUSupportedBySuricata {
+		klog.ErrorS(nil, "L7 NetworkPolicy engine Suricata may fail to start since the interface MTU is greater than the maximum MTU supported by Suricata", "interfaceMTU", i.networkConfig.InterfaceMTU, "maximumMTU", maxMTUSupportedBySuricata)
 	}
 
 	return nil
