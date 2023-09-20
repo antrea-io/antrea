@@ -5630,6 +5630,13 @@ data:
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     defaultMTU: 0
 
+    # packetInRate defines the OVS controller packet rate limits for different
+    # features. All features will apply this rate-limit individually on packet-in
+    # messages sent to antrea-agent. The number stands for the rate as packets per
+    # second(pps) and the burst size will be automatically set to twice the rate.
+    # When the rate and burst size are exceeded, new packets will be dropped.
+    packetInRate: 500
+
     # wireGuard specifies WireGuard related configurations.
     wireGuard:
       # The port for WireGuard to receive traffic.
@@ -6832,7 +6839,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 62fe59882b960435e6de67c414b3ea71463d9c1eb97a024a69dd0aa6e506deff
+        checksum/config: 95cb599f701a0e39878a7a5a248e2f0a053d9ebcef1c5ad2eec4f397ed7a2b7f
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -7117,7 +7124,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 62fe59882b960435e6de67c414b3ea71463d9c1eb97a024a69dd0aa6e506deff
+        checksum/config: 95cb599f701a0e39878a7a5a248e2f0a053d9ebcef1c5ad2eec4f397ed7a2b7f
       labels:
         app: antrea
         component: antrea-controller

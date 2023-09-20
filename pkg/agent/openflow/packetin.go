@@ -81,18 +81,6 @@ const (
 	PacketInMeterIDNP  = 1
 	PacketInMeterIDTF  = 2
 	PacketInMeterIDDNS = 3
-	// Meter Entry Rate. It is represented as number of events per second.
-	// Packets which exceed the rate will be dropped.
-	PacketInMeterRateNP  = 500
-	PacketInMeterRateTF  = 500
-	PacketInMeterRateDNS = 500
-
-	// PacketInQueueSize defines the size of PacketInQueue.
-	// When PacketInQueue reaches PacketInQueueSize, new packetIn will be dropped.
-	PacketInQueueSize = 1000
-	// PacketInQueueRate defines the maximum frequency of getting items from PacketInQueue.
-	// PacketInQueueRate is represented as number of events per second.
-	PacketInQueueRate = 500
 )
 
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
@@ -112,9 +100,9 @@ type featureStartPacketIn struct {
 	packetInQueue *openflow.PacketInQueue
 }
 
-func newFeatureStartPacketIn(category uint8, stopCh <-chan struct{}) *featureStartPacketIn {
+func newFeatureStartPacketIn(category uint8, stopCh <-chan struct{}, queueSize, queueRate int) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{category: category, stopCh: stopCh}
-	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(PacketInQueueSize, rate.Limit(PacketInQueueRate))
+	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(queueSize, rate.Limit(queueRate))
 
 	return &featurePacketIn
 }
@@ -124,10 +112,9 @@ func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
 	if len(c.packetInHandlers) == 0 {
 		return
 	}
-
 	// Iterate through each feature that starts packetIn. Subscribe with their specified category.
 	for category := range c.packetInHandlers {
-		featurePacketIn := newFeatureStartPacketIn(category, stopCh)
+		featurePacketIn := newFeatureStartPacketIn(category, stopCh, c.packetInRate*2, c.packetInRate)
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {
 			klog.Errorf("received error %+v while subscribing packetIn for each feature", err)

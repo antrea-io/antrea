@@ -59,6 +59,7 @@ const (
 	defaultAuditLogsMaxBackups     = 3
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
+	defaultPacketInRate            = 500
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -191,6 +192,9 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
+	}
+	if o.config.PacketInRate == 0 {
+		o.config.PacketInRate = defaultPacketInRate
 	}
 	o.setAuditLoggingDefaultOptions()
 }
