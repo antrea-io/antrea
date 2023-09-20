@@ -275,10 +275,27 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 }
 
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
-	go fa.collectingProcess.Start()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		// Waiting for this function to return on stop makes it easier to set expectations
+		// when testing. Without this, there is no guarantee that
+		// fa.collectingProcess.Start() was called by the time Run() returns.
+		// It also makes more sense to ensure that fa.collectingProcess.Stop() is always
+		// called after fa.collectingProcess.Start().
+		defer wg.Done()
+		fa.collectingProcess.Start()
+	}()
 	defer fa.collectingProcess.Stop()
-	go fa.aggregationProcess.Start()
+	wg.Add(1)
+	go func() {
+		// Same comment as above.
+		defer wg.Done()
+		fa.aggregationProcess.Start()
+	}()
 	defer fa.aggregationProcess.Stop()
+
 	if fa.ipfixExporter != nil {
 		fa.ipfixExporter.Start()
 	}
@@ -291,8 +308,15 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	if fa.logExporter != nil {
 		fa.logExporter.Start()
 	}
-	go fa.podStore.Run(stopCh)
-	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		// Waiting for this function to return on stop makes it easier to set expectations
+		// when testing.
+		defer wg.Done()
+		fa.podStore.Run(stopCh)
+	}()
+
 	wg.Add(1)
 	go func() {
 		// We want to make sure that flowExportLoop returns before
