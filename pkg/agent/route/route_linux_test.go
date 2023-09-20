@@ -74,6 +74,11 @@ func TestSyncRoutes(t *testing.T) {
 		Src:       net.ParseIP("aabb:ccdd::1"),
 		Scope:     netlink.SCOPE_LINK,
 	})
+	mockNetlink.EXPECT().RouteReplace(&netlink.Route{
+		LinkIndex: 10,
+		Dst:       ip.MustParseCIDR("fe80::/64"),
+		Scope:     netlink.SCOPE_LINK,
+	})
 
 	c := &Client{
 		netlink:       mockNetlink,
@@ -676,6 +681,7 @@ func TestReconcile(t *testing.T) {
 		{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::1/128")}, // existing podCIDR, should not be deleted.
 		{Dst: ip.MustParseCIDR("fc01::aabb:ccdd:eeff/128")},        // service route, should not be deleted.
 		{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:100b::/80")},   // non-existing podCIDR, should be deleted.
+		{Dst: ip.MustParseCIDR("fe80::/80")},                       // link-local route, should not be deleted.
 	}, nil)
 	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("192.168.11.0/24")})
 	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:100b::/80")})
