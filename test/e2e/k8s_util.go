@@ -177,7 +177,7 @@ func ProbeCommand(url, protocol, executor string) []string {
 	cmd := []string{
 		"/bin/sh",
 		"-c",
-		fmt.Sprintf(`for i in $(seq 1 3); do echo -n "${i}: " >&2 && %s /agnhost connect %s --timeout=1s --protocol=%s && echo "CONNECTED" >&2; done;`,
+		fmt.Sprintf(`for i in $(seq 1 3); do echo -n "${i}: " >&2 && %s /agnhost connect %s --timeout=1s --protocol=%s && echo "CONNECTED" >&2; done; echo "FINISHED" >&2`,
 			executor, url, protocol),
 	}
 	return cmd
