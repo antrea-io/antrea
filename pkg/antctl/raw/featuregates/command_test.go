@@ -72,16 +72,46 @@ var (
 )
 
 func TestGetFeatureGates(t *testing.T) {
-	fullResponse := []byte(`[
+	controllerRemoteResponse := []byte(`[
 		{
 			"component": "agent",
-			"name": "EndpointSlice",
+			"name": "AntreaIPAM",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
-			"name": "AntreaIPAM",
+			"name": "AntreaPolicy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "AntreaProxy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "CleanupStaleUDPSvcConntrack",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "Egress",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "EndpointSlice",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "ExternalNode",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
@@ -93,43 +123,37 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "agent",
-			"name": "NetworkPolicyStats",
-			"status": "Enabled",
-			"version": "BETA"
+			"name": "IPsecCertAuth",
+			"status": "Disabled",
+			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
-			"name": "AntreaPolicy",
-			"status": "Enabled",
-			"version": "BETA"
+			"name": "L7NetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "LoadBalancerModeDSR",
+			"status": "Disabled",
+			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
 			"name": "Multicast",
-			"status": "Disabled",
-			"version": "ALPHA"
-		},
-		{
-			"component": "agent",
-			"name": "Traceflow",
 			"status": "Enabled",
 			"version": "BETA"
 		},
 		{
 			"component": "agent",
-			"name": "ServiceExternalIP",
+			"name": "Multicluster",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
-			"name": "AntreaProxy",
-			"status": "Enabled",
-			"version": "BETA"
-		},
-		{
-			"component": "agent",
-			"name": "Egress",
+			"name": "NetworkPolicyStats",
 			"status": "Enabled",
 			"version": "BETA"
 		},
@@ -141,8 +165,50 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "agent",
-			"name": "Multicluster",
+			"name": "SecondaryNetwork",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "ServiceExternalIP",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "SupportBundleCollection",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "TopologyAwareHints",
 			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "Traceflow",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "TrafficControl",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "AdminNetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "AntreaIPAM",
+			"status": "Disabled",
 			"version": "ALPHA"
 		},
 		{
@@ -153,13 +219,43 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "controller",
-			"name": "NodeIPAM",
+			"name": "Egress",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "IPsecCertAuth",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
 		{
 			"component": "controller",
-			"name": "Traceflow",
+			"name": "L7NetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "Multicast",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "Multicluster",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "NetworkPolicyStats",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "NodeIPAM",
 			"status": "Enabled",
 			"version": "BETA"
 		},
@@ -171,13 +267,13 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "controller",
-			"name": "Egress",
-			"status": "Enabled",
-			"version": "BETA"
+			"name": "SupportBundleCollection",
+			"status": "Disabled",
+			"version": "ALPHA"
 		},
 		{
 			"component": "controller",
-			"name": "NetworkPolicyStats",
+			"name": "Traceflow",
 			"status": "Enabled",
 			"version": "BETA"
 		}
@@ -186,13 +282,43 @@ func TestGetFeatureGates(t *testing.T) {
 	agentResponse := []byte(`[
 		{
 			"component": "agent",
-			"name": "EndpointSlice",
+			"name": "AntreaIPAM",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
-			"name": "AntreaIPAM",
+			"name": "AntreaPolicy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "AntreaProxy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "CleanupStaleUDPSvcConntrack",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "Egress",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "EndpointSlice",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "ExternalNode",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
@@ -204,43 +330,37 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "agent",
-			"name": "NetworkPolicyStats",
-			"status": "Enabled",
-			"version": "BETA"
+			"name": "IPsecCertAuth",
+			"status": "Disabled",
+			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
-			"name": "AntreaPolicy",
-			"status": "Enabled",
-			"version": "BETA"
+			"name": "L7NetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "LoadBalancerModeDSR",
+			"status": "Disabled",
+			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
 			"name": "Multicast",
-			"status": "Disabled",
-			"version": "ALPHA"
-		},
-		{
-			"component": "agent",
-			"name": "Traceflow",
 			"status": "Enabled",
 			"version": "BETA"
 		},
 		{
 			"component": "agent",
-			"name": "ServiceExternalIP",
+			"name": "Multicluster",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
 		{
 			"component": "agent",
-			"name": "AntreaProxy",
-			"status": "Enabled",
-			"version": "BETA"
-		},
-		{
-			"component": "agent",
-			"name": "Egress",
+			"name": "NetworkPolicyStats",
 			"status": "Enabled",
 			"version": "BETA"
 		},
@@ -252,9 +372,312 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "agent",
-			"name": "Multicluster",
-			"status": "Enabled",
+			"name": "SecondaryNetwork",
+			"status": "Disabled",
 			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "ServiceExternalIP",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "SupportBundleCollection",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "TopologyAwareHints",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "Traceflow",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "TrafficControl",
+			"status": "Disabled",
+			"version": "ALPHA"
+		}
+	]`)
+
+	controllerRemoteWithWindowsAgentResponse := []byte(`[
+		{
+			"component": "agent",
+			"name": "AntreaIPAM",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "AntreaPolicy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "AntreaProxy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "CleanupStaleUDPSvcConntrack",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "Egress",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "EndpointSlice",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "ExternalNode",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "FlowExporter",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "IPsecCertAuth",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "L7NetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "LoadBalancerModeDSR",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "Multicast",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "Multicluster",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "NetworkPolicyStats",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "NodePortLocal",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "SecondaryNetwork",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "ServiceExternalIP",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "SupportBundleCollection",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent",
+			"name": "TopologyAwareHints",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "Traceflow",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent",
+			"name": "TrafficControl",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "AntreaPolicy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "AntreaProxy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "EndpointSlice",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "ExternalNode",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "FlowExporter",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "NetworkPolicyStats",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "NodePortLocal",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "SupportBundleCollection",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "TopologyAwareHints",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "Traceflow",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "agent-windows",
+			"name": "TrafficControl",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "AdminNetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "AntreaIPAM",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "AntreaPolicy",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "Egress",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "IPsecCertAuth",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "L7NetworkPolicy",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "Multicast",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "Multicluster",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "NetworkPolicyStats",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "NodeIPAM",
+			"status": "Enabled",
+			"version": "BETA"
+		},
+		{
+			"component": "controller",
+			"name": "ServiceExternalIP",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "SupportBundleCollection",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "Traceflow",
+			"status": "Enabled",
+			"version": "BETA"
 		}
 	]`)
 
@@ -268,22 +691,182 @@ func TestGetFeatureGates(t *testing.T) {
 		expectedOutput string
 	}{
 		{
-			name:           "get featuregates out of Pod",
-			runE:           controllerRemoteRunE,
-			expectedOutput: "Antrea Agent Feature Gates\nFEATUREGATE              STATUS         VERSION   \nEndpointSlice            Disabled       ALPHA     \nAntreaIPAM               Disabled       ALPHA     \nFlowExporter             Disabled       ALPHA     \nNetworkPolicyStats       Enabled        BETA      \nAntreaPolicy             Enabled        BETA      \nMulticast                Disabled       ALPHA     \nTraceflow                Enabled        BETA      \nServiceExternalIP        Disabled       ALPHA     \nAntreaProxy              Enabled        BETA      \nEgress                   Enabled        BETA      \nNodePortLocal            Enabled        BETA      \nMulticluster             Enabled        ALPHA     \nAntrea Controller Feature Gates\nFEATUREGATE              STATUS         VERSION   \nAntreaPolicy             Enabled        BETA      \nNodeIPAM                 Disabled       ALPHA     \nTraceflow                Enabled        BETA      \nServiceExternalIP        Disabled       ALPHA     \nEgress                   Enabled        BETA      \nNetworkPolicyStats       Enabled        BETA      \n",
-			response:       fullResponse,
+			name: "get featuregates out of Pod",
+			runE: controllerRemoteRunE,
+			expectedOutput: `Antrea Agent Feature Gates
+FEATUREGATE                     STATUS       VERSION
+AntreaIPAM                      Disabled     ALPHA
+AntreaPolicy                    Enabled      BETA
+AntreaProxy                     Enabled      BETA
+CleanupStaleUDPSvcConntrack     Disabled     ALPHA
+Egress                          Enabled      BETA
+EndpointSlice                   Enabled      BETA
+ExternalNode                    Disabled     ALPHA
+FlowExporter                    Disabled     ALPHA
+IPsecCertAuth                   Disabled     ALPHA
+L7NetworkPolicy                 Disabled     ALPHA
+LoadBalancerModeDSR             Disabled     ALPHA
+Multicast                       Enabled      BETA
+Multicluster                    Disabled     ALPHA
+NetworkPolicyStats              Enabled      BETA
+NodePortLocal                   Enabled      BETA
+SecondaryNetwork                Disabled     ALPHA
+ServiceExternalIP               Disabled     ALPHA
+SupportBundleCollection         Disabled     ALPHA
+TopologyAwareHints              Enabled      BETA
+Traceflow                       Enabled      BETA
+TrafficControl                  Disabled     ALPHA
+
+Antrea Controller Feature Gates
+FEATUREGATE                 STATUS       VERSION
+AdminNetworkPolicy          Disabled     ALPHA
+AntreaIPAM                  Disabled     ALPHA
+AntreaPolicy                Enabled      BETA
+Egress                      Enabled      BETA
+IPsecCertAuth               Disabled     ALPHA
+L7NetworkPolicy             Disabled     ALPHA
+Multicast                   Enabled      BETA
+Multicluster                Disabled     ALPHA
+NetworkPolicyStats          Enabled      BETA
+NodeIPAM                    Enabled      BETA
+ServiceExternalIP           Disabled     ALPHA
+SupportBundleCollection     Disabled     ALPHA
+Traceflow                   Enabled      BETA
+`,
+			response: controllerRemoteResponse,
 		},
 		{
-			name:           "get featuregates in agent Pod",
-			runE:           agentRunE,
-			expectedOutput: "Antrea Agent Feature Gates\nFEATUREGATE              STATUS         VERSION   \nEndpointSlice            Disabled       ALPHA     \nAntreaIPAM               Disabled       ALPHA     \nFlowExporter             Disabled       ALPHA     \nNetworkPolicyStats       Enabled        BETA      \nAntreaPolicy             Enabled        BETA      \nMulticast                Disabled       ALPHA     \nTraceflow                Enabled        BETA      \nServiceExternalIP        Disabled       ALPHA     \nAntreaProxy              Enabled        BETA      \nEgress                   Enabled        BETA      \nNodePortLocal            Enabled        BETA      \nMulticluster             Enabled        ALPHA     \n",
-			response:       agentResponse,
+			name: "get featuregates in agent Pod",
+			runE: agentRunE,
+			expectedOutput: `Antrea Agent Feature Gates
+FEATUREGATE                     STATUS       VERSION
+AntreaIPAM                      Disabled     ALPHA
+AntreaPolicy                    Enabled      BETA
+AntreaProxy                     Enabled      BETA
+CleanupStaleUDPSvcConntrack     Disabled     ALPHA
+Egress                          Enabled      BETA
+EndpointSlice                   Enabled      BETA
+ExternalNode                    Disabled     ALPHA
+FlowExporter                    Disabled     ALPHA
+IPsecCertAuth                   Disabled     ALPHA
+L7NetworkPolicy                 Disabled     ALPHA
+LoadBalancerModeDSR             Disabled     ALPHA
+Multicast                       Enabled      BETA
+Multicluster                    Disabled     ALPHA
+NetworkPolicyStats              Enabled      BETA
+NodePortLocal                   Enabled      BETA
+SecondaryNetwork                Disabled     ALPHA
+ServiceExternalIP               Disabled     ALPHA
+SupportBundleCollection         Disabled     ALPHA
+TopologyAwareHints              Enabled      BETA
+Traceflow                       Enabled      BETA
+TrafficControl                  Disabled     ALPHA
+`,
+			response: agentResponse,
 		},
 		{
-			name:           "get featuregates in controller Pod",
-			runE:           controllerLocalRunE,
-			expectedOutput: "Antrea Agent Feature Gates\nFEATUREGATE              STATUS         VERSION   \nEndpointSlice            Disabled       ALPHA     \nAntreaIPAM               Disabled       ALPHA     \nFlowExporter             Disabled       ALPHA     \nNetworkPolicyStats       Enabled        BETA      \nAntreaPolicy             Enabled        BETA      \nMulticast                Disabled       ALPHA     \nTraceflow                Enabled        BETA      \nServiceExternalIP        Disabled       ALPHA     \nAntreaProxy              Enabled        BETA      \nEgress                   Enabled        BETA      \nNodePortLocal            Enabled        BETA      \nMulticluster             Enabled        ALPHA     \nAntrea Controller Feature Gates\nFEATUREGATE              STATUS         VERSION   \nAntreaPolicy             Enabled        BETA      \nNodeIPAM                 Disabled       ALPHA     \nTraceflow                Enabled        BETA      \nServiceExternalIP        Disabled       ALPHA     \nEgress                   Enabled        BETA      \nNetworkPolicyStats       Enabled        BETA      \n",
-			response:       fullResponse,
+			name: "get featuregates in controller Pod",
+			runE: controllerLocalRunE,
+			expectedOutput: `Antrea Agent Feature Gates
+FEATUREGATE                     STATUS       VERSION
+AntreaIPAM                      Disabled     ALPHA
+AntreaPolicy                    Enabled      BETA
+AntreaProxy                     Enabled      BETA
+CleanupStaleUDPSvcConntrack     Disabled     ALPHA
+Egress                          Enabled      BETA
+EndpointSlice                   Enabled      BETA
+ExternalNode                    Disabled     ALPHA
+FlowExporter                    Disabled     ALPHA
+IPsecCertAuth                   Disabled     ALPHA
+L7NetworkPolicy                 Disabled     ALPHA
+LoadBalancerModeDSR             Disabled     ALPHA
+Multicast                       Enabled      BETA
+Multicluster                    Disabled     ALPHA
+NetworkPolicyStats              Enabled      BETA
+NodePortLocal                   Enabled      BETA
+SecondaryNetwork                Disabled     ALPHA
+ServiceExternalIP               Disabled     ALPHA
+SupportBundleCollection         Disabled     ALPHA
+TopologyAwareHints              Enabled      BETA
+Traceflow                       Enabled      BETA
+TrafficControl                  Disabled     ALPHA
+
+Antrea Controller Feature Gates
+FEATUREGATE                 STATUS       VERSION
+AdminNetworkPolicy          Disabled     ALPHA
+AntreaIPAM                  Disabled     ALPHA
+AntreaPolicy                Enabled      BETA
+Egress                      Enabled      BETA
+IPsecCertAuth               Disabled     ALPHA
+L7NetworkPolicy             Disabled     ALPHA
+Multicast                   Enabled      BETA
+Multicluster                Disabled     ALPHA
+NetworkPolicyStats          Enabled      BETA
+NodeIPAM                    Enabled      BETA
+ServiceExternalIP           Disabled     ALPHA
+SupportBundleCollection     Disabled     ALPHA
+Traceflow                   Enabled      BETA
+`,
+			response: controllerRemoteResponse,
+		},
+		{
+			name: "get featuregates in controller Pod with Windows agent",
+			runE: controllerLocalRunE,
+			expectedOutput: `Antrea Agent Feature Gates
+FEATUREGATE                     STATUS       VERSION
+AntreaIPAM                      Disabled     ALPHA
+AntreaPolicy                    Enabled      BETA
+AntreaProxy                     Enabled      BETA
+CleanupStaleUDPSvcConntrack     Disabled     ALPHA
+Egress                          Enabled      BETA
+EndpointSlice                   Enabled      BETA
+ExternalNode                    Disabled     ALPHA
+FlowExporter                    Disabled     ALPHA
+IPsecCertAuth                   Disabled     ALPHA
+L7NetworkPolicy                 Disabled     ALPHA
+LoadBalancerModeDSR             Disabled     ALPHA
+Multicast                       Enabled      BETA
+Multicluster                    Disabled     ALPHA
+NetworkPolicyStats              Enabled      BETA
+NodePortLocal                   Enabled      BETA
+SecondaryNetwork                Disabled     ALPHA
+ServiceExternalIP               Disabled     ALPHA
+SupportBundleCollection         Disabled     ALPHA
+TopologyAwareHints              Enabled      BETA
+Traceflow                       Enabled      BETA
+TrafficControl                  Disabled     ALPHA
+
+Antrea Agent Feature Gates (Windows)
+FEATUREGATE                 STATUS       VERSION
+AntreaPolicy                Enabled      BETA
+AntreaProxy                 Enabled      BETA
+EndpointSlice               Enabled      BETA
+ExternalNode                Disabled     ALPHA
+FlowExporter                Disabled     ALPHA
+NetworkPolicyStats          Enabled      BETA
+NodePortLocal               Enabled      BETA
+SupportBundleCollection     Disabled     ALPHA
+TopologyAwareHints          Enabled      BETA
+Traceflow                   Enabled      BETA
+TrafficControl              Disabled     ALPHA
+
+Antrea Controller Feature Gates
+FEATUREGATE                 STATUS       VERSION
+AdminNetworkPolicy          Disabled     ALPHA
+AntreaIPAM                  Disabled     ALPHA
+AntreaPolicy                Enabled      BETA
+Egress                      Enabled      BETA
+IPsecCertAuth               Disabled     ALPHA
+L7NetworkPolicy             Disabled     ALPHA
+Multicast                   Enabled      BETA
+Multicluster                Disabled     ALPHA
+NetworkPolicyStats          Enabled      BETA
+NodeIPAM                    Enabled      BETA
+ServiceExternalIP           Disabled     ALPHA
+SupportBundleCollection     Disabled     ALPHA
+Traceflow                   Enabled      BETA
+`,
+			response: controllerRemoteWithWindowsAgentResponse,
 		},
 	}
 
