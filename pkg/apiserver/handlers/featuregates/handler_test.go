@@ -99,7 +99,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 			want: []Response{
 				{Component: "agent-windows", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled", Version: "BETA"},
+				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled"},
 				{Component: "agent-windows", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
