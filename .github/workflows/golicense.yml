@@ -21,6 +21,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        show-progress: false
     - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
@@ -34,6 +35,8 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v4
+      with:
+        show-progress: false
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v4
       with:
