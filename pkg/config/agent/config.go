@@ -199,6 +199,12 @@ type AgentConfig struct {
 	AuditLogging AuditLoggingConfig `yaml:"auditLogging,omitempty"`
 	// Antrea's native secondary network configuration.
 	SecondaryNetwork SecondaryNetworkConfig `yaml:"secondaryNetwork,omitempty"`
+	// PacketInRate defines the OVS controller packet rate limits for different
+	// features. All features will apply this rate-limit individually on packet-in
+	// messages sent to antrea-agent. The number stands for the rate as packets per
+	// second(pps) and the burst size will be automatically set to twice the rate.
+	// When the rate and burst size are exceeded, new packets will be dropped.
+	PacketInRate int `yaml:"packetInRate,omitempty"`
 }
 
 type AntreaProxyConfig struct {

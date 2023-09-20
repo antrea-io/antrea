@@ -170,6 +170,7 @@ func run(o *Options) error {
 		enableMulticlusterGW,
 		groupIDAllocator,
 		*o.config.EnablePrometheusMetrics,
+		o.config.PacketInRate,
 	)
 
 	var serviceCIDRNet *net.IPNet
