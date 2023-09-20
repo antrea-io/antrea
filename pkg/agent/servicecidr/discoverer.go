@@ -42,7 +42,7 @@ const (
 type EventHandler func(serviceCIDRs []*net.IPNet)
 
 type Interface interface {
-	GetServiceCIDR(isIPv6 bool) (*net.IPNet, error)
+	GetServiceCIDRs() ([]*net.IPNet, error)
 	// The added handlers will be called when Service CIDR changes.
 	AddEventHandler(handler EventHandler)
 }
@@ -56,6 +56,8 @@ type Discoverer struct {
 	eventHandlers   []EventHandler
 	// queue maintains the Service objects that need to be synced.
 	queue workqueue.Interface
+	// initialized indicates whether the Discoverer has been initialized.
+	initialized bool
 }
 
 func NewServiceCIDRDiscoverer(serviceInformer coreinformers.ServiceInformer) *Discoverer {
@@ -104,19 +106,20 @@ func (d *Discoverer) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func (d *Discoverer) GetServiceCIDR(isIPv6 bool) (*net.IPNet, error) {
+func (d *Discoverer) GetServiceCIDRs() ([]*net.IPNet, error) {
 	d.RLock()
 	defer d.RUnlock()
-	if isIPv6 {
-		if d.serviceIPv6CIDR == nil {
-			return nil, fmt.Errorf("Service IPv6 CIDR is not available yet")
-		}
-		return d.serviceIPv6CIDR, nil
+	if !d.initialized {
+		return nil, fmt.Errorf("Service CIDR discoverer is not initialized yet")
 	}
-	if d.serviceIPv4CIDR == nil {
-		return nil, fmt.Errorf("Service IPv4 CIDR is not available yet")
+	var serviceCIDRs []*net.IPNet
+	if d.serviceIPv4CIDR != nil {
+		serviceCIDRs = append(serviceCIDRs, d.serviceIPv4CIDR)
 	}
-	return d.serviceIPv4CIDR, nil
+	if d.serviceIPv6CIDR != nil {
+		serviceCIDRs = append(serviceCIDRs, d.serviceIPv6CIDR)
+	}
+	return serviceCIDRs, nil
 }
 
 func (d *Discoverer) AddEventHandler(handler EventHandler) {
@@ -178,8 +181,10 @@ func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 					continue
 				}
 			} else {
+				mask := net.CIDRMask(mask, mask)
+				clusterIP := clusterIP.Mask(mask)
 				// If the calculated Service CIDR doesn't exist, generate a new Service CIDR with the ClusterIP.
-				newServiceCIDR = &net.IPNet{IP: clusterIP, Mask: net.CIDRMask(mask, mask)}
+				newServiceCIDR = &net.IPNet{IP: clusterIP, Mask: mask}
 			}
 
 			if isIPv6 {
@@ -207,6 +212,7 @@ func (d *Discoverer) updateServiceCIDR(svcs ...*corev1.Service) {
 			klog.InfoS("Service IPv6 CIDR was updated", "ServiceCIDR", curServiceIPv6CIDR)
 			newServiceCIDRs = append(newServiceCIDRs, curServiceIPv6CIDR)
 		}
+		d.initialized = true
 	}()
 	for _, handler := range d.eventHandlers {
 		handler(newServiceCIDRs)
