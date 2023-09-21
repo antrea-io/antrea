@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	mock "github.com/golang/mock/gomock"
+	mock "go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

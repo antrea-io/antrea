@@ -28,7 +28,7 @@ import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	ovsctl "antrea.io/antrea/pkg/ovs/ovsctl"
 	querier "antrea.io/antrea/pkg/querier"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	kubernetes "k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/listers/core/v1"
 	reflect "reflect"

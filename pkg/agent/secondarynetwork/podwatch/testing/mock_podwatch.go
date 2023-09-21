@@ -21,7 +21,7 @@ package testing
 
 import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

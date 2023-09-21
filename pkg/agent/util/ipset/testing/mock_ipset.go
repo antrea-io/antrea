@@ -21,7 +21,7 @@ package testing
 
 import (
 	ipset "antrea.io/antrea/pkg/agent/util/ipset"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

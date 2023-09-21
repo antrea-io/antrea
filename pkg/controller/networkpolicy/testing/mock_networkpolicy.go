@@ -21,7 +21,7 @@ package testing
 
 import (
 	networkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

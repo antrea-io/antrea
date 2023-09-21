@@ -21,7 +21,7 @@ package testing
 
 import (
 	memberlist "antrea.io/antrea/pkg/agent/memberlist"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	sets "k8s.io/apimachinery/pkg/util/sets"
 	reflect "reflect"
 )

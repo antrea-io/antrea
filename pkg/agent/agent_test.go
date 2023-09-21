@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	mock "github.com/golang/mock/gomock"
+	mock "go.uber.org/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"

@@ -25,7 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/util/logdir"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

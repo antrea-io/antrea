@@ -22,7 +22,7 @@ package testing
 import (
 	config "antrea.io/antrea/pkg/agent/config"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	net "net"
 	reflect "reflect"
 )

@@ -21,7 +21,7 @@ package testing
 
 import (
 	options "antrea.io/antrea/pkg/flowaggregator/options"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	entities "github.com/vmware/go-ipfix/pkg/entities"
 	reflect "reflect"
 )

@@ -20,7 +20,7 @@
 package testing
 
 import (
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	entities "github.com/vmware/go-ipfix/pkg/entities"
 	intermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	reflect "reflect"

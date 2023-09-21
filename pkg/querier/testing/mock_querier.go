@@ -25,7 +25,7 @@ import (
 	types "antrea.io/antrea/pkg/agent/types"
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	querier "antrea.io/antrea/pkg/querier"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	types0 "k8s.io/apimachinery/pkg/types"
 	reflect "reflect"
 )

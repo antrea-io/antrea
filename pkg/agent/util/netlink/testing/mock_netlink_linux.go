@@ -20,7 +20,7 @@
 package testing
 
 import (
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	netlink "github.com/vishvananda/netlink"
 	net "net"
 	reflect "reflect"

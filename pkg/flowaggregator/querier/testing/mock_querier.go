@@ -21,7 +21,7 @@ package testing
 
 import (
 	querier "antrea.io/antrea/pkg/flowaggregator/querier"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	intermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	reflect "reflect"
 )

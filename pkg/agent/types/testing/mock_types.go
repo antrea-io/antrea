@@ -21,7 +21,7 @@ package testing
 
 import (
 	types "antrea.io/antrea/pkg/agent/types"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	net "net"
 	reflect "reflect"
 )

@@ -21,7 +21,7 @@ package testing
 
 import (
 	iptables "antrea.io/antrea/pkg/agent/util/iptables"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

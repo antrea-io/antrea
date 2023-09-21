@@ -20,7 +20,7 @@
 package memberlist
 
 import (
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	memberlist "github.com/hashicorp/memberlist"
 	reflect "reflect"
 	time "time"

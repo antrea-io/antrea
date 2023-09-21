@@ -21,7 +21,7 @@ package testing
 
 import (
 	flowexporter "antrea.io/antrea/pkg/agent/flowexporter"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

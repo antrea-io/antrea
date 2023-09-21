@@ -21,7 +21,7 @@ package leader
 
 import (
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

@@ -20,7 +20,7 @@
 package testing
 
 import (
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	v10 "k8s.io/api/discovery/v1"
 	reflect "reflect"

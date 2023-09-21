@@ -21,7 +21,7 @@ package testing
 
 import (
 	ovsctl "antrea.io/antrea/pkg/ovs/ovsctl"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

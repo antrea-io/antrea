@@ -21,7 +21,7 @@ package testing
 
 import (
 	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

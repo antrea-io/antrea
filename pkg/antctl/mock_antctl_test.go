@@ -20,7 +20,7 @@
 package antctl
 
 import (
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	io "io"
 	reflect "reflect"
 )

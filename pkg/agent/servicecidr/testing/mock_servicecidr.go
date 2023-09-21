@@ -21,7 +21,7 @@ package testing
 
 import (
 	servicecidr "antrea.io/antrea/pkg/agent/servicecidr"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	net "net"
 	reflect "reflect"
 )

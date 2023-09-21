@@ -23,7 +23,7 @@ import (
 	ipam "antrea.io/antrea/pkg/agent/cniserver/ipam"
 	types "antrea.io/antrea/pkg/agent/cniserver/types"
 	invoke "github.com/containernetworking/cni/pkg/invoke"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

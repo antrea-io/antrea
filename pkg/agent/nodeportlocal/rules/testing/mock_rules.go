@@ -21,7 +21,7 @@ package testing
 
 import (
 	rules "antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

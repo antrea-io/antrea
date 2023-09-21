@@ -22,7 +22,7 @@ package testing
 import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	proxy "antrea.io/antrea/third_party/proxy"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	reflect "reflect"
 )
 

@@ -22,7 +22,7 @@ If you make any change to any `types.go`, you can re-generate the code by invoki
 
 ## Mocks
 
-Antrea uses the [GoMock](https://github.com/golang/mock) framework for its unit tests.
+Antrea uses the [GoMock](https://github.com/uber-go/mock) framework for its unit tests.
 
 If you add or modify interfaces that need to be mocked, please add or update `MOCKGEN_TARGETS` in
 [update-codegen-dockerized.sh](../../hack/update-codegen-dockerized.sh) accordingly. All the mocks for a
