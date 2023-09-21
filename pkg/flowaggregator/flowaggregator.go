@@ -285,16 +285,16 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		// It also makes more sense to ensure that fa.collectingProcess.Stop() is always
 		// called after fa.collectingProcess.Start().
 		defer wg.Done()
+		// blocking function, will return when fa.collectingProcess.Stop() is called
 		fa.collectingProcess.Start()
 	}()
-	defer fa.collectingProcess.Stop()
 	wg.Add(1)
 	go func() {
 		// Same comment as above.
 		defer wg.Done()
+		// blocking function, will return when fa.aggregationProcess.Stop() is called
 		fa.aggregationProcess.Start()
 	}()
-	defer fa.aggregationProcess.Stop()
 
 	if fa.ipfixExporter != nil {
 		fa.ipfixExporter.Start()
@@ -339,6 +339,8 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		fa.configWatcher.Close()
 	}()
 	<-stopCh
+	fa.collectingProcess.Stop()
+	fa.aggregationProcess.Stop()
 	wg.Wait()
 }
 
