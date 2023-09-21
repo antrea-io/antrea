@@ -282,8 +282,6 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		// Waiting for this function to return on stop makes it easier to set expectations
 		// when testing. Without this, there is no guarantee that
 		// fa.collectingProcess.Start() was called by the time Run() returns.
-		// It also makes more sense to ensure that fa.collectingProcess.Stop() is always
-		// called after fa.collectingProcess.Start().
 		defer wg.Done()
 		// blocking function, will return when fa.collectingProcess.Stop() is called
 		fa.collectingProcess.Start()
