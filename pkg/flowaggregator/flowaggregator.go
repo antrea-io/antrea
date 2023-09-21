@@ -275,21 +275,21 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 }
 
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
-	var wg sync.WaitGroup
+	var wg, ipfixProcessesWg sync.WaitGroup
 
-	wg.Add(1)
+	ipfixProcessesWg.Add(1)
 	go func() {
 		// Waiting for this function to return on stop makes it easier to set expectations
 		// when testing. Without this, there is no guarantee that
 		// fa.collectingProcess.Start() was called by the time Run() returns.
-		defer wg.Done()
+		defer ipfixProcessesWg.Done()
 		// blocking function, will return when fa.collectingProcess.Stop() is called
 		fa.collectingProcess.Start()
 	}()
-	wg.Add(1)
+	ipfixProcessesWg.Add(1)
 	go func() {
 		// Same comment as above.
-		defer wg.Done()
+		defer ipfixProcessesWg.Done()
 		// blocking function, will return when fa.aggregationProcess.Stop() is called
 		fa.aggregationProcess.Start()
 	}()
@@ -337,9 +337,14 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		fa.configWatcher.Close()
 	}()
 	<-stopCh
-	fa.collectingProcess.Stop()
-	fa.aggregationProcess.Stop()
+	// Wait for fa.podStore.Run, fa.flowExportLoop and fa.watchConfiguration to return.
 	wg.Wait()
+	// Stop fa.collectingProcess and fa.aggregationProcess, and wait for their Start function to
+	// return. There should be no strict requirement to stop these processes last, but we
+	// preserve existing behavior from older code.
+	fa.aggregationProcess.Stop()
+	fa.collectingProcess.Stop()
+	ipfixProcessesWg.Wait()
 }
 
 // flowExportLoop is the main loop for the FlowAggregator. It runs in a single
