@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 func makeService(namespace, name string, clusterIP string, protocol corev1.Protocol) *corev1.Service {
@@ -54,12 +56,10 @@ func TestServiceCIDRProvider(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	svcInformer := informerFactory.Core().V1().Services()
 	serviceCIDRProvider := NewServiceCIDRDiscoverer(svcInformer)
-	serviceCIDRChan := make(chan *net.IPNet)
+	serviceCIDRChan := make(chan []*net.IPNet)
 	serviceCIDRProvider.AddEventHandler(func(serviceCIDRs []*net.IPNet) {
 		{
-			for _, serviceCIDR := range serviceCIDRs {
-				serviceCIDRChan <- serviceCIDR
-			}
+			serviceCIDRChan <- serviceCIDRs
 		}
 	})
 
@@ -69,11 +69,11 @@ func TestServiceCIDRProvider(t *testing.T) {
 	informerFactory.WaitForCacheSync(stopCh)
 	go serviceCIDRProvider.Run(stopCh)
 
-	check := func(expectedServiceCIDR string, isServiceCIDRUpdated, isIPv6 bool) {
-		if isServiceCIDRUpdated {
+	check := func(expectedServiceCIDRs []*net.IPNet, expectedEvent []*net.IPNet) {
+		if expectedEvent != nil {
 			select {
 			case event := <-serviceCIDRChan:
-				assert.Equal(t, expectedServiceCIDR, event.String())
+				assert.Equal(t, expectedEvent, event)
 			case <-time.After(time.Second):
 				t.Fatalf("timed out waiting for expected Service CIDR")
 			}
@@ -84,70 +84,72 @@ func TestServiceCIDRProvider(t *testing.T) {
 			case <-time.After(100 * time.Millisecond):
 			}
 		}
-		serviceCIDR, err := serviceCIDRProvider.GetServiceCIDR(isIPv6)
-		if expectedServiceCIDR != "" {
+		serviceCIDRs, err := serviceCIDRProvider.GetServiceCIDRs()
+		if expectedServiceCIDRs != nil {
 			assert.NoError(t, err)
-			assert.Equal(t, expectedServiceCIDR, serviceCIDR.String())
+			assert.Equal(t, expectedServiceCIDRs, serviceCIDRs)
 		} else {
-			assert.ErrorContains(t, err, "CIDR is not available yet")
+			assert.ErrorContains(t, err, "Service CIDR discoverer is not initialized yet")
 		}
 	}
+
+	check(nil, nil)
 
 	svc := makeService("ns1", "svc0", "None", corev1.ProtocolTCP)
 	_, err := client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("", false, false)
+	check(nil, nil)
 
 	svc = makeService("ns1", "svc1", "10.10.0.1", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10.10.0.1/32", true, false)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.1/32")}, []*net.IPNet{ip.MustParseCIDR("10.10.0.1/32")})
 
 	svc = makeService("ns1", "svc2", "10.10.0.2", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10.10.0.0/30", true, false)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/30")}, []*net.IPNet{ip.MustParseCIDR("10.10.0.0/30")})
 
 	svc = makeService("ns1", "svc5", "10.10.0.5", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10.10.0.0/29", true, false)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29")}, []*net.IPNet{ip.MustParseCIDR("10.10.0.0/29")})
 
 	svc = makeService("ns1", "svc4", "10.10.0.4", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10.10.0.0/29", false, false)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29")}, nil)
 
 	err = client.CoreV1().Services("ns1").Delete(context.TODO(), "svc4", metav1.DeleteOptions{})
 	assert.NoError(t, err)
-	check("10.10.0.0/29", false, false)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29")}, nil)
 
 	svc = makeService("ns1", "svc60", "None", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("", false, true)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29")}, nil)
 
 	svc = makeService("ns1", "svc61", "10::1", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10::1/128", true, true)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29"), ip.MustParseCIDR("10::1/128")}, []*net.IPNet{ip.MustParseCIDR("10::1/128")})
 
 	svc = makeService("ns1", "svc62", "10::2", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10::/126", true, true)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29"), ip.MustParseCIDR("10::/126")}, []*net.IPNet{ip.MustParseCIDR("10::/126")})
 
 	svc = makeService("ns1", "svc65", "10::5", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10::/125", true, true)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29"), ip.MustParseCIDR("10::/125")}, []*net.IPNet{ip.MustParseCIDR("10::/125")})
 
 	svc = makeService("ns1", "svc64", "10::4", corev1.ProtocolTCP)
 	_, err = client.CoreV1().Services("ns1").Create(context.TODO(), svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
-	check("10::/125", false, true)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29"), ip.MustParseCIDR("10::/125")}, nil)
 
 	err = client.CoreV1().Services("ns1").Delete(context.TODO(), "svc64", metav1.DeleteOptions{})
 	assert.NoError(t, err)
-	check("10::/125", false, true)
+	check([]*net.IPNet{ip.MustParseCIDR("10.10.0.0/29"), ip.MustParseCIDR("10::/125")}, nil)
 }

@@ -1465,6 +1465,87 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 	assert.ElementsMatch(t, expectedFlowKeys, flowKeys)
 }
 
+func Test_client_InstallSNATBypassServiceFlows(t *testing.T) {
+	testCases := []struct {
+		name             string
+		serviceCIDRs     []*net.IPNet
+		newServiceCIDRs  []*net.IPNet
+		expectedFlows    []string
+		expectedNewFlows []string
+	}{
+		{
+			name: "IPv4",
+			serviceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/24"),
+			},
+			newServiceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/16"),
+			},
+			expectedFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/24 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/16 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
+			name: "IPv6",
+			serviceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("1096::/80"),
+			},
+			newServiceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("1096::/64"),
+			},
+			expectedFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/80 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/64 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
+			name: "dual-stack",
+			serviceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/24"),
+				utilip.MustParseCIDR("1096::/80"),
+			},
+			newServiceCIDRs: []*net.IPNet{
+				utilip.MustParseCIDR("10.96.0.0/16"),
+				utilip.MustParseCIDR("1096::/64"),
+			},
+			expectedFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/24 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/80 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+			expectedNewFlows: []string{
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=10.96.0.0/16 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ipv6,ipv6_dst=1096::/64 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+			defer resetPipelines()
+
+			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+			assert.NoError(t, fc.InstallSNATBypassServiceFlows(tc.serviceCIDRs))
+			fCacheI, ok := fc.featureEgress.cachedFlows.Load("svc-cidrs")
+			require.True(t, ok)
+			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
+
+			m.EXPECT().BundleOps(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			assert.NoError(t, fc.InstallSNATBypassServiceFlows(tc.newServiceCIDRs))
+			fCacheI, ok = fc.featureEgress.cachedFlows.Load("svc-cidrs")
+			require.True(t, ok)
+			assert.ElementsMatch(t, tc.expectedNewFlows, getFlowStrings(fCacheI))
+		})
+	}
+}
+
 func Test_client_InstallSNATMarkFlows(t *testing.T) {
 	mark := uint32(100)
 
