@@ -29,9 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
+	"go.uber.org/mock/gomock"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"

@@ -20,9 +20,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
+	"go.uber.org/mock/gomock"
 
 	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
 )

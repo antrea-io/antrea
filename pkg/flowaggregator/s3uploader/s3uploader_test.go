@@ -25,11 +25,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"go.uber.org/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
+	"go.uber.org/mock/gomock"
 
 	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"

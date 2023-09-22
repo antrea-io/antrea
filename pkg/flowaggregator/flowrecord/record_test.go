@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
+	"go.uber.org/mock/gomock"
 
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
 )

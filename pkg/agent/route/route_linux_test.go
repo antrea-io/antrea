@@ -20,9 +20,9 @@ import (
 	"sync"
 	"testing"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
 	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"

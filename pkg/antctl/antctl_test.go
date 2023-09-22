@@ -20,9 +20,9 @@ import (
 	"os"
 	"testing"
 
-	"go.uber.org/mock/gomock"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	antreaversion "antrea.io/antrea/pkg/version"
 )

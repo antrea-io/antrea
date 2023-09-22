@@ -18,8 +18,8 @@ import (
 	"sort"
 	"testing"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/types"
 
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"

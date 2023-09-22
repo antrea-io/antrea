@@ -17,8 +17,8 @@ package openflow
 import (
 	"testing"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
