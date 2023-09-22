@@ -26,6 +26,7 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -245,7 +246,7 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 	randomNum := int(getRandomNum(int64(testNumOfConns - testNumOfDyingConns)))
 	for i := 0; i < testNumOfConns; i++ {
 		// create and add connection to connection store
-		var src, dst, svc net.IP
+		var src, dst, svc netip.Addr
 		if testWithIPv6 {
 			src = exptest.RandIPv6()
 			dst = exptest.RandIPv6()
@@ -293,7 +294,7 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 
 func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueue *priorityqueue.ExpirePriorityQueue) {
 	for i := 0; i < testNumOfDenyConns; i++ {
-		var src, dst net.IP
+		var src, dst netip.Addr
 		if testWithIPv6 {
 			src = exptest.RandIPv6()
 			dst = exptest.RandIPv6()

@@ -15,7 +15,7 @@
 package connections
 
 import (
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -52,7 +52,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
 	refTime := time.Now()
 	// Flow-1, which is already in connectionStore
-	tuple1 := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple1 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	testFlows[0] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
 		StopTime:        refTime,
@@ -64,7 +64,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		IsPresent:       true,
 	}
 	// Flow-2, which is not in connectionStore
-	tuple2 := flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple2 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	testFlows[1] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
 		StopTime:        refTime,
@@ -107,7 +107,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	// test on deny connection store
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	denyConnStore := NewDenyConnectionStore(mockPodStore, nil, testFlowExporterOptions)
-	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	conn := &flowexporter.Connection{
 		FlowKey: tuple,
 	}

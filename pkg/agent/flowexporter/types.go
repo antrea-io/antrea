@@ -15,17 +15,20 @@
 package flowexporter
 
 import (
-	"net"
+	"net/netip"
 	"time"
 )
 
-type ConnectionKey [5]string
+// We use a type alias here, as a way to minimize code changes: ConnectionKey used to be its own
+// type, and ConnectionKey values were generated from Tuple values. Because of changes to the Tuple
+// type (net.IP -> netip.Addr), Tuple is now comparable and can be used as a map key directly.
+type ConnectionKey = Tuple
 
 type ConnectionMapCallBack func(key ConnectionKey, conn *Connection) error
 
 type Tuple struct {
-	SourceAddress      net.IP
-	DestinationAddress net.IP
+	SourceAddress      netip.Addr
+	DestinationAddress netip.Addr
 	Protocol           uint8
 	SourcePort         uint16
 	DestinationPort    uint16
@@ -60,7 +63,7 @@ type Connection struct {
 	DestinationPodNamespace        string
 	DestinationPodName             string
 	DestinationServicePortName     string
-	DestinationServiceAddress      net.IP
+	DestinationServiceAddress      netip.Addr
 	DestinationServicePort         uint16
 	IngressNetworkPolicyName       string
 	IngressNetworkPolicyNamespace  string

@@ -109,7 +109,7 @@ func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 	srcPod, srcFound := cs.podStore.GetPodByIPAndTime(srcIP, conn.StartTime)
 	dstPod, dstFound := cs.podStore.GetPodByIPAndTime(dstIP, conn.StartTime)
 	if !srcFound && !dstFound {
-		klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", srcIP, dstIP)
+		klog.InfoS("Cannot map any of the connection IPs to a local Pod", "srcIP", srcIP, "dstIP", dstIP)
 	}
 	if srcFound {
 		conn.SourcePodName = srcPod.Name

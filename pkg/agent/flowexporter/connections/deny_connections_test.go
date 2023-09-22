@@ -16,7 +16,7 @@ package connections
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -35,7 +35,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// Create flow for testing adding and updating of same connection.
 	refTime := time.Now()
-	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	servicePortName := k8sproxy.ServicePortName{
 		NamespacedName: types.NamespacedName{
 			Namespace: "serviceNS1",

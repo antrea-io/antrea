@@ -16,17 +16,17 @@ package testing
 
 import (
 	"crypto/rand"
-	"net"
+	"net/netip"
 )
 
-func RandIPv4() net.IP {
-	ip := make([]byte, net.IPv4len)
-	rand.Read(ip)
-	return ip
+func RandIPv4() netip.Addr {
+	var ip [4]byte
+	rand.Read(ip[:])
+	return netip.AddrFrom4(ip)
 }
 
-func RandIPv6() net.IP {
-	ip := make([]byte, net.IPv6len)
-	rand.Read(ip)
-	return ip
+func RandIPv6() netip.Addr {
+	var ip [16]byte
+	rand.Read(ip[:])
+	return netip.AddrFrom16(ip)
 }
