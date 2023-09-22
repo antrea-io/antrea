@@ -152,7 +152,12 @@ export NO_PULL
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
 
 function export_govc_env_var {
-    export GOVC_URL=$GOVC_URL
+    env_govc="${WORKDIR}/govc.env"
+    if [ -f "$env_govc" ]; then
+        source "$env_govc"
+    else
+        export GOVC_URL=$GOVC_URL
+    fi
     export GOVC_USERNAME=$GOVC_USERNAME
     export GOVC_PASSWORD=$GOVC_PASSWORD
     export GOVC_INSECURE=1
@@ -522,8 +527,6 @@ function  build_and_deliver_antrea_windows_and_linux_containerd_images {
     kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true || true
 
     prepare_env
-    ${CLEAN_STALE_IMAGES_CONTAINERD}
-    ${PRINT_CONTAINERD_STATUS}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     # Clean docker image to save disk space.
@@ -564,8 +567,8 @@ function deliver_antrea_linux_containerd {
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
     common_images=("registry.k8s.io/e2e-test-images/agnhost:2.29")
-    k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.40" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
-    e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.40" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
+    k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
+    e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
 
     for i in "${!harbor_images[@]}"; do
         ctr -n=k8s.io images delete "${antrea_images[i]}"
@@ -617,8 +620,8 @@ function deliver_antrea_windows_containerd {
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
-        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.40" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
-        e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.40" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
+        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
+        e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
         # Pull necessary images in advance to avoid transient error
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
