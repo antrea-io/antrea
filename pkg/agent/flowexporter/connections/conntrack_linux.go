@@ -20,6 +20,7 @@ package connections
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/ti-mo/conntrack"
@@ -36,19 +37,20 @@ var _ ConnTrackDumper = new(connTrackSystem)
 
 type connTrackSystem struct {
 	nodeConfig           *config.NodeConfig
-	serviceCIDRv4        *net.IPNet
-	serviceCIDRv6        *net.IPNet
+	serviceCIDRv4        netip.Prefix
+	serviceCIDRv6        netip.Prefix
 	isAntreaProxyEnabled bool
 	connTrack            NetFilterConnTrack
 }
 
 // TODO: detect the endianness of the system when initializing conntrack dumper to handle situations on big-endian platforms.
 // All connection labels are required to store in little endian format in conntrack dumper.
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
 	}
+
 	return &connTrackSystem{
 		nodeConfig,
 		serviceCIDRv4,
@@ -122,9 +124,23 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 }
 
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
+	convIP := func(ip net.IP) netip.Addr {
+		// IPv4 addresses in conntrack.Flow are stored as IPv4-mapped IPv6 addresses. If we
+		// use netip.AddrFromSlice directly, we will end up with a netip.Addr object of type
+		// Is4In6, and when we call String() on that object, it will be formatted with a
+		// "::ffff:" prefix before the dotted quad.
+		ip4 := ip.To4()
+		if ip4 != nil {
+			addr, _ := netip.AddrFromSlice(ip4)
+			return addr
+		}
+		addr, _ := netip.AddrFromSlice(ip)
+		return addr
+	}
+
 	tuple := flowexporter.Tuple{
-		SourceAddress:      conn.TupleOrig.IP.SourceAddress,
-		DestinationAddress: conn.TupleReply.IP.SourceAddress,
+		SourceAddress:      convIP(conn.TupleOrig.IP.SourceAddress),
+		DestinationAddress: convIP(conn.TupleReply.IP.SourceAddress),
 		Protocol:           conn.TupleOrig.Proto.Protocol,
 		SourcePort:         conn.TupleOrig.Proto.SourcePort,
 		DestinationPort:    conn.TupleReply.Proto.SourcePort,
@@ -141,7 +157,7 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		LabelsMask:                conn.LabelsMask,
 		StatusFlag:                uint32(conn.Status.Value),
 		FlowKey:                   tuple,
-		DestinationServiceAddress: conn.TupleOrig.IP.DestinationAddress,
+		DestinationServiceAddress: convIP(conn.TupleOrig.IP.DestinationAddress),
 		DestinationServicePort:    conn.TupleOrig.Proto.DestinationPort,
 		OriginalPackets:           conn.CountersOrig.Packets,
 		OriginalBytes:             conn.CountersOrig.Bytes,

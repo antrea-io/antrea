@@ -19,7 +19,7 @@ package connections
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -33,7 +33,7 @@ type connTrackOvsCtlWindows struct {
 
 func (ct *connTrackOvsCtlWindows) GetMaxConnections() (int, error) {
 	var zoneID int
-	if ct.serviceCIDRv4 != nil {
+	if !ct.serviceCIDRv4.IsValid() {
 		zoneID = openflow.CtZone
 	} else {
 		zoneID = openflow.CtZoneV6
@@ -57,6 +57,6 @@ func (ct *connTrackOvsCtlWindows) GetMaxConnections() (int, error) {
 	return 0, fmt.Errorf("couldn't find limit field in dpctl/ct-get-limits command output '%s'", cmdOutput)
 }
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtlWindows {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackOvsCtlWindows {
 	return &connTrackOvsCtlWindows{*NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)}
 }

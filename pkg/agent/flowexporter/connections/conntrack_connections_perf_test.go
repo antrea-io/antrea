@@ -22,7 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"math/big"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -51,8 +51,8 @@ const (
 )
 
 var (
-	svcIPv4 = net.ParseIP("10.0.0.1")
-	svcIPv6 = net.ParseIP("2001:0:3238:dfe1:63::fefc")
+	svcIPv4 = netip.MustParseAddr("10.0.0.1")
+	svcIPv6 = netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 )
 
 /*
@@ -188,7 +188,7 @@ func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Conn
 func getNewConn() *flowexporter.Connection {
 	randomNum1 := getRandomNum(255)
 	randomNum2 := getRandomNum(255)
-	var src, dst, svc net.IP
+	var src, dst, svc netip.Addr
 	if testWithIPv6 {
 		src = exptest.RandIPv6()
 		dst = exptest.RandIPv6()

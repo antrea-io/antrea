@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -457,10 +458,10 @@ func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElement
 func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8, tcpState string) *flowexporter.Connection {
 	var tuple flowexporter.Tuple
 	if !isIPv6 {
-		tuple = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+		tuple = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	} else {
-		srcIP := net.ParseIP("2001:0:3238:dfe1:63::fefb")
-		dstIP := net.ParseIP("2001:0:3238:dfe1:63::fefc")
+		srcIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefb")
+		dstIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 		tuple = flowexporter.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &flowexporter.Connection{
@@ -494,10 +495,10 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 func getDenyConnection(isIPv6 bool, protoID uint8) *flowexporter.Connection {
 	var tuple, _ flowexporter.Tuple
 	if !isIPv6 {
-		tuple = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+		tuple = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	} else {
-		srcIP := net.ParseIP("2001:0:3238:dfe1:63::fefb")
-		dstIP := net.ParseIP("2001:0:3238:dfe1:63::fefc")
+		srcIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefb")
+		dstIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 		tuple = flowexporter.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &flowexporter.Connection{

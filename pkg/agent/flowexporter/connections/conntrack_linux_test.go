@@ -16,6 +16,7 @@ package connections
 
 import (
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"testing"
@@ -35,15 +36,33 @@ import (
 )
 
 var (
+	srcAddr       = netip.MustParseAddr("1.2.3.4")
+	dstAddr       = netip.MustParseAddr("4.3.2.1")
+	svcAddr       = netip.MustParseAddr("100.50.25.5")
+	gwAddr        = netip.MustParseAddr("8.7.6.5")
+	_, podCIDR, _ = net.ParseCIDR("1.2.3.0/24")
+	svcCIDR       = netip.MustParsePrefix("100.50.25.0/24")
+
 	conntrackFlowTuple = conntrack.Tuple{
 		IP: conntrack.IPTuple{
-			SourceAddress:      net.IP{1, 2, 3, 4},
-			DestinationAddress: net.IP{4, 3, 2, 1},
+			SourceAddress:      srcAddr.AsSlice(),
+			DestinationAddress: dstAddr.AsSlice(),
 		},
 		Proto: conntrack.ProtoTuple{
 			Protocol:        6,
 			SourcePort:      65280,
 			DestinationPort: 255,
+		},
+	}
+	conntrackFlowTupleReply = conntrack.Tuple{
+		IP: conntrack.IPTuple{
+			SourceAddress:      dstAddr.AsSlice(),
+			DestinationAddress: srcAddr.AsSlice(),
+		},
+		Proto: conntrack.ProtoTuple{
+			Protocol:        6,
+			SourcePort:      255,
+			DestinationPort: 65280,
 		},
 	}
 )
@@ -52,18 +71,17 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	// Create flows for test
-
-	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple := flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: dstAddr, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	antreaFlow := &flowexporter.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	tuple = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{100, 50, 25, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: svcAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	antreaServiceFlow := &flowexporter.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
 	}
-	tuple = flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple = flowexporter.Tuple{SourceAddress: srcAddr, DestinationAddress: gwAddr, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	antreaGWFlow := &flowexporter.Connection{
 		FlowKey: tuple,
 		Zone:    openflow.CtZone,
@@ -77,23 +95,15 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
-		IPv4: net.IP{8, 7, 6, 5},
+		IPv4: gwAddr.AsSlice(),
 	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: gwConfig,
-		PodIPv4CIDR: &net.IPNet{
-			IP:   net.IP{1, 2, 3, 0},
-			Mask: net.IPMask{255, 255, 255, 0},
-		},
-	}
-	// Create serviceCIDR
-	serviceCIDR := &net.IPNet{
-		IP:   net.IP{100, 50, 25, 0},
-		Mask: net.IPMask{255, 255, 255, 0},
+		PodIPv4CIDR:   podCIDR,
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem := NewConnTrackSystem(nodeConfig, serviceCIDR, nil, false)
+	connDumperDPSystem := NewConnTrackSystem(nodeConfig, svcCIDR, netip.Prefix{}, false)
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
@@ -115,21 +125,17 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	// Create nodeConfig and gateWayConfig
 	// Set antreaGWFlow.TupleOrig.IP.DestinationAddress as gateway IP
 	gwConfig := &config.GatewayConfig{
-		IPv4: net.IP{8, 7, 6, 5},
+		IPv4: gwAddr.AsSlice(),
 	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig: gwConfig,
 	}
-	// Create serviceCIDR
-	serviceCIDR := &net.IPNet{
-		IP:   net.IP{100, 50, 25, 0},
-		Mask: net.IPMask{255, 255, 255, 0},
-	}
+	serviceCIDR := netip.MustParsePrefix("10.96.0.0/24")
 
 	connDumper := &connTrackOvsCtl{
 		nodeConfig,
 		serviceCIDR,
-		nil,
+		netip.Prefix{},
 		mockOVSCtlClient,
 		false,
 	}
@@ -148,13 +154,13 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		StatusFlag: 302,
 		Mark:       openflow.ServiceCTMark.GetValue(),
 		FlowKey: flowexporter.Tuple{
-			SourceAddress:      net.ParseIP("100.10.0.105"),
-			DestinationAddress: net.ParseIP("100.10.0.106"),
+			SourceAddress:      netip.MustParseAddr("100.10.0.105"),
+			DestinationAddress: netip.MustParseAddr("100.10.0.106"),
 			Protocol:           6,
 			SourcePort:         uint16(41284),
 			DestinationPort:    uint16(6443),
 		},
-		DestinationServiceAddress: net.ParseIP("10.96.0.1"),
+		DestinationServiceAddress: netip.MustParseAddr("10.96.0.1"),
 		DestinationServicePort:    uint16(443),
 		OriginalPackets:           343260,
 		OriginalBytes:             19340621,
@@ -182,7 +188,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
-	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{}, &net.IPNet{}, false)
+	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, netip.Prefix{}, netip.Prefix{}, false)
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	expMaxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
@@ -198,8 +204,8 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(expMaxConns)), nil)
 	connDumper := &connTrackOvsCtl{
 		&config.NodeConfig{},
-		&net.IPNet{},
-		&net.IPNet{},
+		netip.Prefix{},
+		netip.Prefix{},
 		mockOVSCtlClient,
 		false,
 	}
@@ -211,11 +217,20 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 	// Create new conntrack flow with status set to assured.
 	netlinkFlow := &conntrack.Flow{
-		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTuple, TupleMaster: conntrackFlowTuple,
+		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTupleReply, TupleMaster: conntrackFlowTuple,
 		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured}, Mark: 0x1234, Zone: 2,
 		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
 	}
-	tuple := flowexporter.Tuple{SourceAddress: conntrackFlowTuple.IP.SourceAddress, DestinationAddress: conntrackFlowTuple.IP.SourceAddress, Protocol: conntrackFlowTuple.Proto.Protocol, SourcePort: conntrackFlowTuple.Proto.SourcePort, DestinationPort: conntrackFlowTuple.Proto.SourcePort}
+	sourceAddr, _ := netip.AddrFromSlice(conntrackFlowTuple.IP.SourceAddress)
+	destinationAddr, _ := netip.AddrFromSlice(conntrackFlowTupleReply.IP.SourceAddress)
+	destinationServiceAddr, _ := netip.AddrFromSlice(conntrackFlowTuple.IP.DestinationAddress)
+	tuple := flowexporter.Tuple{
+		SourceAddress:      sourceAddr,
+		DestinationAddress: destinationAddr,
+		Protocol:           conntrackFlowTuple.Proto.Protocol,
+		SourcePort:         conntrackFlowTuple.Proto.SourcePort,
+		DestinationPort:    conntrackFlowTupleReply.Proto.SourcePort,
+	}
 	expectedAntreaFlow := &flowexporter.Connection{
 		Timeout:                   netlinkFlow.Timeout,
 		StartTime:                 netlinkFlow.Timestamp.Start,
@@ -224,7 +239,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		StatusFlag:                0x4,
 		Mark:                      0x1234,
 		FlowKey:                   tuple,
-		DestinationServiceAddress: conntrackFlowTuple.IP.DestinationAddress,
+		DestinationServiceAddress: destinationServiceAddr,
 		DestinationServicePort:    conntrackFlowTuple.Proto.DestinationPort,
 		OriginalPackets:           netlinkFlow.CountersOrig.Packets,
 		OriginalBytes:             netlinkFlow.CountersOrig.Bytes,
@@ -245,7 +260,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 
 	// Create new conntrack flow with status set to dying connection.
 	netlinkFlow = &conntrack.Flow{
-		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTuple, TupleMaster: conntrackFlowTuple,
+		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTupleReply, TupleMaster: conntrackFlowTuple,
 		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured | conntrack.StatusDying}, Mark: 0x1234, Zone: 2,
 		Timestamp: conntrack.Timestamp{
 			Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC),
@@ -261,7 +276,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		StatusFlag:                0x204,
 		Mark:                      0x1234,
 		FlowKey:                   tuple,
-		DestinationServiceAddress: conntrackFlowTuple.IP.DestinationAddress,
+		DestinationServiceAddress: destinationServiceAddr,
 		DestinationServicePort:    conntrackFlowTuple.Proto.DestinationPort,
 		OriginalPackets:           netlinkFlow.CountersOrig.Packets,
 		OriginalBytes:             netlinkFlow.CountersOrig.Bytes,

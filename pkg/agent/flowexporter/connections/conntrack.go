@@ -16,6 +16,7 @@ package connections
 
 import (
 	"net"
+	"net/netip"
 
 	"k8s.io/klog/v2"
 
@@ -26,15 +27,24 @@ import (
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
 func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType ovsconfig.OVSDatapathType, isAntreaProxyEnabled bool) ConnTrackDumper {
+	var svcCIDRv4, svcCIDRv6 netip.Prefix
+	if serviceCIDRv4 != nil {
+		svcCIDRv4 = netip.MustParsePrefix(serviceCIDRv4.String())
+	}
+	if serviceCIDRv6 != nil {
+		svcCIDRv6 = netip.MustParsePrefix(serviceCIDRv6.String())
+	}
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)
+		connTrackDumper = NewConnTrackSystem(nodeConfig, svcCIDRv4, svcCIDRv6, isAntreaProxyEnabled)
 	}
 	return connTrackDumper
 }
 
-func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, zoneFilter uint16, isAntreaProxyEnabled bool) []*flowexporter.Connection {
+func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool) []*flowexporter.Connection {
 	filteredConns := conns[:0]
+	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
+	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue
@@ -43,10 +53,10 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		dstIP := conn.FlowKey.DestinationAddress
 
 		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
-		if srcIP.Equal(nodeConfig.GatewayConfig.IPv4) || dstIP.Equal(nodeConfig.GatewayConfig.IPv4) {
+		if srcIP == gwIPv4 || dstIP == gwIPv4 {
 			continue
 		}
-		if srcIP.Equal(nodeConfig.GatewayConfig.IPv6) || dstIP.Equal(nodeConfig.GatewayConfig.IPv6) {
+		if srcIP == gwIPv6 || dstIP == gwIPv6 {
 			continue
 		}
 

@@ -17,7 +17,7 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
@@ -109,16 +109,15 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// Get 5-tuple information
+	sourceAddr, _ := netip.AddrFromSlice(packet.SourceIP)
+	destinationAddr, _ := netip.AddrFromSlice(packet.DestinationIP)
 	tuple := flowexporter.Tuple{
-		SourcePort:      packet.SourcePort,
-		DestinationPort: packet.DestinationPort,
-		Protocol:        packet.IPProto,
+		SourceAddress:      sourceAddr,
+		DestinationAddress: destinationAddr,
+		SourcePort:         packet.SourcePort,
+		DestinationPort:    packet.DestinationPort,
+		Protocol:           packet.IPProto,
 	}
-	// Make deep copy of IP addresses
-	tuple.SourceAddress = make(net.IP, len(packet.SourceIP))
-	tuple.DestinationAddress = make(net.IP, len(packet.DestinationIP))
-	copy(tuple.SourceAddress, packet.SourceIP)
-	copy(tuple.DestinationAddress, packet.DestinationIP)
 
 	// Generate deny connection and add to deny connection store
 	denyConn := flowexporter.Connection{}

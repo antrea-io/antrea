@@ -17,7 +17,7 @@ package connections
 import (
 	"encoding/hex"
 	"fmt"
-	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -66,13 +66,13 @@ var _ ConnTrackDumper = new(connTrackOvsCtl)
 
 type connTrackOvsCtl struct {
 	nodeConfig           *config.NodeConfig
-	serviceCIDRv4        *net.IPNet
-	serviceCIDRv6        *net.IPNet
+	serviceCIDRv4        netip.Prefix
+	serviceCIDRv6        netip.Prefix
 	ovsctlClient         ovsctl.OVSCtlClient
 	isAntreaProxyEnabled bool
 }
 
-func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {
+func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackOvsCtl {
 	return &connTrackOvsCtl{
 		nodeConfig,
 		serviceCIDRv4,
@@ -148,14 +148,26 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 		case strings.Contains(fs, "src"):
 			fields := strings.Split(fs, "=")
 			if !isReply {
-				conn.FlowKey.SourceAddress = net.ParseIP(fields[len(fields)-1])
+				srcAddr, err := netip.ParseAddr(fields[len(fields)-1])
+				if err != nil {
+					return nil, fmt.Errorf("parsing source address failed: %w", err)
+				}
+				conn.FlowKey.SourceAddress = srcAddr
 			} else {
-				conn.FlowKey.DestinationAddress = net.ParseIP(fields[len(fields)-1])
+				dstAddr, err := netip.ParseAddr(fields[len(fields)-1])
+				if err != nil {
+					return nil, fmt.Errorf("parsing destination address failed: %w", err)
+				}
+				conn.FlowKey.DestinationAddress = dstAddr
 			}
 		case strings.Contains(fs, "dst"):
 			fields := strings.Split(fs, "=")
 			if !isReply {
-				conn.DestinationServiceAddress = net.ParseIP(fields[len(fields)-1])
+				svcAddr, err := netip.ParseAddr(fields[len(fields)-1])
+				if err != nil {
+					return nil, fmt.Errorf("parsing destination service address failed: %w", err)
+				}
+				conn.DestinationServiceAddress = svcAddr
 			}
 		case strings.Contains(fs, "sport"):
 			fields := strings.Split(fs, "=")

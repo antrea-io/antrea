@@ -19,7 +19,7 @@ package agent
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -53,7 +53,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 	testConns := make([]*flowexporter.Connection, 2)
 	testConnKeys := make([]*flowexporter.ConnectionKey, 2)
 	// Flow-1
-	tuple1 := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple1 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	testConn1 := &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
 		StopTime:        refTime,
@@ -67,7 +67,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 	testConns[0] = testConn1
 	testConnKeys[0] = &testConnKey1
 	// Flow-2
-	tuple2 := flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple2 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	testConn2 := &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
 		StopTime:        refTime,
@@ -84,7 +84,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 	return testConns, testConnKeys
 }
 
-func preparePodInformation(podName string, podNS string, ip *net.IP) *v1.Pod {
+func preparePodInformation(podName string, podNS string, ip netip.Addr) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: podNS,
@@ -112,8 +112,8 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Prepare connections and pod store for test
 	testConns, testConnKeys := createConnsForTest()
 	testPods := make([]*v1.Pod, 2)
-	testPods[0] = preparePodInformation("pod1", "ns1", &testConns[0].FlowKey.SourceAddress)
-	testPods[1] = preparePodInformation("pod2", "ns2", &testConns[1].FlowKey.DestinationAddress)
+	testPods[0] = preparePodInformation("pod1", "ns1", testConns[0].FlowKey.SourceAddress)
+	testPods[1] = preparePodInformation("pod2", "ns2", testConns[1].FlowKey.DestinationAddress)
 
 	// Create connectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
