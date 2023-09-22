@@ -42,4 +42,6 @@ function docker_run() {
 		"${IMAGE_NAME}" bash -c "git config --global --add safe.directory ${ANTREA_PATH} && $@"
 }
 
-docker_run hack/update-codegen-dockerized.sh "$@"
+# Combine hack/update-codegen-dockerized.sh and the arguments to the script as a
+# single argument to the docker_run function.
+docker_run "hack/update-codegen-dockerized.sh $@"
