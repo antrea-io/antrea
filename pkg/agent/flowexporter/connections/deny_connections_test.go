@@ -17,19 +17,15 @@ package connections
 import (
 	"fmt"
 	"net"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/metrics"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
@@ -37,7 +33,6 @@ import (
 
 func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
 	// Create flow for testing adding and updating of same connection.
 	refTime := time.Now()
 	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
@@ -74,7 +69,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	expConn := testFlow
 	expConn.DestinationServicePortName = servicePortName.String()
 	actualConn, ok := denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&testFlow))
-	assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
+	assert.True(t, ok, "deny connection should be there in deny connection store")
 	assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
 	assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
 	assert.Equal(t, refTime.Add(-(time.Second * 20)), actualConn.LastExportTime, "LastExportTime should be set to StartTime during Add")
@@ -91,14 +86,4 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len())
 	assert.Equal(t, refTime.Add(-(time.Second * 20)), actualConn.LastExportTime, "LastExportTime should not be changed during Update")
 	checkDenyConnectionMetrics(t, len(denyConnStore.connections))
-}
-
-func checkDenyConnectionMetrics(t *testing.T, numConns int) {
-	expectedDenyConnectionCount := `
-	# HELP antrea_agent_denied_connection_count [ALPHA] Number of denied connections detected by Flow Exporter deny connections tracking. This metric gets updated when a flow is rejected/dropped by network policy.
-	# TYPE antrea_agent_denied_connection_count gauge
-	`
-	expectedDenyConnectionCount = expectedDenyConnectionCount + fmt.Sprintf("antrea_agent_denied_connection_count %d\n", numConns)
-	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedDenyConnectionCount), "antrea_agent_denied_connection_count")
-	assert.NoError(t, err)
 }

@@ -173,6 +173,10 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, o)
 
+	if nodeRouteController == nil {
+		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
+	}
+
 	return &FlowExporter{
 		collectorAddr:          o.FlowCollectorAddr,
 		conntrackConnStore:     conntrackConnStore,
