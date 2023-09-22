@@ -814,7 +814,7 @@ func TestCNIServerChaining(t *testing.T) {
 		containerIntf, err := util.GetNSDevInterface(netNS.Path(), IFName)
 		testRequire.Nil(err)
 
-		orderedCalls := make([]*mock.Call, 0)
+		orderedCalls := make([]any, 0)
 		testNodeConfig.GatewayConfig.Name = testPatchPortName
 
 		// Pod port expectations
