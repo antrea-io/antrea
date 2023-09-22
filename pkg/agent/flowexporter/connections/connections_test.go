@@ -104,7 +104,6 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 
 func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
 	// test on deny connection store
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	denyConnStore := NewDenyConnectionStore(mockPodStore, nil, testFlowExporterOptions)

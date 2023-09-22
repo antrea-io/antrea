@@ -29,7 +29,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
@@ -51,7 +50,7 @@ var (
 
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
+
 	// Create flows for test
 
 	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
@@ -109,7 +108,6 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 
 func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
 
 	// Create mock interface
 	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
