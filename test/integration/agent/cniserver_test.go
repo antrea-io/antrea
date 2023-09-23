@@ -34,12 +34,12 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+	mock "go.uber.org/mock/gomock"
 	k8sFake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
@@ -814,7 +814,7 @@ func TestCNIServerChaining(t *testing.T) {
 		containerIntf, err := util.GetNSDevInterface(netNS.Path(), IFName)
 		testRequire.Nil(err)
 
-		orderedCalls := make([]*mock.Call, 0)
+		orderedCalls := make([]any, 0)
 		testNodeConfig.GatewayConfig.Name = testPatchPortName
 
 		// Pod port expectations

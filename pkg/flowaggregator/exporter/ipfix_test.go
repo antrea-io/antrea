@@ -19,12 +19,12 @@ import (
 	"net"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"go.uber.org/mock/gomock"
 	"k8s.io/client-go/kubernetes/fake"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"

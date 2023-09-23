@@ -21,8 +21,8 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"

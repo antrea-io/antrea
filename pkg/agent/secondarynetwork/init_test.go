@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	mock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	mock "go.uber.org/mock/gomock"
 
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"

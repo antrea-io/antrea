@@ -20,9 +20,9 @@ package portcache
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"

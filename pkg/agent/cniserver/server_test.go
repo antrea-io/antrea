@@ -24,10 +24,10 @@ import (
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"

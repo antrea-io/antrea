@@ -23,10 +23,10 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+	"go.uber.org/mock/gomock"
 
 	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
 )

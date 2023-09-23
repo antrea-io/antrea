@@ -27,9 +27,9 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
