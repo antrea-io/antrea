@@ -23,7 +23,7 @@ import (
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	context "context"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"

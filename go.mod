@@ -25,7 +25,6 @@ require (
 	github.com/gammazero/deque v0.1.2
 	github.com/go-logr/logr v1.2.4
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.3.1
@@ -52,7 +51,8 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/ti-mo/conntrack v0.4.0
 	github.com/vishvananda/netlink v1.1.1-0.20211101163509-b10eb8fe5cf6
-	github.com/vmware/go-ipfix v0.6.2
+	github.com/vmware/go-ipfix v0.7.0
+	go.uber.org/mock v0.3.0
 	golang.org/x/crypto v0.13.0
 	golang.org/x/mod v0.12.0
 	golang.org/x/net v0.15.0

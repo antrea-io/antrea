@@ -20,8 +20,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"

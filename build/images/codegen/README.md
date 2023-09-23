@@ -18,17 +18,18 @@ The `docker push` command will fail if you do not have permission to push to the
 
 Here is the table of codegen images that have been uploaded:
 
-| Tag                            | Change                                  |
-| :----------------------------- | --------------------------------------- |
-| kubernetes-1.26.4-build.0      | Upgraded Go to v1.21                    |
-| kubernetes-1.26.4              | Upgraded K8s libraries to v1.26.4       |
-| kubernetes-1.24.0-build.2      | Upgraded base image to ubuntu:22.04     |
-| kubernetes-1.24.0-build.1      | Upgraded Go to v1.19                    |
-| kubernetes-1.24.0-build.0      | Add controller-gen v0.9.0               |
-| kubernetes-1.24.0              | Upgraded K8s libraries to v1.24.0       |
-| kubernetes-1.21.0-build.1      | Upgraded protoc-gen-go to v1.5.2        |
-| kubernetes-1.21.0-build.0      | Upgraded Go to v1.17                    |
-| kubernetes-1.21.0              | Upgraded K8s libraries to v1.21.0       |
-| kubernetes-1.19.8              | Upgraded K8s libraries to v1.19.8       |
-| kubernetes-1.18.4              | Upgraded K8s libraries to v1.18.4       |
-| kubernetes-1.17.6              | Upgraded K8s libraries to v1.17.6       |
+| Tag                            | Change                                               |
+| :----------------------------- | ---------------------------------------------------- |
+| kubernetes-1.26.4-build.1      | Replace github.com/golang/mock with go.uber.org/mock |
+| kubernetes-1.26.4-build.0      | Upgraded Go to v1.21                                 |
+| kubernetes-1.26.4              | Upgraded K8s libraries to v1.26.4                    |
+| kubernetes-1.24.0-build.2      | Upgraded base image to ubuntu:22.04                  |
+| kubernetes-1.24.0-build.1      | Upgraded Go to v1.19                                 |
+| kubernetes-1.24.0-build.0      | Add controller-gen v0.9.0                            |
+| kubernetes-1.24.0              | Upgraded K8s libraries to v1.24.0                    |
+| kubernetes-1.21.0-build.1      | Upgraded protoc-gen-go to v1.5.2                     |
+| kubernetes-1.21.0-build.0      | Upgraded Go to v1.17                                 |
+| kubernetes-1.21.0              | Upgraded K8s libraries to v1.21.0                    |
+| kubernetes-1.19.8              | Upgraded K8s libraries to v1.19.8                    |
+| kubernetes-1.18.4              | Upgraded K8s libraries to v1.18.4                    |
+| kubernetes-1.17.6              | Upgraded K8s libraries to v1.17.6                    |
