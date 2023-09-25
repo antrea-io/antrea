@@ -763,7 +763,8 @@ func (c *client) InstallServiceFlows(config *types.ServiceConfig) error {
 	if config.AffinityTimeout != 0 {
 		flows = append(flows, c.featureService.serviceLearnFlow(config))
 	}
-	if !config.IsExternal && !config.IsNested {
+	if c.enableMulticluster && !config.IsExternal && !config.IsNested {
+		// Currently, this flow is only used in multi-cluster.
 		flows = append(flows, c.featureService.endpointRedirectFlowForServiceIP(config))
 	}
 	if config.IsDSR {

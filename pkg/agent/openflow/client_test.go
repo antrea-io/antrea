@@ -1207,6 +1207,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		isNodePort         bool
 		isNested           bool
 		isDSR              bool
+		enableMulticluster bool
 		expectedFlows      []string
 	}{
 		{
@@ -1214,7 +1215,6 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			protocol: binding.ProtocolTCP,
 			svcIP:    svcIPv4,
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x64->reg7,group:100",
 			},
 		},
@@ -1224,18 +1224,29 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			trafficPolicyLocal: true,
 			svcIP:              svcIPv4,
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:101",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x65->reg7,group:101",
 			},
 		},
 		{
-			name:     "Service ClusterIP, nested",
+			name:     "Service ClusterIP,multicluster,nested",
 			protocol: binding.ProtocolTCP,
 			svcIP:    svcIPv4,
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x64->reg7,set_field:0x1000000/0x1000000->reg4,group:100",
 			},
-			isNested: true,
+			isNested:           true,
+			enableMulticluster: true,
+		},
+		{
+			name:     "Service ClusterIP,multicluster,non-nested",
+			protocol: binding.ProtocolTCP,
+			svcIP:    svcIPv4,
+			expectedFlows: []string{
+				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x64->reg7,group:100",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:100",
+			},
+			isNested:           false,
+			enableMulticluster: true,
 		},
 		{
 			name:            "Service ClusterIP,SessionAffinity",
@@ -1243,7 +1254,6 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			svcIP:           svcIPv4,
 			affinityTimeout: uint16(100),
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp,reg3=0xa600064,reg4=0x1020050/0x107ffff actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x64->reg7,group:100",
 				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
@@ -1254,7 +1264,6 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,tcp6,reg4=0x1020050/0x107ffff,xxreg3=0xfec00010009600000000000000000100 actions=group:100",
 				"cookie=0x1030000000000, table=ServiceLB, priority=200,tcp6,reg4=0x10000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x30000/0x70000->reg4,set_field:0x64->reg7,group:100",
 				"cookie=0x1030000000064, table=ServiceLB, priority=190,tcp6,reg4=0x30000/0x70000,ipv6_dst=fec0:10:96::100,tp_dst=80 actions=learn(table=SessionAffinity,hard_timeout=100,priority=200,delete_learned,cookie=0x1030000000064,eth_type=0x86dd,nw_proto=0x6,OXM_OF_TCP_DST[],NXM_NX_IPV6_DST[],NXM_NX_IPV6_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_XXREG3[]->NXM_NX_XXREG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT",
 			},
@@ -1393,6 +1402,9 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			var options []clientOptionsFn
 			if tc.isDSR {
 				options = append(options, enableDSR)
+			}
+			if tc.enableMulticluster {
+				options = append(options, enableMulticluster)
 			}
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, options...)
 			defer resetPipelines()
