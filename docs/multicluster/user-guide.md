@@ -117,9 +117,13 @@ To deploy Multi-cluster Controller in a dual-role cluster, please refer to
 
 #### Deploy in a Dedicated Leader Cluster
 
-Run the following command to install Multi-cluster Controller in the leader cluster.
-Multi-cluster Controller is deployed into a Namespace. You must create the Namespace
-first, and then apply the deployment manifest in the Namespace.
+Since Antrea v1.14.0, you can run the following command to install Multi-cluster Controller
+in the leader cluster. Multi-cluster Controller is deployed into a Namespace. You must
+create the Namespace first, and then apply the deployment manifest in the Namespace.
+
+For a version older than v1.14, please check the user guide document of the version:
+`https://github.com/antrea-io/antrea/blob/release-$version/docs/multicluster/user-guide.md`,
+where `$version` can be `1.12`, `1.13` etc.
 
    ```bash
    kubectl create ns antrea-multicluster
