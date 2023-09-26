@@ -7078,6 +7078,10 @@ spec:
           key: node-role.kubernetes.io/master
         - effect: NoSchedule
           key: node-role.kubernetes.io/control-plane
+        - effect: NoExecute
+          key: node.kubernetes.io/unreachable
+          operator: Exists
+          tolerationSeconds: 0
       serviceAccountName: antrea-controller
       containers:
         - name: antrea-controller
