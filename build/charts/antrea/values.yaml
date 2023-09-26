@@ -296,6 +296,13 @@ controller:
     # Control-plane taint for Kubernetes >= 1.24.
     - key: node-role.kubernetes.io/control-plane
       effect: NoSchedule
+    # Evict it immediately once Node is detected unreachable.
+    # Must be set explicitly, otherwise DefaultTolerationSeconds plugin will
+    # add a default toleration with tolerationSeconds of 300s.
+    - key: node.kubernetes.io/unreachable
+      effect: NoExecute
+      operator: Exists
+      tolerationSeconds: 0
   # -- Node selector for the antrea-controller Pod.
   nodeSelector:
     kubernetes.io/os: linux
