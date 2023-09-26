@@ -102,6 +102,80 @@ func TestGetNodeAddrs(t *testing.T) {
 			expectedAddr: nil,
 			expectedErr:  fmt.Errorf("no IP with type in [InternalIP ExternalIP] was found for Node 'foo'"),
 		},
+		{
+			name: "dual stack Internal IP addresses",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "192.168.10.10",
+						},
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "abcd::1",
+						},
+					},
+				},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.10.10"), IPv6: net.ParseIP("abcd::1")},
+			expectedErr:  nil,
+		},
+		{
+			name: "dual stack external IP addresses",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeExternalIP,
+							Address: "1.1.1.1",
+						},
+						{
+							Type:    corev1.NodeExternalIP,
+							Address: "2023::1",
+						},
+					},
+				},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("1.1.1.1"), IPv6: net.ParseIP("2023::1")},
+			expectedErr:  nil,
+		},
+		{
+			name: "mixed IP addresses",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "192.168.10.10",
+						},
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "abcd::1",
+						},
+						{
+							Type:    corev1.NodeExternalIP,
+							Address: "1.1.1.1",
+						},
+						{
+							Type:    corev1.NodeExternalIP,
+							Address: "2023::1",
+						},
+					},
+				},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.10.10"), IPv6: net.ParseIP("abcd::1")},
+			expectedErr:  nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -124,8 +198,24 @@ func TestGetNodeAddrsWithType(t *testing.T) {
 					Address: "192.168.10.10",
 				},
 				{
+					Type:    corev1.NodeInternalIP,
+					Address: "192.168.10.11",
+				},
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: "abcd::1",
+				},
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: "abcd::2",
+				},
+				{
 					Type:    corev1.NodeExternalIP,
 					Address: "1.1.1.1",
+				},
+				{
+					Type:    corev1.NodeExternalIP,
+					Address: "2023::1",
 				},
 			},
 		},
@@ -149,7 +239,12 @@ func TestGetNodeAddrsWithType(t *testing.T) {
 		{
 			name:         "correct priority",
 			types:        []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP},
-			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("1.1.1.1")},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("1.1.1.1"), IPv6: net.ParseIP("2023::1")},
+		},
+		{
+			name:         "shoud return the first matching address",
+			types:        []corev1.NodeAddressType{corev1.NodeInternalIP, corev1.NodeExternalIP},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.10.10"), IPv6: net.ParseIP("abcd::1")},
 		},
 	}
 
