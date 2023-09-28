@@ -38,8 +38,6 @@ const (
 	perfTestAppLabel                = "antrea-perf-test"
 	podsConnectionNetworkPolicyName = "pods.ingress"
 	workloadNetworkPolicyName       = "workloads.ingress"
-	toolboxContainerName            = "toolbox"
-	nginxContainerName              = "nginx"
 )
 
 var (
