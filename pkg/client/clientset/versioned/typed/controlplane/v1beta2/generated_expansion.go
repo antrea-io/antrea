@@ -20,13 +20,9 @@ type AddressGroupExpansion interface{}
 
 type AppliedToGroupExpansion interface{}
 
-type ClusterGroupMembersExpansion interface{}
-
 type EgressGroupExpansion interface{}
 
 type GroupAssociationExpansion interface{}
-
-type GroupMembersExpansion interface{}
 
 type IPGroupAssociationExpansion interface{}
 
