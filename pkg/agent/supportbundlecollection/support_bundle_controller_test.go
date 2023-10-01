@@ -148,6 +148,13 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			agentDumper:             &mockAgentDumper{dumpOVSPortsErr: fmt.Errorf("failed to dump OVS ports")},
 			uploader:                &testUploader{},
 		},
+		{
+			name:                    "SupportBundleCollection failed to dump goroutine Pprof",
+			supportBundleCollection: generateSupportbundleCollection("supportBundle12", "sftp://10.220.175.92:22/root/supportbundle"),
+			expectedCompleted:       false,
+			agentDumper:             &mockAgentDumper{dumpGoroutinePprofErr: fmt.Errorf("failed to dump goroutine Pprof")},
+			uploader:                &testUploader{},
+		},
 	}
 
 	for _, tt := range testcases {
@@ -222,6 +229,7 @@ type mockAgentDumper struct {
 	dumpAgentInfoErr              error
 	dumpNetworkPolicyResourcesErr error
 	dumpHeapPprofErr              error
+	dumpGoroutinePprofErr         error
 	dumpOVSPortsErr               error
 	dumpMemberlistErr             error
 }
@@ -248,6 +256,10 @@ func (d *mockAgentDumper) DumpNetworkPolicyResources(basedir string) error {
 
 func (d *mockAgentDumper) DumpHeapPprof(basedir string) error {
 	return d.dumpHeapPprofErr
+}
+
+func (d *mockAgentDumper) DumpGoroutinePprof(basedir string) error {
+	return d.dumpGoroutinePprofErr
 }
 
 func (d *mockAgentDumper) DumpOVSPorts(basedir string) error {

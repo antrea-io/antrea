@@ -58,6 +58,8 @@ type AgentDumper interface {
 	DumpNetworkPolicyResources(basedir string) error
 	// DumpHeapPprof should create a pprof file of heap usage of the agent.
 	DumpHeapPprof(basedir string) error
+	// DumpGoroutinePprof should create a pprof file of goroutine stacks of the agent.
+	DumpGoroutinePprof(basedir string) error
 
 	// DumpOVSPorts should create file that contains OF port descriptions under the basedir.
 	DumpOVSPorts(basedir string) error
@@ -80,6 +82,8 @@ type ControllerDumper interface {
 	DumpNetworkPolicyResources(basedir string) error
 	// DumpHeapPprof should create a pprof file of the heap usage of the controller.
 	DumpHeapPprof(basedir string) error
+	// DumpGoroutinePprof should create a pprof file of goroutine stacks of the controller.
+	DumpGoroutinePprof(basedir string) error
 }
 
 func DumpHeapPprof(fs afero.Fs, basedir string) error {
@@ -89,6 +93,15 @@ func DumpHeapPprof(fs afero.Fs, basedir string) error {
 	}
 	defer f.Close()
 	return pprof.WriteHeapProfile(f)
+}
+
+func DumpGoroutinePprof(fs afero.Fs, basedir string) error {
+	f, err := fs.Create(filepath.Join(basedir, "goroutinestacks"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return pprof.Lookup("goroutine").WriteTo(f, 2)
 }
 
 func dumpAntctlGet(fs afero.Fs, executor exec.Interface, name, basedir string) error {
@@ -267,6 +280,10 @@ func (d *controllerDumper) DumpHeapPprof(basedir string) error {
 	return DumpHeapPprof(d.fs, basedir)
 }
 
+func (d *controllerDumper) DumpGoroutinePprof(basedir string) error {
+	return DumpGoroutinePprof(d.fs, basedir)
+}
+
 func NewControllerDumper(fs afero.Fs, executor exec.Interface, since string) ControllerDumper {
 	return &controllerDumper{
 		fs:       fs,
@@ -315,6 +332,10 @@ func (d *agentDumper) DumpFlows(basedir string) error {
 
 func (d *agentDumper) DumpHeapPprof(basedir string) error {
 	return DumpHeapPprof(d.fs, basedir)
+}
+
+func (d *agentDumper) DumpGoroutinePprof(basedir string) error {
+	return DumpGoroutinePprof(d.fs, basedir)
 }
 
 func (d *agentDumper) DumpOVSPorts(basedir string) error {

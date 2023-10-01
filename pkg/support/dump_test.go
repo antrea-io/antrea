@@ -195,3 +195,11 @@ func TestControllerDumpHeapPprof(t *testing.T) {
 	err := dumper.DumpHeapPprof(baseDir)
 	require.NoError(t, err)
 }
+
+func TestControllerDumpGoroutinePprof(t *testing.T) {
+	exe := new(testExec)
+	fs := afero.NewMemMapFs()
+	dumper := NewControllerDumper(fs, exe, "5s")
+	err := dumper.DumpGoroutinePprof(baseDir)
+	require.NoError(t, err)
+}
