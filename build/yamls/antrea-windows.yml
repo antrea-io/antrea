@@ -10,7 +10,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-kht6m7hthm
+  name: antrea-agent-windows
   namespace: kube-system
 ---
 apiVersion: v1
@@ -172,7 +172,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-c2c7f4kbbc
+  name: antrea-windows-config
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -190,6 +190,9 @@ spec:
       component: antrea-agent
   template:
     metadata:
+      annotations:
+        checksum/agent-windows: 5af94f558d39950050ce9625ca7670bcca448b9ff3080a16902a5cae5d069210
+        checksum/windows-config: 6be75a1fcb4855e2e138e36109862d93f16e2d654312c74532bbcc64c65af3d9
       labels:
         app: antrea
         component: antrea-agent
@@ -260,11 +263,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-c2c7f4kbbc
+          name: antrea-windows-config
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-kht6m7hthm
+          name: antrea-agent-windows
         name: antrea-agent-windows
       - hostPath:
           path: /etc/cni/net.d

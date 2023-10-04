@@ -12,6 +12,8 @@ spec:
     metadata:
       annotations:
         "microsoft.com/hostprocess-inherit-user": "true"
+        checksum/windows-config: windows-config-checksum-placeholder
+        checksum/agent-windows: agent-windows-checksum-placeholder
       labels:
         component: antrea-agent
     spec:

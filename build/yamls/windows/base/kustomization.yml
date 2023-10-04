@@ -5,3 +5,5 @@ configMapGenerator:
   - conf/antrea-agent.conf
   - conf/antrea-cni.conflist
   name: antrea-windows-config
+generatorOptions:
+  disableNameSuffixHash: true
