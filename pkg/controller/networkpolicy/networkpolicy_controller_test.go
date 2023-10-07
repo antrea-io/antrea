@@ -218,6 +218,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		internalNetworkPolicyQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
 		internalGroupQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
 		groupingInterface:          groupEntityIndex,
+		appliedToGroupNotifier:     newNotifier(),
 	}
 	npController.tierInformer.Informer().AddIndexers(tierIndexers)
 	npController.cnpInformer.Informer().AddIndexers(cnpIndexers)
@@ -2919,6 +2920,193 @@ func compareIPNet(ipn1, ipn2 controlplane.IPNet) bool {
 		return false
 	}
 	return true
+}
+
+// TestMultipleNetworkPoliciesWithSameAppliedTo verifies NetworkPolicyController can create and delete
+// InternalNetworkPolicy, AppliedToGroups and AddressGroups correctly when concurrently processing multiple
+// NetworkPolicies that refer to the same groups.
+func TestMultipleNetworkPoliciesWithSameAppliedTo(t *testing.T) {
+	// podA and podB will be selected by the AppliedToGroup.
+	podA := getPod("podA", "default", "nodeA", "10.0.0.1", false)
+	podA.Labels = selectorA.MatchLabels
+	podB := getPod("podB", "default", "nodeB", "10.0.1.1", false)
+	podB.Labels = selectorA.MatchLabels
+	// podC will be selected by the AddressGroup.
+	podC := getPod("podC", "default", "nodeC", "10.0.2.1", false)
+	podC.Labels = selectorB.MatchLabels
+	// policyA and policyB use the same AppliedToGroup and AddressGroup.
+	policyA := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "npA", UID: "uidA"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorA,
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+				},
+			},
+		},
+	}
+	policyB := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "npB", UID: "uidB"},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: selectorA,
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					To: []networkingv1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+				},
+			},
+		},
+	}
+
+	selectorAGroup := antreatypes.NewGroupSelector("default", &selectorA, nil, nil, nil)
+	selectorAGroupUID := getNormalizedUID(selectorAGroup.NormalizedName)
+	selectorBGroup := antreatypes.NewGroupSelector("default", &selectorB, nil, nil, nil)
+	selectorBGroupUID := getNormalizedUID(selectorBGroup.NormalizedName)
+	expectedAppliedToGroup := &antreatypes.AppliedToGroup{
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString("nodeA", "nodeB")}, // according to podA and podB
+		UID:      types.UID(selectorAGroupUID),
+		Name:     selectorAGroupUID,
+		Selector: selectorAGroup,
+		GroupMemberByNode: map[string]controlplane.GroupMemberSet{
+			"nodeA": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: &controlplane.PodReference{
+				Name:      podA.Name,
+				Namespace: podA.Namespace,
+			}}),
+			"nodeB": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: &controlplane.PodReference{
+				Name:      podB.Name,
+				Namespace: podB.Namespace,
+			}}),
+		},
+	}
+	expectedAddressGroup := &antreatypes.AddressGroup{
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString("nodeA", "nodeB")}, // according to policyA and policyB
+		UID:      types.UID(selectorBGroupUID),
+		Name:     selectorBGroupUID,
+		Selector: *selectorBGroup,
+		GroupMembers: controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: &controlplane.PodReference{
+			Name:      podC.Name,
+			Namespace: podC.Namespace,
+		}, IPs: []controlplane.IPAddress{ipStrToIPAddress(podC.Status.PodIP)}}),
+	}
+	expectedPolicyA := &antreatypes.NetworkPolicy{
+		UID:      "uidA",
+		Name:     "uidA",
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString("nodeA", "nodeB")}, // according to AppliedToGroup
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "default",
+			Name:      "npA",
+			UID:       "uidA",
+		},
+		Rules: []controlplane.NetworkPolicyRule{
+			{
+				Direction: controlplane.DirectionIn,
+				From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{selectorBGroupUID}},
+				Priority:  defaultRulePriority,
+				Action:    &defaultAction,
+			},
+		},
+		AppliedToGroups: []string{selectorAGroupUID},
+	}
+	expectedPolicyB := &antreatypes.NetworkPolicy{
+		UID:      "uidB",
+		Name:     "uidB",
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString("nodeA", "nodeB")}, // according to AppliedToGroup
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "default",
+			Name:      "npB",
+			UID:       "uidB",
+		},
+		Rules: []controlplane.NetworkPolicyRule{
+			{
+				Direction: controlplane.DirectionOut,
+				To: controlplane.NetworkPolicyPeer{
+					AddressGroups: []string{selectorBGroupUID},
+				},
+				Priority: defaultRulePriority,
+				Action:   &defaultAction,
+			},
+		},
+		AppliedToGroups: []string{selectorAGroupUID},
+	}
+	_, c := newController(podA, podB, podC)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	go c.groupingInterface.Run(stopCh)
+	go c.groupingController.Run(stopCh)
+	go c.Run(stopCh)
+
+	c.kubeClient.NetworkingV1().NetworkPolicies(policyA.Namespace).Create(context.TODO(), policyA, metav1.CreateOptions{})
+	c.kubeClient.NetworkingV1().NetworkPolicies(policyB.Namespace).Create(context.TODO(), policyB, metav1.CreateOptions{})
+
+	checkInternalNetworkPolicyExist(t, c, expectedPolicyA)
+	checkInternalNetworkPolicyExist(t, c, expectedPolicyB)
+	checkAppliedToGroupExist(t, c, expectedAppliedToGroup)
+	checkAddressGroupExist(t, c, expectedAddressGroup)
+
+	c.kubeClient.NetworkingV1().NetworkPolicies(policyA.Namespace).Delete(context.TODO(), policyA.Name, metav1.DeleteOptions{})
+	c.kubeClient.NetworkingV1().NetworkPolicies(policyB.Namespace).Delete(context.TODO(), policyB.Name, metav1.DeleteOptions{})
+
+	checkInternalNetworkPolicyNotExist(t, c, expectedPolicyA)
+	checkInternalNetworkPolicyNotExist(t, c, expectedPolicyB)
+	checkAppliedToGroupNotExist(t, c, expectedAppliedToGroup)
+	checkAddressGroupNotExist(t, c, expectedAddressGroup)
+}
+
+func checkInternalNetworkPolicyExist(t *testing.T, c *networkPolicyController, policy *antreatypes.NetworkPolicy) {
+	assert.Eventually(t, func() bool {
+		obj, exists, _ := c.internalNetworkPolicyStore.Get(string(policy.UID))
+		if !exists {
+			return false
+		}
+		return reflect.DeepEqual(policy, obj.(*antreatypes.NetworkPolicy))
+	}, 3*time.Second, 10*time.Millisecond)
+}
+
+func checkAppliedToGroupExist(t *testing.T, c *networkPolicyController, appliedToGroup *antreatypes.AppliedToGroup) {
+	assert.Eventually(t, func() bool {
+		obj, exists, _ := c.appliedToGroupStore.Get(string(appliedToGroup.UID))
+		if !exists {
+			return false
+		}
+		return reflect.DeepEqual(appliedToGroup, obj.(*antreatypes.AppliedToGroup))
+	}, 3*time.Second, 10*time.Millisecond)
+}
+
+func checkAddressGroupExist(t *testing.T, c *networkPolicyController, addressGroup *antreatypes.AddressGroup) {
+	assert.Eventually(t, func() bool {
+		obj, exists, _ := c.addressGroupStore.Get(string(addressGroup.UID))
+		if !exists {
+			return false
+		}
+		return reflect.DeepEqual(addressGroup, obj.(*antreatypes.AddressGroup))
+	}, 3*time.Second, 10*time.Millisecond)
+}
+
+func checkInternalNetworkPolicyNotExist(t *testing.T, c *networkPolicyController, policy *antreatypes.NetworkPolicy) {
+	assert.Eventually(t, func() bool {
+		_, exists, _ := c.internalNetworkPolicyStore.Get(string(policy.UID))
+		return !exists
+	}, 3*time.Second, 10*time.Millisecond)
+}
+
+func checkAppliedToGroupNotExist(t *testing.T, c *networkPolicyController, appliedToGroup *antreatypes.AppliedToGroup) {
+	assert.Eventually(t, func() bool {
+		_, exists, _ := c.appliedToGroupStore.Get(string(appliedToGroup.UID))
+		return !exists
+	}, 3*time.Second, 10*time.Millisecond)
+}
+
+func checkAddressGroupNotExist(t *testing.T, c *networkPolicyController, addressGroup *antreatypes.AddressGroup) {
+	assert.Eventually(t, func() bool {
+		_, exists, _ := c.addressGroupStore.Get(string(addressGroup.UID))
+		return !exists
+	}, 3*time.Second, 10*time.Millisecond)
 }
 
 func TestSyncInternalNetworkPolicy(t *testing.T) {
