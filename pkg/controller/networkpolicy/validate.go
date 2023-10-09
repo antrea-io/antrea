@@ -681,10 +681,10 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1beta1.Rule)
 	for _, rule := range egress {
 		if rule.ToServices != nil {
 			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-				return fmt.Sprintf("`toServices` can only be used when AntreaProxy is enabled"), false
+				return "`toServices` can only be used when AntreaProxy is enabled", false
 			}
 			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil || rule.Protocols != nil {
-				return fmt.Sprintf("`toServices` cannot be used with `to`, `ports` or `protocols`"), false
+				return "`toServices` cannot be used with `to`, `ports` or `protocols`", false
 			}
 		}
 		msg, isValid := checkPeers(rule.To)
@@ -775,12 +775,12 @@ func (v *antreaPolicyValidator) validateTierForPassAction(tier string, ingress, 
 	}
 	for _, rule := range ingress {
 		if *rule.Action == crdv1beta1.RuleActionPass {
-			return fmt.Sprintf("`Pass` action should not be set for Baseline Tier policy rules"), false
+			return "`Pass` action should not be set for Baseline Tier policy rules", false
 		}
 	}
 	for _, rule := range egress {
 		if *rule.Action == crdv1beta1.RuleActionPass {
-			return fmt.Sprintf("`Pass` action should not be set for Baseline Tier policy rules"), false
+			return "`Pass` action should not be set for Baseline Tier policy rules", false
 		}
 	}
 	return "", true
@@ -809,14 +809,14 @@ func (v *antreaPolicyValidator) validateEgressMulticastAddress(egressRule []crdv
 				otherSelectors = true
 			}
 			if multicast && (*r.Action == crdv1beta1.RuleActionPass || *r.Action == crdv1beta1.RuleActionReject) {
-				return fmt.Sprintf("multicast does not support action Pass or Reject"), false
+				return "multicast does not support action Pass or Reject", false
 			}
 		}
 		if multicast && unicast {
-			return fmt.Sprintf("can not set multicast groupAddress and unicast ip address at the same time"), false
+			return "can not set multicast groupAddress and unicast ip address at the same time", false
 		}
 		if multicast && otherSelectors {
-			return fmt.Sprintf("can not set multicast groupAddress and selectors at the same time"), false
+			return "can not set multicast groupAddress and selectors at the same time", false
 		}
 	}
 	return "", true
@@ -868,7 +868,7 @@ func (v *antreaPolicyValidator) validateL7Protocols(ingressRules, egressRules []
 			continue
 		}
 		if !features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy) {
-			return fmt.Sprintf("layer 7 protocols can only be used when L7NetworkPolicy is enabled"), false
+			return "layer 7 protocols can only be used when L7NetworkPolicy is enabled", false
 		}
 		if *r.Action != crdv1beta1.RuleActionAllow {
 			return "layer 7 protocols only support Allow", false
@@ -1129,14 +1129,14 @@ func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticat
 
 func (a *adminPolicyValidator) validateAdminNP(anp *v1alpha1.AdminNetworkPolicy) (string, bool) {
 	if anpHasNamespaceLabelRule(anp) {
-		return fmt.Sprintf("SameLabels and NotSameLabels namespace selection are not yet supported by Antrea"), false
+		return "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea", false
 	}
 	return "", true
 }
 
 func (a *adminPolicyValidator) validateBANP(banp *v1alpha1.BaselineAdminNetworkPolicy) (string, bool) {
 	if banpHasNamespaceLabelRule(banp) {
-		return fmt.Sprintf("SameLabels and NotSameLabels namespace selection are not yet supported by Antrea"), false
+		return "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea", false
 	}
 	return "", true
 }

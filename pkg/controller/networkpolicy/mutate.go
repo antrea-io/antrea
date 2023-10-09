@@ -121,7 +121,7 @@ func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, e
 		allValues := append(ingressRuleNames, egressRuleNames...)
 		// Mutate empty tier name to the name of the Default application Tier.
 		if tier == "" {
-			allPaths = append(allPaths, fmt.Sprintf("/spec/tier"))
+			allPaths = append(allPaths, "/spec/tier")
 			allValues = append(allValues, defaultTierName)
 		}
 		genPatch, err := createReplacePatch(allPaths, allValues)

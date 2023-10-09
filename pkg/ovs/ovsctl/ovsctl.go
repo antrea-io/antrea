@@ -224,7 +224,7 @@ func (c *ovsCtlClient) GetDPFeatures() (map[DPFeature]bool, error) {
 
 // DeleteDPInterface deletes OVS datapath interface, and it returns with no error if the interface does not exist.
 func (c *ovsCtlClient) DeleteDPInterface(name string) error {
-	cmd := fmt.Sprintf("dpctl/show ovs-system")
+	cmd := "dpctl/show ovs-system"
 	out, execErr := c.ovsAppctlRunner.RunAppctlCmd(cmd, false)
 	if execErr != nil {
 		return execErr

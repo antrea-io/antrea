@@ -1745,7 +1745,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:    v1alpha1.CollectionFailure,
 			Status:  metav1.ConditionTrue,
 			Reason:  string(metav1.StatusReasonInternalError),
-			Message: fmt.Sprintf(`Failed Agent count: 2, "unknown error":[n1, ns1/n0]`),
+			Message: `Failed Agent count: 2, "unknown error":[n1, ns1/n0]`,
 		}
 		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, failureStatus))
 		// Test merging failure message.
@@ -1757,7 +1757,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:    v1alpha1.CollectionFailure,
 			Status:  metav1.ConditionTrue,
 			Reason:  string(metav1.StatusReasonInternalError),
-			Message: fmt.Sprintf(`Failed Agent count: 3, "agent internal error":[n5], "unknown error":[n1, ns1/n0]`),
+			Message: `Failed Agent count: 3, "agent internal error":[n5], "unknown error":[n1, ns1/n0]`,
 		}))
 		assert.False(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, failureStatus))
 		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
