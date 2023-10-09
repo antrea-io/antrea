@@ -454,7 +454,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 
 	success := false
 	defer func() {
-		// Rollback to delete configurations once ADD is failure.
+		// Rollback to delete configurations if ADD fails.
 		if !success {
 			if isInfraContainer {
 				klog.InfoS("CmdAdd for container failed, trying to rollback", "container", cniConfig.ContainerId)
