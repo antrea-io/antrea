@@ -1175,7 +1175,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=210,ip,in_port=LOCAL,vlan_tci=0x0000/0x1fff,dl_dst=%s", podMAC.String()),
-						ActStr:   fmt.Sprintf("set_field:0x1000/0xf000->reg8,set_field:0x5/0xf->reg0,goto_table:UnSNAT"),
+						ActStr:   "set_field:0x1000/0xf000->reg8,set_field:0x5/0xf->reg0,goto_table:UnSNAT",
 					},
 				},
 			}}...)
@@ -1425,8 +1425,8 @@ func prepareServiceHelperFlows() []expectTableFlows {
 			"SessionAffinity",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprint("priority=0"),
-					ActStr:   fmt.Sprint("set_field:0x10000/0x70000->reg4"),
+					MatchStr: "priority=0",
+					ActStr:   "set_field:0x10000/0x70000->reg4",
 				},
 			},
 		},

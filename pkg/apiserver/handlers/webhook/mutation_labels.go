@@ -161,7 +161,7 @@ func createLabelsReplacePatch(l map[string]string) ([]byte, error) {
 	var patch []jsonPatch
 	patch = append(patch, jsonPatch{
 		Op:    jsonPatchReplaceOp,
-		Path:  fmt.Sprintf("/metadata/labels"),
+		Path:  "/metadata/labels",
 		Value: l,
 	})
 	return json.Marshal(patch)

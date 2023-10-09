@@ -94,7 +94,7 @@ func ValidateIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 		klog.V(2).Info("Validating DELETE request for IPPool")
 		if len(oldObj.Status.IPAddresses) > 0 {
 			allowed = false
-			msg = fmt.Sprintf("IPPool in use cannot be deleted")
+			msg = "IPPool in use cannot be deleted"
 		}
 	}
 
