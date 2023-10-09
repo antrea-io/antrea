@@ -320,7 +320,7 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
 
 	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
-	saveCmd := fmt.Sprintf("iptables-save -t nat | grep ANTREA-POSTROUTING")
+	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
 	// #nosec G204: ignore in test code
 	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
 	assert.NoError(t, err, "error executing iptables-save cmd")
@@ -630,14 +630,14 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.NoError(t, routeClient.MigrateRoutesToGw(cLink.Name))
 	expRoute := strings.Join(strings.Fields(
 		fmt.Sprintf("%s dev %s scope link", hostRt.IP, gwName)), "")
-	output, _ := ExecOutputTrim(fmt.Sprintf("ip route show"))
+	output, _ := ExecOutputTrim("ip route show")
 	assert.Containsf(t, output, expRoute, output)
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
 	assert.Containsf(t, output, ipAddr.String(), output)
 
 	// verify route being removed after unmigrate
 	assert.NoError(t, routeClient.UnMigrateRoutesFromGw(hostRt, ""))
-	output, _ = ExecOutputTrim(fmt.Sprintf("ip route show"))
+	output, _ = ExecOutputTrim("ip route show")
 	assert.NotContainsf(t, output, expRoute, output)
 	// note unmigrate does not remove ip addresses given to antrea-gw0
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
