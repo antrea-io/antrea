@@ -102,7 +102,7 @@ type ruleRealizationUpdate struct {
 // ruleSyncTracker tracks the realization status of FQDN rules that are
 // applied to workloads on this Node.
 type ruleSyncTracker struct {
-	mutex sync.Mutex
+	mutex sync.RWMutex
 	// updateCh is the channel used by the rule reconciler to report rule realization status.
 	updateCh chan ruleRealizationUpdate
 	// ruleToSubscribers keeps track of the subscribers that are currently subscribed
@@ -497,14 +497,12 @@ func (f *fqdnController) syncDirtyRules(fqdn string, waitCh chan error, addressU
 			utilsets.MergeString(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
 		}
 		if !addressUpdate {
-			f.ruleSyncTracker.mutex.Lock()
-			defer f.ruleSyncTracker.mutex.Unlock()
 			// If there is no address update for this FQDN, and rules selecting this FQDN
 			// were all previously realized successfully, then there will be no dirty rules
 			// left to be synced. On the contrary, if some rules that select this FQDN are
 			// still in the dirtyRules set of the ruleSyncTracker, then only those rules
 			// should be retried for reconciliation, and packetOut shall be blocked.
-			dirtyRules = f.ruleSyncTracker.dirtyRules.Intersection(dirtyRules)
+			dirtyRules = f.ruleSyncTracker.getDirtyRules().Intersection(dirtyRules)
 		}
 		if len(dirtyRules) > 0 {
 			klog.V(4).InfoS("Dirty rules blocking packetOut", "dirtyRules", dirtyRules)
@@ -531,6 +529,13 @@ func (rst *ruleSyncTracker) subscribe(waitCh chan error, dirtyRules sets.String)
 	for r := range dirtyRules {
 		rst.ruleToSubscribers[r] = append(rst.ruleToSubscribers[r], subscriber)
 	}
+}
+
+// getDirtyRules retrieves the current dirty rule set of ruleSyncTracker.
+func (rst *ruleSyncTracker) getDirtyRules() sets.String {
+	rst.mutex.RLock()
+	defer rst.mutex.RUnlock()
+	return rst.dirtyRules
 }
 
 func (rst *ruleSyncTracker) Run(stopCh <-chan struct{}) {

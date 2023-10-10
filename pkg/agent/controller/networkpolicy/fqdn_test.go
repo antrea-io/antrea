@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -384,6 +385,139 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			}
 			gotOutput := f.getIPsForFQDNSelectors(tc.fqdns)
 			assert.ElementsMatch(t, tc.expectedMatchedIPs, gotOutput)
+		})
+	}
+}
+
+func TestSyncDirtyRules(t *testing.T) {
+	testFQDN := "test.antrea.io"
+	selectorItem := fqdnSelectorItem{
+		matchName: testFQDN,
+	}
+	testFQDN2 := "dev.antrea.io"
+	selectorItem2 := fqdnSelectorItem{
+		matchName: testFQDN2,
+	}
+	tests := []struct {
+		name                        string
+		fqdnsToSync                 []string
+		waitChs                     []chan error
+		addressUpdates              []bool
+		prevDirtyRules              sets.String
+		notifications               []ruleRealizationUpdate
+		expectedDirtyRuleSyncCalls  []string
+		expectedDirtyRulesRemaining sets.String
+		expectErr                   bool
+	}{
+		{
+			name:                        "test non-blocking dirty rule sync with address update",
+			fqdnsToSync:                 []string{testFQDN},
+			prevDirtyRules:              sets.NewString(),
+			addressUpdates:              []bool{true},
+			waitChs:                     []chan error{nil},
+			notifications:               []ruleRealizationUpdate{{"1", nil}, {"2", nil}},
+			expectedDirtyRuleSyncCalls:  []string{"1", "2"},
+			expectedDirtyRulesRemaining: sets.NewString(),
+			expectErr:                   false,
+		},
+		{
+			name:                        "test blocking dirty rule sync with address update",
+			fqdnsToSync:                 []string{testFQDN},
+			prevDirtyRules:              sets.NewString(),
+			waitChs:                     []chan error{make(chan error, 1)},
+			addressUpdates:              []bool{true},
+			notifications:               []ruleRealizationUpdate{{"1", nil}, {"2", nil}},
+			expectedDirtyRuleSyncCalls:  []string{"1", "2"},
+			expectedDirtyRulesRemaining: sets.NewString(),
+			expectErr:                   false,
+		},
+		{
+			name:                        "test blocking dirty rule sync with failed rule realization",
+			fqdnsToSync:                 []string{testFQDN},
+			prevDirtyRules:              sets.NewString(),
+			waitChs:                     []chan error{make(chan error, 1)},
+			addressUpdates:              []bool{true},
+			notifications:               []ruleRealizationUpdate{{"1", nil}, {"2", fmt.Errorf("ovs err")}},
+			expectedDirtyRuleSyncCalls:  []string{"1", "2"},
+			expectedDirtyRulesRemaining: sets.NewString("2"),
+			expectErr:                   true,
+		},
+		{
+			name:                        "test blocking dirty rule sync without address update but previously failed rule realization",
+			fqdnsToSync:                 []string{testFQDN},
+			prevDirtyRules:              sets.NewString("2"),
+			waitChs:                     []chan error{make(chan error, 1)},
+			addressUpdates:              []bool{false},
+			notifications:               []ruleRealizationUpdate{{"2", nil}},
+			expectedDirtyRuleSyncCalls:  []string{"2"},
+			expectedDirtyRulesRemaining: sets.NewString(),
+			expectErr:                   false,
+		},
+		{
+			name:                        "test blocking dirty rule sync without address update",
+			fqdnsToSync:                 []string{testFQDN},
+			prevDirtyRules:              sets.NewString(),
+			waitChs:                     []chan error{make(chan error, 1)},
+			addressUpdates:              []bool{false},
+			notifications:               []ruleRealizationUpdate{},
+			expectedDirtyRuleSyncCalls:  []string{},
+			expectedDirtyRulesRemaining: sets.NewString(),
+			expectErr:                   false,
+		},
+		{
+			name:                        "test blocking single dirty rule multiple FQDN concurrent updates",
+			fqdnsToSync:                 []string{testFQDN, testFQDN2},
+			prevDirtyRules:              sets.NewString(),
+			waitChs:                     []chan error{make(chan error, 1), make(chan error, 1)},
+			addressUpdates:              []bool{true, false},
+			notifications:               []ruleRealizationUpdate{{"1", nil}, {"2", nil}},
+			expectedDirtyRuleSyncCalls:  []string{"1", "2", "2"},
+			expectedDirtyRulesRemaining: sets.NewString(),
+			expectErr:                   false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			f, _ := newMockFQDNController(t, controller, nil)
+			var dirtyRuleSyncCalls []string
+			f.dirtyRuleHandler = func(s string) {
+				dirtyRuleSyncCalls = append(dirtyRuleSyncCalls, s)
+			}
+			f.addFQDNSelector("1", []string{testFQDN})
+			f.addFQDNSelector("2", []string{testFQDN})
+			f.addFQDNSelector("2", []string{testFQDN2})
+			f.setFQDNMatchSelector(testFQDN, selectorItem)
+			f.setFQDNMatchSelector(testFQDN2, selectorItem2)
+			// This simulates failed rule syncs in previous syncDirtyRules() calls
+			if len(tc.prevDirtyRules) > 0 {
+				f.ruleSyncTracker.dirtyRules = tc.prevDirtyRules
+			}
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			go f.runRuleSyncTracker(stopCh)
+
+			for i, fqdn := range tc.fqdnsToSync {
+				f.syncDirtyRules(fqdn, tc.waitChs[i], tc.addressUpdates[i])
+			}
+			for _, update := range tc.notifications {
+				f.ruleSyncTracker.updateCh <- update
+			}
+			assert.ElementsMatch(t, tc.expectedDirtyRuleSyncCalls, dirtyRuleSyncCalls)
+			for _, waitCh := range tc.waitChs {
+				if waitCh != nil {
+					assert.Eventually(t, func() bool {
+						select {
+						case err := <-waitCh:
+							if err != nil && !tc.expectErr {
+								return false
+							}
+						}
+						return true
+					}, ruleRealizationTimeout, time.Millisecond*10, "Failed to successfully wait for rule syncs")
+				}
+			}
+			assert.Equal(t, tc.expectedDirtyRulesRemaining, f.ruleSyncTracker.getDirtyRules())
 		})
 	}
 }
