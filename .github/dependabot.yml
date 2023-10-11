@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 5
+    groups:
+      golang.org/x:
+        patterns:
+        - "golang.org/x/*"
     ignore:
     - dependency-name: "k8s.io/*"
     - dependency-name: "sigs.k8s.io/*"
