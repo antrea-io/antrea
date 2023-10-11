@@ -233,6 +233,10 @@ func (f *fakeAgentDumper) DumpHeapPprof(basedir string) error {
 	return f.returnErr
 }
 
+func (f *fakeAgentDumper) DumpGoroutinePprof(basedir string) error {
+	return f.returnErr
+}
+
 func (f *fakeAgentDumper) DumpOVSPorts(basedir string) error {
 	return f.returnErr
 }

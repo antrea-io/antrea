@@ -265,6 +265,9 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 	if err = agentDumper.DumpHeapPprof(basedir); err != nil {
 		return err
 	}
+	if err = agentDumper.DumpGoroutinePprof(basedir); err != nil {
+		return err
+	}
 	if err = agentDumper.DumpOVSPorts(basedir); err != nil {
 		return err
 	}

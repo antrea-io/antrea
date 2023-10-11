@@ -268,6 +268,7 @@ func (r *supportBundleREST) collectAgent(ctx context.Context, since string) (*sy
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpAgentInfo,
 		dumper.DumpHeapPprof,
+		dumper.DumpGoroutinePprof,
 		dumper.DumpOVSPorts,
 		dumper.DumpMemberlist,
 	)
@@ -281,6 +282,7 @@ func (r *supportBundleREST) collectController(ctx context.Context, since string)
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpControllerInfo,
 		dumper.DumpHeapPprof,
+		dumper.DumpGoroutinePprof,
 	)
 }
 
