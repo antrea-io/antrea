@@ -56,10 +56,10 @@ func GetNodeAddrsWithType(node *v1.Node, types []v1.NodeAddressType) (*ip.DualSt
 		if addr == nil {
 			return nil, fmt.Errorf("'%s' is not a valid IP address", ipAddrStrs[i])
 		}
-		if addr.To4() == nil {
-			nodeAddrs.IPv6 = addr
-		} else {
+		if addr.To4() != nil && nodeAddrs.IPv4 == nil {
 			nodeAddrs.IPv4 = addr
+		} else if addr.To4() == nil && nodeAddrs.IPv6 == nil {
+			nodeAddrs.IPv6 = addr
 		}
 	}
 	return nodeAddrs, nil
