@@ -489,17 +489,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 
 func autoConvert_v1beta2_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup, out *controlplane.AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.GroupMembers != nil {
-		in, out := &in.GroupMembers, &out.GroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.GroupMembers = nil
-	}
+	out.GroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.GroupMembers))
 	return nil
 }
 
@@ -510,17 +500,7 @@ func Convert_v1beta2_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup,
 
 func autoConvert_controlplane_AddressGroup_To_v1beta2_AddressGroup(in *controlplane.AddressGroup, out *AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.GroupMembers != nil {
-		in, out := &in.GroupMembers, &out.GroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.GroupMembers = nil
-	}
+	out.GroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.GroupMembers))
 	return nil
 }
 
@@ -531,17 +511,7 @@ func Convert_controlplane_AddressGroup_To_v1beta2_AddressGroup(in *controlplane.
 
 func autoConvert_v1beta2_AddressGroupList_To_controlplane_AddressGroupList(in *AddressGroupList, out *controlplane.AddressGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]controlplane.AddressGroup, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_AddressGroup_To_controlplane_AddressGroup(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.Items = nil
-	}
+	out.Items = *(*[]controlplane.AddressGroup)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -552,17 +522,7 @@ func Convert_v1beta2_AddressGroupList_To_controlplane_AddressGroupList(in *Addre
 
 func autoConvert_controlplane_AddressGroupList_To_v1beta2_AddressGroupList(in *controlplane.AddressGroupList, out *AddressGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]AddressGroup, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_AddressGroup_To_v1beta2_AddressGroup(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.Items = nil
-	}
+	out.Items = *(*[]AddressGroup)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -573,28 +533,8 @@ func Convert_controlplane_AddressGroupList_To_v1beta2_AddressGroupList(in *contr
 
 func autoConvert_v1beta2_AddressGroupPatch_To_controlplane_AddressGroupPatch(in *AddressGroupPatch, out *controlplane.AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.AddedGroupMembers != nil {
-		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.AddedGroupMembers = nil
-	}
-	if in.RemovedGroupMembers != nil {
-		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.RemovedGroupMembers = nil
-	}
+	out.AddedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
+	out.RemovedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
 	return nil
 }
 
@@ -605,28 +545,8 @@ func Convert_v1beta2_AddressGroupPatch_To_controlplane_AddressGroupPatch(in *Add
 
 func autoConvert_controlplane_AddressGroupPatch_To_v1beta2_AddressGroupPatch(in *controlplane.AddressGroupPatch, out *AddressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.AddedGroupMembers != nil {
-		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.AddedGroupMembers = nil
-	}
-	if in.RemovedGroupMembers != nil {
-		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.RemovedGroupMembers = nil
-	}
+	out.AddedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
+	out.RemovedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
 	return nil
 }
 
@@ -637,17 +557,7 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta2_AddressGroupPatch(in *con
 
 func autoConvert_v1beta2_AppliedToGroup_To_controlplane_AppliedToGroup(in *AppliedToGroup, out *controlplane.AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.GroupMembers != nil {
-		in, out := &in.GroupMembers, &out.GroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.GroupMembers = nil
-	}
+	out.GroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.GroupMembers))
 	return nil
 }
 
@@ -658,17 +568,7 @@ func Convert_v1beta2_AppliedToGroup_To_controlplane_AppliedToGroup(in *AppliedTo
 
 func autoConvert_controlplane_AppliedToGroup_To_v1beta2_AppliedToGroup(in *controlplane.AppliedToGroup, out *AppliedToGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.GroupMembers != nil {
-		in, out := &in.GroupMembers, &out.GroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.GroupMembers = nil
-	}
+	out.GroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.GroupMembers))
 	return nil
 }
 
@@ -679,17 +579,7 @@ func Convert_controlplane_AppliedToGroup_To_v1beta2_AppliedToGroup(in *controlpl
 
 func autoConvert_v1beta2_AppliedToGroupList_To_controlplane_AppliedToGroupList(in *AppliedToGroupList, out *controlplane.AppliedToGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]controlplane.AppliedToGroup, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_AppliedToGroup_To_controlplane_AppliedToGroup(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.Items = nil
-	}
+	out.Items = *(*[]controlplane.AppliedToGroup)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -700,17 +590,7 @@ func Convert_v1beta2_AppliedToGroupList_To_controlplane_AppliedToGroupList(in *A
 
 func autoConvert_controlplane_AppliedToGroupList_To_v1beta2_AppliedToGroupList(in *controlplane.AppliedToGroupList, out *AppliedToGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]AppliedToGroup, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_AppliedToGroup_To_v1beta2_AppliedToGroup(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.Items = nil
-	}
+	out.Items = *(*[]AppliedToGroup)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -721,28 +601,8 @@ func Convert_controlplane_AppliedToGroupList_To_v1beta2_AppliedToGroupList(in *c
 
 func autoConvert_v1beta2_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(in *AppliedToGroupPatch, out *controlplane.AppliedToGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.AddedGroupMembers != nil {
-		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.AddedGroupMembers = nil
-	}
-	if in.RemovedGroupMembers != nil {
-		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.RemovedGroupMembers = nil
-	}
+	out.AddedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
+	out.RemovedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
 	return nil
 }
 
@@ -753,28 +613,8 @@ func Convert_v1beta2_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(in 
 
 func autoConvert_controlplane_AppliedToGroupPatch_To_v1beta2_AppliedToGroupPatch(in *controlplane.AppliedToGroupPatch, out *AppliedToGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.AddedGroupMembers != nil {
-		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.AddedGroupMembers = nil
-	}
-	if in.RemovedGroupMembers != nil {
-		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.RemovedGroupMembers = nil
-	}
+	out.AddedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
+	out.RemovedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
 	return nil
 }
 
@@ -851,17 +691,7 @@ func Convert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerA
 
 func autoConvert_v1beta2_ClusterGroupMembers_To_controlplane_ClusterGroupMembers(in *ClusterGroupMembers, out *controlplane.ClusterGroupMembers, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.EffectiveMembers != nil {
-		in, out := &in.EffectiveMembers, &out.EffectiveMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.EffectiveMembers = nil
-	}
+	out.EffectiveMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.EffectiveMembers))
 	out.EffectiveIPBlocks = *(*[]controlplane.IPNet)(unsafe.Pointer(&in.EffectiveIPBlocks))
 	out.TotalMembers = in.TotalMembers
 	out.TotalPages = in.TotalPages
@@ -876,17 +706,7 @@ func Convert_v1beta2_ClusterGroupMembers_To_controlplane_ClusterGroupMembers(in 
 
 func autoConvert_controlplane_ClusterGroupMembers_To_v1beta2_ClusterGroupMembers(in *controlplane.ClusterGroupMembers, out *ClusterGroupMembers, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.EffectiveMembers != nil {
-		in, out := &in.EffectiveMembers, &out.EffectiveMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.EffectiveMembers = nil
-	}
+	out.EffectiveMembers = *(*[]GroupMember)(unsafe.Pointer(&in.EffectiveMembers))
 	out.EffectiveIPBlocks = *(*[]IPNet)(unsafe.Pointer(&in.EffectiveIPBlocks))
 	out.TotalMembers = in.TotalMembers
 	out.TotalPages = in.TotalPages
@@ -901,17 +721,7 @@ func Convert_controlplane_ClusterGroupMembers_To_v1beta2_ClusterGroupMembers(in 
 
 func autoConvert_v1beta2_EgressGroup_To_controlplane_EgressGroup(in *EgressGroup, out *controlplane.EgressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.GroupMembers != nil {
-		in, out := &in.GroupMembers, &out.GroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.GroupMembers = nil
-	}
+	out.GroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.GroupMembers))
 	return nil
 }
 
@@ -922,17 +732,7 @@ func Convert_v1beta2_EgressGroup_To_controlplane_EgressGroup(in *EgressGroup, ou
 
 func autoConvert_controlplane_EgressGroup_To_v1beta2_EgressGroup(in *controlplane.EgressGroup, out *EgressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.GroupMembers != nil {
-		in, out := &in.GroupMembers, &out.GroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.GroupMembers = nil
-	}
+	out.GroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.GroupMembers))
 	return nil
 }
 
@@ -943,17 +743,7 @@ func Convert_controlplane_EgressGroup_To_v1beta2_EgressGroup(in *controlplane.Eg
 
 func autoConvert_v1beta2_EgressGroupList_To_controlplane_EgressGroupList(in *EgressGroupList, out *controlplane.EgressGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]controlplane.EgressGroup, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_EgressGroup_To_controlplane_EgressGroup(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.Items = nil
-	}
+	out.Items = *(*[]controlplane.EgressGroup)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -964,17 +754,7 @@ func Convert_v1beta2_EgressGroupList_To_controlplane_EgressGroupList(in *EgressG
 
 func autoConvert_controlplane_EgressGroupList_To_v1beta2_EgressGroupList(in *controlplane.EgressGroupList, out *EgressGroupList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]EgressGroup, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_EgressGroup_To_v1beta2_EgressGroup(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.Items = nil
-	}
+	out.Items = *(*[]EgressGroup)(unsafe.Pointer(&in.Items))
 	return nil
 }
 
@@ -985,28 +765,8 @@ func Convert_controlplane_EgressGroupList_To_v1beta2_EgressGroupList(in *control
 
 func autoConvert_v1beta2_EgressGroupPatch_To_controlplane_EgressGroupPatch(in *EgressGroupPatch, out *controlplane.EgressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.AddedGroupMembers != nil {
-		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.AddedGroupMembers = nil
-	}
-	if in.RemovedGroupMembers != nil {
-		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.RemovedGroupMembers = nil
-	}
+	out.AddedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
+	out.RemovedGroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
 	return nil
 }
 
@@ -1017,28 +777,8 @@ func Convert_v1beta2_EgressGroupPatch_To_controlplane_EgressGroupPatch(in *Egres
 
 func autoConvert_controlplane_EgressGroupPatch_To_v1beta2_EgressGroupPatch(in *controlplane.EgressGroupPatch, out *EgressGroupPatch, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.AddedGroupMembers != nil {
-		in, out := &in.AddedGroupMembers, &out.AddedGroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.AddedGroupMembers = nil
-	}
-	if in.RemovedGroupMembers != nil {
-		in, out := &in.RemovedGroupMembers, &out.RemovedGroupMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.RemovedGroupMembers = nil
-	}
+	out.AddedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.AddedGroupMembers))
+	out.RemovedGroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.RemovedGroupMembers))
 	return nil
 }
 
@@ -1109,9 +849,9 @@ func Convert_v1beta2_GroupMember_To_controlplane_GroupMember(in *GroupMember, ou
 func autoConvert_controlplane_GroupMember_To_v1beta2_GroupMember(in *controlplane.GroupMember, out *GroupMember, s conversion.Scope) error {
 	out.Pod = (*PodReference)(unsafe.Pointer(in.Pod))
 	out.ExternalEntity = (*ExternalEntityReference)(unsafe.Pointer(in.ExternalEntity))
-	out.Node = (*NodeReference)(unsafe.Pointer(in.Node))
 	out.IPs = *(*[]IPAddress)(unsafe.Pointer(&in.IPs))
 	out.Ports = *(*[]NamedPort)(unsafe.Pointer(&in.Ports))
+	out.Node = (*NodeReference)(unsafe.Pointer(in.Node))
 	out.Service = (*ServiceReference)(unsafe.Pointer(in.Service))
 	return nil
 }
@@ -1123,17 +863,7 @@ func Convert_controlplane_GroupMember_To_v1beta2_GroupMember(in *controlplane.Gr
 
 func autoConvert_v1beta2_GroupMembers_To_controlplane_GroupMembers(in *GroupMembers, out *controlplane.GroupMembers, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.EffectiveMembers != nil {
-		in, out := &in.EffectiveMembers, &out.EffectiveMembers
-		*out = make([]controlplane.GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_v1beta2_GroupMember_To_controlplane_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.EffectiveMembers = nil
-	}
+	out.EffectiveMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.EffectiveMembers))
 	out.EffectiveIPBlocks = *(*[]controlplane.IPNet)(unsafe.Pointer(&in.EffectiveIPBlocks))
 	out.TotalMembers = in.TotalMembers
 	out.TotalPages = in.TotalPages
@@ -1148,17 +878,7 @@ func Convert_v1beta2_GroupMembers_To_controlplane_GroupMembers(in *GroupMembers,
 
 func autoConvert_controlplane_GroupMembers_To_v1beta2_GroupMembers(in *controlplane.GroupMembers, out *GroupMembers, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	if in.EffectiveMembers != nil {
-		in, out := &in.EffectiveMembers, &out.EffectiveMembers
-		*out = make([]GroupMember, len(*in))
-		for i := range *in {
-			if err := Convert_controlplane_GroupMember_To_v1beta2_GroupMember(&(*in)[i], &(*out)[i], s); err != nil {
-				return err
-			}
-		}
-	} else {
-		out.EffectiveMembers = nil
-	}
+	out.EffectiveMembers = *(*[]GroupMember)(unsafe.Pointer(&in.EffectiveMembers))
 	out.EffectiveIPBlocks = *(*[]IPNet)(unsafe.Pointer(&in.EffectiveIPBlocks))
 	out.TotalMembers = in.TotalMembers
 	out.TotalPages = in.TotalPages
