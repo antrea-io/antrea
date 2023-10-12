@@ -82,12 +82,12 @@ type GroupMember struct {
 	Pod *PodReference
 	// ExternalEntity maintains the reference to the ExternalEntity.
 	ExternalEntity *ExternalEntityReference
-	// Node maintains the reference to the Node.
-	Node *NodeReference
 	// IP is the IP address of the Endpoints associated with the GroupMember.
 	IPs []IPAddress
 	// Ports is the list NamedPort of the GroupMember.
 	Ports []NamedPort
+	// Node maintains the reference to the Node.
+	Node *NodeReference
 	// Service is the reference to the Service. It can only be used in an AppliedTo
 	// Group and only a NodePort type Service can be referred by this field.
 	Service *ServiceReference

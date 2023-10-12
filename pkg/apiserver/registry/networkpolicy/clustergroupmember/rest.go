@@ -94,15 +94,15 @@ func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options ru
 		}
 	}
 	totalMembers = int64(len(members))
-	totalPages, currentPage, err = paginateMemberList(&members, getOptions)
+	totalPages, currentPage, err = PaginateMemberList(&members, getOptions)
 	return
 }
 
-// paginateMemberList returns paginated results if meaningful options are provided. Options should never be nil.
+// PaginateMemberList returns paginated results if meaningful options are provided. Options should never be nil.
 // Paginated results are continuous only when there is no member change across multiple calls.
 // Pagination is not enabled if either page number or limit = 0, in which the full member list is returned.
 // An error is returned for invalid options, and an empty list is returned for a page number out of the pages range.
-func paginateMemberList(effectiveMembers *[]controlplane.GroupMember, pageInfo *controlplane.PaginationGetOptions) (int64, int64, error) {
+func PaginateMemberList(effectiveMembers *[]controlplane.GroupMember, pageInfo *controlplane.PaginationGetOptions) (int64, int64, error) {
 	if pageInfo.Limit < 0 {
 		return 0, 0, errors.NewBadRequest(fmt.Sprintf("received invalid page limit %d for pagination", pageInfo.Limit))
 	} else if pageInfo.Page < 0 {

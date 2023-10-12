@@ -497,11 +497,6 @@ func (in *GroupMember) DeepCopyInto(out *GroupMember) {
 		*out = new(ExternalEntityReference)
 		**out = **in
 	}
-	if in.Node != nil {
-		in, out := &in.Node, &out.Node
-		*out = new(NodeReference)
-		**out = **in
-	}
 	if in.IPs != nil {
 		in, out := &in.IPs, &out.IPs
 		*out = make([]IPAddress, len(*in))
@@ -517,6 +512,11 @@ func (in *GroupMember) DeepCopyInto(out *GroupMember) {
 		in, out := &in.Ports, &out.Ports
 		*out = make([]NamedPort, len(*in))
 		copy(*out, *in)
+	}
+	if in.Node != nil {
+		in, out := &in.Node, &out.Node
+		*out = new(NodeReference)
+		**out = **in
 	}
 	if in.Service != nil {
 		in, out := &in.Service, &out.Service
