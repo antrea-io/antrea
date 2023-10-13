@@ -49,7 +49,7 @@ These are the CRDs currently available in `crd.antrea.io`.
 
 ### Other API groups
 
-These are the API group versions which are curently available when using Antrea.
+These are the API group versions which are currently available when using Antrea.
 
 | API group | API version | API Service? | Introduced in | Deprecated in / Planned Deprecation | Planned Removal |
 |---|---|---|---|---|---|

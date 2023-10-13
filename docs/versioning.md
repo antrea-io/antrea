@@ -175,7 +175,7 @@ some_counter 0
 
 In the future, we may introduce the same concept of [hidden
 metric](https://kubernetes.io/docs/concepts/cluster-administration/system-metrics/#show-hidden-metrics)
-as K8s, as an additional part of the metric lifecyle.
+as K8s, as an additional part of the metric lifecycle.
 
 ### APIs deprecation policy
 
@@ -196,7 +196,7 @@ removal of new versions for this API must respect the ["graceful" upgrade
 guarantee](#antrea-upgrade-and-supported-version-skew). The `controlplane` API
 (which is exposed using the aggregation layer) is often referred to as an
 "internal" API as it is used by the Antrea components to communicate with each
-other, and is usually not consummed by end users, e.g. cluster admins. However,
+other, and is usually not consumed by end users, e.g. cluster admins. However,
 this API may also be used for integration with other software, which is why we
 abide to the same deprecation policy as for other more "user-facing" APIs
 (e.g. Antrea-native policy CRDs).
@@ -239,7 +239,7 @@ When introducing a new version of a CRD, [the API deprecation policy should be
 followed](#apis-deprecation-policy).
 
 When introducing a CRD, the following rule should be followed in order to avoid
-potential dependency cyles (and thus import cycles in Go): if the CRD depends on
+potential dependency cycles (and thus import cycles in Go): if the CRD depends on
 other object types spread across potentially different versions of
 `crd.antrea.io`, the CRD should be defined in a group version greater or equal
 to all of these versions. For example, if we want to introduce a new CRD which
