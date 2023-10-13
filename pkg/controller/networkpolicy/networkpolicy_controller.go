@@ -249,6 +249,10 @@ type NetworkPolicyController struct {
 	// to the same addressgroups/appliedtogroups.
 	internalNetworkPolicyMutex sync.RWMutex
 
+	// appliedToGroupNotifier is responsible for notifying subscribers of an AppliedToGroup about its update.
+	// The typical subscribers of AppliedToGroup are NetworkPolicies.
+	appliedToGroupNotifier *notifier
+
 	groupingInterface grouping.Interface
 	// Added as a member to the struct to allow injection for testing.
 	groupingInterfaceSynced func() bool
@@ -432,6 +436,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		groupingInterfaceSynced:        groupingInterface.HasSynced,
 		labelIdentityInterface:         labelIdentityInterface,
 		stretchNPEnabled:               stretchedNPEnabled,
+		appliedToGroupNotifier:         newNotifier(),
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
@@ -1348,19 +1353,9 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		}
 	}
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
-	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
 	// Note that this must be executed after storing the result, to ensure that
-	// both of the NetworkPolicies that referred it before storing it and the
-	// ones after storing it can get the right span.
-	nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AppliedToGroupIndex, key)
-	if err != nil {
-		return fmt.Errorf("unable to filter internal NetworkPolicies for AppliedToGroup %s: %v", key, err)
-	}
-	// Enqueue syncInternalNetworkPolicy for each affected internal NetworkPolicy so
-	// that corresponding Node spans are updated.
-	for _, npObj := range nps {
-		n.enqueueInternalNetworkPolicy(npObj.(*antreatypes.NetworkPolicy).SourceRef)
-	}
+	// the notified subscribers get the latest state.
+	n.appliedToGroupNotifier.notify(key)
 	return nil
 }
 
@@ -1503,6 +1498,15 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processBaselineAdminNetworkPolicy(banp)
 	}
 
+	// The NetworkPolicy must subscribe to the updates of AppliedToGroups before calculating span based on them,
+	// otherwise the calculated span may be outdated as AppliedToGroups can be updated concurrently and the
+	// NetworkPolicy wouldn't be notified.
+	for group := range newAppliedToGroups {
+		n.appliedToGroupNotifier.subscribe(group, internalNetworkPolicyName, func() {
+			n.enqueueInternalNetworkPolicy(key)
+		})
+	}
+
 	newNodeNames, err := func() (sets.Set[string], error) {
 		nodeNames := sets.New[string]()
 		// Calculate the set of Node names based on the span of the
@@ -1594,9 +1598,11 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 	// Enqueue AddressGroups that are affected by this NetworkPolicy.
 	var oldNodeNames sets.Set[string]
 	var oldAddressGroupNames sets.Set[string]
+	var oldAppliedToGroupNames sets.Set[string]
 	if oldInternalNetworkPolicy != nil {
 		oldNodeNames = oldInternalNetworkPolicy.NodeNames
 		oldAddressGroupNames = oldInternalNetworkPolicy.GetAddressGroups()
+		oldAppliedToGroupNames = oldInternalNetworkPolicy.GetAppliedToGroups()
 	}
 	var addressGroupsToSync sets.Set[string]
 	newAddressGroupNames := sets.KeySet(newAddressGroups)
@@ -1609,6 +1615,12 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 	}
 	for addressGroup := range addressGroupsToSync {
 		n.enqueueAddressGroup(addressGroup)
+	}
+	// Unsubscribe to the updates of the stale AppliedToGroups.
+	for name := range oldAppliedToGroupNames {
+		if _, exists := newAppliedToGroups[name]; !exists {
+			n.appliedToGroupNotifier.unsubscribe(name, internalNetworkPolicyName)
+		}
 	}
 	return nil
 }
@@ -1627,6 +1639,10 @@ func (n *NetworkPolicyController) deleteInternalNetworkPolicy(name string) {
 	internalNetworkPolicy := obj.(*antreatypes.NetworkPolicy)
 	n.internalNetworkPolicyStore.Delete(internalNetworkPolicy.Name)
 	n.cleanupOrphanGroups(internalNetworkPolicy)
+	// Unsubscribe to the updates of the AppliedToGroups.
+	for appliedToGroup := range internalNetworkPolicy.GetAppliedToGroups() {
+		n.appliedToGroupNotifier.unsubscribe(appliedToGroup, name)
+	}
 	if n.stretchNPEnabled && internalNetworkPolicy.SourceRef.Type != controlplane.K8sNetworkPolicy {
 		n.labelIdentityInterface.DeletePolicySelectors(internalNetworkPolicy.Name)
 	}
