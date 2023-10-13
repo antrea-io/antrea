@@ -237,11 +237,10 @@ To learn more about MetalLB concepts and functionalities, you can read the
 You can run the following commands to install MetalLB using the YAML manifests:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.9/manifests/namespace.yaml
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.9/manifests/metallb.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.11/config/manifests/metallb-native.yaml
 ```
 
-The commands will deploy MetalLB version 0.13.9 into Namespace
+The commands will deploy MetalLB version 0.13.11 into Namespace
 `metallb-system`. You can also refer to this [MetalLB installation
 guide](https://metallb.universe.tf/installation) for other ways of installing
 MetalLB.
@@ -279,6 +278,7 @@ spec:
   addresses:
   - 10.10.0.2-10.10.0.10
 ---
+apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
   name: example

@@ -5,7 +5,7 @@ WireGuard. Traffic encryption is not supported on Windows Nodes yet.
 
 ## IPsec
 
-IPsec encyption works for all tunnel types supported by OVS including Geneve,
+IPsec encryption works for all tunnel types supported by OVS including Geneve,
 GRE, VXLAN, and STT tunnel.
 
 Note that GRE is not supported for IPv6 clusters (IPv6-only or dual-stack
@@ -17,7 +17,7 @@ Geneve or VXLAN.
 IPsec requires a set of Linux kernel modules. Check the required kernel modules
 listed in the [strongSwan documentation](https://wiki.strongswan.org/projects/strongswan/wiki/KernelModules).
 Make sure the required kernel modules are loaded on the Kubernetes Nodes before
-deploying Antrea with IPsec encyption enabled.
+deploying Antrea with IPsec encryption enabled.
 
 If you want to enable IPsec with Geneve, please make sure [this commit](https://github.com/torvalds/linux/commit/34beb21594519ce64a55a498c2fe7d567bc1ca20)
 is included in the kernel. For Ubuntu 18.04, kernel version should be at least
@@ -26,7 +26,7 @@ is included in the kernel. For Ubuntu 18.04, kernel version should be at least
 ### Antrea installation
 
 You can simply apply the [Antrea IPsec deployment yaml](../build/yamls/antrea-ipsec.yml)
-to deploy Antrea with IPsec encyption enabled. To deploy a released version of
+to deploy Antrea with IPsec encryption enabled. To deploy a released version of
 Antrea, pick a version from the [list of releases](https://github.com/antrea-io/antrea/releases).
 Note that IPsec support was added in release 0.3.0, which means you can not
 pick a release older than 0.3.0. For any given release `<TAG>` (e.g. `v0.3.0`),
