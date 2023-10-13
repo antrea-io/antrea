@@ -61,7 +61,7 @@ const (
 // check previousResult with local cache.
 // Host gateway and the default tunnel interfaces are added into cache in node initialization
 // phase or retrieved from existing OVS ports.
-// An IPsec tunnel interface is added into the cache when IPsec encyption is enabled, and
+// An IPsec tunnel interface is added into the cache when IPsec encryption is enabled, and
 // NodeRouteController watches a new remote Node from K8s API, and is removed when the remote
 // Node is deleted.
 // Todo: add periodic task to sync local cache with container veth pair
