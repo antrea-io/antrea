@@ -874,7 +874,12 @@ func nxActionLearnToString(action openflow15.Action) string {
 			if spec.SrcValue != nil {
 				srcValueStr := strings.TrimLeft(fmt.Sprintf("%x", spec.SrcValue), "0")
 				if isMatch {
-					dstFieldStr := getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, spec.DstField.Ofs, nBits, true, false)
+					var dstFieldStr string
+					if spec.DstField.Field.Class == openflow15.OXM_CLASS_NXM_1 {
+						dstFieldStr = getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, spec.DstField.Ofs, nBits, false, true)
+					} else {
+						dstFieldStr = getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, spec.DstField.Ofs, nBits, true, false)
+					}
 					parts = append(parts, fmt.Sprintf("%s=0x%s", dstFieldStr, srcValueStr))
 				} else if isLoad {
 					dstFieldStr := getFieldNameString(spec.DstField.Field.Class, spec.DstField.Field.Field, spec.DstField.Ofs, nBits, false, false)
