@@ -45,8 +45,8 @@ var (
 
 	conntrackFlowTuple = conntrack.Tuple{
 		IP: conntrack.IPTuple{
-			SourceAddress:      srcAddr.AsSlice(),
-			DestinationAddress: dstAddr.AsSlice(),
+			SourceAddress:      srcAddr,
+			DestinationAddress: dstAddr,
 		},
 		Proto: conntrack.ProtoTuple{
 			Protocol:        6,
@@ -56,8 +56,8 @@ var (
 	}
 	conntrackFlowTupleReply = conntrack.Tuple{
 		IP: conntrack.IPTuple{
-			SourceAddress:      dstAddr.AsSlice(),
-			DestinationAddress: srcAddr.AsSlice(),
+			SourceAddress:      dstAddr,
+			DestinationAddress: srcAddr,
 		},
 		Proto: conntrack.ProtoTuple{
 			Protocol:        6,
@@ -221,12 +221,10 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured}, Mark: 0x1234, Zone: 2,
 		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
 	}
-	sourceAddr, _ := netip.AddrFromSlice(conntrackFlowTuple.IP.SourceAddress)
-	destinationAddr, _ := netip.AddrFromSlice(conntrackFlowTupleReply.IP.SourceAddress)
-	destinationServiceAddr, _ := netip.AddrFromSlice(conntrackFlowTuple.IP.DestinationAddress)
+
 	tuple := flowexporter.Tuple{
-		SourceAddress:      sourceAddr,
-		DestinationAddress: destinationAddr,
+		SourceAddress:      conntrackFlowTuple.IP.SourceAddress,
+		DestinationAddress: conntrackFlowTupleReply.IP.SourceAddress,
 		Protocol:           conntrackFlowTuple.Proto.Protocol,
 		SourcePort:         conntrackFlowTuple.Proto.SourcePort,
 		DestinationPort:    conntrackFlowTupleReply.Proto.SourcePort,
@@ -239,7 +237,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		StatusFlag:                0x4,
 		Mark:                      0x1234,
 		FlowKey:                   tuple,
-		DestinationServiceAddress: destinationServiceAddr,
+		DestinationServiceAddress: conntrackFlowTuple.IP.DestinationAddress,
 		DestinationServicePort:    conntrackFlowTuple.Proto.DestinationPort,
 		OriginalPackets:           netlinkFlow.CountersOrig.Packets,
 		OriginalBytes:             netlinkFlow.CountersOrig.Bytes,
@@ -276,7 +274,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		StatusFlag:                0x204,
 		Mark:                      0x1234,
 		FlowKey:                   tuple,
-		DestinationServiceAddress: destinationServiceAddr,
+		DestinationServiceAddress: conntrackFlowTuple.IP.DestinationAddress,
 		DestinationServicePort:    conntrackFlowTuple.Proto.DestinationPort,
 		OriginalPackets:           netlinkFlow.CountersOrig.Packets,
 		OriginalBytes:             netlinkFlow.CountersOrig.Bytes,
