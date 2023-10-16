@@ -19,7 +19,6 @@ package connections
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
 	"time"
 
@@ -107,7 +106,7 @@ func (nfct *netFilterConnTrack) Dial() error {
 }
 
 func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
-	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{})
+	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -124,40 +123,24 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 }
 
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
-	convIP := func(ip net.IP) netip.Addr {
-		// IPv4 addresses in conntrack.Flow are stored as IPv4-mapped IPv6 addresses. If we
-		// use netip.AddrFromSlice directly, we will end up with a netip.Addr object of type
-		// Is4In6, and when we call String() on that object, it will be formatted with a
-		// "::ffff:" prefix before the dotted quad.
-		ip4 := ip.To4()
-		if ip4 != nil {
-			addr, _ := netip.AddrFromSlice(ip4)
-			return addr
-		}
-		addr, _ := netip.AddrFromSlice(ip)
-		return addr
-	}
-
-	tuple := flowexporter.Tuple{
-		SourceAddress:      convIP(conn.TupleOrig.IP.SourceAddress),
-		DestinationAddress: convIP(conn.TupleReply.IP.SourceAddress),
-		Protocol:           conn.TupleOrig.Proto.Protocol,
-		SourcePort:         conn.TupleOrig.Proto.SourcePort,
-		DestinationPort:    conn.TupleReply.Proto.SourcePort,
-	}
-	// Assign all the applicable fields
 	newConn := flowexporter.Connection{
-		ID:                        conn.ID,
-		Timeout:                   conn.Timeout,
-		StartTime:                 conn.Timestamp.Start,
-		IsPresent:                 true,
-		Zone:                      conn.Zone,
-		Mark:                      conn.Mark,
-		Labels:                    conn.Labels,
-		LabelsMask:                conn.LabelsMask,
-		StatusFlag:                uint32(conn.Status.Value),
-		FlowKey:                   tuple,
-		DestinationServiceAddress: convIP(conn.TupleOrig.IP.DestinationAddress),
+		ID:         conn.ID,
+		Timeout:    conn.Timeout,
+		StartTime:  conn.Timestamp.Start,
+		IsPresent:  true,
+		Zone:       conn.Zone,
+		Mark:       conn.Mark,
+		Labels:     conn.Labels,
+		LabelsMask: conn.LabelsMask,
+		StatusFlag: uint32(conn.Status.Value),
+		FlowKey: flowexporter.Tuple{
+			SourceAddress:      conn.TupleOrig.IP.SourceAddress,
+			DestinationAddress: conn.TupleReply.IP.SourceAddress,
+			Protocol:           conn.TupleOrig.Proto.Protocol,
+			SourcePort:         conn.TupleOrig.Proto.SourcePort,
+			DestinationPort:    conn.TupleReply.Proto.SourcePort,
+		},
+		DestinationServiceAddress: conn.TupleOrig.IP.DestinationAddress,
 		DestinationServicePort:    conn.TupleOrig.Proto.DestinationPort,
 		OriginalPackets:           conn.CountersOrig.Packets,
 		OriginalBytes:             conn.CountersOrig.Bytes,
