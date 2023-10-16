@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const waitEgressRealizedTimeout = 3 * time.Second
@@ -285,12 +286,13 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 
 func testEgressCRUD(t *testing.T, data *TestData) {
 	tests := []struct {
-		name             string
-		ipRange          v1beta1.IPRange
-		nodeSelector     metav1.LabelSelector
-		expectedEgressIP string
-		expectedNodes    sets.Set[string]
-		expectedTotal    int
+		name               string
+		ipRange            v1beta1.IPRange
+		nodeSelector       metav1.LabelSelector
+		expectedEgressIP   string
+		expectedNodes      sets.Set[string]
+		expectedTotal      int
+		expectedConditions []v1beta1.EgressCondition
 	}{
 		{
 			name:    "single matching Node",
@@ -303,6 +305,10 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedEgressIP: "169.254.100.1",
 			expectedNodes:    sets.New[string](nodeName(0)),
 			expectedTotal:    2,
+			expectedConditions: []v1beta1.EgressCondition{
+				{Type: v1beta1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+				{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+			},
 		},
 		{
 			name:    "single matching Node with IPv6 range",
@@ -315,6 +321,10 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedEgressIP: "2021:1::aaa1",
 			expectedNodes:    sets.New[string](nodeName(0)),
 			expectedTotal:    15,
+			expectedConditions: []v1beta1.EgressCondition{
+				{Type: v1beta1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+				{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+			},
 		},
 		{
 			name:    "two matching Nodes",
@@ -331,6 +341,10 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedEgressIP: "169.254.101.10",
 			expectedNodes:    sets.New[string](nodeName(0), nodeName(1)),
 			expectedTotal:    2,
+			expectedConditions: []v1beta1.EgressCondition{
+				{Type: v1beta1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+				{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+			},
 		},
 		{
 			name:    "no matching Node",
@@ -343,6 +357,10 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			expectedEgressIP: "169.254.102.1",
 			expectedNodes:    sets.New[string](),
 			expectedTotal:    2,
+			expectedConditions: []v1beta1.EgressCondition{
+				{Type: v1beta1.IPAssigned, Status: v1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: no Node available"},
+				{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -365,6 +383,9 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 					return false, err
 				}
 				if egress.Spec.EgressIP != tt.expectedEgressIP {
+					return false, nil
+				}
+				if !k8s.SemanticIgnoringTime.DeepEqual(tt.expectedConditions, egress.Status.Conditions) {
 					return false, nil
 				}
 				if tt.expectedNodes.Len() == 0 {

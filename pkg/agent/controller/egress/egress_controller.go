@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -614,7 +614,7 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP string) error {
+func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP string, scheduleErr error) error {
 	isLocal := false
 	if egressIP != "" {
 		isLocal = c.localIPDetector.IsLocalIP(egressIP)
@@ -628,7 +628,7 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 			desiredStatus.Conditions = []crdv1b1.EgressCondition{
 				{
 					Type:               crdv1b1.IPAssigned,
-					Status:             v1.ConditionTrue,
+					Status:             corev1.ConditionTrue,
 					LastTransitionTime: metav1.Now(),
 					Reason:             "Assigned",
 					Message:            "EgressIP is successfully assigned to EgressNode",
@@ -637,6 +637,8 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 		}
 	} else if egressIP == "" {
 		// Select one Node to update false status among all Nodes.
+		// We don't care about the value of egress.Spec.EgressIP, just use it to reach a consensus among all agents
+		// about which one should do the update.
 		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(egress.Spec.EgressIP, "")
 		if err != nil {
 			return err
@@ -647,33 +649,42 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 		}
 		desiredStatus.EgressNode = ""
 		desiredStatus.EgressIP = ""
-		if isEgressSchedulable(egress) {
+		// If the error is nil, it means the Egress hasn't been processed yet.
+		// The scheduler will get a result for the Egress very soon regardless of success or failure and trigger the
+		// controller to process it another time, so we avoid generating a transient state here, which may lead to some
+		// back-off retries due to updating conflict.
+		if scheduleErr != nil {
 			desiredStatus.Conditions = []crdv1b1.EgressCondition{
 				{
 					Type:               crdv1b1.IPAssigned,
-					Status:             v1.ConditionFalse,
+					Status:             corev1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
-					Reason:             "NoAvailableNode",
-					Message:            "No available Node can be elected as EgressNode",
+					Reason:             "AssignmentError",
+					Message:            fmt.Sprintf("Failed to assign the IP to EgressNode: %v", scheduleErr),
 				},
 			}
 		}
 	} else {
+		// The Egress IP is assigned to a Node (egressIP != "") but it's not this Node (isLocal == false), do nothing.
 		return nil
 	}
 
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if compareEgressStatus(toUpdate.Status, *desiredStatus) {
+		if compareEgressStatus(&toUpdate.Status, desiredStatus) {
 			return nil
 		}
+		// Must make a copy here as we will append more conditions. If it's appended to desiredStatus directly, there
+		// would be duplicate conditions when the function retries.
+		statusToUpdate := desiredStatus.DeepCopy()
+		// Copy conditions other than crdv1b1.IPAssigned to statusToUpdate.
 		for _, c := range toUpdate.Status.Conditions {
 			if c.Type != crdv1b1.IPAssigned {
-				desiredStatus.Conditions = append(desiredStatus.Conditions, c)
+				statusToUpdate.Conditions = append(statusToUpdate.Conditions, c)
 			}
 		}
-		toUpdate.Status = *desiredStatus
+		toUpdate.Status = *statusToUpdate
 
 		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
 		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
@@ -717,13 +728,16 @@ func (c *EgressController) syncEgress(egressName string) error {
 
 	var desiredEgressIP string
 	var desiredNode string
+	var scheduleErr error
 	// Only check whether the Egress IP should be assigned to this Node when the Egress is schedulable.
 	// Otherwise, users are responsible for assigning the Egress IP to Nodes.
 	if isEgressSchedulable(egress) {
-		egressIP, egressNode, scheduled := c.egressIPScheduler.GetEgressIPAndNode(egressName)
+		egressIP, egressNode, err, scheduled := c.egressIPScheduler.GetEgressIPAndNode(egressName)
 		if scheduled {
 			desiredEgressIP = egressIP
 			desiredNode = egressNode
+		} else {
+			scheduleErr = err
 		}
 	} else {
 		desiredEgressIP = egress.Spec.EgressIP
@@ -739,7 +753,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 	// Do not proceed if EgressIP is empty.
 	if desiredEgressIP == "" {
-		if err := c.updateEgressStatus(egress, ""); err != nil {
+		if err := c.updateEgressStatus(egress, "", scheduleErr); err != nil {
 			return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 		}
 		return nil
@@ -778,7 +792,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		eState.mark = mark
 	}
 
-	if err := c.updateEgressStatus(egress, desiredEgressIP); err != nil {
+	if err := c.updateEgressStatus(egress, desiredEgressIP, nil); err != nil {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
@@ -1067,20 +1081,18 @@ func isEgressSchedulable(egress *crdv1b1.Egress) bool {
 }
 
 // compareEgressStatus compares two Egress Statuses, ignoring LastTransitionTime and conditions other than IPAssigned, returns true if they are equal.
-func compareEgressStatus(currentStatus, desiredStatus crdv1b1.EgressStatus) bool {
+func compareEgressStatus(currentStatus, desiredStatus *crdv1b1.EgressStatus) bool {
+	if currentStatus == nil && desiredStatus == nil {
+		return true
+	}
+	if currentStatus == nil || desiredStatus == nil {
+		return false
+	}
 	if currentStatus.EgressIP != desiredStatus.EgressIP || currentStatus.EgressNode != desiredStatus.EgressNode {
 		return false
 	}
-	getIPAssignedCondition := func(conditions []crdv1b1.EgressCondition) *crdv1b1.EgressCondition {
-		for _, c := range conditions {
-			if c.Type == crdv1b1.IPAssigned {
-				return &c
-			}
-		}
-		return nil
-	}
-	currentIPAssignedCondition := getIPAssignedCondition(currentStatus.Conditions)
-	desiredIPAssignedCondition := getIPAssignedCondition(desiredStatus.Conditions)
+	currentIPAssignedCondition := crdv1b1.GetEgressCondition(currentStatus.Conditions, crdv1b1.IPAssigned)
+	desiredIPAssignedCondition := crdv1b1.GetEgressCondition(desiredStatus.Conditions, crdv1b1.IPAssigned)
 	if currentIPAssignedCondition == nil && desiredIPAssignedCondition == nil {
 		return true
 	}

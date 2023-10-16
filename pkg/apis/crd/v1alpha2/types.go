@@ -212,8 +212,12 @@ type EgressStatus struct {
 type EgressConditionType string
 
 const (
+	// IPAllocated means at least one IP has been allocated to the Egress from ExternalIPPool.
+	// It is not applicable for Egresses with empty ExternalIPPool.
 	IPAllocated EgressConditionType = "IPAllocated"
-	IPAssigned  EgressConditionType = "IPAssigned"
+	// IPAssigned means the Egress has been assigned to a Node.
+	// It is not applicable for Egresses with empty ExternalIPPool.
+	IPAssigned EgressConditionType = "IPAssigned"
 )
 
 type EgressCondition struct {

@@ -47,6 +47,7 @@ type scheduleEventHandler func(egress string)
 type scheduleResult struct {
 	ip   string
 	node string
+	err  error
 }
 
 // egressIPScheduler is responsible for scheduling Egress IPs to appropriate Nodes according to the Node selector of the
@@ -248,15 +249,18 @@ func (s *egressIPScheduler) AddEventHandler(handler scheduleEventHandler) {
 	s.eventHandlers = append(s.eventHandlers, handler)
 }
 
-func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, bool) {
+func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, error, bool) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
 	result, exists := s.scheduleResults[egress]
 	if !exists {
-		return "", "", false
+		return "", "", nil, false
 	}
-	return result.ip, result.node, true
+	if result.err != nil {
+		return "", "", result.err, false
+	}
+	return result.ip, result.node, nil, true
 }
 
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
@@ -356,6 +360,8 @@ func (s *egressIPScheduler) schedule() {
 			} else {
 				klog.ErrorS(err, "Failed to select Node for Egress", "egress", klog.KObj(egress))
 			}
+			// Store error in its result to differentiate scheduling error from unprocessed case.
+			newResults[egress.Name] = &scheduleResult{err: err}
 			continue
 		}
 		result := &scheduleResult{
@@ -380,7 +386,7 @@ func (s *egressIPScheduler) schedule() {
 		prevResults := s.scheduleResults
 		for egress, result := range newResults {
 			prevResult, exists := prevResults[egress]
-			if !exists || prevResult.ip != result.ip || prevResult.node != result.node {
+			if !exists || prevResult.ip != result.ip || prevResult.node != result.node || prevResult.err != result.err {
 				egressesToUpdate = append(egressesToUpdate, egress)
 			}
 			delete(prevResults, egress)

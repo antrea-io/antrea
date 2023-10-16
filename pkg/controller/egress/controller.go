@@ -475,7 +475,7 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 				Type:               egressv1beta1.IPAllocated,
 				Status:             v1.ConditionFalse,
 				Reason:             "AllocationError",
-				Message:            fmt.Sprintf("Cannot allocate EgressIP from ExternalIPPool %s due to: %v", egress.Spec.ExternalIPPool, err),
+				Message:            fmt.Sprintf("Cannot allocate EgressIP from ExternalIPPool: %v", err),
 				LastTransitionTime: metav1.Now(),
 			}
 		}
@@ -484,7 +484,7 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		actualCondition := getIPAllocatedCondition(toUpdate)
+		actualCondition := egressv1beta1.GetEgressCondition(toUpdate.Status.Conditions, egressv1beta1.IPAllocated)
 		if compareConditionIgnoringTimestamp(actualCondition, desiredCondition) {
 			return nil
 		}
@@ -508,16 +508,6 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 	}); err != nil {
 		klog.ErrorS(err, "Error updating Egress Status")
 	}
-}
-
-// getIPAllocatedCondition gets the IPAllocated condition from an Egress
-func getIPAllocatedCondition(egress *egressv1beta1.Egress) *egressv1beta1.EgressCondition {
-	for _, c := range egress.Status.Conditions {
-		if c.Type == egressv1beta1.IPAllocated {
-			return &c
-		}
-	}
-	return nil
 }
 
 // compareConditionIgnoringTimestamp compares two conditions ignoring the timestamp

@@ -142,6 +142,9 @@ func TestSchedule(t *testing.T) {
 					node: "node2",
 					ip:   "1.1.1.11",
 				},
+				"egressC": {
+					err: memberlist.ErrNoNodeAvailable,
+				},
 			},
 		},
 		{
@@ -177,6 +180,9 @@ func TestSchedule(t *testing.T) {
 				"egressB": {
 					node: "node3",
 					ip:   "1.1.1.11",
+				},
+				"egressC": {
+					err: memberlist.ErrNoNodeAvailable,
 				},
 			},
 		},
@@ -329,7 +335,7 @@ func TestRun(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidD", CreationTimestamp: metav1.NewTime(time.Unix(4, 0))},
 		Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
 	}, metav1.CreateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]())
+	assertReceivedItems(t, egressUpdates, sets.New[string]("egressD"))
 	assertScheduleResult(t, s, "egressD", "", "", false)
 
 	// After node2 joins, egressB should be moved to node2 determined by its consistent hash result, and egressD should be assigned to node1.
@@ -357,6 +363,7 @@ func TestRun(t *testing.T) {
 }
 
 func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[string]) {
+	t.Helper()
 	receivedItems := sets.New[string]()
 	for i := 0; i < expectedItems.Len(); i++ {
 		select {
@@ -376,7 +383,8 @@ func assertReceivedItems(t *testing.T, ch <-chan string, expectedItems sets.Set[
 }
 
 func assertScheduleResult(t *testing.T, s *egressIPScheduler, egress, egressIP, egressNode string, scheduled bool) {
-	gotEgressIP, gotEgressNode, gotScheduled := s.GetEgressIPAndNode(egress)
+	t.Helper()
+	gotEgressIP, gotEgressNode, _, gotScheduled := s.GetEgressIPAndNode(egress)
 	assert.Equal(t, egressIP, gotEgressIP)
 	assert.Equal(t, egressNode, gotEgressNode)
 	assert.Equal(t, scheduled, gotScheduled)
