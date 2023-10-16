@@ -762,7 +762,7 @@ func TestFlowActions(t *testing.T) {
 		{
 			name: "Learn",
 			actionFn: func(b Action) FlowBuilder {
-				return b.Learn(tableID1, 100, 1800, 1800, 100).Done()
+				return b.Learn(tableID1, 100, 1800, 1800, 0, 0, 100).Done()
 			},
 			expectedActionField: &openflow15.NXActionLearn{
 				IdleTimeout: 1800,
@@ -1739,7 +1739,7 @@ func TestLearnActions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			learnAction := tc.learnActionFn(table.BuildFlow(1).Action().Learn(targetTable, priority, idleTimeout, hardTimeout, cookieID))
+			learnAction := tc.learnActionFn(table.BuildFlow(1).Action().Learn(targetTable, priority, idleTimeout, hardTimeout, 0, 0, cookieID))
 			action := learnAction.(*ofLearnAction).nxLearn.GetActionMessage().(*openflow15.NXActionLearn)
 			checkLearnSpecs(t, tc.expectedActionFields, action.LearnSpecs)
 			flowMod := getFlowMod(t, learnAction.Done().Done())
