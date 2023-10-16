@@ -12,6 +12,9 @@ spec:
     metadata:
       labels:
         component: antrea-agent
+      annotations:
+        checksum/windows-config: windows-config-checksum-placeholder
+        checksum/agent-windows: agent-windows-checksum-placeholder
     spec:
       containers:
         - command:
