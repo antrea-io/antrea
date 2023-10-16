@@ -25,6 +25,9 @@
   .PARAMETER InstallUserspace
   Specifies whether OVS userspace processes are included in the installation. If false, these processes will not 
   be installed as a Windows service on the host.
+
+  .PARAMETER LocalSSLFile
+  Specifies the path of a local SSL package to be used for installation.
 #>
 Param(
     [parameter(Mandatory = $false)] [string] $DownloadDir,
@@ -33,7 +36,8 @@ Param(
     [parameter(Mandatory = $false)] [bool] $CheckFileHash = $true,
     [parameter(Mandatory = $false)] [string] $LocalFile,
     [parameter(Mandatory = $false)] [bool] $ImportCertificate = $true,
-    [parameter(Mandatory = $false)] [bool] $InstallUserspace = $true
+    [parameter(Mandatory = $false)] [bool] $InstallUserspace = $true,
+    [parameter(Mandatory = $false)] [string] $LocalSSLFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -206,30 +210,41 @@ function InstallOVS() {
 
 function InstallDependency() {
     # Check if SSL library has been installed
-    $pathEntries = $env:Path.Split(";") | ForEach-Object {
-        if ((Test-Path "$_/ssleay32.dll" -PathType Leaf) -and (Test-Path "$_/libeay32.dll" -PathType Leaf)) {
+    $paths = $env:Path.Split(";")
+    foreach($path in $paths) {
+        if ((Test-Path "$path/ssleay32.dll" -PathType Leaf) -and (Test-Path "$path/libeay32.dll" -PathType Leaf)) {
             Log "Found existing SSL library."
             return
         }
     }
-    $SSLZip = "openssl-1.0.2u-x64_86-win64.zip"
-    $SSLMD5 = "E723E1C479983F35A0901243881FA046"
-    $SSLDownloadURL = "https://indy.fulgan.com/SSL/$SSLZip"
-    curl.exe -LO $SSLDownloadURL
-    If (!$?) {
-        Log "Download SSL files failed, URL: $SSLDownloadURL"
-        Log "Please install ssleay32.dll and libeay32.dll to $OVSInstallDir\usr\sbin\ manually"
-        exit 1
+    if ($LocalSSLFile) {
+        if ($LocalSSLFile -like "*.zip") {
+            Log "Install local SSL library."
+            Expand-Archive $LocalSSLFile -DestinationPath openssl
+        } else {
+            Log "The local SSL package must be in ZIP format, exit"
+            exit 1
+        }
+    } else {
+        $SSLZip = "openssl-1.0.2u-x64_86-win64.zip"
+        $SSLMD5 = "E723E1C479983F35A0901243881FA046"
+        $SSLDownloadURL = "https://github.com/IndySockets/OpenSSL-Binaries/raw/21d81384bfe589273e6b2ac1389c40e8f0ca610d/$SSLZip"
+        curl.exe -LO $SSLDownloadURL
+        If (!$?) {
+            Log "Download SSL files failed, URL: $SSLDownloadURL"
+            Log "Please install ssleay32.dll and libeay32.dll to $OVSInstallDir\usr\sbin\ manually"
+            exit 1
+        }
+        $MD5Result = Get-FileHash $SSLZip -Algorithm MD5 | Select -ExpandProperty "Hash"
+        If ($MD5Result -ne $SSLMD5){
+            Log "Wrong md5sum, Please check the file integrity"
+            exit 1
+        }
+        Expand-Archive $SSLZip -DestinationPath openssl
+        rm $SSLZip
     }
-    $MD5Result = Get-FileHash $SSLZip -Algorithm MD5 | Select -ExpandProperty "Hash"
-    If ($MD5Result -ne $SSLMD5){
-        Log "Wrong md5sum, Please check the file integrity"
-        exit 1
-    }
-    Expand-Archive $SSLZip -DestinationPath openssl
     cp -Force openssl/*.dll $OVSInstallDir\usr\sbin\
     rm -Recurse -Force openssl
-    rm $SSLZip
 }
 
 function ConfigOVS() {
