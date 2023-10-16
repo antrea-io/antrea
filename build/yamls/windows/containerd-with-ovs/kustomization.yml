@@ -13,3 +13,5 @@ configMapGenerator:
   name: antrea-agent-windows
   namespace: kube-system
   behavior: merge
+generatorOptions:
+  disableNameSuffixHash: true

@@ -24,7 +24,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-75tg78f7k9
+  name: antrea-agent-windows
   namespace: kube-system
 ---
 apiVersion: v1
@@ -186,7 +186,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-c2c7f4kbbc
+  name: antrea-windows-config
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -205,6 +205,8 @@ spec:
   template:
     metadata:
       annotations:
+        checksum/agent-windows: 7749579c82f76822f449f6d6f765f07486310e8cd21cb117c8349ad1e118788b
+        checksum/windows-config: 6be75a1fcb4855e2e138e36109862d93f16e2d654312c74532bbcc64c65af3d9
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea
@@ -270,11 +272,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-c2c7f4kbbc
+          name: antrea-windows-config
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-75tg78f7k9
+          name: antrea-agent-windows
         name: antrea-agent-windows
       - hostPath:
           path: /var/log/antrea/

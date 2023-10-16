@@ -10,3 +10,5 @@ configMapGenerator:
 - files:
   - conf/Run-AntreaAgent.ps1
   name: antrea-agent-windows
+generatorOptions:
+  disableNameSuffixHash: true
