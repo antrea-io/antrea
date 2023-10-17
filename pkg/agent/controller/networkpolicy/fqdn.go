@@ -535,7 +535,8 @@ func (rst *ruleSyncTracker) subscribe(waitCh chan error, dirtyRules sets.String)
 func (rst *ruleSyncTracker) getDirtyRules() sets.String {
 	rst.mutex.RLock()
 	defer rst.mutex.RUnlock()
-	return rst.dirtyRules
+	// Must return a copy as the set can be updated in-place by Run func.
+	return rst.dirtyRules.Union(nil)
 }
 
 func (rst *ruleSyncTracker) Run(stopCh <-chan struct{}) {
