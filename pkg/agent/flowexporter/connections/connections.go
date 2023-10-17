@@ -108,9 +108,6 @@ func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 
 	srcPod, srcFound := cs.podStore.GetPodByIPAndTime(srcIP, conn.StartTime)
 	dstPod, dstFound := cs.podStore.GetPodByIPAndTime(dstIP, conn.StartTime)
-	if !srcFound && !dstFound {
-		klog.Warningf("Cannot map any of the IP %s or %s to a local Pod", srcIP, dstIP)
-	}
 	if srcFound {
 		conn.SourcePodName = srcPod.Name
 		conn.SourcePodNamespace = srcPod.Namespace
@@ -125,9 +122,7 @@ func (cs *connectionStore) fillServiceInfo(conn *flowexporter.Connection, servic
 	// resolve destination Service information
 	if cs.antreaProxier != nil {
 		servicePortName, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
-		if !exists {
-			klog.Warningf("Could not retrieve the Service info from antrea-agent-proxier for the serviceStr: %s", serviceStr)
-		} else {
+		if exists {
 			conn.DestinationServicePortName = servicePortName.String()
 		}
 	}
