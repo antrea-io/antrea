@@ -525,18 +525,32 @@ func TestNewTraceflow(t *testing.T) {
 
 func TestGetTFName(t *testing.T) {
 	tests := []struct {
-		name   string
-		prefix string
-		nowait string
+		name     string
+		prefix   string
+		nowait   string
+		expected string
 	}{
 		{
-			name:   "nowait is true",
-			prefix: "traceflow",
-			nowait: "1",
+			name:     "nowait is true",
+			prefix:   "default-pod1-to-default-pod2",
+			nowait:   "1",
+			expected: "default-pod1-to-default-pod2",
 		},
 		{
-			name:   "nowait is false",
-			prefix: "traceflow",
+			name:     "nowait is true and prefix contains IPv6",
+			prefix:   "default-pod1-to-fc00:f853:ccd:e793::2",
+			nowait:   "1",
+			expected: "default-pod1-to-fc00-f853-ccd-e793-2",
+		},
+		{
+			name:     "nowait is false",
+			prefix:   "default-pod1-to-default-pod2",
+			expected: "default-pod1-to-default-pod2",
+		},
+		{
+			name:     "nowait is false and prefix contains IPv6",
+			prefix:   "default-pod1-to-fc00:f853:ccd:e793::2",
+			expected: "default-pod1-to-fc00-f853-ccd-e793-2",
 		},
 	}
 
@@ -547,9 +561,9 @@ func TestGetTFName(t *testing.T) {
 
 			got := getTFName(tc.prefix)
 			if tc.nowait != "" {
-				assert.Equal(t, tc.prefix, got)
+				assert.Equal(t, tc.expected, got)
 			} else {
-				assert.Regexp(t, fmt.Sprintf("^%s-.{8}$", tc.prefix), got)
+				assert.Regexp(t, fmt.Sprintf("^%s-.{8}$", tc.expected), got)
 			}
 		})
 	}
