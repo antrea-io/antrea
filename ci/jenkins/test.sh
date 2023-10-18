@@ -134,8 +134,8 @@ done
 if [[ "${IP_MODE}" == "" ]]; then
     IP_MODE=${DEFAULT_IP_MODE}
 fi
-if [[ "${IP_MODE}" != "${DEFAULT_IP_MODE}" && "${IP_MODE}" != "ipv6" && "${IP_MODE}" != "ds" ]]; then
-    echoerr "--ip-mode must be ipv4, ipv6 or ds"
+if [[ "${IP_MODE}" != "${DEFAULT_IP_MODE}" && "${IP_MODE}" != "ipv6" && "${IP_MODE}" != "dual" ]]; then
+    echoerr "--ip-mode must be ipv4, ipv6 or dual"
     exit 1
 fi
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
@@ -751,7 +751,9 @@ function deliver_antrea {
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
             kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
-            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}
+            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}  
+            kubectl config use-context kind-${KIND_CLUSTER}
+            docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml 
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
@@ -804,7 +806,9 @@ function run_e2e {
 
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
-    cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    if [[ $TESTBED_TYPE != "kind" ]]; then 
+        cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    fi
     generate_ssh_config
 
     set +e
@@ -813,6 +817,8 @@ function run_e2e {
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
+    elif [[ $TESTBED_TYPE == "kind" ]]; then
+        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind -timeout=100m --prometheus
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi
