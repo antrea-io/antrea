@@ -460,6 +460,9 @@ func jsonOutput(r *Response, writer io.Writer) error {
 }
 
 func getTFName(prefix string) string {
+	// prefix may contain IPv6 address. Replace "::"  and ":" to make it a valid RFC 1123 subdomain.
+	prefix = strings.ReplaceAll(prefix, "::", "-")
+	prefix = strings.ReplaceAll(prefix, ":", "-")
 	if option.nowait {
 		return prefix
 	}
