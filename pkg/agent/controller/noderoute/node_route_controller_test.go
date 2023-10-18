@@ -22,6 +22,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
@@ -43,12 +45,16 @@ var (
 	gatewayMAC, _   = net.ParseMAC("00:00:00:00:00:01")
 	_, podCIDR, _   = net.ParseCIDR("1.1.1.0/24")
 	_, podCIDR2, _  = net.ParseCIDR("1.1.2.0/24")
+	_, podCIDR3, _  = net.ParseCIDR("2001:4860:4860::8888/32")
 	podCIDRGateway  = ip.NextIP(podCIDR.IP)
 	podCIDR2Gateway = ip.NextIP(podCIDR2.IP)
+	podCIDR3Gateway = ip.NextIP(podCIDR3.IP)
 	nodeIP1         = net.ParseIP("10.10.10.10")
 	dsIPs1          = utilip.DualStackIPs{IPv4: nodeIP1}
 	nodeIP2         = net.ParseIP("10.10.10.11")
 	dsIPs2          = utilip.DualStackIPs{IPv4: nodeIP2}
+	nodeIP3         = net.ParseIP("2001:db8::68")
+	dsIPs3          = utilip.DualStackIPs{IPv6: nodeIP3}
 )
 
 type fakeController struct {
@@ -186,6 +192,7 @@ func TestIPInPodSubnets(t *testing.T) {
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.Controller.nodeConfig.PodIPv4CIDR = podCIDR
+	c.Controller.nodeConfig.PodIPv6CIDR = podCIDR3
 
 	node1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -221,6 +228,23 @@ func TestIPInPodSubnets(t *testing.T) {
 			},
 		},
 	}
+	node3 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node3",
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR:  podCIDR3.String(),
+			PodCIDRs: []string{podCIDR3.String()},
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: nodeIP3.String(),
+				},
+			},
+		},
+	}
 
 	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
@@ -232,7 +256,13 @@ func TestIPInPodSubnets(t *testing.T) {
 	c.routeClient.EXPECT().AddRoutes(podCIDR2, "node2", nodeIP2, podCIDR2Gateway).Times(1)
 	c.processNextWorkItem()
 
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), node3, metav1.CreateOptions{})
+	c.ofClient.EXPECT().InstallNodeFlows("node3", gomock.Any(), &dsIPs3, uint32(0), nil).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR3, "node3", nodeIP3, podCIDR3Gateway).Times(1)
+	c.processNextWorkItem()
+
 	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.1.1")))
+	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("2001:4860:4860::8889")))
 	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.2.1")))
 	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("10.10.10.10")))
 	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("8.8.8.8")))
@@ -442,6 +472,162 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 			hasErr := err != nil
 			assert.Equal(t, tt.wantErr, hasErr)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestGetNodeMAC(t *testing.T) {
+	validMac, _ := net.ParseMAC("00:1B:44:11:3A:B7")
+
+	tests := []struct {
+		name        string
+		mac         string
+		node        *corev1.Node
+		expectedMac net.HardwareAddr
+		expectedErr string
+	}{
+		{
+			name: "valid MAC address",
+			mac:  validMac.String(),
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{types.NodeMACAddressAnnotationKey: validMac.String()},
+				},
+			},
+			expectedMac: validMac,
+		},
+		{
+			name: "empty MAC in Node annotation",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{types.NodeMACAddressAnnotationKey: ""},
+				},
+			},
+		},
+		{
+			name: "invalid MAC address",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{types.NodeMACAddressAnnotationKey: "00:1B:44:11:3A:BG"},
+				},
+			},
+			expectedErr: "failed to parse MAC",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getNodeMAC(tt.node)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedMac, got)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestParseTunnelInterfaceConfig(t *testing.T) {
+	tests := []struct {
+		name                    string
+		portData                *ovsconfig.OVSPortData
+		portConfig              *interfacestore.OVSPortConfig
+		expectedInterfaceConfig *interfacestore.InterfaceConfig
+	}{
+		{
+			name: "Tunnel interface",
+			portData: &ovsconfig.OVSPortData{
+				Name:   "antrea-tun0",
+				IFType: "gre",
+				Options: map[string]string{
+					"dst_port": "2",
+				},
+				OFPort: 1,
+			},
+			portConfig: &interfacestore.OVSPortConfig{
+				OFPort: 1,
+			},
+			expectedInterfaceConfig: &interfacestore.InterfaceConfig{
+				InterfaceName: "antrea-tun0",
+				Type:          interfacestore.TunnelInterface,
+				TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
+					Type:            ovsconfig.TunnelType("gre"),
+					DestinationPort: 2,
+				},
+				OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}},
+		},
+		{
+			name: "IPSec tunnel interface",
+			portData: &ovsconfig.OVSPortData{
+				Name:   "antrea-ipsec-tun",
+				IFType: "gre",
+				Options: map[string]string{
+					"remote_name": "testNode",
+					"dst_port":    "2",
+				},
+				OFPort:      1,
+				ExternalIDs: map[string]string{ovsExternalIDNodeName: "testNode"},
+			},
+			portConfig: &interfacestore.OVSPortConfig{
+				OFPort: 1,
+			},
+			expectedInterfaceConfig: &interfacestore.InterfaceConfig{
+				InterfaceName: "antrea-ipsec-tun",
+				Type:          interfacestore.IPSecTunnelInterface,
+				TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
+					Type:       ovsconfig.TunnelType("gre"),
+					NodeName:   "testNode",
+					RemoteName: "testNode",
+				},
+				OVSPortConfig: &interfacestore.OVSPortConfig{OFPort: 1}},
+		},
+		{
+			name:       "portData with no options",
+			portData:   &ovsconfig.OVSPortData{},
+			portConfig: &interfacestore.OVSPortConfig{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseTunnelInterfaceConfig(tt.portData, tt.portConfig)
+			assert.Equal(t, tt.expectedInterfaceConfig, got)
+		})
+	}
+}
+
+func TestGetPodCIDRsOnNode(t *testing.T) {
+	tests := []struct {
+		name     string
+		node     *corev1.Node
+		expected []string
+	}{
+		{
+			name: "non-empty PodCIDRs",
+			node: &corev1.Node{
+				Spec: corev1.NodeSpec{
+					PodCIDRs: []string{"192.168.2.0/24"},
+				},
+			},
+			expected: []string{"192.168.2.0/24"},
+		},
+		{
+			name: "non-empty PodCIDR",
+			node: &corev1.Node{
+				Spec: corev1.NodeSpec{
+					PodCIDR: "192.168.1.0/24",
+				},
+			},
+			expected: []string{"192.168.1.0/24"},
+		},
+		{
+			name: "empty PodCIDRs and PodCIDR",
+			node: &corev1.Node{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getPodCIDRsOnNode(tt.node)
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
