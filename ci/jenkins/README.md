@@ -185,6 +185,15 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase networkpolicy --registry ${DOCKER_REGISTRY} --testbed-type "kind" --kind-cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
 ```
 
+* "/stop-all-jobs": Trigger '/stop-all-jobs' to stop stale running or waiting jobs related to a PR,
+and for now this feature is enabled only for [capv-related jobs](http://jenkins.antrea-ci.rocks/label/antrea-test-node/).
+
+```shell
+#!/bin/bash
+set -e
+./ci/jenkins/stop-stale-jobs.sh --pull-request "${{ghprbPullId}}" --jenkins "${{JENKINS_URL}}"
+```
+
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 
