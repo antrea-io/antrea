@@ -203,6 +203,9 @@ specific function. For example:
 * test/e2e/* change: skip conformance and networkpolicy checks
 * *_windows.go change: skip Linux checks
 
+Besides skipping specific checks you can also cancel all stale running or waiting capv jenkins jobs related to your PR with
+`/stop-all-jobs`.
+
 For more information about the tests we run as part of CI, please refer to
 [ci/README.md](ci/README.md).
 
