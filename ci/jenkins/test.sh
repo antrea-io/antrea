@@ -344,12 +344,15 @@ function prepare_env {
 function revert_snapshot_windows {
     WIN_NAME=$1
     echo "==== Reverting Windows VM ${WIN_NAME} ====="
-    if [[ $WIN_NAME == *"jumper"* ]]; then
-        govc snapshot.revert -vm ${WIN_NAME} win-initial
+    if [[ ${TESTCASE} =~ "containerd" ]]; then
+        if [[ $WIN_NAME == *"jumper"* || $WIN_NAME == *"win-image"* || ${TESTCASE} == *"userspace"* ]]; then
+            govc snapshot.revert -vm ${WIN_NAME} win-initial
+        else
+            govc snapshot.revert -vm ${WIN_NAME} pristine-win-initial
     else
-        govc snapshot.revert -vm ${WIN_NAME} pristine-win-initial
+        govc snapshot.revert -vm ${WIN_NAME} win-initial
     fi
-    # If Windows VM fails to power on correctly in time, retry several times.
+
     winVMIPs=""
     for i in `seq 10`; do
         winVMIPs=$(govc vm.ip -wait=2m -a ${WIN_NAME})
@@ -542,7 +545,7 @@ function build_and_deliver_antrea_windows_and_linux_docker_images {
 function  build_and_deliver_antrea_windows_and_linux_containerd_images {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows and Antrea Linux containerd Images ====="
     clean_antrea
-    kubectl delete -f ${WORKDIR}/antrea-windows-containerd-with-ovs.yml --ignore-not-found=true || true
+    kubectl delete -f ${WORKDIR}/antrea-${WINDOWS_YAML_SUFFIX}.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true || true
@@ -555,11 +558,11 @@ function  build_and_deliver_antrea_windows_and_linux_containerd_images {
     ${PRINT_DOCKER_STATUS}
     export_govc_env_var
     # Enable verbose log for troubleshooting.
-    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd-with-ovs.yml
+    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-${WINDOWS_YAML_SUFFIX}.yml
 
     echo "====== Updating yaml files to enable proxyAll ======"
     KUBE_API_SERVER=$(kubectl --kubeconfig=$KubeConfigFile config view -o jsonpath='{.clusters[0].cluster.server}')
-    sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_API_SERVER}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd-with-ovs.yml
+    sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_API_SERVER}\"|g" build/yamls/antrea.yml build/yamls/antrea-${WINDOWS_YAML_SUFFIX}.yml
 
     cp -f build/yamls/*.yml $WORKDIR
     set +e
