@@ -85,7 +85,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase networkpolicy --registry ${DOCKER_REGISTRY}
 ```
 
-* windows e2e: e2e tests in a Windows setup with Docker runtime.
+* Windows e2e: e2e tests in a Windows setup.
 
 ```shell
 #!/bin/bash
@@ -93,11 +93,10 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY}
 ```
 
-* windows conformance: community tests on Windows cluster with Docker runtime, focusing on "Conformance|sig-windows" and
+* Windows conformance: community tests on Windows cluster
+  with OVS daemons running inside a container, focusing on "conformance|sig-windows" and
   "sig-network", and skipping "LinuxOnly", "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage",
-  "sig-auth", "sig-api-machinery", "sig-apps", "sig-node", "Privileged", "should be able to change the type from",
-  "[sig-network] Services should be able to create a functioning NodePort service [Conformance]", "Service endpoints
-  latency should not be very high".
+  "sig-auth", "sig-api-machinery", "sig-apps", "sig-node", "Privileged".
 
 ```shell
 #!/bin/bash
@@ -105,48 +104,13 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-conformance --registry ${DOCKER_REGISTRY}
 ```
 
-* windows network policy: community tests on Windows cluster with Docker runtime, focusing on "Feature:NetworkPolicy".
+* Windows network policy: community tests on Windows cluster,
+  with OVS daemons running inside a container focusing on "Feature:NetworkPolicy".
 
 ```shell
 #!/bin/bash
 DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-networkpolicy --registry ${DOCKER_REGISTRY}
-```
-
-* windows e2e with proxyAll enabled: e2e tests in a Windows setup with proxyAll enabled.
-
-```shell
-#!/bin/bash
-DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
-```
-
-* windows containerd e2e: e2e tests in a Windows setup with containerd runtime.
-
-```shell
-#!/bin/bash
-DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --win-image-node {antrea_win_image_node_name}
-```
-
-* windows containerd conformance: community tests on Windows cluster with containerd runtime, focusing on "Conformance|sig-windows" and
-  "sig-network", and skipping "LinuxOnly", "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage",
-  "sig-auth", "sig-api-machinery", "sig-apps", "sig-node", "Privileged", "should be able to change the type from",
-  "[sig-network] Services should be able to create a functioning NodePort service [Conformance]", "Service endpoints
-  latency should not be very high".
-
-```shell
-#!/bin/bash
-DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-./ci/jenkins/test.sh --testcase windows-conformance --registry ${DOCKER_REGISTRY} --win-image-node {antrea_win_image_node_name}
-```
-
-* windows containerd network policy: community tests on Windows cluster with containerd runtime, focusing on "Feature:NetworkPolicy".
-
-```shell
-#!/bin/bash
-DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-./ci/jenkins/test.sh --testcase windows-networkpolicy --registry ${DOCKER_REGISTRY} --win-image-node {antrea_win_image_node_name}
 ```
 
 * Multicast e2e: e2e tests in a multicast cluster
@@ -333,5 +297,5 @@ updated with new code.
 
 ## Tips for Developer
 
-* [macro.yaml](jobs/macros.yaml): Use "{{}}" instead of "{}" to escape the "{" in "builder-list-tests", "builder-conformance" and "builder-*-win-containerd" because the macro has parameters.
+* [macro.yaml](jobs/macros.yaml): Use "{{}}" instead of "{}" to escape the "{" in "builder-list-tests", "builder-conformance" and "builder-*-win" because the macro has parameters.
 * While setting up the Rancher testbed, delete the cattle-cluster-agent deployment and use cattle-node-agent because cluster-agent adds extra watchers for all the resources. Antrea Controller counts connected Antrea Agent from watcher connections. Extra watchers lead to wrong Antrea Agent number in AntreaControllerInfo CR.
