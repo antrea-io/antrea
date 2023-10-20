@@ -23,6 +23,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/podstore"
@@ -98,7 +99,9 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		ds.fillPodInfo(conn)
 		protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
 		serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
-		ds.fillServiceInfo(conn, serviceStr)
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
+			ds.fillServiceInfo(conn, serviceStr)
+		}
 		metrics.TotalDenyConnections.Inc()
 		conn.IsActive = true
 		ds.connections[connKey] = conn
