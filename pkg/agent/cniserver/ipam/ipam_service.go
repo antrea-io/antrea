@@ -54,12 +54,6 @@ func RegisterIPAMDriver(ipamType string, ipamDriver IPAMDriver) {
 	ipamDrivers[ipamType] = append(ipamDrivers[ipamType], ipamDriver)
 }
 
-func ResetIPAMDrivers(ipamType string) {
-	if ipamDrivers != nil {
-		delete(ipamDrivers, ipamType)
-	}
-}
-
 func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {
 	return &invoke.Args{
 		ContainerID: cniArgs.ContainerId,

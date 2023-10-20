@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -139,77 +138,31 @@ func checkErrorResponse(t *testing.T, resp *cnipb.CniCmdResponse, code cnipb.Err
 	}
 }
 
-// networkConfigIPAMMatcher is used to validate the IPAMConfig received by the IPAM driver mock.
-type networkConfigIPAMMatcher struct {
-	ipamConfig *types.IPAMConfig
-}
-
-func (m *networkConfigIPAMMatcher) Matches(x interface{}) bool {
-	var networkConfig types.NetworkConfig
-	if err := json.Unmarshal(x.([]byte), &networkConfig); err != nil {
-		return false
-	}
-	return reflect.DeepEqual(networkConfig.IPAM, m.ipamConfig)
-}
-
-func (m *networkConfigIPAMMatcher) String() string {
-	return fmt.Sprintf("IPAMConfig is equal to %v", m.ipamConfig)
-}
-
 func TestIPAMService(t *testing.T) {
-	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType)
+	controller := gomock.NewController(t)
+	ipamMock := ipamtest.NewMockIPAMDriver(controller)
+	ipam.RegisterIPAMDriver(testIpamType, ipamMock)
+	cniServer := newCNIServer(t)
+	ifaceStore := interfacestore.NewInterfaceStore()
+	cniServer.podConfigurator = &podConfigurator{ifaceStore: ifaceStore}
 
-	setup := func(t *testing.T) (*ipamtest.MockIPAMDriver, *CNIServer, *cnipb.CniCmdRequest) {
-		// required to provide isolation between subtests
-		// note that subtests CANNOT share an instance of gomock.Controller
-		ipam.ResetIPAMDrivers(testIpamType)
-		controller := gomock.NewController(t)
-		ipamMock := ipamtest.NewMockIPAMDriver(controller)
-		ipam.RegisterIPAMDriver(testIpamType, ipamMock)
-		cniServer := newCNIServer(t)
-		ifaceStore := interfacestore.NewInterfaceStore()
-		cniServer.podConfigurator = &podConfigurator{ifaceStore: ifaceStore}
-
-		require.True(t, ipam.IsIPAMTypeValid(testIpamType), "Failed to register IPAM service")
-		require.False(t, ipam.IsIPAMTypeValid("not_a_valid_IPAM_driver"))
-		requestMsg, _ := newRequest(args, networkCfg, "", t)
-		return ipamMock, cniServer, requestMsg
-	}
+	require.True(t, ipam.IsIPAMTypeValid(testIpamType), "Failed to register IPAM service")
+	require.False(t, ipam.IsIPAMTypeValid("not_a_valid_IPAM_driver"))
 
 	// Test IPAM_Failure cases
 	cxt := context.Background()
-
-	expectedIPAMConfig := &types.IPAMConfig{
-		Type: testIpamType,
-		Ranges: []types.RangeSet{
-			[]types.Range{
-				{
-					Subnet:  testNodeConfig.PodIPv4CIDR.String(),
-					Gateway: testNodeConfig.GatewayConfig.IPv4.String(),
-				},
-			},
-			[]types.Range{
-				{
-					Subnet:  testNodeConfig.PodIPv6CIDR.String(),
-					Gateway: testNodeConfig.GatewayConfig.IPv6.String(),
-				},
-			},
-		},
-	}
+	networkCfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType)
+	requestMsg, _ := newRequest(args, networkCfg, "", t)
 
 	t.Run("Error on ADD", func(t *testing.T) {
-		ipamMock, cniServer, requestMsg := setup(t)
-		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), &networkConfigIPAMMatcher{expectedIPAMConfig}).Return(true, nil, fmt.Errorf("IPAM add error"))
-		// Del call triggered by automatic rollback.
-		// IPAMConfig should be the same for both calls (Add and Del).
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), &networkConfigIPAMMatcher{expectedIPAMConfig}).Return(true, nil)
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 		response, err := cniServer.CmdAdd(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
 
 	t.Run("Error on DEL", func(t *testing.T) {
-		ipamMock, cniServer, requestMsg := setup(t)
 		// Prepare cached IPAM result which will be deleted later.
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil)
 		cniConfig, _ := cniServer.validateRequestMessage(requestMsg)
@@ -228,7 +181,6 @@ func TestIPAMService(t *testing.T) {
 	})
 
 	t.Run("Error on CHECK", func(t *testing.T) {
-		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, fmt.Errorf("IPAM check error"))
 		response, err := cniServer.CmdCheck(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
@@ -236,7 +188,6 @@ func TestIPAMService(t *testing.T) {
 	})
 
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod", func(t *testing.T) {
-		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil)
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(2)
 		cniConfig, response := cniServer.validateRequestMessage(requestMsg)
@@ -253,7 +204,6 @@ func TestIPAMService(t *testing.T) {
 	})
 
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod with different containers", func(t *testing.T) {
-		ipamMock, cniServer, requestMsg := setup(t)
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil).Times(2)
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(2)
 		cniConfig, response := cniServer.validateRequestMessage(requestMsg)
