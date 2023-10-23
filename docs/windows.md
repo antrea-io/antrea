@@ -222,12 +222,25 @@ kubectl apply -f -
 
 ##### 1. (Optional) Install OVS (provided by Antrea or your own)
 
+Antrea supports running OVS on Windows as native services or inside a
+host-process container. If you have an OVS package with a signed kernel
+driver and want to run OVS inside container, you can skip this step.
+
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try the
 Antrea on Windows, this package can be used for testing. We also provide a helper
 script `Install-OVS.ps1` to install the OVS driver and register userspace binaries
-as services. If you want to use your own signed OVS package for production, you can
-run `Install-OVS.ps1` like this:
+as services. 
+
+If you want to containerize OVS with an unsigned kernel driver, you must
+pre-install the driver on the worker node before joining cluster. Hence, 
+you need to run the `Install-OVS.ps1` script to install only the driver like this:
+
+```powershell
+.\Install-OVS.ps1 -InstallUserspace $false
+```
+
+If you want to run OVS as Windows native services, you can run the script like this,
 
 ```powershell
 Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>
@@ -254,13 +267,6 @@ Verify the OVS services are installed.
 ```powershell
 get-service ovsdb-server
 get-service ovs-vswitchd
-```
-
-If you want to containerize OVS for containerd runtime, OVS userspace processes are
-not run on the host and hence you can set the `InstallUserspace` parameter to false.
-
-```powershell
-.\Install-OVS.ps1 -InstallUserspace $false
 ```
 
 ##### 2. Disable Windows Firewall
@@ -339,6 +345,16 @@ The script `Prepare-AntreaAgent.ps1` performs following tasks:
 
     After the Windows Node reboots, there will be stale network resources which
     need to be cleaned before starting antrea-agent.
+
+* Ensure OVS services are running.
+
+    This script starts OVS services on the Node if they are not running. This step
+    needs to be skipped in case of OVS containerization. Hence, you need to specify
+    the parameter `RunOVSServices` as false.
+    
+    ```powershell
+    & C:\k\antrea\Prepare-AntreaAgent.ps1 -RunOVSServices $false
+    ```
 
 As you know from the task details from above, the script must be executed every
 time you restart the Node to prepare the environment for antrea-agent.
