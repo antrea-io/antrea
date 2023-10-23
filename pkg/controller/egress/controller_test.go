@@ -45,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/controller/egress/store"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/grouping"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var (
@@ -742,7 +743,7 @@ func TestSyncEgressIP(t *testing.T) {
 			go controller.externalIPAllocator.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 			controller.restoreIPAllocations(tt.existingEgresses)
-			getEgressIP, err := controller.syncEgressIP(tt.inputEgress)
+			getEgressIP, _, err := controller.syncEgressIP(tt.inputEgress)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -765,4 +766,110 @@ func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolNam
 		return eip.Status.Usage.Used == used, nil
 	})
 	assert.NoError(t, err)
+}
+
+func TestUpdateEgressAllocatedCondition(t *testing.T) {
+	tests := []struct {
+		name           string
+		inputEgress    *v1beta1.Egress
+		inputErr       error
+		expectedStatus v1beta1.EgressStatus
+	}{
+		{
+			name: "allocating IP succeeds",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "1.1.1.1",
+					ExternalIPPool: "pool1",
+				},
+			},
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{
+					{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "allocating IP fails",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					ExternalIPPool: "pool1",
+				},
+			},
+			inputErr: fmt.Errorf("no available IP"),
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{
+					{Type: v1beta1.IPAllocated, Status: v1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: no available IP"},
+				},
+			},
+		},
+		{
+			name: "specifying IP fails",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "1.1.1.1",
+					ExternalIPPool: "pool1",
+				},
+			},
+			inputErr: fmt.Errorf("IP already used"),
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{
+					{Type: v1beta1.IPAllocated, Status: v1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: IP already used"},
+				},
+			},
+		},
+		{
+			name: "updating condition succeeds",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "1.1.1.1",
+					ExternalIPPool: "pool1",
+				},
+				Status: v1beta1.EgressStatus{
+					Conditions: []v1beta1.EgressCondition{
+						{Type: v1beta1.IPAllocated, Status: v1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: no available IP"},
+					},
+				},
+			},
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{
+					{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "removing condition succeeds",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIP:       "1.1.1.1",
+					ExternalIPPool: "", // ExternalIPPool is removed.
+				},
+				Status: v1beta1.EgressStatus{
+					Conditions: []v1beta1.EgressCondition{
+						{Type: v1beta1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully allocated"},
+						{Type: v1beta1.IPAllocated, Status: v1.ConditionFalse, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+					},
+				},
+			},
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{ // It should only delete IPAllocated condition.
+					{Type: v1beta1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := newController(nil, []runtime.Object{tt.inputEgress})
+			controller.updateEgressAllocatedCondition(tt.inputEgress, tt.inputErr)
+			gotEgress, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), tt.inputEgress.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(tt.expectedStatus, gotEgress.Status), "Expected:\n%v\ngot:\n%v", tt.expectedStatus, gotEgress.Status)
+		})
+	}
 }

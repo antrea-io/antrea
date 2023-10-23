@@ -235,6 +235,7 @@ rules:
     resources:
       - clustergroups/status
       - groups/status
+      - egresses/status
     verbs:
       - update
   - apiGroups:

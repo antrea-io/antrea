@@ -88,6 +88,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination":                                schema_pkg_apis_crd_v1beta1_Destination(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress":                                     schema_pkg_apis_crd_v1beta1_Egress(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition":                            schema_pkg_apis_crd_v1beta1_EgressCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressList":                                 schema_pkg_apis_crd_v1beta1_EgressList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec":                                 schema_pkg_apis_crd_v1beta1_EgressSpec(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus":                               schema_pkg_apis_crd_v1beta1_EgressStatus(ref),
@@ -3400,6 +3401,50 @@ func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.Ope
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_EgressCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"lastTransitionTime": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_EgressList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3538,10 +3583,25 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 							Format:      "",
 						},
 					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition"),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"egressNode", "egressIP"},
 			},
 		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition"},
 	}
 }
 
