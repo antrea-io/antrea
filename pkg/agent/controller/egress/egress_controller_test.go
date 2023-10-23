@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -59,6 +60,7 @@ const (
 	fakeLocalEgressIP2  = "1.1.1.2"
 	fakeRemoteEgressIP1 = "1.1.1.3"
 	fakeNode            = "node1"
+	fakeNode2           = "node2"
 )
 
 type fakeLocalIPDetector struct {
@@ -106,7 +108,7 @@ func (c *fakeSingleNodeCluster) ShouldSelectIP(ip string, pool string, filters .
 func (c *fakeSingleNodeCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
 	for _, filter := range filters {
 		if !filter(c.node) {
-			return "", nil
+			return "", memberlist.ErrNoNodeAvailable
 		}
 	}
 	return c.node, nil
@@ -585,7 +587,9 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: "external-ip-pool"},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode},
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+					}},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -630,12 +634,16 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: "external-ip-pool"},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+					}},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
-					Status:     crdv1b1.EgressStatus{},
+					Status: crdv1b1.EgressStatus{Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAssigned, Status: v1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: no Node available"},
+					}},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -644,8 +652,6 @@ func TestSyncEgress(t *testing.T) {
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
-				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Times(2)
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(3), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 			},
 		},
 		{
@@ -738,7 +744,7 @@ func TestSyncEgress(t *testing.T) {
 			for _, expectedEgress := range tt.expectedEgresses {
 				gotEgress, err := c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), expectedEgress.Name, metav1.GetOptions{})
 				require.NoError(t, err)
-				assert.Equal(t, expectedEgress, gotEgress)
+				assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedEgress, gotEgress))
 			}
 		})
 	}
@@ -940,42 +946,66 @@ func TestUpdateEgressStatus(t *testing.T) {
 	updateError := fmt.Errorf("update Egress error")
 	tests := []struct {
 		name                 string
+		egress               *crdv1b1.Egress
+		egressIP             string
+		scheduleErr          error
 		updateErrorNum       int
 		updateError          error
 		getErrorNum          int
+		selectedNodeForIP    string
 		expectedUpdateCalled int
 		expectedGetCalled    int
 		expectedError        error
+		expectedEgressStatus crdv1b1.EgressStatus
 	}{
 		{
-			name:                 "succeed immediately",
-			updateErrorNum:       0,
-			updateError:          nil,
-			getErrorNum:          0,
+			name: "updating static Egress succeeds immediately",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+			},
+			egressIP:             fakeLocalEgressIP1,
 			expectedUpdateCalled: 1,
-			expectedGetCalled:    0,
-			expectedError:        nil,
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				EgressNode: fakeNode,
+				EgressIP:   fakeLocalEgressIP1,
+			},
 		},
 		{
-			name:                 "succeed after one update conflict failure",
+			name: "updating static Egress succeeds after one update conflict failure",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+			},
+			egressIP:             fakeLocalEgressIP1,
 			updateErrorNum:       1,
 			updateError:          updateConflictError,
-			getErrorNum:          0,
 			expectedUpdateCalled: 2,
 			expectedGetCalled:    1,
-			expectedError:        nil,
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				EgressNode: fakeNode,
+				EgressIP:   fakeLocalEgressIP1,
+			},
 		},
 		{
-			name:                 "fail after one update failure",
+			name: "updating static Egress fails after one update failure",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+			},
+			egressIP:             fakeLocalEgressIP1,
 			updateErrorNum:       1,
 			updateError:          updateError,
-			getErrorNum:          0,
 			expectedUpdateCalled: 1,
-			expectedGetCalled:    0,
 			expectedError:        updateError,
 		},
 		{
-			name:                 "fail after one update conflict failure and one get failure",
+			name: "updating static Egress fails after one update conflict failure and one get failure",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+			},
+			egressIP:             fakeLocalEgressIP1,
 			updateErrorNum:       1,
 			updateError:          updateConflictError,
 			getErrorNum:          1,
@@ -983,41 +1013,150 @@ func TestUpdateEgressStatus(t *testing.T) {
 			expectedGetCalled:    1,
 			expectedError:        getError,
 		},
+		{
+			name: "updating static Egress with remote IP does nothing",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1},
+			},
+			egressIP: fakeRemoteEgressIP1,
+		},
+		{
+			name: "updating HA Egress with local IP succeeds immediately",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: "external-ip-pool"},
+				Status: crdv1b1.EgressStatus{
+					Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+					},
+				},
+			},
+			egressIP:             fakeLocalEgressIP1,
+			expectedUpdateCalled: 1,
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				EgressNode: fakeNode,
+				EgressIP:   fakeLocalEgressIP1,
+				Conditions: []crdv1b1.EgressCondition{
+					{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
+					{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "updating HA Egress with remote IP does nothing",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
+				Status: crdv1b1.EgressStatus{
+					Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+					},
+				},
+			},
+			egressIP: fakeRemoteEgressIP1,
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				Conditions: []crdv1b1.EgressCondition{
+					{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "updating HA Egress with schedule error succeeds immediately",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
+				Status: crdv1b1.EgressStatus{
+					Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+					},
+				},
+			},
+			scheduleErr:          memberlist.ErrNoNodeAvailable,
+			selectedNodeForIP:    fakeNode,
+			expectedUpdateCalled: 1,
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				Conditions: []crdv1b1.EgressCondition{
+					{Type: crdv1b1.IPAssigned, Status: v1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: no Node available"},
+					{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "updating HA Egress with schedule error succeeds after one update conflict failure",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
+				Status: crdv1b1.EgressStatus{
+					Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+					},
+				},
+			},
+			scheduleErr:          memberlist.ErrNoNodeAvailable,
+			selectedNodeForIP:    fakeNode,
+			updateError:          updateConflictError,
+			updateErrorNum:       2,
+			expectedUpdateCalled: 3,
+			expectedGetCalled:    2,
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				Conditions: []crdv1b1.EgressCondition{
+					{Type: crdv1b1.IPAssigned, Status: v1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign the IP to EgressNode: no Node available"},
+					{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "updating HA Egress with schedule error does nothing when the Node is not selected to update",
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
+				Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: "external-ip-pool"},
+				Status: crdv1b1.EgressStatus{
+					Conditions: []crdv1b1.EgressCondition{
+						{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+					},
+				},
+			},
+			scheduleErr:       memberlist.ErrNoNodeAvailable,
+			selectedNodeForIP: fakeNode2, // Not this Node.
+			expectedEgressStatus: crdv1b1.EgressStatus{
+				Conditions: []crdv1b1.EgressCondition{
+					{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			egress := crdv1b1.Egress{
-				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA", ResourceVersion: "fake-ResourceVersion"},
-				Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-			}
-			fakeClient := &fakeversioned.Clientset{}
+			fakeClient := fakeversioned.NewSimpleClientset(tt.egress)
 			getCalled := 0
-			fakeClient.AddReactor("get", "egresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			fakeClient.PrependReactor("get", "egresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				getCalled += 1
 				if getCalled <= tt.getErrorNum {
 					return true, nil, getError
 				}
-				return true, &egress, nil
+				return false, nil, nil
 			})
 			updateCalled := 0
-			fakeClient.AddReactor("update", "*", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			fakeClient.PrependReactor("update", "*", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				updateCalled += 1
 				if updateCalled <= tt.updateErrorNum {
 					return true, nil, tt.updateError
 				}
-				return true, &egress, nil
+				return false, nil, nil
 			})
 
 			localIPDetector := &fakeLocalIPDetector{localIPs: sets.New[string](fakeLocalEgressIP1)}
-			c := &EgressController{crdClient: fakeClient, nodeName: fakeNode, localIPDetector: localIPDetector}
-			_, err := c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), &egress, metav1.CreateOptions{})
-			assert.NoError(t, err)
-			err = c.updateEgressStatus(&egress, fakeLocalEgressIP1)
+			cluster := newFakeMemberlistCluster([]string{tt.selectedNodeForIP})
+			c := &EgressController{crdClient: fakeClient, nodeName: fakeNode, localIPDetector: localIPDetector, cluster: cluster}
+			err := c.updateEgressStatus(tt.egress, tt.egressIP, tt.scheduleErr)
 			if err != tt.expectedError {
 				t.Errorf("Update Egress error not match, got: %v, expected: %v", err, tt.expectedError)
 			}
 			assert.Equal(t, tt.expectedGetCalled, getCalled, "Get called num not match")
 			assert.Equal(t, tt.expectedUpdateCalled, updateCalled, "Update called num not match")
+			gotEgress, _ := c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), tt.egress.Name, metav1.GetOptions{})
+			assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(tt.expectedEgressStatus, gotEgress.Status), "Expected:\n%v\nGot:\n%v", tt.expectedEgressStatus, gotEgress.Status)
 		})
 	}
 }
@@ -1199,4 +1338,131 @@ func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface
 		queue.Done(key)
 	}
 	assert.Equal(t, expectedItems, actualItems)
+}
+
+func TestCompareEgressStatus(t *testing.T) {
+	newCondition := func(t crdv1b1.EgressConditionType, c v1.ConditionStatus, reason string, message string) crdv1b1.EgressCondition {
+		return crdv1b1.EgressCondition{
+			Type:    t,
+			Status:  c,
+			Message: message,
+			Reason:  reason,
+		}
+	}
+	tests := []struct {
+		name           string
+		status1        *crdv1b1.EgressStatus
+		status2        *crdv1b1.EgressStatus
+		expectedReturn bool // true if equal, false if not
+	}{
+		{
+			name: "Different EgressIP",
+			status1: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+			},
+			status2: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.2",
+				EgressNode: "node1",
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "Different EgressNode",
+			status1: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+			},
+			status2: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node2",
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "Egresses are the same",
+			status1: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newCondition(crdv1b1.IPAssigned, v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			status2: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newCondition(crdv1b1.IPAssigned, v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			expectedReturn: true,
+		},
+		{
+			name: "EgressStatus Condition is different",
+			status1: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newCondition(crdv1b1.IPAssigned, v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			status2: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newCondition(crdv1b1.IPAssigned, v1.ConditionFalse, "NoAvailableNode", "No available Node can be elected as EgressNode"),
+				},
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "New Status has relevant Condition that old one doesn't",
+			status1: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{},
+			},
+			status2: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newCondition(crdv1b1.IPAssigned, v1.ConditionTrue, "Assigned", "EgressIP is successfully assigned to EgressNode"),
+				},
+			},
+			expectedReturn: false,
+		},
+		{
+			name: "New Status has irrelevant Condition that old one doesn't",
+			status1: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{},
+			},
+			status2: &crdv1b1.EgressStatus{
+				EgressIP:   "1.1.1.1",
+				EgressNode: "node1",
+				Conditions: []crdv1b1.EgressCondition{
+					newCondition(crdv1b1.IPAllocated, v1.ConditionTrue, "Allocated", "EgressIP is successfully allocated"),
+				},
+			},
+			expectedReturn: true,
+		},
+		{
+			name:           "nils are the same",
+			expectedReturn: true,
+		},
+		{
+			name: "nil and non empty one are different",
+			status2: &crdv1b1.EgressStatus{
+				EgressIP: "1.1.1.1",
+			},
+			expectedReturn: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compareEgressStatus(tt.status1, tt.status2)
+			assert.Equal(t, tt.expectedReturn, result)
+		})
+	}
 }

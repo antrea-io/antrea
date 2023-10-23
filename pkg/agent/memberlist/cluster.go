@@ -59,6 +59,8 @@ const (
 	nodeEventTypeJoin   nodeEventType = "Join"
 	nodeEventTypeLeave  nodeEventType = "Leave"
 	nodeEventTypeUpdate nodeEventType = "Update"
+
+	allNodesConsistentHashMapKey = ""
 )
 
 // ErrNoNodeAvailable is the error returned if no Node is chosen in SelectNodeForIP and ShouldSelectIP.
@@ -226,7 +228,7 @@ func (c *Cluster) handleCreateNode(obj interface{}) {
 	}
 
 	affectedEIPs := c.filterEIPsFromNodeLabels(node)
-	c.enqueueExternalIPPools(affectedEIPs)
+	c.enqueueExternalIPPools(affectedEIPs.Insert(allNodesConsistentHashMapKey))
 	klog.V(2).InfoS("Processed Node CREATE event", "nodeName", node.Name, "affectedExternalIPPoolNum", affectedEIPs.Len())
 }
 
@@ -248,7 +250,7 @@ func (c *Cluster) handleDeleteNode(obj interface{}) {
 		return
 	}
 	affectedEIPs := c.filterEIPsFromNodeLabels(node)
-	c.enqueueExternalIPPools(affectedEIPs)
+	c.enqueueExternalIPPools(affectedEIPs.Insert(allNodesConsistentHashMapKey))
 	klog.V(2).InfoS("Processed Node DELETE event", "nodeName", node.Name, "affectedExternalIPPoolNum", affectedEIPs.Len())
 }
 
@@ -439,6 +441,27 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 		klog.V(4).InfoS("Finished syncing consistentHash", "ExternalIPPool", eipName, "durationTime", time.Since(startTime))
 	}()
 
+	if eipName == allNodesConsistentHashMapKey {
+		allAgentNodes := c.AliveNodes()
+		allKNodes, err := c.nodeLister.List(labels.Everything())
+		if err != nil {
+			return err
+		}
+		var allNodes []string
+		for _, node := range allKNodes {
+			nodeName := node.Name
+			if allAgentNodes.Has(nodeName) {
+				allNodes = append(allNodes, nodeName)
+			}
+		}
+		allNodesConsistentHashMap := NewNodeConsistentHashMap()
+		allNodesConsistentHashMap.Add(allNodes...)
+		c.consistentHashRWMutex.Lock()
+		defer c.consistentHashRWMutex.Unlock()
+		c.consistentHashMap[allNodesConsistentHashMapKey] = allNodesConsistentHashMap
+		return nil
+	}
+
 	eip, err := c.externalIPPoolLister.Get(eipName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -504,7 +527,7 @@ func (c *Cluster) handleClusterNodeEvents(nodeEvent *memberlist.NodeEvent) {
 			return
 		}
 		affectedEIPs := c.filterEIPsFromNodeLabels(coreNode)
-		c.enqueueExternalIPPools(affectedEIPs)
+		c.enqueueExternalIPPools(affectedEIPs.Insert(allNodesConsistentHashMapKey))
 		klog.InfoS("Processed Node event", "eventType", mapNodeEventType[event], "nodeName", node.Name, "affectedExternalIPPoolNum", len(affectedEIPs))
 	default:
 		klog.InfoS("Processed Node event", "eventType", mapNodeEventType[event], "nodeName", node.Name)
@@ -540,9 +563,6 @@ func (c *Cluster) ShouldSelectIP(ip, externalIPPool string, filters ...func(stri
 
 // SelectNodeForIP returns the closest item (Node name) in the hash to the provided key (IP) and ExternalIPPool.
 func (c *Cluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
-	if externalIPPool == "" || ip == "" {
-		return "", fmt.Errorf("IP and externalIPPool cannot be empty")
-	}
 	c.consistentHashRWMutex.RLock()
 	defer c.consistentHashRWMutex.RUnlock()
 	consistentHash, ok := c.consistentHashMap[externalIPPool]

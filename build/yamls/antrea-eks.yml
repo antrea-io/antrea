@@ -2245,6 +2245,21 @@ spec:
                   type: string
                 egressIP:
                   type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
       additionalPrinterColumns:
         - description: The effective SNAT IP address for the selected workloads.
           jsonPath: .status.egressIP
@@ -2367,6 +2382,21 @@ spec:
                   type: string
                 egressIP:
                   type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
       additionalPrinterColumns:
       - description: The effective SNAT IP address for the selected workloads.
         jsonPath: .status.egressIP
@@ -6568,6 +6598,7 @@ rules:
     resources:
       - clustergroups/status
       - groups/status
+      - egresses/status
     verbs:
       - update
   - apiGroups:
