@@ -28,11 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
@@ -78,7 +77,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *crdv1beta1.Observation
+		want *crdv1alpha1.Observation
 	}{
 		{
 			name: "ingress metric drop",
@@ -86,10 +85,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: openflow.IngressMetricTable.GetID(),
 				ingress: true,
 			},
-			want: &crdv1beta1.Observation{
-				Component:     crdv1beta1.ComponentNetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "IngressMetric",
-				Action:        crdv1beta1.ActionDropped,
+				Action:        crdv1alpha1.ActionDropped,
 			},
 		},
 		{
@@ -98,10 +97,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: openflow.OutputTable.GetID(),
 				ingress: true,
 			},
-			want: &crdv1beta1.Observation{
-				Component:     crdv1beta1.ComponentNetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "IngressRule",
-				Action:        crdv1beta1.ActionForwarded,
+				Action:        crdv1alpha1.ActionForwarded,
 			},
 		},
 		{
@@ -110,10 +109,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: openflow.EgressDefaultTable.GetID(),
 				ingress: false,
 			},
-			want: &crdv1beta1.Observation{
-				Component:     crdv1beta1.ComponentNetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "EgressDefaultRule",
-				Action:        crdv1beta1.ActionDropped,
+				Action:        crdv1alpha1.ActionDropped,
 			},
 		},
 		{
@@ -122,10 +121,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: openflow.OutputTable.GetID(),
 				ingress: false,
 			},
-			want: &crdv1beta1.Observation{
-				Component:     crdv1beta1.ComponentNetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "EgressRule",
-				Action:        crdv1beta1.ActionForwarded,
+				Action:        crdv1alpha1.ActionForwarded,
 			},
 		},
 	}
@@ -150,22 +149,22 @@ func TestParseCapturedPacket(t *testing.T) {
 	bf := new(util.Buffer)
 	bf.UnmarshalBinary(bytes)
 	tcpPktIn.Data = bf
-	tcpPktCap := crdv1beta1.Packet{
-		SrcIP: tcpPktIn.NWSrc.String(), DstIP: tcpPktIn.NWDst.String(), Length: int32(tcpPktIn.Length),
-		IPHeader: &crdv1beta1.IPHeader{Protocol: int32(tcpPktIn.Protocol), TTL: int32(tcpPktIn.TTL), Flags: int32(tcpPktIn.Flags)},
-		TransportHeader: crdv1beta1.TransportHeader{
-			TCP: &crdv1beta1.TCPHeader{SrcPort: int32(tcp.PortSrc), DstPort: int32(tcp.PortDst), Flags: pointer.Int32(int32(tcp.Code))},
+	tcpPktCap := crdv1alpha1.Packet{
+		SrcIP: tcpPktIn.NWSrc.String(), DstIP: tcpPktIn.NWDst.String(), Length: tcpPktIn.Length,
+		IPHeader: crdv1alpha1.IPHeader{Protocol: int32(tcpPktIn.Protocol), TTL: int32(tcpPktIn.TTL), Flags: int32(tcpPktIn.Flags)},
+		TransportHeader: crdv1alpha1.TransportHeader{
+			TCP: &crdv1alpha1.TCPHeader{SrcPort: int32(tcp.PortSrc), DstPort: int32(tcp.PortDst), Flags: int32(tcp.Code)},
 		},
 	}
 
 	udpPktIn := protocol.IPv4{Length: 50, Flags: 0, TTL: 128, NWSrc: srcIPv4, NWDst: dstIPv4, Protocol: protocol.Type_UDP}
 	udp := protocol.UDP{PortSrc: 1080, PortDst: 80}
 	udpPktIn.Data = &udp
-	udpPktCap := crdv1beta1.Packet{
-		SrcIP: udpPktIn.NWSrc.String(), DstIP: udpPktIn.NWDst.String(), Length: int32(udpPktIn.Length),
-		IPHeader: &crdv1beta1.IPHeader{Protocol: int32(udpPktIn.Protocol), TTL: int32(udpPktIn.TTL), Flags: int32(udpPktIn.Flags)},
-		TransportHeader: crdv1beta1.TransportHeader{
-			UDP: &crdv1beta1.UDPHeader{SrcPort: int32(udp.PortSrc), DstPort: int32(udp.PortDst)},
+	udpPktCap := crdv1alpha1.Packet{
+		SrcIP: udpPktIn.NWSrc.String(), DstIP: udpPktIn.NWDst.String(), Length: udpPktIn.Length,
+		IPHeader: crdv1alpha1.IPHeader{Protocol: int32(udpPktIn.Protocol), TTL: int32(udpPktIn.TTL), Flags: int32(udpPktIn.Flags)},
+		TransportHeader: crdv1alpha1.TransportHeader{
+			UDP: &crdv1alpha1.UDPHeader{SrcPort: int32(udp.PortSrc), DstPort: int32(udp.PortDst)},
 		},
 	}
 
@@ -174,16 +173,16 @@ func TestParseCapturedPacket(t *testing.T) {
 	icmp := protocol.ICMP{Type: 128, Code: 0, Data: icmpEchoReq}
 	icmpv6PktIn.Data = &icmp
 	nextHdr := int32(icmpv6PktIn.NextHeader)
-	icmpv6PktCap := crdv1beta1.Packet{
-		SrcIP: icmpv6PktIn.NWSrc.String(), DstIP: icmpv6PktIn.NWDst.String(), Length: int32(icmpv6PktIn.Length) + 40,
-		IPv6Header:      &crdv1beta1.IPv6Header{NextHeader: &nextHdr, HopLimit: int32(icmpv6PktIn.HopLimit)},
-		TransportHeader: crdv1beta1.TransportHeader{ICMP: &crdv1beta1.ICMPEchoRequestHeader{ID: 1, Sequence: 123}},
+	icmpv6PktCap := crdv1alpha1.Packet{
+		SrcIP: icmpv6PktIn.NWSrc.String(), DstIP: icmpv6PktIn.NWDst.String(), Length: icmpv6PktIn.Length + 40,
+		IPv6Header:      &crdv1alpha1.IPv6Header{NextHeader: &nextHdr, HopLimit: int32(icmpv6PktIn.HopLimit)},
+		TransportHeader: crdv1alpha1.TransportHeader{ICMP: &crdv1alpha1.ICMPEchoRequestHeader{ID: 1, Sequence: 123}},
 	}
 
 	tests := []struct {
 		name      string
 		pktInData util.Message
-		pktCap    *crdv1beta1.Packet
+		pktCap    *crdv1alpha1.Packet
 		isIPv6    bool
 	}{
 		{"tcp", &tcpPktIn, &tcpPktCap, false},
@@ -262,8 +261,8 @@ func TestParsePacketIn(t *testing.T) {
 		nodeConfig         *config.NodeConfig
 		tfState            *traceflowState
 		pktIn              *ofctrl.PacketIn
-		expectedTf         *crdv1beta1.Traceflow
-		expectedNodeResult *crdv1beta1.NodeResult
+		expectedTf         *crdv1alpha1.Traceflow
+		expectedNodeResult *crdv1alpha1.NodeResult
 	}{
 		{
 			name: "packet at source Node for local Egress",
@@ -290,40 +289,40 @@ func TestParsePacketIn(t *testing.T) {
 					Data: util.NewBuffer(pktBytes),
 				},
 			},
-			expectedTf: &crdv1beta1.Traceflow{
+			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "traceflow-pod-to-ipv4",
 				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1beta1.Destination{
+					Destination: crdv1alpha1.Destination{
 						IP: dstIPv4,
 					},
 				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
 					DataplaneTag: 1,
 				},
 			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
+			expectedNodeResult: &crdv1alpha1.NodeResult{
+				Observations: []crdv1alpha1.Observation{
 					{
-						Component: crdv1beta1.ComponentSpoofGuard,
-						Action:    crdv1beta1.ActionForwarded,
+						Component: crdv1alpha1.ComponentSpoofGuard,
+						Action:    crdv1alpha1.ActionForwarded,
 					},
 					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionMarkedForSNAT,
+						Component: crdv1alpha1.ComponentEgress,
+						Action:    crdv1alpha1.ActionMarkedForSNAT,
 						Egress:    egressName,
 						EgressIP:  egressIP,
 					},
 					{
-						Component:     crdv1beta1.ComponentForwarding,
+						Component:     crdv1alpha1.ComponentForwarding,
 						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfOverlay,
+						Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
 					},
 				},
 			},
@@ -353,40 +352,40 @@ func TestParsePacketIn(t *testing.T) {
 					Data: util.NewBuffer(pktBytes),
 				},
 			},
-			expectedTf: &crdv1beta1.Traceflow{
+			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "traceflow-pod-to-ipv4",
 				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1beta1.Destination{
+					Destination: crdv1alpha1.Destination{
 						IP: dstIPv4,
 					},
 				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
 					DataplaneTag: 1,
 				},
 			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
+			expectedNodeResult: &crdv1alpha1.NodeResult{
+				Observations: []crdv1alpha1.Observation{
 					{
-						Component: crdv1beta1.ComponentSpoofGuard,
-						Action:    crdv1beta1.ActionForwarded,
+						Component: crdv1alpha1.ComponentSpoofGuard,
+						Action:    crdv1alpha1.ActionForwarded,
 					},
 					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionForwardedToEgressNode,
+						Component: crdv1alpha1.ComponentEgress,
+						Action:    crdv1alpha1.ActionForwardedToEgressNode,
 						Egress:    egressName,
 						EgressIP:  egressIP,
 					},
 					{
-						Component:     crdv1beta1.ComponentForwarding,
+						Component:     crdv1alpha1.ComponentForwarding,
 						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwarded,
+						Action:        crdv1alpha1.ActionForwarded,
 						TunnelDstIP:   egressIP,
 					},
 				},
@@ -416,39 +415,39 @@ func TestParsePacketIn(t *testing.T) {
 					Data: util.NewBuffer(pktBytes),
 				},
 			},
-			expectedTf: &crdv1beta1.Traceflow{
+			expectedTf: &crdv1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "traceflow-pod-to-ipv4",
 				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
 						Namespace: pod1.Namespace,
 						Pod:       pod1.Name,
 					},
-					Destination: crdv1beta1.Destination{
+					Destination: crdv1alpha1.Destination{
 						IP: dstIPv4,
 					},
 				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
 					DataplaneTag: 1,
 				},
 			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
+			expectedNodeResult: &crdv1alpha1.NodeResult{
+				Observations: []crdv1alpha1.Observation{
 					{
-						Component: crdv1beta1.ComponentForwarding,
-						Action:    crdv1beta1.ActionReceived,
+						Component: crdv1alpha1.ComponentForwarding,
+						Action:    crdv1alpha1.ActionReceived,
 					},
 					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionMarkedForSNAT,
+						Component: crdv1alpha1.ComponentEgress,
+						Action:    crdv1alpha1.ActionMarkedForSNAT,
 						EgressIP:  egressIP,
 					},
 					{
-						Component:     crdv1beta1.ComponentForwarding,
+						Component:     crdv1alpha1.ComponentForwarding,
 						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfOverlay,
+						Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
 					},
 				},
 			},
@@ -464,7 +463,7 @@ func TestParsePacketIn(t *testing.T) {
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 			tfc.runningTraceflows[tt.expectedTf.Status.DataplaneTag] = tt.tfState
 
-			tf, nodeResult, _, err := tfc.parsePacketIn(tt.pktIn)
+			tf, nodeResult, _, _, _, err := tfc.parsePacketIn(tt.pktIn)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedNodeResult.Observations, nodeResult.Observations)
 			assert.Equal(t, tt.expectedTf, tf)
@@ -499,6 +498,6 @@ func TestParsePacketInLiveDuplicates(t *testing.T) {
 	tfc := newFakeTraceflowController(t, nil, networkConfig, nodeConfig, nil, nil)
 	tfc.runningTraceflows[tfState.tag] = tfState
 
-	_, _, _, err := tfc.parsePacketIn(pktIn)
-	assert.ErrorIs(t, err, skipTraceflowUpdateErr)
+	_, _, _, _, shouldSkip, _ := tfc.parsePacketIn(pktIn)
+	assert.True(t, shouldSkip)
 }

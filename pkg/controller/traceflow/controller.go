@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -136,7 +137,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 
 	go func() {
-		wait.Until(c.checkTraceflowTimeout, timeoutCheckInterval, stopCh)
+		wait.Until(c.repostTraceflows, timeoutCheckInterval, stopCh)
 	}()
 
 	for i := 0; i < defaultWorkers; i++ {
@@ -170,7 +171,7 @@ func (c *Controller) worker() {
 	}
 }
 
-func (c *Controller) checkTraceflowTimeout() {
+func (c *Controller) repostTraceflows() {
 	c.runningTraceflowsMutex.Lock()
 	tfs := make([]string, 0, len(c.runningTraceflows))
 	for _, tfName := range c.runningTraceflows {
@@ -251,7 +252,11 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	if err := c.validateTraceflow(tf); err != nil {
 		klog.ErrorS(err, "Invalid Traceflow request", "request", tf)
-		return c.updateTraceflowStatus(tf, crdv1beta1.Failed, fmt.Sprintf("Invalid Traceflow request, err: %+v", err), 0)
+		return newTraceflowUpdater(tf, c).
+			Phase(crdv1beta1.Failed).
+			Reason(fmt.Sprintf("Invalid Traceflow request, err: %+v", err)).
+			Tag(0).
+			Update()
 	}
 	// Allocate data plane tag.
 	tag, err := c.allocateTag(tf.Name)
@@ -262,27 +267,86 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 		return nil
 	}
 
-	err = c.updateTraceflowStatus(tf, crdv1beta1.Running, "", tag)
+	updater := newTraceflowUpdater(tf, c).
+		Phase(crdv1beta1.Running).
+		Tag(int8(tag))
+	if tf.Spec.SamplingEnabled() {
+		updater.UID(uuid.New().String())
+	}
+	err = updater.Update()
 	if err != nil {
 		c.deallocateTag(tf.Name, tag)
 	}
 	return err
 }
 
+// setPodByTranslatedDstIP sets the Pod field in observations by the TranslatedDstIP.
+//
+// Theoretically, this can be done in the antrea-agent if it has a PodInformer, which is more straightforward, but a
+// PodInformer consumes too much resources, so only the antrea-controller has a PodInformer and this function has to be
+// executed in the antrea-controller.
+func (c *Controller) setPodByTranslatedDstIP(tf *crdv1beta1.Traceflow) {
+	for i, nodeResult := range tf.Status.Results {
+		for j, ob := range nodeResult.Observations {
+			if ob.TranslatedDstIP != "" {
+				// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
+				pods, err := c.podInformer.Informer().GetIndexer().ByIndex(grouping.PodIPsIndex, ob.TranslatedDstIP)
+				if err != nil {
+					klog.Infof("Unable to find Pod from IP, error: %+v", err)
+				} else if len(pods) > 0 {
+					pod, ok := pods[0].(*corev1.Pod)
+					if !ok {
+						klog.Warningf("Invalid Pod obj in cache")
+					} else {
+						tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+					}
+				}
+			}
+		}
+	}
+}
+
 // checkTraceflowStatus is only called for Traceflows in the Running phase
 func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
+	if checkTraceflowSucceeded(tf) {
+		if !(tf.Spec.LiveTraffic && tf.Spec.DroppedOnly) {
+			c.setPodByTranslatedDstIP(tf)
+		}
+		c.deallocateTagForTF(tf)
+		return newTraceflowUpdater(tf, c).
+			Phase(crdv1beta1.Succeeded).
+			Tag(0).
+			Update()
+	}
+
+	if checkTraceflowTimeout(tf) {
+		c.deallocateTagForTF(tf)
+		return newTraceflowUpdater(tf, c).
+			Phase(crdv1beta1.Failed).
+			Reason(traceflowTimeout).
+			Tag(0).
+			Update()
+	}
+
+	return nil
+}
+
+func checkTraceflowSucceeded(tf *crdv1beta1.Traceflow) bool {
 	succeeded := false
 	if tf.Spec.LiveTraffic && tf.Spec.DroppedOnly {
-		// There should be only one reported NodeResult for droppedOnly
-		// Traceflow.
+		// There should be only one reported NodeResult for droppedOnly Traceflow.
 		if len(tf.Status.Results) > 0 {
+			succeeded = true
+		}
+	} else if tf.Spec.SamplingEnabled() {
+		if tf.Spec.Sampling.Method == crdv1beta1.FirstN && tf.Status.Sampling.NumCapturedPackets == tf.Spec.Sampling.Num {
 			succeeded = true
 		}
 	} else {
 		sender := false
 		receiver := false
-		for i, nodeResult := range tf.Status.Results {
-			for j, ob := range nodeResult.Observations {
+		for _, nodeResult := range tf.Status.Results {
+			for _, ob := range nodeResult.Observations {
 				if ob.Component == crdv1beta1.ComponentSpoofGuard {
 					sender = true
 				}
@@ -292,20 +356,6 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 					ob.Action == crdv1beta1.ActionForwardedOutOfOverlay {
 					receiver = true
 				}
-				if ob.TranslatedDstIP != "" {
-					// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
-					pods, err := c.podInformer.Informer().GetIndexer().ByIndex(grouping.PodIPsIndex, ob.TranslatedDstIP)
-					if err != nil {
-						klog.Infof("Unable to find Pod from IP, error: %+v", err)
-					} else if len(pods) > 0 {
-						pod, ok := pods[0].(*corev1.Pod)
-						if !ok {
-							klog.Warningf("Invalid Pod obj in cache")
-						} else {
-							tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
-						}
-					}
-				}
 			}
 		}
 		// When the Source Pod is specified, the Traceflow should receive
@@ -314,11 +364,10 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 		// receiver Node will report the results.
 		succeeded = (sender && receiver) || (receiver && tf.Spec.Source.Pod == "")
 	}
-	if succeeded {
-		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, crdv1beta1.Succeeded, "", 0)
-	}
+	return succeeded
+}
 
+func checkTraceflowTimeout(tf *crdv1beta1.Traceflow) bool {
 	var timeout time.Duration
 	if tf.Spec.Timeout != 0 {
 		timeout = time.Duration(tf.Spec.Timeout) * time.Second
@@ -334,26 +383,7 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 		klog.V(2).InfoS("StartTime field in Traceflow Status should not be empty", "Traceflow", klog.KObj(tf))
 		startTime = tf.CreationTimestamp.Time
 	}
-	if startTime.Add(timeout).Before(time.Now()) {
-		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, crdv1beta1.Failed, traceflowTimeout, 0)
-	}
-	return nil
-}
-
-func (c *Controller) updateTraceflowStatus(tf *crdv1beta1.Traceflow, phase crdv1beta1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
-	update := tf.DeepCopy()
-	update.Status.Phase = phase
-	if phase == crdv1beta1.Running && tf.Status.StartTime == nil {
-		t := metav1.Now()
-		update.Status.StartTime = &t
-	}
-	update.Status.DataplaneTag = int8(dataPlaneTag)
-	if reason != "" {
-		update.Status.Reason = reason
-	}
-	_, err := c.client.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), update, metav1.UpdateOptions{})
-	return err
+	return startTime.Add(timeout).Before(time.Now())
 }
 
 func (c *Controller) occupyTag(tf *crdv1beta1.Traceflow) error {
@@ -427,5 +457,80 @@ func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
 			return fmt.Errorf("using hostNetwork Pod as source in non-live-traffic Traceflow is not supported")
 		}
 	}
+
+	// Validate spec related to sampling live traffic traceflow.
+	if tf.Spec.Sampling.Method != "" {
+		if !tf.Spec.LiveTraffic {
+			return errors.New("the sampling is valid only in live traffic mode")
+		}
+	}
+
 	return nil
+}
+
+// traceflowUpdater is a simple wrapper that makes TF updates easier.
+//
+// Example: newTraceflowUpdater(oldTF, controller).Tag(0).Update() will update the TF's tag while keeping other fields
+// unchanged, except for some metadata.
+type traceflowUpdater struct {
+	tf         *crdv1beta1.Traceflow
+	controller *Controller
+	phase      *crdv1beta1.TraceflowPhase
+	reason     *string
+	uid        *string
+	tag        *int8
+	packetsPath *string
+}
+
+func newTraceflowUpdater(base *crdv1beta1.Traceflow, c *Controller) *traceflowUpdater {
+	return &traceflowUpdater{
+		tf:         base,
+		controller: c,
+	}
+}
+
+func (t *traceflowUpdater) Phase(phase crdv1beta1.TraceflowPhase) *traceflowUpdater {
+	t.phase = &phase
+	return t
+}
+
+func (t *traceflowUpdater) Reason(reason string) *traceflowUpdater {
+	t.reason = &reason
+	return t
+}
+
+func (t *traceflowUpdater) UID(uid string) *traceflowUpdater {
+	t.uid = &uid
+	return t
+}
+
+func (t *traceflowUpdater) Tag(tag int8) *traceflowUpdater {
+	t.tag = &tag
+	return t
+}
+
+func (t *traceflowUpdater) PacketsPath(path string) *traceflowUpdater {
+	t.packetsPath = &path
+}
+
+func (t *traceflowUpdater) Update() error {
+	newTF := t.tf.DeepCopy()
+	if t.phase != nil {
+		newTF.Status.Phase = *t.phase
+	}
+	if t.tf.Status.Phase == crdv1beta1.Running && t.tf.Status.StartTime == nil {
+		time := metav1.Now()
+		t.tf.Status.StartTime = &time
+	}
+	if t.tag != nil {
+		newTF.Status.DataplaneTag = *t.tag
+	}
+	if t.reason != nil {
+		newTF.Status.Reason = *t.reason
+	}
+	if t.packetsPath != nil {
+		newTF.Status.Sampling.PacketsPath = *t.packetsPath
+	}
+	_, err := t.controller.client.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), newTF, metav1.UpdateOptions{})
+	return err
 }

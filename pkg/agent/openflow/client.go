@@ -26,7 +26,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
@@ -205,7 +204,7 @@ type Client interface {
 	SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error
 
 	// InstallTraceflowFlows installs flows for a Traceflow request.
-	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
+	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, sampling, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
 
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
@@ -1118,13 +1117,14 @@ func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet,
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
+func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, sampling, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	var flows []binding.Flow
 	for _, f := range c.traceableFeatures {
 		flows = append(flows, f.flowsToTrace(dataplaneTag,
 			c.ovsMetersAreSupported,
 			liveTraffic,
+			sampling,
 			droppedOnly,
 			receiverOnly,
 			packet,
@@ -1550,22 +1550,4 @@ func GetFlowModMessages(flows []binding.Flow, op binding.OFOperation) []*openflo
 func getFlowModMessage(flow binding.Flow, op binding.OFOperation) *openflow15.FlowMod {
 	messages := GetFlowModMessages([]binding.Flow{flow}, op)
 	return messages[0]
-}
-
-// getMeterStats sends a multipart request to get all the meter statistics and
-// sets values for antrea_agent_ovs_meter_packet_dropped_count.
-func (c *client) getMeterStats() {
-	handleMeterStatsReply := func(meterID int, packetCount int64) {
-		switch meterID {
-		case PacketInMeterIDNP:
-			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterNetworkPolicy").Set(float64(packetCount))
-		case PacketInMeterIDTF:
-			metrics.OVSMeterPacketDroppedCount.WithLabelValues("PacketInMeterTraceflow").Set(float64(packetCount))
-		default:
-			klog.V(4).InfoS("Received unexpected meterID", "meterID", meterID)
-		}
-	}
-	if err := c.bridge.GetMeterStats(handleMeterStatsReply); err != nil {
-		klog.ErrorS(err, "Failed to get OVS meter stats")
-	}
 }

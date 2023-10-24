@@ -20,10 +20,16 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path"
+	"runtime"
 	"sync"
 	"time"
 
 	"antrea.io/libOpenflow/protocol"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcapgo"
+	"golang.org/x/time/rate"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,10 +45,10 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -71,9 +77,27 @@ const (
 	defaultTTL uint8 = 64
 )
 
+// Parameters for sampling live traffic traceflow.
+const (
+	// The minimum interval of reporting "traceflowState.numCapturedPackets" change.
+	samplingStatusUpdatePeriod = 10 * time.Second
+	packetDirectoryUnix        = "/root/traceflows/packets"
+	packetDirectoryWindows     = "C:\\traceflows\\packets"
+)
+
+var packetDirectory = getPacketDirectory()
+
+func getPacketDirectory() string {
+	if runtime.GOOS == "windows" {
+		return packetDirectoryWindows
+	} else {
+		return packetDirectoryUnix
+	}
+}
+
 type traceflowState struct {
 	name        string
-	tag         int8
+	tag         uint8
 	liveTraffic bool
 	droppedOnly bool
 	// Live-traffic Traceflow with only destination Pod specified.
@@ -81,6 +105,24 @@ type traceflowState struct {
 	isSender     bool
 	// Agent received the first Traceflow packet from OVS.
 	receivedPacket bool
+
+	// Non-nil only on sampling mode.
+	samplingState *samplingState
+}
+
+func (s *traceflowState) samplingEnabled() bool {
+	return s.samplingState != nil
+}
+
+type samplingState struct {
+	shouldSyncPackets     bool
+	numCapturedPackets    int32
+	maxNumCapturedPackets int32
+	// Controls the CRD "NumCapturedPackets" update rate.
+	updateRateLimiter *rate.Limiter
+	uid               string
+	pcapngFile        *os.File
+	pcapngWriter      *pcapgo.NgWriter
 }
 
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
@@ -105,7 +147,7 @@ type Controller struct {
 	runningTraceflowsMutex sync.RWMutex
 	// runningTraceflows is a map for storing the running Traceflow state
 	// with dataplane tag to be the key.
-	runningTraceflows map[int8]*traceflowState
+	runningTraceflows map[uint8]*traceflowState
 }
 
 // NewTraceflowController instantiates a new Controller object which will process Traceflow
@@ -138,7 +180,7 @@ func NewTraceflowController(
 		nodeConfig:            nodeConfig,
 		serviceCIDR:           serviceCIDR,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
-		runningTraceflows:     make(map[int8]*traceflowState),
+		runningTraceflows:     make(map[uint8]*traceflowState),
 	}
 
 	// Add handlers for Traceflow events.
@@ -161,7 +203,7 @@ func NewTraceflowController(
 }
 
 // enqueueTraceflow adds an object to the controller work queue.
-func (c *Controller) enqueueTraceflow(tf *crdv1beta1.Traceflow) {
+func (c *Controller) enqueueTraceflow(tf *crdv1alpha1.Traceflow) {
 	c.queue.Add(tf.Name)
 }
 
@@ -181,6 +223,11 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
+	err := os.MkdirAll(packetDirectory, 0755)
+	if err != nil {
+		klog.ErrorS(err, "Couldn't create directory for storing packets")
+	}
+
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
@@ -188,20 +235,26 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 func (c *Controller) addTraceflow(obj interface{}) {
-	tf := obj.(*crdv1beta1.Traceflow)
+	tf := obj.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s ADD event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
 
 func (c *Controller) updateTraceflow(_, curObj interface{}) {
-	tf := curObj.(*crdv1beta1.Traceflow)
+	tf := curObj.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
 
 func (c *Controller) deleteTraceflow(old interface{}) {
-	tf := old.(*crdv1beta1.Traceflow)
+	tf := old.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
+
+	err := deletePcapngFile(tf.Status.Sampling.UID)
+	if err != nil {
+		klog.ErrorS(err, "Couldn't delete pcapng file")
+	}
+
 	c.enqueueTraceflow(tf)
 }
 
@@ -266,7 +319,7 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 	}
 
 	switch tf.Status.Phase {
-	case crdv1beta1.Running:
+	case crdv1alpha1.Running:
 		if tf.Status.DataplaneTag != 0 {
 			start := false
 			c.runningTraceflowsMutex.Lock()
@@ -288,7 +341,7 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 
 // startTraceflow deploys OVS flow entries for Traceflow and inject packet if current Node
 // is Sender Node.
-func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
+func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	err := c.validateTraceflow(tf)
 	defer func() {
 		if err != nil {
@@ -349,7 +402,49 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	tfState := traceflowState{
 		name: tf.Name, tag: tf.Status.DataplaneTag,
 		liveTraffic: liveTraffic, droppedOnly: tf.Spec.DroppedOnly && liveTraffic,
-		receiverOnly: receiverOnly, isSender: isSender}
+		receiverOnly: receiverOnly, isSender: isSender,
+	}
+	if tf.Spec.SamplingEnabled() {
+		exists, err := fileExists(tf.Status.Sampling.UID)
+		if err != nil {
+			return fmt.Errorf("couldn't check if the file exists: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("packet file already exists. this may be due to an unexpected termination")
+		}
+		file, err := createPcapngFile(tf.Status.Sampling.UID)
+		if err != nil {
+			return fmt.Errorf("couldn't create pcapng file: %w", err)
+		}
+		writer, err := pcapgo.NewNgWriter(file, layers.LinkTypeEthernet)
+		if err != nil {
+			return fmt.Errorf("couldn't init NgWriter: %w", err)
+		}
+
+		// If only receiver is assigned in the traceflow spec, then the receiver node is responsible
+		// for reporting number of captured packets. Otherwise, the sender node is responsible for it.
+		if tf.Spec.Destination.Pod != "" {
+			pod = tf.Spec.Destination.Pod
+			ns = tf.Spec.Destination.Namespace
+		} else {
+			pod = tf.Spec.Source.Pod
+			ns = tf.Spec.Source.Namespace
+		}
+		podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+		shouldSyncPackets := len(podInterfaces) > 0
+
+		tfState.samplingState = &samplingState{
+			shouldSyncPackets:     shouldSyncPackets,
+			numCapturedPackets:    0,
+			maxNumCapturedPackets: tf.Spec.Sampling.Num,
+			uid:                   tf.Status.Sampling.UID,
+			pcapngFile:            file,
+			pcapngWriter:          writer,
+		}
+		if tfState.samplingState.shouldSyncPackets {
+			tfState.samplingState.updateRateLimiter = rate.NewLimiter(rate.Every(samplingStatusUpdatePeriod), 1)
+		}
+	}
 	c.runningTraceflows[tfState.tag] = &tfState
 	c.runningTraceflowsMutex.Unlock()
 
@@ -357,9 +452,9 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 	klog.V(2).Infof("Installing flow entries for Traceflow %s", tf.Name)
 	timeout := tf.Spec.Timeout
 	if timeout == 0 {
-		timeout = crdv1beta1.DefaultTraceflowTimeout
+		timeout = crdv1alpha1.DefaultTraceflowTimeout
 	}
-	err = c.ofClient.InstallTraceflowFlows(uint8(tfState.tag), liveTraffic, tfState.droppedOnly, receiverOnly, matchPacket, ofPort, uint16(timeout))
+	err = c.ofClient.InstallTraceflowFlows(tfState.tag, liveTraffic, tf.Spec.SamplingEnabled(), tfState.droppedOnly, receiverOnly, matchPacket, ofPort, timeout)
 	if err != nil {
 		return err
 	}
@@ -377,12 +472,12 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 			time.Sleep(time.Duration(injectLocalPacketDelay) * time.Millisecond)
 		}
 		klog.V(2).Infof("Injecting packet for Traceflow %s", tf.Name)
-		err = c.ofClient.SendTraceflowPacket(uint8(tfState.tag), packet, ofPort, -1)
+		err = c.ofClient.SendTraceflowPacket(tfState.tag, packet, ofPort, -1)
 	}
 	return err
 }
 
-func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
+func (c *Controller) validateTraceflow(tf *crdv1alpha1.Traceflow) error {
 	if tf.Spec.Destination.Service != "" && !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		return errors.New("using Service destination requires AntreaProxy feature enabled")
 	}
@@ -400,7 +495,7 @@ func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
 	return nil
 }
 
-func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestore.InterfaceConfig, receiverOnly bool) (*binding.Packet, error) {
+func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacestore.InterfaceConfig, receiverOnly bool) (*binding.Packet, error) {
 	liveTraffic := tf.Spec.LiveTraffic
 	isICMP := false
 	packet := new(binding.Packet)
@@ -511,7 +606,7 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			packet.TTL = uint8(tf.Spec.Packet.IPv6Header.HopLimit)
 			packet.IPFlags = 0
 		}
-	} else if tf.Spec.Packet.IPHeader != nil {
+	} else {
 		packet.IPProto = uint8(tf.Spec.Packet.IPHeader.Protocol)
 		if !liveTraffic {
 			packet.TTL = uint8(tf.Spec.Packet.IPHeader.TTL)
@@ -527,15 +622,11 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 		packet.IPProto = protocol.Type_TCP
 		packet.SourcePort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
 		packet.DestinationPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
-		if tf.Spec.Packet.TransportHeader.TCP.Flags != nil {
-			packet.TCPFlags = uint8(*tf.Spec.Packet.TransportHeader.TCP.Flags)
+		if tf.Spec.Packet.TransportHeader.TCP.Flags != 0 {
+			packet.TCPFlags = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
 		}
-		if !liveTraffic {
-			if tf.Spec.Packet.TransportHeader.TCP.Flags == nil {
-				packet.TCPFlags = uint8(2)
-			} else {
-				packet.TCPFlags = uint8(*tf.Spec.Packet.TransportHeader.TCP.Flags)
-			}
+		if !liveTraffic && tf.Spec.Packet.TransportHeader.TCP.Flags == 0 {
+			packet.TCPFlags = uint8(2)
 		}
 	} else if tf.Spec.Packet.TransportHeader.UDP != nil {
 		packet.IPProto = protocol.Type_UDP
@@ -573,15 +664,15 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 	return packet, nil
 }
 
-func (c *Controller) errorTraceflowCRD(tf *crdv1beta1.Traceflow, reason string) (*crdv1beta1.Traceflow, error) {
-	tf.Status.Phase = crdv1beta1.Failed
+func (c *Controller) errorTraceflowCRD(tf *crdv1alpha1.Traceflow, reason string) (*crdv1alpha1.Traceflow, error) {
+	tf.Status.Phase = crdv1alpha1.Failed
 
 	type Traceflow struct {
-		Status crdv1beta1.TraceflowStatus `json:"status,omitempty"`
+		Status crdv1alpha1.TraceflowStatus `json:"status,omitempty"`
 	}
-	patchData := Traceflow{Status: crdv1beta1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
+	patchData := Traceflow{Status: crdv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.traceflowClient.CrdV1beta1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
+	return c.traceflowClient.CrdV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
 // Delete Traceflow from cache.
@@ -604,9 +695,44 @@ func (c *Controller) deleteTraceflowState(tfName string) *traceflowState {
 func (c *Controller) cleanupTraceflow(tfName string) {
 	tfState := c.deleteTraceflowState(tfName)
 	if tfState != nil {
-		err := c.ofClient.UninstallTraceflowFlows(uint8(tfState.tag))
+		err := c.ofClient.UninstallTraceflowFlows(tfState.tag)
 		if err != nil {
 			klog.Errorf("Failed to uninstall Traceflow %s flows: %v", tfName, err)
 		}
+		if tfState.samplingState != nil {
+			err := tfState.samplingState.pcapngWriter.Flush()
+			if err != nil {
+				klog.ErrorS(err, "Couldn't flush pcapngWriter")
+			}
+			err = tfState.samplingState.pcapngFile.Close()
+			if err != nil {
+				klog.ErrorS(err, "Couldn't close pcapng file")
+			}
+		}
 	}
+}
+
+func fileExists(uid string) (bool, error) {
+	_, err := os.Stat(uidToPath(uid))
+	if err == nil {
+		return true, nil
+	} else {
+		if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+}
+
+func createPcapngFile(uid string) (*os.File, error) {
+	return os.Create(uidToPath(uid))
+}
+
+func deletePcapngFile(uid string) error {
+	return os.Remove(uidToPath(uid))
+}
+
+func uidToPath(uid string) string {
+	return path.Join(packetDirectory, uid+".pcapng")
 }

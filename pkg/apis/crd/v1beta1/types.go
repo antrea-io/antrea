@@ -1126,3 +1126,33 @@ type TraceflowList struct {
 
 	Items []Traceflow `json:"items"`
 }
+
+
+type PacketSamplingType string
+
+const (
+	FirstNSampling PacketSamplingType = 'FirstNsampling'
+)
+
+type FirstNSamplingConfig struct {
+	Number int `json:"number,omitempty"`
+}
+
+
+type PacketSampling struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec PacketSamplingSpec `json:"spec,omitempty"`
+	Status PacketSamplingStatus `json:"status,omitempty"`
+}
+
+
+
+type PacketSamplingSpec struct {
+	// Timeout is a hard limit for all sampling action
+	Timeout int `json:"timeout,omitempty"`
+	Type    PacketSamplingType `json:"type,omitempty"`
+	FirstNSamplingConfig *FirstNSamplingConfig `json:"firstNsamplingConfig,omitempty"`
+	Source Source `json:"source,omitempty"`
+	Destination Description `json:"destination,omitempty"`
+}

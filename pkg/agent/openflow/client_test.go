@@ -361,7 +361,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		fn(o)
 	}
 
-	client := NewClient(bridgeName,
+	cli := NewClient(bridgeName,
 		bridgeMgmtAddr,
 		nodeiptest.NewFakeNodeIPChecker(),
 		o.enableProxy,
@@ -375,8 +375,8 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		o.enableMulticast,
 		o.enableTrafficControl,
 		o.enableMulticluster,
-		NewGroupAllocator(),
-		false)
+		NewGroupAllocator())
+	client := cli.(*client)
 
 	var egressExceptCIDRs []net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
@@ -1585,7 +1585,7 @@ func Test_client_InstallTraceflowFlows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			c := tt.prepareFunc(ctrl)
-			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag, false, false, false, nil, 0, 300); (err != nil) != tt.wantErr {
+			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag, false, false, false, false, nil, 0, 300); (err != nil) != tt.wantErr {
 				t.Errorf("InstallTraceflowFlows() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -1815,15 +1815,16 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, nil)
+	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
-	ofClient.bridge = m
+	c.bridge = m
 	bridge := binding.OFBridge{}
 	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
 	if success {
 		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
 	}
-	return ofClient
+	return c
 }
 
 func Test_client_SendPacketOut(t *testing.T) {

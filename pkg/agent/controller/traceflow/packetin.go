@@ -25,28 +25,26 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	"github.com/google/gopacket"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/openflow"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
-
-var skipTraceflowUpdateErr = errors.New("skip Traceflow update")
 
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if !c.traceflowListerSynced() {
 		return errors.New("Traceflow controller is not started")
 	}
-	oldTf, nodeResult, packet, err := c.parsePacketIn(pktIn)
-	if err == skipTraceflowUpdateErr {
-		return nil
-	}
+	oldTf, nodeResult, packet, samplingState, shouldSkip, err := c.parsePacketIn(pktIn)
 	if err != nil {
 		return fmt.Errorf("parsePacketIn error: %v", err)
+	}
+	if shouldSkip {
+		return nil
 	}
 
 	// Retry when update CRD conflict which caused by multiple agents updating one CRD at same time.
@@ -55,12 +53,26 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		if err != nil {
 			return fmt.Errorf("get Traceflow failed: %w", err)
 		}
+
+		if samplingState != nil {
+			shouldUpdate := samplingState.shouldSyncPackets && (packet != nil ||
+				samplingState.updateRateLimiter.Allow() || samplingState.numCapturedPackets == tf.Spec.Sampling.Num)
+			if !shouldUpdate {
+				return nil
+			}
+		}
+
 		update := tf.DeepCopy()
-		update.Status.Results = append(update.Status.Results, *nodeResult)
+		if samplingState != nil {
+			update.Status.Sampling.NumCapturedPackets = samplingState.numCapturedPackets
+		} else {
+			update.Status.Results = append(update.Status.Results, *nodeResult)
+		}
 		if packet != nil {
 			update.Status.CapturedPacket = packet
 		}
-		_, err = c.traceflowClient.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
+
+		_, err = c.traceflowClient.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("update Traceflow failed: %w", err)
 		}
@@ -70,114 +82,156 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return fmt.Errorf("Traceflow update error: %w", err)
 	}
+
+	if samplingState != nil {
+		rawData := pktIn.Data.(*util.Buffer).Bytes()
+		ci := gopacket.CaptureInfo{
+			Timestamp:     time.Now(),
+			CaptureLength: len(rawData),
+			Length:        len(rawData),
+		}
+		err = samplingState.pcapngWriter.WritePacket(ci, rawData)
+		if err != nil {
+			return fmt.Errorf("couldn't write packet: %w", err)
+		}
+	}
 	return nil
 }
 
-func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflow, *crdv1beta1.NodeResult, *crdv1beta1.Packet, error) {
+// parsePacketIn parses the packet-in message and returns
+// 1. the corresponding Traceflow CRD,
+// 2. the observed node result,
+// 3. the captured packet metadata (if applicable),
+// 4. the sampling state of the Traceflow (on sampling mode),
+// 5. a flag indicating whether this packet should be skipped,
+// 6. unexpected errors.
+func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (_ *crdv1alpha1.Traceflow, _ *crdv1alpha1.NodeResult,
+	_ *crdv1alpha1.Packet, _ *samplingState, shouldSkip bool, _ error) {
 	matchers := pktIn.GetMatches()
 
 	// Get data plane tag.
 	// Directly read data plane tag from packet.
 	var err error
 	var tag uint8
-	var ctNwDst, ctNwSrc, ipDst, ipSrc, ns, srcPod string
+	var ctNwDst, ctNwSrc, ipDst, ipSrc string
 	etherData := new(protocol.Ethernet)
 	if err := etherData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
+		return nil, nil, nil, nil, false, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
 	}
 	if etherData.Ethertype == protocol.IPv4_MSG {
 		ipPacket, ok := etherData.Data.(*protocol.IPv4)
 		if !ok {
-			return nil, nil, nil, errors.New("invalid traceflow IPv4 packet")
+			return nil, nil, nil, nil, false, errors.New("invalid traceflow IPv4 packet")
 		}
 		tag = ipPacket.DSCP
 		ctNwDst, err = getCTDstValue(matchers, false)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ctNwSrc, err = getCTSrcValue(matchers, false)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ipDst = ipPacket.NWDst.String()
 		ipSrc = ipPacket.NWSrc.String()
 	} else if etherData.Ethertype == protocol.IPv6_MSG {
 		ipv6Packet, ok := etherData.Data.(*protocol.IPv6)
 		if !ok {
-			return nil, nil, nil, errors.New("invalid traceflow IPv6 packet")
+			return nil, nil, nil, nil, false, errors.New("invalid traceflow IPv6 packet")
 		}
 		tag = ipv6Packet.TrafficClass >> 2
 		ctNwDst, err = getCTDstValue(matchers, true)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ctNwSrc, err = getCTSrcValue(matchers, true)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ipDst = ipv6Packet.NWDst.String()
 		ipSrc = ipv6Packet.NWSrc.String()
 	} else {
-		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
+		return nil, nil, nil, nil, false, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
 	}
 
 	firstPacket := false
-	c.runningTraceflowsMutex.RLock()
-	tfState, exists := c.runningTraceflows[int8(tag)]
+	samplingEnabled := false
+	samplingState := samplingState{}
+	c.runningTraceflowsMutex.Lock()
+	tfState, exists := c.runningTraceflows[tag]
 	if exists {
-		firstPacket = !tfState.receivedPacket
-		tfState.receivedPacket = true
+		samplingEnabled = tfState.samplingEnabled()
+		if samplingEnabled {
+			if tfState.samplingState.numCapturedPackets == tfState.samplingState.maxNumCapturedPackets {
+				c.runningTraceflowsMutex.Unlock()
+				return nil, nil, nil, nil, true, nil
+			}
+			tfState.samplingState.numCapturedPackets++
+			if tfState.samplingState.numCapturedPackets == tfState.samplingState.maxNumCapturedPackets {
+				c.ofClient.UninstallTraceflowFlows(tag)
+			}
+			samplingState = *tfState.samplingState
+		} else {
+			firstPacket = !tfState.receivedPacket
+			tfState.receivedPacket = true
+		}
 	}
-	c.runningTraceflowsMutex.RUnlock()
+	c.runningTraceflowsMutex.Unlock()
 	if !exists {
-		return nil, nil, nil, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", tag)
+		return nil, nil, nil, nil, false, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", tag)
 	}
 
-	var capturedPacket *crdv1beta1.Packet
+	var capturedPacket *crdv1alpha1.Packet
 	if tfState.liveTraffic {
-		// Live Traceflow only considers the first packet of each
-		// connection. However, it is possible for 2 connections to
-		// match the Live Traceflow flows in OVS (before the flows can
-		// be uninstalled below), leading to 2 Packet In messages being
-		// processed. If we don't ignore all additional Packet Ins, we
-		// can end up with duplicate Node observations in the Traceflow
-		// Status. This situation is more likely when the Live TraceFlow
-		// request does not specify source / destination ports.
-		if !firstPacket {
-			klog.InfoS("An additional Traceflow packet was received unexpectedly for Live Traceflow, ignoring it")
-			return nil, nil, nil, skipTraceflowUpdateErr
-		}
-		// Uninstall the OVS flows after receiving the first packet, to
-		// avoid capturing too many matched packets.
-		c.ofClient.UninstallTraceflowFlows(tag)
-		// Report the captured dropped packet, if the Traceflow is for
-		// the dropped packet only; report too if only the receiver
-		// captures packets in the Traceflow (live-traffic Traceflow
-		// that has only destination Pod set); otherwise only the sender
-		// should report the first captured packet.
-		if tfState.isSender || tfState.receiverOnly || tfState.droppedOnly {
-			capturedPacket = parseCapturedPacket(pktIn)
+		if samplingEnabled {
+			if samplingState.numCapturedPackets == 1 && samplingState.shouldSyncPackets {
+				capturedPacket = parseCapturedPacket(pktIn)
+			}
+		} else {
+			// Live Traceflow only considers the first packet of each
+			// connection. However, it is possible for 2 connections to
+			// match the Live Traceflow flows in OVS (before the flows can
+			// be uninstalled below), leading to 2 Packet In messages being
+			// processed. If we don't ignore all additional Packet Ins, we
+			// can end up with duplicate Node observations in the Traceflow
+			// Status. This situation is more likely when the Live TraceFlow
+			// request does not specify source / destination ports.
+			if !firstPacket {
+				klog.InfoS("An additional Traceflow packet was received unexpectedly for Live Traceflow, ignoring it")
+				return nil, nil, nil, nil, true, nil
+			}
+			// Uninstall the OVS flows after receiving the first packet, to
+			// avoid capturing too many matched packets.
+			c.ofClient.UninstallTraceflowFlows(tag)
+			// Report the captured dropped packet, if the Traceflow is for
+			// the dropped packet only; report too if only the receiver
+			// captures packets in the Traceflow (live-traffic Traceflow
+			// that has only destination Pod set); otherwise only the sender
+			// should report the first captured packet.
+			if tfState.isSender || tfState.receiverOnly || tfState.droppedOnly {
+				capturedPacket = parseCapturedPacket(pktIn)
+			}
 		}
 	}
 
 	tf, err := c.traceflowLister.Get(tfState.name)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get Traceflow %s CRD: %v", tfState.name, err)
+		return nil, nil, nil, nil, false, fmt.Errorf("failed to get Traceflow %s CRD: %v", tfState.name, err)
 	}
-	ns = tf.Spec.Source.Namespace
-	srcPod = tf.Spec.Source.Pod
+	ns := tf.Spec.Source.Namespace
+	srcPod := tf.Spec.Source.Pod
 
-	obs := []crdv1beta1.Observation{}
+	obs := []crdv1alpha1.Observation{}
 	tableID := pktIn.TableId
 	if tfState.isSender {
-		ob := new(crdv1beta1.Observation)
-		ob.Component = crdv1beta1.ComponentSpoofGuard
-		ob.Action = crdv1beta1.ActionForwarded
+		ob := new(crdv1alpha1.Observation)
+		ob.Component = crdv1alpha1.ComponentSpoofGuard
+		ob.Action = crdv1alpha1.ActionForwarded
 		obs = append(obs, *ob)
 	} else {
-		ob := new(crdv1beta1.Observation)
-		ob.Component = crdv1beta1.ComponentForwarding
-		ob.Action = crdv1beta1.ActionReceived
+		ob := new(crdv1alpha1.Observation)
+		ob.Component = crdv1alpha1.ComponentForwarding
+		ob.Action = crdv1alpha1.ActionReceived
 		obs = append(obs, *ob)
 	}
 
@@ -187,9 +241,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	//   state is that ipSrc != ctNwSrc (in SNAT CT zone). The state in DNAT CT zone cannot be recognized in SNAT CT zone.
 	if !tfState.receiverOnly {
 		if isValidCtNw(ctNwDst) && ipDst != ctNwDst || isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
-			ob := &crdv1beta1.Observation{
-				Component:       crdv1beta1.ComponentLB,
-				Action:          crdv1beta1.ActionForwarded,
+			ob := &crdv1alpha1.Observation{
+				Component:       crdv1alpha1.ComponentLB,
+				Action:          crdv1alpha1.ActionForwarded,
 				TranslatedDstIP: ipDst,
 			}
 			if isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
@@ -201,7 +255,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		if match := getMatchRegField(matchers, openflow.TFEgressConjIDField); match != nil {
 			egressInfo, err := getRegValue(match, nil)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 			ob := getNetworkPolicyObservation(tableID, false)
 			npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
@@ -216,7 +270,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 	if match := getMatchRegField(matchers, openflow.TFIngressConjIDField); match != nil {
 		ingressInfo, err := getRegValue(match, nil)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, false, err
 		}
 		ob := getNetworkPolicyObservation(tableID, true)
 		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressInfo)
@@ -232,14 +286,14 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		if match := getMatchRegField(matchers, openflow.APConjIDField); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 			if ruleRef := c.networkPolicyQuerier.GetRuleByFlowID(notAllowConjInfo); ruleRef != nil {
 				if npRef := ruleRef.PolicyRef; npRef != nil {
 					ob.NetworkPolicy = npRef.ToString()
 				}
-				if ruleRef.Action != nil && *ruleRef.Action == crdv1beta1.RuleActionReject {
-					ob.Action = crdv1beta1.ActionRejected
+				if ruleRef.Action != nil && *ruleRef.Action == crdv1alpha1.RuleActionReject {
+					ob.Action = crdv1alpha1.ActionRejected
 				}
 			}
 		}
@@ -251,21 +305,21 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 
 	// Get output table.
 	if tableID == openflow.OutputTable.GetID() {
-		ob := new(crdv1beta1.Observation)
+		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
 		// decide according to packet.
 		isIPv6 := etherData.Ethertype == protocol.IPv6_MSG
 		if match := getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 		}
 		var outputPort uint32
 		if match := getMatchRegField(matchers, openflow.TargetOFPortField); match != nil {
 			outputPort, err = getRegValue(match, nil)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, false, err
 			}
 		}
 		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
@@ -279,58 +333,62 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			if match := getMatchRegField(matchers, openflow.RemoteSNATRegMark.GetField()); match != nil {
 				isRemoteEgress, err = getRegValue(match, openflow.RemoteSNATRegMark.GetField().GetRange().ToNXRange())
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 			}
 			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
 				egress, _, err := c.egressQuerier.GetEgress(ns, srcPod)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 				obEgress := getEgressObservation(false, tunnelDstIP, egress)
 				obs = append(obs, *obEgress)
 			}
 			ob.TunnelDstIP = tunnelDstIP
-			ob.Action = crdv1beta1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		} else if ipDst == gatewayIP.String() && outputPort == gwPort {
-			ob.Action = crdv1beta1.ActionDelivered
+			ob.Action = crdv1alpha1.ActionDelivered
 		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort {
 			var pktMark uint32
 			if match := getMatchPktMarkField(matchers); match != nil {
 				pktMark, err = getMarkValue(match)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 			}
 			if pktMark != 0 { // Egress packet on Egress Node
 				egressIP, err := c.egressQuerier.GetEgressIPByMark(pktMark)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, nil, false, err
 				}
 				egress := ""
 				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
 					egress, _, err = c.egressQuerier.GetEgress(ns, srcPod)
 					if err != nil {
-						return nil, nil, nil, err
+						return nil, nil, nil, nil, false, err
 					}
 				}
 				obEgress := getEgressObservation(true, egressIP, egress)
 				obs = append(obs, *obEgress)
 			}
-			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
+			ob.Action = crdv1alpha1.ActionForwardedOutOfOverlay
 		} else if outputPort == gwPort { // noEncap
-			ob.Action = crdv1beta1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		} else {
 			// Output port is Pod port, packet is delivered.
-			ob.Action = crdv1beta1.ActionDelivered
+			ob.Action = crdv1alpha1.ActionDelivered
 		}
 		ob.ComponentInfo = openflow.OutputTable.GetName()
-		ob.Component = crdv1beta1.ComponentForwarding
+		ob.Component = crdv1alpha1.ComponentForwarding
 		obs = append(obs, *ob)
 	}
 
-	nodeResult := crdv1beta1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
-	return tf, &nodeResult, capturedPacket, nil
+	nodeResult := crdv1alpha1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
+	if samplingEnabled {
+		return tf, &nodeResult, capturedPacket, &samplingState, false, nil
+	} else {
+		return tf, &nodeResult, capturedPacket, nil, false, nil
+	}
 }
 
 func getMatchPktMarkField(matchers *ofctrl.Matchers) *ofctrl.MatchField {
@@ -409,36 +467,36 @@ func getCTSrcValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
 	return regValue.String(), nil
 }
 
-func getNetworkPolicyObservation(tableID uint8, ingress bool) *crdv1beta1.Observation {
-	ob := new(crdv1beta1.Observation)
-	ob.Component = crdv1beta1.ComponentNetworkPolicy
+func getNetworkPolicyObservation(tableID uint8, ingress bool) *crdv1alpha1.Observation {
+	ob := new(crdv1alpha1.Observation)
+	ob.Component = crdv1alpha1.ComponentNetworkPolicy
 	if ingress {
 		switch tableID {
 		case openflow.IngressMetricTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.IngressMetricTable.GetName()
-			ob.Action = crdv1beta1.ActionDropped
+			ob.Action = crdv1alpha1.ActionDropped
 		case openflow.IngressDefaultTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.IngressDefaultTable.GetName()
-			ob.Action = crdv1beta1.ActionDropped
+			ob.Action = crdv1alpha1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.IngressRuleTable.GetName()
-			ob.Action = crdv1beta1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		}
 	} else {
 		switch tableID {
 		case openflow.EgressMetricTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.EgressMetricTable.GetName()
-			ob.Action = crdv1beta1.ActionDropped
+			ob.Action = crdv1alpha1.ActionDropped
 		case openflow.EgressDefaultTable.GetID():
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.EgressDefaultTable.GetName()
-			ob.Action = crdv1beta1.ActionDropped
+			ob.Action = crdv1alpha1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.EgressRuleTable.GetName()
-			ob.Action = crdv1beta1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		}
 	}
 	return ob
@@ -457,34 +515,36 @@ func isValidCtNw(ipStr string) bool {
 	return true
 }
 
-func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1beta1.Packet {
+func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1alpha1.Packet {
 	pkt, _ := binding.ParsePacketIn(pktIn)
-	capturedPacket := crdv1beta1.Packet{SrcIP: pkt.SourceIP.String(), DstIP: pkt.DestinationIP.String(), Length: int32(pkt.IPLength)}
+	capturedPacket := crdv1alpha1.Packet{SrcIP: pkt.SourceIP.String(), DstIP: pkt.DestinationIP.String(), Length: pkt.IPLength}
 	if pkt.IsIPv6 {
 		ipProto := int32(pkt.IPProto)
-		capturedPacket.IPv6Header = &crdv1beta1.IPv6Header{NextHeader: &ipProto, HopLimit: int32(pkt.TTL)}
+		capturedPacket.IPv6Header = &crdv1alpha1.IPv6Header{NextHeader: &ipProto, HopLimit: int32(pkt.TTL)}
 	} else {
-		capturedPacket.IPHeader = &crdv1beta1.IPHeader{Protocol: int32(pkt.IPProto), TTL: int32(pkt.TTL), Flags: int32(pkt.IPFlags)}
+		capturedPacket.IPHeader.Protocol = int32(pkt.IPProto)
+		capturedPacket.IPHeader.TTL = int32(pkt.TTL)
+		capturedPacket.IPHeader.Flags = int32(pkt.IPFlags)
 	}
 	if pkt.IPProto == protocol.Type_TCP {
-		capturedPacket.TransportHeader.TCP = &crdv1beta1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: pointer.Int32(int32(pkt.TCPFlags))}
+		capturedPacket.TransportHeader.TCP = &crdv1alpha1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: int32(pkt.TCPFlags)}
 	} else if pkt.IPProto == protocol.Type_UDP {
-		capturedPacket.TransportHeader.UDP = &crdv1beta1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
+		capturedPacket.TransportHeader.UDP = &crdv1alpha1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
 	} else if pkt.IPProto == protocol.Type_ICMP || pkt.IPProto == protocol.Type_IPv6ICMP {
-		capturedPacket.TransportHeader.ICMP = &crdv1beta1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
+		capturedPacket.TransportHeader.ICMP = &crdv1alpha1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
 	}
 	return &capturedPacket
 }
 
-func getEgressObservation(isEgressNode bool, egressIP, egressName string) *crdv1beta1.Observation {
-	ob := new(crdv1beta1.Observation)
-	ob.Component = crdv1beta1.ComponentEgress
+func getEgressObservation(isEgressNode bool, egressIP, egressName string) *crdv1alpha1.Observation {
+	ob := new(crdv1alpha1.Observation)
+	ob.Component = crdv1alpha1.ComponentEgress
 	ob.EgressIP = egressIP
 	ob.Egress = egressName
 	if isEgressNode {
-		ob.Action = crdv1beta1.ActionMarkedForSNAT
+		ob.Action = crdv1alpha1.ActionMarkedForSNAT
 	} else {
-		ob.Action = crdv1beta1.ActionForwardedToEgressNode
+		ob.Action = crdv1alpha1.ActionForwardedToEgressNode
 	}
 	return ob
 }

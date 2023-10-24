@@ -143,7 +143,7 @@ func TestTraceflow(t *testing.T) {
 		assert.NotNil(t, res)
 		res, _ = tfc.waitForTraceflow("tf1", crdv1beta1.Failed, defaultTimeoutDuration*2)
 		assert.NotNil(t, res)
-		assert.True(t, time.Now().Sub(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
+		assert.True(t, time.Since(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
 		assert.Equal(t, res.Status.Reason, traceflowTimeout)
 		assert.True(t, res.Status.DataplaneTag == 0)
 		assert.Equal(t, numRunningTraceflows(), 0)
