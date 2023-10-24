@@ -165,8 +165,19 @@ func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgen
 	}
 }
 
-func skipIfProxyDisabled(t *testing.T) {
-	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
+func skipIfProxyDisabled(t *testing.T, data *TestData) {
+	if featureGate, err := GetAgentFeatures(); err != nil {
+		t.Fatalf("Cannot determine if %s is enabled in the Agent: %v", features.AntreaProxy, err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skipf("Skipping test because %s is not enabled in the Agent", features.AntreaProxy)
+	}
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		t.Fatalf("Error getting Antrea Agent config: %v", err)
+	}
+	if agentConf.AntreaProxy.Enable != nil && !*agentConf.AntreaProxy.Enable {
+		t.Skipf("Skipping test because AntreaProxy is not enabled")
+	}
 }
 
 func skipIfProxyAllDisabled(t *testing.T, data *TestData) {

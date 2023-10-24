@@ -520,13 +520,13 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 func TestCleanStaleClusterIPRoutes(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a backend Pod for test Service: if a Service has no backend Pod, no ClusterIP route will be installed.

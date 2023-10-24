@@ -44,13 +44,13 @@ type expectTableFlows struct {
 // Proxy related test cases so they can share setup, teardown.
 func TestProxy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 
 	t.Run("testProxyServiceSessionAffinityCase", func(t *testing.T) {
 		testProxyServiceSessionAffinityCase(t, data)
@@ -148,7 +148,6 @@ func TestProxyLoadBalancerServiceIPv6(t *testing.T) {
 }
 
 func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
-	skipIfProxyDisabled(t)
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 
@@ -157,6 +156,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a busybox Pod on every Node. The busybox Pod is used as a client.
@@ -290,13 +290,13 @@ func TestProxyNodePortServiceIPv6(t *testing.T) {
 func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	nodes := []string{nodeName(0), nodeName(1)}
@@ -396,7 +396,6 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)
-	skipIfProxyDisabled(t)
 	skipIfEgressDisabled(t)
 
 	data, err := setupTest(t)
@@ -404,6 +403,7 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap) // Egress works for encap mode only.
 
@@ -517,13 +517,13 @@ func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls []string)
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
@@ -548,13 +548,13 @@ func TestProxyExternalTrafficPolicyIPv6(t *testing.T) {
 func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 
 	svcName := fmt.Sprintf("nodeport-external-traffic-policy-test-ipv6-%v", isIPv6)
@@ -657,14 +657,12 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 }
 
 func TestProxyHairpinIPv4(t *testing.T) {
-	skipIfProxyDisabled(t)
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 	testProxyHairpin(t, false)
 }
 
 func TestProxyHairpinIPv6(t *testing.T) {
-	skipIfProxyDisabled(t)
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv6Cluster(t)
 	testProxyHairpin(t, true)
@@ -676,6 +674,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 
 	node := nodeName(1)
 	workerNodeIP := workerNodeIPv4(1)
@@ -876,13 +875,13 @@ func testProxyEndpointLifeCycleCase(t *testing.T, data *TestData) {
 
 func TestProxyEndpointLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
@@ -970,13 +969,13 @@ func testProxyServiceLifeCycleCase(t *testing.T, data *TestData) {
 
 func TestProxyServiceLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
@@ -1089,11 +1088,11 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 3)
 	skipIfAntreaIPAMTest(t)
-	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	require.NoError(t, err, "Error when setting up test")
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfProxyAllDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 

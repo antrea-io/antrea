@@ -680,9 +680,6 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1beta1.Rule)
 	}
 	for _, rule := range egress {
 		if rule.ToServices != nil {
-			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-				return "`toServices` can only be used when AntreaProxy is enabled", false
-			}
 			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil || rule.Protocols != nil {
 				return "`toServices` cannot be used with `to`, `ports` or `protocols`", false
 			}

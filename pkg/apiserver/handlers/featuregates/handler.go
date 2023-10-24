@@ -137,12 +137,12 @@ func getFeatureGatesResponse(cfg *Config, component string) []Response {
 			if !ok {
 				status = features.DefaultFeatureGate.Enabled(df)
 			}
-			featureStatus := getStatus(status)
+			featureStatus := features.GetStatus(status)
 			gatesResp = append(gatesResp, Response{
 				Component: component,
 				Name:      string(df),
 				Status:    featureStatus,
-				Version:   string(features.DefaultAntreaFeatureGates[df].PreRelease),
+				Version:   features.GetVersion(string(features.DefaultAntreaFeatureGates[df].PreRelease)),
 			})
 		}
 	}
@@ -150,11 +150,4 @@ func getFeatureGatesResponse(cfg *Config, component string) []Response {
 		return gatesResp[i].Name < gatesResp[j].Name
 	})
 	return gatesResp
-}
-
-func getStatus(status bool) string {
-	if status {
-		return "Enabled"
-	}
-	return "Disabled"
 }

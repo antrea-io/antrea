@@ -56,6 +56,7 @@ const (
 
 	// alpha: v0.8
 	// beta: v0.11
+	// GA: v1.14
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
 	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
 	// Service traffic.
@@ -155,7 +156,7 @@ var (
 	// available throughout Antrea binaries.
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:                {Default: true, PreRelease: featuregate.Beta},
-		AntreaProxy:                 {Default: true, PreRelease: featuregate.Beta},
+		AntreaProxy:                 {Default: true, PreRelease: featuregate.GA},
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
@@ -293,4 +294,18 @@ func SupportedOnExternalNode(feature featuregate.Feature) bool {
 	}
 	_, exists = supportedFeaturesOnExternalNode[feature]
 	return exists
+}
+
+func GetVersion(version string) string {
+	if version == "" {
+		version = "GA"
+	}
+	return version
+}
+
+func GetStatus(status bool) string {
+	if status {
+		return "Enabled"
+	}
+	return "Disabled"
 }

@@ -28,8 +28,8 @@ import (
 )
 
 func TestGetStatus(t *testing.T) {
-	assert.Equal(t, "Enabled", getStatus(true))
-	assert.Equal(t, "Disabled", getStatus(false))
+	assert.Equal(t, "Enabled", features.GetStatus(true))
+	assert.Equal(t, "Disabled", features.GetStatus(false))
 }
 
 func TestHandleFunc(t *testing.T) {
@@ -48,7 +48,7 @@ func TestHandleFunc(t *testing.T) {
 	for _, v := range resp {
 		df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]
 		require.True(t, ok)
-		assert.Equal(t, v.Status, getStatus(df.Default))
-		assert.Equal(t, v.Version, string(df.PreRelease))
+		assert.Equal(t, v.Status, features.GetStatus(df.Default))
+		assert.Equal(t, v.Version, features.GetVersion(string(df.PreRelease)))
 	}
 }

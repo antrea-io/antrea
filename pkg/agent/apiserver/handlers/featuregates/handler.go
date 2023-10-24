@@ -41,8 +41,8 @@ func HandleFunc() http.HandlerFunc {
 				featureGates = append(featureGates, Response{
 					Component: "agent",
 					Name:      string(df),
-					Status:    getStatus(features.DefaultFeatureGate.Enabled(df)),
-					Version:   string(features.DefaultAntreaFeatureGates[df].PreRelease),
+					Status:    features.GetStatus(features.DefaultFeatureGate.Enabled(df)),
+					Version:   features.GetVersion(string(features.DefaultAntreaFeatureGates[df].PreRelease)),
 				})
 			}
 		}
@@ -55,11 +55,4 @@ func HandleFunc() http.HandlerFunc {
 			klog.ErrorS(err, "Error when encoding FeatureGates to json")
 		}
 	}
-}
-
-func getStatus(status bool) string {
-	if status {
-		return "Enabled"
-	}
-	return "Disabled"
 }
