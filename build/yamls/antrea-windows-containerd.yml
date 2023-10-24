@@ -34,7 +34,8 @@ data:
     featureGates:
     # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic.
+    # Service traffic. Note that this feature gate is deprecated since this feature was
+    # promoted to GA in v1.14.
     #  AntreaProxy: true
 
     # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
@@ -147,6 +148,9 @@ data:
 
     # Option antreaProxy contains AntreaProxy related configuration options.
     antreaProxy:
+      # To disable AntreaProxy, set this to false. It should be enabled on Windows, otherwise NetworkPolicy will
+      # not take effect on Service traffic.
+      enable: {{.enable}}
       # ProxyAll tells antrea-agent to proxy ClusterIP Service traffic, regardless of where they come from.
       # Therefore, running kube-proxy is no longer required. This requires the AntreaProxy feature to be enabled.
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
@@ -206,7 +210,7 @@ spec:
     metadata:
       annotations:
         checksum/agent-windows: 7749579c82f76822f449f6d6f765f07486310e8cd21cb117c8349ad1e118788b
-        checksum/windows-config: 6be75a1fcb4855e2e138e36109862d93f16e2d654312c74532bbcc64c65af3d9
+        checksum/windows-config: 6bd9e27a05233439f0012137ccfa6dc3817f99df9e394c9d07922c3277e433d1
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea

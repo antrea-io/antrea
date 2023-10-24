@@ -112,6 +112,8 @@ nodePortLocal:
   portRange: "61000-62000"
 
 antreaProxy:
+  # -- To disable AntreaProxy, set this to false.
+  enable: true
   # -- Proxy all Service traffic, for all Service types, regardless of where it
   # comes from.
   proxyAll: false

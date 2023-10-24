@@ -240,7 +240,6 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	// The test is about IPAM for secondary network, which should not be
 	// impacted by other modes and configurations, such as encap mode,
 	// AntreaProxy, IPv6, etc., so we skip those cases.
-	skipIfProxyDisabled(t)
 	skipIfNotIPv4Cluster(t)
 	skipIfAntreaIPAMTest(t)
 	skipIfFeatureDisabled(t, features.AntreaIPAM, true, true)
@@ -250,6 +249,7 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfProxyDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
 	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})

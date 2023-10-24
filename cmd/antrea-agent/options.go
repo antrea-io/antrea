@@ -27,6 +27,7 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis"
@@ -93,6 +94,10 @@ type Options struct {
 	// enableEgress represents whether Egress should run or not, calculated from its feature gate configuration and
 	// whether the traffic mode supports it.
 	enableEgress bool
+	// enableAntreaProxy indicates whether AntreaProxy should be enabled, based on feature gate AntreaProxy and options
+	// AntreaProxy.Enable. This is used to maintain compatibility with the AntreaProxy feature gate, which was promoted
+	// to GA in v1.14.
+	enableAntreaProxy bool
 
 	defaultLoadBalancerMode config.LoadBalancerMode
 }
@@ -190,9 +195,6 @@ func (o *Options) setDefaults() {
 	if o.config.Multicluster.EnableGateway {
 		o.setMulticlusterDefaultOptions()
 	}
-	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
-		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
-	}
 	if o.config.PacketInRate == 0 {
 		o.config.PacketInRate = defaultPacketInRate
 	}
@@ -218,7 +220,11 @@ func (o *Options) validateTLSOptions() error {
 
 func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeType) error {
 	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		// Validate service CIDR configuration if AntreaProxy is not enabled.
+		klog.InfoS("Feature gate `AntreaProxy` is deprecated, please use option `antreaProxy.enable` to disable AntreaProxy")
+	}
+	o.enableAntreaProxy = *o.config.AntreaProxy.Enable && features.DefaultFeatureGate.Enabled(features.AntreaProxy)
+	if !o.enableAntreaProxy {
+		// Validate Service CIDR configuration if AntreaProxy is not enabled.
 		if _, _, err := net.ParseCIDR(o.config.ServiceCIDR); err != nil {
 			return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
 		}
@@ -397,22 +403,24 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
 	}
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		if o.config.AntreaProxy.ProxyLoadBalancerIPs == nil {
-			o.config.AntreaProxy.ProxyLoadBalancerIPs = new(bool)
-			*o.config.AntreaProxy.ProxyLoadBalancerIPs = true
-		}
-	} else {
-		if o.config.ServiceCIDR == "" {
-			o.config.ServiceCIDR = defaultServiceCIDR
-		}
+	if o.config.AntreaProxy.Enable == nil {
+		o.config.AntreaProxy.Enable = pointer.Bool(true)
+	}
+	if o.config.AntreaProxy.ProxyLoadBalancerIPs == nil {
+		o.config.AntreaProxy.ProxyLoadBalancerIPs = pointer.Bool(true)
+	}
+	if o.config.ServiceCIDR == "" {
+		//It's okay to set the default value of this field even when AntreaProxy is enabled and the field is not used.
+		o.config.ServiceCIDR = defaultServiceCIDR
+	}
+	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
+		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
 	}
 	if o.config.ClusterMembershipPort == 0 {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
 	}
 	if o.config.EnablePrometheusMetrics == nil {
-		o.config.EnablePrometheusMetrics = new(bool)
-		*o.config.EnablePrometheusMetrics = true
+		o.config.EnablePrometheusMetrics = pointer.Bool(true)
 	}
 	if o.config.WireGuard.Port == 0 {
 		o.config.WireGuard.Port = apis.WireGuardListenPort
@@ -539,7 +547,9 @@ func (o *Options) validateK8sNodeOptions() error {
 	if err := o.checkUnsupportedFeatures(); err != nil {
 		return err
 	}
-
+	if err := o.validateAntreaProxyConfig(encapMode); err != nil {
+		return fmt.Errorf("proxy config is invalid: %w", err)
+	}
 	if encapMode.SupportsNoEncap() {
 		// When using NoEncap traffic mode without AntreaProxy, Pod-to-Service traffic is handled by kube-proxy
 		// (iptables/ipvs) in the root netns. If the Endpoint is not local the DNATed traffic will be output to
@@ -548,7 +558,7 @@ func (o *Options) validateK8sNodeOptions() error {
 		// AntreaProxy. But one can bypass this check and force this feature combination to be allowed, by defining
 		// the ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY environment variable and setting it to true. This may lead to
 		// better performance when using NoEncap if Egress NetworkPolicy enforcement is not required.
-		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if !o.enableAntreaProxy {
 			if env.GetAllowNoEncapWithoutAntreaProxy() {
 				klog.InfoS("Disabling AntreaProxy in NoEncap mode will prevent Egress NetworkPolicy rules from being enforced correctly")
 			} else {
@@ -566,9 +576,6 @@ func (o *Options) validateK8sNodeOptions() error {
 		// In the NetworkPolicyOnly mode, Antrea will not perform SNAT
 		// (but SNAT can be done by the primary CNI).
 		o.config.NoSNAT = true
-	}
-	if err := o.validateAntreaProxyConfig(encapMode); err != nil {
-		return fmt.Errorf("proxy config is invalid: %w", err)
 	}
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
@@ -674,6 +681,7 @@ func (o *Options) validatePolicyBypassRulesConfig() error {
 	return nil
 
 }
+
 func (o *Options) setExternalNodeDefaultOptions() {
 	// Following options are default values for agent running on a Virtual Machine.
 	// They are set to avoid unexpected agent crash.

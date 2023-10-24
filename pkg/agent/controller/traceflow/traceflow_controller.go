@@ -43,7 +43,6 @@ import (
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/querier"
 )
@@ -104,6 +103,7 @@ type Controller struct {
 	// runningTraceflows is a map for storing the running Traceflow state
 	// with dataplane tag to be the key.
 	runningTraceflows map[int8]*traceflowState
+	enableAntreaProxy bool
 }
 
 // NewTraceflowController instantiates a new Controller object which will process Traceflow
@@ -119,7 +119,8 @@ func NewTraceflowController(
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
-	serviceCIDR *net.IPNet) *Controller {
+	serviceCIDR *net.IPNet,
+	enableAntreaProxy bool) *Controller {
 	c := &Controller{
 		kubeClient:            kubeClient,
 		crdClient:             crdClient,
@@ -135,6 +136,7 @@ func NewTraceflowController(
 		serviceCIDR:           serviceCIDR,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
 		runningTraceflows:     make(map[int8]*traceflowState),
+		enableAntreaProxy:     enableAntreaProxy,
 	}
 
 	// Add handlers for Traceflow events.
@@ -149,7 +151,7 @@ func NewTraceflowController(
 	// Register packetInHandler
 	c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryTF), c)
 	// Add serviceLister if AntreaProxy enabled
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if c.enableAntreaProxy {
 		c.serviceLister = serviceInformer.Lister()
 		c.serviceListerSynced = serviceInformer.Informer().HasSynced
 	}
@@ -170,7 +172,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer klog.Infof("Shutting down %s", controllerName)
 
 	cacheSyncs := []cache.InformerSynced{c.traceflowListerSynced}
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if c.enableAntreaProxy {
 		cacheSyncs = append(cacheSyncs, c.serviceListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
@@ -370,15 +372,15 @@ func (c *Controller) startTraceflow(tf *crdv1beta1.Traceflow) error {
 }
 
 func (c *Controller) validateTraceflow(tf *crdv1beta1.Traceflow) error {
-	if tf.Spec.Destination.Service != "" && !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		return errors.New("using Service destination requires AntreaProxy feature enabled")
+	if tf.Spec.Destination.Service != "" && !c.enableAntreaProxy {
+		return errors.New("using Service destination requires AntreaProxy enabled")
 	}
 	if tf.Spec.Destination.IP != "" {
 		destIP := net.ParseIP(tf.Spec.Destination.IP)
 		// When AntreaProxy is enabled, serviceCIDR is not required and may be set to a
 		// default value which does not match the cluster configuration.
-		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && c.serviceCIDR.Contains(destIP) {
-			return errors.New("using ClusterIP destination requires AntreaProxy feature enabled")
+		if !c.enableAntreaProxy && c.serviceCIDR.Contains(destIP) {
+			return errors.New("using ClusterIP destination requires AntreaProxy enabled")
 		}
 	}
 	return nil

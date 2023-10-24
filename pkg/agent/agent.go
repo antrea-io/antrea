@@ -52,7 +52,6 @@ import (
 	"antrea.io/antrea/pkg/agent/wireguard"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/env"
@@ -121,6 +120,7 @@ type Initializer struct {
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	enableL7NetworkPolicy bool
 	connectUplinkToBridge bool
+	enableAntreaProxy     bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	networkReadyCh        chan<- struct{}
@@ -149,6 +149,7 @@ func NewInitializer(
 	nodeType config.NodeType,
 	externalNodeNamespace string,
 	connectUplinkToBridge bool,
+	enableAntreaProxy bool,
 	enableL7NetworkPolicy bool,
 ) *Initializer {
 	return &Initializer{
@@ -172,6 +173,7 @@ func NewInitializer(
 		nodeType:              nodeType,
 		externalNodeNamespace: externalNodeNamespace,
 		connectUplinkToBridge: connectUplinkToBridge,
+		enableAntreaProxy:     enableAntreaProxy,
 		enableL7NetworkPolicy: enableL7NetworkPolicy,
 	}
 }
@@ -233,7 +235,7 @@ func (i *Initializer) validateSupportedDPFeatures() error {
 		ovsctl.CTLabelFeature,
 	}
 	// AntreaProxy requires CTStateNAT feature.
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if i.enableAntreaProxy {
 		requiredFeatures = append(requiredFeatures, ovsctl.CTStateNATFeature)
 	}
 

@@ -3387,8 +3387,8 @@ func testFQDNPolicyTCP(t *testing.T) {
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 }
 
-func testToServices(t *testing.T) {
-	skipIfProxyDisabled(t)
+func testToServices(t *testing.T, data *TestData) {
+	skipIfProxyDisabled(t, data)
 	var services []*v1.Service
 	if clusterInfo.podV4NetworkCIDR != "" {
 		ipv4Svc := k8sUtils.BuildService("ipv4-svc", namespaces["x"], 81, 81, map[string]string{"pod": "a"}, nil)
@@ -4381,7 +4381,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
 		t.Run("Case=ACNPFQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
 		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
-		t.Run("Case=ACNPToServices", func(t *testing.T) { testToServices(t) })
+		t.Run("Case=ACNPToServices", func(t *testing.T) { testToServices(t, data) })
 		t.Run("Case=ACNPServiceAccountSelector", func(t *testing.T) { testServiceAccountSelector(t, data) })
 		t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })
 		t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })

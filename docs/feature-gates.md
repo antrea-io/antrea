@@ -16,7 +16,7 @@ Some features are specific to the Agent, others are specific to the Controller, 
 enabled / disabled consistently in both
 `.conf` entries.
 
-To enable / disable a feature, edit the Antrea manifest appropriately. For example, to enable `AntreaProxy` on Linux,
+To enable / disable a feature, edit the Antrea manifest appropriately. For example, to enable `FeatureGateFoo` on Linux,
 edit the Agent configuration in the
 `antrea` ConfigMap as follows:
 
@@ -24,17 +24,15 @@ edit the Agent configuration in the
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
-    # Enable antrea proxy which provides ServiceLB for in-cluster Services in antrea agent.
-    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic.
-      AntreaProxy: true
+    # Enable the feature gate.
+      FeatureGateFoo: true
 ```
 
 ## List of Available Features
 
 | Feature Name                  | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes                                         |
 |-------------------------------|--------------------|---------|-------|---------------|--------------|------------|--------------------|-----------------------------------------------|
-| `AntreaProxy`                 | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows.                  |
+| `AntreaProxy`                 | Agent              | `true`  | GA    | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                  |
 | `EndpointSlice`               | Agent              | `true`  | GA    | v0.13.0       | v1.11        | v1.14      | Yes                |                                               |
 | `TopologyAwareHints`          | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |                                               |
 | `CleanupStaleUDPSvcConntrack` | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
@@ -90,7 +88,7 @@ for more information about EndpointSlice. If this feature is enabled but the End
 #### Requirements for this Feature
 
 - EndpointSlice v1 API is available (Kubernetes version >=1.21).
-- `AntreaProxy` is enabled.
+- Option `antreaProxy.enable` is set to true.
 
 ### TopologyAwareHints
 
@@ -100,7 +98,7 @@ for more information about TopologyAwareHints.
 
 #### Requirements for this Feature
 
-- `AntreaProxy` is enabled.
+- Option `antreaProxy.enable` is set to true.
 - EndpointSlice API version v1 is available in Kubernetes.
 
 ### LoadBalancerModeDSR
@@ -115,7 +113,7 @@ antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more in
 
 #### Requirements for this Feature
 
-- `AntreaProxy` with `proxyAll` is enabled.
+- Options `antreaProxy.enable` and `antreaProxy.proxyAll`  are set to true.
 - IPv4 only.
 - Linux Nodes only.
 - Encap mode only.
@@ -126,7 +124,7 @@ antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more in
 
 #### Requirements for this Feature
 
-- `AntreaProxy` is enabled.
+Option `antreaProxy.enable` is set to true.
 
 ### AntreaPolicy
 
@@ -152,8 +150,8 @@ Until Antrea v0.11, this feature could only be used in "encap" mode, with the Ge
 for both Linux and Windows). In v0.11, this feature was graduated to Beta (enabled by default) and this requirement was
 lifted.
 
-In order to support cluster Services as the destination for tracing requests,
-`AntreaProxy` should be enabled, which is the default starting with Antrea v0.11.
+In order to support cluster Services as the destination for tracing requests, option `antreaProxy.enable` should be set
+to true to enable AntreaProxy.
 
 ### Flow Exporter
 
@@ -372,7 +370,7 @@ Refer to this [document](external-node.md) for more information.
 #### Requirements for this Feature
 
 Since Antrea Agent is running on an unmanaged VM/BM when this feature is enabled, features designed for K8s Pods are
-disabled. As of now, this feature requires that `AntreaProxy` and `NetworkPolicyStats` are also enabled.
+disabled. As of now, this feature requires that `AntreaPolicy` and `NetworkPolicyStats` are also enabled.
 
 OVS is required to be installed on the virtual machine or the bare-metal server before running Antrea Agent, and the OVS
 version must be >= 2.13.0.

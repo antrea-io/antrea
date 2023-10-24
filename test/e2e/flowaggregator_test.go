@@ -632,7 +632,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
 	t.Run("LocalServiceAccess", func(t *testing.T) {
-		skipIfProxyDisabled(t)
+		skipIfProxyDisabled(t, data)
 		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
 		// In that case, source IP and destination IP will align with IP family of Service IP.
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
@@ -646,7 +646,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 
 	// RemoteServiceAccess tests the case, where Pod and Service are deployed on different Nodes and their flow information is exported as IPFIX flow records.
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
-		skipIfProxyDisabled(t)
+		skipIfProxyDisabled(t, data)
 		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
 		// In that case, source IP and destination IP will align with IP family of Service IP.
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.

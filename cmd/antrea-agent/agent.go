@@ -157,7 +157,7 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge,
 		ovsBridgeMgmtAddr,
 		nodeIPTracker,
-		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+		o.enableAntreaProxy,
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		l7NetworkPolicyEnabled,
 		o.enableEgress,
@@ -279,6 +279,7 @@ func run(o *Options) error {
 		o.nodeType,
 		o.config.ExternalNode.ExternalNodeNamespace,
 		connectUplinkToBridge,
+		o.enableAntreaProxy,
 		l7NetworkPolicyEnabled)
 	err = agentInitializer.Initialize()
 	if err != nil {
@@ -405,7 +406,7 @@ func run(o *Options) error {
 	}
 
 	var proxier proxy.Proxier
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if o.enableAntreaProxy {
 		proxier, err = proxy.NewProxier(nodeConfig.Name,
 			k8sClient,
 			serviceInformer,
@@ -435,7 +436,6 @@ func run(o *Options) error {
 	// after rule deletion.
 	asyncRuleDeleteInterval := o.pollInterval
 	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
-	antreaProxyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaProxy)
 	// In Antrea agent, status manager will automatically be enabled if
 	// AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
@@ -469,7 +469,7 @@ func run(o *Options) error {
 		groupIDUpdates,
 		antreaPolicyEnabled,
 		l7NetworkPolicyEnabled,
-		antreaProxyEnabled,
+		o.enableAntreaProxy,
 		statusManagerEnabled,
 		multicastEnabled,
 		auditLoggerOptions,
@@ -597,7 +597,8 @@ func run(o *Options) error {
 			ifaceStore,
 			networkConfig,
 			nodeConfig,
-			serviceCIDRNet)
+			serviceCIDRNet,
+			o.enableAntreaProxy)
 	}
 
 	// TODO: we should call this after installing flows for initial node routes
@@ -641,7 +642,7 @@ func run(o *Options) error {
 			serviceCIDRNet,
 			serviceCIDRNetv6,
 			ovsDatapathType,
-			features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+			o.enableAntreaProxy,
 			networkPolicyController,
 			flowExporterOptions,
 			egressController)
@@ -739,7 +740,7 @@ func run(o *Options) error {
 		go traceflowController.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if o.enableAntreaProxy {
 		go proxier.GetProxyProvider().Run(stopCh)
 
 		// If AntreaProxy is configured to proxy all Service traffic, we need to wait for it to sync at least once

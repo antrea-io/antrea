@@ -53,10 +53,10 @@ func Test_getGatesResponse(t *testing.T) {
 			want: []Response{
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
-				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "CleanupStaleUDPSvcConntrack", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
-				{Component: "agent", Name: "EndpointSlice", Status: "Enabled"},
+				{Component: "agent", Name: "EndpointSlice", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
@@ -98,8 +98,8 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 			},
 			want: []Response{
 				{Component: "agent-windows", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
-				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled"},
+				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
+				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled", Version: "GA"},
 				{Component: "agent-windows", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
@@ -120,8 +120,8 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 }
 
 func TestGetStatus(t *testing.T) {
-	assert.Equal(t, "Enabled", getStatus(true))
-	assert.Equal(t, "Disabled", getStatus(false))
+	assert.Equal(t, "Enabled", features.GetStatus(true))
+	assert.Equal(t, "Disabled", features.GetStatus(false))
 }
 
 func TestHandleFunc(t *testing.T) {
@@ -174,8 +174,8 @@ func TestHandleFunc(t *testing.T) {
 	for _, v := range resp {
 		df, ok := features.DefaultAntreaFeatureGates[featuregate.Feature(v.Name)]
 		require.True(t, ok)
-		assert.Equal(t, v.Status, getStatus(df.Default))
-		assert.Equal(t, v.Version, string(df.PreRelease))
+		assert.Equal(t, v.Status, features.GetStatus(df.Default))
+		assert.Equal(t, v.Version, features.GetVersion(string(df.PreRelease)))
 	}
 }
 

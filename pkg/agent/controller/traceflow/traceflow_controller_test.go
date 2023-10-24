@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
-	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 
@@ -41,7 +40,6 @@ import (
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -806,7 +804,7 @@ func TestValidateTraceflow(t *testing.T) {
 		expectedErr        string
 	}{
 		{
-			name: "AntreaProxy feature disabled with destination as service",
+			name: "AntreaProxy disabled with destination as service",
 			tf: &crdv1beta1.Traceflow{
 				Spec: crdv1beta1.TraceflowSpec{
 					Destination: crdv1beta1.Destination{
@@ -814,10 +812,10 @@ func TestValidateTraceflow(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "using Service destination requires AntreaProxy feature enabled",
+			expectedErr: "using Service destination requires AntreaProxy enabled",
 		},
 		{
-			name: "AntreaProxy feature disabled with ClusterIP destination",
+			name: "AntreaProxy disabled with ClusterIP destination",
 			tf: &crdv1beta1.Traceflow{
 				Spec: crdv1beta1.TraceflowSpec{
 					Destination: crdv1beta1.Destination{
@@ -825,14 +823,14 @@ func TestValidateTraceflow(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "using ClusterIP destination requires AntreaProxy feature enabled",
+			expectedErr: "using ClusterIP destination requires AntreaProxy enabled",
 		},
 	}
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaProxy, tt.antreaProxyEnabled)()
 			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
+			tfc.enableAntreaProxy = tt.antreaProxyEnabled
 			err := tfc.validateTraceflow(tt.tf)
 			assert.ErrorContains(t, err, tt.expectedErr)
 		})

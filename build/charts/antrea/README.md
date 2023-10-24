@@ -42,6 +42,7 @@ Kubernetes: `>= 1.16.0-0`
 | agent.tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"}]` | Tolerations for the antrea-agent Pods. |
 | agent.updateStrategy | object | `{"type":"RollingUpdate"}` | Update strategy for the antrea-agent DaemonSet. |
 | antreaProxy.defaultLoadBalancerMode | string | `"nat"` | Determines how external traffic is processed when it's load balanced across Nodes by default. It must be one of "nat" or "dsr". |
+| antreaProxy.enable | bool | `true` | To disable AntreaProxy, set this to false. |
 | antreaProxy.nodePortAddresses | list | `[]` | String array of values which specifies the host IPv4/IPv6 addresses for NodePort. By default, all host addresses are used. |
 | antreaProxy.proxyAll | bool | `false` | Proxy all Service traffic, for all Service types, regardless of where it comes from. |
 | antreaProxy.proxyLoadBalancerIPs | bool | `true` | When set to false, AntreaProxy no longer load-balances traffic destined to the External IPs of LoadBalancer Services. |
