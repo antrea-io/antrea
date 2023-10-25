@@ -9,7 +9,7 @@
   - [AppliedTo](#appliedto)
   - [EgressIP](#egressip)
   - [ExternalIPPool](#externalippool)
-  - [TrafficShaping](#trafficshaping)
+  - [Bandwidth](#bandwidth)
 - [The ExternalIPPool resource](#the-externalippool-resource)
   - [IPRanges](#ipranges)
   - [NodeSelector](#nodeselector)
@@ -128,13 +128,13 @@ The `externalIPPool` field specifies the name of the `ExternalIPPool` that the
 be assigned to. It can be empty, which means users should assign the `egressIP`
 to one Node manually.
 
-### TrafficShaping
+### Bandwidth
 
 The `bandwidth` field enables traffic shaping for an Egress, by limiting the
 bandwidth for all egress traffic belonging to this Egress. `rate` specifies
 the maximum transmission rate. `burst` specifies the maximum burst size when
 traffic exceeds the rate. The user-provided values for `rate` and `burst` must
-follow the k8s [Quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/) format,
+follow the Kubernetes [Quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/) format,
 e.g. 300k, 100M, 2G. All backend workloads selected by a rate-limited Egress share the
 same bandwidth while sending egress traffic via this Egress. If these limits are exceeded,
 the traffic will be dropped.
