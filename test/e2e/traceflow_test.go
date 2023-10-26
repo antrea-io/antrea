@@ -2052,7 +2052,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 		},
 	}
 
-	egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressIP)
+	egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressIP, nil)
 	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	testcaseLocalEgress := testcase{

@@ -24,7 +24,7 @@ import (
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
 )
 
-func pipelineDefaultFlows(externalNodeEnabled, isEncap, isIPv4 bool) []string {
+func pipelineDefaultFlows(egressTrafficShapingEnabled, externalNodeEnabled, isEncap, isIPv4 bool) []string {
 	if externalNodeEnabled {
 		return []string{
 			"cookie=0x1000000000000, table=PipelineRootClassifier, priority=200,ip actions=goto_table:ConntrackZone",
@@ -69,7 +69,6 @@ func pipelineDefaultFlows(externalNodeEnabled, isEncap, isIPv4 bool) []string {
 			"cookie=0x1000000000000, table=EgressDefaultRule, priority=0 actions=goto_table:EgressMetric",
 			"cookie=0x1000000000000, table=EgressMetric, priority=0 actions=goto_table:L3Forwarding",
 			"cookie=0x1000000000000, table=L3Forwarding, priority=0 actions=goto_table:EgressMark",
-			"cookie=0x1000000000000, table=EgressMark, priority=0 actions=goto_table:L3DecTTL",
 			"cookie=0x1000000000000, table=L3DecTTL, priority=0 actions=goto_table:SNATMark",
 			"cookie=0x1000000000000, table=SNATMark, priority=0 actions=goto_table:SNAT",
 			"cookie=0x1000000000000, table=SNAT, priority=0 actions=goto_table:L2ForwardingCalc",
@@ -104,6 +103,16 @@ func pipelineDefaultFlows(externalNodeEnabled, isEncap, isIPv4 bool) []string {
 			flows = append(flows,
 				"cookie=0x1000000000000, table=PipelineRootClassifier, priority=200,ipv6 actions=goto_table:Classifier",
 				"cookie=0x1000000000000, table=IPv6, priority=0 actions=goto_table:UnSNAT",
+			)
+		}
+		if egressTrafficShapingEnabled {
+			flows = append(flows,
+				"cookie=0x1000000000000, table=EgressMark, priority=0 actions=goto_table:EgressQoS",
+				"cookie=0x1000000000000, table=EgressQoS, priority=0 actions=goto_table:L3DecTTL",
+			)
+		} else {
+			flows = append(flows,
+				"cookie=0x1000000000000, table=EgressMark, priority=0 actions=goto_table:L3DecTTL",
 			)
 		}
 	} else {
@@ -158,13 +167,14 @@ func pipelineDefaultFlows(externalNodeEnabled, isEncap, isIPv4 bool) []string {
 
 func Test_client_defaultFlows(t *testing.T) {
 	testCases := []struct {
-		name             string
-		enableIPv4       bool
-		enableIPv6       bool
-		nodeType         config.NodeType
-		trafficEncapMode config.TrafficEncapModeType
-		clientOptions    []clientOptionsFn
-		expectedFlows    []string
+		name                string
+		enableIPv4          bool
+		enableIPv6          bool
+		nodeType            config.NodeType
+		trafficEncapMode    config.TrafficEncapModeType
+		clientOptions       []clientOptionsFn
+		requireMeterSupport bool
+		expectedFlows       []string
 	}{
 		{
 			name:             "IPv4,Encap,K8s Node",
@@ -172,7 +182,16 @@ func Test_client_defaultFlows(t *testing.T) {
 			nodeType:         config.K8sNode,
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			clientOptions:    []clientOptionsFn{enableTrafficControl, enableMulticast, enableMulticluster},
-			expectedFlows:    pipelineDefaultFlows(false, true, true),
+			expectedFlows:    pipelineDefaultFlows(false, false, true, true),
+		},
+		{
+			name:                "IPv4,Encap,K8s Node,EgressTrafficShaping",
+			enableIPv4:          true,
+			nodeType:            config.K8sNode,
+			trafficEncapMode:    config.TrafficEncapModeEncap,
+			clientOptions:       []clientOptionsFn{enableTrafficControl, enableMulticast, enableMulticluster, enableEgressTrafficShaping},
+			requireMeterSupport: true,
+			expectedFlows:       pipelineDefaultFlows(true, false, true, true),
 		},
 		{
 			name:             "IPv4,NoEncap,K8s Node",
@@ -180,7 +199,7 @@ func Test_client_defaultFlows(t *testing.T) {
 			nodeType:         config.K8sNode,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			clientOptions:    []clientOptionsFn{enableTrafficControl, enableMulticast, enableConnectUplinkToBridge},
-			expectedFlows:    pipelineDefaultFlows(false, false, true),
+			expectedFlows:    pipelineDefaultFlows(false, false, false, true),
 		},
 		{
 			name:             "IPv6,K8s Node",
@@ -188,17 +207,20 @@ func Test_client_defaultFlows(t *testing.T) {
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			clientOptions:    []clientOptionsFn{enableTrafficControl},
 			nodeType:         config.K8sNode,
-			expectedFlows:    pipelineDefaultFlows(false, true, false),
+			expectedFlows:    pipelineDefaultFlows(false, false, true, false),
 		},
 		{
 			name:          "IPv4,ExternalNode Node",
 			enableIPv4:    true,
 			nodeType:      config.ExternalNode,
-			expectedFlows: pipelineDefaultFlows(true, false, false),
+			expectedFlows: pipelineDefaultFlows(false, true, false, false),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.requireMeterSupport && !OVSMetersAreSupported() {
+				t.Skipf("Skip test because OVS meters are not supported")
+			}
 			ctrl := gomock.NewController(t)
 			m := oftest.NewMockOFEntryOperations(ctrl)
 

@@ -78,6 +78,10 @@ func (f *featureMulticluster) replayGroups() []binding.OFEntry {
 	return nil
 }
 
+func (f *featureMulticluster) replayMeters() []binding.OFEntry {
+	return nil
+}
+
 func (f *featureMulticluster) l3FwdFlowToRemoteGateway(
 	localGatewayMAC net.HardwareAddr,
 	peerServiceCIDR net.IPNet,

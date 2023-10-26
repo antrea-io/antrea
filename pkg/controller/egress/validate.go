@@ -20,6 +20,7 @@ import (
 	"net"
 
 	admv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
@@ -52,6 +53,17 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		}
 		if len(newEgress.Spec.ExternalIPPools) > 0 {
 			return false, "spec.externalIPPools is not supported yet"
+		}
+		// Validate Egress trafficShaping
+		if newEgress.Spec.Bandwidth != nil {
+			_, err := resource.ParseQuantity(newEgress.Spec.Bandwidth.Rate)
+			if err != nil {
+				return false, fmt.Sprintf("Rate %s in Egress %s is invalid: %v", newEgress.Spec.Bandwidth.Rate, newEgress.Name, err)
+			}
+			_, err = resource.ParseQuantity(newEgress.Spec.Bandwidth.Burst)
+			if err != nil {
+				return false, fmt.Sprintf("Burst %s in Egress %s is invalid: %v", newEgress.Spec.Bandwidth.Burst, newEgress.Name, err)
+			}
 		}
 		// Allow it if EgressIP and ExternalIPPool don't change.
 		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {

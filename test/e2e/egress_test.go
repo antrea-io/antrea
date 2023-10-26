@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,7 @@ func TestEgress(t *testing.T) {
 	t.Run("testEgressUpdateNodeSelector", func(t *testing.T) { testEgressUpdateNodeSelector(t, data) })
 	t.Run("testEgressNodeFailure", func(t *testing.T) { testEgressNodeFailure(t, data) })
 	t.Run("testCreateExternalIPPool", func(t *testing.T) { testCreateExternalIPPool(t, data) })
+	t.Run("testUpdateBandwidth", func(t *testing.T) { testEgressUpdateBandwidth(t, data) })
 }
 
 func testCreateExternalIPPool(t *testing.T, data *TestData) {
@@ -204,7 +206,7 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 					Operator: metav1.LabelSelectorOpExists,
 				},
 			}
-			egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressNodeIP)
+			egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressNodeIP, nil)
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			assertClientIP(localPod, egressNodeIP)
 			assertClientIP(remotePod, egressNodeIP)
@@ -373,7 +375,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			pool := data.createExternalIPPool(t, "crud-pool-", tt.ipRange, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
 			defer data.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{})
 
-			egress := data.createEgress(t, "crud-egress-", nil, map[string]string{"foo": "bar"}, pool.Name, "")
+			egress := data.createEgress(t, "crud-egress-", nil, map[string]string{"foo": "bar"}, pool.Name, "", nil)
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			// Use Poll to wait the interval before the first run to detect the case that the IP is assigned to any Node
 			// when it's not supposed to.
@@ -493,7 +495,7 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 			newPool := data.createExternalIPPool(t, "newpool-", tt.newIPRange, nil, map[string]string{v1.LabelHostname: tt.newNode})
 			defer data.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), newPool.Name, metav1.DeleteOptions{})
 
-			egress := data.createEgress(t, "egress-", nil, map[string]string{"foo": "bar"}, originalPool.Name, "")
+			egress := data.createEgress(t, "egress-", nil, map[string]string{"foo": "bar"}, originalPool.Name, "", nil)
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			egress, err := data.checkEgressState(egress.Name, tt.originalEgressIP, tt.originalNode, "", time.Second)
 			require.NoError(t, err)
@@ -641,7 +643,7 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 	externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", *ipRange, matchExpressions, nil)
 	defer data.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), externalIPPoolTwoNodes.Name, metav1.DeleteOptions{})
 
-	egress := data.createEgress(t, "migration-egress-", nil, map[string]string{"foo": "bar"}, externalIPPoolTwoNodes.Name, "")
+	egress := data.createEgress(t, "migration-egress-", nil, map[string]string{"foo": "bar"}, externalIPPoolTwoNodes.Name, "", nil)
 	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	var err error
@@ -683,6 +685,62 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 	_, err = data.checkEgressState(egress.Name, egress.Spec.EgressIP, fromNode, toNode, timeout)
 	assert.NoError(t, err)
 	checkIPNeighbor(fromNode)
+}
+
+func testEgressUpdateBandwidth(t *testing.T, data *TestData) {
+	skipIfEgressShapingDisabled(t)
+	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+	bandwidth := &v1beta1.Bandwidth{
+		Rate:  "100M",
+		Burst: "200M",
+	}
+	transMap := map[string]int{
+		"100M": 100,
+		"200M": 200,
+	}
+
+	egressNode := nodeName(1)
+	egressNodeIP := nodeIP(1)
+
+	// Create another netns to fake an external network on the host network Pod.
+	fakeExternalName := "fake-external"
+	fakeExternalCmd := "iperf3 -s"
+	cmd, _ := getCommandInFakeExternalNetwork(fakeExternalCmd, 24, "1.1.1.1", "1.1.1.254")
+
+	err := NewPodBuilder(fakeExternalName, data.testNamespace, toolboxImage).OnNode(egressNode).WithCommand([]string{"bash", "-c", cmd}).InHostNetwork().Privileged().Create(data)
+	require.NoError(t, err, "Failed to create fake external Pod")
+	defer deletePodWrapper(t, data, data.testNamespace, fakeExternalName)
+	err = data.podWaitForRunning(defaultTimeout, fakeExternalName, data.testNamespace)
+	require.NoError(t, err, "Error when waiting for fake external Pod to be in the Running state")
+
+	clientPodName := "client-pod"
+	err = NewPodBuilder(clientPodName, data.testNamespace, toolboxImage).OnNode(egressNode).Create(data)
+	require.NoError(t, err, "Failed to create client Pod")
+	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
+	err = data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, err, "Error when waiting for the client Pod to be in the Running state")
+
+	egress := data.createEgress(t, "egress-qos-", nil, map[string]string{"antrea-e2e": clientPodName}, "", egressNodeIP, bandwidth)
+	_, err = data.waitForEgressRealized(egress)
+	require.NoError(t, err, "Error when waiting for Egress to be realized")
+	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+	// expectedBandwidth is Mbps
+	runIperf := func(cmd []string, expectedBandwidth int) {
+		stdout, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, "toolbox", cmd)
+		if err != nil {
+			t.Fatalf("Error when running iperf3 client: %v", err)
+		}
+		stdout = strings.TrimSpace(stdout)
+		actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+		t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
+		// Allow a certain deviation.
+		assert.InEpsilon(t, actualBandwidth, expectedBandwidth, 0.2)
+	}
+
+	runIperf([]string{"bash", "-c", "iperf3 -c 1.1.1.1 -f m -t 1|grep sender|awk '{print $7}'"}, transMap[bandwidth.Rate]+transMap[bandwidth.Burst])
+	runIperf([]string{"bash", "-c", "iperf3 -c 1.1.1.1 -f m -O 1|grep sender|awk '{print $7}'"}, transMap[bandwidth.Rate])
 }
 
 func (data *TestData) checkEgressState(egressName, expectedIP, expectedNode, otherNode string, timeout time.Duration) (*v1beta1.Egress, error) {
@@ -811,7 +869,7 @@ func (data *TestData) createExternalIPPool(t *testing.T, generateName string, ip
 	return pool
 }
 
-func (data *TestData) createEgress(t *testing.T, generateName string, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string, externalPoolName string, egressIP string) *v1beta1.Egress {
+func (data *TestData) createEgress(t *testing.T, generateName string, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string, externalPoolName string, egressIP string, bandwidth *v1beta1.Bandwidth) *v1beta1.Egress {
 	egress := &v1beta1.Egress{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: generateName},
 		Spec: v1beta1.EgressSpec{
@@ -823,6 +881,7 @@ func (data *TestData) createEgress(t *testing.T, generateName string, matchExpre
 			},
 			ExternalIPPool: externalPoolName,
 			EgressIP:       egressIP,
+			Bandwidth:      bandwidth,
 		},
 	}
 	egress, err := data.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})

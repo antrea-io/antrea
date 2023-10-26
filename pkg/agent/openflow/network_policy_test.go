@@ -1373,13 +1373,13 @@ func networkPolicyInitFlows(ovsMeterSupported, externalNodeEnabled, l7NetworkPol
 	}
 	if ovsMeterSupported {
 		loggingFlows = []string{
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x2400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.01,max_len=128)",
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x4400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.02,max_len=128)",
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x6400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.03,max_len=128)",
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x8400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.04,max_len=128)",
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0xa400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.05,max_len=128)",
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0xc400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.06,max_len=128)",
-			"cookie=0x1020000000000, table=Output, priority=200,reg0=0xe400000/0xfe600000 actions=meter:1,controller(id=32776,reason=no_match,userdata=01.07,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x2400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.01,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x4400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.02,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x6400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.03,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0x8400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.04,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0xa400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.05,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0xc400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.06,max_len=128)",
+			"cookie=0x1020000000000, table=Output, priority=200,reg0=0xe400000/0xfe600000 actions=meter:256,controller(id=32776,reason=no_match,userdata=01.07,max_len=128)",
 		}
 	}
 	if externalNodeEnabled {
@@ -1410,7 +1410,7 @@ func networkPolicyInitFlows(ovsMeterSupported, externalNodeEnabled, l7NetworkPol
 }
 
 func Test_featureNetworkPolicy_initFlows(t *testing.T) {
-	ovsMetersSupported := ovsMetersAreSupported()
+	ovsMetersSupported := OVSMetersAreSupported()
 	testCases := []struct {
 		name          string
 		nodeType      config.NodeType
@@ -1447,7 +1447,7 @@ func Test_featureNetworkPolicy_initFlows(t *testing.T) {
 }
 
 func Test_NewDNSPacketInConjunction(t *testing.T) {
-	ovsMetersSupported := ovsMetersAreSupported()
+	ovsMetersSupported := OVSMetersAreSupported()
 	ipv4ExpFlows := []string{
 		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
 		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
@@ -1455,7 +1455,7 @@ func Test_NewDNSPacketInConjunction(t *testing.T) {
 	}
 	if ovsMetersSupported {
 		ipv4ExpFlows = []string{
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:3,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
 		}
@@ -1467,7 +1467,7 @@ func Test_NewDNSPacketInConjunction(t *testing.T) {
 	}
 	if ovsMetersSupported {
 		ipv6ExpFlows = []string{
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:3,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
 		}
@@ -1481,7 +1481,7 @@ func Test_NewDNSPacketInConjunction(t *testing.T) {
 	}
 	if ovsMetersSupported {
 		dsExpFlows = []string{
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:3,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
 			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",

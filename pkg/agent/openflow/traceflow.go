@@ -49,3 +49,7 @@ func (f *featureTraceflow) initGroups() []binding.OFEntry {
 func (f *featureTraceflow) replayGroups() []binding.OFEntry {
 	return nil
 }
+
+func (f *featureTraceflow) replayMeters() []binding.OFEntry {
+	return nil
+}

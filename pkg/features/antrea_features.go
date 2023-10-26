@@ -142,6 +142,10 @@ const (
 	// Enable the AdminNetworkPolicy APIs
 	// https://github.com/kubernetes-sigs/network-policy-api
 	AdminNetworkPolicy featuregate.Feature = "AdminNetworkPolicy"
+
+	// alpha: v1.14
+	// Enable Egress traffic shaping.
+	EgressTrafficShaping featuregate.Feature = "EgressTrafficShaping"
 )
 
 var (
@@ -179,6 +183,7 @@ var (
 		L7NetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
 		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
 		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
+		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
@@ -205,6 +210,7 @@ var (
 		TopologyAwareHints,
 		Traceflow,
 		TrafficControl,
+		EgressTrafficShaping,
 	)
 
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
@@ -248,6 +254,7 @@ var (
 		L7NetworkPolicy:             {},
 		LoadBalancerModeDSR:         {},
 		CleanupStaleUDPSvcConntrack: {},
+		EgressTrafficShaping:        {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

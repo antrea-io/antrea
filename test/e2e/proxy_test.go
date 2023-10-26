@@ -423,7 +423,7 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 
 	// Create an Egress whose external IP is on worker Node.
 	egressNodeIP := workerNodeIPv4(1)
-	egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "nginx"}, "", egressNodeIP)
+	egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "nginx"}, "", egressNodeIP, nil)
 	defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	// Create the backend Pod on control plane Node.

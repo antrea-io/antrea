@@ -2375,6 +2375,16 @@ spec:
                   type: array
                   items:
                     type: string
+                bandwidth:
+                  type: object
+                  required:
+                    - rate
+                    - burst
+                  properties:
+                    rate:
+                      type: string
+                    burst:
+                      type: string
             status:
               type: object
               properties:
@@ -5561,6 +5571,9 @@ data:
     # Allow users to specify the load balancer mode as DSR (Direct Server Return).
     #  LoadBalancerModeDSR: false
 
+    # Enable Egress traffic shaping.
+    #  EgressTrafficShaping: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -6853,7 +6866,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 77b5f317f3faa10adebca604e145675d41d73631984cc8fa075069b70f9f0419
+        checksum/config: e59e0431902646d46cba490279184fea2bdd3c8b486b5a7b1d3ece9a91614634
       labels:
         app: antrea
         component: antrea-agent
@@ -7095,7 +7108,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 77b5f317f3faa10adebca604e145675d41d73631984cc8fa075069b70f9f0419
+        checksum/config: e59e0431902646d46cba490279184fea2bdd3c8b486b5a7b1d3ece9a91614634
       labels:
         app: antrea
         component: antrea-controller

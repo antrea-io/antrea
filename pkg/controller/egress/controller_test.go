@@ -68,7 +68,7 @@ var (
 	eipFoo2 = newExternalIPPool("pool2", "", "2.2.2.10", "2.2.2.20")
 )
 
-func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSelector *metav1.LabelSelector) *v1beta1.Egress {
+func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSelector *metav1.LabelSelector, bandwidth *v1beta1.Bandwidth) *v1beta1.Egress {
 	egress := &v1beta1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: v1beta1.EgressSpec{
@@ -78,6 +78,7 @@ func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSele
 			},
 			EgressIP:       egressIP,
 			ExternalIPPool: externalIPPool,
+			Bandwidth:      bandwidth,
 		},
 	}
 	return egress

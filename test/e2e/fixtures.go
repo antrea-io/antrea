@@ -180,6 +180,10 @@ func skipIfProxyDisabled(t *testing.T, data *TestData) {
 	}
 }
 
+func skipIfEgressShapingDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.EgressTrafficShaping, true /* checkAgent */, false /* checkController */)
+}
+
 func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 	isProxyAll, err := data.isProxyAll()
 	if err != nil {
