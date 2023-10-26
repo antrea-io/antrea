@@ -81,6 +81,7 @@ func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
 }
 
 type clientOptions struct {
+	enableOVSMeters            bool
 	enableProxy                bool
 	enableAntreaPolicy         bool
 	enableEgress               bool
@@ -95,6 +96,12 @@ type clientOptions struct {
 }
 
 type clientOptionsFn func(*clientOptions)
+
+func setEnableOVSMeters(v bool) clientOptionsFn {
+	return func(o *clientOptions) {
+		o.enableOVSMeters = v
+	}
+}
 
 func enableProxyAll(o *clientOptions) {
 	o.enableProxy = true
@@ -121,7 +128,18 @@ func disableEgress(o *clientOptions) {
 }
 
 func enableEgressTrafficShaping(o *clientOptions) {
+	// traffic shaping requires meter support
+	o.enableOVSMeters = true
 	o.enableEgressTrafficShaping = true
+}
+
+func setEnableEgressTrafficShaping(v bool) clientOptionsFn {
+	return func(o *clientOptions) {
+		if v {
+			o.enableOVSMeters = true
+		}
+		o.enableEgressTrafficShaping = v
+	}
 }
 
 func enableConnectUplinkToBridge(o *clientOptions) {
@@ -345,25 +363,31 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 
 }
 
-func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
+func newFakeClient(
+	mockOFEntryOperations *oftest.MockOFEntryOperations,
 	enableIPv4,
 	enableIPv6 bool,
 	nodeType config.NodeType,
 	trafficEncapMode config.TrafficEncapModeType,
-	options ...clientOptionsFn) *client {
+	options ...clientOptionsFn,
+) *client {
+	return newFakeClientWithBridge(mockOFEntryOperations, enableIPv4, enableIPv6, nodeType, trafficEncapMode, nil, options...)
+}
 
+func newFakeClientWithBridge(
+	mockOFEntryOperations *oftest.MockOFEntryOperations,
+	enableIPv4,
+	enableIPv6 bool,
+	nodeType config.NodeType,
+	trafficEncapMode config.TrafficEncapModeType,
+	bridge binding.Bridge, // use nil to use the default bridge created with binding.NewOFBridge
+	options ...clientOptionsFn,
+) *client {
+	// default options
 	o := &clientOptions{
-		enableProxy:                true,
-		enableAntreaPolicy:         true,
-		enableEgress:               true,
-		enableEgressTrafficShaping: false,
-		proxyAll:                   false,
-		enableDSR:                  false,
-		connectUplinkToBridge:      false,
-		enableMulticast:            false,
-		enableTrafficControl:       false,
-		enableMulticluster:         false,
-		enableL7NetworkPolicy:      false,
+		enableProxy:        true,
+		enableAntreaPolicy: true,
+		enableEgress:       true,
 	}
 	for _, fn := range options {
 		fn(o)
@@ -387,6 +411,11 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		NewGroupAllocator(),
 		false,
 		defaultPacketInRate)
+
+	// Meters must be supported to enable Egress traffic shaping.
+	// For unit tests, we can "force" client.ovsMetersAreSupported to true, even if the platform
+	// running the unit tests don't actually support meters.
+	client.ovsMetersAreSupported = o.enableOVSMeters
 
 	var egressExceptCIDRs []net.IPNet
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
@@ -477,8 +506,14 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	client.generatePipelines()
 	client.realizePipelines()
 	binding.TableNameCache = getTableNameCache()
+
+	// This is needed even when bridge != nil for proper table initialization.
 	client.bridge.(*binding.OFBridge).SetOFSwitch(ofctrl.NewSwitch(&util.MessageStream{}, GlobalVirtualMAC, client.bridge.(ofctrl.AppInterface), make(chan int), 32776))
 	client.bridge.(*binding.OFBridge).Initialize()
+	if bridge != nil {
+		client.bridge = bridge
+	}
+
 	return client
 }
 
@@ -1614,16 +1649,7 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			var fc *client
-			if tc.trafficShapingEnabled {
-				if !OVSMetersAreSupported() {
-					t.Skipf("Skip test because OVS meters are not supported")
-				}
-				fc = newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableEgressTrafficShaping)
-				fc.featureEgress.enableEgressTrafficShaping = tc.trafficShapingEnabled
-			} else {
-				fc = newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
-			}
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(tc.trafficShapingEnabled))
 			defer resetPipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -1681,16 +1707,7 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			var fc *client
-			if tc.trafficShapingEnabled {
-				if !OVSMetersAreSupported() {
-					t.Skipf("Skip test because OVS meters are not supported")
-				}
-				fc = newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableEgressTrafficShaping)
-				fc.featureEgress.enableEgressTrafficShaping = tc.trafficShapingEnabled
-			} else {
-				fc = newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
-			}
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(tc.trafficShapingEnabled))
 			defer resetPipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -1710,9 +1727,6 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 }
 
 func Test_client_InstallEgressQoS(t *testing.T) {
-	if !OVSMetersAreSupported() {
-		t.Skipf("Skip test because OVS meters are not supported")
-	}
 	meterID := uint32(100)
 	meterRate := uint32(100)
 	meterBurst := uint32(200)
@@ -1721,10 +1735,7 @@ func Test_client_InstallEgressQoS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	m := oftest.NewMockOFEntryOperations(ctrl)
 	bridge := ovsoftest.NewMockBridge(ctrl)
-	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableEgressTrafficShaping)
-	fc.bridge = bridge
-	fc.featureEgress.enableEgressTrafficShaping = true
-	fc.ovsMetersAreSupported = true
+	fc := newFakeClientWithBridge(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, bridge, enableEgressTrafficShaping)
 	defer resetPipelines()
 
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -1895,9 +1906,8 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	m := oftest.NewMockOFEntryOperations(ctrl)
-	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, ovsoftest.NewMockBridge(ctrl))
 	defer resetPipelines()
-	fc.bridge = ovsoftest.NewMockBridge(ctrl)
 
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
@@ -1921,11 +1931,10 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 }
 
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
-	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	m := ovsoftest.NewMockBridge(ctrl)
+	fc := newFakeClientWithBridge(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap, m)
 	defer resetPipelines()
 
-	m := ovsoftest.NewMockBridge(ctrl)
-	fc.bridge = m
 	bridge := binding.OFBridge{}
 	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
 	if success {
@@ -2123,9 +2132,8 @@ func Test_client_SendPacketOut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockBridge := ovsoftest.NewMockBridge(ctrl)
-			fc := newFakeClient(nil, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+			fc := newFakeClientWithBridge(nil, true, true, config.K8sNode, config.TrafficEncapModeEncap, mockBridge)
 			defer resetPipelines()
-			fc.bridge = mockBridge
 
 			srcMAC := fc.nodeConfig.GatewayConfig.MAC
 			dstMAC, _ := net.ParseMAC("00:00:10:10:00:66")
@@ -2296,9 +2304,8 @@ func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 func Test_client_SendIGMPQueryPacketOut(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockBridge := ovsoftest.NewMockBridge(ctrl)
-	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
+	fc := newFakeClientWithBridge(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap, mockBridge)
 	defer resetPipelines()
-	fc.bridge = mockBridge
 
 	srcMAC := fc.nodeConfig.GatewayConfig.MAC
 	srcIP := fc.nodeConfig.GatewayConfig.IPv4
@@ -2657,12 +2664,11 @@ func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 }
 
 func Test_client_RegisterPacketInHandler(t *testing.T) {
-	fc := newFakeClient(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap)
-	defer resetPipelines()
 	ctrl := gomock.NewController(t)
 	bridge := ovsoftest.NewMockBridge(ctrl)
+	fc := newFakeClientWithBridge(nil, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge)
+	defer resetPipelines()
 	bridge.EXPECT().ResumePacket(gomock.Any()).Times(1)
-	fc.bridge = bridge
 	fc.ResumePausePacket(nil)
 }
 
@@ -2670,18 +2676,14 @@ func Test_client_ReplayFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := oftest.NewMockOFEntryOperations(ctrl)
-	egressTrafficShaping := false
-	clientOptions := []clientOptionsFn{enableTrafficControl, enableMulticast, enableMulticluster}
-	if OVSMetersAreSupported() {
-		egressTrafficShaping = true
-		clientOptions = append(clientOptions, enableEgressTrafficShaping)
-	}
-	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, clientOptions...)
+	bridge := ovsoftest.NewMockBridge(ctrl)
+	clientOptions := []clientOptionsFn{enableTrafficControl, enableMulticast, enableMulticluster, enableEgressTrafficShaping}
+	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge, clientOptions...)
 	defer resetPipelines()
 
-	expectedFlows := append(pipelineDefaultFlows(egressTrafficShaping, false, true, true), egressInitFlows(true)...)
+	expectedFlows := append(pipelineDefaultFlows(true /* egressTrafficShapingEnabled */, false /* externalNodeEnabled */, true /* isEncap */, true /* isIPv4 */), egressInitFlows(true)...)
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
-	expectedFlows = append(expectedFlows, networkPolicyInitFlows(fc.ovsMetersAreSupported, false, false)...)
+	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
 
@@ -2698,16 +2700,10 @@ func Test_client_ReplayFlows(t *testing.T) {
 	// Feature Egress replays flows.
 	snatIP := net.ParseIP("192.168.77.100")
 	addFlowInCache(fc.featureEgress.cachedFlows, "egressFlows", []binding.Flow{fc.featureEgress.snatIPFromTunnelFlow(snatIP, uint32(100))})
-	if egressTrafficShaping {
-		replayedFlows = append(replayedFlows,
-			"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:EgressQoS",
-			"cookie=0x1040000000000, table=EgressQoS, priority=190 actions=goto_table:L2ForwardingCalc",
-		)
-	} else {
-		replayedFlows = append(replayedFlows,
-			"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+new+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
-		)
-	}
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:EgressQoS",
+		"cookie=0x1040000000000, table=EgressQoS, priority=190 actions=goto_table:L2ForwardingCalc",
+	)
 	// Feature Multicast replays flows.
 	podIP := net.ParseIP("10.10.0.66")
 	podOfPort := uint32(100)
@@ -2754,21 +2750,10 @@ func Test_client_ReplayFlows(t *testing.T) {
 		"cookie=0x1020000000000, table=IngressRule, priority=200,reg1=0x64 actions=conjunction(15,2/2)",
 		"cookie=0x1020000000000, table=IngressMetric, priority=200,reg0=0x400/0x400,reg3=0xf actions=drop",
 	)
-	if egressTrafficShaping {
-		// When egressTrafficShaping is enabled, EgressQoSTable will be initialized, which
-		// will cause IDs of tables after EgressQoSTable shifted.
-		// The tableID stored in PacketInTableField need to be added 1:
-		// set_field:0x1a/0xff->reg2 => set_field:0x1b/0xff->reg2
-		replayedFlows = append(replayedFlows,
-			"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1b/0xff->reg2,group:4",
-			"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1c/0xff->reg2,goto_table:Output",
-		)
-	} else {
-		replayedFlows = append(replayedFlows,
-			"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1a/0xff->reg2,group:4",
-			"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1b/0xff->reg2,goto_table:Output",
-		)
-	}
+	replayedFlows = append(replayedFlows,
+		"cookie=0x1020000000000, table=IngressRule, priority=200,conj_id=15 actions=set_field:0xf->reg3,set_field:0x400/0x400->reg0,set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x1b/0xff->reg2,group:4",
+		"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x64 actions=set_field:0x800/0x1800->reg0,set_field:0x2000000/0xfe000000->reg0,set_field:0x400000/0x600000->reg0,set_field:0x1c/0xff->reg2,goto_table:Output",
+	)
 
 	// Feature Pod connectivity replays flows.
 	podMAC, _ := net.ParseMAC("00:00:10:10:00:66")
@@ -2816,43 +2801,41 @@ func Test_client_ReplayFlows(t *testing.T) {
 		actualFlows = append(actualFlows, flowStrings...)
 	}).Return(nil).AnyTimes()
 
-	if fc.ovsMetersAreSupported {
-		// Use mock for the unit test on meter is because the current implementation in ofnet does not support
-		// sending Meter modification message in a bundle message. The "Add" meter actions is dependent on a valid
-		// connection to OVS, hence it may return timeout error without a mock which is possibly block the comparation
-		// on the flows and groups.
-		bridge := ovsoftest.NewMockBridge(ctrl)
-		fc.bridge = bridge
-		egressMeterID := uint32(1)
-		egressMeterRate := uint32(100)
-		egressMeterBurst := uint32(200)
-		expectNewMeter := func(id, rate, burst uint32, unit ofctrl.MeterFlag, isCached bool) {
-			meter := ovsoftest.NewMockMeter(ctrl)
-			meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)
-			bridge.EXPECT().NewMeter(binding.MeterIDType(id), ofctrl.MeterBurst|unit).Return(meter).Times(1)
-			meter.EXPECT().MeterBand().Return(meterBuilder).Times(1)
-			meterBuilder.EXPECT().MeterType(ofctrl.MeterDrop).Return(meterBuilder).Times(1)
-			meterBuilder.EXPECT().Rate(rate).Return(meterBuilder).Times(1)
-			meterBuilder.EXPECT().Burst(burst).Return(meterBuilder).Times(1)
-			meterBuilder.EXPECT().Done().Return(meter).Times(1)
-			if isCached {
-				meter.EXPECT().Reset().Times(1)
-			}
-			meter.EXPECT().Add().Return(nil).Times(1)
+	// Use mock for the unit test on meter is because the current implementation in ofnet does not support
+	// sending Meter modification message in a bundle message. The "Add" meter actions is dependent on a valid
+	// connection to OVS, hence it may return timeout error without a mock which is possibly block the comparation
+	// on the flows and groups.
+	egressMeterID := uint32(1)
+	egressMeterRate := uint32(100)
+	egressMeterBurst := uint32(200)
+	expectNewMeter := func(id, rate, burst uint32, unit ofctrl.MeterFlag, isCached bool) {
+		meter := ovsoftest.NewMockMeter(ctrl)
+		meterBuilder := ovsoftest.NewMockMeterBandBuilder(ctrl)
+		bridge.EXPECT().NewMeter(binding.MeterIDType(id), ofctrl.MeterBurst|unit).Return(meter).Times(1)
+		meter.EXPECT().MeterBand().Return(meterBuilder).Times(1)
+		meterBuilder.EXPECT().MeterType(ofctrl.MeterDrop).Return(meterBuilder).Times(1)
+		meterBuilder.EXPECT().Rate(rate).Return(meterBuilder).Times(1)
+		meterBuilder.EXPECT().Burst(burst).Return(meterBuilder).Times(1)
+		meterBuilder.EXPECT().Done().Return(meter).Times(1)
+		if isCached {
+			meter.EXPECT().Reset().Times(1)
 		}
-		expectNewMeter(egressMeterID, egressMeterRate, egressMeterBurst, ofctrl.MeterKbps, true)
-		egressMeter := fc.genOFMeter(binding.MeterIDType(egressMeterID), ofctrl.MeterBurst|ofctrl.MeterKbps, egressMeterRate, egressMeterBurst)
-		fc.featureEgress.cachedMeter.Store(egressMeterID, egressMeter)
-		for _, meterCfg := range []struct {
-			id   binding.MeterIDType
-			rate uint32
-		}{
-			{id: PacketInMeterIDNP, rate: uint32(defaultPacketInRate)},
-			{id: PacketInMeterIDTF, rate: uint32(defaultPacketInRate)},
-			{id: PacketInMeterIDDNS, rate: uint32(defaultPacketInRate)},
-		} {
-			expectNewMeter(uint32(meterCfg.id), meterCfg.rate, meterCfg.rate*2, ofctrl.MeterPktps, false)
-		}
+		meter.EXPECT().Add().Return(nil).Times(1)
+	}
+	// egress QOS meter:
+	expectNewMeter(egressMeterID, egressMeterRate, egressMeterBurst, ofctrl.MeterKbps, true)
+	egressMeter := fc.genOFMeter(binding.MeterIDType(egressMeterID), ofctrl.MeterBurst|ofctrl.MeterKbps, egressMeterRate, egressMeterBurst)
+	fc.featureEgress.cachedMeter.Store(egressMeterID, egressMeter)
+	// "static" PacketIn meters:
+	for _, meterCfg := range []struct {
+		id   binding.MeterIDType
+		rate uint32
+	}{
+		{id: PacketInMeterIDNP, rate: uint32(defaultPacketInRate)},
+		{id: PacketInMeterIDTF, rate: uint32(defaultPacketInRate)},
+		{id: PacketInMeterIDDNS, rate: uint32(defaultPacketInRate)},
+	} {
+		expectNewMeter(uint32(meterCfg.id), meterCfg.rate, meterCfg.rate*2, ofctrl.MeterPktps, false)
 	}
 
 	fc.ReplayFlows()
@@ -2861,13 +2844,6 @@ func Test_client_ReplayFlows(t *testing.T) {
 }
 
 func TestCachedFlowIsDrop(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	m := oftest.NewMockOFEntryOperations(ctrl)
-	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
-	defer resetPipelines()
-	fc.bridge = ovsoftest.NewMockBridge(ctrl)
-
 	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
 	flows, err := EgressDefaultTable.ofTable.
 		BuildFlow(priority100).
