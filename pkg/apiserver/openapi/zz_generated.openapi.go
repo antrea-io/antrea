@@ -80,6 +80,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                       schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo":                                  schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth":                                  schema_pkg_apis_crd_v1beta1_Bandwidth(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup":                               schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroupList":                           schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy":                       schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref),
@@ -2989,6 +2990,35 @@ func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_Bandwidth(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"rate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rate specifies the maximum traffic rate. e.g. 300k, 10M",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"burst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Burst specifies the maximum burst size when traffic exceeds the rate. e.g. 300k, 10M",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"rate", "burst"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3551,12 +3581,18 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 							},
 						},
 					},
+					"bandwidth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Bandwidth specifies the rate limit of north-south egress traffic of this Egress.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"),
+						},
+					},
 				},
 				Required: []string{"appliedTo"},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"},
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"},
 	}
 }
 

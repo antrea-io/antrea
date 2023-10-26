@@ -25,6 +25,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -91,6 +92,24 @@ type egressState struct {
 	ofPorts sets.Set[int32]
 	// The actual Pods of the Egress. Used to identify stale Pods when updating or deleting an Egress.
 	pods sets.Set[string]
+	// Rate-limit of this Egress.
+	rateLimitMeter *rateLimitMeter
+}
+
+type rateLimitMeter struct {
+	MeterID uint32
+	Rate    uint32
+	Burst   uint32
+}
+
+func (r *rateLimitMeter) Equals(rateLimit *rateLimitMeter) bool {
+	if r == nil && rateLimit == nil {
+		return true
+	}
+	if r == nil || rateLimit == nil {
+		return false
+	}
+	return r.MeterID == rateLimit.MeterID && r.Rate == rateLimit.Rate && r.Burst == rateLimit.Burst
 }
 
 // egressIPState keeps the actual state of an Egress IP. It's maintained separately from egressState because
@@ -154,6 +173,8 @@ type EgressController struct {
 	serviceCIDRUpdateCh  chan struct{}
 	// Declared for testing.
 	serviceCIDRUpdateRetryDelay time.Duration
+
+	trafficShapingEnabled bool
 }
 
 func NewEgressController(
@@ -170,7 +191,11 @@ func NewEgressController(
 	podUpdateSubscriber channel.Subscriber,
 	serviceCIDRInterface servicecidr.Interface,
 	maxEgressIPsPerNode int,
+	trafficShapingEnabled bool,
 ) (*EgressController, error) {
+	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
+		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
+	}
 	c := &EgressController{
 		ofClient:             ofClient,
 		routeClient:          routeClient,
@@ -193,6 +218,8 @@ func NewEgressController(
 		// One buffer is enough as we just use it to ensure the target handler is executed once.
 		serviceCIDRUpdateCh:         make(chan struct{}, 1),
 		serviceCIDRUpdateRetryDelay: 10 * time.Second,
+
+		trafficShapingEnabled: openflow.OVSMetersAreSupported() && trafficShapingEnabled,
 	}
 	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice)
 	if err != nil {
@@ -506,6 +533,61 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string) (uint32,
 	return ipState.mark, nil
 }
 
+func bandwidthToRateLimitMeter(bandwidth *crdv1b1.Bandwidth, meterID uint32) *rateLimitMeter {
+	if bandwidth == nil {
+		return nil
+	}
+	rate, err := resource.ParseQuantity(bandwidth.Rate)
+	if err != nil {
+		klog.ErrorS(err, "Invalid bandwidth rate configured for Egress", "rate", bandwidth.Rate)
+		return nil
+	}
+	burst, err := resource.ParseQuantity(bandwidth.Burst)
+	if err != nil {
+		klog.ErrorS(err, "Invalid bandwidth burst size configured for Egress", "burst", bandwidth.Burst)
+		return nil
+	}
+	return &rateLimitMeter{
+		MeterID: meterID,
+		Rate:    uint32(rate.Value() / 1000),
+		Burst:   uint32(burst.Value() / 1000),
+	}
+}
+
+func (c *EgressController) realizeEgressQoS(egressName string, eState *egressState, mark uint32, bandwidth *crdv1b1.Bandwidth) error {
+	if !c.trafficShapingEnabled {
+		if bandwidth != nil {
+			klog.InfoS("Bandwidth in the Egress is ignored because OVS meters are not supported or trafficShaping is not enabled in Antrea-agent config.", "EgressName", egressName)
+		}
+		return nil
+	}
+	var desiredRateLimit *rateLimitMeter
+	// QoS is desired only if the Egress is configured on this Node.
+	if mark != 0 {
+		desiredRateLimit = bandwidthToRateLimitMeter(bandwidth, mark)
+	}
+	// Nothing changes.
+	if eState.rateLimitMeter.Equals(desiredRateLimit) {
+		return nil
+	}
+	// It's desired to have QoS on this Node, install/override it.
+	if desiredRateLimit != nil {
+		if err := c.ofClient.InstallEgressQoS(mark, desiredRateLimit.Rate, desiredRateLimit.Burst); err != nil {
+			return err
+		}
+		eState.rateLimitMeter = desiredRateLimit
+		return nil
+	}
+	// It's undesired to have QoS on this Node, uninstall it.
+	if eState.rateLimitMeter != nil {
+		if err := c.ofClient.UninstallEgressQoS(eState.rateLimitMeter.MeterID); err != nil {
+			return err
+		}
+		eState.rateLimitMeter = nil
+	}
+	return nil
+}
+
 // unrealizeEgressIP unrealizes an Egress IP, reverts what realizeEgressIP does.
 // For a local Egress IP, only when the last Egress unrealizes the Egress IP, it will releases the IP's mark and
 // uninstalls corresponding flows and iptables rule.
@@ -782,6 +864,10 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 
+	if err = c.realizeEgressQoS(egressName, eState, mark, egress.Spec.Bandwidth); err != nil {
+		return err
+	}
+
 	// If the mark changes, uninstall all of the Egress's Pod flows first, then installs them with new mark.
 	// It could happen when the Egress IP is added to or removed from the Node.
 	if eState.mark != mark {
@@ -857,6 +943,12 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 	// Release the EgressIP's mark if the Egress is the last one referring to it.
 	if err := c.unrealizeEgressIP(egressName, eState.egressIP); err != nil {
 		return err
+	}
+	// Uninstall its meter.
+	if c.trafficShapingEnabled && eState.rateLimitMeter != nil {
+		if err := c.ofClient.UninstallEgressQoS(eState.rateLimitMeter.MeterID); err != nil {
+			return err
+		}
 	}
 	// Unassign the Egress IP from the local Node if it was assigned by the agent.
 	if err := c.ipAssigner.UnassignIP(eState.egressIP); err != nil {

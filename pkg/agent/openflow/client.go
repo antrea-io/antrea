@@ -163,6 +163,14 @@ type Client interface {
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
 	UninstallPodSNATFlows(ofPort uint32) error
 
+	// InstallEgressQoS installs an OF meter with specific meterID, rate
+	// and burst used for QoS of Egress and a QoS flow that direct packets
+	// into the meter.
+	InstallEgressQoS(meterID, rate, burst uint32) error
+
+	// UninstallEgressQoS removes the flow and OF meter used by QoS of Egress.
+	UninstallEgressQoS(meterID uint32) error
+
 	// Disconnect disconnects the connection between client and OFSwitch.
 	Disconnect() error
 
@@ -798,13 +806,13 @@ func (c *client) initialize() error {
 	}
 
 	if c.ovsMetersAreSupported {
-		if err := c.genPacketInMeter(PacketInMeterIDNP, uint32(c.packetInRate)).Add(); err != nil {
+		if err := c.genOFMeter(PacketInMeterIDNP, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, c.packetInRate, err)
 		}
-		if err := c.genPacketInMeter(PacketInMeterIDTF, uint32(c.packetInRate)).Add(); err != nil {
+		if err := c.genOFMeter(PacketInMeterIDTF, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, c.packetInRate, err)
 		}
-		if err := c.genPacketInMeter(PacketInMeterIDDNS, uint32(c.packetInRate)).Add(); err != nil {
+		if err := c.genOFMeter(PacketInMeterIDDNS, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %v", PacketInMeterIDDNS, c.packetInRate, err)
 		}
 	}
@@ -930,7 +938,7 @@ func (c *client) generatePipelines() {
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
 
 	if c.enableEgress {
-		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig)
+		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig, c.ovsMetersAreSupported && c.enableEgressTrafficShaping)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureEgress)
 	}
 
@@ -1036,6 +1044,52 @@ func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
 	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
 }
 
+func (c *client) InstallEgressQoS(meterID, rate, burst uint32) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	// Install Egress QoS meter.
+	meter := c.genOFMeter(binding.MeterIDType(meterID), ofctrl.MeterBurst|ofctrl.MeterKbps, rate, burst)
+	_, installed := c.featureEgress.cachedMeter.Load(meterID)
+	if !installed {
+		if err := meter.Add(); err != nil {
+			return fmt.Errorf("error when installing Egress QoS OF Meter %d: %w", meterID, err)
+		}
+	} else {
+		if err := meter.Modify(); err != nil {
+			return fmt.Errorf("error when modifying Egress QoS OF Meter %d: %w", meterID, err)
+		}
+	}
+	c.featureEgress.cachedMeter.Store(meterID, meter)
+
+	// Install Egress QoS flow.
+	flow := c.featureEgress.egressQoSFlow(meterID)
+	cacheKey := fmt.Sprintf("eq%x", meterID)
+	return c.modifyFlows(c.featureEgress.cachedFlows, cacheKey, []binding.Flow{flow})
+}
+
+func (c *client) UninstallEgressQoS(meterID uint32) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	// Uninstall Egress QoS flow.
+	cacheKey := fmt.Sprintf("eq%x", meterID)
+	if err := c.deleteFlows(c.featureEgress.cachedFlows, cacheKey); err != nil {
+		return err
+	}
+
+	// Uninstall Egress QoS meter.
+	mCache, ok := c.featureEgress.cachedMeter.Load(meterID)
+	if ok {
+		meter := mCache.(binding.Meter)
+		if err := meter.Delete(); err != nil {
+			return fmt.Errorf("error when deleting Egress QoS OF Meter %d: %w", meterID, err)
+		}
+		c.featureEgress.cachedMeter.Delete(meterID)
+	}
+	return nil
+}
+
 func (c *client) ReplayFlows() {
 	c.replayMutex.Lock()
 	defer c.replayMutex.Unlock()
@@ -1045,11 +1099,19 @@ func (c *client) ReplayFlows() {
 	}
 
 	for _, activeFeature := range c.activatedFeatures {
+		featureName := activeFeature.getFeatureName()
+		for _, meter := range activeFeature.replayMeters() {
+			// Openflow bundle message doesn't support meter. Add meter individually instead of
+			// calling AddOFEntries function.
+			if err := meter.Add(); err != nil {
+				klog.ErrorS(err, "Error when replaying feature meters", "feature", featureName)
+			}
+		}
 		if err := c.ofEntryOperations.AddOFEntries(activeFeature.replayGroups()); err != nil {
-			klog.ErrorS(err, "Error when replaying feature groups", "feature", activeFeature.getFeatureName())
+			klog.ErrorS(err, "Error when replaying feature groups", "feature", featureName)
 		}
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {
-			klog.ErrorS(err, "Error when replaying feature flows", "feature", activeFeature.getFeatureName())
+			klog.ErrorS(err, "Error when replaying feature flows", "feature", featureName)
 		}
 	}
 }

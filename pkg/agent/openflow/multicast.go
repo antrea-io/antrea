@@ -196,6 +196,10 @@ func (f *featureMulticast) initGroups() []binding.OFEntry {
 	return nil
 }
 
+func (f *featureMulticast) replayMeters() []binding.OFEntry {
+	return nil
+}
+
 func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDType, firstMulticastTable binding.Table) []binding.Flow {
 	return []binding.Flow{
 		// This flow outputs the IGMP report message sent from Antrea Agent to an OpenFlow group which is expected to

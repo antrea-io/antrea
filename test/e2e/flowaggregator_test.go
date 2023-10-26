@@ -553,7 +553,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		} else {
 			egressNodeIP = nodeIPv6(0)
 		}
-		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP)
+		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP, nil)
 		egress, err := data.waitForEgressRealized(egress)
 		if err != nil {
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
@@ -593,7 +593,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		} else {
 			egressNodeIP = nodeIPv6(1)
 		}
-		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP)
+		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP, nil)
 		egress, err := data.waitForEgressRealized(egress)
 		if err != nil {
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)

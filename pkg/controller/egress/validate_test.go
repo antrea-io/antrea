@@ -34,6 +34,20 @@ func marshal(object runtime.Object) []byte {
 }
 
 func TestEgressControllerValidateEgress(t *testing.T) {
+	var (
+		bandwidth = crdv1beta1.Bandwidth{
+			Rate:  "500k",
+			Burst: "10M",
+		}
+		invalidBandwidthRate = crdv1beta1.Bandwidth{
+			Rate:  "500A",
+			Burst: "10G",
+		}
+		invalidBandwidthBurst = crdv1beta1.Bandwidth{
+			Rate:  "1.5G",
+			Burst: "10b",
+		}
+	)
 	tests := []struct {
 		name                   string
 		existingExternalIPPool *crdv1beta1.ExternalIPPool
@@ -46,7 +60,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "nonExistingPool", nil, nil))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "nonExistingPool", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
@@ -61,7 +75,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.11.1", "bar", nil, nil))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.11.1", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
@@ -76,7 +90,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
@@ -86,8 +100,8 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil))},
-				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.11.1", "bar", nil, nil))},
+				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.11.1", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
@@ -102,8 +116,8 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil))},
-				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.2", "bar", nil, nil))},
+				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.2", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
@@ -113,10 +127,10 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil))},
+				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
 				Object: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.2", "bar", &metav1.LabelSelector{
 					MatchLabels: map[string]string{"foo": "bar"},
-				}, nil))},
+				}, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
@@ -125,9 +139,56 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "DELETE",
-				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.2", "bar", nil, nil))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.2", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Creating an Egress with bandwidth should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "", nil, nil, &bandwidth))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Update an Egress bandwidth config should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "", nil, nil, &bandwidth))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Create an Egress with invalid bandwidth rate",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "", nil, nil, &invalidBandwidthRate))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "Rate 500A in Egress foo is invalid: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'",
+				},
+			},
+		},
+		{
+			name: "Create an Egress with invalid bandwidth burst",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "", nil, nil, &invalidBandwidthBurst))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "Burst 10b in Egress foo is invalid: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'",
+				},
+			},
 		},
 	}
 	for _, tt := range tests {

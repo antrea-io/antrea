@@ -9,6 +9,7 @@
   - [AppliedTo](#appliedto)
   - [EgressIP](#egressip)
   - [ExternalIPPool](#externalippool)
+  - [Bandwidth](#bandwidth)
 - [The ExternalIPPool resource](#the-externalippool-resource)
   - [IPRanges](#ipranges)
   - [NodeSelector](#nodeselector)
@@ -126,6 +127,46 @@ The `externalIPPool` field specifies the name of the `ExternalIPPool` that the
 `egressIP` should be allocated from. It also determines which Nodes the IP can
 be assigned to. It can be empty, which means users should assign the `egressIP`
 to one Node manually.
+
+### Bandwidth
+
+The `bandwidth` field enables traffic shaping for an Egress, by limiting the
+bandwidth for all egress traffic belonging to this Egress. `rate` specifies
+the maximum transmission rate. `burst` specifies the maximum burst size when
+traffic exceeds the rate. The user-provided values for `rate` and `burst` must
+follow the Kubernetes [Quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/) format,
+e.g. 300k, 100M, 2G. All backend workloads selected by a rate-limited Egress share the
+same bandwidth while sending egress traffic via this Egress. If these limits are exceeded,
+the traffic will be dropped.
+
+**Note**: Traffic shaping is currently in alpha version. To use this feature, users should
+enable the `EgressTrafficShaping` feature gate. Each Egress IP can be applied one bandwidth only.
+If multiple Egresses use the same IP but configure different bandwidths, the effective
+bandwidth will be selected randomly from the set of configured bandwidths. The effective use of the `bandwidth`
+function requires the OVS datapath to support meters.
+
+An Egress with traffic shaping example:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: Egress
+metadata:
+  name: egress-prod-web
+spec:
+  appliedTo:
+    namespaceSelector:
+      matchLabels:
+        env: prod
+    podSelector:
+      matchLabels:
+        role: web
+  egressIP: 10.10.0.8
+  bandwidth:
+    rate: 800M
+    burst: 2G
+status:
+  egressNode: node01
+```
 
 ## The ExternalIPPool resource
 

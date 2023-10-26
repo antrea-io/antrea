@@ -61,6 +61,8 @@ type feature interface {
 	initGroups() []binding.OFEntry
 	// initFlows returns the Openflow messages of initial flows of the feature.
 	initFlows() []*openflow15.FlowMod
+	// replayMeters returns the fixed and cached Openflow meters that need to be replayed after OVS is reconnected.
+	replayMeters() []binding.OFEntry
 	// replayGroups returns the fixed and cached Openflow groups that need to be replayed after OVS is reconnected.
 	replayGroups() []binding.OFEntry
 	// replayFlows returns the Openflow messages of fixed and cached flows that need to be replayed after OVS is reconnected.
@@ -271,10 +273,14 @@ func (f *featureService) getRequiredTables() []*Table {
 }
 
 func (f *featureEgress) getRequiredTables() []*Table {
-	return []*Table{
+	tables := []*Table{
 		L3ForwardingTable,
 		EgressMarkTable,
 	}
+	if f.enableEgressTrafficShaping {
+		tables = append(tables, EgressQoSTable)
+	}
+	return tables
 }
 
 func (f *featureMulticast) getRequiredTables() []*Table {

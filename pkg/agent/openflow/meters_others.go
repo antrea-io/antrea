@@ -17,7 +17,7 @@
 
 package openflow
 
-func ovsMetersAreSupported() bool {
+func OVSMetersAreSupported() bool {
 	// TODO: revisit after Windows OVS supports OpenFlow meters.
 	return false
 }

@@ -880,6 +880,15 @@ type EgressSpec struct {
 	// same index in EgressIPs and ExternalIPPools are correlated.
 	// Cannot be set with ExternalIPPool.
 	ExternalIPPools []string `json:"externalIPPools,omitempty"`
+	// Bandwidth specifies the rate limit of north-south egress traffic of this Egress.
+	Bandwidth *Bandwidth `json:"bandwidth,omitempty"`
+}
+
+type Bandwidth struct {
+	// Rate specifies the maximum traffic rate. e.g. 300k, 10M
+	Rate string `json:"rate"`
+	// Burst specifies the maximum burst size when traffic exceeds the rate. e.g. 300k, 10M
+	Burst string `json:"burst"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
