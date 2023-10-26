@@ -13,7 +13,8 @@ Specifies whether kube-proxy interface is included in the installation. If false
 be installed on the host.
 #>
 Param(
-    [parameter(Mandatory = $false)] [bool] $InstallKubeProxy = $true
+    [parameter(Mandatory = $false)] [bool] $InstallKubeProxy = $true,
+    [parameter(Mandatory = $false)] [bool] $RunOVSServices= $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,10 +40,12 @@ if ($NeedCleanNetwork) {
     & $CleanAntreaNetworkScript -OVSRunMode $ovsRunMode
 }
 # Enure OVS services are running.
-Write-Host "Starting ovsdb-server service..."
-Start-Service ovsdb-server
-Write-Host "Starting ovs-vswitchd service..."
-Start-Service ovs-vswitchd
+if ($RunOVSServices -eq $true) {
+    Write-Host "Starting ovsdb-server service..."
+    Start-Service ovsdb-server
+    Write-Host "Starting ovs-vswitchd service..."
+    Start-Service ovs-vswitchd
+}
 # Prepare service network interface for kube-proxy.
 if ($InstallKubeProxy -eq $true) {
     Write-Host "Preparing service network interface for kube-proxy..."
