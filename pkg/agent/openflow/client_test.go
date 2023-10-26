@@ -2781,6 +2781,9 @@ func Test_client_ReplayFlows(t *testing.T) {
 
 	expectedFlows = append(expectedFlows, replayedFlows...)
 
+	bridge.EXPECT().DeleteGroupAll().Return(nil).Times(1)
+	bridge.EXPECT().DeleteMeterAll().Return(nil).Times(1)
+
 	actualGroups := make([]string, 0)
 	m.EXPECT().AddOFEntries(gomock.Any()).Do(func(ofEntries []binding.OFEntry) {
 		for _, entry := range ofEntries {

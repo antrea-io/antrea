@@ -801,28 +801,46 @@ func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol bindi
 }
 
 func (c *client) initialize() error {
+	// After a connection or re-connection, delete all existing group and meter entries, to
+	// avoid "already exist" errors. This will typically happen if the antrea-agent container is
+	// restarted (but not the antrea-ovs one). We do this in initialize(), and not directly in
+	// Initialize(), to ensure that the deletion happen on every re-connection (when
+	// ReplayFlows() is called), even though we typically only see reconnections when the OVS
+	// daemons are restarted. When ovs-vswitchd restarts, group and meter entries are empty by
+	// default and these calls are not required.
+	// This is specific to groups and meters. Flows are replayed with a different cookie number
+	// and conflicts are not possible.
+	if err := c.bridge.DeleteGroupAll(); err != nil {
+		return fmt.Errorf("error when deleting all group entries: %w", err)
+	}
+	if c.ovsMetersAreSupported {
+		if err := c.bridge.DeleteMeterAll(); err != nil {
+			return fmt.Errorf("error when deleting all meter entries: %w", err)
+		}
+	}
+
 	if err := c.ofEntryOperations.AddAll(c.defaultFlows()); err != nil {
-		return fmt.Errorf("failed to install default flows: %v", err)
+		return fmt.Errorf("failed to install default flows: %w", err)
 	}
 
 	if c.ovsMetersAreSupported {
 		if err := c.genOFMeter(PacketInMeterIDNP, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, c.packetInRate, err)
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %w", PacketInMeterIDNP, c.packetInRate, err)
 		}
 		if err := c.genOFMeter(PacketInMeterIDTF, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, c.packetInRate, err)
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %w", PacketInMeterIDTF, c.packetInRate, err)
 		}
 		if err := c.genOFMeter(PacketInMeterIDDNS, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %v", PacketInMeterIDDNS, c.packetInRate, err)
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %w", PacketInMeterIDDNS, c.packetInRate, err)
 		}
 	}
 
 	for _, activeFeature := range c.activatedFeatures {
 		if err := c.ofEntryOperations.AddOFEntries(activeFeature.initGroups()); err != nil {
-			return fmt.Errorf("failed to install feature %v initial groups: %v", activeFeature.getFeatureName(), err)
+			return fmt.Errorf("failed to install feature %s initial groups: %w", activeFeature.getFeatureName(), err)
 		}
 		if err := c.ofEntryOperations.AddAll(activeFeature.initFlows()); err != nil {
-			return fmt.Errorf("failed to install feature %v initial flows: %v", activeFeature.getFeatureName(), err)
+			return fmt.Errorf("failed to install feature %s initial flows: %w", activeFeature.getFeatureName(), err)
 		}
 	}
 
@@ -868,17 +886,6 @@ func (c *client) Initialize(roundInfo types.RoundInfo,
 	// the previous round have been deleted).
 	if err := c.deleteFlowsByRoundNum(roundInfo.RoundNum); err != nil {
 		return nil, fmt.Errorf("error when deleting exiting flows for current round number: %v", err)
-	}
-
-	// In the normal case, there should be no existing meter entries. This is needed in case the
-	// antrea-agent container is restarted (but not the antrea-ovs one), which will add meter
-	// entries during initialization, but the meter entries added during the previous
-	// initialization still exist. Trying to add an existing meter entry will cause an
-	// OFPMMFC_METER_EXISTS error.
-	if c.ovsMetersAreSupported {
-		if err := c.bridge.DeleteMeterAll(); err != nil {
-			return nil, fmt.Errorf("error when deleting all meter entries: %v", err)
-		}
 	}
 
 	return connCh, c.initialize()

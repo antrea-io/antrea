@@ -110,7 +110,10 @@ type Bridge interface {
 	GetTableByID(id uint8) (Table, error)
 	NewGroupTypeAll(id GroupIDType) Group
 	NewGroup(id GroupIDType) Group
+	// DeleteGroupAll deletes all group entries from the switch.
+	DeleteGroupAll() error
 	NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
+	// DeleteMeterAll deletes all meter entries from the switch.
 	DeleteMeterAll() error
 	GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error
 	DumpTableStatus() []TableStatus
