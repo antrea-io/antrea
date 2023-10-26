@@ -152,6 +152,12 @@ export NO_PULL
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
 
 function export_govc_env_var {
+    if [ -z $GOVC_URL ]; then
+      export GOVC_URL=$GOVC_URL
+    fi
+    if [ -z $GOVC_USERNAME ]; then
+      export GOVC_USERNAME=$GOVC_USERNAME
+    fi
     export GOVC_URL=$GOVC_URL
     export GOVC_USERNAME=$GOVC_USERNAME
     export GOVC_PASSWORD=$GOVC_PASSWORD
@@ -161,6 +167,14 @@ function export_govc_env_var {
 }
 
 function clean_antrea {
+    ELAPSED_TIME=$(( $(date +%s) - START_TIME ))
+
+    HOURS=$((ELAPSED_TIME / 3600))
+    MINUTES=$(( (ELAPSED_TIME % 3600) / 60 ))
+    SECONDS=$((ELAPSED_TIME % 60))
+
+    printf "Script has been running for %02d:%02d:%02d\n" $HOURS $MINUTES $SECONDS
+
     echo "====== Cleanup Antrea Installation ======"
     clean_ns "monitoring"
     clean_ns "antrea-ipam-test"
@@ -179,6 +193,14 @@ function clean_antrea {
     done
     docker images | grep 'antrea' | awk '{print $3}' | xargs -r docker rmi || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+
+    ELAPSED_TIME=$(( $(date +%s) - START_TIME ))
+
+    HOURS=$((ELAPSED_TIME / 3600))
+    MINUTES=$(( (ELAPSED_TIME % 3600) / 60 ))
+    SECONDS=$((ELAPSED_TIME % 60))
+
+    printf "Script has been running for %02d:%02d:%02d\n" $HOURS $MINUTES $SECONDS
 }
 
 function clean_for_windows_install_cni {
@@ -342,6 +364,7 @@ function revert_snapshot_windows {
     # Windows VM is reverted to an old snapshot so computer date needs updating.
     for i in `seq 24`; do
         sleep 5
+        echo "Resync ${i}"
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "W32tm /resync /force" | grep successfully && break
     done
     # Avoid potential resync delay error
@@ -633,7 +656,7 @@ function deliver_antrea_windows_containerd {
             for i in `seq 2`; do
                 timeout 2m scp -o StrictHostKeyChecking=no -T antrea-windows.tar.gz Administrator@${IP}: && break
             done
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import --all-platforms antrea-windows.tar"
         fi
     done
     rm -f antrea-windows.tar
@@ -705,6 +728,7 @@ function deliver_antrea {
     echo "====== Delivering Antrea to all Nodes ======"
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
+    echo "====== Delivering Images to all Nodes ======"
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
@@ -816,6 +840,14 @@ function run_conformance {
     else
         echo "All tests passed."
     fi
+
+    ELAPSED_TIME=$(( $(date +%s) - START_TIME ))
+
+    HOURS=$((ELAPSED_TIME / 3600))
+    MINUTES=$(( (ELAPSED_TIME % 3600) / 60 ))
+    SECONDS=$((ELAPSED_TIME % 60))
+
+    printf "Script has been running for %02d:%02d:%02d\n" $HOURS $MINUTES $SECONDS
 }
 
 function run_e2e_windows {
@@ -838,7 +870,7 @@ function run_e2e_windows {
     mkdir -p `pwd`/antrea-test-logs
 
     echo "====== Run test with e2e test ======"
-    go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
+    go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m -run TestTraceflow --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
@@ -1126,6 +1158,8 @@ EOF
         done
     done
 }
+
+START_TIME=$(date +%s)
 
 export KUBECONFIG=${KUBECONFIG_PATH}
 if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then

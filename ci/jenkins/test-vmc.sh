@@ -504,6 +504,8 @@ function run_e2e {
     set +e
     kubectl taint nodes --selector='!node-role.kubernetes.io/control-plane' node.cluster.x-k8s.io/uninitialized-
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
+    #go install golang.org/dl/go1.19@latest
+    #go1.19 download
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/e2e-coverage
         mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
