@@ -31,6 +31,7 @@ NodePortLocal was introduced in v0.13 as an alpha feature, and was graduated to
 beta in v1.4, at which time it was enabled by default. Prior to v1.4, a feature
 gate, `NodePortLocal`, must be enabled on the antrea-agent for the feature to
 work. Starting from Antrea v1.7, NPL is supported on the Windows antrea-agent.
+From Antrea v1.14, NPL is GA.
 
 ## Usage
 

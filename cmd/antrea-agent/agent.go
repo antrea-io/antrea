@@ -137,7 +137,6 @@ func run(o *Options) error {
 
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
-	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
@@ -326,7 +325,7 @@ func run(o *Options) error {
 	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
 	// StretchedNetworkPolicyController, and secondary network controller.
 	var localPodInformer cache.SharedIndexInformer
-	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFlowExporter ||
+	if o.enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFlowExporter ||
 		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
 		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
 		listOptions := func(options *metav1.ListOptions) {
@@ -672,7 +671,7 @@ func run(o *Options) error {
 	go antreaClientProvider.Run(ctx)
 
 	// Initialize the NPL agent.
-	if enableNodePortLocal {
+	if o.enableNodePortLocal {
 		nplController, err := npl.InitializeNPLAgent(
 			k8sClient,
 			serviceInformer,

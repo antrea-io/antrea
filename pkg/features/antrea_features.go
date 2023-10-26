@@ -78,6 +78,7 @@ const (
 
 	// alpha: v0.13
 	// beta: v1.4
+	// GA: v1.14
 	// Expose Pod ports through NodePort
 	NodePortLocal featuregate.Feature = "NodePortLocal"
 
@@ -165,7 +166,7 @@ var (
 		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
-		NodePortLocal:               {Default: true, PreRelease: featuregate.Beta},
+		NodePortLocal:               {Default: true, PreRelease: featuregate.GA},
 		NodeIPAM:                    {Default: true, PreRelease: featuregate.Beta},
 		Multicast:                   {Default: true, PreRelease: featuregate.Beta},
 		Multicluster:                {Default: false, PreRelease: featuregate.Alpha},

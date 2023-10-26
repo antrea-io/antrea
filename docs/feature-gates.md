@@ -31,7 +31,7 @@ edit the Agent configuration in the
 ## List of Available Features
 
 | Feature Name                  | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes                                         |
-|-------------------------------|--------------------|---------|-------|---------------|--------------|------------|--------------------|-----------------------------------------------|
+| ----------------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | --------------------------------------------- |
 | `AntreaProxy`                 | Agent              | `true`  | GA    | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                  |
 | `EndpointSlice`               | Agent              | `true`  | GA    | v0.13.0       | v1.11        | v1.14      | Yes                |                                               |
 | `TopologyAwareHints`          | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |                                               |
@@ -41,7 +41,7 @@ edit the Agent configuration in the
 | `Traceflow`                   | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |                                               |
 | `FlowExporter`                | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |                                               |
 | `NetworkPolicyStats`          | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |                                               |
-| `NodePortLocal`               | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0        |
+| `NodePortLocal`               | Agent              | `true`  | GA    | v0.13         | v1.4         | v1.14      | Yes                | Important user-facing change in v1.2.0        |
 | `Egress`                      | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |                                               |
 | `NodeIPAM`                    | Controller         | `true`  | Beta  | v1.4          | v1.12        | N/A        | Yes                |                                               |
 | `AntreaIPAM`                  | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |                                               |
