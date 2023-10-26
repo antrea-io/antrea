@@ -308,6 +308,10 @@ func (data *MCTestData) probeFromPodInCluster(
 	cmd := antreae2e.ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(cmd, " "))
 	stdout, stderr, err := data.runCommandFromPod(cluster, podNamespace, podName, containerName, cmd)
+	if !strings.Contains(stderr, "FINISHED") {
+		log.Infof("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstName, err, stdout, stderr)
+		return antreae2e.Error
+	}
 	// It needs to check both err and stderr because:
 	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
 	// 2. There might be an issue in Pod exec API that it sometimes doesn't return error when the probe fails. See #2394.
