@@ -152,7 +152,12 @@ export NO_PULL
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
 
 function export_govc_env_var {
-    export GOVC_URL=$GOVC_URL
+    env_govc="${WORKDIR}/govc.env"
+    if [ -f "$env_govc" ]; then
+        source "$env_govc"
+    else
+        export GOVC_URL=$GOVC_URL
+    fi
     export GOVC_USERNAME=$GOVC_USERNAME
     export GOVC_PASSWORD=$GOVC_PASSWORD
     export GOVC_INSECURE=1
@@ -322,7 +327,11 @@ function prepare_env {
 function revert_snapshot_windows {
     WIN_NAME=$1
     echo "==== Reverting Windows VM ${WIN_NAME} ====="
-    govc snapshot.revert -vm ${WIN_NAME} win-initial
+    if [[ $WIN_NAME == *"jumper"* ]]; then
+        govc snapshot.revert -vm ${WIN_NAME} win-initial
+    else
+        govc snapshot.revert -vm ${WIN_NAME} pristine-win-initial
+    fi
     # If Windows VM fails to power on correctly in time, retry several times.
     winVMIPs=""
     for i in `seq 10`; do
@@ -516,14 +525,12 @@ function build_and_deliver_antrea_windows_and_linux_docker_images {
 function  build_and_deliver_antrea_windows_and_linux_containerd_images {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows and Antrea Linux containerd Images ====="
     clean_antrea
-    kubectl delete -f ${WORKDIR}/antrea-windows-containerd.yml --ignore-not-found=true || true
+    kubectl delete -f ${WORKDIR}/antrea-windows-containerd-with-ovs.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows-containerd.yml --ignore-not-found=true || true
     kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true || true
 
     prepare_env
-    ${CLEAN_STALE_IMAGES_CONTAINERD}
-    ${PRINT_CONTAINERD_STATUS}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     # Clean docker image to save disk space.
@@ -531,11 +538,11 @@ function  build_and_deliver_antrea_windows_and_linux_containerd_images {
     ${PRINT_DOCKER_STATUS}
     export_govc_env_var
     # Enable verbose log for troubleshooting.
-    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
+    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd-with-ovs.yml
 
     echo "====== Updating yaml files to enable proxyAll ======"
     KUBE_API_SERVER=$(kubectl --kubeconfig=$KubeConfigFile config view -o jsonpath='{.clusters[0].cluster.server}')
-    sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_API_SERVER}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd.yml
+    sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_API_SERVER}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows-containerd-with-ovs.yml
 
     cp -f build/yamls/*.yml $WORKDIR
     set +e
@@ -1148,7 +1155,7 @@ fi
 trap clean_antrea EXIT
 if [[ ${TESTCASE} =~ "windows" ]]; then
     if [[ ${TESTCASE} =~ "containerd" ]]; then
-        WINDOWS_YAML_SUFFIX="windows-containerd"
+        WINDOWS_YAML_SUFFIX="windows-containerd-with-ovs"
         build_and_deliver_antrea_windows_and_linux_containerd_images
         if [[ ${TESTCASE} =~ "e2e" ]]; then
             run_e2e_windows
