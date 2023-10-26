@@ -26,7 +26,7 @@ import (
 
 func ovsMetersAreSupported() bool {
 	// According to the OVS documentation, meters are supported in the kernel module since 4.15
-	// (https://docs.openvswitch.org/en/latest/faq/releases/). However, it turns out that
+	// (https://docs.openvswitch.org/en/latest/faq/releases.html). However, it turns out that
 	// because of a bug meters cannot be used with kernel versions older than 4.18, which is
 	// when this patch was merged: https://github.com/torvalds/linux/commit/25432eba9cd.
 	// To avoid increasing the minimum required kernel version for Antrea, we will avoid using
