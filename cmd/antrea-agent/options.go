@@ -98,6 +98,10 @@ type Options struct {
 	// AntreaProxy.Enable. This is used to maintain compatibility with the AntreaProxy feature gate, which was promoted
 	// to GA in v1.14.
 	enableAntreaProxy bool
+	// enableNodePortLocal indicates whether NodePortLocal should be enabled or not, based on feature gate NodePortLocal
+	// and options NodePortLocal.Enable. This is used to maintain compatibility with the NodePortLocal feature gate, which
+	// was promoted to GA in v1.14
+	enableNodePortLocal bool
 
 	defaultLoadBalancerMode config.LoadBalancerMode
 }
@@ -461,7 +465,7 @@ func (o *Options) setK8sNodeDefaultOptions() {
 		}
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+	if o.config.NodePortLocal.Enable {
 		switch {
 		case o.config.NodePortLocal.PortRange != "":
 		case o.config.NPLPortRange != "":
@@ -589,16 +593,8 @@ func (o *Options) validateK8sNodeOptions() error {
 	if err := o.validateMulticlusterConfig(encapMode, encryptionMode); err != nil {
 		return err
 	}
-
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
-		if err != nil {
-			return fmt.Errorf("NodePortLocal portRange is not valid: %v", err)
-		}
-		o.nplStartPort = startPort
-		o.nplEndPort = endPort
-	} else if o.config.NodePortLocal.Enable {
-		klog.InfoS("The nodePortLocal.enable config option is set to true, but it will be ignored because the NodePortLocal feature gate is disabled")
+	if err := o.validateNodePortLocalConfig(); err != nil {
+		return fmt.Errorf("failed to validate nodePortLocal config: %v", err)
 	}
 	if err := o.validateAntreaIPAMConfig(); err != nil {
 		return fmt.Errorf("failed to validate AntreaIPAM config: %v", err)
@@ -744,5 +740,21 @@ func (o *Options) validateSecondaryNetworkConfig() error {
 		return fmt.Errorf("at most one physical interface can be specified for the secondary network OVS bridge")
 	}
 
+	return nil
+}
+
+func (o *Options) validateNodePortLocalConfig() error {
+	o.enableNodePortLocal = o.config.NodePortLocal.Enable && features.DefaultFeatureGate.Enabled(features.NodePortLocal)
+	if !features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		klog.InfoS("Feature gate `NodePortLocal` is deprecated, please use option `nodePortLocal.enable` to disable NodePortLocal")
+	}
+	if o.enableNodePortLocal {
+		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
+		if err != nil {
+			return fmt.Errorf("NodePortLocal portRange is not valid: %v", err)
+		}
+		o.nplStartPort = startPort
+		o.nplEndPort = endPort
+	}
 	return nil
 }
