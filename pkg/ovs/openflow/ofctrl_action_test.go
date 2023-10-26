@@ -673,7 +673,7 @@ func TestFlowActions(t *testing.T) {
 				return b.SendToController([]byte{0x1}, false)
 			},
 			expectedActionField: &openflow15.NXActionController2{},
-			expectedActionStr:   "controller(id=0,reason=no_match,userdata=01,max_len=128)",
+			expectedActionStr:   "controller(id=0,reason=no_match,userdata=01,max_len=65535)",
 		},
 		{
 			name: "SendToController",
@@ -681,7 +681,7 @@ func TestFlowActions(t *testing.T) {
 				return b.SendToController([]byte{0x1}, false)
 			},
 			expectedActionField: &openflow15.NXActionController2{},
-			expectedActionStr:   "controller(id=0,reason=no_match,userdata=01,max_len=128)",
+			expectedActionStr:   "controller(id=0,reason=no_match,userdata=01,max_len=65535)",
 		},
 		{
 			name: "Meter",
