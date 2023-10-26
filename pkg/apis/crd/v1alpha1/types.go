@@ -935,3 +935,69 @@ type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
 	SNI string `json:"sni,omitempty"`
 }
+
+
+
+type PacketSamplingType string
+
+const (
+	FirstNSampling PacketSamplingType = "FirstNsampling"
+)
+
+// Source describes the source spec of the traceflow.
+type Source struct {
+	// Namespace is the source namespace.
+	Namespace string `json:"namespace,omitempty"`
+	// Pod is the source pod.
+	Pod string `json:"pod,omitempty"`
+	// IP is the source IPv4 or IPv6 address. IP as the source is supported
+	// only for live-traffic Traceflow.
+	IP string `json:"ip,omitempty"`
+}
+
+
+// Destination describes the destination spec of the traceflow.
+type Destination struct {
+	// Namespace is the destination namespace.
+	Namespace string `json:"namespace,omitempty"`
+	// Pod is the destination pod, exclusive with destination service.
+	Pod string `json:"pod,omitempty"`
+	// Service is the destination service, exclusive with destination pod.
+	Service string `json:"service,omitempty"`
+	// IP is the destination IPv4 or IPv6 address.
+	IP string `json:"ip,omitempty"`
+}
+
+
+type FirstNSamplingConfig struct {
+	Number int `json:"number,omitempty"`
+}
+
+type PacketSampling struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec PacketSamplingSpec `json:"spec,omitempty"`
+	Status PacketSamplingStatus `json:"status,omitempty"`
+}
+
+type PacketSamplingSpec struct {
+	Timeout int `json:"timeout,omitempty"`
+	Type    PacketSamplingType `json:"type,omitempty"`
+	FirstNSamplingConfig *FirstNSamplingConfig `json:"firstNsamplingConfig,omitempty"`
+	Source Source `json:"source,omitempty"`
+	Destination Destination `json:"destination,omitempty"`
+	FileServer BundleFileServer `json:"fileServer,omitempty"`
+	Authentication BundleServerAuthConfiguration `json:"authentication,omitempty"`
+	
+}
+
+type PacketSamplingPhase string
+
+const (
+	PacketSamplingSucceed PacketSamplingPhase = 'Succeed'
+)
+
+type PacketSamplingStatus struct {
+	Reason string `json:"reason,omitempty"`
+}
+
