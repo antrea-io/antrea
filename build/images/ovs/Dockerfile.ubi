@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # OVS build scripts are only applicable for RHEL 7.x:
-# https://docs.openvswitch.org/en/latest/intro/install/fedora
+# https://docs.openvswitch.org/en/latest/intro/install/fedora/
 FROM centos:centos7 as ovs-rpms
 
 # Some patches may not apply cleanly if a non-default version is provided.

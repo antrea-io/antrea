@@ -328,7 +328,7 @@ table=100, n_packets=0, n_bytes=0, priority=200,ip,reg1=0x5 actions=drop
 ### OVS packet tracing
 
 Starting from version 0.7.0, Antrea Agent supports tracing the OVS flows that a
-specified packet traverses, leveraging the [OVS packet tracing tool](http://docs.openvswitch.org/en/latest/topics/tracing).
+specified packet traverses, leveraging the [OVS packet tracing tool](https://docs.openvswitch.org/en/latest/topics/tracing/).
 
 `antctl trace-packet` command starts a packet tracing operation.
 `antctl help trace-packet` shows the usage of the command. This section lists a
