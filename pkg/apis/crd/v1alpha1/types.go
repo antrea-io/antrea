@@ -944,29 +944,7 @@ const (
 	FirstNSampling PacketSamplingType = "FirstNsampling"
 )
 
-// Source describes the source spec of the traceflow.
-type Source struct {
-	// Namespace is the source namespace.
-	Namespace string `json:"namespace,omitempty"`
-	// Pod is the source pod.
-	Pod string `json:"pod,omitempty"`
-	// IP is the source IPv4 or IPv6 address. IP as the source is supported
-	// only for live-traffic Traceflow.
-	IP string `json:"ip,omitempty"`
-}
 
-
-// Destination describes the destination spec of the traceflow.
-type Destination struct {
-	// Namespace is the destination namespace.
-	Namespace string `json:"namespace,omitempty"`
-	// Pod is the destination pod, exclusive with destination service.
-	Pod string `json:"pod,omitempty"`
-	// Service is the destination service, exclusive with destination pod.
-	Service string `json:"service,omitempty"`
-	// IP is the destination IPv4 or IPv6 address.
-	IP string `json:"ip,omitempty"`
-}
 
 
 type FirstNSamplingConfig struct {
@@ -994,7 +972,7 @@ type PacketSamplingSpec struct {
 type PacketSamplingPhase string
 
 const (
-	PacketSamplingSucceed PacketSamplingPhase = 'Succeed'
+	PacketSamplingSucceed PacketSamplingPhase = "Succeed"
 )
 
 type PacketSamplingStatus struct {
