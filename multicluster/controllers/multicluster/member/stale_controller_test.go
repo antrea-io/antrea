@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Antrea Authors.
+Copyright 2023 Antrea Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,46 +14,50 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package multicluster
+package member
 
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
-	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
-var ctx = context.Background()
+var clusterSet = &mcv1alpha2.ClusterSet{
+	ObjectMeta: metav1.ObjectMeta{
+		Namespace: "default",
+		Name:      "test-cluster",
+	},
+}
 
-func TestStaleController_CleanupService(t *testing.T) {
+func TestStaleController_CleanUpService(t *testing.T) {
 	mcSvcNginx := common.SvcNginx.DeepCopy()
 	mcSvcNginx.Name = "antrea-mc-nginx"
 	mcSvcNginx.Annotations = map[string]string{common.AntreaMCServiceAnnotation: "true"}
 	mcSvcNonNginx := common.SvcNginx.DeepCopy()
 	mcSvcNginx.Name = "antrea-mc-non-nginx"
 	mcSvcNonNginx.Annotations = map[string]string{common.AntreaMCServiceAnnotation: "true"}
-	mcSvcImpNginx := k8smcsv1alpha1.ServiceImport{
+	mcSvcImpNginx := k8smcv1alpha1.ServiceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx",
 		},
 	}
-	mcSvcImpNonNginx := k8smcsv1alpha1.ServiceImport{
+	mcSvcImpNonNginx := k8smcv1alpha1.ServiceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "non-nginx",
@@ -73,7 +77,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 	tests := []struct {
 		name               string
 		existSvcList       *corev1.ServiceList
-		existSvcImpList    *k8smcsv1alpha1.ServiceImportList
+		existSvcImpList    *k8smcv1alpha1.ServiceImportList
 		existingResImpList *mcv1alpha1.ResourceImportList
 		wantErr            bool
 	}{
@@ -82,8 +86,8 @@ func TestStaleController_CleanupService(t *testing.T) {
 			existSvcList: &corev1.ServiceList{
 				Items: []corev1.Service{*mcSvcNginx, *mcSvcNonNginx},
 			},
-			existSvcImpList: &k8smcsv1alpha1.ServiceImportList{
-				Items: []k8smcsv1alpha1.ServiceImport{
+			existSvcImpList: &k8smcv1alpha1.ServiceImportList{
+				Items: []k8smcv1alpha1.ServiceImport{
 					mcSvcImpNginx, mcSvcImpNonNginx,
 				},
 			},
@@ -96,13 +100,14 @@ func TestStaleController_CleanupService(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existSvcList, tt.existSvcImpList).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).
+				WithLists(tt.existSvcList, tt.existSvcImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(ctx); err != nil {
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale Service and ServiceImport but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -116,7 +121,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 			} else {
 				t.Errorf("Should list Service successfully but got err = %v", err)
 			}
-			svImpList := &k8smcsv1alpha1.ServiceImportList{}
+			svImpList := &k8smcv1alpha1.ServiceImportList{}
 			err = fakeClient.List(ctx, svImpList, &client.ListOptions{})
 			svcImpLen := len(svImpList.Items)
 			if err == nil {
@@ -130,7 +135,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 	}
 }
 
-func TestStaleController_CleanupACNP(t *testing.T) {
+func TestStaleController_CleanUpACNP(t *testing.T) {
 	acnpImportName := "acnp-for-isolation"
 	acnpResImportName := common.LeaderNamespace + "-" + acnpImportName
 	acnpResImport := mcv1alpha1.ResourceImport{
@@ -190,14 +195,14 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingACNPList).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(tt.existingACNPList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(ctx); err != nil {
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -216,8 +221,8 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 	}
 }
 
-func TestStaleController_CleanupResourceExport(t *testing.T) {
-	svcExpNginx := k8smcsv1alpha1.ServiceExport{
+func TestStaleController_CleanUpResourceExports(t *testing.T) {
+	svcExpNginx := k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "keep-nginx",
@@ -397,7 +402,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 		existPodList           *corev1.PodList
 		existNamespaceList     *corev1.NamespaceList
 		existLabelIdentityList *mcv1alpha1.LabelIdentityList
-		existSvcExpList        *k8smcsv1alpha1.ServiceExportList
+		existSvcExpList        *k8smcv1alpha1.ServiceExportList
 		existResExpList        *mcv1alpha1.ResourceExportList
 		wantErr                bool
 	}{
@@ -405,8 +410,8 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			name:               "clean up ResourceExport successfully",
 			existNamespaceList: existingNamespaces,
 			existPodList:       existingPods,
-			existSvcExpList: &k8smcsv1alpha1.ServiceExportList{
-				Items: []k8smcsv1alpha1.ServiceExport{
+			existSvcExpList: &k8smcv1alpha1.ServiceExportList{
+				Items: []k8smcv1alpha1.ServiceExport{
 					svcExpNginx,
 				},
 			},
@@ -427,14 +432,15 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existSvcExpList, tt.existPodList, tt.existNamespaceList).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).
+				WithLists(tt.existSvcExpList, tt.existPodList, tt.existNamespaceList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existResExpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(ctx); err != nil {
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ResourceExports but got err = %v", err)
 			}
 			resExpList := &mcv1alpha1.ResourceExportList{}
@@ -451,7 +457,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 	}
 }
 
-func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
+func TestStaleController_CleanUpClusterInfoImports(t *testing.T) {
 	ci := mcv1alpha1.ClusterInfo{
 		ClusterID:   "cluster-a",
 		ServiceCIDR: "10.10.1.0/16",
@@ -504,14 +510,14 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existCIImpList).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(tt.existCIImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonarea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(ctx); err != nil {
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ClusterInfoImport but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -529,107 +535,7 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 	}
 }
 
-func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
-	tests := []struct {
-		name                              string
-		memberClusterAnnounceList         *mcv1alpha1.MemberClusterAnnounceList
-		clusterSet                        *mcv1alpha2.ClusterSetList
-		exceptMemberClusterAnnounceNumber int
-	}{
-		{
-			name:                              "no MemberClusterAnnounce to clean up when there is no resource",
-			clusterSet:                        &mcv1alpha2.ClusterSetList{},
-			memberClusterAnnounceList:         &mcv1alpha1.MemberClusterAnnounceList{},
-			exceptMemberClusterAnnounceNumber: 0,
-		},
-		{
-			name:                              "no MemberClusterAnnounce to clean up when the resource has a valid update time",
-			exceptMemberClusterAnnounceNumber: 1,
-			clusterSet: &mcv1alpha2.ClusterSetList{
-				Items: []mcv1alpha2.ClusterSet{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Name:      "clusterset",
-						},
-						Spec: mcv1alpha2.ClusterSetSpec{},
-					},
-				},
-			},
-			memberClusterAnnounceList: &mcv1alpha1.MemberClusterAnnounceList{
-				Items: []mcv1alpha1.MemberClusterAnnounce{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Name:      "member-cluster-from-cluster-a",
-							Annotations: map[string]string{
-								commonarea.TimestampAnnotationKey: time.Now().Format(time.RFC3339),
-							},
-						},
-						ClusterID: "cluster-a",
-					},
-				},
-			},
-		},
-		{
-			name:                              "clean up outdated MemberClusterAnnounce",
-			exceptMemberClusterAnnounceNumber: 1,
-			clusterSet: &mcv1alpha2.ClusterSetList{
-				Items: []mcv1alpha2.ClusterSet{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Name:      "clusterset",
-						},
-						Spec: mcv1alpha2.ClusterSetSpec{},
-					},
-				},
-			},
-			memberClusterAnnounceList: &mcv1alpha1.MemberClusterAnnounceList{
-				Items: []mcv1alpha1.MemberClusterAnnounce{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Name:      "member-cluster-from-cluster-a",
-							Annotations: map[string]string{
-								commonarea.TimestampAnnotationKey: time.Now().Format(time.RFC3339),
-							},
-						},
-						ClusterID: "cluster-a",
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Name:      "member-cluster-from-cluster-outdated",
-							Annotations: map[string]string{
-								commonarea.TimestampAnnotationKey: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-							},
-						},
-						ClusterID: "cluster-outdated",
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.memberClusterAnnounceList).WithLists(tt.clusterSet).Build()
-
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, LeaderCluster)
-			assert.Equal(t, nil, c.cleanup(ctx))
-
-			memberClusterAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
-			if err := fakeClient.List(context.TODO(), memberClusterAnnounceList, &client.ListOptions{}); err != nil {
-				t.Errorf("Should list MemberClusterAnnounce successfully but got err = %v", err)
-			}
-
-			assert.Equal(t, tt.exceptMemberClusterAnnounceNumber, len(memberClusterAnnounceList.Items))
-		})
-	}
-}
-
-func TestStaleController_CleanupLabelIdentites(t *testing.T) {
+func TestStaleController_CleanUpLabelIdentites(t *testing.T) {
 	normalizedLabelA := "namespace:kubernetes.io/metadata.name=test&pod:app=client"
 	normalizedLabelB := "namespace:kubernetes.io/metadata.name=test&pod:app=db"
 	labelHashA := common.HashLabelIdentity(normalizedLabelA)
@@ -687,14 +593,14 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existLabelIdentityList).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(tt.existLabelIdentityList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
 
-			mcReconciler := member.NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(ca)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, "default", mcReconciler, MemberCluster)
-			if err := c.cleanup(ctx); err != nil {
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale LabelIdentities but got err = %v", err)
 			}
 			ctx := context.TODO()
@@ -710,4 +616,171 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStaleController_CleanupAllWithEmptyClusterSet(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "antrea-mcs", nil)
+
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
+	mcReconciler.SetRemoteCommonArea(commonarea)
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+	if err := c.CleanUp(ctx); err != nil {
+		t.Errorf("StaleController.cleanup() should clean up all stale resources but got err = %v", err)
+	}
+}
+
+func TestCleanUpMCServiceAndServiceImport(t *testing.T) {
+	existingSVCs := &corev1.ServiceList{
+		Items: []corev1.Service{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "svc-a",
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "antrea-mc-svc-b",
+				},
+			},
+		},
+	}
+	existingSVCImports := &k8smcv1alpha1.ServiceImportList{
+		Items: []k8smcv1alpha1.ServiceImport{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "svc-b",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(existingSVCImports, existingSVCs).Build()
+	ctx := context.Background()
+	err := cleanUpMCServicesAndServiceImports(ctx, fakeClient)
+	require.NoError(t, err)
+	actualSvcList := &corev1.ServiceList{}
+	err = fakeClient.List(ctx, actualSvcList)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(actualSvcList.Items))
+
+	actualSvcImpList := &k8smcv1alpha1.ServiceImportList{}
+	err = fakeClient.List(ctx, actualSvcImpList)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(actualSvcImpList.Items))
+}
+
+func TestCleanUpReplicatedACNP(t *testing.T) {
+	acnpList := &v1beta1.ClusterNetworkPolicyList{
+		Items: []v1beta1.ClusterNetworkPolicy{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-1",
+					Annotations: map[string]string{
+						common.AntreaMCACNPAnnotation: "true",
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-2",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(acnpList).Build()
+	ctx := context.Background()
+	err := cleanUpReplicatedACNPs(ctx, fakeClient)
+	require.NoError(t, err)
+
+	actualACNPList := &v1beta1.ClusterNetworkPolicyList{}
+	err = fakeClient.List(ctx, actualACNPList, &client.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(actualACNPList.Items))
+}
+
+func TestCleanUpLabelIdentities(t *testing.T) {
+	labelIdentityList := &mcv1alpha1.LabelIdentityList{
+		Items: []mcv1alpha1.LabelIdentity{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "labelidt-1",
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "labelidt-2",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(labelIdentityList).Build()
+	ctx := context.Background()
+	err := cleanUpLabelIdentities(ctx, fakeClient)
+	require.NoError(t, err)
+
+	actualIdtList := &mcv1alpha1.LabelIdentityList{}
+	err = fakeClient.List(ctx, actualIdtList, &client.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(actualIdtList.Items))
+}
+
+func TestCleanUpClusterInfoImport(t *testing.T) {
+	ciImpList := &mcv1alpha1.ClusterInfoImportList{
+		Items: []mcv1alpha1.ClusterInfoImport{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "cluster-1-import",
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "cluster-2-import",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(ciImpList).Build()
+	ctx := context.Background()
+	err := cleanUpClusterInfoImports(ctx, fakeClient)
+	require.NoError(t, err)
+
+	actualCIImpList := &mcv1alpha1.ClusterInfoImportList{}
+	err = fakeClient.List(ctx, actualCIImpList, &client.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(actualCIImpList.Items))
+}
+
+func TestCleanUpGateway(t *testing.T) {
+	gwList := &mcv1alpha1.GatewayList{
+		Items: []mcv1alpha1.Gateway{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "gw-1",
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(gwList).Build()
+	ctx := context.Background()
+	err := cleanUpGateways(ctx, fakeClient)
+	require.NoError(t, err)
+
+	actualGWList := &mcv1alpha1.ClusterInfoImportList{}
+	err = fakeClient.List(ctx, actualGWList, &client.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(actualGWList.Items))
 }

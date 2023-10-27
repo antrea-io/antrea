@@ -23,7 +23,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
@@ -70,11 +69,13 @@ func runMember(o *Options) error {
 			role:      memberRole},
 		})
 
+	commonAreaCreationCh := make(chan struct{}, 1)
 	clusterSetReconciler := member.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
 		o.EnableStretchedNetworkPolicy,
 		o.ClusterCalimCRDAvailable,
+		commonAreaCreationCh,
 	)
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
@@ -122,15 +123,16 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating Node controller: %v", err)
 	}
 
-	staleController := multiclustercontrollers.NewStaleResCleanupController(
+	staleController := member.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		commonAreaCreationCh,
 		env.GetPodNamespace(),
 		commonAreaGetter,
-		multiclustercontrollers.MemberCluster,
 	)
 
 	go staleController.Run(stopCh)
+
 	// Member runs ResourceImportReconciler from RemoteCommonArea only
 
 	klog.InfoS("Member MC Controller Starting Manager")

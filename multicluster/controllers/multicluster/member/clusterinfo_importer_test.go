@@ -29,6 +29,7 @@ import (
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
@@ -200,16 +201,16 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 			if tt.existingCIImport != nil {
-				fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existingCIImport).Build()
+				fakeClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingCIImport).Build()
 			}
-			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existingCIResImport).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingCIResImport).Build()
 			if tt.isDelete {
-				fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
+				fakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 			}
 			remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", "cluster-d", "default", nil)
-			r := newResourceImportReconciler(fakeClient, scheme, fakeClient, "cluster-d", "default", remoteCluster)
+			r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, "cluster-d", "default", remoteCluster)
 			if tt.existingCIResImport != nil {
 				r.installedResImports.Add(*tt.existingCIResImport)
 			}

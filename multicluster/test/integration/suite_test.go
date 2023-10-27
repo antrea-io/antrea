@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,7 +37,6 @@ import (
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
@@ -131,19 +131,23 @@ var _ = BeforeSuite(func() {
 		Scheme: scheme,
 	})
 	Expect(err).ToNot(HaveOccurred())
+
 	k8sServerURL = testEnv.Config.Host
-	ctx := context.Background()
+	stopCh := signals.RegisterSignalHandlers()
+	ctx, _ := wait.ContextForChannel(stopCh)
 
 	By("Creating MemberClusterSetReconciler")
 	k8sClient.Create(ctx, leaderNS)
 	k8sClient.Create(ctx, testNS)
 	k8sClient.Create(ctx, testNSStale)
+	commonAreaCreationCh := make(chan struct{})
 	clusterSetReconciler := member.NewMemberClusterSetReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
 		LeaderNamespace,
 		false,
 		false,
+		commonAreaCreationCh,
 	)
 	err = clusterSetReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
@@ -162,24 +166,20 @@ var _ = BeforeSuite(func() {
 	// configureClusterSet finishes
 
 	By("Creating StaleController")
-	stopCh := signals.RegisterSignalHandlers()
-	staleController := multiclustercontrollers.NewStaleResCleanupController(
+	staleController := member.NewStaleResCleanupController(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
+		commonAreaCreationCh,
 		"default",
 		clusterSetReconciler,
-		multiclustercontrollers.MemberCluster,
 	)
 
 	go staleController.Run(stopCh)
-	// Make sure to trigger clean up process every 5 seconds
-	// otherwise staleResCleanupController will only run once before test case is ready to run.
-	go func() {
-		for {
-			staleController.Enqueue()
-			time.Sleep(5 * time.Second)
-		}
-	}()
+	// Fake the commonAreaCreation event since the ClusterSet creation is only triggered one time
+	// when the ClusterSet is created, but the stale controller test is not running yet.
+	go wait.UntilWithContext(ctx, func(ctx context.Context) {
+		commonAreaCreationCh <- struct{}{}
+	}, 5*time.Second)
 
 	By("Creating ResourceExportReconciler")
 	resExportReconciler := leader.NewResourceExportReconciler(

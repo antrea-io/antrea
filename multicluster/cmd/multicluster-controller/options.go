@@ -96,9 +96,9 @@ func (o *Options) complete(args []string) error {
 			o.EndpointIPType = ctrlConfig.EndpointIPType
 		}
 		o.EnableStretchedNetworkPolicy = ctrlConfig.EnableStretchedNetworkPolicy
-		klog.InfoS("Using config from file", "config", o.options)
+		klog.InfoS("Using config from file", "config", o.configFile)
 	} else {
-		klog.InfoS("Using default config", "config", o.options)
+		klog.InfoS("Using default config")
 	}
 	return nil
 }

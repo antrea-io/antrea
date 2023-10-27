@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
@@ -82,6 +83,7 @@ var (
 
 func createMockClients(t *testing.T, objects ...client.Object) (*runtime.Scheme, client.Client, *MockMemberClusterStatusManager) {
 	scheme := runtime.NewScheme()
+	mcv1alpha1.AddToScheme(scheme)
 	mcv1alpha2.AddToScheme(scheme)
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(objects...).Build()

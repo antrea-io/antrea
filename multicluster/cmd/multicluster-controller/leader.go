@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
@@ -114,14 +113,13 @@ func runLeader(o *Options) error {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
 
-	staleController := multiclustercontrollers.NewStaleResCleanupController(
+	staleController := leader.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),
-		env.GetPodNamespace(),
-		nil,
-		multiclustercontrollers.LeaderCluster,
 	)
-
+	if err = staleController.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating StaleResCleanupController: %v", err)
+	}
 	go staleController.Run(stopCh)
 
 	klog.InfoS("Leader MC Controller Starting Manager")
