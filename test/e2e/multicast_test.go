@@ -545,7 +545,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 }
 
 func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, senderIdx int, senderPort int, senderGroup string, senderMulticastInterfaces []string) {
-	mcjoinWaitTimeout := defaultTimeout / time.Second
+	mcjoinWaitTimeout := defaultTimeout / time.Second //
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(senderIdx), data.testNamespace, false)
 	defer cleanupFunc()
 	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(senderIdx), data.testNamespace, true)
