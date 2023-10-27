@@ -158,7 +158,8 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetScheme(),
 		clusterSetReconciler,
 		"ClusterIP",
-		false)
+		false,
+		testNamespace)
 	err = svcExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -193,10 +194,34 @@ var _ = BeforeSuite(func() {
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
 		Expect(err).ToNot(HaveOccurred())
 	}()
-	configureClusterSet()
+	configureMemberClusterSet()
+	configureLeaderClusterSet()
 })
 
-func configureClusterSet() {
+func configureMemberClusterSet() {
+	clusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      clusterSetID,
+		},
+		Spec: mcv1alpha2.ClusterSetSpec{
+			ClusterID: LocalClusterID,
+			Leaders: []mcv1alpha2.LeaderClusterInfo{
+				{
+					ClusterID: LocalClusterID,
+					Secret:    "access-token",
+					Server:    k8sServerURL,
+				},
+			},
+			Namespace: LeaderNamespace,
+		},
+	}
+	ctx := context.Background()
+	err := k8sClient.Create(ctx, clusterSet, &client.CreateOptions{})
+	Expect(err == nil).Should(BeTrue())
+}
+
+func configureLeaderClusterSet() {
 	clusterSet := &mcv1alpha2.ClusterSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: LeaderNamespace,

@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,10 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -51,7 +53,7 @@ var (
 		Name:      "nginx",
 	}}
 
-	existSvcExport = &k8smcsv1alpha1.ServiceExport{
+	existSvcExport = &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx",
@@ -60,13 +62,13 @@ var (
 )
 
 func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
-	existSvcResExport := &mcsv1alpha1.ResourceExport{
+	existSvcResExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: common.LeaderNamespace,
 			Name:      getResourceExportName(common.LocalClusterID, nginxReq, "service"),
 		},
 	}
-	existEpResExport := &mcsv1alpha1.ResourceExport{
+	existEpResExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: common.LeaderNamespace,
 			Name:      getResourceExportName(common.LocalClusterID, nginxReq, "endpoints"),
@@ -80,7 +82,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false)
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false, "default")
 	r.installedSvcs.Add(&svcInfo{
 		name:      common.SvcNginx.Name,
 		namespace: common.SvcNginx.Namespace,
@@ -88,7 +90,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
 		t.Errorf("ServiceExport Reconciler should handle delete event successfully but got error = %v", err)
 	} else {
-		epResource := &mcsv1alpha1.ResourceExport{}
+		epResource := &mcv1alpha1.ResourceExport{}
 		err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{
 			Namespace: "default",
 			Name:      "cluster-a-default-nginx-endpoints",
@@ -96,7 +98,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 		if !apierrors.IsNotFound(err) {
 			t.Errorf("Expected not found error but got error = %v", err)
 		}
-		svcResource := &mcsv1alpha1.ResourceExport{}
+		svcResource := &mcv1alpha1.ResourceExport{}
 		err = fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{
 			Namespace: "default",
 			Name:      "cluster-a-default-nginx-service",
@@ -111,7 +113,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	mcsSvc := common.SvcNginx.DeepCopy()
 	mcsSvc.Name = "antrea-mc-nginx"
 	mcsSvc.Annotations = map[string]string{common.AntreaMCServiceAnnotation: "true"}
-	mcsSvcExport := &k8smcsv1alpha1.ServiceExport{
+	mcsSvcExport := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "antrea-mc-nginx",
@@ -120,7 +122,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 
 	nginx0Svc := common.SvcNginx.DeepCopy()
 	nginx0Svc.Name = "nginx0"
-	nginx0SvcExport := &k8smcsv1alpha1.ServiceExport{
+	nginx0SvcExport := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx0",
@@ -132,15 +134,15 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	now := metav1.Now()
 	reason := "service_without_endpoints"
 	message := "the Service has no Endpoints, failed to export"
-	nginx1SvcExportWithStatus := &k8smcsv1alpha1.ServiceExport{
+	nginx1SvcExportWithStatus := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx1",
 		},
-		Status: k8smcsv1alpha1.ServiceExportStatus{
-			Conditions: []k8smcsv1alpha1.ServiceExportCondition{
+		Status: k8smcv1alpha1.ServiceExportStatus{
+			Conditions: []k8smcv1alpha1.ServiceExportCondition{
 				{
-					Type:               k8smcsv1alpha1.ServiceExportValid,
+					Type:               k8smcv1alpha1.ServiceExportValid,
 					Status:             corev1.ConditionFalse,
 					LastTransitionTime: &now,
 					Reason:             &reason,
@@ -168,7 +170,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	nginx3Svc := common.SvcNginx.DeepCopy()
 	nginx3Svc.Name = "nginx3"
 	nginx3Svc.Spec.Type = corev1.ServiceTypeExternalName
-	nginx3SvcExport := &k8smcsv1alpha1.ServiceExport{
+	nginx3SvcExport := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx3",
@@ -196,7 +198,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		Subsets: common.EPNginxSubset,
 	}
 
-	svcExpNoClusterIP := &k8smcsv1alpha1.ServiceExport{
+	svcExpNoClusterIP := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx-no-ip",
@@ -275,13 +277,13 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false)
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false, "default")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(common.TestCtx, tt.req); err != nil {
 				t.Errorf("ServiceExport Reconciler should update ServiceExport status successfully but got error = %v", err)
 			} else {
-				newSvcExport := &k8smcsv1alpha1.ServiceExport{}
+				newSvcExport := &k8smcv1alpha1.ServiceExport{}
 				err := fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: tt.req.Namespace, Name: tt.req.Name}, newSvcExport)
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new ServiceExport successfully but got error = %v", err)
@@ -351,21 +353,21 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(tt.fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			r := NewServiceExportReconciler(tt.fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, tt.endpointSliceEnabled)
+			r := NewServiceExportReconciler(tt.fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, tt.endpointSliceEnabled, "default")
 			if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
 				t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
 			} else {
-				svcResExport := &mcsv1alpha1.ResourceExport{}
+				svcResExport := &mcv1alpha1.ResourceExport{}
 				err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, svcResExport)
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
 				}
-				epResExport := &mcsv1alpha1.ResourceExport{}
+				epResExport := &mcv1alpha1.ResourceExport{}
 				err = fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, epResExport)
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
 				}
-				newSvcExport := &k8smcsv1alpha1.ServiceExport{}
+				newSvcExport := &k8smcv1alpha1.ServiceExport{}
 				if err = tt.fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport); err != nil {
 					t.Errorf("Should get ServiceExport successfully but got error = %v", err)
 				} else {
@@ -423,7 +425,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 		Subsets: common.EPNginxSubset,
 	}
-	re := mcsv1alpha1.ResourceExport{
+	re := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: common.LeaderNamespace,
 			Labels: map[string]string{
@@ -432,7 +434,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 				constants.SourceClusterID: common.LocalClusterID,
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			ClusterID: common.LocalClusterID,
 			Name:      nginxReq.Name,
 			Namespace: nginxReq.Namespace,
@@ -440,12 +442,12 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	existSvcRe := re.DeepCopy()
 	existSvcRe.Name = "cluster-a-default-nginx-service"
-	existSvcRe.Spec.Service = &mcsv1alpha1.ServiceExport{ServiceSpec: corev1.ServiceSpec{}}
+	existSvcRe.Spec.Service = &mcv1alpha1.ServiceExport{ServiceSpec: corev1.ServiceSpec{}}
 	existSvcRe.Spec.Service.ServiceSpec.Ports = []corev1.ServicePort{common.SvcPort80}
 
 	existEpRe := re.DeepCopy()
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
-	existEpRe.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{Subsets: filteredSubsets}
+	existEpRe.Spec.Endpoints = &mcv1alpha1.EndpointsExport{Subsets: filteredSubsets}
 
 	tests := []struct {
 		name              string
@@ -534,13 +536,13 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, false)
+			r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, false, "default")
 			r.installedSvcs.Add(sinfo)
 			r.installedEps.Add(epInfo)
 			if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
 				t.Errorf("ServiceExport Reconciler should update ResourceExports but got error = %v", err)
 			} else {
-				svcResExport := &mcsv1alpha1.ResourceExport{}
+				svcResExport := &mcv1alpha1.ResourceExport{}
 				err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, svcResExport)
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
@@ -550,7 +552,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 						t.Errorf("Expected Service ports are %v but got %v", tt.expectedPorts, ports)
 					}
 				}
-				epResExport := &mcsv1alpha1.ResourceExport{}
+				epResExport := &mcv1alpha1.ResourceExport{}
 				err = fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, epResExport)
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
@@ -640,4 +642,75 @@ func Test_endpointSliceMapFunc(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClusterSetMapFunc_ServiceExport(t *testing.T) {
+	clusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test",
+		},
+		Status: mcv1alpha2.ClusterSetStatus{
+			Conditions: []mcv1alpha2.ClusterSetCondition{
+				{
+					Status: corev1.ConditionTrue,
+					Type:   mcv1alpha2.ClusterSetReady,
+				},
+			},
+		},
+	}
+	clusterSet2 := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test-deleted",
+		},
+	}
+	svcExport1 := k8smcv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx",
+		},
+	}
+	svcExport2 := k8smcv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "kube-system",
+			Name:      "web",
+		},
+	}
+	serviceExports := &k8smcv1alpha1.ServiceExportList{
+		Items: []k8smcv1alpha1.ServiceExport{
+			svcExport1, svcExport2,
+		},
+	}
+	expectedReqs := []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name:      svcExport1.GetName(),
+				Namespace: svcExport1.GetNamespace(),
+			},
+		},
+		{
+			NamespacedName: types.NamespacedName{
+				Name:      svcExport2.GetName(),
+				Namespace: svcExport2.GetNamespace(),
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(serviceExports).Build()
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, clusterSet.Namespace)
+	requests := r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, expectedReqs, requests)
+
+	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "mismatch_ns")
+	requests = r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, []reconcile.Request{}, requests)
+
+	// non-existing ClusterSet
+	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "default")
+	r.installedSvcs.Add(&svcInfo{name: "nginx-stale", namespace: "default"})
+	r.installedEps.Add(&epInfo{name: "nginx-stale", namespace: "default"})
+	requests = r.clusterSetMapFunc(clusterSet2)
+	assert.Equal(t, []reconcile.Request{}, requests)
+	assert.Equal(t, 0, len(r.installedSvcs.List()))
+	assert.Equal(t, 0, len(r.installedEps.List()))
 }

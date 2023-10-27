@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -176,7 +177,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler)
+			r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler, "default")
 			go r.Run(stopCh)
 
 			for _, p := range tt.existingPods.Items {
@@ -244,7 +245,7 @@ func TestNamespaceMapFunc(t *testing.T) {
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
 
-	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler)
+	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler, "default")
 	actualReq := r.namespaceMapFunc(ns)
 	assert.ElementsMatch(t, expReq, actualReq)
 }
@@ -285,4 +286,75 @@ func TestGetNormalizedLabel(t *testing.T) {
 			assert.Equal(t, tt.expNormalizedLabel, normalizedLabel)
 		})
 	}
+}
+
+func TestClusterSetMapFunc_LabelIdentity(t *testing.T) {
+	clusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test",
+		},
+		Status: mcv1alpha2.ClusterSetStatus{
+			Conditions: []mcv1alpha2.ClusterSetCondition{
+				{
+					Status: v1.ConditionTrue,
+					Type:   mcv1alpha2.ClusterSetReady,
+				},
+			},
+		},
+	}
+	clusterSet2 := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test-stale",
+		},
+	}
+	pod1 := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "pod1",
+		},
+	}
+	pod2 := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "kube-system",
+			Name:      "pod2",
+		},
+	}
+	pods := &v1.PodList{
+		Items: []v1.Pod{
+			pod1, pod2,
+		},
+	}
+	expectedReqs := []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name:      pod1.GetName(),
+				Namespace: pod1.GetNamespace(),
+			},
+		},
+		{
+			NamespacedName: types.NamespacedName{
+				Name:      pod2.GetName(),
+				Namespace: pod2.GetNamespace(),
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(pods).Build()
+	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, clusterSet.Namespace)
+	requests := r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, expectedReqs, requests)
+
+	r = NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, "mismatch_ns")
+	requests = r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, []reconcile.Request{}, requests)
+
+	// non-existing ClusterSet
+	r = NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, "default")
+	r.labelToPodsCache["label"] = sets.New[string]("default/nginx")
+	r.podLabelCache["default/nginx"] = "label"
+	requests = r.clusterSetMapFunc(clusterSet2)
+	assert.Equal(t, []reconcile.Request{}, requests)
+	assert.Equal(t, 0, len(r.labelToPodsCache))
+	assert.Equal(t, 0, len(r.labelToPodsCache))
 }
