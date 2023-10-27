@@ -83,7 +83,7 @@ type MulticlusterConfig struct {
 	// Enable Multi-cluster NetworkPolicy, including ingress rules that select peers from all
 	// clusters in a ClusterSet, and egress rules that select Multi-cluster Services.
 	EnableStretchedNetworkPolicy bool `yaml:"enableStretchedNetworkPolicy,omitempty"`
-	// The Namespace where the Antrea Multi-cluster controller is running.
+	// The Namespace where the Antrea Multi-cluster Controller is running.
 	// The default is antrea-agent's Namespace.
 	Namespace string `yaml:"namespace,omitempty"`
 }

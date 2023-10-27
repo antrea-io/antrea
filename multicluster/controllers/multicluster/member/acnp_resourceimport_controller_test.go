@@ -123,8 +123,8 @@ var (
 )
 
 func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(securityOpsTier).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(acnpResImport, acnpResImportNoMatchingTier, acnpResImportNoSpec).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(securityOpsTier).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(acnpResImport, acnpResImportNoMatchingTier, acnpResImportNoSpec).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
 	tests := []struct {
@@ -152,7 +152,7 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 			expectedSuccess: false,
 		},
 	}
-	r := newResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
+	r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -188,11 +188,11 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingACNP).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
-	r := newResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
+	r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*acnpResImport)
 
 	if _, err := r.Reconcile(ctx, acnpImpReq); err != nil {
@@ -301,11 +301,11 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP1, existingACNP3, existingACNP4, securityOpsTier).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(acnpResImport, updatedResImport2, updatedResImport3).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingACNP1, existingACNP3, existingACNP4, securityOpsTier).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(acnpResImport, updatedResImport2, updatedResImport3).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
-	r := newResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
+	r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*acnpResImport)
 	r.installedResImports.Add(*acnpResImportNoMatchingTier)
 	r.installedResImports.Add(*updatedResImport3)

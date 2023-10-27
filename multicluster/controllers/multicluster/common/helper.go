@@ -16,11 +16,22 @@ package common
 import (
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const labelIdentityHashLength = 16
+
+// CleanUpRetry is the retry when the clean up method
+// failed to clean up all stale resources.
+var CleanUpRetry = wait.Backoff{
+	Steps:    12,
+	Duration: 500 * time.Millisecond,
+	Factor:   2.0,
+	Jitter:   1,
+}
 
 // TODO: Use NamespacedName stringer method instead of this. e.g. nsName.String()
 func NamespacedName(namespace, name string) string {

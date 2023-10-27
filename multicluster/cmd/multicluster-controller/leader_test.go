@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -59,6 +60,7 @@ func initMockManager(mockManager *mocks.MockManager) {
 	mockManager.EXPECT().Start(gomock.Any()).Return(nil).AnyTimes()
 	mockManager.EXPECT().GetConfig().Return(&rest.Config{}).AnyTimes()
 	mockManager.EXPECT().GetRESTMapper().Return(&meta.DefaultRESTMapper{}).AnyTimes()
+	mockManager.EXPECT().GetFieldIndexer().Return(&informertest.FakeInformers{}).AnyTimes()
 }
 
 func TestRunLeader(t *testing.T) {

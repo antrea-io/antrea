@@ -32,7 +32,6 @@ docs/multicluster/architecture.md
 docs/multicluster/policy-only-mode.md
 docs/multicluster/quick-start.md
 docs/multicluster/upgrade.md
-docs/multicluster/user-guide.md
 docs/network-requirements.md
 docs/noencap-hybrid-modes.md
 docs/octant-plugin-installation.md
