@@ -230,10 +230,10 @@ Antrea provides a pre-built OVS package which contains test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try the
 Antrea on Windows, this package can be used for testing. We also provide a helper
 script `Install-OVS.ps1` to install the OVS driver and register userspace binaries
-as services. 
+as services.
 
 If you want to containerize OVS with an unsigned kernel driver, you must
-pre-install the driver on the worker node before joining cluster. Hence, 
+pre-install the driver on the worker node before joining cluster. Hence,
 you need to run the `Install-OVS.ps1` script to install only the driver like this:
 
 ```powershell
@@ -351,7 +351,7 @@ The script `Prepare-AntreaAgent.ps1` performs following tasks:
     This script starts OVS services on the Node if they are not running. This step
     needs to be skipped in case of OVS containerization. Hence, you need to specify
     the parameter `RunOVSServices` as false.
-    
+
     ```powershell
     & C:\k\antrea\Prepare-AntreaAgent.ps1 -RunOVSServices $false
     ```
