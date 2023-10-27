@@ -40,7 +40,7 @@ require (
 	github.com/miekg/dns v1.1.56
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/onsi/gomega v1.28.1
+	github.com/onsi/gomega v1.29.0
 	github.com/pkg/sftp v1.13.6
 	github.com/prometheus/client_golang v1.17.0
 	github.com/prometheus/common v0.45.0
