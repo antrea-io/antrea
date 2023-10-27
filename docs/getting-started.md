@@ -54,7 +54,7 @@ should work with Antrea, starting with version 7.4.
 
 In case a node does not have a supported OVS module installed,
 you can install it following the instructions at:
-[Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install).
+[Installing Open vSwitch](https://docs.openvswitch.org/en/latest/intro/install/).
 Please be aware that the `vport-stt` module is not in the Linux tree and needs to be
 built from source, please build and load it manually before STT tunneling is enabled.
 

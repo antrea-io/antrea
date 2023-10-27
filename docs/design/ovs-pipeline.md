@@ -34,7 +34,7 @@
   more information.
 * *conntrack*: a connection tracking module that can be used by OVS to match on
   the state of a TCP, UDP, ICMP, etc., connection. See the [OVS Conntrack
-  tutorial](http://docs.openvswitch.org/en/latest/tutorials/ovs-conntrack/) for
+  tutorial](https://docs.openvswitch.org/en/latest/tutorials/ovs-conntrack/) for
   more information.
 * *dmac table*: a traditional L2 switch has a "dmac" table which maps
   learned destination MAC address to the appropriate egress port. It is often
@@ -42,7 +42,7 @@
   address and initiate MAC learning if the address is unknown).
 * *group action*: an action which is used to process forwarding decisions
   on multiple OVS ports. Examples include: load-balancing, multicast, and active/standby.
-  See [OVS group action](https://docs.openvswitch.org/en/latest/ref/ovs-actions.7/?highlight=group#the-group-action)
+  See [OVS group action](https://docs.openvswitch.org/en/latest/ref/ovs-actions.7/#the-group-action)
   for more information.
 * *IN_PORT action*: an action to output the packet to the port on which it was
   received. This is the only standard way to output the packet to the input port.
@@ -373,11 +373,11 @@ specific to conntrack and has less overhead.
 
 After invoking the ct action, packets will be in the "tracked" (`trk`) state and
 all [connection tracking
-fields](http://www.openvswitch.org//support/dist-docs/ovs-fields.7.txt) will be
+fields](https://www.openvswitch.org/support/dist-docs/ovs-fields.7.txt) will be
 set to the correct value. Packets will then move on to [ConntrackStateTable].
 
 Refer to [this
-document](http://docs.openvswitch.org/en/latest/tutorials/ovs-conntrack/) for
+document](https://docs.openvswitch.org/en/latest/tutorials/ovs-conntrack/) for
 more information on connection tracking in OVS.
 
 ### ConntrackStateTable (31)

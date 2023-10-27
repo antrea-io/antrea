@@ -74,7 +74,7 @@ the Windows Nodes in the demo.
   capabilities required by Hyper-V, you could try the workaround
   described in the [Known issues](#Known-issues) section.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
-* [Install OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/)
+* [Install OVS](https://docs.openvswitch.org/en/latest/intro/install/windows/)
   and configure the daemons as Windows service.
   - The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
   - If OVS driver is not signed, please refer to the Windows doc about how to
