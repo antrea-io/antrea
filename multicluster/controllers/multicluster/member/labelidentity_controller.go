@@ -41,7 +41,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -56,6 +57,7 @@ type (
 		commonAreaMutex  sync.Mutex
 		commonAreaGetter commonarea.RemoteCommonAreaGetter
 		remoteCommonArea commonarea.RemoteCommonArea
+		namespace        string
 		// labelMutex prevents concurrent access to labelToPodsCache and podLabelCache.
 		// It also prevents concurrent updates to labelExportUpdatesInProgress.
 		labelMutex sync.RWMutex
@@ -73,10 +75,12 @@ type (
 func NewLabelIdentityReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
-	commonAreaGetter commonarea.RemoteCommonAreaGetter) *LabelIdentityReconciler {
+	commonAreaGetter commonarea.RemoteCommonAreaGetter,
+	namespace string) *LabelIdentityReconciler {
 	return &LabelIdentityReconciler{
 		Client:           client,
 		Scheme:           scheme,
+		namespace:        namespace,
 		commonAreaGetter: commonAreaGetter,
 		labelToPodsCache: map[string]sets.Set[string]{},
 		podLabelCache:    map[string]string{},
@@ -89,8 +93,8 @@ func NewLabelIdentityReconciler(
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling Pod for label identity", "pod", req.NamespacedName)
-	if requeue := r.checkRemoteCommonArea(); requeue {
-		return ctrl.Result{Requeue: true}, nil
+	if skip := r.checkRemoteCommonArea(); skip {
+		return ctrl.Result{}, nil
 	}
 	var pod v1.Pod
 	var ns v1.Namespace
@@ -130,15 +134,49 @@ func (r *LabelIdentityReconciler) checkRemoteCommonArea() bool {
 // SetupWithManager sets up the controller with the Manager.
 func (r *LabelIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1.Pod{}).
-		WithEventFilter(predicate.LabelChangedPredicate{}).
+		For(&v1.Pod{}, builder.WithPredicates(predicate.LabelChangedPredicate{})).
 		Watches(&source.Kind{Type: &v1.Namespace{}},
 			handler.EnqueueRequestsFromMapFunc(r.namespaceMapFunc),
 			builder.WithPredicates(predicate.LabelChangedPredicate{})).
+		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}},
+			handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.LabelIdentityWorkerCount,
 		}).
 		Complete(r)
+}
+
+func (r *LabelIdentityReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	requests := []reconcile.Request{}
+	if a.GetNamespace() != r.namespace {
+		return requests
+	}
+	ctx := context.TODO()
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	if err == nil {
+		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == v1.ConditionTrue {
+			podList := &v1.PodList{}
+			r.Client.List(ctx, podList)
+			requests = make([]reconcile.Request, len(podList.Items))
+			for i, pod := range podList.Items {
+				podNamespacedName := types.NamespacedName{
+					Name:      pod.GetName(),
+					Namespace: pod.GetNamespace(),
+				}
+				requests[i] = reconcile.Request{
+					NamespacedName: podNamespacedName,
+				}
+			}
+		}
+	} else if apierrors.IsNotFound(err) {
+		// All auto-generated resources will be deleted by the ClusterSet controller when a ClusterSet is
+		// deleted, so reset caches here.
+		r.labelToPodsCache = map[string]sets.Set[string]{}
+		r.podLabelCache = map[string]string{}
+	}
+	return requests
 }
 
 // namespaceMapFunc handles Namespace update events (Namespace label change) by enqueuing
@@ -288,7 +326,7 @@ func (r *LabelIdentityReconciler) createLabelIdentityResExport(ctx context.Conte
 
 // deleteLabelIdentityResExport deletes a ResourceExport for a stale label.
 func (r *LabelIdentityReconciler) deleteLabelIdentityResExport(ctx context.Context, labelToDelete string) error {
-	labelResExport := &mcsv1alpha1.ResourceExport{
+	labelResExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResourceExportNameForLabelIdentity(r.localClusterID, labelToDelete),
 			Namespace: r.remoteCommonArea.GetNamespace(),
@@ -299,8 +337,8 @@ func (r *LabelIdentityReconciler) deleteLabelIdentityResExport(ctx context.Conte
 	return client.IgnoreNotFound(err)
 }
 
-func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(name, normalizedLabel string) *mcsv1alpha1.ResourceExport {
-	return &mcsv1alpha1.ResourceExport{
+func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(name, normalizedLabel string) *mcv1alpha1.ResourceExport {
+	return &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: r.remoteCommonArea.GetNamespace(),
@@ -309,10 +347,10 @@ func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(name, normalize
 				constants.SourceClusterID: r.localClusterID,
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			ClusterID: r.localClusterID,
 			Kind:      constants.LabelIdentityKind,
-			LabelIdentity: &mcsv1alpha1.LabelIdentityExport{
+			LabelIdentity: &mcv1alpha1.LabelIdentityExport{
 				NormalizedLabel: normalizedLabel,
 			},
 		},

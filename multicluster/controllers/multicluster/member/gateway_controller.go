@@ -19,17 +19,23 @@ package member
 import (
 	"context"
 
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -74,11 +80,14 @@ func NewGatewayReconciler(
 
 func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling Gateway", "gateway", req.NamespacedName)
-	var err error
 	var commonArea commonarea.RemoteCommonArea
-	commonArea, r.localClusterID, err = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
+	// TODO: there is a possibility that the ClusterSet is to be deleted after getting the commonArea,
+	// then there might be new ResourceExports created in the leader after the member cluster
+	// is removed from the ClusterSet. We need to handle such corner cases in the future release.
+	commonArea, r.localClusterID, _ = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
 	if commonArea == nil {
-		return ctrl.Result{Requeue: true}, err
+		klog.InfoS("Skip reconciling Gateway since there is no connection to the leader")
+		return ctrl.Result{}, nil
 	}
 	r.leaderNamespace = commonArea.GetNamespace()
 
@@ -87,15 +96,15 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		Name:      resExportName,
 		Namespace: r.leaderNamespace,
 	}
-	resExport := &mcsv1alpha1.ResourceExport{
+	resExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      resExportName,
 			Namespace: r.leaderNamespace,
 		},
 	}
 
-	createOrUpdate := func(gateway *mcsv1alpha1.Gateway) error {
-		existingResExport := &mcsv1alpha1.ResourceExport{}
+	createOrUpdate := func(gateway *mcv1alpha1.Gateway) error {
+		existingResExport := &mcv1alpha1.ResourceExport{}
 		err := commonArea.Get(ctx, resExportNamespacedName, existingResExport)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
@@ -114,7 +123,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return nil
 	}
 
-	gw := &mcsv1alpha1.Gateway{}
+	gw := &mcv1alpha1.Gateway{}
 	if err := r.Client.Get(ctx, req.NamespacedName, gw); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
@@ -132,8 +141,8 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.Request,
-	commonArea commonarea.RemoteCommonArea, existingResExport *mcsv1alpha1.ResourceExport, gw *mcsv1alpha1.Gateway) error {
-	resExportSpec := mcsv1alpha1.ResourceExportSpec{
+	commonArea commonarea.RemoteCommonArea, existingResExport *mcv1alpha1.ResourceExport, gw *mcv1alpha1.Gateway) error {
+	resExportSpec := mcv1alpha1.ResourceExportSpec{
 		Kind:      constants.ClusterInfoKind,
 		ClusterID: r.localClusterID,
 		Name:      r.localClusterID,
@@ -150,15 +159,15 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 }
 
 func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.Request,
-	commonArea commonarea.RemoteCommonArea, gateway *mcsv1alpha1.Gateway) error {
-	resExportSpec := mcsv1alpha1.ResourceExportSpec{
+	commonArea commonarea.RemoteCommonArea, gateway *mcv1alpha1.Gateway) error {
+	resExportSpec := mcv1alpha1.ResourceExportSpec{
 		Kind:      constants.ClusterInfoKind,
 		ClusterID: r.localClusterID,
 		Name:      r.localClusterID,
 		Namespace: r.namespace,
 	}
 	resExportSpec.ClusterInfo = r.getClusterInfo(gateway)
-	resExport := &mcsv1alpha1.ResourceExport{
+	resExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: r.leaderNamespace,
 			Name:      common.NewClusterInfoResourceExportName(r.localClusterID),
@@ -176,7 +185,9 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&mcsv1alpha1.Gateway{}).
+		For(&mcv1alpha1.Gateway{}).
+		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
 			// TODO: add a lock for r.serviceCIDR and r.localClusterID if
 			//  there is any plan to increase this concurrent number.
@@ -185,19 +196,45 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *GatewayReconciler) getClusterInfo(gateway *mcsv1alpha1.Gateway) *mcsv1alpha1.ClusterInfo {
-	clusterInfo := &mcsv1alpha1.ClusterInfo{
+func (r *GatewayReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	requests := []reconcile.Request{}
+	if a.GetNamespace() != r.namespace {
+		return requests
+	}
+	ctx := context.TODO()
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	if err == nil {
+		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == v1.ConditionTrue {
+			gwList := &mcv1alpha1.GatewayList{}
+			r.Client.List(ctx, gwList, &client.ListOptions{Namespace: r.namespace})
+			requests = make([]reconcile.Request, len(gwList.Items))
+			for i, gw := range gwList.Items {
+				requests[i] = reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Namespace: gw.Namespace,
+						Name:      gw.Name,
+					},
+				}
+			}
+		}
+	}
+	return requests
+}
+
+func (r *GatewayReconciler) getClusterInfo(gateway *mcv1alpha1.Gateway) *mcv1alpha1.ClusterInfo {
+	clusterInfo := &mcv1alpha1.ClusterInfo{
 		ClusterID:   r.localClusterID,
 		ServiceCIDR: gateway.ServiceCIDR,
 		PodCIDRs:    r.podCIDRs,
-		GatewayInfos: []mcsv1alpha1.GatewayInfo{
+		GatewayInfos: []mcv1alpha1.GatewayInfo{
 			{
 				GatewayIP: gateway.GatewayIP,
 			},
 		},
 	}
 	if gateway.WireGuard != nil && gateway.WireGuard.PublicKey != "" {
-		clusterInfo.WireGuard = &mcsv1alpha1.WireGuardInfo{
+		clusterInfo.WireGuard = &mcv1alpha1.WireGuardInfo{
 			PublicKey: gateway.WireGuard.PublicKey,
 		}
 	}

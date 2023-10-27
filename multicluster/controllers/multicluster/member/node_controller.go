@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,28 +29,61 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 var (
 	ServiceCIDRDiscoverFn = common.DiscoverServiceCIDRByInvalidServiceCreation
+
+	statusReadyPredicateFunc = func(e event.UpdateEvent) bool {
+		if e.ObjectOld == nil || e.ObjectNew == nil {
+			return false
+		}
+		oldClusterSet := e.ObjectOld.(*mcv1alpha2.ClusterSet)
+		newClusterSet := e.ObjectNew.(*mcv1alpha2.ClusterSet)
+		oldConditionSize := len(oldClusterSet.Status.Conditions)
+		newConditionSize := len(newClusterSet.Status.Conditions)
+		if oldConditionSize == 0 && newConditionSize > 0 && newClusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
+			return true
+		}
+		if oldConditionSize > 0 && newConditionSize > 0 &&
+			(oldClusterSet.Status.Conditions[0].Status == corev1.ConditionFalse || oldClusterSet.Status.Conditions[0].Status == corev1.ConditionUnknown) &&
+			newClusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
+			return true
+		}
+		return false
+	}
+
+	statusReadyPredicate = predicate.Funcs{
+		UpdateFunc: statusReadyPredicateFunc,
+	}
 )
 
 type (
 	// NodeReconciler is for member cluster only.
 	NodeReconciler struct {
 		client.Client
-		Scheme            *runtime.Scheme
-		namespace         string
-		precedence        mcsv1alpha1.Precedence
-		gatewayCandidates map[string]bool
-		activeGateway     string
-		serviceCIDR       string
-		initialized       bool
+		Scheme             *runtime.Scheme
+		namespace          string
+		precedence         mcv1alpha1.Precedence
+		gatewayCandidates  map[string]bool
+		activeGatewayMutex sync.Mutex
+		commonAreaGetter   commonarea.RemoteCommonAreaGetter
+		activeGateway      string
+		serviceCIDR        string
+		initialized        bool
 	}
 )
 
@@ -63,9 +97,10 @@ func NewNodeReconciler(
 	scheme *runtime.Scheme,
 	namespace string,
 	serviceCIDR string,
-	precedence mcsv1alpha1.Precedence) *NodeReconciler {
+	precedence mcv1alpha1.Precedence,
+	commonAreaGetter commonarea.RemoteCommonAreaGetter) *NodeReconciler {
 	if string(precedence) == "" {
-		precedence = mcsv1alpha1.PrecedenceInternal
+		precedence = mcv1alpha1.PrecedenceInternal
 	}
 	reconciler := &NodeReconciler{
 		Client:            client,
@@ -74,6 +109,7 @@ func NewNodeReconciler(
 		serviceCIDR:       serviceCIDR,
 		precedence:        precedence,
 		gatewayCandidates: make(map[string]bool),
+		commonAreaGetter:  commonAreaGetter,
 	}
 	return reconciler
 }
@@ -84,6 +120,13 @@ func NewNodeReconciler(
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=gateways/finalizers,verbs=update
 
 func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var commonArea commonarea.RemoteCommonArea
+	commonArea, _, _ = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
+	if commonArea == nil {
+		klog.InfoS("Skip reconciling Gateway since there is no connection to the leader")
+		return ctrl.Result{}, nil
+	}
+
 	klog.V(2).InfoS("Reconciling Node", "node", req.Name)
 	if !r.initialized {
 		if err := r.initialize(); err != nil {
@@ -91,13 +134,15 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		}
 		r.initialized = true
 	}
-	gw := &mcsv1alpha1.Gateway{
+	gw := &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: r.namespace,
 		},
 	}
 
+	r.activeGatewayMutex.Lock()
+	defer r.activeGatewayMutex.Unlock()
 	noActiveGateway := r.activeGateway == ""
 	isActiveGateway := r.activeGateway == req.Name
 	stillGatewayNode := false
@@ -161,7 +206,7 @@ func (r *NodeReconciler) initialize() error {
 		return err
 	}
 
-	gwList := &mcsv1alpha1.GatewayList{}
+	gwList := &mcv1alpha1.GatewayList{}
 	if err := r.Client.List(ctx, gwList, &client.ListOptions{}); err != nil {
 		return err
 	}
@@ -173,7 +218,7 @@ func (r *NodeReconciler) initialize() error {
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
-			staleGateway := &mcsv1alpha1.Gateway{
+			staleGateway := &mcv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: r.namespace,
 					Name:      existingGWName},
@@ -194,8 +239,8 @@ func (r *NodeReconciler) initialize() error {
 	return nil
 }
 
-func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mcsv1alpha1.Gateway) error {
-	existingGW := &mcsv1alpha1.Gateway{}
+func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mcv1alpha1.Gateway) error {
+	existingGW := &mcv1alpha1.Gateway{}
 	// TODO: cache might be stale. Need to revisit here and other reconcilers to
 	// check if we can improve this with 'Owns' or other methods.
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: newGateway.Name, Namespace: r.namespace}, existingGW); err != nil {
@@ -222,7 +267,7 @@ func (r *NodeReconciler) updateActiveGateway(ctx context.Context, newGateway *mc
 
 // recreateActiveGateway will delete the existing Gateway CR and create a new Gateway
 // from the pool of Gateway candidates.
-func (r *NodeReconciler) recreateActiveGateway(ctx context.Context, gateway *mcsv1alpha1.Gateway) error {
+func (r *NodeReconciler) recreateActiveGateway(ctx context.Context, gateway *mcv1alpha1.Gateway) error {
 	err := r.Client.Delete(ctx, gateway, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
@@ -241,8 +286,8 @@ func (r *NodeReconciler) recreateActiveGateway(ctx context.Context, gateway *mcs
 
 // getValidGatewayFromCandidates picks a valid Node from Gateway candidates and
 // creates a Gateway. It returns no error if no good Gateway candidate.
-func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcsv1alpha1.Gateway, error) {
-	var activeGateway *mcsv1alpha1.Gateway
+func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcv1alpha1.Gateway, error) {
+	var activeGateway *mcv1alpha1.Gateway
 	var internalIP, gwIP string
 	var err error
 
@@ -257,7 +302,7 @@ func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcsv1alpha1.Gateway, 
 				continue
 			}
 
-			activeGateway = &mcsv1alpha1.Gateway{
+			activeGateway = &mcv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      gatewayNode.Name,
 					Namespace: r.namespace,
@@ -276,8 +321,12 @@ func (r *NodeReconciler) getValidGatewayFromCandidates() (*mcsv1alpha1.Gateway, 
 	return nil, nil
 }
 
-func (r *NodeReconciler) createGateway(gateway *mcsv1alpha1.Gateway) error {
+func (r *NodeReconciler) createGateway(gateway *mcv1alpha1.Gateway) error {
 	if err := r.Client.Create(context.Background(), gateway, &client.CreateOptions{}); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			r.activeGateway = gateway.Name
+			return nil
+		}
 		return err
 	}
 	r.activeGateway = gateway.Name
@@ -288,12 +337,12 @@ func (r *NodeReconciler) getGatawayNodeIP(node *corev1.Node) (string, string, er
 	var gatewayIP, internalIP string
 	for _, addr := range node.Status.Addresses {
 		if addr.Type == corev1.NodeInternalIP {
-			if r.precedence == mcsv1alpha1.PrecedencePrivate || r.precedence == mcsv1alpha1.PrecedenceInternal {
+			if r.precedence == mcv1alpha1.PrecedencePrivate || r.precedence == mcv1alpha1.PrecedenceInternal {
 				gatewayIP = addr.Address
 			}
 			internalIP = addr.Address
 		}
-		if (r.precedence == mcsv1alpha1.PrecedencePublic || r.precedence == mcsv1alpha1.PrecedenceExternal) &&
+		if (r.precedence == mcv1alpha1.PrecedencePublic || r.precedence == mcv1alpha1.PrecedenceExternal) &&
 			addr.Type == corev1.NodeExternalIP {
 			gatewayIP = addr.Address
 		}
@@ -324,10 +373,45 @@ func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
+		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}},
+			handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(r)
+}
+
+func (r *NodeReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	requests := []reconcile.Request{}
+	if a.GetNamespace() != r.namespace {
+		return requests
+	}
+	ctx := context.TODO()
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	if err == nil {
+		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
+			nodeList := &corev1.NodeList{}
+			r.Client.List(ctx, nodeList)
+			for _, n := range nodeList.Items {
+				if _, ok := n.Annotations[common.GatewayAnnotation]; ok {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name: n.GetName(),
+						},
+					})
+				}
+			}
+		}
+	} else if apierrors.IsNotFound(err) {
+		r.activeGatewayMutex.Lock()
+		defer r.activeGatewayMutex.Unlock()
+		// All auto-generated resources will be deleted by the ClusterSet controller when a ClusterSet is
+		// deleted, so here we can set the activeGateway to empty directly.
+		r.activeGateway = ""
+	}
+	return requests
 }
 
 func isReadyNode(node *corev1.Node) bool {

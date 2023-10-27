@@ -54,18 +54,20 @@ func runMember(o *Options) error {
 	if err != nil {
 		return err
 	}
-
+	mgrClient := mgr.GetClient()
+	mgrScheme := mgr.GetScheme()
+	podNamespace := env.GetPodNamespace()
 	stopCh := signals.RegisterSignalHandlers()
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-gateway",
 		&webhook.Admission{Handler: &gatewayValidator{
-			Client:    mgr.GetClient(),
-			namespace: env.GetPodNamespace()}})
+			Client:    mgrClient,
+			namespace: podNamespace}})
 
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
-			Client:    mgr.GetClient(),
-			namespace: env.GetPodNamespace(),
+			Client:    mgrClient,
+			namespace: podNamespace,
 			role:      memberRole},
 		})
 
@@ -83,20 +85,22 @@ func runMember(o *Options) error {
 
 	commonAreaGetter := clusterSetReconciler
 	svcExportReconciler := member.NewServiceExportReconciler(
-		mgr.GetClient(),
-		mgr.GetScheme(),
+		mgrClient,
+		mgrScheme,
 		commonAreaGetter,
 		o.EndpointIPType,
 		o.EnableEndpointSlice,
+		podNamespace,
 	)
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
 	if o.EnableStretchedNetworkPolicy {
 		labelIdentityReconciler := member.NewLabelIdentityReconciler(
-			mgr.GetClient(),
-			mgr.GetScheme(),
-			commonAreaGetter)
+			mgrClient,
+			mgrScheme,
+			commonAreaGetter,
+			podNamespace)
 		if err = labelIdentityReconciler.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("error creating LabelIdentity controller: %v", err)
 		}
@@ -104,9 +108,9 @@ func runMember(o *Options) error {
 	}
 
 	gwReconciler := member.NewGatewayReconciler(
-		mgr.GetClient(),
-		mgr.GetScheme(),
-		env.GetPodNamespace(),
+		mgrClient,
+		mgrScheme,
+		podNamespace,
 		opts.PodCIDRs,
 		commonAreaGetter)
 	if err = gwReconciler.SetupWithManager(mgr); err != nil {
@@ -114,11 +118,12 @@ func runMember(o *Options) error {
 	}
 
 	nodeReconciler := member.NewNodeReconciler(
-		mgr.GetClient(),
-		mgr.GetScheme(),
-		env.GetPodNamespace(),
+		mgrClient,
+		mgrScheme,
+		podNamespace,
 		opts.ServiceCIDR,
-		opts.GatewayIPPrecedence)
+		opts.GatewayIPPrecedence,
+		commonAreaGetter)
 	if err = nodeReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating Node controller: %v", err)
 	}

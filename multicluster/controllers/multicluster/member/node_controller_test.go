@@ -26,10 +26,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 var (
@@ -37,8 +40,8 @@ var (
 	node2           *corev1.Node
 	node3           *corev1.Node
 	node4           *corev1.Node
-	updatedGateway2 *mcsv1alpha1.Gateway
-	gateway3        *mcsv1alpha1.Gateway
+	updatedGateway2 *mcv1alpha1.Gateway
+	gateway3        *mcv1alpha1.Gateway
 )
 
 func initializeCommonData() {
@@ -98,7 +101,7 @@ func initializeCommonData() {
 		common.GatewayIPAnnotation: "invalid-gatewayip",
 	}
 
-	updatedGateway2 = &mcsv1alpha1.Gateway{
+	updatedGateway2 = &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "node-2",
 			Namespace: "default",
@@ -137,9 +140,9 @@ func TestNodeReconciler(t *testing.T) {
 		name          string
 		nodes         []*corev1.Node
 		req           reconcile.Request
-		precedence    mcsv1alpha1.Precedence
-		existingGW    *mcsv1alpha1.Gateway
-		expectedGW    *mcsv1alpha1.Gateway
+		precedence    mcv1alpha1.Precedence
+		existingGW    *mcv1alpha1.Gateway
+		expectedGW    *mcv1alpha1.Gateway
 		activeGateway string
 		candidates    map[string]bool
 		isDelete      bool
@@ -149,14 +152,14 @@ func TestNodeReconciler(t *testing.T) {
 			nodes:      []*corev1.Node{node1},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Name: node1.Name}},
 			expectedGW: &gwNode1,
-			precedence: mcsv1alpha1.PrecedencePublic,
+			precedence: mcv1alpha1.PrecedencePublic,
 		},
 		{
 			name:       "update a Gateway successfully by changing GatewayIP",
 			nodes:      []*corev1.Node{&node1WithIPAnnotation},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Name: node1.Name}},
 			existingGW: &gwNode1,
-			expectedGW: &mcsv1alpha1.Gateway{
+			expectedGW: &mcv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node-1",
 					Namespace: "default",
@@ -165,7 +168,7 @@ func TestNodeReconciler(t *testing.T) {
 				InternalIP: "172.11.10.1",
 			},
 			activeGateway: "node-1",
-			precedence:    mcsv1alpha1.PrecedencePublic,
+			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
 			name:          "remove a Gateway Node to delete a Gateway successfully",
@@ -174,7 +177,7 @@ func TestNodeReconciler(t *testing.T) {
 			existingGW:    &gwNode1,
 			activeGateway: "node-1",
 			isDelete:      true,
-			precedence:    mcsv1alpha1.PrecedencePublic,
+			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
 			name:          "remove a Gateway Node's annotation to delete a Gateway successfully",
@@ -183,7 +186,7 @@ func TestNodeReconciler(t *testing.T) {
 			existingGW:    &gwNode1,
 			activeGateway: "node-1",
 			isDelete:      true,
-			precedence:    mcsv1alpha1.PrecedencePublic,
+			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
 			name:       "remote a Gateway due to no IPs",
@@ -191,7 +194,7 @@ func TestNodeReconciler(t *testing.T) {
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Name: newNode1.Name}},
 			existingGW: &gwNode1,
 			isDelete:   true,
-			precedence: mcsv1alpha1.PrecedencePrivate,
+			precedence: mcv1alpha1.PrecedencePrivate,
 		},
 		{
 			name:          "remove a Gateway Node to create a new Gateway from candidates successfully",
@@ -200,7 +203,7 @@ func TestNodeReconciler(t *testing.T) {
 			existingGW:    &gwNode1,
 			expectedGW:    updatedGateway2,
 			activeGateway: "node-1",
-			precedence:    mcsv1alpha1.PrecedencePublic,
+			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
 			name:          "create a new Gateway successfully when active Gateway Node is not ready",
@@ -209,7 +212,7 @@ func TestNodeReconciler(t *testing.T) {
 			existingGW:    gateway3,
 			expectedGW:    updatedGateway2,
 			activeGateway: "node-3",
-			precedence:    mcsv1alpha1.PrecedencePublic,
+			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
 			name:          "create a new Gateway successfully when active Gateway Node has no valid IP",
@@ -218,7 +221,7 @@ func TestNodeReconciler(t *testing.T) {
 			existingGW:    gateway4,
 			expectedGW:    updatedGateway2,
 			activeGateway: "node-4",
-			precedence:    mcsv1alpha1.PrecedencePublic,
+			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 	}
 	for _, tt := range tests {
@@ -231,12 +234,17 @@ func TestNodeReconciler(t *testing.T) {
 				obj = append(obj, tt.existingGW)
 			}
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(obj...).Build()
-			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", tt.precedence)
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
+			mcReconciler.SetRemoteCommonArea(commonArea)
+			commonAreaGetter := mcReconciler
+			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", tt.precedence, commonAreaGetter)
 			r.activeGateway = tt.activeGateway
 			if _, err := r.Reconcile(common.TestCtx, tt.req); err != nil {
 				t.Errorf("Node Reconciler should handle Node events successfully but got error = %v", err)
 			} else {
-				newGW := &mcsv1alpha1.Gateway{}
+				newGW := &mcv1alpha1.Gateway{}
 				gwNamespcedName := types.NamespacedName{Name: tt.req.Name, Namespace: "default"}
 				if tt.expectedGW != nil {
 					gwNamespcedName = types.NamespacedName{Name: tt.expectedGW.Name, Namespace: "default"}
@@ -269,7 +277,7 @@ func TestInitialize(t *testing.T) {
 		name                  string
 		nodes                 []*corev1.Node
 		req                   reconcile.Request
-		existingGW            *mcsv1alpha1.Gateway
+		existingGW            *mcv1alpha1.Gateway
 		expectedActiveGateway string
 		isDelete              bool
 		candidatesSize        int
@@ -307,14 +315,19 @@ func TestInitialize(t *testing.T) {
 				obj = append(obj, tt.existingGW)
 			}
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(obj...).Build()
-			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", mcsv1alpha1.PrecedencePublic)
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
+			mcReconciler.SetRemoteCommonArea(commonArea)
+			commonAreaGetter := mcReconciler
+			r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.100.0.0/16", mcv1alpha1.PrecedencePublic, commonAreaGetter)
 			if err := r.initialize(); err != nil {
 				t.Errorf("Expected initialize() successfully but got err: %v", err)
 			} else {
 				assert.Equal(t, tt.expectedActiveGateway, r.activeGateway)
 				assert.Equal(t, tt.candidatesSize, len(r.gatewayCandidates))
 				if tt.isDelete {
-					deletedGW := &mcsv1alpha1.Gateway{}
+					deletedGW := &mcv1alpha1.Gateway{}
 					gwNamespcedName := types.NamespacedName{Name: tt.existingGW.Name, Namespace: "default"}
 					err := fakeClient.Get(common.TestCtx, gwNamespcedName, deletedGW)
 					if !apierrors.IsNotFound(err) {
@@ -323,5 +336,147 @@ func TestInitialize(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestClusterSetMapFunc(t *testing.T) {
+	clusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test",
+		},
+		Status: mcv1alpha2.ClusterSetStatus{
+			Conditions: []mcv1alpha2.ClusterSetCondition{
+				{
+					Status: corev1.ConditionTrue,
+					Type:   mcv1alpha2.ClusterSetReady,
+				},
+			},
+		},
+	}
+
+	deletedClusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test-deleted",
+		},
+	}
+	node1 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-1",
+			Annotations: map[string]string{
+				common.GatewayAnnotation: "true",
+			},
+		},
+	}
+	expectedReqs := []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name: node1.GetName(),
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, node1).Build()
+	r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.200.1.1/16", "", nil)
+	requests := r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, expectedReqs, requests)
+
+	requests = r.clusterSetMapFunc(deletedClusterSet)
+	assert.Equal(t, []reconcile.Request{}, requests)
+
+	r = NewNodeReconciler(fakeClient, common.TestScheme, "mismatch_ns", "10.200.1.1/16", "", nil)
+	requests = r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, []reconcile.Request{}, requests)
+}
+
+func Test_StatusPredicate(t *testing.T) {
+	tests := []struct {
+		name        string
+		updateEvent event.UpdateEvent
+		expected    bool
+	}{
+		{
+			name: "status changed to ready",
+			updateEvent: event.UpdateEvent{
+				ObjectOld: &mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+				},
+				ObjectNew: &mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+					Status: mcv1alpha2.ClusterSetStatus{
+						Conditions: []mcv1alpha2.ClusterSetCondition{{
+							Status: corev1.ConditionTrue,
+						}},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "status is changed from unknown to ready",
+			updateEvent: event.UpdateEvent{
+				ObjectOld: &mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+					Status: mcv1alpha2.ClusterSetStatus{
+						Conditions: []mcv1alpha2.ClusterSetCondition{{
+							Status: corev1.ConditionUnknown,
+						}},
+					},
+				},
+				ObjectNew: &mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+					Status: mcv1alpha2.ClusterSetStatus{
+						Conditions: []mcv1alpha2.ClusterSetCondition{{
+							Status: corev1.ConditionTrue,
+						}},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "status is ready but no change",
+			updateEvent: event.UpdateEvent{
+				ObjectOld: &mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+					Status: mcv1alpha2.ClusterSetStatus{
+						Conditions: []mcv1alpha2.ClusterSetCondition{{
+							Status: corev1.ConditionTrue,
+						}},
+					},
+				},
+				ObjectNew: &mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+					Status: mcv1alpha2.ClusterSetStatus{
+						Conditions: []mcv1alpha2.ClusterSetCondition{{
+							Status: corev1.ConditionTrue,
+						}},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		actual := statusReadyPredicateFunc(tt.updateEvent)
+		assert.Equal(t, tt.expected, actual)
 	}
 }
