@@ -85,13 +85,9 @@ func runLeader(o *Options) error {
 			role:      leaderRole},
 		})
 
-	clusterSetReconciler := &leader.LeaderClusterSetReconciler{
-		Client:                   mgrClient,
-		Scheme:                   mgrScheme,
-		StatusManager:            memberClusterStatusManager,
-		ClusterCalimCRDAvailable: o.ClusterCalimCRDAvailable,
-	}
-	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
+	clusterSetReconciler := leader.NewLeaderClusterSetReconciler(mgrClient, podNamespace,
+		o.ClusterCalimCRDAvailable, memberClusterStatusManager)
+	if err := clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
 	}
 

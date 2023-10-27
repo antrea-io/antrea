@@ -25,7 +25,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,15 +45,26 @@ var (
 // Namespace, so a MC Controller will be handling only a single ClusterSet in the given Namespace.
 type LeaderClusterSetReconciler struct {
 	client.Client
-	Scheme                   *runtime.Scheme
-	mutex                    sync.Mutex
-	ClusterCalimCRDAvailable bool
+	namespace                string
+	clusterCalimCRDAvailable bool
+	statusManager            MemberClusterStatusManager
 
-	clusterSetConfig *mcv1alpha2.ClusterSet
-	clusterSetID     common.ClusterSetID
-	clusterID        common.ClusterID
+	clusterSetID common.ClusterSetID
+	clusterID    common.ClusterID
+	mutex        sync.Mutex
+}
 
-	StatusManager MemberClusterStatusManager
+func NewLeaderClusterSetReconciler(client client.Client, namespace string,
+	clusterCalimCRDAvailable bool,
+	statusManager MemberClusterStatusManager) *LeaderClusterSetReconciler {
+	return &LeaderClusterSetReconciler{
+		Client:                   client,
+		namespace:                namespace,
+		clusterCalimCRDAvailable: clusterCalimCRDAvailable,
+		statusManager:            statusManager,
+		clusterID:                common.InvalidClusterID,
+		clusterSetID:             common.InvalidClusterSetID,
+	}
 }
 
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets,verbs=get;list;watch;create;update;patch;delete
@@ -72,10 +82,10 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
-		if r.clusterSetConfig != nil && r.clusterSetConfig.Name != req.Name {
+		if r.clusterSetID != common.ClusterSetID(req.Name) {
+			// Not the current ClusterSet.
 			return ctrl.Result{}, nil
 		}
-		r.clusterSetConfig = nil
 		r.clusterID = common.InvalidClusterID
 		r.clusterSetID = common.InvalidClusterSetID
 		return ctrl.Result{}, nil
@@ -84,8 +94,8 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
 
 	// Handle create or update
-	if r.clusterSetConfig == nil {
-		r.clusterID, err = common.GetClusterID(r.ClusterCalimCRDAvailable, req, r.Client, clusterSet)
+	if r.clusterID == common.InvalidClusterID {
+		r.clusterID, err = common.GetClusterID(r.clusterCalimCRDAvailable, req, r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -109,7 +119,6 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 	}
 
-	r.clusterSetConfig = clusterSet.DeepCopy()
 	return ctrl.Result{}, nil
 }
 
@@ -158,14 +167,27 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if r.clusterSetConfig == nil {
+	if r.clusterID == common.InvalidClusterID {
 		// Nothing to do.
 		return
 	}
 
+	namespacedName := types.NamespacedName{
+		Namespace: r.namespace,
+		Name:      string(r.clusterSetID),
+	}
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	err := r.Get(context.TODO(), namespacedName, clusterSet)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to get ClusterSet", "name", namespacedName)
+		}
+		return
+	}
+
 	status := mcv1alpha2.ClusterSetStatus{}
-	status.ObservedGeneration = r.clusterSetConfig.Generation
-	clusterStatuses := r.StatusManager.GetMemberClusterStatuses()
+	status.ObservedGeneration = clusterSet.Generation
+	clusterStatuses := r.statusManager.GetMemberClusterStatuses()
 	status.ClusterStatuses = clusterStatuses
 	sizeOfMembers := len(clusterStatuses)
 	status.TotalClusters = int32(sizeOfMembers)
@@ -199,15 +221,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		overallCondition.Message = "All clusters have an unknown status"
 	}
 
-	namespacedName := types.NamespacedName{
-		Namespace: r.clusterSetConfig.Namespace,
-		Name:      r.clusterSetConfig.Name,
-	}
-	clusterSet := &mcv1alpha2.ClusterSet{}
-	err := r.Get(context.TODO(), namespacedName, clusterSet)
-	if err != nil {
-		klog.ErrorS(err, "Failed to read ClusterSet", "name", namespacedName)
-	}
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
 		len(clusterSet.Status.Conditions) == 0 {
