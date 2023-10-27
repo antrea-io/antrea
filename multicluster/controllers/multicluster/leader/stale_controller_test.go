@@ -30,93 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
-
-func TestCleanUpStaleResourceExports(t *testing.T) {
-	now := time.Now().Format(time.RFC3339)
-	oldTime := time.Now().Add(-1).Format(time.RFC3339)
-	mcaList := &mcv1alpha1.MemberClusterAnnounceList{
-		Items: []mcv1alpha1.MemberClusterAnnounce{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "member-announce-from-cluster-a",
-					Namespace: "default",
-					Annotations: map[string]string{
-						commonarea.TimestampAnnotationKey: now,
-					},
-				},
-				ClusterID: "cluster-a",
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "member-announce-from-cluster-b",
-					Namespace: "default",
-					Annotations: map[string]string{
-						commonarea.TimestampAnnotationKey: oldTime,
-					},
-				},
-				ClusterID: "cluster-b",
-			},
-		},
-	}
-
-	resExports := &mcv1alpha1.ResourceExportList{
-		Items: []mcv1alpha1.ResourceExport{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      "cluster-a-svc",
-				},
-				Spec: mcv1alpha1.ResourceExportSpec{
-					ClusterID: "cluster-a",
-				},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      "cluster-b-svc",
-				},
-				Spec: mcv1alpha1.ResourceExportSpec{
-					ClusterID: "cluster-b",
-				},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      "cluster-c-svc",
-				},
-				Spec: mcv1alpha1.ResourceExportSpec{
-					ClusterID: "cluster-c",
-				},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      "leader-acnp",
-				},
-				Spec: mcv1alpha1.ResourceExportSpec{
-					Kind: constants.AntreaClusterNetworkPolicyKind,
-				},
-			},
-		},
-	}
-
-	scheme := runtime.NewScheme()
-	mcv1alpha1.AddToScheme(scheme)
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(mcaList, resExports).Build()
-	c := NewStaleResCleanupController(fakeClient, scheme)
-	ctx := context.Background()
-	cleanUpStaleResourceExports(ctx, c.Client)
-	latestResExports := &mcv1alpha1.ResourceExportList{}
-	err := fakeClient.List(ctx, latestResExports)
-	require.NoError(t, err)
-	assert.Equal(t, 3, len(latestResExports.Items))
-}
 
 func TestReconcile(t *testing.T) {
 	resExport1 := mcv1alpha1.ResourceExport{

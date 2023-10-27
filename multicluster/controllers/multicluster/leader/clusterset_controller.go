@@ -96,7 +96,7 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 
 		if clusterSet.Spec.ClusterID == "" {
-			// ClusterID is a required feild, and the empty value case should only happen
+			// ClusterID is a required field, and the empty value case should only happen
 			// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
 			// Here we try to update the ClusterSet's ClusterID when it's configured in an
 			// existing ClusterClaim.

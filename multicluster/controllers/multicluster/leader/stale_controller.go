@@ -24,14 +24,12 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
@@ -95,7 +93,7 @@ func (c *StaleResCleanupController) cleanUpExpiredMemberClusterAnnounces(ctx con
 	}
 }
 
-func (c *StaleResCleanupController) RunPeriodically(stopCh <-chan struct{}) {
+func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
@@ -155,50 +153,6 @@ func (c *StaleResCleanupController) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(c)
-}
-
-func cleanUpStaleResourceExports(ctx context.Context, mgrClient client.Client) error {
-	existingMemberClusterIDs, err := getExistingMemberClusterIDs(ctx, mgrClient)
-	if err != nil {
-		klog.ErrorS(err, "Failed to get existing member cluster's ClusterID")
-		return err
-	}
-
-	resourceExports := &mcv1alpha1.ResourceExportList{}
-	err = mgrClient.List(ctx, resourceExports, &client.ListOptions{})
-	if err != nil {
-		klog.ErrorS(err, "Failed to get ResourceExports")
-		return err
-	}
-
-	staleResExports := []mcv1alpha1.ResourceExport{}
-	for _, resExport := range resourceExports.Items {
-		// The AntreaClusterNetworkPolicy kind of ResourceExport is created in the leader directly
-		// without a ClusterID info. It's not owned by any member cluster.
-		if resExport.Spec.Kind != constants.AntreaClusterNetworkPolicyKind && !existingMemberClusterIDs.Has(resExport.Spec.ClusterID) {
-			staleResExports = append(staleResExports, resExport)
-		}
-	}
-
-	cleanUpSucceed := deleteResourceExports(ctx, mgrClient, staleResExports)
-	if !cleanUpSucceed {
-		return fmt.Errorf("stale ResourceExports are not fully cleaned up, retry later")
-	}
-	return nil
-}
-
-func getExistingMemberClusterIDs(ctx context.Context, mgrClient client.Client) (sets.Set[string], error) {
-	validMemberClusterIDs := sets.Set[string]{}
-	memberClusterAnnounces := &mcv1alpha1.MemberClusterAnnounceList{}
-	err := mgrClient.List(ctx, memberClusterAnnounces, &client.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, m := range memberClusterAnnounces.Items {
-		validMemberClusterIDs.Insert(m.ClusterID)
-	}
-	return validMemberClusterIDs, nil
 }
 
 func deleteResourceExports(ctx context.Context, mgrClient client.Client, resouceExports []mcv1alpha1.ResourceExport) bool {

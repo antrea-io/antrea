@@ -374,23 +374,22 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	ctx, _ := wait.ContextForChannel(stopCh)
 
 	go func() {
-		for range c.commonAreaCreationCh {
-			retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
-				func() error {
-					if err := c.cleanUpStaleResources(ctx); err != nil {
-						klog.ErrorS(err, "Failed to clean up stale resources after a ClusterSet is created, will retry later")
-						return err
-					}
-					return nil
-				})
-		}
+		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
+			func() error {
+				return c.CleanUp(ctx)
+			})
 	}()
 
-	retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
-		func() error {
-			return c.CleanUp(ctx)
-		})
-	<-stopCh
+	for range c.commonAreaCreationCh {
+		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
+			func() error {
+				if err := c.cleanUpStaleResources(ctx); err != nil {
+					klog.ErrorS(err, "Failed to clean up stale resources after a ClusterSet is created, will retry later")
+					return err
+				}
+				return nil
+			})
+	}
 }
 
 func (c *StaleResCleanupController) cleanUpStaleResources(ctx context.Context) error {

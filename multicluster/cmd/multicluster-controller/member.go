@@ -69,7 +69,7 @@ func runMember(o *Options) error {
 			role:      memberRole},
 		})
 
-	commonAreaCreationCh := make(chan struct{})
+	commonAreaCreationCh := make(chan struct{}, 1)
 	clusterSetReconciler := member.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),

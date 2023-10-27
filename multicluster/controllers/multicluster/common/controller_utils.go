@@ -105,7 +105,7 @@ func getClusterIDFromClusterClaim(c client.Client, clusterSet *mcv1alpha2.Cluste
 
 func GetClusterID(clusterCalimCRDAvailable bool, req ctrl.Request, client client.Client, clusterSet *mcv1alpha2.ClusterSet) (ClusterID, error) {
 	if clusterSet.Spec.ClusterID == "" {
-		// ClusterID is a required feild, and the empty value case should only happen
+		// ClusterID is a required field, and the empty value case should only happen
 		// when Antrea Multi-cluster is upgraded from an old version prior to v1.13.
 		// Here we try to get the ClusterID from ClusterClaim before returning any error.
 		if clusterCalimCRDAvailable {

@@ -120,7 +120,7 @@ func runLeader(o *Options) error {
 	if err = staleController.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating StaleResCleanupController: %v", err)
 	}
-	go staleController.RunPeriodically(stopCh)
+	go staleController.Run(stopCh)
 
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
