@@ -125,7 +125,9 @@ if ($InstallKubeProxy) {
 
 $StartKubeletFileContent += [Environment]::NewLine + '$global:KubeletArgs += "--cert-dir=$env:SYSTEMDRIVE\var\lib\kubelet\pki --config=/var/lib/kubelet/config.yaml --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --hostname-override=$(hostname) --pod-infra-container-image=`"mcr.microsoft.com/oss/kubernetes/pause:1.4.1`" --enable-debugging-handlers --cgroups-per-qos=false --enforce-node-allocatable=`"`" --resolv-conf=`"`" --node-ip=$env:NODE_IP"'
 
-if ($ContainerRuntime -eq "containerd") {
+$targetVersion = [version]"1.28.0"
+
+if ($ContainerRuntime -eq "containerd" -and [version]($KubernetesVersion -replace '^v') -lt $targetVersion) {
     $StartKubeletFileContent += [Environment]::NewLine + '$global:KubeletArgs += " --feature-gates=WindowsHostProcessContainers=true"'
 }
 
