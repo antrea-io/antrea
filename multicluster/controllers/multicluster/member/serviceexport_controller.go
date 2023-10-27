@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -42,7 +43,8 @@ import (
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -71,6 +73,7 @@ type (
 		remoteCommonArea     commonarea.RemoteCommonArea
 		installedSvcs        cache.Indexer
 		installedEps         cache.Indexer
+		namespace            string
 		leaderNamespace      string
 		leaderClusterID      string
 		localClusterID       string
@@ -95,16 +98,19 @@ func NewServiceExportReconciler(
 	scheme *runtime.Scheme,
 	commonAreaGetter commonarea.RemoteCommonAreaGetter,
 	endpointIPType string,
-	endpointSliceEnabled bool) *ServiceExportReconciler {
+	endpointSliceEnabled bool,
+	namespace string) *ServiceExportReconciler {
 	reconciler := &ServiceExportReconciler{
 		Client:               client,
 		Scheme:               scheme,
+		namespace:            namespace,
 		commonAreaGetter:     commonAreaGetter,
 		endpointIPType:       endpointIPType,
 		endpointSliceEnabled: endpointSliceEnabled,
 		installedSvcs:        cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{}),
 		installedEps:         cache.NewIndexer(epInfoKeyFunc, cache.Indexers{}),
 	}
+
 	return reconciler
 }
 
@@ -132,6 +138,11 @@ func epInfoKeyFunc(obj interface{}) (string, error) {
 // and also Services/Endpoints resources. It will create/update/remove ResourceExport
 // in a leader cluster for corresponding ServiceExport from a member cluster.
 func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if skip := r.checkRemoteCommonArea(); skip {
+		klog.V(2).InfoS("Skip reconciling ServiceExports since there is no connection to the leader")
+		return ctrl.Result{}, nil
+	}
+
 	klog.V(2).InfoS("Reconciling ServiceExport", "serviceexport", req.NamespacedName)
 	svcExportList := &k8smcsv1alpha1.ServiceExportList{}
 	err := r.Client.List(ctx, svcExportList, &client.ListOptions{})
@@ -289,20 +300,20 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if svcInstalled {
 		installedSvc := svcObj.(*svcInfo)
 		if apiequality.Semantic.DeepEqual(svc.Spec.Ports, installedSvc.ports) {
-			klog.InfoS("Service has been converted into ResourceExport and no change, skip it", "service",
-				req.String(), "resourceexport", svcExportNSName)
 			skipUpdateSvcResourceExport = true
+			klog.V(2).InfoS("Service has been converted into ResourceExport and no change, skip it", "service",
+				req.String(), "resourceexport", svcExportNSName)
 		}
 	}
 
 	if epsInstalled {
 		installedEp := epsObj.(*epInfo)
 		if apiequality.Semantic.DeepEqual(newSubsets, installedEp.subsets) {
-			klog.InfoS("Service's Endpoints (PodIP or ClusterIP) has been converted into ResourceExport and no change, skip it", "Service",
-				req.String(), "resourceexport", epExportNSName)
 			// When the EndpointIPType is EndpointIPTypeClusterIP, skipUpdateEPResourceExport should be false only
-			// when there is a ClusterIP/Port change.
+			// when there is a ClusterIP/Port change or the recreation flag is true.
 			skipUpdateEPResourceExport = true
+			klog.V(2).InfoS("Service's Endpoints (PodIP or ClusterIP) has been converted into ResourceExport and no change, skip it", "Service",
+				req.String(), "resourceexport", epExportNSName)
 		}
 	}
 
@@ -310,7 +321,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	re := mcsv1alpha1.ResourceExport{
+	re := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: r.leaderNamespace,
 			Labels: map[string]string{
@@ -319,7 +330,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				constants.SourceClusterID: r.localClusterID,
 			},
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			ClusterID: r.localClusterID,
 			Name:      req.Name,
 			Namespace: req.Namespace,
@@ -376,7 +387,7 @@ func (r *ServiceExportReconciler) checkRemoteCommonArea() bool {
 func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, req ctrl.Request,
 	commonArea commonarea.RemoteCommonArea) error {
 	svcResExportName := getResourceExportName(r.localClusterID, req, "service")
-	svcResExport := &mcsv1alpha1.ResourceExport{
+	svcResExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcResExportName,
 			Namespace: r.leaderNamespace,
@@ -398,7 +409,7 @@ func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, 
 func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context, req ctrl.Request,
 	commonArea commonarea.RemoteCommonArea) error {
 	epResExportName := getResourceExportName(r.localClusterID, req, "endpoints")
-	epResExport := &mcsv1alpha1.ResourceExport{
+	epResExport := &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      epResExportName,
 			Namespace: r.leaderNamespace,
@@ -491,27 +502,64 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch events only when resource version changes
-	versionChange := predicate.ResourceVersionChangedPredicate{}
+	versionChangePredicates := builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})
 	if r.endpointSliceEnabled {
 		return ctrl.NewControllerManagedBy(mgr).
-			For(&k8smcsv1alpha1.ServiceExport{}).
-			Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
-			Watches(&source.Kind{Type: &discovery.EndpointSlice{}}, handler.EnqueueRequestsFromMapFunc(endpointSliceMapFunc)).
-			WithEventFilter(versionChange).
+			For(&k8smcsv1alpha1.ServiceExport{}, versionChangePredicates).
+			Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+			Watches(&source.Kind{Type: &discovery.EndpointSlice{}}, handler.EnqueueRequestsFromMapFunc(endpointSliceMapFunc), versionChangePredicates).
+			Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+				builder.WithPredicates(statusReadyPredicate)).
 			WithOptions(controller.Options{
 				MaxConcurrentReconciles: common.DefaultWorkerCount,
 			}).
 			Complete(r)
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&k8smcsv1alpha1.ServiceExport{}).
-		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
-		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
-		WithEventFilter(versionChange).
+		For(&k8smcsv1alpha1.ServiceExport{}, versionChangePredicates).
+		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
+}
+
+// clusterSetMapFunc handles ClusterSet events by enqueuing all ServiceExports
+// into the reconciler processing queue.
+func (r *ServiceExportReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+	clusterSet := &mcv1alpha2.ClusterSet{}
+	requests := []reconcile.Request{}
+	if a.GetNamespace() != r.namespace {
+		return requests
+	}
+
+	ctx := context.TODO()
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
+	if err == nil {
+		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
+			svcExports := &k8smcsv1alpha1.ServiceExportList{}
+			r.Client.List(ctx, svcExports)
+			for _, svcExport := range svcExports.Items {
+				namespacedName := types.NamespacedName{
+					Name:      svcExport.GetName(),
+					Namespace: svcExport.GetNamespace(),
+				}
+				req := reconcile.Request{
+					NamespacedName: namespacedName,
+				}
+				requests = append(requests, req)
+			}
+		}
+	} else if apierrors.IsNotFound(err) {
+		// All auto-generated resources will be deleted by the ClusterSet controller when a ClusterSet is
+		// deleted, so reset caches here.
+		r.installedSvcs = cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{})
+		r.installedEps = cache.NewIndexer(epInfoKeyFunc, cache.Indexers{})
+	}
+	return requests
 }
 
 // objectMapFunc simply maps all Serivce and Endpoints events to ServiceExports.
@@ -551,7 +599,7 @@ func (r *ServiceExportReconciler) serviceHandler(
 	req ctrl.Request,
 	svc *corev1.Service,
 	resName string,
-	re mcsv1alpha1.ResourceExport,
+	re mcv1alpha1.ResourceExport,
 	rc commonarea.RemoteCommonArea) error {
 	kind := constants.ServiceKind
 	sinfo := &svcInfo{
@@ -562,7 +610,7 @@ func (r *ServiceExportReconciler) serviceHandler(
 		svcType:    string(svc.Spec.Type),
 	}
 	r.resetResourceExport(resName, kind, svc, nil, &re)
-	existingResExport := &mcsv1alpha1.ResourceExport{}
+	existingResExport := &mcv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	err := rc.Get(ctx, resNamespaced, existingResExport)
 	if err != nil {
@@ -585,7 +633,7 @@ func (r *ServiceExportReconciler) endpointsHandler(
 	req ctrl.Request,
 	eps *corev1.Endpoints,
 	resName string,
-	re mcsv1alpha1.ResourceExport,
+	re mcv1alpha1.ResourceExport,
 	rc commonarea.RemoteCommonArea) error {
 	kind := constants.EndpointsKind
 	epInfo := &epInfo{
@@ -594,7 +642,7 @@ func (r *ServiceExportReconciler) endpointsHandler(
 		subsets:   eps.Subsets,
 	}
 	r.resetResourceExport(resName, kind, nil, eps, &re)
-	existingResExport := &mcsv1alpha1.ResourceExport{}
+	existingResExport := &mcv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	err := rc.Get(ctx, resNamespaced, existingResExport)
 	if err != nil {
@@ -613,12 +661,12 @@ func (r *ServiceExportReconciler) endpointsHandler(
 func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 	svc *corev1.Service,
 	ep *corev1.Endpoints,
-	re *mcsv1alpha1.ResourceExport) mcsv1alpha1.ResourceExport {
+	re *mcv1alpha1.ResourceExport) mcv1alpha1.ResourceExport {
 	re.Spec.Kind = kind
 	switch kind {
 	case constants.ServiceKind:
 		re.ObjectMeta.Name = resName
-		re.Spec.Service = &mcsv1alpha1.ServiceExport{
+		re.Spec.Service = &mcv1alpha1.ServiceExport{
 			ServiceSpec: corev1.ServiceSpec{
 				Ports: svc.Spec.Ports,
 			},
@@ -626,7 +674,7 @@ func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 		re.Labels[constants.SourceKind] = constants.ServiceKind
 	case constants.EndpointsKind:
 		re.ObjectMeta.Name = resName
-		re.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{
+		re.Spec.Endpoints = &mcv1alpha1.EndpointsExport{
 			Subsets: ep.Subsets,
 		}
 		re.Labels[constants.SourceKind] = constants.EndpointsKind
@@ -637,10 +685,10 @@ func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	ctx context.Context,
 	req ctrl.Request,
-	newResExport *mcsv1alpha1.ResourceExport,
-	existingResExport *mcsv1alpha1.ResourceExport,
+	newResExport *mcv1alpha1.ResourceExport,
+	existingResExport *mcv1alpha1.ResourceExport,
 	rc commonarea.RemoteCommonArea) error {
-	createResExport := reflect.DeepEqual(*existingResExport, mcsv1alpha1.ResourceExport{})
+	createResExport := reflect.DeepEqual(*existingResExport, mcv1alpha1.ResourceExport{})
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	if createResExport {
 		// We are using Finalizers to implement asynchronous pre-delete hooks.

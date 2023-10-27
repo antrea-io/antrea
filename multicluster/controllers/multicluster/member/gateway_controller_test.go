@@ -22,15 +22,18 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
@@ -41,7 +44,7 @@ var (
 
 	gw1CreationTime = metav1.NewTime(time.Now())
 
-	gwNode1 = mcsv1alpha1.Gateway{
+	gwNode1 = mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "node-1",
 			Namespace:         "default",
@@ -51,19 +54,19 @@ var (
 		InternalIP: "172.11.10.1",
 	}
 
-	existingResExport = &mcsv1alpha1.ResourceExport{
+	existingResExport = &mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster-a-clusterinfo",
 			Namespace: common.LeaderNamespace,
 		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
+		Spec: mcv1alpha1.ResourceExportSpec{
 			Name:      clusterID,
 			Namespace: "default",
 			Kind:      constants.ClusterInfoKind,
-			ClusterInfo: &mcsv1alpha1.ClusterInfo{
+			ClusterInfo: &mcv1alpha1.ClusterInfo{
 				ServiceCIDR: serviceCIDR,
 				ClusterID:   clusterID,
-				GatewayInfos: []mcsv1alpha1.GatewayInfo{
+				GatewayInfos: []mcv1alpha1.GatewayInfo{
 					{
 						GatewayIP: "10.10.10.10",
 					},
@@ -81,9 +84,9 @@ func TestGatewayReconciler(t *testing.T) {
 	tests := []struct {
 		name           string
 		namespacedName types.NamespacedName
-		gateway        []mcsv1alpha1.Gateway
-		resExport      *mcsv1alpha1.ResourceExport
-		expectedInfo   []mcsv1alpha1.GatewayInfo
+		gateway        []mcv1alpha1.Gateway
+		resExport      *mcv1alpha1.ResourceExport
+		expectedInfo   []mcv1alpha1.GatewayInfo
 		expectedErr    string
 		isDelete       bool
 	}{
@@ -93,10 +96,10 @@ func TestGatewayReconciler(t *testing.T) {
 				Namespace: "default",
 				Name:      "node-1",
 			},
-			gateway: []mcsv1alpha1.Gateway{
+			gateway: []mcv1alpha1.Gateway{
 				gwNode1,
 			},
-			expectedInfo: []mcsv1alpha1.GatewayInfo{
+			expectedInfo: []mcv1alpha1.GatewayInfo{
 				{
 					GatewayIP: "10.10.10.10",
 				},
@@ -108,7 +111,7 @@ func TestGatewayReconciler(t *testing.T) {
 				Namespace: "default",
 				Name:      "node-1",
 			},
-			gateway: []mcsv1alpha1.Gateway{
+			gateway: []mcv1alpha1.Gateway{
 				gwNode1,
 			},
 			resExport:   staleExistingResExport,
@@ -120,11 +123,11 @@ func TestGatewayReconciler(t *testing.T) {
 				Namespace: "default",
 				Name:      "node-1",
 			},
-			gateway: []mcsv1alpha1.Gateway{
+			gateway: []mcv1alpha1.Gateway{
 				gwNode1New,
 			},
 			resExport: existingResExport,
-			expectedInfo: []mcsv1alpha1.GatewayInfo{
+			expectedInfo: []mcv1alpha1.GatewayInfo{
 				{
 					GatewayIP: "10.10.10.12",
 				},
@@ -155,8 +158,8 @@ func TestGatewayReconciler(t *testing.T) {
 		commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
 		mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 		mcReconciler.SetRemoteCommonArea(commonArea)
-		commonAreaGatter := mcReconciler
-		r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, commonAreaGatter)
+		commonAreaGetter := mcReconciler
+		r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, commonAreaGetter)
 		t.Run(tt.name, func(t *testing.T) {
 			req := ctrl.Request{NamespacedName: tt.namespacedName}
 			if _, err := r.Reconcile(common.TestCtx, req); err != nil {
@@ -166,7 +169,7 @@ func TestGatewayReconciler(t *testing.T) {
 					t.Errorf("Gateway Reconciler should handle ResourceExports events successfully but got error = %v", err)
 				}
 			} else {
-				ciExport := mcsv1alpha1.ResourceExport{}
+				ciExport := mcv1alpha1.ResourceExport{}
 				ciExportName := types.NamespacedName{
 					Namespace: common.LeaderNamespace,
 					Name:      common.NewClusterInfoResourceExportName(common.LocalClusterID),
@@ -189,29 +192,78 @@ func TestGatewayReconciler(t *testing.T) {
 func TestGetClusterInfo(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, nil)
-	gw := &mcsv1alpha1.Gateway{
+	gw := &mcv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "gw",
 		},
 		ServiceCIDR: "10.100.0.0/16",
 		GatewayIP:   "10.10.1.1",
 		InternalIP:  "10.10.1.1",
-		WireGuard: &mcsv1alpha1.WireGuardInfo{
+		WireGuard: &mcv1alpha1.WireGuardInfo{
 			PublicKey: "key",
 		},
 	}
-	expectedClusterInfo := &mcsv1alpha1.ClusterInfo{
-		GatewayInfos: []mcsv1alpha1.GatewayInfo{
+	expectedClusterInfo := &mcv1alpha1.ClusterInfo{
+		GatewayInfos: []mcv1alpha1.GatewayInfo{
 			{
 				GatewayIP: "10.10.1.1",
 			},
 		},
 		ServiceCIDR: "10.100.0.0/16",
 		PodCIDRs:    []string{"10.200.1.1/16"},
-		WireGuard: &mcsv1alpha1.WireGuardInfo{
+		WireGuard: &mcv1alpha1.WireGuardInfo{
 			PublicKey: "key",
 		},
 	}
 
 	assert.Equal(t, expectedClusterInfo, r.getClusterInfo(gw))
+}
+
+func TestClusterSetMapFunc_Gateway(t *testing.T) {
+	clusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test",
+		},
+		Status: mcv1alpha2.ClusterSetStatus{
+			Conditions: []mcv1alpha2.ClusterSetCondition{
+				{
+					Status: corev1.ConditionTrue,
+					Type:   mcv1alpha2.ClusterSetReady,
+				},
+			},
+		},
+	}
+
+	deletedClusterSet := &mcv1alpha2.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "clusterset-test-deleted",
+		},
+	}
+	gw1 := &mcv1alpha1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gw-1",
+			Namespace: "default",
+		},
+	}
+	expectedReqs := []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name:      gw1.GetName(),
+				Namespace: gw1.GetNamespace(),
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, gw1).Build()
+	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, nil)
+	requests := r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, expectedReqs, requests)
+
+	requests = r.clusterSetMapFunc(deletedClusterSet)
+	assert.Equal(t, []reconcile.Request{}, requests)
+
+	r = NewGatewayReconciler(fakeClient, common.TestScheme, "mismatch_ns", []string{"10.200.1.1/16"}, nil)
+	requests = r.clusterSetMapFunc(clusterSet)
+	assert.Equal(t, []reconcile.Request{}, requests)
 }
