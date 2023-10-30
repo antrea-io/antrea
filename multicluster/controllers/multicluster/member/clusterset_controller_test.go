@@ -50,7 +50,32 @@ func TestMemberClusterDelete(t *testing.T) {
 	reconciler := MemberClusterSetReconciler{
 		Client:           fakeClient,
 		remoteCommonArea: commonArea,
+		clusterSetID:     common.ClusterSetID("clusterset1"),
 	}
+
+	// Delete a different ClusterSet.
+	if _, err := reconciler.Reconcile(common.TestCtx, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      "clusterset2",
+		}}); err != nil {
+		t.Errorf("Member ClusterSet Reconciler should handle delete event successfully but got error = %v", err)
+	} else {
+		memberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
+		err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{
+			Namespace: "default",
+			Name:      "member-announce-from-cluster-a",
+		}, memberClusterAnnounce)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				t.Errorf("Member ClusterSet Reconciler should not remove MemberClusterAnnounce")
+			} else {
+				t.Errorf("Get MemberClusterAnnounce returned error = %v", err)
+			}
+		}
+	}
+
+	// Delete the current ClusterSet.
 	if _, err := reconciler.Reconcile(common.TestCtx, reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "default",
@@ -59,12 +84,14 @@ func TestMemberClusterDelete(t *testing.T) {
 		t.Errorf("Member ClusterSet Reconciler should handle delete event successfully but got error = %v", err)
 	} else {
 		memberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
-		err := fakeClient.Get(common.TestCtx, types.NamespacedName{
+		err := fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{
 			Namespace: "default",
 			Name:      "member-announce-from-cluster-a",
 		}, memberClusterAnnounce)
-		if !apierrors.IsNotFound(err) {
-			t.Errorf("Member ClusterSet Reconciler should remove MemberClusterAnnounce successfully but got error = %v", err)
+		if err == nil {
+			t.Errorf("Member ClusterSet Reconciler should remove MemberClusterAnnounce but not")
+		} else if !apierrors.IsNotFound(err) {
+			t.Errorf("Get MemberClusterAnnounce returned error = %v", err)
 		}
 	}
 }
