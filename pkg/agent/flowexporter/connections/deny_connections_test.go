@@ -30,6 +30,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	podstoretest "antrea.io/antrea/pkg/util/podstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
@@ -80,7 +81,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				OriginalBytes:             uint64(60),
 				OriginalPackets:           uint64(1),
 				IsActive:                  true,
-				Mark:                      19,
+				Mark:                      openflow.ServiceCTMark.GetValue(),
 			},
 			isSvc: true,
 		},
@@ -96,8 +97,8 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			if c.isSvc {
 				mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 			}
-			mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(nil, false)
-			mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(nil, false)
+			mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(pod1, true)
+			mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 
 			denyConnStore := NewDenyConnectionStore(mockPodStore, mockProxier, testFlowExporterOptions)
 

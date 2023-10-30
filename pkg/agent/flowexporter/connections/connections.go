@@ -124,6 +124,8 @@ func (cs *connectionStore) fillServiceInfo(conn *flowexporter.Connection, servic
 		servicePortName, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
 		if exists {
 			conn.DestinationServicePortName = servicePortName.String()
+		} else {
+			klog.InfoS("Could not retrieve the Service info from antrea-agent-proxier", "serviceStr", serviceStr)
 		}
 	}
 }
