@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,6 +29,7 @@ import (
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 var (
@@ -53,15 +53,12 @@ func setup() {
 		},
 	}
 
-	scheme := runtime.NewScheme()
-	mcv1alpha1.AddToScheme(scheme)
-	mcv1alpha2.AddToScheme(scheme)
-	mcaTestFakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).
+	mcaTestFakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).
 		WithObjects(existingClusterSet).
 		Build()
 
 	memberClusterAnnounceReconcilerUnderTest = NewMemberClusterAnnounceReconciler(
-		mcaTestFakeRemoteClient, scheme)
+		mcaTestFakeRemoteClient, common.TestScheme)
 }
 
 func TestStatusAfterAdd(t *testing.T) {

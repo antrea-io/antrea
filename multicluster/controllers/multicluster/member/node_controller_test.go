@@ -145,7 +145,6 @@ func TestNodeReconciler(t *testing.T) {
 		expectedGW    *mcv1alpha1.Gateway
 		activeGateway string
 		candidates    map[string]bool
-		isDelete      bool
 	}{
 		{
 			name:       "create a Gateway successfully",
@@ -176,7 +175,6 @@ func TestNodeReconciler(t *testing.T) {
 			req:           reconcile.Request{NamespacedName: types.NamespacedName{Name: node1.Name}},
 			existingGW:    &gwNode1,
 			activeGateway: "node-1",
-			isDelete:      true,
 			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
@@ -185,15 +183,13 @@ func TestNodeReconciler(t *testing.T) {
 			req:           reconcile.Request{NamespacedName: types.NamespacedName{Name: node1.Name}},
 			existingGW:    &gwNode1,
 			activeGateway: "node-1",
-			isDelete:      true,
 			precedence:    mcv1alpha1.PrecedencePublic,
 		},
 		{
-			name:       "remote a Gateway due to no IPs",
+			name:       "remove a Gateway due to no IPs",
 			nodes:      []*corev1.Node{newNode1},
 			req:        reconcile.Request{NamespacedName: types.NamespacedName{Name: newNode1.Name}},
 			existingGW: &gwNode1,
-			isDelete:   true,
 			precedence: mcv1alpha1.PrecedencePrivate,
 		},
 		{
@@ -250,7 +246,8 @@ func TestNodeReconciler(t *testing.T) {
 					gwNamespcedName = types.NamespacedName{Name: tt.expectedGW.Name, Namespace: "default"}
 				}
 				err := fakeClient.Get(common.TestCtx, gwNamespcedName, newGW)
-				if tt.isDelete {
+				isDelete := tt.expectedGW == nil
+				if isDelete {
 					if err == nil || (err != nil && !apierrors.IsNotFound(err)) {
 						t.Errorf("Expected to get not found error but got err: %v", err)
 					}

@@ -275,8 +275,6 @@ func (r *MemberClusterSetReconciler) createRemoteCommonArea(clusterSet *mcv1alph
 	// Create import reconcilers and add them to RemoteCommonArea (to be started with
 	// RemoteCommonArea.StartWatching).
 	resImportReconciler := newResourceImportReconciler(
-		remoteCommonAreaMgr.GetClient(),
-		remoteCommonAreaMgr.GetScheme(),
 		r.Client,
 		string(r.clusterID),
 		r.namespace,
@@ -286,8 +284,6 @@ func (r *MemberClusterSetReconciler) createRemoteCommonArea(clusterSet *mcv1alph
 
 	if r.enableStretchedNetworkPolicy {
 		labelIdentityImpReconciler := newLabelIdentityResourceImportReconciler(
-			remoteCommonAreaMgr.GetClient(),
-			remoteCommonAreaMgr.GetScheme(),
 			r.Client,
 			string(clusterID),
 			remoteNamespace,

@@ -25,7 +25,6 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -58,8 +57,6 @@ func resImportIndexerKeyFunc(obj interface{}) (string, error) {
 
 // ResourceImportReconciler reconciles a ResourceImport object in the member cluster.
 type ResourceImportReconciler struct {
-	client.Client
-	Scheme              *runtime.Scheme
 	localClusterClient  client.Client
 	localClusterID      string
 	namespace           string
@@ -69,11 +66,9 @@ type ResourceImportReconciler struct {
 	manager ctrl.Manager
 }
 
-func newResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client,
+func newResourceImportReconciler(localClusterClient client.Client,
 	localClusterID string, namespace string, remoteCommonArea commonarea.RemoteCommonArea) *ResourceImportReconciler {
 	return &ResourceImportReconciler{
-		Client:             client,
-		Scheme:             scheme,
 		localClusterClient: localClusterClient,
 		localClusterID:     localClusterID,
 		namespace:          namespace,
