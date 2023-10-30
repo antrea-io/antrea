@@ -126,9 +126,13 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	denyConn.DestinationServiceAddress = tuple.DestinationAddress
 	denyConn.DestinationServicePort = tuple.DestinationPort
 	denyConn.Mark = getCTMarkValue(matchers)
-	dstSvcAddress := getSvcAddress(matchers)
+	dstSvcAddress := getCTNwDstValue(matchers)
+	dstSvcPort := getCTTpDstValue(matchers)
 	if dstSvcAddress != nil {
-		denyConn.DestinationServiceAddress = *dstSvcAddress
+		denyConn.DestinationServiceAddress = dstSvcAddress
+	}
+	if dstSvcPort != 0 {
+		denyConn.DestinationServicePort = dstSvcPort
 	}
 
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
@@ -241,14 +245,32 @@ func getCTMarkValue(matchers *ofctrl.Matchers) uint32 {
 	return ctMarkValue
 }
 
-func getSvcAddress(matchers *ofctrl.Matchers) *net.IP {
-	svcIp := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
-	if svcIp == nil {
-		return nil
+func getCTNwDstValue(matchers *ofctrl.Matchers) net.IP {
+	nwDst := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
+	if nwDst != nil {
+		nwDstValue, ok := nwDst.GetValue().(net.IP)
+		if ok {
+			return nwDstValue
+		}
 	}
-	svcIpValue, ok := svcIp.GetValue().(net.IP)
+	nwDst = matchers.GetMatchByName("NXM_NX_CT_IPV6_DST")
+	if nwDst != nil {
+		nwDstValue, ok := nwDst.GetValue().(net.IP)
+		if ok {
+			return nwDstValue
+		}
+	}
+	return nil
+}
+
+func getCTTpDstValue(matchers *ofctrl.Matchers) uint16 {
+	port := matchers.GetMatchByName("NXM_NX_CT_TP_DST")
+	if port == nil {
+		return 0
+	}
+	portValue, ok := port.GetValue().(uint16)
 	if !ok {
-		return nil
+		return 0
 	}
-	return &svcIpValue
+	return portValue
 }
