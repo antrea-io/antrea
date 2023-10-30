@@ -101,6 +101,10 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
+		if r.clusterSetID != common.ClusterSetID(req.Name) {
+			// Not the current ClusterSet.
+			return ctrl.Result{}, nil
+		}
 		clusterSetNotFound = true
 	}
 
