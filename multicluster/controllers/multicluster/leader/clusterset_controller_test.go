@@ -81,7 +81,7 @@ var (
 	}
 )
 
-func createMockClients(t *testing.T, objects ...client.Object) (*runtime.Scheme, client.Client, *MockMemberClusterStatusManager) {
+func createMockClients(t *testing.T, objects ...client.Object) (client.Client, *MockMemberClusterStatusManager) {
 	scheme := runtime.NewScheme()
 	mcv1alpha1.AddToScheme(scheme)
 	mcv1alpha2.AddToScheme(scheme)
@@ -90,16 +90,13 @@ func createMockClients(t *testing.T, objects ...client.Object) (*runtime.Scheme,
 
 	mockCtrl := gomock.NewController(t)
 	mockStatusManager := NewMockMemberClusterStatusManager(mockCtrl)
-	return scheme, fakeRemoteClient, mockStatusManager
+	return fakeRemoteClient, mockStatusManager
 }
 
 func TestLeaderClusterSetAdd(t *testing.T) {
-	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
-	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
-		Client:        fakeRemoteClient,
-		Scheme:        scheme,
-		StatusManager: mockStatusManager,
-	}
+	fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := NewLeaderClusterSetReconciler(
+		fakeRemoteClient, "mcs1", false, mockStatusManager)
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "mcs1",
@@ -135,13 +132,9 @@ func TestLeaderClusterSetAddWithoutClusterID(t *testing.T) {
 		},
 		Value: "leader1",
 	}
-	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, clusterSetWithoutClusterID, clusterClaim)
-	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
-		Client:                   fakeRemoteClient,
-		Scheme:                   scheme,
-		StatusManager:            mockStatusManager,
-		ClusterCalimCRDAvailable: true,
-	}
+	fakeRemoteClient, mockStatusManager := createMockClients(t, clusterSetWithoutClusterID, clusterClaim)
+	leaderClusterSetReconcilerUnderTest := NewLeaderClusterSetReconciler(
+		fakeRemoteClient, "mcs1", true, mockStatusManager)
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "mcs1",
@@ -160,13 +153,11 @@ func TestLeaderClusterSetAddWithoutClusterID(t *testing.T) {
 }
 
 func TestLeaderClusterSetUpdate(t *testing.T) {
-	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
-	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
-		Client:           fakeRemoteClient,
-		Scheme:           scheme,
-		StatusManager:    mockStatusManager,
-		clusterSetConfig: existingClusterSet.DeepCopy(),
-	}
+	fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := NewLeaderClusterSetReconciler(
+		fakeRemoteClient, "mcs1", false, mockStatusManager)
+	leaderClusterSetReconcilerUnderTest.clusterID = common.ClusterID(existingClusterSet.Spec.ClusterID)
+
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 	assert.Equal(t, nil, err)
@@ -192,13 +183,12 @@ func TestLeaderClusterSetUpdate(t *testing.T) {
 }
 
 func TestLeaderClusterSetDelete(t *testing.T) {
-	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
-	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
-		Client:           fakeRemoteClient,
-		Scheme:           scheme,
-		StatusManager:    mockStatusManager,
-		clusterSetConfig: existingClusterSet.DeepCopy(),
-	}
+	fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := NewLeaderClusterSetReconciler(
+		fakeRemoteClient, "mcs1", false, mockStatusManager)
+	leaderClusterSetReconcilerUnderTest.clusterID = common.ClusterID(existingClusterSet.Spec.ClusterID)
+	leaderClusterSetReconcilerUnderTest.clusterSetID = common.ClusterSetID(existingClusterSet.Name)
+
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := fakeRemoteClient.Get(context.TODO(), types.NamespacedName{Name: "clusterset1", Namespace: "mcs1"}, clusterSet)
 	assert.Equal(t, nil, err)
@@ -219,13 +209,11 @@ func TestLeaderClusterSetDelete(t *testing.T) {
 }
 
 func TestLeaderClusterStatus(t *testing.T) {
-	scheme, fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
-	leaderClusterSetReconcilerUnderTest := LeaderClusterSetReconciler{
-		Client:           fakeRemoteClient,
-		Scheme:           scheme,
-		StatusManager:    mockStatusManager,
-		clusterSetConfig: existingClusterSet.DeepCopy(),
-	}
+	fakeRemoteClient, mockStatusManager := createMockClients(t, existingClusterSet)
+	leaderClusterSetReconcilerUnderTest := NewLeaderClusterSetReconciler(
+		fakeRemoteClient, "mcs1", false, mockStatusManager)
+	leaderClusterSetReconcilerUnderTest.clusterID = common.ClusterID(existingClusterSet.Spec.ClusterID)
+	leaderClusterSetReconcilerUnderTest.clusterSetID = common.ClusterSetID(existingClusterSet.Name)
 
 	mockStatusManager.EXPECT().GetMemberClusterStatuses().Return(statuses).Times(1)
 	leaderClusterSetReconcilerUnderTest.updateStatus()

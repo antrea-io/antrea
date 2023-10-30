@@ -197,9 +197,9 @@ func TestMemberClusterStatus(t *testing.T) {
 			reconciler := MemberClusterSetReconciler{
 				Client:           fakeClient,
 				remoteCommonArea: commonArea,
-				clusterSetConfig: existingClusterSet,
 				clusterSetID:     "clusterset1",
 				clusterID:        "east",
+				namespace:        "mcs1",
 			}
 			reconciler.updateStatus()
 			clusterSet := &mcv1alpha2.ClusterSet{}
@@ -263,7 +263,6 @@ func TestMemberCreateOrUpdateRemoteCommonArea(t *testing.T) {
 	reconciler := MemberClusterSetReconciler{
 		Client:                       fakeClient,
 		remoteCommonArea:             commonArea,
-		clusterSetConfig:             existingClusterSet,
 		clusterSetID:                 "clusterset1",
 		clusterID:                    "east",
 		enableStretchedNetworkPolicy: true,
@@ -337,7 +336,7 @@ func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 
 			reconciler := MemberClusterSetReconciler{
 				Client:                   fakeClient,
-				ClusterCalimCRDAvailable: true,
+				clusterCalimCRDAvailable: true,
 				commonAreaCreationCh:     make(chan struct{}),
 			}
 			go func() {
