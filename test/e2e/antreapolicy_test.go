@@ -3732,7 +3732,7 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 }
 
 func testACNPICMPSupport(t *testing.T, data *TestData) {
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "client", nodeName(1), data.testNamespace, false)
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "client", nodeName(1), data.testNamespace, false)
 	defer cleanupFunc()
 
 	server0Name, server0IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server0", nodeName(0), data.testNamespace, false)
@@ -3920,7 +3920,7 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
 	defer cleanupFunc()
 
 	queryGroupAddress := "224.0.0.1"
@@ -4007,7 +4007,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 	// check if receiver can receive multicast packet
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
 	defer cleanupFunc()
 	cmd, err := generatePacketCaptureCmd(t, data, 5, mc.group.String(), nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0])
 	if err != nil {
@@ -4115,14 +4115,14 @@ func generatePacketCaptureCmd(t *testing.T, data *TestData, timeout int, hostIP,
 	if err != nil {
 		return "", err
 	}
-
-	cmd := fmt.Sprintf("timeout %ds tcpdump -q -i %s -c 1 -W 90 host %s", timeout, podInterfaceInfo[0].InterfaceName, hostIP)
+	// Set "--preserve-status" to get the exit code of "tcpdump" as opposed to "timeout".
+	cmd := fmt.Sprintf("timeout --preserve-status %ds tcpdump -q -i %s -c 1 -W 90 host %s", timeout, podInterfaceInfo[0].InterfaceName, hostIP)
 	return cmd, nil
 }
 
 func checkPacketCaptureResult(t *testing.T, data *TestData, tcpdumpName, cmd string) (captured bool, err error) {
 	stdout, stderr := "", ""
-	stdout, stderr, err = data.RunCommandFromPod(data.testNamespace, tcpdumpName, tcpdumpContainerName, []string{"/bin/sh", "-c", cmd})
+	stdout, stderr, err = data.RunCommandFromPod(data.testNamespace, tcpdumpName, toolboxContainerName, []string{"/bin/sh", "-c", cmd})
 	t.Logf("%s returned: stdout %v, stderr : %v", cmd, stdout, stderr)
 	if err != nil {
 		return false, err

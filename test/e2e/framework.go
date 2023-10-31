@@ -90,8 +90,9 @@ const (
 	testAntreaIPAMNamespace12  string = "antrea-ipam-test-12"
 	busyboxContainerName       string = "busybox"
 	mcjoinContainerName        string = "mcjoin"
-	tcpdumpContainerName       string = "netshoot"
 	agnhostContainerName       string = "agnhost"
+	toolboxContainerName       string = "toolbox"
+	nginxContainerName         string = "nginx"
 	controllerContainerName    string = "antrea-controller"
 	ovsContainerName           string = "antrea-ovs"
 	agentContainerName         string = "antrea-agent"
@@ -124,11 +125,11 @@ const (
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.29"
 	busyboxImage        = "projects.registry.vmware.com/antrea/busybox"
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
-	netshootImage       = "projects.registry.vmware.com/antrea/netshoot:v0.1"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.6.1"
+	toolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.2-1"
 	ipfixCollectorPort  = "4739"
 	clickHouseHTTPPort  = "8123"
 
@@ -1369,10 +1370,10 @@ func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName str
 	return NewPodBuilder(name, ns, mcjoinImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
-// createNetshootPodOnNode creates a Pod in the test namespace with a single netshoot container. The
+// createToolboxPodOnNode creates a Pod in the test namespace with a single toolbox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createNetshootPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	return NewPodBuilder(name, ns, netshootImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
+func (data *TestData) createToolboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
+	return NewPodBuilder(name, ns, toolboxImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
