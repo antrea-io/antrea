@@ -28,6 +28,7 @@ DOCKER_BUILD_ARGS := --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
 DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 WIN_BUILD_ARGS := --build-arg GO_VERSION=$(GO_VERSION)
+WIN_BUILD_ARGS += --build-arg WIN_OVS_VERSION=$(WIN_OVS_VERSION)
 WIN_BUILD_ARGS += --build-arg CNI_BINARIES_VERSION=$(CNI_BINARIES_VERSION)
 WIN_BUILD_ARGS += --build-arg NANOSERVER_VERSION=$(NANOSERVER_VERSION)
 WIN_BUILD_ARGS += --build-arg WIN_BUILD_TAG=$(WIN_BUILD_TAG)
@@ -357,10 +358,11 @@ endif
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
+	docker build -t antrea/windows-ovs:$(WIN_BUILD_OVS_TAG) -f build/images/ovs/Dockerfile.windows --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
 ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
+	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 
