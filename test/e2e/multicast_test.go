@@ -550,7 +550,7 @@ func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, send
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(senderIdx), data.testNamespace, false)
 	defer cleanupFunc()
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(senderIdx), data.testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(senderIdx), data.testNamespace, true)
 	defer cleanupFunc()
 	// Wait 2 seconds(-w 2) before sending multicast traffic.
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
@@ -565,7 +565,7 @@ func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, send
 		// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
 		for _, multicastInterface := range senderMulticastInterfaces {
 			tcpdumpReceiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 5s tcpdump -q -i %s -c 1 -W 90 host %s", multicastInterface, senderGroup)}
-			_, stderr, err := data.RunCommandFromPod(data.testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
+			_, stderr, err := data.RunCommandFromPod(data.testNamespace, tcpdumpName, toolboxContainerName, tcpdumpReceiveMulticastCommand)
 			if err != nil {
 				return false, err
 			}
