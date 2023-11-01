@@ -288,7 +288,7 @@ func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs,
 }
 
 func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
-	_, svcB, svcC, svcD, svcE, err := createPerftestServices(data, false)
+	_, svcB, svcC, svcD, svcE, err := createPerftestServices(data, isIPv6)
 	if err != nil {
 		t.Fatalf("Error when creating perftest Services: %v", err)
 	}
@@ -1489,7 +1489,7 @@ func getRecordsFromOutput(t *testing.T, output string, startTime time.Time) []st
 			result = append(result, record)
 		}
 	}
-	return recordSlices
+	return result
 }
 
 func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {

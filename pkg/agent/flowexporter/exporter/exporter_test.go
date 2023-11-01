@@ -502,7 +502,8 @@ func getDenyConnection(isIPv6 bool, protoID uint8) *flowexporter.Connection {
 		tuple = flowexporter.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &flowexporter.Connection{
-		FlowKey: tuple,
+		FlowKey:       tuple,
+		SourcePodName: "pod",
 	}
 	return conn
 }
