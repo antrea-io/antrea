@@ -32,6 +32,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -154,6 +155,7 @@ var (
 	// we expect 3 records at time 5.5s, 9s, and 12.5s after iperf traffic begins.
 	expectedNumDataRecords                      = 3
 	podAIPs, podBIPs, podCIPs, podDIPs, podEIPs *PodIPs
+	serviceNames                                = []string{"perftest-a", "perftest-b", "perftest-c", "perftest-d", "perftest-e"}
 )
 
 type testFlow struct {
@@ -213,7 +215,7 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 				// of Flow Aggregator has been exported.
 				teardownFlowAggregator(t, data)
 			}()
-			podAIPs, podBIPs, _, _, _, err := createPerftestPods(data)
+			podAIPs, podBIPs, _, _, _, err = createPerftestPods(data)
 			if err != nil {
 				t.Fatalf("Error when creating perftest Pods: %v", err)
 			}
@@ -1666,62 +1668,39 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string, 
 	return np1, np2
 }
 
-func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCIPs *PodIPs, podDIPs *PodIPs, podEIPs *PodIPs, err error) {
+func createPerftestPods(data *TestData) (*PodIPs, *PodIPs, *PodIPs, *PodIPs, *PodIPs, error) {
 	cmd := []string{"iperf3", "-s"}
 	create := func(name string, nodeName string, ports []corev1.ContainerPort) error {
 		return NewPodBuilder(name, data.testNamespace, toolboxImage).WithContainerName("iperf").WithCommand(cmd).OnNode(nodeName).WithPorts(ports).Create(data)
 	}
-
-	if err := create("perftest-a", controlPlaneNodeName(), nil); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
+	var err error
+	var podIPsArray [5]*PodIPs
+	for i, serviceName := range serviceNames {
+		var nodeName string
+		if slices.Contains([]string{"perftest-a", "perftest-b", "perftest-d"}, serviceName) {
+			nodeName = controlPlaneNodeName()
+		} else {
+			nodeName = workerNodeName(1)
+		}
+		if err := create(serviceName, nodeName, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
+			return nil, nil, nil, nil, nil, fmt.Errorf("error when creating the perftest client Pod: %v", err)
+		}
+		podIPsArray[i], err = data.podWaitForIPs(defaultTimeout, serviceName, data.testNamespace)
+		if err != nil {
+			return nil, nil, nil, nil, nil, fmt.Errorf("error when waiting for the perftest client Pod: %v", err)
+		}
 	}
-	podAIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-a", data.testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
-	}
-
-	if err := create("perftest-b", controlPlaneNodeName(), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podBIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-b", data.testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
-	}
-
-	if err := create("perftest-c", workerNodeName(1), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podCIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-c", data.testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
-	}
-
-	if err := create("perftest-d", controlPlaneNodeName(), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podDIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-d", data.testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
-	}
-
-	if err := create("perftest-e", workerNodeName(1), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podEIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-e", data.testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
-	}
-
-	return podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, nil
+	return podIPsArray[0], podIPsArray[1], podIPsArray[2], podIPsArray[3], podIPsArray[4], nil
 }
 
-func createPerftestServices(data *TestData, isIPv6 bool) (svcA *corev1.Service, svcB *corev1.Service, svcC *corev1.Service, svcD *corev1.Service, svcE *corev1.Service, err error) {
+func createPerftestServices(data *TestData, isIPv6 bool) (*corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, error) {
 	svcIPFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		svcIPFamily = corev1.IPv6Protocol
 	}
+	var err error
 	var services [5]*corev1.Service
-	for i, serviceName := range []string{"perftest-a", "perftest-b", "perftest-c", "perftest-d", "perftest-e"} {
+	for i, serviceName := range serviceNames {
 		services[i], err = data.CreateService(serviceName, data.testNamespace, iperfSvcPort, iperfPort, map[string]string{"antrea-e2e": serviceName}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 		if err != nil {
 			return nil, nil, nil, nil, nil, fmt.Errorf("error when creating perftest-b Service: %v", err)
@@ -1731,7 +1710,7 @@ func createPerftestServices(data *TestData, isIPv6 bool) (svcA *corev1.Service, 
 }
 
 func deletePerftestServices(t *testing.T, data *TestData) {
-	for _, serviceName := range []string{"perftest-a", "perftest-b", "perftest-c", "perftest-d", "perftest-e"} {
+	for _, serviceName := range serviceNames {
 		err := data.deleteService(data.testNamespace, serviceName)
 		if err != nil {
 			t.Logf("Error when deleting %s Service: %v", serviceName, err)
