@@ -19,7 +19,7 @@ package connections
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"time"
 
 	"github.com/ti-mo/conntrack"
@@ -36,19 +36,20 @@ var _ ConnTrackDumper = new(connTrackSystem)
 
 type connTrackSystem struct {
 	nodeConfig           *config.NodeConfig
-	serviceCIDRv4        *net.IPNet
-	serviceCIDRv6        *net.IPNet
+	serviceCIDRv4        netip.Prefix
+	serviceCIDRv6        netip.Prefix
 	isAntreaProxyEnabled bool
 	connTrack            NetFilterConnTrack
 }
 
 // TODO: detect the endianness of the system when initializing conntrack dumper to handle situations on big-endian platforms.
 // All connection labels are required to store in little endian format in conntrack dumper.
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
 	}
+
 	return &connTrackSystem{
 		nodeConfig,
 		serviceCIDRv4,
@@ -105,7 +106,7 @@ func (nfct *netFilterConnTrack) Dial() error {
 }
 
 func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexporter.Connection, error) {
-	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{})
+	conns, err := nfct.netlinkConn.DumpFilter(conntrack.Filter{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -122,25 +123,23 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 }
 
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
-	tuple := flowexporter.Tuple{
-		SourceAddress:      conn.TupleOrig.IP.SourceAddress,
-		DestinationAddress: conn.TupleReply.IP.SourceAddress,
-		Protocol:           conn.TupleOrig.Proto.Protocol,
-		SourcePort:         conn.TupleOrig.Proto.SourcePort,
-		DestinationPort:    conn.TupleReply.Proto.SourcePort,
-	}
-	// Assign all the applicable fields
 	newConn := flowexporter.Connection{
-		ID:                        conn.ID,
-		Timeout:                   conn.Timeout,
-		StartTime:                 conn.Timestamp.Start,
-		IsPresent:                 true,
-		Zone:                      conn.Zone,
-		Mark:                      conn.Mark,
-		Labels:                    conn.Labels,
-		LabelsMask:                conn.LabelsMask,
-		StatusFlag:                uint32(conn.Status.Value),
-		FlowKey:                   tuple,
+		ID:         conn.ID,
+		Timeout:    conn.Timeout,
+		StartTime:  conn.Timestamp.Start,
+		IsPresent:  true,
+		Zone:       conn.Zone,
+		Mark:       conn.Mark,
+		Labels:     conn.Labels,
+		LabelsMask: conn.LabelsMask,
+		StatusFlag: uint32(conn.Status.Value),
+		FlowKey: flowexporter.Tuple{
+			SourceAddress:      conn.TupleOrig.IP.SourceAddress,
+			DestinationAddress: conn.TupleReply.IP.SourceAddress,
+			Protocol:           conn.TupleOrig.Proto.Protocol,
+			SourcePort:         conn.TupleOrig.Proto.SourcePort,
+			DestinationPort:    conn.TupleReply.Proto.SourcePort,
+		},
 		DestinationServiceAddress: conn.TupleOrig.IP.DestinationAddress,
 		DestinationServicePort:    conn.TupleOrig.Proto.DestinationPort,
 		OriginalPackets:           conn.CountersOrig.Packets,

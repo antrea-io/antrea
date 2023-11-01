@@ -15,8 +15,6 @@
 package flowexporter
 
 import (
-	"strconv"
-
 	"github.com/vmware/go-ipfix/pkg/registry"
 
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -28,12 +26,7 @@ const (
 
 // NewConnectionKey creates 5-tuple of flow as connection key
 func NewConnectionKey(conn *Connection) ConnectionKey {
-	return ConnectionKey{conn.FlowKey.SourceAddress.String(),
-		strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10),
-		conn.FlowKey.DestinationAddress.String(),
-		strconv.FormatUint(uint64(conn.FlowKey.DestinationPort), 10),
-		strconv.FormatUint(uint64(conn.FlowKey.Protocol), 10),
-	}
+	return conn.FlowKey
 }
 
 func IsConnectionDying(conn *Connection) bool {

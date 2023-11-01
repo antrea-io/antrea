@@ -17,19 +17,16 @@ package connections
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
-	"strings"
+	"net/netip"
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
@@ -45,17 +42,17 @@ import (
 )
 
 var (
-	tuple1 = flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	tuple2 = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	tuple3 = flowexporter.Tuple{SourceAddress: net.IP{10, 10, 10, 10}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 60000, DestinationPort: 100}
+	tuple1 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple2 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple3 = flowexporter.Tuple{SourceAddress: netip.MustParseAddr("10.10.10.10"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 60000, DestinationPort: 100}
 	pod1   = &v1.Pod{
 		Status: v1.PodStatus{
 			PodIPs: []v1.PodIP{
 				{
-					IP: net.IP{8, 7, 6, 5}.String(),
+					IP: "8.7.6.5",
 				},
 				{
-					IP: net.IP{4, 3, 2, 1}.String(),
+					IP: "4.3.2.1",
 				},
 			},
 			Phase: v1.PodRunning,
@@ -96,7 +93,6 @@ var (
 
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
 	refTime := time.Now()
 
 	tc := []struct {
@@ -265,13 +261,12 @@ func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection)
 
 func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
 	// Create two flows; one is already in connectionStore and other one is new
 	testFlows := make([]*flowexporter.Connection, 2)
 	testFlowKeys := make([]*flowexporter.ConnectionKey, 2)
 	refTime := time.Now()
 	// Flow-1, which is already in connectionStore
-	tuple1 := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	tuple1 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	testFlows[0] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
 		StopTime:        refTime,
@@ -283,7 +278,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 		IsPresent:       true,
 	}
 	// Flow-2, which is not in connectionStore
-	tuple2 := flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
+	tuple2 := flowexporter.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	testFlows[1] = &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
 		StopTime:        refTime,
@@ -319,7 +314,6 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 
 func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	metrics.InitializeConnectionMetrics()
 
 	testFlows := make([]*flowexporter.Connection, 0)
 	// Create connectionStore
@@ -337,34 +331,4 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	assert.Equal(t, connsLens[0], len(testFlows), "expected connections should be equal to number of testFlows")
 	checkTotalConnectionsMetric(t, TotalConnections)
 	checkMaxConnectionsMetric(t, MaxConnections)
-}
-
-func checkAntreaConnectionMetrics(t *testing.T, numConns int) {
-	expectedAntreaConnectionCount := `
-	# HELP antrea_agent_conntrack_antrea_connection_count [ALPHA] Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
-	# TYPE antrea_agent_conntrack_antrea_connection_count gauge
-	`
-	expectedAntreaConnectionCount = expectedAntreaConnectionCount + fmt.Sprintf("antrea_agent_conntrack_antrea_connection_count %d\n", numConns)
-	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedAntreaConnectionCount), "antrea_agent_conntrack_antrea_connection_count")
-	assert.NoError(t, err)
-}
-
-func checkTotalConnectionsMetric(t *testing.T, numConns int) {
-	expectedConnectionCount := `
-	# HELP antrea_agent_conntrack_total_connection_count [ALPHA] Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
-	# TYPE antrea_agent_conntrack_total_connection_count gauge
-	`
-	expectedConnectionCount = expectedConnectionCount + fmt.Sprintf("antrea_agent_conntrack_total_connection_count %d\n", numConns)
-	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedConnectionCount), "antrea_agent_conntrack_total_connection_count")
-	assert.NoError(t, err)
-}
-
-func checkMaxConnectionsMetric(t *testing.T, maxConns int) {
-	expectedMaxConnectionsCount := `
-	# HELP antrea_agent_conntrack_max_connection_count [ALPHA] Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.
-	# TYPE antrea_agent_conntrack_max_connection_count gauge
-	`
-	expectedMaxConnectionsCount = expectedMaxConnectionsCount + fmt.Sprintf("antrea_agent_conntrack_max_connection_count %d\n", maxConns)
-	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedMaxConnectionsCount), "antrea_agent_conntrack_max_connection_count")
-	assert.NoError(t, err)
 }

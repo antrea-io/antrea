@@ -16,6 +16,7 @@ package priorityqueue
 import (
 	"container/heap"
 	"fmt"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -23,6 +24,19 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 )
+
+func testConnectionKey(x int) flowexporter.ConnectionKey {
+	if x < 0 || x > 255 {
+		panic("x must be >= 0 and <= 255")
+	}
+	return flowexporter.Tuple{
+		SourceAddress:      netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", x)),
+		DestinationAddress: netip.MustParseAddr("10.10.0.1"),
+		Protocol:           6,
+		SourcePort:         12345,
+		DestinationPort:    8080,
+	}
+}
 
 func TestExpirePriorityQueue(t *testing.T) {
 	startTime := time.Now()
@@ -42,12 +56,12 @@ func TestExpirePriorityQueue(t *testing.T) {
 			Index:            key,
 		}
 		testPriorityQueue.items = append(testPriorityQueue.items, item)
-		testPriorityQueue.KeyToItem[flowexporter.ConnectionKey{fmt.Sprintf("%d", key)}] = item
+		testPriorityQueue.KeyToItem[testConnectionKey(key)] = item
 	}
 	heap.Init(testPriorityQueue)
 
 	// Test WriteItemToQueue
-	connKey := flowexporter.ConnectionKey{"3"}
+	connKey := testConnectionKey(3)
 	conn := flowexporter.Connection{}
 	testPriorityQueue.WriteItemToQueue(connKey, &conn)
 	assert.Equal(t, &conn, testPriorityQueue.KeyToItem[connKey].Conn, "WriteItemToQueue didn't add new conn to map")

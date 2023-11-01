@@ -26,17 +26,18 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
-	"go.uber.org/mock/gomock"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/pkg/ipfix"
 )
 
@@ -46,6 +47,8 @@ const (
 	testNumOfDyingConns    = 2000
 	testNumOfIdleDenyConns = 2000
 	testBufferSize         = 1048
+
+	testWithIPv6 = false
 )
 
 var recordsReceived = 0
@@ -83,11 +86,11 @@ Reference value:
 */
 func BenchmarkExportConntrackConns(b *testing.B) {
 	disableLogToStderr()
-	ctrl := gomock.NewController(b)
-	defer ctrl.Finish()
 
+	stopCh := make(chan struct{})
+	defer close(stopCh)
 	recordsReceived = 0
-	exp, err := setupExporter(true)
+	exp, err := setupExporter(true, stopCh)
 	if err != nil {
 		b.Fatalf("error when setting up exporter: %v", err)
 	}
@@ -98,6 +101,7 @@ func BenchmarkExportConntrackConns(b *testing.B) {
 			exp.sendFlowRecords()
 		}
 	}
+	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of conntrack connections: %d\nNumber of dying conntrack connections: %d\nTotal connections received: %d\n", testNumOfConns, testNumOfDyingConns, recordsReceived)
 }
 
@@ -134,11 +138,11 @@ Reference value:
 */
 func BenchmarkExportDenyConns(b *testing.B) {
 	disableLogToStderr()
-	ctrl := gomock.NewController(b)
-	defer ctrl.Finish()
 
+	stopCh := make(chan struct{})
+	defer close(stopCh)
 	recordsReceived = 0
-	exp, err := setupExporter(false)
+	exp, err := setupExporter(false, stopCh)
 	if err != nil {
 		b.Fatalf("error when setting up exporter: %v", err)
 	}
@@ -149,8 +153,8 @@ func BenchmarkExportDenyConns(b *testing.B) {
 			exp.sendFlowRecords()
 		}
 	}
+	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of deny connections: %d\nNumber of idle deny connections: %d\nTotal connections received: %d\n", testNumOfDenyConns, testNumOfIdleDenyConns, recordsReceived)
-
 }
 
 func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
@@ -162,8 +166,8 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	nodeName := "test-node"
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
-	v4Enabled := true
-	v6Enabled := false
+	v4Enabled := !testWithIPv6
+	v6Enabled := testWithIPv6
 
 	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o)
 	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, o)
@@ -187,9 +191,9 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	}
 }
 
-func setupExporter(isConntrackConn bool) (*FlowExporter, error) {
+func setupExporter(isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter, error) {
 	var err error
-	collectorAddr, err := startLocalServer()
+	collectorAddr, err := startLocalServer(stopCh)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +205,8 @@ func setupExporter(isConntrackConn bool) (*FlowExporter, error) {
 		ActiveFlowTimeout:      testActiveFlowTimeout,
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: 1,
-		PollInterval:           1}
+		PollInterval:           1,
+	}
 	exp := NewFlowExporterForTest(o)
 	if isConntrackConn {
 		addConns(exp.conntrackConnStore, exp.conntrackConnStore.GetPriorityQueue())
@@ -211,7 +216,7 @@ func setupExporter(isConntrackConn bool) (*FlowExporter, error) {
 	return exp, err
 }
 
-func startLocalServer() (net.Addr, error) {
+func startLocalServer(stopCh <-chan struct{}) (net.Addr, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("error when resolving UDP address: %v", err)
@@ -221,7 +226,6 @@ func startLocalServer() (net.Addr, error) {
 		return nil, fmt.Errorf("error when creating local server: %v", err)
 	}
 	go func() {
-		defer conn.Close()
 		for {
 			buff := make([]byte, testBufferSize)
 			_, _, err := conn.ReadFromUDP(buff)
@@ -231,6 +235,10 @@ func startLocalServer() (net.Addr, error) {
 			recordsReceived++
 		}
 	}()
+	go func() {
+		<-stopCh
+		conn.Close()
+	}()
 	return conn.LocalAddr(), nil
 }
 
@@ -238,13 +246,20 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 	randomNum := int(getRandomNum(int64(testNumOfConns - testNumOfDyingConns)))
 	for i := 0; i < testNumOfConns; i++ {
 		// create and add connection to connection store
-		randomNum1 := getRandomNum(255)
-		randomNum2 := getRandomNum(255)
-		src := net.ParseIP(fmt.Sprintf("192.168.%d.%d", randomNum1, randomNum2))
-		dst := net.ParseIP(fmt.Sprintf("192.169.%d.%d", randomNum2, randomNum1))
+		var src, dst, svc netip.Addr
+		if testWithIPv6 {
+			src = exptest.RandIPv6()
+			dst = exptest.RandIPv6()
+			svc = exptest.RandIPv6()
+		} else {
+			src = exptest.RandIPv4()
+			dst = exptest.RandIPv4()
+			svc = exptest.RandIPv4()
+		}
 		flowKey := flowexporter.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
+		randomDuration := getRandomNum(255)
 		conn := &flowexporter.Connection{
-			StartTime:                  time.Now().Add(-time.Duration(randomNum1) * time.Second),
+			StartTime:                  time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			StopTime:                   time.Now(),
 			IsPresent:                  true,
 			ReadyToDelete:              false,
@@ -258,7 +273,7 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 			DestinationPodNamespace:    "ns2",
 			DestinationPodName:         "pod2",
 			DestinationServicePortName: "service",
-			DestinationServiceAddress:  net.ParseIP("0.0.0.0"),
+			DestinationServiceAddress:  svc,
 			TCPState:                   "SYN_SENT",
 		}
 		connKey := flowexporter.NewConnectionKey(conn)
@@ -268,7 +283,7 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 		}
 		connStore.AddConnToMap(&connKey, conn)
 		pqItem := &flowexporter.ItemToExpire{
-			ActiveExpireTime: time.Now().Add(-time.Duration(randomNum1) * time.Second),
+			ActiveExpireTime: time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			IdleExpireTime:   time.Now(),
 		}
 		pqItem.Conn = conn
@@ -279,13 +294,18 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 
 func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueue *priorityqueue.ExpirePriorityQueue) {
 	for i := 0; i < testNumOfDenyConns; i++ {
-		randomNum1 := getRandomNum(255)
-		randomNum2 := getRandomNum(255)
-		src := net.ParseIP(fmt.Sprintf("192.166.%d.%d", randomNum1, randomNum2))
-		dst := net.ParseIP(fmt.Sprintf("192.167.%d.%d", randomNum2, randomNum1))
+		var src, dst netip.Addr
+		if testWithIPv6 {
+			src = exptest.RandIPv6()
+			dst = exptest.RandIPv6()
+		} else {
+			src = exptest.RandIPv4()
+			dst = exptest.RandIPv4()
+		}
 		flowKey := flowexporter.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(i), DestinationPort: uint16(i)}
+		randomDuration := getRandomNum(255)
 		conn := &flowexporter.Connection{
-			StartTime:                     time.Now().Add(-time.Duration(randomNum1) * time.Second),
+			StartTime:                     time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			StopTime:                      time.Now(),
 			FlowKey:                       flowKey,
 			OriginalPackets:               10,
@@ -300,7 +320,7 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 		connKey := flowexporter.NewConnectionKey(conn)
 		connStore.AddConnToMap(&connKey, conn)
 		pqItem := &flowexporter.ItemToExpire{
-			ActiveExpireTime: time.Now().Add(-time.Duration(randomNum1) * time.Second),
+			ActiveExpireTime: time.Now().Add(-time.Duration(randomDuration) * time.Second),
 			IdleExpireTime:   time.Now(),
 		}
 		pqItem.Conn = conn

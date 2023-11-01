@@ -173,6 +173,10 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, o)
 
+	if nodeRouteController == nil {
+		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
+	}
+
 	return &FlowExporter{
 		collectorAddr:          o.FlowCollectorAddr,
 		conntrackConnStore:     conntrackConnStore,
@@ -424,7 +428,7 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 
 	eL := exp.elementsListv4
 	templateID := exp.templateIDv4
-	if conn.FlowKey.SourceAddress.To4() == nil {
+	if conn.FlowKey.SourceAddress.Is6() {
 		templateID = exp.templateIDv6
 		eL = exp.elementsListv6
 	}
@@ -448,13 +452,13 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 				ie.SetUnsigned8Value(ipfixregistry.IdleTimeoutReason)
 			}
 		case "sourceIPv4Address":
-			ie.SetIPAddressValue(conn.FlowKey.SourceAddress)
+			ie.SetIPAddressValue(conn.FlowKey.SourceAddress.AsSlice())
 		case "destinationIPv4Address":
-			ie.SetIPAddressValue(conn.FlowKey.DestinationAddress)
+			ie.SetIPAddressValue(conn.FlowKey.DestinationAddress.AsSlice())
 		case "sourceIPv6Address":
-			ie.SetIPAddressValue(conn.FlowKey.SourceAddress)
+			ie.SetIPAddressValue(conn.FlowKey.SourceAddress.AsSlice())
 		case "destinationIPv6Address":
-			ie.SetIPAddressValue(conn.FlowKey.DestinationAddress)
+			ie.SetIPAddressValue(conn.FlowKey.DestinationAddress.AsSlice())
 		case "sourceTransportPort":
 			ie.SetUnsigned16Value(conn.FlowKey.SourcePort)
 		case "destinationTransportPort":
@@ -517,7 +521,7 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 			}
 		case "destinationClusterIPv4":
 			if conn.DestinationServicePortName != "" {
-				ie.SetIPAddressValue(conn.DestinationServiceAddress)
+				ie.SetIPAddressValue(conn.DestinationServiceAddress.AsSlice())
 			} else {
 				// Sending dummy IP as IPFIX collector expects constant length of data for IP field.
 				// We should probably think of better approach as this involves customization of IPFIX collector to ignore
@@ -526,7 +530,7 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 			}
 		case "destinationClusterIPv6":
 			if conn.DestinationServicePortName != "" {
-				ie.SetIPAddressValue(conn.DestinationServiceAddress)
+				ie.SetIPAddressValue(conn.DestinationServiceAddress.AsSlice())
 			} else {
 				// Same as destinationClusterIPv4.
 				ie.SetIPAddressValue(net.ParseIP("::"))
@@ -595,11 +599,11 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	}
 
 	if exp.nodeRouteController == nil {
-		klog.Warningf("Can't find flowType without nodeRouteController")
+		klog.V(4).InfoS("Can't find flowType without nodeRouteController")
 		return 0
 	}
-	if exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.SourceAddress) {
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress) {
+	if exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.SourceAddress.AsSlice()) {
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress.AsSlice()) {
 			if conn.SourcePodName == "" || conn.DestinationPodName == "" {
 				return ipfixregistry.FlowTypeInterNode
 			}
