@@ -1077,3 +1077,189 @@
                     default-excludes: true
                     fingerprint: false
                     only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind--ipv6-networkpolicy
+          node: 'antrea-aws-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+              - ${{sha1}}    
+          builders:
+              - builder-kind-ipv6-ds-conformance:
+                    conformance_type: 'networkpolicy'
+                    ip_version: 'ipv6'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-aws-ipv6-(networkpolicy|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-ipv6-networkpolicy
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-aws-ipv6-networkpolicy to re-trigger.
+          error_status: Failed. Add comment /test-kind-aws-ipv6-networkpolicy to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-ipv6-conformance
+          node: 'antrea-aws-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+             - ${{sha1}}   
+          builders:
+             - builder-kind-ipv6-ds-conformance:
+                  conformance_type: 'conformance'
+                  ip_version: 'ipv6'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-aws-ipv6-(conformance|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-ipv6-conformance
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-aws-ipv6-conformance to re-trigger.
+          error_status: Failed. Add comment /test-kind-aws-ipv6-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-ipv6-e2e
+          node: 'antrea-aws-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+             - ${{sha1}}      
+          builders:
+             - builder-kind-ipv6-ds-e2e:
+                  test_type: 'e2e'
+                  ip_version: 'ipv6'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-aws-ipv6-(e2e|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-ipv6-e2e
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-aws-ipv6-e2e to re-trigger.
+          error_status: Failed. Add comment /test-kind-aws-ipv6-e2e to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-ds-networkpolicy
+          node: 'antrea-aws-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+             - ${{sha1}}    
+          builders:
+             - builder-kind-ipv6-ds-conformance:
+                  conformance_type: 'networkpolicy'
+                  ip_version: 'dual'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-aws-ds-(networkpolicy|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-ds-networkpolicy
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-aws-ds-networkpolicy to re-trigger.
+          error_status: Failed. Add comment /test-kind-aws-ds-networkpolicy to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-dual-conformance
+          node: 'antrea-aws-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+             - ${{sha1}}   
+          builders:
+             - builder-kind-ipv6-ds-conformance:
+                  conformance_type: 'conformance'
+                  ip_version: 'dual'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-aws-ds-(conformance|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-ds-conformance
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-aws-ds-conformance to re-trigger.
+          error_status: Failed. Add comment /test-kind-aws-ds-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-ds-e2e
+          node: 'antrea-aws-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+             - ${{sha1}}      
+          builders:
+             - builder-kind-ipv6-ds-e2e:
+                  test_type: 'e2e'
+                  ip_version: 'dual'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-aws-ds-(e2e|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-ds-e2e
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-aws-ds-e2e to re-trigger.
+          error_status: Failed. Add comment /test-kind-aws-ds-e2e to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers: []

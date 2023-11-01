@@ -20,6 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
+IP_VERSION=""
 KIND_CLUSTER=""
 DEFAULT_WORKDIR="/var/lib/jenkins"
 DEFAULT_KUBECONFIG_PATH=$DEFAULT_WORKDIR/kube.conf
@@ -67,7 +68,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
         --win-image-node         Name of the windows image node in containerd cluster. Images are built by docker on this node.
-        --kind-cluster-name      Name of the kind Cluster." 
+        --kind-cluster-name      Name of the kind Cluster
+        --ip-version             Specifies the ip-version for the kind cluster." 
 
 function print_usage {
     echoerr "$_usage"
@@ -84,6 +86,10 @@ key="$1"
 case $key in
     --kind-cluster-name)
     KIND_CLUSTER="$2"
+    shift 2
+    ;;
+    --ip-version)
+    IP_VERSION="$2"
     shift 2
     ;;
     --kubeconfig)
@@ -150,6 +156,7 @@ fi
 export NO_PULL
 
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
+export KUBECONFIG=${KUBECONFIG_PATH}
 
 function export_govc_env_var {
     env_govc="${WORKDIR}/govc.env"
@@ -774,7 +781,9 @@ function run_e2e {
 
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
-    cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    if [[ $TESTBED_TYPE != "kind" ]]; then
+        cp -f "${WORKDIR}/kube.conf"  ${KUBECONFIG_PATH}
+    fi
     generate_ssh_config
 
     set +e
@@ -783,6 +792,11 @@ function run_e2e {
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
+    elif [[ $TESTBED_TYPE == "kind" ]]; then
+        kubectl apply -f build/yamls/antrea-prometheus.yml
+        kubectl apply --context kind-${KIND_CLUSTER} -f build/yamls/antrea-prometheus-rbac.yml
+        ./hack/generate-manifest.sh | docker exec -i ${KIND_CLUSTER}-control-plane dd of=/root/antrea.yml
+        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind -timeout=100m --prometheus
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi
@@ -809,6 +823,18 @@ function run_conformance {
     kubectl rollout status daemonset/antrea-agent -n kube-system
 
     set +e
+    # Conformance DNS test cases fail in ipv6 Kind cluster because here CoreDNS pods are IPV6 pods and 
+    # it can't reach IPV4 upstream namespace server.
+    # Note: By default CoreDNS ConfigMap uses /etc/resolv.conf to get upstream nameservers and the upstream nameservers can be accessed by IPV4
+    # but single stack IPV6 CoreDNS would not be able to connect that server and it return servfail, 
+    # to reolve this we need to forward IPV6 query to "compute.internal:53" server and 
+    # it will return 'NXDOMAIN' so that client keep searching.
+    # For more detail: https://github.com/kubernetes/kubernetes/issues/94794 
+    if [[ $IP_VERSION == "ipv6" && "$TESTCASE" =~ "conformance" && $TESTBED_TYPE == "kind" ]]; then
+        #  Override the CoreDNS ConfigMap with new one.
+        kubectl apply -f ./ci/coredns-configmap.yaml
+    fi  
+    
     if [[ "$TESTCASE" =~ "conformance" ]]; then
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip "$CONFORMANCE_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
     else

@@ -301,3 +301,43 @@
            #!/bin/bash
            set -e
            ./ci/jenkins/stop-stale-jobs.sh --pull-request "${ghprbPullId}" --jenkins "${JENKINS_URL}"
+
+- builder:          
+    name: builder-kind-ipv6-ds-conformance
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          #  Delete all kind clusters created more than 135 mins ago. 135 minutes is the timeout 
+          #  we have configured for running conformance, NetworkPolicy and e2e tests on Kind, 
+          #  so clusters older than that can de deleted safely.
+          ./ci/kind/kind-setup.sh destroy --all --until 135
+          ./ci/kind/kind-setup.sh --antrea-cni create "kind-${{BUILD_NUMBER}}" --ip-family '{ip_version}'
+          kind export kubeconfig -n "kind-${{BUILD_NUMBER}}" --kubeconfig ${{PWD}}/.kube/config
+          set +ex
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --ip-version '{ip_version}' --kind-cluster-name "kind-${{BUILD_NUMBER}}"
+          return_code=$?
+          set -e
+          kind delete cluster --name "kind-${{BUILD_NUMBER}}"
+          exit $return_code
+
+- builder:
+    name: builder-kind-ipv6-ds-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          #  Delete all kind clusters created more than 135 mins ago. 135 minutes is the timeout 
+          #  we have configured for running conformance, NetworkPolicy and e2e tests on Kind, 
+          #  so clusters older than that can de deleted safely.
+          ./ci/kind/kind-setup.sh destroy --all --until 135
+          ./ci/kind/kind-setup.sh --antrea-cni create "kind-${{BUILD_NUMBER}}" --ip-family '{ip_version}'
+          kind export kubeconfig -n "kind-${{BUILD_NUMBER}}" --kubeconfig ${{PWD}}/.kube/config
+          set +ex
+          ./ci/jenkins/test.sh --testcase '{test_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "kind-${{BUILD_NUMBER}}"
+          return_code=$?
+          set -e
+          kind delete cluster --name "kind-${{BUILD_NUMBER}}"
+          exit $return_code 
