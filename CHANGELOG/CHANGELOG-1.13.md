@@ -1,5 +1,17 @@
 # Changelog 1.13
 
+## 1.13.2 - 2023-11-01
+
+### Fixed
+
+- Fix `antctl tf` CLI failure when the Traceflow is using an IPv6 address. ([#5588](https://github.com/antrea-io/antrea/pull/5588), [@Atish-iaf])
+- Fix a deadlock issue in NetworkPolicy Controller which causes a FQDN resolution failure. ([#5566](https://github.com/antrea-io/antrea/pull/5566) [#5583](https://github.com/antrea-io/antrea/pull/5583), [@Dyanngg] [@tnqn])
+- Fix NetworkPolicy span calculation to avoid out-dated data when multiple NetworkPolicies have the same selector. ([#5554](https://github.com/antrea-io/antrea/pull/5554), [@tnqn])
+- Fix SSL library downloading failure in Install-OVS.ps1 on Windows. ([#5510](https://github.com/antrea-io/antrea/pull/5510), [@XinShuYang])
+- Fix rollback invocation after CmdAdd failure in CNI server. ([#5548](https://github.com/antrea-io/antrea/pull/5548), [@antoninbas])
+- Do not apply Egress to traffic destined for ServiceCIDRs to avoid performance issue and unexpected behaviors. ([#5495](https://github.com/antrea-io/antrea/pull/5495), [@tnqn])
+- Do not delete IPv6 link-local route in route reconciler to fix cross-Node Pod traffic or Pod-to-external traffic. ([#5483](https://github.com/antrea-io/antrea/pull/5483), [@wenyingd])
+
 ## 1.13.1 - 2023-09-11
 
 ### Changed
