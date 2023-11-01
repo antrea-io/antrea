@@ -36,7 +36,7 @@ function print_usage {
 }
 
 if ! command -v gh > /dev/null; then
-  echo "Can't find 'gh' tool in PATH, please install from https://github.com/cli/cli"
+  echoerr "Can't find 'gh' tool in PATH, please install from https://github.com/cli/cli"
   exit 1
 fi
 
