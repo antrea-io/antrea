@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"time"
 
@@ -128,7 +129,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	denyConn.Mark = getCTMarkValue(matchers)
 	dstSvcAddress := getCTNwDstValue(matchers)
 	dstSvcPort := getCTTpDstValue(matchers)
-	if dstSvcAddress != nil {
+	if dstSvcAddress.IsValid() {
 		denyConn.DestinationServiceAddress = dstSvcAddress
 	}
 	if dstSvcPort != 0 {
@@ -245,22 +246,24 @@ func getCTMarkValue(matchers *ofctrl.Matchers) uint32 {
 	return ctMarkValue
 }
 
-func getCTNwDstValue(matchers *ofctrl.Matchers) net.IP {
+func getCTNwDstValue(matchers *ofctrl.Matchers) netip.Addr {
 	nwDst := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
 	if nwDst != nil {
-		nwDstValue, ok := nwDst.GetValue().(net.IP)
-		if ok {
-			return nwDstValue
+		if nwDstValue, ok := nwDst.GetValue().(net.IP); ok {
+			if ip, ok := netip.AddrFromSlice(nwDstValue.To4()); ok {
+				return ip
+			}
 		}
 	}
 	nwDst = matchers.GetMatchByName("NXM_NX_CT_IPV6_DST")
 	if nwDst != nil {
-		nwDstValue, ok := nwDst.GetValue().(net.IP)
-		if ok {
-			return nwDstValue
+		if nwDstValue, ok := nwDst.GetValue().(net.IP); ok {
+			if ip, ok := netip.AddrFromSlice(nwDstValue.To16()); ok {
+				return ip
+			}
 		}
 	}
-	return nil
+	return netip.Addr{}
 }
 
 func getCTTpDstValue(matchers *ofctrl.Matchers) uint16 {
