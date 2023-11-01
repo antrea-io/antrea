@@ -33,7 +33,7 @@ type connTrackOvsCtlWindows struct {
 
 func (ct *connTrackOvsCtlWindows) GetMaxConnections() (int, error) {
 	var zoneID int
-	if !ct.serviceCIDRv4.IsValid() {
+	if ct.serviceCIDRv4.IsValid() {
 		zoneID = openflow.CtZone
 	} else {
 		zoneID = openflow.CtZoneV6
