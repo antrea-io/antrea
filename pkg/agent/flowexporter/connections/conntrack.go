@@ -44,7 +44,7 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool) []*flowexporter.Connection {
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
-	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
+	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
 	for _, conn := range conns {
 		if conn.Zone != zoneFilter {
 			continue

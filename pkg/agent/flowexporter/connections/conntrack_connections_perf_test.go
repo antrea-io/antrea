@@ -99,8 +99,8 @@ func BenchmarkConnStore(b *testing.B) {
 	connStore, _ := setupConntrackConnStore(b)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		// include this in the bechmark (do not stop timer), to measure the memory footprint
-		// of the connection store and all connections accurately.
+		// include this in the benchmark (do not stop timer), to measure the memory
+		// footprint of the connection store and all connections accurately.
 		conns := generateConns()
 		// add connections
 		for _, conn := range conns {
