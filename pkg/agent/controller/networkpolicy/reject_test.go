@@ -20,13 +20,17 @@ import (
 	"testing"
 
 	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	storetesting "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
+	oftesting "antrea.io/antrea/pkg/agent/openflow/testing"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	mocks "antrea.io/antrea/pkg/ovs/openflow/testing"
 )
@@ -390,6 +394,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		})
 	conntrackTableID := openflow.ConntrackTable.GetID()
 	l3ForwardingTableID := openflow.L3ForwardingTable.GetID()
+	l2ForwardingTableID := openflow.L2ForwardingCalcTable.GetID()
 	ctrl := gomock.NewController(t)
 	type args struct {
 		rejectType        rejectType
@@ -451,7 +456,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 			},
 		},
 		{
-			name: "RejectLocalToRemoteFlexibleIPAMSrc",
+			name: "RejectLocalToRemoteNoFlexibleIPAM",
 			args: args{
 				rejectType:        rejectPodLocalToRemote,
 				nodeType:          config.K8sNode,
@@ -463,6 +468,21 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
 				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
 				builder.EXPECT().AddResubmitAction(nil, &l3ForwardingTableID).Return(builder)
+			},
+		},
+		{
+			name: "RejectLocalToRemoteNoFlexibleIPAM,ExternalNode",
+			args: args{
+				rejectType:        rejectPodLocalToRemote,
+				nodeType:          config.ExternalNode,
+				isFlexibleIPAMSrc: false,
+				isFlexibleIPAMDst: false,
+				ctZone:            1,
+			},
+			prepareFunc: func(builder *mocks.MockPacketOutBuilder) {
+				builder.EXPECT().AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark).Return(builder)
+				builder.EXPECT().AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, 1)).Return(builder)
+				builder.EXPECT().AddResubmitAction(nil, &l2ForwardingTableID).Return(builder)
 			},
 		},
 		{
@@ -501,4 +521,181 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 			getRejectPacketOutMutateFunc(tt.args.rejectType, tt.args.nodeType, tt.args.isFlexibleIPAMSrc, tt.args.isFlexibleIPAMDst, tt.args.ctZone)(builder)
 		})
 	}
+}
+
+func Test_handleRejectRequest(t *testing.T) {
+	fakeSrcMac := "aa:aa:aa:aa:aa:aa"
+	fakeDstMac := "bb:bb:bb:bb:bb:bb"
+	fakeSrcIPv4 := "1.1.1.1"
+	fakeDstIPv4 := "2.2.2.2"
+	fakeSrcIPv6 := "2001::1"
+	fakeDstIPv6 := "2001::2"
+	fakeSrcPort := uint16(8080)
+	fakeDstPort := uint16(80)
+	fakeTCPSeqNum := uint32(1)
+	fakeOFPort1 := int32(1)
+	fakeOFPort2 := int32(2)
+	fakeSIface := &interfacestore.InterfaceConfig{
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			OFPort: fakeOFPort2,
+		},
+		MAC: net.HardwareAddr([]byte{0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb}),
+	}
+	fakeDIface := &interfacestore.InterfaceConfig{
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			OFPort: fakeOFPort1,
+		},
+		MAC: net.HardwareAddr([]byte{0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa}),
+	}
+	fakeGWIface := &interfacestore.InterfaceConfig{
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			OFPort: fakeOFPort1,
+		},
+		MAC: net.HardwareAddr([]byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}),
+	}
+	// Only test RejectPodLocal and RejectServiceRemoteToExternal two reject types,
+	// considering other types branches are covered by the UTs above.
+	tests := []struct {
+		name              string
+		packetIn          *ofctrl.PacketIn
+		antreaProxyEnable bool
+		prepareFunc       func(mockClient *oftesting.MockClient, mockIStore *storetesting.MockInterfaceStore)
+	}{
+		{
+			name:              "RejectPodLocalIPv4TCPTrafficWithAntreaProxy",
+			packetIn:          genPacketIn(fakeSrcMac, fakeDstMac, fakeSrcIPv4, fakeDstIPv4, fakeSrcPort, fakeDstPort, fakeTCPSeqNum, false, true, []openflow15.MatchField{*openflow15.NewInPortField(uint32(fakeOFPort1))}),
+			antreaProxyEnable: true,
+			prepareFunc: func(mockClient *oftesting.MockClient, mockIStore *storetesting.MockInterfaceStore) {
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeSIface, true)
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeDIface, true)
+				mockClient.EXPECT().SendTCPPacketOut(fakeDstMac, fakeSrcMac, fakeDstIPv4, fakeSrcIPv4, gomock.Any(), gomock.Any(), false, fakeDstPort, fakeSrcPort, gomock.Any(), fakeTCPSeqNum+1, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+			},
+		},
+		{
+			name:              "RejectPodLocalIPv4TCPTrafficNoAntreaProxy",
+			packetIn:          genPacketIn(fakeSrcMac, fakeDstMac, fakeSrcIPv4, fakeDstIPv4, fakeSrcPort, fakeDstPort, fakeTCPSeqNum, false, true, nil),
+			antreaProxyEnable: false,
+			prepareFunc: func(mockClient *oftesting.MockClient, mockIStore *storetesting.MockInterfaceStore) {
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeSIface, true)
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeDIface, true)
+				mockIStore.EXPECT().GetInterfacesByType(gomock.Any()).Return([]*interfacestore.InterfaceConfig{fakeGWIface})
+				mockClient.EXPECT().SendTCPPacketOut(fakeDstMac, fakeSrcMac, fakeDstIPv4, fakeSrcIPv4, gomock.Any(), gomock.Any(), false, fakeDstPort, fakeSrcPort, gomock.Any(), fakeTCPSeqNum+1, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+			},
+		},
+		{
+			name: "RejectServiceRemoteToExternalIPv4TCPTrafficWithAntreaProxy",
+			packetIn: genPacketIn(fakeSrcMac, fakeDstMac, fakeSrcIPv4, fakeDstIPv4, fakeSrcPort, fakeDstPort, fakeTCPSeqNum, false, true, []openflow15.MatchField{{
+				// EpSelectedRegMark
+				Class:          openflow15.OXM_CLASS_PACKET_REGS,
+				Field:          2,
+				HasMask:        false,
+				Length:         0,
+				ExperimenterID: 0,
+				Value: &openflow15.ByteArrayField{
+					Data:   []byte{0, 2, 0, 0, 0, 0, 0, 0},
+					Length: 64,
+				},
+				Mask: nil,
+			}}),
+			antreaProxyEnable: true,
+			prepareFunc: func(mockClient *oftesting.MockClient, mockIStore *storetesting.MockInterfaceStore) {
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(nil, false)
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(nil, false)
+				mockClient.EXPECT().SendTCPPacketOut(fakeDstMac, openflow.GlobalVirtualMAC.String(), fakeDstIPv4, fakeSrcIPv4, gomock.Any(), gomock.Any(), false, fakeDstPort, fakeSrcPort, gomock.Any(), fakeTCPSeqNum+1, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+			},
+		},
+		{
+			name:              "RejectPodLocalIPv4UDPTrafficWithAntreaProxy",
+			packetIn:          genPacketIn(fakeSrcMac, fakeDstMac, fakeSrcIPv4, fakeDstIPv4, fakeSrcPort, fakeDstPort, 0, false, false, []openflow15.MatchField{*openflow15.NewInPortField(uint32(fakeOFPort1))}),
+			antreaProxyEnable: true,
+			prepareFunc: func(mockClient *oftesting.MockClient, mockIStore *storetesting.MockInterfaceStore) {
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeSIface, true)
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeDIface, true)
+				mockClient.EXPECT().SendICMPPacketOut(fakeDstMac, fakeSrcMac, fakeDstIPv4, fakeSrcIPv4, gomock.Any(), gomock.Any(), false, uint8(3), uint8(10), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+			},
+		},
+		{
+			name:              "RejectPodLocalIPv6TCPTrafficWithAntreaProxy",
+			packetIn:          genPacketIn(fakeSrcMac, fakeDstMac, fakeSrcIPv6, fakeDstIPv6, fakeSrcPort, fakeDstPort, fakeTCPSeqNum, true, true, nil),
+			antreaProxyEnable: true,
+			prepareFunc: func(mockClient *oftesting.MockClient, mockIStore *storetesting.MockInterfaceStore) {
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeSIface, true)
+				mockIStore.EXPECT().GetInterfaceByIP(gomock.Any()).Return(fakeDIface, true)
+				mockClient.EXPECT().SendTCPPacketOut(fakeDstMac, fakeSrcMac, fakeDstIPv6, fakeSrcIPv6, gomock.Any(), gomock.Any(), true, fakeDstPort, fakeSrcPort, gomock.Any(), fakeTCPSeqNum+1, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			controller, _, _ := newTestController()
+			mockClient := oftesting.NewMockClient(ctrl)
+			mockIStore := storetesting.NewMockInterfaceStore(ctrl)
+			controller.ofClient = mockClient
+			controller.ifaceStore = mockIStore
+			controller.antreaProxyEnabled = tt.antreaProxyEnable
+			tt.prepareFunc(mockClient, mockIStore)
+			assert.NoError(t, controller.rejectRequest(tt.packetIn))
+		})
+	}
+}
+
+func genPacketIn(srcMac, dstMac, srcIP, dstIP string, srcPort, dstPort uint16, seqNum uint32, isIPv6, isTCP bool, matches []openflow15.MatchField) *ofctrl.PacketIn {
+	pktIn := openflow15.NewPacketIn()
+	for i := range matches {
+		pktIn.Match.AddField(matches[i])
+	}
+	var ipData util.Message
+	var proto uint8
+	if isTCP {
+		proto = protocol.Type_TCP
+		tcpPacket := &protocol.TCP{
+			PortSrc: srcPort,
+			PortDst: dstPort,
+			SeqNum:  seqNum,
+		}
+		b, _ := tcpPacket.MarshalBinary()
+		ipData = util.NewBuffer(b)
+	} else {
+		proto = protocol.Type_UDP
+		udpPacket := &protocol.UDP{
+			PortSrc: srcPort,
+			PortDst: dstPort,
+		}
+		b, _ := udpPacket.MarshalBinary()
+		ipData = util.NewBuffer(b)
+	}
+	var ethData util.Message
+	var ethType uint16
+	if isIPv6 {
+		ethType = protocol.IPv6_MSG
+		ipPacket := &protocol.IPv6{
+			NWSrc:      net.ParseIP(srcIP),
+			NWDst:      net.ParseIP(dstIP),
+			NextHeader: proto,
+			Data:       ipData,
+		}
+		b, _ := ipPacket.MarshalBinary()
+		ethData = util.NewBuffer(b)
+	} else {
+		ethType = protocol.IPv4_MSG
+		ipPacket := &protocol.IPv4{
+			NWSrc:    net.ParseIP(srcIP),
+			NWDst:    net.ParseIP(dstIP),
+			Protocol: proto,
+			Data:     ipData,
+		}
+		b, _ := ipPacket.MarshalBinary()
+		ethData = util.NewBuffer(b)
+	}
+	ethernetPkt := protocol.NewEthernet()
+	hwSrc, _ := net.ParseMAC(srcMac)
+	hwDst, _ := net.ParseMAC(dstMac)
+	ethernetPkt.HWSrc = hwSrc
+	ethernetPkt.HWDst = hwDst
+	ethernetPkt.Ethertype = ethType
+	ethernetPkt.Data = ethData
+	pktBytes, _ := ethernetPkt.MarshalBinary()
+	pktIn.Data = util.NewBuffer(pktBytes)
+	return &ofctrl.PacketIn{PacketIn: pktIn}
 }
