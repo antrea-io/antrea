@@ -34,6 +34,11 @@ import (
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
+var (
+	// setInterfaceARPAnnounce is meant to be overridden for testing.
+	setInterfaceARPAnnounce = util.EnsureARPAnnounceOnInterface
+)
+
 // prepareHostNetwork returns immediately on Linux.
 func (i *Initializer) prepareHostNetwork() error {
 	return nil

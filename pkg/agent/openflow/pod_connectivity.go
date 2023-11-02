@@ -140,7 +140,6 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, f.gatewayPort))
 			if f.connectUplinkToBridge {
 				flows = append(flows, f.arpResponderFlow(f.gatewayIPs[ipProtocol], gatewayMAC))
-				flows = append(flows, f.arpSpoofGuardFlow(f.nodeConfig.NodeIPv4Addr.IP, gatewayMAC, f.gatewayPort))
 				flows = append(flows, f.hostBridgeUplinkVLANFlows()...)
 			}
 			if runtime.IsWindowsPlatform() || f.connectUplinkToBridge {
