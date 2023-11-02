@@ -218,13 +218,10 @@ func Test_client_defaultFlows(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.requireMeterSupport && !OVSMetersAreSupported() {
-				t.Skipf("Skip test because OVS meters are not supported")
-			}
 			ctrl := gomock.NewController(t)
 			m := oftest.NewMockOFEntryOperations(ctrl)
-
-			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, tc.nodeType, tc.trafficEncapMode, tc.clientOptions...)
+			options := append(tc.clientOptions, setEnableOVSMeters(tc.requireMeterSupport))
+			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, tc.nodeType, tc.trafficEncapMode, options...)
 			defer resetPipelines()
 
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.defaultFlows()))

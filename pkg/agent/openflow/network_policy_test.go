@@ -1410,132 +1410,153 @@ func networkPolicyInitFlows(ovsMeterSupported, externalNodeEnabled, l7NetworkPol
 }
 
 func Test_featureNetworkPolicy_initFlows(t *testing.T) {
-	ovsMetersSupported := OVSMetersAreSupported()
-	testCases := []struct {
-		name          string
-		nodeType      config.NodeType
-		clientOptions []clientOptionsFn
-		expectedFlows []string
-	}{
-		{
-			name:          "K8s Node with Multicast and L7NetworkPolicy",
-			nodeType:      config.K8sNode,
-			clientOptions: []clientOptionsFn{enableMulticast, enableL7NetworkPolicy},
-			expectedFlows: networkPolicyInitFlows(ovsMetersSupported, false, true),
-		},
-		{
-			name:          "K8s Node with Multicast",
-			nodeType:      config.K8sNode,
-			clientOptions: []clientOptionsFn{enableMulticast},
-			expectedFlows: networkPolicyInitFlows(ovsMetersSupported, false, false),
-		},
-		{
-			name:          "External Node",
-			nodeType:      config.ExternalNode,
-			expectedFlows: networkPolicyInitFlows(ovsMetersSupported, true, false),
-		},
+	runTests := func(t *testing.T, ovsMetersSupported bool) {
+		testCases := []struct {
+			name          string
+			nodeType      config.NodeType
+			clientOptions []clientOptionsFn
+			expectedFlows []string
+		}{
+			{
+				name:          "K8s Node with Multicast and L7NetworkPolicy",
+				nodeType:      config.K8sNode,
+				clientOptions: []clientOptionsFn{enableMulticast, enableL7NetworkPolicy},
+				expectedFlows: networkPolicyInitFlows(ovsMetersSupported, false, true),
+			},
+			{
+				name:          "K8s Node with Multicast",
+				nodeType:      config.K8sNode,
+				clientOptions: []clientOptionsFn{enableMulticast},
+				expectedFlows: networkPolicyInitFlows(ovsMetersSupported, false, false),
+			},
+			{
+				name:          "External Node",
+				nodeType:      config.ExternalNode,
+				expectedFlows: networkPolicyInitFlows(ovsMetersSupported, true, false),
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				options := append(tc.clientOptions, setEnableOVSMeters(ovsMetersSupported))
+				fc := newFakeClient(nil, true, false, tc.nodeType, config.TrafficEncapModeEncap, options...)
+				defer resetPipelines()
+
+				assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.featureNetworkPolicy.initFlows()))
+			})
+		}
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			fc := newFakeClient(nil, true, false, tc.nodeType, config.TrafficEncapModeEncap, tc.clientOptions...)
-			defer resetPipelines()
-
-			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.featureNetworkPolicy.initFlows()))
-		})
-	}
+	t.Run("With OVS meters", func(t *testing.T) { runTests(t, true) })
+	t.Run("Without OVS meters", func(t *testing.T) { runTests(t, false) })
 }
 
 func Test_NewDNSPacketInConjunction(t *testing.T) {
-	ovsMetersSupported := OVSMetersAreSupported()
-	ipv4ExpFlows := []string{
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
-	}
-	if ovsMetersSupported {
-		ipv4ExpFlows = []string{
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+	ipv4ExpFlows := func(ovsMetersSupported bool) []string {
+		if ovsMetersSupported {
+			return []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+			}
+		} else {
+			return []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+			}
 		}
 	}
-	ipv6ExpFlows := []string{
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
-	}
-	if ovsMetersSupported {
-		ipv6ExpFlows = []string{
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+
+	ipv6ExpFlows := func(ovsMetersSupported bool) []string {
+		if ovsMetersSupported {
+			return []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+			}
+		} else {
+			return []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+			}
 		}
 	}
-	dsExpFlows := []string{
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
-		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
-	}
-	if ovsMetersSupported {
-		dsExpFlows = []string{
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
-			"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+
+	dsExpFlows := func(ovsMetersSupported bool) []string {
+		if ovsMetersSupported {
+			return []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=meter:258,controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+			}
+		} else {
+			return []string{
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,conj_id=1 actions=controller(id=32776,reason=no_match,userdata=02,max_len=128),goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,udp6,tp_src=53 actions=conjunction(1,1/2)",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64991,ct_state=+rpl+trk,tcp6,tp_src=53 actions=conjunction(1,1/2)",
+			}
 		}
 	}
-	for _, tc := range []struct {
-		name          string
-		enableIPv4    bool
-		enableIPv6    bool
-		conjID        uint32
-		expectedFlows []string
-	}{
-		{
-			name:          "IPv4 only",
-			enableIPv4:    true,
-			enableIPv6:    false,
-			conjID:        1,
-			expectedFlows: ipv4ExpFlows,
-		},
-		{
-			name:          "IPv6 only",
-			enableIPv4:    false,
-			enableIPv6:    true,
-			conjID:        1,
-			expectedFlows: ipv6ExpFlows,
-		},
-		{
-			name:          "dual stack",
-			enableIPv4:    true,
-			enableIPv6:    true,
-			conjID:        1,
-			expectedFlows: dsExpFlows,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
-			bridge := mocks.NewMockBridge(ctrl)
-			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, config.TrafficEncapModeEncap)
-			defer resetPipelines()
-			fc.featureNetworkPolicy.bridge = bridge
-			actualFlows := make([]string, 0)
-			m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
-				flowStrings := getFlowStrings(flowMessages)
-				actualFlows = append(actualFlows, flowStrings...)
-			}).Return(nil).AnyTimes()
-			bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(addflows, modFlows, delFlows []*openflow15.FlowMod) {
-				flowStrings := getFlowStrings(addflows)
-				actualFlows = append(actualFlows, flowStrings...)
-			}).Return(nil).Times(1)
-			err := fc.NewDNSPacketInConjunction(tc.conjID)
-			assert.NoError(t, err)
-			assert.ElementsMatch(t, tc.expectedFlows, actualFlows)
-		})
+
+	runTests := func(t *testing.T, ovsMetersSupported bool) {
+		for _, tc := range []struct {
+			name          string
+			enableIPv4    bool
+			enableIPv6    bool
+			conjID        uint32
+			expectedFlows []string
+		}{
+			{
+				name:          "IPv4 only",
+				enableIPv4:    true,
+				enableIPv6:    false,
+				conjID:        1,
+				expectedFlows: ipv4ExpFlows(ovsMetersSupported),
+			},
+			{
+				name:          "IPv6 only",
+				enableIPv4:    false,
+				enableIPv6:    true,
+				conjID:        1,
+				expectedFlows: ipv6ExpFlows(ovsMetersSupported),
+			},
+			{
+				name:          "dual stack",
+				enableIPv4:    true,
+				enableIPv6:    true,
+				conjID:        1,
+				expectedFlows: dsExpFlows(ovsMetersSupported),
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				m := oftest.NewMockOFEntryOperations(ctrl)
+				bridge := mocks.NewMockBridge(ctrl)
+				fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, config.TrafficEncapModeEncap, setEnableOVSMeters(ovsMetersSupported))
+				defer resetPipelines()
+				fc.featureNetworkPolicy.bridge = bridge
+				actualFlows := make([]string, 0)
+				m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
+					flowStrings := getFlowStrings(flowMessages)
+					actualFlows = append(actualFlows, flowStrings...)
+				}).Return(nil).AnyTimes()
+				bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(addflows, modFlows, delFlows []*openflow15.FlowMod) {
+					flowStrings := getFlowStrings(addflows)
+					actualFlows = append(actualFlows, flowStrings...)
+				}).Return(nil).Times(1)
+				err := fc.NewDNSPacketInConjunction(tc.conjID)
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tc.expectedFlows, actualFlows)
+			})
+		}
 	}
+
+	t.Run("With OVS meters", func(t *testing.T) { runTests(t, true) })
+	t.Run("Without OVS meters", func(t *testing.T) { runTests(t, false) })
 }
