@@ -38,6 +38,9 @@ import (
 var (
 	// setInterfaceMTU is meant to be overridden for testing
 	setInterfaceMTU = util.SetInterfaceMTU
+
+	// setInterfaceARPAnnounce is meant to be overridden for testing.
+	setInterfaceARPAnnounce = func(ifaceName string, value int) error { return nil }
 )
 
 func (i *Initializer) prepareHostNetwork() error {

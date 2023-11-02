@@ -167,7 +167,6 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 				flows = append(flows,
 					"cookie=0x1010000000000, table=ARPSpoofGuard, priority=210,arp,in_port=4 actions=NORMAL",
 					"cookie=0x1010000000000, table=ARPSpoofGuard, priority=210,arp,in_port=4294967294 actions=NORMAL",
-					"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=2,arp_spa=192.168.77.100,arp_sha=0a:00:00:00:00:01 actions=goto_table:ARPResponder",
 					"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.0.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:0a:00:00:00:00:01->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:0a:00:00:00:00:01->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.0.1->arp_spa,IN_PORT",
 					"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4 actions=output:4294967294",
 					"cookie=0x1010000000000, table=Classifier, priority=200,in_port=4294967294 actions=output:4",
