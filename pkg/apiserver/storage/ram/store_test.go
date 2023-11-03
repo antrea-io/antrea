@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
 )
@@ -469,7 +470,8 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 }
 
 func TestRamStoreWatchTimeout(t *testing.T) {
-	store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) })
+	clock := clocktesting.NewFakeClock(time.Now())
+	store := newStoreWithClock(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) }, clock)
 	// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
 	maxBuffered := watcherChanSize*2 + 1
 
@@ -478,7 +480,10 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to watch object: %v", err)
 	}
+
+	w1Done := make(chan struct{})
 	go func() {
+		defer close(w1Done)
 		ch := w1.ResultChan()
 		// Skip the bookmark event.
 		<-ch
@@ -505,25 +510,36 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	<-w2.ResultChan()
 	assert.Equal(t, 2, store.GetWatchersNum(), "Unexpected watchers number")
 
-	for i := 0; i < maxBuffered; i++ {
+	// Generate all events at once: w1 can take all events (eventually) as it has a consumer. w2
+	// will not be able to take the last event as it has no consumer.
+	for i := 0; i < maxBuffered+1; i++ {
 		store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
 	}
 
-	// Terminating watchers is asynchronous, leave it some reaction time to avoid flakes.
-	terminationReactionTime := time.Millisecond * 500
+	// Give 1s for the consumer for w1 to receive all events. During that time, we do not
+	// advance the fake clock.
+	select {
+	case <-w1Done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("w1 consumer has not received all events")
+	}
+
+	// Make sure that w2 is not stopped yet.
 	select {
 	case <-w2.(*storeWatcher).done:
 		t.Fatal("w2 was stopped, expected not stopped")
-	case <-time.After(watcherAddTimeout + terminationReactionTime):
+	default:
 	}
 
-	// w2 can't take one more event as it's buffer has been full, it should be terminated.
-	store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", maxBuffered), Labels: map[string]string{"app": "nginx"}}})
+	// After advancing the fake clock, w2 should be stopped. Because terminating watchers is
+	// asynchronous, we leave 500ms of reaction time.
+	clock.Step(watcherAddTimeout)
 
 	select {
 	case <-w2.(*storeWatcher).done:
-	case <-time.After(watcherAddTimeout + terminationReactionTime):
+	case <-time.After(500 * time.Millisecond):
 		t.Error("w2 was not stopped, expected stopped")
 	}
+
 	assert.Equal(t, 1, store.GetWatchersNum(), "Unexpected watchers number")
 }
