@@ -421,6 +421,8 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	// desiredPods is the set of Pods that should be present, based on the
 	// current list of Pods got from the Kubernetes API.
 	desiredPods := sets.New[string]()
+	// desiredPodIPs is the set of IPs allocated to desiredPods.
+	desiredPodIPs := sets.New[string]()
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 
@@ -430,11 +432,16 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 			continue
 		}
 		desiredPods.Insert(k8s.NamespacedName(pod.Namespace, pod.Name))
+		for _, podIP := range pod.Status.PodIPs {
+			desiredPodIPs.Insert(podIP.IP)
+		}
 	}
 
 	missingIfConfigs := make([]*interfacestore.InterfaceConfig, 0)
 	for _, containerConfig := range knownInterfaces {
-		namespacedName := k8s.NamespacedName(containerConfig.PodNamespace, containerConfig.PodName)
+		namespace := containerConfig.PodNamespace
+		name := containerConfig.PodName
+		namespacedName := k8s.NamespacedName(namespace, name)
 		if desiredPods.Has(namespacedName) {
 			// Find the OVS ports which are not connected to host interfaces. This is useful on Windows if the runtime is
 			// containerd, because the host interface is created async from the OVS port.
@@ -446,7 +453,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 			// We rely on the interface cache / store - which is initialized from the persistent
 			// OVSDB - to map the Pod to its interface configuration. The interface
 			// configuration includes the parameters we need to replay the flows.
-			klog.V(4).Infof("Syncing interface %s for Pod %s", containerConfig.InterfaceName, namespacedName)
+			klog.V(4).InfoS("Syncing Pod interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 			if err := pc.ofClient.InstallPodFlows(
 				containerConfig.InterfaceName,
 				containerConfig.IPs,
@@ -455,13 +462,13 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				containerConfig.VLANID,
 				nil,
 			); err != nil {
-				klog.Errorf("Error when re-installing flows for Pod %s", namespacedName)
+				klog.ErrorS(err, "Error when re-installing flows for Pod", "Pod", klog.KRef(namespace, name))
 			}
 		} else {
 			// clean-up and delete interface
-			klog.V(4).Infof("Deleting interface %s", containerConfig.InterfaceName)
+			klog.V(4).InfoS("Deleting interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 			if err := pc.removeInterfaces(containerConfig.ContainerID); err != nil {
-				klog.Errorf("Failed to delete interface %s: %v", containerConfig.InterfaceName, err)
+				klog.ErrorS(err, "Failed to delete interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 			}
 			// interface should no longer be in store after the call to removeInterfaces
 		}
@@ -469,6 +476,13 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	if len(missingIfConfigs) > 0 {
 		pc.reconcileMissingPods(missingIfConfigs, containerAccess)
 	}
+
+	// clean-up IPs that may still be allocated
+	klog.V(4).InfoS("Running IPAM garbage collection for unused Pod IPs")
+	if err := ipam.GarbageCollectContainerIPs(antreaCNIType, desiredPodIPs); err != nil {
+		klog.ErrorS(err, "Error when garbage collecting previously-allocated IPs")
+	}
+
 	return nil
 }
 
