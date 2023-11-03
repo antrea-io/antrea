@@ -293,7 +293,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: 9580d68fcd452c53eb53272cc077b07295505b7209185d3e36619fb2f02fb935
+        checksum/agent-windows: bb43d8d5840ffd71ff946d44052fefc5bd88ca5ad58ac5048d85a5cf26a7ef13
         checksum/windows-config: 6ff4f8bd0b310ebe4d4612bdd9697ffb3d79e0e0eab3936420417dd5a8fc128d
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
