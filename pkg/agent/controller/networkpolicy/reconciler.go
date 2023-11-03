@@ -322,7 +322,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 		ofRuleInstallErr = r.update(value.(*lastRealized), rule, ofPriority, ruleTable)
 	}
 	if ofRuleInstallErr != nil && ofPriority != nil && !registeredBefore {
-		priorityAssigner.assigner.Release(*ofPriority)
+		priorityAssigner.assigner.release(*ofPriority)
 	}
 	return ofRuleInstallErr
 }
@@ -400,7 +400,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, tableID uint8, pa *table
 		PolicyPriority: *rule.PolicyPriority,
 		RulePriority:   rule.Priority,
 	}
-	ofPriority, registered := pa.assigner.GetOFPriority(p)
+	ofPriority, registered := pa.assigner.getOFPriority(p)
 	if !registered {
 		allPrioritiesInPolicy := make([]types.Priority, rule.MaxPriority+1)
 		for i := int32(0); i <= rule.MaxPriority; i++ {
@@ -410,7 +410,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, tableID uint8, pa *table
 				RulePriority:   i,
 			}
 		}
-		priorityUpdates, revertFunc, err := pa.assigner.RegisterPriorities(allPrioritiesInPolicy)
+		priorityUpdates, revertFunc, err := pa.assigner.registerPriorities(allPrioritiesInPolicy)
 		if err != nil {
 			return nil, registered, err
 		}
@@ -422,7 +422,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, tableID uint8, pa *table
 				return nil, registered, err
 			}
 		}
-		ofPriority, _ = pa.assigner.GetOFPriority(p)
+		ofPriority, _ = pa.assigner.getOFPriority(p)
 	}
 	klog.V(2).InfoS("Assigning OFPriority to rule", "rule", rule.ID, "priority", ofPriority)
 	return &ofPriority, registered, nil
@@ -462,7 +462,7 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 		for tableID, ofPriorities := range prioritiesByTable {
 			pa := r.priorityAssigners[tableID]
 			for _, ofPriority := range ofPriorities {
-				pa.assigner.Release(*ofPriority)
+				pa.assigner.release(*ofPriority)
 			}
 		}
 	}
@@ -487,7 +487,7 @@ func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
 		}
 	}
 	for tableID, priorities := range prioritiesToRegister {
-		if _, _, err := r.priorityAssigners[tableID].assigner.RegisterPriorities(priorities); err != nil {
+		if _, _, err := r.priorityAssigners[tableID].assigner.registerPriorities(priorities); err != nil {
 			return err
 		}
 	}
@@ -994,7 +994,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table uint8) error {
 			}
 			// If there are stalePriorities, priorityAssigners[table] must not be nil.
 			priorityAssigner, _ := r.priorityAssigners[table]
-			priorityAssigner.assigner.Release(uint16(priorityNum))
+			priorityAssigner.assigner.release(uint16(priorityNum))
 		}
 	}
 	r.idAllocator.forgetRule(ofID)

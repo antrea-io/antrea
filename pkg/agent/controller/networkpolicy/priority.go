@@ -25,22 +25,21 @@ import (
 )
 
 const (
-	MaxUint16                    = ^uint16(0)
 	zoneOffset                   = uint16(5)
-	DefaultTierPriority          = int32(250)
-	BaselinePolicyBottomPriority = uint16(10)
-	BaselinePolicyTopPriority    = uint16(180)
-	PolicyBottomPriority         = uint16(100)
-	PolicyTopPriority            = uint16(65000)
-	PriorityOffsetBaselineTier   = float64(10)
-	TierOffsetBaselineTier       = uint16(0)
-	PriorityOffsetMultiTier      = float64(20)
-	PriorityOffsetDefaultTier    = float64(100)
-	TierOffsetMultiTier          = uint16(200)
+	defaultTierPriority          = int32(250)
+	baselinePolicyBottomPriority = uint16(10)
+	baselinePolicyTopPriority    = uint16(180)
+	policyBottomPriority         = uint16(100)
+	policyTopPriority            = uint16(65000)
+	priorityOffsetBaselineTier   = float64(10)
+	tierOffsetBaselineTier       = uint16(0)
+	priorityOffsetMultiTier      = float64(20)
+	priorityOffsetDefaultTier    = float64(100)
+	tierOffsetMultiTier          = uint16(200)
 )
 
-// PriorityUpdate stores the original and updated ofPriority of a Priority.
-type PriorityUpdate struct {
+// priorityUpdate stores the original and updated ofPriority of a Priority.
+type priorityUpdate struct {
 	Original uint16
 	Updated  uint16
 }
@@ -55,7 +54,7 @@ type reassignCost struct {
 
 // priorityUpdatesToOFUpdates converts a map of Priority and its ofPriority update to a map
 // of ofPriority updates.
-func priorityUpdatesToOFUpdates(allUpdates map[types.Priority]*PriorityUpdate) map[uint16]uint16 {
+func priorityUpdatesToOFUpdates(allUpdates map[types.Priority]*priorityUpdate) map[uint16]uint16 {
 	processed := map[uint16]uint16{}
 	for _, update := range allUpdates {
 		processed[update.Original] = update.Updated
@@ -83,11 +82,11 @@ type priorityAssigner struct {
 }
 
 func newPriorityAssigner(isBaselineTier bool) *priorityAssigner {
-	bottomPriority := PolicyBottomPriority
-	topPriority := PolicyTopPriority
+	bottomPriority := policyBottomPriority
+	topPriority := policyTopPriority
 	if isBaselineTier {
-		bottomPriority = BaselinePolicyBottomPriority
-		topPriority = BaselinePolicyTopPriority
+		bottomPriority = baselinePolicyBottomPriority
+		topPriority = baselinePolicyTopPriority
 	}
 	pa := &priorityAssigner{
 		priorityMap:          map[types.Priority]uint16{},
@@ -108,14 +107,14 @@ func newPriorityAssigner(isBaselineTier bool) *priorityAssigner {
 // It computes the initial OpenFlow priority by offsetting the tier priority, policy priority and rule priority
 // with pre-determined coefficients.
 func (pa *priorityAssigner) initialOFPriority(p types.Priority) uint16 {
-	tierOffsetBase := TierOffsetMultiTier
-	priorityOffsetBase := PriorityOffsetMultiTier
-	if p.TierPriority == DefaultTierPriority {
-		priorityOffsetBase = PriorityOffsetDefaultTier
+	tierOffsetBase := tierOffsetMultiTier
+	priorityOffsetBase := priorityOffsetMultiTier
+	if p.TierPriority == defaultTierPriority {
+		priorityOffsetBase = priorityOffsetDefaultTier
 	}
 	if pa.isBaselineTier {
-		tierOffsetBase = TierOffsetBaselineTier
-		priorityOffsetBase = PriorityOffsetBaselineTier
+		tierOffsetBase = tierOffsetBaselineTier
+		priorityOffsetBase = priorityOffsetBaselineTier
 	}
 	tierOffset := tierOffsetBase * uint16(p.TierPriority)
 	priorityOffset := uint16(p.PolicyPriority * priorityOffsetBase)
@@ -205,7 +204,7 @@ func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16
 // new Priorities to be registered. It also records all the priority updates due to the reassignment in the
 // map of updates, which is passed to it as parameter.
 func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound uint16, prioritiesToRegister types.ByPriority,
-	updates map[types.Priority]*PriorityUpdate) error {
+	updates map[types.Priority]*priorityUpdate) error {
 	numNewPriorities, gap := len(prioritiesToRegister), int(upperBound-lowerBound-1)
 	low, high, err := pa.findReassignBoundaries(lowerBound, upperBound, numNewPriorities, gap)
 	if err != nil {
@@ -232,7 +231,7 @@ func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound ui
 		// if exists (the Priority has already been reassigned in a previous step), the original
 		// ofPriority of that Priority would have been recorded.
 		if _, exists := updates[p]; !exists {
-			updates[p] = &PriorityUpdate{Original: pa.priorityMap[p]}
+			updates[p] = &priorityUpdate{Original: pa.priorityMap[p]}
 		}
 	}
 	// assign ofPriorities by the order of siftedPrioritiesLow, prioritiesToRegister and siftedPrioritiesHigh.
@@ -246,19 +245,19 @@ func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound ui
 	return nil
 }
 
-// GetOFPriority returns if the Priority is registered with the priorityAssigner,
+// getOFPriority returns if the Priority is registered with the priorityAssigner,
 // and retrieves the corresponding ofPriority.
-func (pa *priorityAssigner) GetOFPriority(p types.Priority) (uint16, bool) {
+func (pa *priorityAssigner) getOFPriority(p types.Priority) (uint16, bool) {
 	of, registered := pa.priorityMap[p]
 	return of, registered
 }
 
-// RegisterPriorities registers a list of types.Priority with the priorityAssigner. It allocates ofPriorities for
+// registerPriorities registers a list of types.Priority with the priorityAssigner. It allocates ofPriorities for
 // input priorities that are not yet registered. It also returns the ofPriority updates if there are reassignments,
 // as well as a revert function that can undo the registration if any error occurred in data plane.
 // Note that this function modifies the priorities slice in the parameter, as it only keeps the Priorities which
 // this priorityAssigner has not yet registered. Input priorities are not assumed to be unique or consecutive.
-func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) (map[uint16]uint16, func(), error) {
+func (pa *priorityAssigner) registerPriorities(priorities []types.Priority) (map[uint16]uint16, func(), error) {
 	// create a zero-length slice with the same underlying array to save memory usage.
 	prioritiesToRegister := priorities[:0]
 	priorityDedup := map[types.Priority]struct{}{}
@@ -291,7 +290,7 @@ func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) (map
 
 // registerConsecutivePriorities registers lists of consecutive Priorities with the priorityAssigner.
 func (pa *priorityAssigner) registerConsecutivePriorities(consecutivePriorities [][]types.Priority) (map[uint16]uint16, func(), error) {
-	allPriorityUpdates := map[types.Priority]*PriorityUpdate{}
+	allPriorityUpdates := map[types.Priority]*priorityUpdate{}
 	revertFunc := func() {
 		// in case of error, all new Priorities need to be unregistered.
 		for _, newPriorities := range consecutivePriorities {
@@ -325,7 +324,7 @@ func (pa *priorityAssigner) registerConsecutivePriorities(consecutivePriorities 
 // It first identifies the lower and upper bound for insertion, by obtaining the ofPriorities of
 // registered Priorities surrounding (immediately lower and higher than) the inserting Priorities.
 // It then decides the range to register new Priorities, and reassign existing ones if necessary.
-func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPriority, updates map[types.Priority]*PriorityUpdate) error {
+func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPriority, updates map[types.Priority]*priorityUpdate) error {
 	numPriorities := len(priorities)
 	pLow, pHigh := priorities[0], priorities[numPriorities-1]
 	insertionPointLow := pa.initialOFPriority(pLow)
@@ -371,8 +370,8 @@ func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPrior
 	return nil
 }
 
-// Release removes the priority that currently corresponds to the input OFPriority from the known priorities.
-func (pa *priorityAssigner) Release(ofPriority uint16) {
+// release removes the priority that currently corresponds to the input OFPriority from the known priorities.
+func (pa *priorityAssigner) release(ofPriority uint16) {
 	priority, exists := pa.ofPriorityMap[ofPriority]
 	if !exists {
 		klog.V(2).Infof("OF priority %v not known, skip releasing priority", ofPriority)
