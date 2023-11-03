@@ -612,9 +612,19 @@ function deliver_antrea_windows_containerd {
     done
     ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver && docker tag ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver golang:${GO_VERSION}-nanoserver"
     ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && NO_PULL=${NO_PULL}; DOCKER_NETWORK=host make build-windows && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+    expected_checkum=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "Get-FileHash antrea/antrea-windows.tar.gz -Algorithm SHA256 | Select -ExpandProperty 'Hash'")
     for i in `seq 2`; do
         timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
     done
+    local_checksum=$(sha256sum antrea-windows.tar.gz | awk '{print $1}')
+    # Compare the calculated checksum with the expected checksum
+    if [ "$local_checksum" == "$expected_checksum" ]; then
+        echo "Checksum matches. Proceeding with importing the image."
+    else
+        echo "Checksum mismatch. The downloaded file may be corrupted."
+        exit 1
+    fi
+
 
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
@@ -640,6 +650,14 @@ function deliver_antrea_windows_containerd {
             for i in `seq 2`; do
                 timeout 2m scp -o StrictHostKeyChecking=no -T antrea-windows.tar.gz Administrator@${IP}: && break
             done
+            local_checkum=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "Get-FileHash antrea/antrea-windows.tar.gz -Algorithm SHA256 | Select -ExpandProperty 'Hash'")
+                # Compare the calculated checksum with the expected checksum
+            if [ "$local_checksum" == "$expected_checksum" ]; then
+                echo "Checksum matches. Proceeding with importing the image."
+            else
+                echo "Checksum mismatch. The downloaded file may be corrupted."
+                exit 1
+            fi
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
         fi
     done
