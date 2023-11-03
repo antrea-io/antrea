@@ -27,6 +27,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
 )
@@ -75,20 +76,16 @@ type store struct {
 	stopCh chan struct{}
 	// timer is used when sending events to watchers. Hold it here to avoid unnecessary
 	// re-allocation for each event.
-	timer *time.Timer
+	timer clock.Timer
 }
 
-// NewStore creates a store based on the provided KeyFunc, Indexers, and GenEventFunc.
-// KeyFunc decides how to get the key from an object.
-// Indexers decides how to build indices for an object.
-// GenEventFunc decides how to generate InternalEvent for an update of an object.
-func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc, newFunc func() runtime.Object) *store {
+func newStoreWithClock(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc, newFunc func() runtime.Object, clock clock.Clock) *store {
 	stopCh := make(chan struct{})
 	storage := cache.NewIndexer(keyFunc, indexers)
-	timer := time.NewTimer(time.Duration(0))
+	timer := clock.NewTimer(time.Duration(0))
 	// Ensure the timer is stopped and drain the channel.
 	if !timer.Stop() {
-		<-timer.C
+		<-timer.C()
 	}
 	s := &store{
 		incoming:     make(chan antreastorage.InternalEvent, 100),
@@ -104,6 +101,14 @@ func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antre
 
 	go s.dispatchEvents()
 	return s
+}
+
+// NewStore creates a store based on the provided KeyFunc, Indexers, and GenEventFunc.
+// KeyFunc decides how to get the key from an object.
+// Indexers decides how to build indices for an object.
+// GenEventFunc decides how to generate InternalEvent for an update of an object.
+func NewStore(keyFunc cache.KeyFunc, indexers cache.Indexers, genEventFunc antreastorage.GenEventFunc, selectorFunc antreastorage.SelectFunc, newFunc func() runtime.Object) *store {
+	return newStoreWithClock(keyFunc, indexers, genEventFunc, selectorFunc, newFunc, clock.RealClock{})
 }
 
 // nextResourceVersion increments the resourceVersion and returns it.
@@ -340,7 +345,7 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 
 		// Stop the timer and drain its channel if it is not fired.
 		if timer != nil && !timer.Stop() {
-			<-timer.C
+			<-timer.C()
 		}
 	}()
 

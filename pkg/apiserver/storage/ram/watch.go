@@ -17,11 +17,11 @@ package ram
 import (
 	"context"
 	"sync"
-	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/apiserver/storage"
 )
@@ -81,7 +81,7 @@ func (w *storeWatcher) nonBlockingAdd(event storage.InternalEvent) bool {
 // add tries to send event to channel input. It will first use non blocking
 // way, then block until the provided timer fires, if the timer is not nil.
 // It returns true if successful, otherwise false.
-func (w *storeWatcher) add(event storage.InternalEvent, timer *time.Timer) bool {
+func (w *storeWatcher) add(event storage.InternalEvent, timer clock.Timer) bool {
 	// Try to send the event without blocking regardless of timer is fired or not.
 	// This gives the watcher a chance when other watchers exhaust the time slices.
 	if w.nonBlockingAdd(event) {
@@ -95,7 +95,7 @@ func (w *storeWatcher) add(event storage.InternalEvent, timer *time.Timer) bool 
 	select {
 	case w.input <- event:
 		return true
-	case <-timer.C:
+	case <-timer.C():
 		return false
 	}
 }

@@ -18,12 +18,12 @@ import (
 	"context"
 	"reflect"
 	"testing"
-	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/apiserver/storage"
 )
@@ -182,12 +182,13 @@ func TestAddTimeout(t *testing.T) {
 			ResourceVersion: 2,
 		},
 	}
-	timer := time.NewTimer(watcherAddTimeout)
+	clock := clock.RealClock{}
+	timer := clock.NewTimer(watcherAddTimeout)
 	if !w.add(events[0], timer) {
 		t.Error("add() failed, expected success")
 	}
 	// Since channel size is 1 and there's no consumer, the second add should fail.
-	timer = time.NewTimer(watcherAddTimeout)
+	timer = clock.NewTimer(watcherAddTimeout)
 	if w.add(events[1], timer) {
 		t.Error("add() succeeded, expected failure")
 	}
