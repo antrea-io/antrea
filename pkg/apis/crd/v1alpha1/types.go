@@ -936,37 +936,31 @@ type TLSProtocol struct {
 	SNI string `json:"sni,omitempty"`
 }
 
-
-
 type PacketSamplingType string
 
 const (
 	FirstNSampling PacketSamplingType = "FirstNsampling"
 )
 
-
-
-
 type FirstNSamplingConfig struct {
 	Number int `json:"number,omitempty"`
 }
 
 type PacketSampling struct {
-	metav1.TypeMeta `json:",inline"`
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec PacketSamplingSpec `json:"spec,omitempty"`
-	Status PacketSamplingStatus `json:"status,omitempty"`
+	Spec              PacketSamplingSpec   `json:"spec,omitempty"`
+	Status            PacketSamplingStatus `json:"status,omitempty"`
 }
 
 type PacketSamplingSpec struct {
-	Timeout int `json:"timeout,omitempty"`
-	Type    PacketSamplingType `json:"type,omitempty"`
-	FirstNSamplingConfig *FirstNSamplingConfig `json:"firstNsamplingConfig,omitempty"`
-	Source Source `json:"source,omitempty"`
-	Destination Destination `json:"destination,omitempty"`
-	FileServer BundleFileServer `json:"fileServer,omitempty"`
-	Authentication BundleServerAuthConfiguration `json:"authentication,omitempty"`
-	
+	Timeout              int                           `json:"timeout,omitempty"`
+	Type                 PacketSamplingType            `json:"type,omitempty"`
+	FirstNSamplingConfig *FirstNSamplingConfig         `json:"firstNsamplingConfig,omitempty"`
+	Source               Source                        `json:"source,omitempty"`
+	Destination          Destination                   `json:"destination,omitempty"`
+	FileServer           BundleFileServer              `json:"fileServer,omitempty"`
+	Authentication       BundleServerAuthConfiguration `json:"authentication,omitempty"`
 }
 
 type PacketSamplingPhase string
@@ -978,4 +972,3 @@ const (
 type PacketSamplingStatus struct {
 	Reason string `json:"reason,omitempty"`
 }
-
