@@ -230,16 +230,17 @@ func (b *OFBridge) NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
 }
 
 func (b *OFBridge) DeleteMeterAll() error {
-	// Clear all existing meter entries
-	// TODO: this should be defined in libOpenflow
-	const OFPM_ALL = 0xffffffff // Represents all meters
 	meterMod := openflow15.NewMeterMod()
-	meterMod.MeterId = OFPM_ALL
+	meterMod.MeterId = openflow15.M_ALL
 	meterMod.Command = openflow15.MC_DELETE
-	if err := b.ofSwitch.Send(meterMod); err != nil {
-		return err
-	}
-	return nil
+	return b.ofSwitch.Send(meterMod)
+}
+
+func (b *OFBridge) DeleteGroupAll() error {
+	groupMod := openflow15.NewGroupMod()
+	groupMod.GroupId = openflow15.OFPG_ALL
+	groupMod.Command = openflow15.OFPGC_DELETE
+	return b.ofSwitch.Send(groupMod)
 }
 
 func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error {
