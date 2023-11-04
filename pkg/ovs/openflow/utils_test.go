@@ -136,7 +136,7 @@ func TestFlowModToString(t *testing.T) {
 					Action().SendToController([]byte{1}, false).
 					Done()
 			},
-			expectedFlow: "cookie=0x12345678, table=1, idle_timeout=3600, hard_timeout=3600, priority=100,ip,in_port=3,dl_src=10:1a:1b:1c:1d:1f,dl_dst=20:2a:2b:2c:2d:2f actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],group:1,controller(id=100,reason=no_match,userdata=01,max_len=128)",
+			expectedFlow: "cookie=0x12345678, table=1, idle_timeout=3600, hard_timeout=3600, priority=100,ip,in_port=3,dl_src=10:1a:1b:1c:1d:1f,dl_dst=20:2a:2b:2c:2d:2f actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],group:1,controller(id=100,reason=no_match,userdata=01,max_len=65535)",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

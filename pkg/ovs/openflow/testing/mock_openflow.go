@@ -128,6 +128,20 @@ func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowsByCookie", reflect.TypeOf((*MockBridge)(nil).DeleteFlowsByCookie), arg0, arg1)
 }
 
+// DeleteGroupAll mocks base method.
+func (m *MockBridge) DeleteGroupAll() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteGroupAll")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteGroupAll indicates an expected call of DeleteGroupAll.
+func (mr *MockBridgeMockRecorder) DeleteGroupAll() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGroupAll", reflect.TypeOf((*MockBridge)(nil).DeleteGroupAll))
+}
+
 // DeleteMeterAll mocks base method.
 func (m *MockBridge) DeleteMeterAll() error {
 	m.ctrl.T.Helper()
