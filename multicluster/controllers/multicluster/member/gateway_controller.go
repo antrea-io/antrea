@@ -86,7 +86,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// is removed from the ClusterSet. We need to handle such corner cases in the future release.
 	commonArea, r.localClusterID, _ = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
 	if commonArea == nil {
-		klog.InfoS("Skip reconciling Gateway since there is no connection to the leader")
+		klog.V(2).InfoS("Skip reconciling Gateway since there is no connection to the leader")
 		return ctrl.Result{}, nil
 	}
 	r.leaderNamespace = commonArea.GetNamespace()

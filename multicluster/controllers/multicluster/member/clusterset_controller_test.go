@@ -269,9 +269,6 @@ func TestMemberCreateOrUpdateRemoteCommonArea(t *testing.T) {
 	}
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
-	mockManager.EXPECT().GetClient().Times(2)
-	mockManager.EXPECT().GetScheme().Times(2)
-
 	getRemoteConfigAndClient = commonarea.FuncGetFakeRemoteConfigAndClient(mockManager)
 
 	err := reconciler.createRemoteCommonArea(existingClusterSet)
@@ -330,8 +327,6 @@ func TestMemberClusterSetAddWithoutClusterID(t *testing.T) {
 
 			mockCtrl := gomock.NewController(t)
 			mockManager := mocks.NewMockManager(mockCtrl)
-			mockManager.EXPECT().GetClient()
-			mockManager.EXPECT().GetScheme()
 			getRemoteConfigAndClient = commonarea.FuncGetFakeRemoteConfigAndClient(mockManager)
 
 			reconciler := MemberClusterSetReconciler{

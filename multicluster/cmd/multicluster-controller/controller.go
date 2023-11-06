@@ -171,6 +171,9 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 			&mcv1alpha2.ClusterSet{}: {
 				Field: namespaceFieldSelector,
 			},
+			&mcv1alpha1.MemberClusterAnnounce{}: {
+				Field: namespaceFieldSelector,
+			},
 		},
 	})
 
