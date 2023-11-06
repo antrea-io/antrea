@@ -27,7 +27,7 @@ parameter to true in the Controller and the Agent configurations.
 
 ### Prometheus version
 
-Prometheus integration with Antrea is validated as part of CI using Prometheus v2.19.3.
+Prometheus integration with Antrea is validated as part of CI using Prometheus v2.46.0.
 
 ### Prometheus RBAC
 
