@@ -26,7 +26,7 @@ import (
 )
 
 func TestController_HandlePacketIn(t *testing.T) {
-	controller, _, _ := newTestController()
+	controller := newTestController(t)
 	logPacketErr := fmt.Errorf("log")
 	rejectRequestErr := fmt.Errorf("reject")
 	storeDenyConnectionErr := fmt.Errorf("storeDenyConnection")

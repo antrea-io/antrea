@@ -54,7 +54,7 @@ func (c *fakeNetworkPolicyControl) getNetworkPolicyStatus() *v1beta2.NetworkPoli
 func newTestStatusController() (*StatusController, *ruleCache, *fakeNetworkPolicyControl) {
 	ruleCache := newRuleCache(func(s string) {}, channel.NewSubscribableChannel("PodUpdate", 100), nil, make(chan string, 100), config.K8sNode)
 	statusControl := &fakeNetworkPolicyControl{}
-	statusController := newStatusController(nil, testNode1, ruleCache)
+	statusController := newStatusController(nil, testNode1, ruleCache, true)
 	statusController.statusControlInterface = statusControl
 	return statusController, ruleCache, statusControl
 }
@@ -62,8 +62,10 @@ func newTestStatusController() (*StatusController, *ruleCache, *fakeNetworkPolic
 func TestSyncStatusForNewPolicy(t *testing.T) {
 	policyWithSingleRule := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, nil)
 	policyWithSingleRule.Generation = 1
+	policyWithSingleRule.SourceRef.Type = v1beta2.AntreaNetworkPolicy
 	policyWithMultipleRules := newNetworkPolicyWithMultipleRules("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, nil)
 	policyWithMultipleRules.Generation = 1
+	policyWithMultipleRules.SourceRef.Type = v1beta2.AntreaNetworkPolicy
 	tests := []struct {
 		name           string
 		policy         *v1beta2.NetworkPolicy
@@ -133,6 +135,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	policy := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, nil)
 	policy.Generation = 1
+	policy.SourceRef.Type = v1beta2.AntreaNetworkPolicy
 	ruleCache.AddNetworkPolicy(policy)
 	rule1 := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))[0]
 	statusController.SetRuleRealization(rule1.ID, policy.UID)

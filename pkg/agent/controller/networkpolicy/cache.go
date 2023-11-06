@@ -243,7 +243,8 @@ func (c *ruleCache) getNetworkPolicy(uid string) *v1beta.NetworkPolicy {
 	return policy
 }
 
-func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
+// getAppliedNetworkPolicyRules returns the rules applied to the given Pod.
+func (c *ruleCache) getAppliedNetworkPolicyRules(namespace, pod string) map[string]*rule {
 	var groups []string
 	memberPod := &v1beta.GroupMember{Pod: &v1beta.PodReference{Name: pod, Namespace: namespace}}
 	c.appliedToSetLock.RLock()
@@ -254,24 +255,33 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 	}
 	c.appliedToSetLock.RUnlock()
 
+	rules := map[string]*rule{}
+	for _, group := range groups {
+		objs, _ := c.rules.ByIndex(appliedToGroupIndex, group)
+		for _, obj := range objs {
+			rule := obj.(*rule)
+			rules[rule.ID] = rule
+		}
+	}
+	return rules
+}
+
+func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
 	var policies []v1beta.NetworkPolicy
 	policyKeys := sets.New[string]()
-	for _, group := range groups {
-		rules, _ := c.rules.ByIndex(appliedToGroupIndex, group)
-		for _, ruleObj := range rules {
-			rule := ruleObj.(*rule)
-			if policyKeys.Has(string(rule.PolicyUID)) {
-				continue
-			}
-			np := c.getNetworkPolicy(string(rule.PolicyUID))
-			// The Policy might be removed during the query.
-			if np == nil {
-				continue
-			}
-			if c.networkPolicyMatchFilter(npFilter, np) {
-				policies = append(policies, *np)
-				policyKeys.Insert(string(rule.PolicyUID))
-			}
+	rules := c.getAppliedNetworkPolicyRules(namespace, pod)
+	for _, rule := range rules {
+		if policyKeys.Has(string(rule.PolicyUID)) {
+			continue
+		}
+		np := c.getNetworkPolicy(string(rule.PolicyUID))
+		// The Policy might be removed during the query.
+		if np == nil {
+			continue
+		}
+		if c.networkPolicyMatchFilter(npFilter, np) {
+			policies = append(policies, *np)
+			policyKeys.Insert(string(rule.PolicyUID))
 		}
 	}
 	return policies

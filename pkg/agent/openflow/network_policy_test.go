@@ -1391,10 +1391,12 @@ func networkPolicyInitFlows(ovsMeterSupported, externalNodeEnabled, l7NetworkPol
 		)
 	}
 	initFlows := append(loggingFlows,
+		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=190,reg0=0x30/0xf0 actions=drop",
 		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x20/0xf0 actions=goto_table:IngressMetric",
 		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x10/0xf0 actions=goto_table:IngressMetric",
 		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x40/0xf0 actions=goto_table:IngressMetric",
 		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,ct_mark=0x40/0x40 actions=goto_table:ConntrackCommit",
+		"cookie=0x1020000000000, table=EgressSecurityClassifier, priority=190,reg0=0x3/0xf actions=drop",
 		"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:EgressMetric",
 		"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:EgressMetric",
 		"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:IngressMetric",
@@ -1560,4 +1562,34 @@ func Test_NewDNSPacketInConjunction(t *testing.T) {
 
 	t.Run("With OVS meters", func(t *testing.T) { runTests(t, true) })
 	t.Run("Without OVS meters", func(t *testing.T) { runTests(t, false) })
+}
+
+func TestPodAdmissionFlows(t *testing.T) {
+	flows := []string{
+		"cookie=0x1020000000000, table=EgressSecurityClassifier, priority=200,reg0=0x3/0xf,in_port=10 actions=goto_table:AntreaPolicyEgressRule",
+		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x30/0xf0,reg1=0xa actions=goto_table:AntreaPolicyIngressRule",
+		"cookie=0x1020000000000, table=EgressSecurityClassifier, priority=200,reg0=0x3/0xf,in_port=11 actions=goto_table:AntreaPolicyEgressRule",
+		"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x30/0xf0,reg1=0xb actions=goto_table:AntreaPolicyIngressRule",
+	}
+	ctrl := gomock.NewController(t)
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+	defer resetPipelines()
+	addedFlows := make([]string, 0)
+	m.EXPECT().AddAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
+		flowStrings := getFlowStrings(flowMessages)
+		addedFlows = append(addedFlows, flowStrings...)
+	}).Return(nil)
+	err := fc.InstallPodNetworkPolicyAdmissionFlows("foo/bar", []uint32{10, 11})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, flows, addedFlows)
+
+	deletedFlows := make([]string, 0)
+	m.EXPECT().DeleteAll(gomock.Any()).Do(func(flowMessages []*openflow15.FlowMod) {
+		flowStrings := getFlowStrings(flowMessages)
+		deletedFlows = append(deletedFlows, flowStrings...)
+	}).Return(nil)
+	err = fc.UninstallPodNetworkPolicyAdmissionFlows("foo/bar")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, flows, deletedFlows)
 }

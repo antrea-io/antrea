@@ -277,11 +277,8 @@ func newReconciler(ofClient openflow.Client,
 		fqdnController:    fqdnController,
 		groupCounters:     groupCounters,
 		multicastEnabled:  multicastEnabled,
-	}
-	// Check if ofClient is nil or not to be compatible with unit tests.
-	if ofClient != nil {
-		reconciler.ipv4Enabled = v4Enabled
-		reconciler.ipv6Enabled = v6Enabled
+		ipv4Enabled:       v4Enabled,
+		ipv6Enabled:       v6Enabled,
 	}
 	return reconciler
 }

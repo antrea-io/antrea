@@ -419,6 +419,20 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
+// InstallPodNetworkPolicyAdmissionFlows mocks base method.
+func (m *MockClient) InstallPodNetworkPolicyAdmissionFlows(arg0 string, arg1 []uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPodNetworkPolicyAdmissionFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPodNetworkPolicyAdmissionFlows indicates an expected call of InstallPodNetworkPolicyAdmissionFlows.
+func (mr *MockClientMockRecorder) InstallPodNetworkPolicyAdmissionFlows(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodNetworkPolicyAdmissionFlows", reflect.TypeOf((*MockClient)(nil).InstallPodNetworkPolicyAdmissionFlows), arg0, arg1)
+}
+
 // InstallPodSNATFlows mocks base method.
 func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32) error {
 	m.ctrl.T.Helper()
@@ -957,6 +971,20 @@ func (m *MockClient) UninstallPodFlows(arg0 string) error {
 func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodFlows), arg0)
+}
+
+// UninstallPodNetworkPolicyAdmissionFlows mocks base method.
+func (m *MockClient) UninstallPodNetworkPolicyAdmissionFlows(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallPodNetworkPolicyAdmissionFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallPodNetworkPolicyAdmissionFlows indicates an expected call of UninstallPodNetworkPolicyAdmissionFlows.
+func (mr *MockClientMockRecorder) UninstallPodNetworkPolicyAdmissionFlows(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodNetworkPolicyAdmissionFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodNetworkPolicyAdmissionFlows), arg0)
 }
 
 // UninstallPodSNATFlows mocks base method.

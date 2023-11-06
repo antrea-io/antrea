@@ -17,7 +17,6 @@ package openflow
 import (
 	"antrea.io/libOpenflow/openflow15"
 
-	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -212,6 +211,7 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 
 func (f *featureNetworkPolicy) getRequiredTables() []*Table {
 	tables := []*Table{
+		EgressSecurityClassifierTable,
 		EgressRuleTable,
 		EgressDefaultTable,
 		EgressMetricTable,
@@ -238,11 +238,6 @@ func (f *featureNetworkPolicy) getRequiredTables() []*Table {
 				MulticastIngressMetricTable,
 			)
 		}
-	}
-	if f.nodeType == config.ExternalNode {
-		tables = append(tables,
-			EgressSecurityClassifierTable,
-		)
 	}
 	return tables
 }

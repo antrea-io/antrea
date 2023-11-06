@@ -28,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -792,6 +793,73 @@ func TestRuleCacheDeleteNetworkPolicy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRuleCacheGetAppliedNetworkPolicies(t *testing.T) {
+	c, _, _, _ := newFakeRuleCache()
+	policies := []*v1beta2.NetworkPolicy{
+		{
+			ObjectMeta: metav1.ObjectMeta{UID: "policy1", Name: "policy1"},
+			Rules: []v1beta2.NetworkPolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+				},
+				{
+					Direction: v1beta2.DirectionOut,
+					To:        v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+				},
+			},
+			AppliedToGroups: []string{"appliedToGroup1"},
+			SourceRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.K8sNetworkPolicy,
+				Namespace: "ns1",
+				Name:      "name1",
+				UID:       "policy1",
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{UID: "policy2", Name: "policy2"},
+			Rules: []v1beta2.NetworkPolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+				},
+			},
+			AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
+			SourceRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.K8sNetworkPolicy,
+				Namespace: "ns2",
+				Name:      "name2",
+				UID:       "policy2",
+			},
+		},
+	}
+	appliedToGroups := []*v1beta2.AppliedToGroup{
+		{
+			ObjectMeta:   metav1.ObjectMeta{Name: "appliedToGroup1"},
+			GroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")},
+		},
+		{
+			ObjectMeta:   metav1.ObjectMeta{Name: "appliedToGroup2"},
+			GroupMembers: []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1"), *newAppliedToGroupMemberPod("pod2", "ns2")},
+		},
+	}
+	c.ReplaceNetworkPolicies(policies)
+	c.ReplaceAppliedToGroups(appliedToGroups)
+	assert.Len(t, c.getAppliedNetworkPolicyRules("ns1", "pod1"), 3)
+	assert.Len(t, c.getAppliedNetworkPolicyRules("ns2", "pod2"), 1)
+	assert.Len(t, c.getAppliedNetworkPolicyRules("ns1", "non-existing-pod"), 0)
+	assert.Len(t, c.getAppliedNetworkPolicyRules("non-existing-ns", "pod1"), 0)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "ns1", &querier.NetworkPolicyQueryFilter{}), 2)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "ns1", &querier.NetworkPolicyQueryFilter{Name: "policy1"}), 1)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "ns1", &querier.NetworkPolicyQueryFilter{SourceName: "name1"}), 1)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "ns1", &querier.NetworkPolicyQueryFilter{Namespace: "ns2"}), 1)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "ns1", &querier.NetworkPolicyQueryFilter{SourceType: v1beta2.K8sNetworkPolicy}), 2)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "ns1", &querier.NetworkPolicyQueryFilter{SourceType: v1beta2.AntreaClusterNetworkPolicy}), 0)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod2", "ns2", &querier.NetworkPolicyQueryFilter{}), 1)
+	assert.Len(t, c.getAppliedNetworkPolicies("non-existing-pod", "ns1", &querier.NetworkPolicyQueryFilter{}), 0)
+	assert.Len(t, c.getAppliedNetworkPolicies("pod1", "non-existing-ns", &querier.NetworkPolicyQueryFilter{}), 0)
 }
 
 func TestRuleCacheGetCompletedRule(t *testing.T) {

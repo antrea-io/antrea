@@ -23,11 +23,14 @@ import (
 	"time"
 
 	"antrea.io/ofnet/ofctrl"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -42,6 +45,8 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/lazy"
 )
 
 const (
@@ -84,8 +89,6 @@ type Controller struct {
 	l7NetworkPolicyEnabled bool
 	// antreaProxyEnabled indicates whether Antrea proxy is enabled.
 	antreaProxyEnabled bool
-	// statusManagerEnabled indicates whether a statusManager is configured.
-	statusManagerEnabled bool
 	// multicastEnabled indicates whether multicast is enabled.
 	multicastEnabled bool
 	// nodeType indicates type of the Node where Antrea Agent is running on.
@@ -98,8 +101,10 @@ type Controller struct {
 	// watches won't be interrupted by rotating cert. The new client will be used
 	// after the existing watches expire.
 	antreaClientProvider agent.AntreaClientProvider
-	// queue maintains the NetworkPolicy ruleIDs that need to be synced.
-	queue workqueue.RateLimitingInterface
+	// podQueue maintains the Pods that need to be synced.
+	podQueue workqueue.RateLimitingInterface
+	// ruleQueue maintains the NetworkPolicy ruleIDs that need to be synced.
+	ruleQueue workqueue.RateLimitingInterface
 	// ruleCache maintains the desired state of NetworkPolicy rules.
 	ruleCache *ruleCache
 	// reconciler provides interfaces to reconcile the desired state of
@@ -113,8 +118,7 @@ type Controller struct {
 	// ofClient registers packetin for Antrea Policy logging.
 	ofClient    openflow.Client
 	auditLogger *AuditLogger
-	// statusManager syncs NetworkPolicy statuses with the antrea-controller.
-	// It's only for Antrea NetworkPolicies.
+	// statusManager tracks the realization status of NetworkPolicy and syncs NetworkPolicy statuses with the antrea-controller.
 	statusManager         StatusManager
 	fqdnController        *fqdnController
 	networkPolicyWatcher  *watcher
@@ -128,6 +132,11 @@ type Controller struct {
 	tunPort       uint32
 	nodeConfig    *config.NodeConfig
 
+	podInformer cache.SharedIndexInformer
+	podLister   corelisters.PodLister
+	// syncedPod is the Pods that have been synced.
+	syncedPod sync.Map
+
 	logPacketAction           packetInAction
 	rejectRequestAction       packetInAction
 	storeDenyConnectionAction packetInAction
@@ -135,6 +144,7 @@ type Controller struct {
 
 // NewNetworkPolicyController returns a new *Controller.
 func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
+	podInformer lazy.Lazy[cache.SharedIndexInformer],
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
@@ -145,7 +155,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	antreaPolicyEnabled bool,
 	l7NetworkPolicyEnabled bool,
 	antreaProxyEnabled bool,
-	statusManagerEnabled bool,
+	statusReportEnabled bool,
 	multicastEnabled bool,
 	loggerOptions *AuditLoggerOptions, // use nil to disable logging
 	asyncRuleDeleteInterval time.Duration,
@@ -158,17 +168,28 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider:   antreaClientGetter,
-		queue:                  workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
+		ruleQueue:              workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		ofClient:               ofClient,
 		nodeType:               nodeType,
 		antreaPolicyEnabled:    antreaPolicyEnabled,
 		l7NetworkPolicyEnabled: l7NetworkPolicyEnabled,
 		antreaProxyEnabled:     antreaProxyEnabled,
-		statusManagerEnabled:   statusManagerEnabled,
 		multicastEnabled:       multicastEnabled,
 		gwPort:                 gwPort,
 		tunPort:                tunPort,
 		nodeConfig:             nodeConfig,
+	}
+
+	if nodeType == config.K8sNode {
+		c.podQueue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(20*time.Millisecond, 2*time.Second), "pod")
+		c.podInformer = podInformer.Get()
+		c.podLister = corelisters.NewPodLister(c.podInformer.GetIndexer())
+		// Enqueue Pod when it's created or deleted, or its interface is created.
+		podUpdateSubscriber.Subscribe(c.enqueuePodIfNewlyCreated)
+		c.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.enqueuePod,
+			DeleteFunc: c.enqueuePod,
+		})
 	}
 
 	if l7NetworkPolicyEnabled {
@@ -181,34 +202,27 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort); err != nil {
 			return nil, err
 		}
-
-		if c.ofClient != nil {
-			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryDNS), c.fqdnController)
-		}
+		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryDNS), c.fqdnController)
 	}
 	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
 		v4Enabled, v6Enabled, antreaPolicyEnabled, multicastEnabled)
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, externalEntityUpdateSubscriber, groupIDUpdates, nodeType)
-	if statusManagerEnabled {
-		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
-	}
+	c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache, statusReportEnabled)
 	// Create a WaitGroup that is used to block network policy workers from asynchronously processing
 	// NP rules until the events preceding bookmark are synced. It can also be used as part of the
 	// solution to a deterministic mechanism for when to cleanup flows from previous round.
 	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
 	c.fullSyncGroup.Add(3)
 
-	if c.ofClient != nil {
-		// Register packetInHandler
-		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
-		if loggerOptions != nil {
-			// Initialize logger for Antrea Policy audit logging
-			auditLogger, err := newAuditLogger(loggerOptions)
-			if err != nil {
-				return nil, err
-			}
-			c.auditLogger = auditLogger
+	// Register packetInHandler
+	c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), c)
+	if loggerOptions != nil {
+		// Initialize logger for Antrea Policy audit logging
+		auditLogger, err := newAuditLogger(loggerOptions)
+		if err != nil {
+			return nil, err
 		}
+		c.auditLogger = auditLogger
 	}
 
 	// Use nodeName to filter resources when watching resources.
@@ -252,7 +266,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			updated := c.ruleCache.UpdateNetworkPolicy(policy)
 			// If any rule or the generation changes, we ensure statusManager will resync the policy's status once, in
 			// case the changes don't cause any actual rule update but the whole policy's generation is changed.
-			if c.statusManagerEnabled && updated && v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
+			if updated && v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
 				c.statusManager.Resync(policy.UID)
 			}
 			return nil
@@ -289,7 +303,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
 				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
 				// two cases. Anyway there's no harm to do a periodical resync.
-				if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(policies[i].SourceRef) {
+				if v1beta2.IsSourceAntreaNativePolicy(policies[i].SourceRef) {
 					c.statusManager.Resync(policies[i].UID)
 				}
 			}
@@ -500,22 +514,31 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 	klog.Infof("Waiting for all watchers to complete full sync")
 	c.fullSyncGroup.Wait()
+	if c.nodeType == config.K8sNode {
+		if !cache.WaitForCacheSync(stopCh, c.podInformer.HasSynced) {
+			klog.Infof("Stopped waiting for Pod cache to be synced")
+			return
+		}
+	}
 	klog.Infof("All watchers have completed full sync, installing flows for init events")
 	// Batch install all rules in queue after fullSync is finished.
 	c.processAllItemsInQueue()
 
 	klog.Infof("Starting NetworkPolicy workers now")
-	defer c.queue.ShutDown()
+	defer c.ruleQueue.ShutDown()
 	for i := 0; i < defaultWorkers; i++ {
-		go wait.Until(c.worker, time.Second, stopCh)
+		go wait.Until(c.ruleWorker, time.Second, stopCh)
+	}
+	if c.nodeType == config.K8sNode {
+		defer c.podQueue.ShutDown()
+		for i := 0; i < defaultWorkers; i++ {
+			go wait.Until(c.podWorker, time.Second, stopCh)
+		}
 	}
 
 	klog.Infof("Starting IDAllocator worker to maintain the async rule cache")
 	go c.reconciler.RunIDAllocatorWorker(stopCh)
-
-	if c.statusManagerEnabled {
-		go c.statusManager.Run(stopCh)
-	}
+	go c.statusManager.Run(stopCh)
 
 	<-stopCh
 }
@@ -568,49 +591,156 @@ func (c *Controller) GetIGMPNPRuleInfo(podName, podNamespace string, groupAddres
 }
 
 func (c *Controller) enqueueRule(ruleID string) {
-	c.queue.Add(ruleID)
+	c.ruleQueue.Add(ruleID)
 }
 
 // worker runs a worker thread that just dequeues items, processes them, and
 // marks them done. You may run as many of these in parallel as you wish; the
 // workqueue guarantees that they will not end up processing the same rule at
 // the same time.
-func (c *Controller) worker() {
-	for c.processNextWorkItem() {
+func (c *Controller) ruleWorker() {
+	for c.processNextRule() {
 	}
 }
 
-func (c *Controller) processNextWorkItem() bool {
-	key, quit := c.queue.Get()
+func (c *Controller) processNextRule() bool {
+	key, quit := c.ruleQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.queue.Done(key)
+	defer c.ruleQueue.Done(key)
 
 	err := c.syncRule(key.(string))
-	c.handleErr(err, key)
-
+	if err != nil {
+		klog.Errorf("Error syncing rule %q, retrying. Error: %v", key, err)
+		c.ruleQueue.AddRateLimited(key)
+		return true
+	}
+	c.ruleQueue.Forget(key)
 	return true
+}
+
+func (c *Controller) podWorker() {
+	for c.processNextPod() {
+	}
+}
+
+func (c *Controller) processNextPod() bool {
+	key, quit := c.podQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.podQueue.Done(key)
+
+	retry, err := c.syncPod(key.(v1beta2.PodReference))
+	if err != nil || retry {
+		if err != nil {
+			klog.Errorf("Error syncing Pod %v, retrying. Error: %v", key, err)
+		}
+		c.podQueue.AddRateLimited(key)
+		return true
+	}
+	c.podQueue.Forget(key)
+	return true
+}
+
+func (c *Controller) enqueuePod(obj interface{}) {
+	pod, isPod := obj.(*corev1.Pod)
+	if !isPod {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Received unexpected object: %v", obj)
+			return
+		}
+		pod, ok = deletedState.Obj.(*corev1.Pod)
+		if !ok {
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Pod object: %v", deletedState.Obj)
+			return
+		}
+	}
+	c.podQueue.Add(v1beta2.PodReference{
+		Namespace: pod.Namespace,
+		Name:      pod.Name,
+	})
+}
+
+// enqueuePodIfNewlyCreated enqueues a Pod if the event indicates its interface is newly created.
+func (c *Controller) enqueuePodIfNewlyCreated(e interface{}) {
+	podEvent := e.(types.PodUpdate)
+	if podEvent.IsAdd {
+		c.podQueue.Add(v1beta2.PodReference{
+			Namespace: podEvent.PodNamespace,
+			Name:      podEvent.PodName,
+		})
+	}
 }
 
 // processAllItemsInQueue pops all rule keys queued at the moment and calls syncRules to
 // reconcile those rules in batch.
 func (c *Controller) processAllItemsInQueue() {
-	numRules := c.queue.Len()
+	numRules := c.ruleQueue.Len()
 	batchSyncRuleKeys := make([]string, numRules)
 	for i := 0; i < numRules; i++ {
-		ruleKey, _ := c.queue.Get()
+		ruleKey, _ := c.ruleQueue.Get()
 		batchSyncRuleKeys[i] = ruleKey.(string)
 		// set key to done to prevent missing watched updates between here and fullSync finish.
-		c.queue.Done(ruleKey)
+		c.ruleQueue.Done(ruleKey)
 	}
 	// Reconcile all rule keys at once.
 	if err := c.syncRules(batchSyncRuleKeys); err != nil {
 		klog.Errorf("Error occurred when reconciling all rules for init events: %v", err)
 		for _, k := range batchSyncRuleKeys {
-			c.queue.AddRateLimited(k)
+			c.ruleQueue.AddRateLimited(k)
 		}
 	}
+}
+
+func (c *Controller) syncPod(key v1beta2.PodReference) (bool, error) {
+	startTime := time.Now()
+	defer func() {
+		klog.V(4).InfoS("Finished syncing Pod", "Pod", key, "duration", time.Since(startTime))
+	}()
+	pod := k8s.NamespacedName(key.Namespace, key.Name)
+	if _, err := c.podLister.Pods(key.Namespace).Get(key.Name); err != nil {
+		if _, ok := c.syncedPod.Load(key); !ok {
+			return false, nil
+		}
+		if err := c.ofClient.UninstallPodNetworkPolicyAdmissionFlows(pod); err != nil {
+			return false, fmt.Errorf("error deleting NetworkPolicy admission flows for Pod %s: %v", pod, err)
+		}
+		c.syncedPod.Delete(key)
+		return false, nil
+	}
+	// It has been synced, do nothing.
+	if _, ok := c.syncedPod.Load(key); ok {
+		return false, nil
+	}
+	ifaces := c.ifaceStore.GetContainerInterfacesByPod(key.Name, key.Namespace)
+	if len(ifaces) == 0 {
+		// This might be because the container has been deleted during realization or hasn't been set up yet.
+		// We will process this Pod again after the interface is created, do nothing here.
+		klog.V(2).InfoS("Found no network interfaces for Pod", "Pod", key)
+		return false, nil
+	}
+	// Not all rules applied to this Pod have been realized, retry with a backoff.
+	// The reason why it uses backoff retry instead of enqueuing the Pod after realizing a rule is because:
+	// 1. It could happen that a Pod's rule has never been realized successfully (due to flapping NetworkPolicy events
+	//    or realization failure), and the Pod could become "realized" after NetworkPolicy is deleted, which would take
+	//    some cost to figure out which Pods should be enqueued.
+	// 2. We only need to process a Pod when it becomes "realized" the first time and when it's deleted, not worth to
+	//    repeatedly check whether the Pods should be processed or not every time a rule is reconciled.
+	if !c.statusManager.GetPodRealization(key) {
+		return true, nil
+	}
+	ofPorts := make([]uint32, 0, len(ifaces))
+	for _, iface := range ifaces {
+		ofPorts = append(ofPorts, uint32(iface.OFPort))
+	}
+	if err := c.ofClient.InstallPodNetworkPolicyAdmissionFlows(pod, ofPorts); err != nil {
+		return false, fmt.Errorf("error installing NetworkPolicy admission flows for Pod %s: %v", pod, err)
+	}
+	c.syncedPod.Store(key, nil)
+	return false, nil
 }
 
 func (c *Controller) syncRule(key string) error {
@@ -624,11 +754,7 @@ func (c *Controller) syncRule(key string) error {
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
-		if c.statusManagerEnabled {
-			// We don't know whether this is a rule owned by Antrea Policy, but
-			// harmless to delete it.
-			c.statusManager.DeleteRuleRealization(key)
-		}
+		c.statusManager.DeleteRuleRealization(key)
 		if c.l7NetworkPolicyEnabled {
 			if vlanID := c.l7VlanIDAllocator.query(key); vlanID != 0 {
 				if err := c.l7RuleReconciler.DeleteRule(key, vlanID); err != nil {
@@ -666,9 +792,7 @@ func (c *Controller) syncRule(key string) error {
 	if err != nil {
 		return err
 	}
-	if c.statusManagerEnabled && v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
-	}
+	c.statusManager.SetRuleRealization(key, rule.PolicyUID)
 	return nil
 }
 
@@ -706,24 +830,10 @@ func (c *Controller) syncRules(keys []string) error {
 	if err := c.reconciler.BatchReconcile(allRules); err != nil {
 		return err
 	}
-	if c.statusManagerEnabled {
-		for _, rule := range allRules {
-			if v1beta2.IsSourceAntreaNativePolicy(rule.SourceRef) {
-				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
-			}
-		}
+	for _, rule := range allRules {
+		c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
 	}
 	return nil
-}
-
-func (c *Controller) handleErr(err error, key interface{}) {
-	if err == nil {
-		c.queue.Forget(key)
-		return
-	}
-
-	klog.Errorf("Error syncing rule %q, retrying. Error: %v", key, err)
-	c.queue.AddRateLimited(key)
 }
 
 // watcher is responsible for watching a given resource with the provided watchFunc

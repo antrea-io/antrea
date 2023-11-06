@@ -1654,6 +1654,7 @@ func (f *featureNetworkPolicy) replayFlows() []*openflow15.FlowMod {
 	for _, ctx := range f.globalConjMatchFlowCache {
 		addMatchFlows(ctx)
 	}
+	flows = append(flows, getCachedFlowMessages(f.podCachedFlows)...)
 	return flows
 }
 
@@ -2072,6 +2073,9 @@ type featureNetworkPolicy struct {
 	nodeType              config.NodeType
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 
+	// podCachedFlows caches flows specific to Pods related to NetworkPolicy.
+	podCachedFlows *flowCategoryCache
+
 	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
 	// conjMatchFlowContext.
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
@@ -2123,6 +2127,7 @@ func newFeatureNetworkPolicy(
 	grpAllocator GroupAllocator) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
 		cookieAllocator:          cookieAllocator,
+		podCachedFlows:           newFlowCategoryCache(),
 		ipProtocols:              ipProtocols,
 		bridge:                   bridge,
 		nodeType:                 nodeType,
@@ -2153,6 +2158,7 @@ func (f *featureNetworkPolicy) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	if f.nodeType == config.K8sNode {
 		flows = append(flows, f.ingressClassifierFlows()...)
+		flows = append(flows, f.egressClassifierFlows()...)
 		if f.enableL7NetworkPolicy {
 			flows = append(flows, f.l7NPTrafficControlFlows()...)
 		}
@@ -2257,6 +2263,29 @@ func (f *featureNetworkPolicy) loggingNPPacketFlowWithOperations(cookieID uint64
 	return fb.Action().SendToController([]byte{uint8(PacketInCategoryNP), operations}, false).
 		Cookie(cookieID).
 		Done()
+}
+
+// podAdmissionFlows generates the flows to admit the traffic from/to Pods to enter NetworkPolicy Ingress/Egress tables.
+func (f *featureNetworkPolicy) podAdmissionFlows(ofPorts []uint32) []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	flows := make([]binding.Flow, 0, 2*len(ofPorts))
+	for _, ofPort := range ofPorts {
+		flows = append(flows,
+			EgressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchRegMark(FromLocalRegMark).
+				MatchInPort(ofPort).
+				Action().NextTable().
+				Done(),
+			IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchRegMark(ToLocalRegMark).
+				MatchRegFieldWithValue(TargetOFPortField, ofPort).
+				Action().NextTable().
+				Done(),
+		)
+	}
+	return flows
 }
 
 func (f *featureNetworkPolicy) initLoggingFlows() []binding.Flow {

@@ -54,6 +54,7 @@ var (
 	PktDestinationField = binding.NewRegField(0, 4, 7)
 	ToTunnelRegMark     = binding.NewRegMark(PktDestinationField, tunnelVal)
 	ToGatewayRegMark    = binding.NewRegMark(PktDestinationField, gatewayVal)
+	ToLocalRegMark      = binding.NewRegMark(PktDestinationField, localVal)
 	ToUplinkRegMark     = binding.NewRegMark(PktDestinationField, uplinkVal)
 	// reg0[9]: Field to indicate whether the packet's source / destination MAC address needs to be rewritten.
 	RewriteMACRegMark    = binding.NewOneBitRegMark(0, 9)

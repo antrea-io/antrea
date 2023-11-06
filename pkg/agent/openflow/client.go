@@ -72,6 +72,13 @@ type Client interface {
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
 	UninstallNodeFlows(hostname string) error
 
+	// InstallPodNetworkPolicyAdmissionFlows installs the flows to admit the traffic from/to a Pod to enter
+	// NetworkPolicy Ingress/Egress tables.
+	InstallPodNetworkPolicyAdmissionFlows(podName string, ofPort []uint32) error
+
+	// UninstallPodNetworkPolicyAdmissionFlows removes the flows installed by InstallPodNetworkPolicyAdmissionFlows.
+	UninstallPodNetworkPolicyAdmissionFlows(podName string) error
+
 	// InstallPodFlows should be invoked when a connection to a Pod on current Node. The
 	// interfaceName is used to identify the added flows. InstallPodFlows has all-or-nothing
 	// semantics(call succeeds if all the flows are installed successfully, otherwise no
@@ -590,6 +597,19 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.featurePodConnectivity.nodeCachedFlows, hostname)
+}
+
+func (c *client) InstallPodNetworkPolicyAdmissionFlows(pod string, ofPorts []uint32) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	flows := c.featureNetworkPolicy.podAdmissionFlows(ofPorts)
+	return c.modifyFlows(c.featureNetworkPolicy.podCachedFlows, pod, flows)
+}
+
+func (c *client) UninstallPodNetworkPolicyAdmissionFlows(pod string) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.featureNetworkPolicy.podCachedFlows, pod)
 }
 
 func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16, labelID *uint32) error {

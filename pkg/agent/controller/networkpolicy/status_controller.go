@@ -45,6 +45,8 @@ type StatusManager interface {
 	SetRuleRealization(ruleID string, policyID types.UID)
 	// DeleteRuleRealization deletes the actual status for the given NetworkPolicy rule.
 	DeleteRuleRealization(ruleID string)
+	// GetPodRealization returns whether all NetworkPolicy rules applied to the given Pod have been realized.
+	GetPodRealization(pod v1beta2.PodReference) bool
 	// Resync triggers syncing status with the antrea-controller for the given NetworkPolicy.
 	Resync(policyID types.UID)
 	// Start the status sync loop.
@@ -54,6 +56,8 @@ type StatusManager interface {
 // StatusController implements StatusManager.
 type StatusController struct {
 	nodeName string
+	// Whether to report status to antrea-controller.
+	statusReportEnabled bool
 	// statusControlInterface knows how to update control plane NetworkPolicy status.
 	statusControlInterface networkPolicyStatusControlInterface
 	// ruleCache provides the desired state of NetworkPolicy rules.
@@ -82,10 +86,11 @@ func realizedRulePolicyIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(rule.policyID)}, nil
 }
 
-func newStatusController(antreaClientProvider agent.AntreaClientProvider, nodeName string, ruleCache *ruleCache) *StatusController {
+func newStatusController(antreaClientProvider agent.AntreaClientProvider, nodeName string, ruleCache *ruleCache, statusReportEnabled bool) *StatusController {
 	return &StatusController{
 		statusControlInterface: &networkPolicyStatusControl{antreaClientProvider: antreaClientProvider},
 		nodeName:               nodeName,
+		statusReportEnabled:    statusReportEnabled,
 		ruleCache:              ruleCache,
 		realizedRules: cache.NewIndexer(realizedRuleKeyFunc, cache.Indexers{
 			realizedRulePolicyIndex: realizedRulePolicyIndexFunc,
@@ -102,7 +107,9 @@ func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID)
 		return
 	}
 	c.realizedRules.Add(&realizedRule{ruleID: ruleID, policyID: policyID})
-	c.queue.Add(policyID)
+	if c.statusReportEnabled {
+		c.queue.Add(policyID)
+	}
 }
 
 func (c *StatusController) DeleteRuleRealization(ruleID string) {
@@ -112,12 +119,27 @@ func (c *StatusController) DeleteRuleRealization(ruleID string) {
 		return
 	}
 	c.realizedRules.Delete(obj)
-	c.queue.Add(obj.(*realizedRule).policyID)
+	if c.statusReportEnabled {
+		c.queue.Add(obj.(*realizedRule).policyID)
+	}
+}
+
+func (c *StatusController) GetPodRealization(pod v1beta2.PodReference) bool {
+	rules := c.ruleCache.getAppliedNetworkPolicyRules(pod.Namespace, pod.Name)
+	for key := range rules {
+		if _, exists, _ := c.realizedRules.GetByKey(key); !exists {
+			klog.V(2).InfoS("Pod's NetworkPolicy was not realized", "Pod", klog.KRef(pod.Namespace, pod.Name), "rule", key)
+			return false
+		}
+	}
+	return true
 }
 
 func (c *StatusController) Resync(policyID types.UID) {
-	klog.V(2).Infof("Resyncing NetworkPolicyStatus for %s", policyID)
-	c.queue.Add(policyID)
+	if c.statusReportEnabled {
+		klog.V(2).Infof("Resyncing NetworkPolicyStatus for %s", policyID)
+		c.queue.Add(policyID)
+	}
 }
 
 // worker is a long-running function that will continually call the processNextWorkItem function in
@@ -162,6 +184,9 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 	policy := c.ruleCache.getNetworkPolicy(string(uid))
 	// The policy must have been deleted, no further processing.
 	if policy == nil {
+		return nil
+	}
+	if !v1beta2.IsSourceAntreaNativePolicy(policy.SourceRef) {
 		return nil
 	}
 	desiredRules := c.ruleCache.getEffectiveRulesByNetworkPolicy(string(uid))

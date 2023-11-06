@@ -34,7 +34,7 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		flows = []string{
 			"cookie=0x1030000000000, table=UnSNAT, priority=200,ip,nw_dst=169.254.0.253 actions=ct(table=ConntrackZone,zone=65521,nat)",
 			"cookie=0x1030000000000, table=UnSNAT, priority=200,ip,nw_dst=10.10.0.1 actions=ct(table=ConntrackZone,zone=65521,nat)",
-			"cookie=0x1030000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x10/0x10,ip actions=set_field:0x200/0x200->reg0,goto_table:AntreaPolicyEgressRule",
+			"cookie=0x1030000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x10/0x10,ip actions=set_field:0x200/0x200->reg0,goto_table:EgressSecurityClassifier",
 			"cookie=0x1030000000000, table=SessionAffinity, priority=0 actions=set_field:0x10000/0x70000->reg4",
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=200,reg0=0x4000/0x4000 actions=controller(id=32776,reason=no_match,userdata=04,max_len=65535)",
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=190,reg4=0x20000/0x70000 actions=set_field:0x10000/0x70000->reg4,resubmit:ServiceLB",
@@ -61,14 +61,14 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		}
 		if dsrEnabled {
 			flows = append(flows,
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ip,reg4=0x2000000/0x2000000 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ip,reg4=0x2000000/0x2000000 actions=ct(commit,table=EgressSecurityClassifier,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			)
 		}
 	} else {
 		flows = []string{
 			"cookie=0x1030000000000, table=UnSNAT, priority=200,ipv6,ipv6_dst=fc01::aabb:ccdd:eeff actions=ct(table=ConntrackZone,zone=65511,nat)",
 			"cookie=0x1030000000000, table=UnSNAT, priority=200,ipv6,ipv6_dst=fec0:10:10::1 actions=ct(table=ConntrackZone,zone=65511,nat)",
-			"cookie=0x1030000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x10/0x10,ipv6 actions=set_field:0x200/0x200->reg0,goto_table:AntreaPolicyEgressRule",
+			"cookie=0x1030000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x10/0x10,ipv6 actions=set_field:0x200/0x200->reg0,goto_table:EgressSecurityClassifier",
 			"cookie=0x1030000000000, table=SessionAffinity, priority=0 actions=set_field:0x10000/0x70000->reg4",
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=200,reg0=0x4000/0x4000 actions=controller(id=32776,reason=no_match,userdata=04,max_len=65535)",
 			"cookie=0x1030000000000, table=EndpointDNAT, priority=190,reg4=0x20000/0x70000 actions=set_field:0x10000/0x70000->reg4,resubmit:ServiceLB",
@@ -95,7 +95,7 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		}
 		if dsrEnabled {
 			flows = append(flows,
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ipv6,reg4=0x2000000/0x2000000 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=210,ipv6,reg4=0x2000000/0x2000000 actions=ct(commit,table=EgressSecurityClassifier,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			)
 		}
 	}

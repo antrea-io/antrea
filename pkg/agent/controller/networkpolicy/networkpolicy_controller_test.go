@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -25,24 +26,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/lazy"
 )
 
 const testNamespace = "ns1"
@@ -65,17 +78,41 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 	return g.clientset, nil
 }
 
-func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
+type fakeController struct {
+	*Controller
+	mockCRDClientset *fake.Clientset
+	mockK8sClientset *k8sfake.Clientset
+	mockOFClient     *openflowtest.MockClient
+	mockReconciler   *mockReconciler
+}
+
+func newTestController(t *testing.T, objs ...runtime.Object) *fakeController {
+	ctrl := gomock.NewController(t)
 	clientset := &fake.Clientset{}
+	k8sClientset := k8sfake.NewSimpleClientset(objs...)
+	localPodInformer := lazy.New[cache.SharedIndexInformer](func() cache.SharedIndexInformer {
+		return coreinformers.NewPodInformer(k8sClientset, v1.NamespaceAll, 0*time.Second, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	})
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	ch2 := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator()
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, nil, groupCounters, ch2, true, true, true, true, false, nil, testAsyncDeleteInterval, "8.8.8.8:53", config.K8sNode, true, false, config.HostGatewayOFPort, config.DefaultTunOFPort, &config.NodeConfig{})
+	ofClient := openflowtest.NewMockClient(ctrl)
+	ofClient.EXPECT().NewDNSPacketInConjunction(dnsInterceptRuleID)
+	ofClient.EXPECT().RegisterPacketInHandler(uint8(openflow.PacketInCategoryDNS), gomock.Any())
+	ofClient.EXPECT().RegisterPacketInHandler(uint8(openflow.PacketInCategoryNP), gomock.Any())
+	ifaceStore := interfacestore.NewInterfaceStore()
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, localPodInformer, ofClient, ifaceStore, "node1", podUpdateChannel, nil, groupCounters, ch2, true, true, true, true, false, nil, testAsyncDeleteInterval, "8.8.8.8:53", config.K8sNode, true, false, config.HostGatewayOFPort, config.DefaultTunOFPort, &config.NodeConfig{})
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	controller.auditLogger = nil
-	return controller, clientset, reconciler
+	return &fakeController{
+		Controller:       controller,
+		mockCRDClientset: clientset,
+		mockK8sClientset: k8sClientset,
+		mockOFClient:     ofClient,
+		mockReconciler:   reconciler,
+	}
 }
 
 // mockReconciler implements Reconciler. It simply records the latest states of rules
@@ -87,6 +124,7 @@ type mockReconciler struct {
 	updated        chan string
 	deleted        chan string
 	fqdnController *fqdnController
+	reconcileErr   error
 }
 
 func newMockReconciler() *mockReconciler {
@@ -102,7 +140,7 @@ func (r *mockReconciler) Reconcile(rule *CompletedRule) error {
 	defer r.Unlock()
 	r.lastRealized[rule.ID] = rule
 	r.updated <- rule.ID
-	return nil
+	return r.reconcileErr
 }
 
 func (r *mockReconciler) BatchReconcile(rules []*CompletedRule) error {
@@ -112,7 +150,7 @@ func (r *mockReconciler) BatchReconcile(rules []*CompletedRule) error {
 		r.lastRealized[rule.ID] = rule
 		r.updated <- rule.ID
 	}
-	return nil
+	return r.reconcileErr
 }
 
 func (r *mockReconciler) Forget(ruleID string) error {
@@ -143,6 +181,26 @@ func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {
 }
 
 var _ Reconciler = &mockReconciler{}
+
+type fakeStatusManager struct {
+	realizedPods sets.Set[v1beta2.PodReference]
+}
+
+func newFakeStatusManager(pods ...v1beta2.PodReference) *fakeStatusManager {
+	return &fakeStatusManager{realizedPods: sets.New[v1beta2.PodReference](pods...)}
+}
+
+func (m *fakeStatusManager) SetRuleRealization(ruleID string, policyID types.UID) {}
+
+func (m *fakeStatusManager) DeleteRuleRealization(ruleID string) {}
+
+func (m *fakeStatusManager) GetPodRealization(pod v1beta2.PodReference) bool {
+	return m.realizedPods.Has(pod)
+}
+
+func (m *fakeStatusManager) Resync(policyID types.UID) {}
+
+func (m *fakeStatusManager) Run(stopCh <-chan struct{}) {}
 
 func newAddressGroup(name string, addresses []v1beta2.GroupMember) *v1beta2.AddressGroup {
 	return &v1beta2.AddressGroup{
@@ -218,13 +276,14 @@ func prepareMockTables() {
 
 func TestAddSingleGroupRule(t *testing.T) {
 	prepareMockTables()
-	controller, clientset, reconciler := newTestController()
+	controller := newTestController(t)
+	reconciler := controller.mockReconciler
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
 	networkPolicyWatcher := watch.NewFake()
-	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
-	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
-	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
@@ -237,6 +296,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
+	go controller.podInformer.Run(stopCh)
 	go controller.Run(stopCh)
 
 	// policy1 comes first, no rule will be synced due to missing addressGroup1 and appliedToGroup1.
@@ -298,14 +358,26 @@ func TestAddSingleGroupRule(t *testing.T) {
 
 func TestAddMultipleGroupsRule(t *testing.T) {
 	prepareMockTables()
-	controller, clientset, reconciler := newTestController()
+	controller := newTestController(t)
+	reconciler := controller.mockReconciler
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
 	networkPolicyWatcher := watch.NewFake()
-	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
-	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
-	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
-
+	pod1 := &corev1.Pod{ObjectMeta: v1.ObjectMeta{Namespace: "ns1", Name: "pod1"}}
+	pod2 := &corev1.Pod{ObjectMeta: v1.ObjectMeta{Namespace: "ns2", Name: "pod2"}}
+	controller.mockCRDClientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+	controller.ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "c1"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "c1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 10},
+	})
+	controller.ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod2", "ns2", "c2"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod2", PodNamespace: "ns2", ContainerID: "c2"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 11},
+	})
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
@@ -317,7 +389,22 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
+	go controller.podInformer.Run(stopCh)
 	go controller.Run(stopCh)
+
+	assertPodNetworkPolicyAdmissionFlows := func(pod string, ofPort uint32) func() {
+		synced := make(chan struct{})
+		controller.mockOFClient.EXPECT().InstallPodNetworkPolicyAdmissionFlows(pod, []uint32{ofPort}).Do(func(string, []uint32) {
+			close(synced)
+		})
+		return func() {
+			select {
+			case <-synced:
+			case <-time.After(time.Millisecond * 100):
+				t.Fatalf("Expected Pod %s to be synced", pod)
+			}
+		}
+	}
 
 	// addressGroup1 comes, no rule will be synced.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
@@ -340,6 +427,10 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
+	// At the moment no NetworkPolicies are applied to Pod2, its admission flows should be installed.
+	assertFn := assertPodNetworkPolicyAdmissionFlows("ns2/pod2", 11)
+	controller.mockK8sClientset.CoreV1().Pods(pod2.Namespace).Create(context.TODO(), pod2, v1.CreateOptions{})
+	assertFn()
 
 	// addressGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("3.3.3.3")}))
@@ -357,6 +448,10 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
+	// At the moment NetworkPolicies are fully applied to Pod1, its admission flows should be installed.
+	assertFn = assertPodNetworkPolicyAdmissionFlows("ns1/pod1", 10)
+	controller.mockK8sClientset.CoreV1().Pods(pod1.Namespace).Create(context.TODO(), pod1, v1.CreateOptions{})
+	assertFn()
 
 	// appliedToGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1 and appliedToGroup2.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod2", "ns2")}))
@@ -378,19 +473,21 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 
 func TestDeleteRule(t *testing.T) {
 	prepareMockTables()
-	controller, clientset, reconciler := newTestController()
+	controller := newTestController(t)
+	reconciler := controller.mockReconciler
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
 	networkPolicyWatcher := watch.NewFake()
-	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
-	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
-	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
+	go controller.podInformer.Run(stopCh)
 	go controller.Run(stopCh)
 
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
@@ -426,13 +523,14 @@ func TestDeleteRule(t *testing.T) {
 
 func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	prepareMockTables()
-	controller, clientset, reconciler := newTestController()
+	controller := newTestController(t)
+	reconciler := controller.mockReconciler
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
 	networkPolicyWatcher := watch.NewFake()
-	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
-	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
-	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
@@ -451,6 +549,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
+	go controller.podInformer.Run(stopCh)
 	go controller.Run(stopCh)
 
 	// Test NetworkPolicyInfoQuerier functions when the NetworkPolicy has multiple rules.
@@ -494,7 +593,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 					t.Errorf("Expected Pods %v, got %v", desiredRule2.TargetMembers, actualRule.TargetMembers)
 				}
 			}
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Millisecond * 500):
 			t.Fatal("Expected two rule updates, got timeout")
 		}
 	}
@@ -511,7 +610,8 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	prepareMockTables()
 	// Initialize NetworkPolicy metrics (prometheus)
 	metrics.InitializeNetworkPolicyMetrics()
-	controller, clientset, reconciler := newTestController()
+	controller := newTestController(t)
+	reconciler := controller.mockReconciler
 
 	// Define functions to wait for a message from reconciler
 	waitForReconcilerUpdated := func() {
@@ -581,17 +681,19 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
 	networkPolicyWatcher := watch.NewFake()
-	clientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
-	clientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
-	clientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
 	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
+	go controller.podInformer.Run(stopCh)
 	go controller.Run(stopCh)
 
+	controller.mockOFClient.EXPECT().UninstallPodNetworkPolicyAdmissionFlows(gomock.Any()).AnyTimes()
 	// Test adding policy1 with a single rule
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
@@ -625,7 +727,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	controller, _, _ := newTestController()
+	controller := newTestController(t)
 	igmpType := int32(0x12)
 	actionAllow, actionDrop := v1beta1.RuleActionAllow, v1beta1.RuleActionDrop
 	appliedToGroup := v1beta2.NewGroupMemberSet()
@@ -694,4 +796,136 @@ func TestValidate(t *testing.T) {
 	if item.RuleAction != v1beta1.RuleActionDrop {
 		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress2, v1beta1.RuleActionDrop, item.RuleAction)
 	}
+}
+
+func TestSyncPod(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: v1.ObjectMeta{Namespace: "foo", Name: "bar"},
+		Spec:       corev1.PodSpec{NodeName: "node1"},
+	}
+	podRef := v1beta2.PodReference{Namespace: pod.Namespace, Name: pod.Name}
+	interfaceConfig := &interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName(pod.Name, pod.Namespace, "c1"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: pod.Name, PodNamespace: pod.Namespace, ContainerID: "c1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 10},
+	}
+	tests := []struct {
+		name                    string
+		existingSyncedPod       *v1beta2.PodReference
+		existingInterfaceConfig *interfacestore.InterfaceConfig
+		existingPod             *corev1.Pod
+		realizedPods            []v1beta2.PodReference
+		expectedCall            func(recorder *openflowtest.MockClientMockRecorder)
+		expectedSynced          bool
+	}{
+		{
+			name:         "pod not exists",
+			expectedCall: func(recorder *openflowtest.MockClientMockRecorder) {},
+		},
+		{
+			name:              "synced pod not exists",
+			existingSyncedPod: &podRef,
+			expectedCall: func(recorder *openflowtest.MockClientMockRecorder) {
+				recorder.UninstallPodNetworkPolicyAdmissionFlows("foo/bar")
+			},
+		},
+		{
+			name:         "interface not exists",
+			existingPod:  pod,
+			expectedCall: func(recorder *openflowtest.MockClientMockRecorder) {},
+		},
+		{
+			name:                    "pod not realized",
+			existingPod:             pod,
+			existingInterfaceConfig: interfaceConfig,
+			expectedCall:            func(recorder *openflowtest.MockClientMockRecorder) {},
+		},
+		{
+			name:                    "pod realized",
+			existingPod:             pod,
+			existingInterfaceConfig: interfaceConfig,
+			realizedPods:            []v1beta2.PodReference{podRef},
+			expectedCall: func(recorder *openflowtest.MockClientMockRecorder) {
+				recorder.InstallPodNetworkPolicyAdmissionFlows("foo/bar", []uint32{10})
+			},
+			expectedSynced: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prepareMockTables()
+			controller := newTestController(t)
+			controller.statusManager = newFakeStatusManager(tt.realizedPods...)
+			if tt.existingSyncedPod != nil {
+				controller.syncedPod.Store(*tt.existingSyncedPod, nil)
+			}
+			if tt.existingPod != nil {
+				controller.podInformer.GetIndexer().Add(tt.existingPod)
+			}
+			if tt.existingInterfaceConfig != nil {
+				controller.ifaceStore.AddInterface(tt.existingInterfaceConfig)
+			}
+
+			tt.expectedCall(controller.mockOFClient.EXPECT())
+			controller.syncPod(podRef)
+			_, ok := controller.syncedPod.Load(podRef)
+			assert.Equal(t, tt.expectedSynced, ok)
+		})
+	}
+}
+
+func TestSyncPodWithReconcileErr(t *testing.T) {
+	prepareMockTables()
+	pod := &corev1.Pod{
+		ObjectMeta: v1.ObjectMeta{Namespace: "foo", Name: "bar"},
+		Spec:       corev1.PodSpec{NodeName: "node1"},
+	}
+	podRef := v1beta2.PodReference{Namespace: pod.Namespace, Name: pod.Name}
+	controller := newTestController(t, pod)
+	controller.mockReconciler.reconcileErr = fmt.Errorf("can't realize rule")
+	controller.ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName(pod.Name, pod.Namespace, "c1"),
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: pod.Name, PodNamespace: pod.Namespace, ContainerID: "c1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 10},
+	})
+	addressGroupWatcher := watch.NewFake()
+	appliedToGroupWatcher := watch.NewFake()
+	networkPolicyWatcher := watch.NewFake()
+	controller.mockCRDClientset.AddWatchReactor("addressgroups", k8stesting.DefaultWatchReactor(addressGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("appliedtogroups", k8stesting.DefaultWatchReactor(appliedToGroupWatcher, nil))
+	controller.mockCRDClientset.AddWatchReactor("networkpolicies", k8stesting.DefaultWatchReactor(networkPolicyWatcher, nil))
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go controller.podInformer.Run(stopCh)
+	go controller.Run(stopCh)
+
+	// A NetworkPolicy is applied to the Pod, but it can't be reconciled successfully, the Pod shouldn't be unblocked.
+	policy := newNetworkPolicy("policy1", "uid1", []string{}, []string{}, []string{"appliedToGroup1"}, nil)
+	networkPolicyWatcher.Add(policy)
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod(pod.Name, pod.Namespace)}))
+	networkPolicyWatcher.Action(watch.Bookmark, nil)
+	appliedToGroupWatcher.Action(watch.Bookmark, nil)
+	addressGroupWatcher.Action(watch.Bookmark, nil)
+	select {
+	case <-controller.mockReconciler.updated:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Expected reconciler to be called")
+	}
+	_, ok := controller.syncedPod.Load(podRef)
+	assert.False(t, ok)
+
+	// After deleting the NetworkPolicy, the Pod should be unblocked.
+	synced := make(chan struct{})
+	controller.mockOFClient.EXPECT().InstallPodNetworkPolicyAdmissionFlows("foo/bar", []uint32{10}).Do(func(string, []uint32) {
+		close(synced)
+	})
+	networkPolicyWatcher.Delete(policy)
+	select {
+	case <-synced:
+	case <-time.After(time.Millisecond * 200):
+		t.Fatalf("Expected Pod %s to be synced", klog.KObj(pod))
+	}
+	_, ok = controller.syncedPod.Load(podRef)
+	assert.True(t, ok)
 }

@@ -169,10 +169,8 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		ipv6Enabled:            v6Enabled,
 		gwPort:                 gwPort,
 	}
-	if controller.ofClient != nil {
-		if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {
-			return nil, fmt.Errorf("failed to install flow for DNS response interception: %w", err)
-		}
+	if err := controller.ofClient.NewDNSPacketInConjunction(dnsInterceptRuleID); err != nil {
+		return nil, fmt.Errorf("failed to install flow for DNS response interception: %w", err)
 	}
 	if dnsServerOverride != "" {
 		klog.InfoS("DNS server override provided by user", "dnsServer", dnsServerOverride)

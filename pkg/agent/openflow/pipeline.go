@@ -1342,6 +1342,7 @@ func (f *featurePodConnectivity) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr
 				MatchProtocol(ipProtocol).
 				MatchDstIP(ip).
 				Action().SetDstMAC(podInterfaceMAC).
+				Action().LoadRegMark(ToLocalRegMark).
 				Action().GotoTable(L3DecTTLTable.GetID()).
 				Done())
 		} else {
@@ -1358,6 +1359,7 @@ func (f *featurePodConnectivity) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr
 				MatchDstIP(ip).
 				Action().SetSrcMAC(localGatewayMAC).
 				Action().SetDstMAC(podInterfaceMAC).
+				Action().LoadRegMark(ToLocalRegMark).
 				Action().GotoTable(L3DecTTLTable.GetID()).
 				Done())
 		}
@@ -1377,6 +1379,7 @@ func (f *featurePodConnectivity) l3FwdFlowRouteToPod(podInterfaceIPs []net.IP, p
 			MatchProtocol(ipProtocol).
 			MatchDstIP(ip).
 			Action().SetDstMAC(podInterfaceMAC).
+			Action().LoadRegMark(ToLocalRegMark).
 			Action().GotoTable(L3DecTTLTable.GetID()).
 			Done())
 	}
@@ -2278,6 +2281,14 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 			MatchCTMark(HairpinCTMark).
 			Action().GotoStage(stageConntrack).
 			Done(),
+		// This generates the default flow to match the packets to local Pods and drop them with low priority.
+		// podAdmissionFlows() will generate flows with higher priority to whitelist a Pod after all its NetworkPolicies
+		// have been realized.
+		IngressSecurityClassifierTable.ofTable.BuildFlow(priorityLow).
+			Cookie(cookieID).
+			MatchRegMark(ToLocalRegMark).
+			Action().Drop().
+			Done(),
 	}
 	if f.enableAntreaPolicy && f.proxyAll {
 		// This generates the flow to match the NodePort Service packets and forward them to AntreaPolicyIngressRuleTable.
@@ -2287,6 +2298,21 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 			MatchRegMark(ToNodePortAddressRegMark).
 			Action().GotoTable(AntreaPolicyIngressRuleTable.GetID()).
 			Done())
+	}
+	return flows
+}
+
+func (f *featureNetworkPolicy) egressClassifierFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	flows := []binding.Flow{
+		// This generates the default flow to match the packets from local Pods and drop them with low priority.
+		// podAdmissionFlows() will generate flows with higher priority to whitelist a Pod after all its NetworkPolicies
+		// have been realized.
+		EgressSecurityClassifierTable.ofTable.BuildFlow(priorityLow).
+			Cookie(cookieID).
+			MatchRegMark(FromLocalRegMark).
+			Action().Drop().
+			Done(),
 	}
 	return flows
 }
@@ -2998,6 +3024,7 @@ func (f *featurePodConnectivity) l3FwdFlowToLocalPodCIDR() []binding.Flow {
 			MatchProtocol(ipProtocol).
 			MatchDstIPNet(cidr).
 			MatchRegMark(regMarksToMatch...).
+			Action().LoadRegMark(ToLocalRegMark).
 			Action().GotoStage(stageSwitching).
 			Done())
 	}

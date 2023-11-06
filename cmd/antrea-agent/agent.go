@@ -433,9 +433,9 @@ func run(o *Options) error {
 	// after rule deletion.
 	asyncRuleDeleteInterval := o.pollInterval
 	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
-	// In Antrea agent, status manager will automatically be enabled if
+	// In Antrea agent, status report will automatically be enabled if
 	// AntreaPolicy feature is enabled.
-	statusManagerEnabled := antreaPolicyEnabled
+	statusReportEnabled := antreaPolicyEnabled
 
 	var auditLoggerOptions *networkpolicy.AuditLoggerOptions
 	auditLoggerOptions = &networkpolicy.AuditLoggerOptions{
@@ -457,6 +457,7 @@ func run(o *Options) error {
 	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
+		localPodInformer,
 		ofClient,
 		ifaceStore,
 		nodeKey,
@@ -467,7 +468,7 @@ func run(o *Options) error {
 		antreaPolicyEnabled,
 		l7NetworkPolicyEnabled,
 		o.enableAntreaProxy,
-		statusManagerEnabled,
+		statusReportEnabled,
 		multicastEnabled,
 		auditLoggerOptions,
 		asyncRuleDeleteInterval,

@@ -810,16 +810,14 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 	}
 	cookieAllocator := cookie.NewAllocator(roundInfo.RoundNum)
 
-	loadGourpID := ""
-	ctTable := "EgressRule"
+	loadGroupID := ""
 	if antreaPolicyEnabled {
-		loadGourpID = fmt.Sprintf("set_field:0x%x->reg7,", svc.ClusterGroupID)
-		ctTable = "AntreaPolicyEgressRule"
+		loadGroupID = fmt.Sprintf("set_field:0x%x->reg7,", svc.ClusterGroupID)
 	}
 	svcFlows := expectTableFlows{tableName: "ServiceLB", flows: []*ofTestUtils.ExpectFlow{
 		{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x10000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.Protocol), svc.ServiceIP.String(), svc.ServicePort),
-			ActStr:   fmt.Sprintf("set_field:0x200/0x200->reg0,set_field:0x%x/0x70000->reg4,%sgroup:%d", serviceLearnReg<<16, loadGourpID, svc.ClusterGroupID),
+			ActStr:   fmt.Sprintf("set_field:0x200/0x200->reg0,set_field:0x%x/0x70000->reg4,%sgroup:%d", serviceLearnReg<<16, loadGroupID, svc.ClusterGroupID),
 		},
 		{
 			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.Protocol), svc.ServiceIP.String(), svc.ServicePort),
@@ -843,7 +841,7 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.Protocol), epIP, unionVal),
-			ActStr:   fmt.Sprintf("ct(commit,table=%s,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ctTable, ep.IP(), epPort),
+			ActStr:   fmt.Sprintf("ct(commit,table=EgressSecurityClassifier,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ep.IP(), epPort),
 		})
 
 		if ep.GetIsLocal() {
@@ -1241,7 +1239,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=200,%s%s%s,%s=%s", ipProto, matchVlanRegString, matchRewriteMACMarkString, nwDstField, podIP.String()),
-						ActStr:   fmt.Sprintf("%sset_field:%s->eth_dst,goto_table:L3DecTTL", actionNotAntreaFlexibleIPAMString, podMAC.String()),
+						ActStr:   fmt.Sprintf("%sset_field:%s->eth_dst,set_field:0x30/0xf0->reg0,goto_table:L3DecTTL", actionNotAntreaFlexibleIPAMString, podMAC.String()),
 					},
 				},
 			},
@@ -1513,7 +1511,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		podCIDR := config.nodeConfig.PodIPv4CIDR.String()
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
+			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "set_field:0x30/0xf0->reg0,goto_table:L2ForwardingCalc"},
 		)
 		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))", ctZone)},
@@ -1558,7 +1556,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		podCIDR := config.nodeConfig.PodIPv6CIDR.String()
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
+			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "set_field:0x30/0xf0->reg0,goto_table:L2ForwardingCalc"},
 		)
 		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))"},
@@ -1598,7 +1596,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		},
 		{
 			"EndpointDNAT",
-			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:EgressRule"}},
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:EgressSecurityClassifier"}},
 		},
 		{
 			"EgressRule",
