@@ -26,6 +26,7 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -35,6 +36,7 @@ import (
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	wgtest "antrea.io/antrea/pkg/agent/wireguard/testing"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
@@ -55,65 +57,8 @@ var (
 	dsIPs2          = utilip.DualStackIPs{IPv4: nodeIP2}
 	nodeIP3         = net.ParseIP("2001:db8::68")
 	dsIPs3          = utilip.DualStackIPs{IPv6: nodeIP3}
-)
 
-type fakeController struct {
-	*Controller
-	clientset       *fake.Clientset
-	informerFactory informers.SharedInformerFactory
-	ofClient        *oftest.MockClient
-	ovsClient       *ovsconfigtest.MockOVSBridgeClient
-	routeClient     *routetest.MockInterface
-	interfaceStore  interfacestore.InterfaceStore
-	ovsCtlClient    *ovsctltest.MockOVSCtlClient
-}
-
-type fakeIPsecCertificateManager struct{}
-
-func (f *fakeIPsecCertificateManager) HasSynced() bool {
-	return true
-}
-
-func newController(t *testing.T, networkConfig *config.NetworkConfig) *fakeController {
-	clientset := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
-	ctrl := gomock.NewController(t)
-	ofClient := oftest.NewMockClient(ctrl)
-	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-	routeClient := routetest.NewMockInterface(ctrl)
-	interfaceStore := interfacestore.NewInterfaceStore()
-	ipsecCertificateManager := &fakeIPsecCertificateManager{}
-	ovsCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
-
-	c := NewNodeRouteController(informerFactory.Core().V1().Nodes(), ofClient, ovsCtlClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
-		IPv4: nil,
-		MAC:  gatewayMAC,
-	}}, nil, ipsecCertificateManager)
-	return &fakeController{
-		Controller:      c,
-		clientset:       clientset,
-		informerFactory: informerFactory,
-		ofClient:        ofClient,
-		ovsClient:       ovsClient,
-		routeClient:     routeClient,
-		ovsCtlClient:    ovsCtlClient,
-		interfaceStore:  interfaceStore,
-	}
-}
-
-func TestControllerWithDuplicatePodCIDR(t *testing.T) {
-	c := newController(t, &config.NetworkConfig{})
-	defer c.queue.ShutDown()
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	c.informerFactory.Start(stopCh)
-	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
-	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
-	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
-	c.informerFactory.WaitForCacheSync(stopCh)
-
-	node1 := &corev1.Node{
+	node1 = &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
 		},
@@ -130,6 +75,66 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 			},
 		},
 	}
+)
+
+type fakeController struct {
+	*Controller
+	clientset       *fake.Clientset
+	informerFactory informers.SharedInformerFactory
+	ofClient        *oftest.MockClient
+	ovsClient       *ovsconfigtest.MockOVSBridgeClient
+	routeClient     *routetest.MockInterface
+	interfaceStore  interfacestore.InterfaceStore
+	ovsCtlClient    *ovsctltest.MockOVSCtlClient
+	wireguardClient *wgtest.MockInterface
+}
+
+type fakeIPsecCertificateManager struct{}
+
+func (f *fakeIPsecCertificateManager) HasSynced() bool {
+	return true
+}
+
+func newController(t *testing.T, networkConfig *config.NetworkConfig, objects ...runtime.Object) *fakeController {
+	clientset := fake.NewSimpleClientset(objects...)
+	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
+	ctrl := gomock.NewController(t)
+	ofClient := oftest.NewMockClient(ctrl)
+	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+	routeClient := routetest.NewMockInterface(ctrl)
+	interfaceStore := interfacestore.NewInterfaceStore()
+	ipsecCertificateManager := &fakeIPsecCertificateManager{}
+	ovsCtlClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+	wireguardClient := wgtest.NewMockInterface(ctrl)
+	c := NewNodeRouteController(informerFactory.Core().V1().Nodes(), ofClient, ovsCtlClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
+		IPv4: nil,
+		MAC:  gatewayMAC,
+	}}, wireguardClient, ipsecCertificateManager)
+	return &fakeController{
+		Controller:      c,
+		clientset:       clientset,
+		informerFactory: informerFactory,
+		ofClient:        ofClient,
+		ovsClient:       ovsClient,
+		routeClient:     routeClient,
+		ovsCtlClient:    ovsCtlClient,
+		interfaceStore:  interfaceStore,
+		wireguardClient: wireguardClient,
+	}
+}
+
+func TestControllerWithDuplicatePodCIDR(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{})
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
+	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
+	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
+	c.informerFactory.WaitForCacheSync(stopCh)
+
 	node2 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node2",
@@ -194,23 +199,6 @@ func TestIPInPodSubnets(t *testing.T) {
 	c.Controller.nodeConfig.PodIPv4CIDR = podCIDR
 	c.Controller.nodeConfig.PodIPv6CIDR = podCIDR3
 
-	node1 := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "node1",
-		},
-		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR.String(),
-			PodCIDRs: []string{podCIDR.String()},
-		},
-		Status: corev1.NodeStatus{
-			Addresses: []corev1.NodeAddress{
-				{
-					Type:    corev1.NodeInternalIP,
-					Address: nodeIP1.String(),
-				},
-			},
-		},
-	}
 	node2 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node2",
@@ -306,7 +294,7 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
-	node1 := &corev1.Node{
+	nodeWithTunnel := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "xyz-k8s-0-1",
 		},
@@ -324,7 +312,7 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 		},
 	}
 
-	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), nodeWithTunnel, metav1.CreateOptions{})
 	c.ovsClient.EXPECT().DeletePort("123").Times(1)
 
 	err := c.removeStaleTunnelPorts()
@@ -628,6 +616,120 @@ func TestGetPodCIDRsOnNode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getPodCIDRsOnNode(tt.node)
 			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestRemoveStaleGatewayRoutes(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{}, node1)
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.routeClient.EXPECT().Reconcile([]string{podCIDR.String()})
+	err := c.removeStaleGatewayRoutes()
+	assert.NoError(t, err)
+}
+
+func TestRemoveStaleWireGuardPeers(t *testing.T) {
+	nodeWithWireGuard := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "nodeWithWireGuard",
+			Annotations: map[string]string{types.NodeWireGuardPublicAnnotationKey: "fakekey"},
+		},
+	}
+	c := newController(t, &config.NetworkConfig{
+		TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
+	}, nodeWithWireGuard)
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.wireguardClient.EXPECT().RemoveStalePeers(map[string]string{nodeWithWireGuard.Name: "fakekey"})
+	err := c.removeStaleWireGuardPeers()
+	assert.NoError(t, err)
+}
+
+func TestDeleteNodeRoute(t *testing.T) {
+	nodeWithWireGuard := node1.DeepCopy()
+	nodeWithWireGuard.Name = "nodeWithWireGuard"
+	nodeWithWireGuard.Annotations = map[string]string{types.NodeWireGuardPublicAnnotationKey: "wgkey"}
+
+	tests := []struct {
+		name          string
+		node          *corev1.Node
+		mode          config.TrafficEncryptionModeType
+		intface       *interfacestore.InterfaceConfig
+		expectedCalls func(ovsClient *ovsconfigtest.MockOVSBridgeClient, mockRouteClient *routetest.MockInterface,
+			ofClient *oftest.MockClient, wgClient *wgtest.MockInterface)
+	}{
+		{
+			name: "delete a Node with IPSec mode",
+			node: node1,
+			mode: config.TrafficEncryptionModeIPSec,
+			intface: &interfacestore.InterfaceConfig{
+				Type:          interfacestore.IPSecTunnelInterface,
+				InterfaceName: "node1-ipsec",
+				TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
+					NodeName: node1.Name,
+					Type:     "vxlan",
+					PSK:      "changeme",
+					RemoteIP: nodeIP2,
+				},
+				OVSPortConfig: &interfacestore.OVSPortConfig{
+					PortUUID: "123",
+				},
+			},
+			expectedCalls: func(ovsClient *ovsconfigtest.MockOVSBridgeClient, routeClient *routetest.MockInterface,
+				ofClient *oftest.MockClient, wgClient *wgtest.MockInterface) {
+				ovsClient.EXPECT().DeletePort("123")
+				routeClient.EXPECT().DeleteRoutes(podCIDR)
+				ofClient.EXPECT().UninstallNodeFlows(node1.Name)
+			},
+		},
+		{
+			name: "delete a Node with WireGuard mode",
+			node: nodeWithWireGuard,
+			mode: config.TrafficEncryptionModeWireGuard,
+			expectedCalls: func(ovsClient *ovsconfigtest.MockOVSBridgeClient, routeClient *routetest.MockInterface,
+				ofClient *oftest.MockClient, wgClient *wgtest.MockInterface) {
+				routeClient.EXPECT().DeleteRoutes(podCIDR)
+				ofClient.EXPECT().UninstallNodeFlows(nodeWithWireGuard.Name)
+				wgClient.EXPECT().DeletePeer(nodeWithWireGuard.Name)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newController(t, &config.NetworkConfig{
+				TrafficEncryptionMode: tt.mode,
+			}, tt.node)
+			c.installedNodes.Add(&nodeRouteInfo{
+				nodeName: tt.node.Name,
+				podCIDRs: []*net.IPNet{podCIDR},
+			})
+
+			defer c.queue.ShutDown()
+
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+
+			if tt.intface != nil {
+				c.interfaceStore.AddInterface(tt.intface)
+			}
+
+			tt.expectedCalls(c.ovsClient, c.routeClient, c.ofClient, c.wireguardClient)
+			err := c.deleteNodeRoute(tt.node.Name)
+			assert.NoError(t, err)
 		})
 	}
 }
