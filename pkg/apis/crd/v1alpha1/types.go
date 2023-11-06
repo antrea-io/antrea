@@ -946,6 +946,8 @@ type FirstNSamplingConfig struct {
 	Number int `json:"number,omitempty"`
 }
 
+const DefaultPacketSamplingTimeout int32 = 60
+
 type PacketSampling struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
