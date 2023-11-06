@@ -24,9 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,25 +31,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
 
 func initMockManager(mockManager *mocks.MockManager) {
-	newScheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
-	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcv1alpha2.AddToScheme(newScheme))
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.Server{}).AnyTimes()
 	mockManager.EXPECT().GetWebhookServer().Return(&webhook.Server{}).AnyTimes()
 	mockManager.EXPECT().GetClient().Return(fakeClient).AnyTimes()
-	mockManager.EXPECT().GetScheme().Return(newScheme).AnyTimes()
+	mockManager.EXPECT().GetScheme().Return(common.TestScheme).AnyTimes()
 	mockManager.EXPECT().GetControllerOptions().Return(v1alpha1.ControllerConfigurationSpec{}).AnyTimes()
 	mockManager.EXPECT().GetLogger().Return(klog.NewKlogr()).AnyTimes()
 	mockManager.EXPECT().SetFields(gomock.Any()).Return(nil).AnyTimes()

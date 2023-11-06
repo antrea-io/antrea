@@ -23,14 +23,12 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
@@ -82,10 +80,7 @@ var (
 )
 
 func createMockClients(t *testing.T, objects ...client.Object) (client.Client, *MockMemberClusterStatusManager) {
-	scheme := runtime.NewScheme()
-	mcv1alpha1.AddToScheme(scheme)
-	mcv1alpha2.AddToScheme(scheme)
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
 		WithObjects(objects...).Build()
 
 	mockCtrl := gomock.NewController(t)

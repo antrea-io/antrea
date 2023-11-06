@@ -85,17 +85,6 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 			ClusterInfo: &clusterBInfoNew,
 		},
 	}
-	ciResImportC := &mcsv1alpha1.ResourceImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "cluster-c-default-clusterinfo",
-		},
-		Spec: mcsv1alpha1.ResourceImportSpec{
-			Kind:      constants.ClusterInfoKind,
-			Name:      "node-3",
-			Namespace: "default",
-		},
-	}
 	ciResImportEmptySpec := &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -153,32 +142,52 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 
 	tests := []struct {
 		name                        string
+		req                         ctrl.Request
 		existingCIResImport         *mcsv1alpha1.ResourceImport
 		existingCIImport            *mcsv1alpha1.ClusterInfoImport
 		expectedCIImport            *mcsv1alpha1.ClusterInfoImport
-		isDelete                    bool
 		expectedInstalledResImpSize int
 	}{
 		{
-			name:                        "create ClusterInfoImport successfully",
+			name: "create ClusterInfoImport successfully",
+			req: ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ciResImportA.Namespace,
+					Name:      ciResImportA.Name},
+			},
 			existingCIResImport:         ciResImportA,
 			expectedCIImport:            &ciImportA,
 			expectedInstalledResImpSize: 1,
 		},
 		{
-			name:                        "skip import empty ResourceImport",
+			name: "skip import empty ResourceImport",
+			req: ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ciResImportEmptySpec.Namespace,
+					Name:      ciResImportEmptySpec.Name},
+			},
 			existingCIResImport:         ciResImportEmptySpec,
 			expectedCIImport:            nil,
 			expectedInstalledResImpSize: 1,
 		},
 		{
-			name:                        "skip import ResourceImport from local",
+			name: "skip import ResourceImport from local",
+			req: ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ciResImportLocal.Namespace,
+					Name:      ciResImportLocal.Name},
+			},
 			existingCIResImport:         ciResImportLocal,
 			expectedCIImport:            nil,
 			expectedInstalledResImpSize: 1,
 		},
 		{
-			name:                "update ClusterInfoImport successfully",
+			name: "update ClusterInfoImport successfully",
+			req: ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ciResImportB.Namespace,
+					Name:      ciResImportB.Name},
+			},
 			existingCIResImport: ciResImportB,
 			existingCIImport:    &ciImportB,
 			expectedCIImport: &mcsv1alpha1.ClusterInfoImport{
@@ -191,10 +200,13 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 			expectedInstalledResImpSize: 1,
 		},
 		{
-			name:                        "delete ClusterInfoImport successfully",
-			existingCIResImport:         ciResImportC,
+			name: "delete ClusterInfoImport successfully",
+			req: ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ciImportC.Namespace,
+					Name:      ciImportC.Name},
+			},
 			existingCIImport:            &ciImportC,
-			isDelete:                    true,
 			expectedInstalledResImpSize: 0,
 		},
 	}
@@ -202,29 +214,23 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 			if tt.existingCIImport != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingCIImport).Build()
 			}
-			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingCIResImport).Build()
-			if tt.isDelete {
-				fakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
+			if tt.existingCIResImport != nil {
+				fakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingCIResImport).Build()
 			}
 			remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", "cluster-d", "default", nil)
-			r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, "cluster-d", "default", remoteCluster)
+			r := newResourceImportReconciler(fakeClient, "cluster-d", "default", remoteCluster)
 			if tt.existingCIResImport != nil {
 				r.installedResImports.Add(*tt.existingCIResImport)
 			}
-			ciResImportName := types.NamespacedName{
-				Namespace: tt.existingCIResImport.Namespace,
-				Name:      tt.existingCIResImport.Name,
-			}
-			req := ctrl.Request{NamespacedName: ciResImportName}
-
-			if _, err := r.Reconcile(ctx, req); err != nil {
+			if _, err := r.Reconcile(ctx, tt.req); err != nil {
 				t.Errorf("ClusterInfo Importer should handle ResourceImport events successfully but got error = %v", err)
 			}
 			gotCIImp := &mcsv1alpha1.ClusterInfoImport{}
-			err := fakeClient.Get(ctx, ciResImportName, gotCIImp)
+			err := fakeClient.Get(ctx, tt.req.NamespacedName, gotCIImp)
 			isNotFound := apierrors.IsNotFound(err)
 			if err != nil {
 				if tt.expectedCIImport == nil && !isNotFound {

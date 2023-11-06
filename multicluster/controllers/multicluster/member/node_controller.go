@@ -123,7 +123,7 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	var commonArea commonarea.RemoteCommonArea
 	commonArea, _, _ = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
 	if commonArea == nil {
-		klog.InfoS("Skip reconciling Gateway since there is no connection to the leader")
+		klog.V(2).InfoS("Skip reconciling Gateway since there is no connection to the leader")
 		return ctrl.Result{}, nil
 	}
 
