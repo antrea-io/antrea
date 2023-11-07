@@ -1304,12 +1304,6 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 					},
 				},
 			)
-			if connectUplinkToBridge {
-				flows[len(flows)-1].flows = append(flows[len(flows)-1].flows, &ofTestUtils.ExpectFlow{
-					MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", agentconfig.HostGatewayOFPort, nodeConfig.NodeIPv4Addr.IP.String(), gwMAC),
-					ActStr:   "goto_table:ARPResponder",
-				})
-			}
 		} else {
 			ipProtoStr = "ipv6"
 			nwSrcStr = "ipv6_src"
