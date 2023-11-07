@@ -337,6 +337,11 @@ func EnsureIPv6EnabledOnInterface(ifaceName string) error {
 	return sysctl.EnsureSysctlNetValue(path, 0)
 }
 
+func EnsureARPAnnounceOnInterface(ifaceName string, value int) error {
+	path := fmt.Sprintf("ipv4/conf/%s/arp_announce", ifaceName)
+	return sysctl.EnsureSysctlNetValue(path, value)
+}
+
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
 	link, err := netlinkUtil.LinkByIndex(linkIndex)
 	if err != nil {

@@ -635,6 +635,7 @@ func TestSetupGatewayInterface(t *testing.T) {
 	mockSetLinkUp(t, fakeMAC, 10, nil)
 	mockConfigureLinkAddress(t, nil)
 	mockSetInterfaceMTU(t, nil)
+	mockSetInterfaceARPAnnounce(t, nil)
 
 	controller := mock.NewController(t)
 
@@ -692,6 +693,14 @@ func mockConfigureLinkAddress(t *testing.T, returnedErr error) {
 		return returnedErr
 	}
 	t.Cleanup(func() { configureLinkAddresses = originalConfigureLinkAddresses })
+}
+
+func mockSetInterfaceARPAnnounce(t *testing.T, returnedErr error) {
+	originalSetInterfaceARPAnnounce := setInterfaceARPAnnounce
+	setInterfaceARPAnnounce = func(ifaceName string, value int) error {
+		return returnedErr
+	}
+	t.Cleanup(func() { setInterfaceARPAnnounce = originalSetInterfaceARPAnnounce })
 }
 
 func TestRestorePortConfigs(t *testing.T) {
