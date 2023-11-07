@@ -1,5 +1,32 @@
 # Antrea IPAM Capabilities
 
+<!-- TOC -->
+* [Antrea IPAM Capabilities](#antrea-ipam-capabilities)
+  * [Running NodeIPAM within Antrea Controller](#running-nodeipam-within-antrea-controller)
+    * [Configuration](#configuration)
+  * [Antrea Flexible IPAM](#antrea-flexible-ipam)
+    * [Usage](#usage)
+      * [Enable AntreaIPAM feature gate and bridging mode](#enable-antreaipam-feature-gate-and-bridging-mode)
+      * [Create IPPool CR](#create-ippool-cr)
+      * [IPPool Annotations on Namespace](#ippool-annotations-on-namespace)
+      * [IPPool Annotations on Pod (available since Antrea 1.5)](#ippool-annotations-on-pod-available-since-antrea-15)
+      * [Persistent IP for StatefulSet Pod (available since Antrea 1.5)](#persistent-ip-for-statefulset-pod-available-since-antrea-15)
+    * [Data path behaviors](#data-path-behaviors)
+    * [Requirements for this Feature](#requirements-for-this-feature)
+    * [Flexible IPAM design](#flexible-ipam-design)
+      * [On IPPool CR create/update event](#on-ippool-cr-createupdate-event)
+      * [On StatefulSet create event](#on-statefulset-create-event)
+      * [On StatefulSet delete event](#on-statefulset-delete-event)
+      * [On Pod create](#on-pod-create)
+      * [On Pod delete](#on-pod-delete)
+  * [IPAM for Secondary Network](#ipam-for-secondary-network)
+    * [Prerequisites](#prerequisites)
+    * [CNI IPAM configuration](#cni-ipam-configuration)
+    * [Configuration with `NetworkAttachmentDefinition` CRD](#configuration-with-networkattachmentdefinition-crd)
+  * [`IPPool` CRD](#ippool-crd)
+    * [Secondary Network creation with Multus](#secondary-network-creation-with-multus)
+<!-- TOC -->
+
 ## Running NodeIPAM within Antrea Controller
 
 NodeIPAM is a Kubernetes component, which manages IP address pool allocation per
@@ -261,6 +288,36 @@ IP, because inter-Node traffic of AntreaIPAM Pods is forwarded by the Node netwo
 router should provide the network connectivity for these VLANs. Only a single IP pool can
 be included in the Namespace annotation. In the future, annotation of up to two pools for
 IPv4 and IPv6 respectively will be supported.
+
+### Flexible IPAM design
+
+When the `AntreaIPAM` feature gate is enabled, `antrea-controller` will watch IPPool CRs and
+StatefulSets from `kube-apiserver`.
+
+#### On IPPool CR create/update event
+
+`antrea-controller` will update IPPool counters, and periodically clean up stale IP addresses.
+
+#### On StatefulSet create event
+
+`antrea-controller` will check the Antrea IPAM annotations on the StatefullSet, and preallocate
+IPs from the specified IPPool for the StatefullSet Pods
+
+#### On StatefulSet delete event
+
+`antrea-controller` will clean up IP allocations for this StatefulSet.
+
+#### On Pod create
+
+`antrea-agent` will receive a CNI add request, and it will then check the Antrea IPAM annotations
+and allocate an IP for the Pod, which can be a pre-allocated IP StatefulSet IP, a user-specified
+IP, or the next available IP in the specified IPPool.
+
+#### On Pod delete
+
+`antrea-agent` will receive a CNI del request and release the IP allocation from the IPPool.
+If the IP is a pre-allocated StatefulSet IP, it will stay in the pre-allocated status thus the Pod
+will get same IP after recreated.
 
 ## IPAM for Secondary Network
 
