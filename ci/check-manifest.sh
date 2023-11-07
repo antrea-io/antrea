@@ -40,11 +40,7 @@ rm "${YAMLS[@]}"
 make manifest
 diff="$(git status --porcelain ${YAMLS[@]})"
 
-MULTICLUSTER_YAMLS=(
-    "multicluster/build/yamls/antrea-multicluster-leader-global.yml"
-    "multicluster/build/yamls/antrea-multicluster-leader-namespaced.yml"
-    "multicluster/build/yamls/antrea-multicluster-member.yml"
-)
+MULTICLUSTER_YAMLS=($(ls multicluster/build/yamls/*.yml))
 
 rm "${MULTICLUSTER_YAMLS[@]}"
 cd multicluster; make manifests; cd ..
