@@ -718,6 +718,14 @@ func (i *Initializer) setupGatewayInterface() error {
 	if err := i.setInterfaceMTU(i.hostGateway, i.networkConfig.InterfaceMTU); err != nil {
 		return err
 	}
+	// Set arp_announce to 1 on Linux platform to make the ARP requests sent on the gateway
+	// interface always use the gateway IP as the source IP, otherwise the ARP requests would be
+	// dropped by ARP SpoofGuard flow.
+	if i.nodeConfig.GatewayConfig.IPv4 != nil {
+		if err := setInterfaceARPAnnounce(gatewayIface.InterfaceName, 1); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
