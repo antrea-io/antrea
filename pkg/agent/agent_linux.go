@@ -40,6 +40,9 @@ var (
 
 	// getAllIPNetsByName is meant to be overridden for testing.
 	getAllIPNetsByName = util.GetAllIPNetsByName
+
+	// setInterfaceARPAnnounce is meant to be overridden for testing.
+	setInterfaceARPAnnounce = util.EnsureARPAnnounceOnInterface
 )
 
 // prepareHostNetwork returns immediately on Linux.
