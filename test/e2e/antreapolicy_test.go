@@ -3445,7 +3445,7 @@ func testToServices(t *testing.T) {
 		services = append(services, ipv4Svc)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		ipv6Svc := k8sUtils.BuildService("ipv6-svc", namespaces["x"], 80, 80, map[string]string{"pod": "b"}, nil)
+		ipv6Svc := k8sUtils.BuildService("ipv6-svc", namespaces["x"], 80, 80, map[string]string{"pod": "a"}, nil)
 		ipv6Svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
 		services = append(services, ipv6Svc)
 	}
@@ -3466,7 +3466,8 @@ func testToServices(t *testing.T) {
 	builder = builder.SetName("test-acnp-to-services").
 		SetTier("application").
 		SetPriority(1.0)
-	builder.AddToServicesRule(svcRefs, "svc", []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["y"]}}}, crdv1alpha1.RuleActionDrop)
+	builder.AddToServicesRule(svcRefs, "x-to-svc", []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["x"]}}}, crdv1alpha1.RuleActionDrop)
+	builder.AddToServicesRule(svcRefs, "y-to-svc", []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["y"]}}}, crdv1alpha1.RuleActionDrop)
 	time.Sleep(networkPolicyDelay)
 
 	acnp := builder.Get()
@@ -3476,6 +3477,12 @@ func testToServices(t *testing.T) {
 	var testcases []podToAddrTestStep
 	for _, service := range builtSvcs {
 		eachServiceCases := []podToAddrTestStep{
+			{
+				Pod(namespaces["x"] + "/a"),
+				service.Spec.ClusterIP,
+				service.Spec.Ports[0].Port,
+				Dropped,
+			},
 			{
 				Pod(namespaces["y"] + "/b"),
 				service.Spec.ClusterIP,
