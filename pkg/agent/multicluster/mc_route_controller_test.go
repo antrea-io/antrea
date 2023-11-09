@@ -34,7 +34,7 @@ import (
 	antrearoute "antrea.io/antrea/pkg/agent/route"
 	routemock "antrea.io/antrea/pkg/agent/route/testing"
 	"antrea.io/antrea/pkg/agent/wireguard"
-	wireguardmock "antrea.io/antrea/pkg/agent/wireguard/testing"
+	wgtest "antrea.io/antrea/pkg/agent/wireguard/testing"
 	"antrea.io/antrea/pkg/config/agent"
 )
 
@@ -43,6 +43,7 @@ type fakeRouteController struct {
 	mcClient        *mcfake.Clientset
 	informerFactory mcinformers.SharedInformerFactory
 	ofClient        *oftest.MockClient
+	wireGuardClient *wgtest.MockInterface
 }
 
 func newMCDefaultRouteController(t *testing.T,
@@ -51,6 +52,7 @@ func newMCDefaultRouteController(t *testing.T,
 	wireGuardConfig agent.WireGuardConfig,
 	routeClient antrearoute.Interface,
 	trafficEncryptionMode string,
+	wireGuardClient *wgtest.MockInterface,
 ) *fakeRouteController {
 	mcClient := mcfake.NewSimpleClientset()
 	mcInformerFactory := mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
@@ -81,11 +83,13 @@ func newMCDefaultRouteController(t *testing.T,
 		routeClient,
 		multiclusterConfig,
 	)
+	c.wireGuardClient = wireGuardClient
 	return &fakeRouteController{
 		MCDefaultRouteController: c,
 		mcClient:                 mcClient,
 		informerFactory:          mcInformerFactory,
 		ofClient:                 ofClient,
+		wireGuardClient:          wireGuardClient,
 	}
 }
 
@@ -187,6 +191,7 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockInterface := routemock.NewMockInterface(ctrl)
 	networkConfig := &config.NetworkConfig{}
+	wgClient := wgtest.NewMockInterface(ctrl)
 	c := newMCDefaultRouteController(t,
 		&config.NodeConfig{
 			Name: "node-4",
@@ -198,6 +203,7 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 		agent.WireGuardConfig{},
 		mockInterface,
 		"wireGuard",
+		wgClient,
 	)
 	defer c.queue.ShutDown()
 
@@ -206,7 +212,7 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
 	wireGuardNewFunc = func(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (wireguard.Interface, error) {
-		return &wireguardmock.MockWireGuardClient{}, nil
+		return wgClient, nil
 	}
 
 	finishCh := make(chan struct{})
@@ -216,6 +222,8 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 		// Create Gateway4
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway4.GetNamespace()).Create(context.TODO(),
 			&gateway4, metav1.CreateOptions{})
+		c.wireGuardClient.EXPECT().CleanUp().AnyTimes()
+		c.wireGuardClient.EXPECT().Init(net.ParseIP("10.100.0.0"), nil)
 		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), true).Times(1)
 		c.processNextWorkItem()
 		c.processNextWorkItem()
@@ -224,6 +232,10 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 		c.mcClient.MulticlusterV1alpha1().ClusterInfoImports(clusterInfoImport3.GetNamespace()).
 			Create(context.TODO(), &clusterInfoImport3, metav1.CreateOptions{})
 		peerNodeIP3 := getPeerGatewayTunnelIP(clusterInfoImport3.Spec, true)
+		remoteWGIP, _, _ := net.ParseCIDR(clusterInfoImport3.Spec.ServiceCIDR)
+		remoteWireGuardNet := &net.IPNet{IP: remoteWGIP, Mask: net.CIDRMask(32, 32)}
+		c.wireGuardClient.EXPECT().UpdatePeer(clusterInfoImport3.Name, clusterInfoImport3.Spec.WireGuard.PublicKey,
+			net.ParseIP(clusterInfoImport3.Spec.GatewayInfos[0].GatewayIP), []*net.IPNet{remoteWireGuardNet})
 		c.ofClient.EXPECT().InstallMulticlusterGatewayFlows(clusterInfoImport3.Name,
 			gomock.Any(), peerNodeIP3, gomock.Any(), true).Times(1)
 		mockInterface.EXPECT().AddRouteForLink(gomock.Any(), 0).Times(1)
@@ -250,6 +262,7 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 		agent.WireGuardConfig{},
 		nil,
 		"none",
+		nil,
 	)
 	defer c.queue.ShutDown()
 
@@ -342,6 +355,7 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 		agent.WireGuardConfig{},
 		nil,
 		"none",
+		nil,
 	)
 	defer c.queue.ShutDown()
 
@@ -429,6 +443,7 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 func TestRemoveWireGuardRouteAndPeer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockInterface := routemock.NewMockInterface(ctrl)
+	wgClient := wgtest.NewMockInterface(ctrl)
 	networkConfig := &config.NetworkConfig{}
 	c := newMCDefaultRouteController(t,
 		&config.NodeConfig{
@@ -441,31 +456,24 @@ func TestRemoveWireGuardRouteAndPeer(t *testing.T) {
 		agent.WireGuardConfig{},
 		mockInterface,
 		"wireGuard",
+		wgClient,
 	)
-	c.wireGuardClient = &wireguardmock.MockWireGuardClient{}
 	defer c.queue.ShutDown()
 	mockInterface.EXPECT().DeleteRouteForLink(gomock.Any(), gomock.Any()).Times(1)
 
-	testCases := []struct {
-		name        string
-		ciImport    *mcv1alpha1.ClusterInfoImport
-		expectError error
-	}{
-		{
-			name: "remove peer successfully",
-			ciImport: &mcv1alpha1.ClusterInfoImport{
-				Spec: mcv1alpha1.ClusterInfo{
-					ServiceCIDR: "10.100.0.0/16",
-				},
-			},
+	ciImport := &mcv1alpha1.ClusterInfoImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-a-info",
+			Namespace: "default",
+		},
+		Spec: mcv1alpha1.ClusterInfo{
+			ServiceCIDR: "10.100.0.0/16",
 		},
 	}
 
-	for _, tt := range testCases {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectError, c.removeWireGuardRouteAndPeer(tt.ciImport))
-		})
-	}
+	wgClient.EXPECT().DeletePeer(ciImport.Name)
+	err := c.removeWireGuardRouteAndPeer(ciImport)
+	assert.NoError(t, err)
 }
 
 func TestEnqueueGateway(t *testing.T) {
@@ -483,8 +491,8 @@ func TestEnqueueGateway(t *testing.T) {
 		agent.WireGuardConfig{},
 		mockInterface,
 		"wireGuard",
+		nil,
 	)
-	c.wireGuardClient = &wireguardmock.MockWireGuardClient{}
 	defer c.queue.ShutDown()
 
 	testCases := []struct {
@@ -555,8 +563,8 @@ func TestEnqueueClusterInfoImport(t *testing.T) {
 		agent.WireGuardConfig{},
 		mockInterface,
 		"wireGuard",
+		nil,
 	)
-	c.wireGuardClient = &wireguardmock.MockWireGuardClient{}
 	defer c.queue.ShutDown()
 
 	testCases := []struct {
