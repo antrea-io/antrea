@@ -22,7 +22,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--coverage] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --ip-family                   Configures the ipFamily for the KinD cluster.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
@@ -240,6 +240,8 @@ function setup_cluster {
 
   if [[ "$ipfamily" == "v6" ]]; then
     args="$args --ip-family ipv6 --pod-cidr fd00:10:244::/56"
+  elif [[ "$ipfamily" == "dual" ]]; then
+    args="$args --ip-family dual"
   elif [[ "$ipfamily" != "v4" ]]; then
     echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
     exit 1

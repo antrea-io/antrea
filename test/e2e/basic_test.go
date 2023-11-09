@@ -543,15 +543,15 @@ func TestCleanStaleClusterIPRoutes(t *testing.T) {
 }
 
 func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	if isIPv6 {
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 	}
 	// Create two test ClusterIPs.
-	svc, err := data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc1-%v", isIPv6), data.testNamespace, false, &ipProtocol)
+	svc, err := data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc1-%v", isIPv6), data.testNamespace, false, ipFamilies)
 	require.NoError(t, err)
 	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
-	svc, err = data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc2-%v", isIPv6), data.testNamespace, false, &ipProtocol)
+	svc, err = data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc2-%v", isIPv6), data.testNamespace, false, ipFamilies)
 	require.NoError(t, err)
 	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
 	time.Sleep(time.Second)

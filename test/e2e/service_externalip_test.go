@@ -564,10 +564,10 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ipFamily := v1.IPv4Protocol
+			ipFamilies := []v1.IPFamily{v1.IPv4Protocol}
 			if utilnet.IsIPv6CIDRString(tt.externalIPCIDR) {
 				skipIfNotIPv6Cluster(t)
-				ipFamily = v1.IPv6Protocol
+				ipFamilies = []v1.IPFamily{v1.IPv6Protocol}
 			} else {
 				skipIfNotIPv4Cluster(t)
 			}
@@ -623,7 +623,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					annotations := map[string]string{
 						antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 					}
-					service, err := data.CreateServiceWithAnnotations(et.serviceName, data.testNamespace, port, port, v1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, v1.ServiceTypeLoadBalancer, &ipFamily, annotations)
+					service, err := data.CreateServiceWithAnnotations(et.serviceName, data.testNamespace, port, port, v1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, v1.ServiceTypeLoadBalancer, ipFamilies, annotations)
 					require.NoError(t, err)
 					defer data.deleteService(service.Namespace, service.Name)
 

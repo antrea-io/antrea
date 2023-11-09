@@ -220,9 +220,9 @@ func (data *MCTestData) updateNamespace(clusterName string, namespace string, mu
 
 func (data *MCTestData) createService(clusterName, serviceName, namespace string, port int32, targetPort int32,
 	protocol corev1.Protocol, selector map[string]string, affinity bool, nodeLocalExternal bool, serviceType corev1.ServiceType,
-	ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
+	ipFamilies []corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
-		svc, err := d.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, protocol, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
+		svc, err := d.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, protocol, selector, affinity, nodeLocalExternal, serviceType, ipFamilies, annotation)
 		if err != nil {
 			return nil, err
 		}

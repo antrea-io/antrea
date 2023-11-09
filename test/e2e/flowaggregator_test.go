@@ -155,6 +155,7 @@ var (
 	// we expect 3 records at time 5.5s, 9s, and 12.5s after iperf traffic begins.
 	expectedNumDataRecords                      = 3
 	podAIPs, podBIPs, podCIPs, podDIPs, podEIPs *PodIPs
+	svcA, svcB, svcC, svcD, svcE                *corev1.Service
 	serviceNames                                = []string{"perftest-a", "perftest-b", "perftest-c", "perftest-d", "perftest-e"}
 )
 
@@ -163,7 +164,7 @@ type testFlow struct {
 	dstIP       string
 	srcPodName  string
 	dstPodName  string
-	svcIP       string
+	svc         *corev1.Service
 	checkDstSvc bool
 }
 
@@ -255,6 +256,13 @@ func TestFlowAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when creating perftest Pods: %v", err)
 	}
+	svcA, svcB, svcC, svcD, svcE, err = createPerftestServices(data)
+	if err != nil {
+		t.Fatalf("Error when creating perftest Services: %v", err)
+	}
+	defer deletePerftestServices(t, data)
+	// Wait for the Service to be realized.
+	time.Sleep(3 * time.Second)
 
 	if v4Enabled {
 		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, false) })
@@ -288,14 +296,7 @@ func checkIntraNodeFlows(t *testing.T, data *TestData, podAIPs, podBIPs *PodIPs,
 }
 
 func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
-	_, svcB, svcC, svcD, svcE, err := createPerftestServices(data, isIPv6)
-	if err != nil {
-		t.Fatalf("Error when creating perftest Services: %v", err)
-	}
-	defer deletePerftestServices(t, data)
-	// Wait for the Service to be realized.
-	time.Sleep(3 * time.Second)
-
+	var err error
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node
 	// and their flow information is exported as IPFIX flow records.
 	// K8s network policies are being tested here.
@@ -430,13 +431,13 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		testFlow1 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-b",
-			svcIP:       svcB.Spec.ClusterIP,
+			svc:         svcB,
 			checkDstSvc: true,
 		}
 		testFlow2 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-d",
-			svcIP:       svcD.Spec.ClusterIP,
+			svc:         svcD,
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
@@ -470,13 +471,13 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		testFlow1 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-b",
-			svcIP:       svcB.Spec.ClusterIP,
+			svc:         svcB,
 			checkDstSvc: true,
 		}
 		testFlow2 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-d",
-			svcIP:       svcD.Spec.ClusterIP,
+			svc:         svcD,
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
@@ -641,13 +642,13 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		testFlow1 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-c",
-			svcIP:       svcC.Spec.ClusterIP,
+			svc:         svcC,
 			checkDstSvc: false,
 		}
 		testFlow2 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-e",
-			svcIP:       svcE.Spec.ClusterIP,
+			svc:         svcE,
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
@@ -681,13 +682,13 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		testFlow1 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-c",
-			svcIP:       svcC.Spec.ClusterIP,
+			svc:         svcC,
 			checkDstSvc: true,
 		}
 		testFlow2 := testFlow{
 			srcPodName:  "perftest-a",
 			dstPodName:  "perftest-e",
-			svcIP:       svcE.Spec.ClusterIP,
+			svc:         svcE,
 			checkDstSvc: true,
 		}
 		if !isIPv6 {
@@ -1138,8 +1139,8 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	var cmdStr1, cmdStr2 string
 	if !isIPv6 {
 		if useSvcIP {
-			cmdStr1 = fmt.Sprintf("iperf3 -c %s -p %d -n 1", testFlow1.svcIP, iperfSvcPort)
-			cmdStr2 = fmt.Sprintf("iperf3 -c %s -p %d -n 1", testFlow2.svcIP, iperfSvcPort)
+			cmdStr1 = fmt.Sprintf("iperf3 -c %s -p %d -n 1", getServiceIP(testFlow1.svc, isIPv6), iperfSvcPort)
+			cmdStr2 = fmt.Sprintf("iperf3 -c %s -p %d -n 1", getServiceIP(testFlow2.svc, isIPv6), iperfSvcPort)
 		} else {
 			cmdStr1 = fmt.Sprintf("iperf3 -c %s -n 1", testFlow1.dstIP)
 			cmdStr2 = fmt.Sprintf("iperf3 -c %s -n 1", testFlow2.dstIP)
@@ -1147,8 +1148,8 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 
 	} else {
 		if useSvcIP {
-			cmdStr1 = fmt.Sprintf("iperf3 -6 -c %s -p %d -n 1", testFlow1.svcIP, iperfSvcPort)
-			cmdStr2 = fmt.Sprintf("iperf3 -6 -c %s -p %d -n 1", testFlow2.svcIP, iperfSvcPort)
+			cmdStr1 = fmt.Sprintf("iperf3 -6 -c %s -p %d -n 1", getServiceIP(testFlow1.svc, isIPv6), iperfSvcPort)
+			cmdStr2 = fmt.Sprintf("iperf3 -6 -c %s -p %d -n 1", getServiceIP(testFlow2.svc, isIPv6), iperfSvcPort)
 		} else {
 			cmdStr1 = fmt.Sprintf("iperf3 -6 -c %s -n 1", testFlow1.dstIP)
 			cmdStr2 = fmt.Sprintf("iperf3 -6 -c %s -n 1", testFlow2.dstIP)
@@ -1693,15 +1694,12 @@ func createPerftestPods(data *TestData) (*PodIPs, *PodIPs, *PodIPs, *PodIPs, *Po
 	return podIPsArray[0], podIPsArray[1], podIPsArray[2], podIPsArray[3], podIPsArray[4], nil
 }
 
-func createPerftestServices(data *TestData, isIPv6 bool) (*corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, error) {
-	svcIPFamily := corev1.IPv4Protocol
-	if isIPv6 {
-		svcIPFamily = corev1.IPv6Protocol
-	}
+func createPerftestServices(data *TestData) (*corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, *corev1.Service, error) {
+	svcIPFamilies := []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}
 	var err error
 	var services [5]*corev1.Service
 	for i, serviceName := range serviceNames {
-		services[i], err = data.CreateService(serviceName, data.testNamespace, iperfSvcPort, iperfPort, map[string]string{"antrea-e2e": serviceName}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
+		services[i], err = data.CreateService(serviceName, data.testNamespace, iperfSvcPort, iperfPort, map[string]string{"antrea-e2e": serviceName}, false, false, corev1.ServiceTypeClusterIP, svcIPFamilies)
 		if err != nil {
 			return nil, nil, nil, nil, nil, fmt.Errorf("error when creating perftest-b Service: %v", err)
 		}

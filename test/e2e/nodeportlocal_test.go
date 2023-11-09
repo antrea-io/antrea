@@ -383,9 +383,9 @@ func NPLTestMultiplePods(t *testing.T, data *TestData) {
 
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
-	ipFamily := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	clientNode, serverNode := getTwoNodes()
-	testData.createNginxClusterIPServiceWithAnnotations(serverNode, false, &ipFamily, annotation)
+	testData.createNginxClusterIPServiceWithAnnotations(serverNode, false, ipFamilies, annotation)
 	var testPods []string
 
 	for i := 0; i < 3; i++ {
@@ -430,9 +430,9 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 	annotation[types.NPLEnabledAnnotationKey] = "true"
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
-	ipFamily := corev1.IPv4Protocol
-	testData.CreateServiceWithAnnotations("agnhost1", data.testNamespace, 80, 80, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.CreateServiceWithAnnotations("agnhost2", data.testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+	testData.CreateServiceWithAnnotations("agnhost1", data.testNamespace, 80, 80, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, ipFamilies, annotation)
+	testData.CreateServiceWithAnnotations("agnhost2", data.testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, ipFamilies, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
 		Add(nil, 80, "tcp").Add(nil, 8080, "tcp")
 
@@ -493,9 +493,9 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 	annotation[types.NPLEnabledAnnotationKey] = "true"
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
-	ipFamily := corev1.IPv4Protocol
-	testData.CreateServiceWithAnnotations("agnhost1", data.testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.CreateServiceWithAnnotations("agnhost2", data.testNamespace, 80, 8080, corev1.ProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+	testData.CreateServiceWithAnnotations("agnhost1", data.testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, ipFamilies, annotation)
+	testData.CreateServiceWithAnnotations("agnhost2", data.testNamespace, 80, 8080, corev1.ProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, ipFamilies, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
 		Add(nil, 8080, "tcp").Add(nil, 8080, "udp")
 
@@ -540,11 +540,11 @@ func NPLTestLocalAccess(t *testing.T, data *TestData) {
 
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
-	ipFamily := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 
 	clientNode, serverNode := getTwoNodes()
 
-	testData.createNginxClusterIPServiceWithAnnotations(serverNode, false, &ipFamily, annotation)
+	testData.createNginxClusterIPServiceWithAnnotations(serverNode, false, ipFamilies, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 
 	testPodName := randName("test-pod-")
@@ -582,10 +582,10 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
-	ipFamily := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 
 	clientNode, serverNode := getTwoNodes()
-	data.createNginxClusterIPServiceWithAnnotations(serverNode, false, &ipFamily, annotation)
+	data.createNginxClusterIPServiceWithAnnotations(serverNode, false, ipFamilies, annotation)
 	var testPods []string
 	var err error
 	for i := 0; i < 4; i++ {
@@ -653,10 +653,10 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
-	ipFamily := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 
 	clientNode, serverNode := getTwoNodes()
-	data.createNginxClusterIPServiceWithAnnotations(serverNode, false, &ipFamily, annotation)
+	data.createNginxClusterIPServiceWithAnnotations(serverNode, false, ipFamilies, annotation)
 	var testPods []string
 	var err error
 	for i := 0; i < 4; i++ {

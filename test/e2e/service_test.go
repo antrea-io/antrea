@@ -63,11 +63,11 @@ func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, clientNamespace, 
 
 	nginx := fmt.Sprintf("nginx-%v-", isIPv6)
 	hostNginx := fmt.Sprintf("nginx-host-%v", isIPv6)
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	if isIPv6 {
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 	}
-	clusterIPSvc, err := data.createNginxClusterIPService(fmt.Sprintf("nginx-%v", isIPv6), serverNamespace, true, &ipProtocol)
+	clusterIPSvc, err := data.createNginxClusterIPService(fmt.Sprintf("nginx-%v", isIPv6), serverNamespace, true, ipFamilies)
 	require.NoError(t, err)
 	defer data.deleteService(clusterIPSvc.Namespace, clusterIPSvc.Name)
 	require.NotEqual(t, "", clusterIPSvc.Spec.ClusterIP, "ClusterIP should not be empty")
@@ -178,7 +178,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 }
 
 func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, namespace string, node string, svcType corev1.ServiceType) (*corev1.Service, func()) {
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	args := []string{"netexec", "--http-port=80", "--udp-port=80"}
 	require.NoError(t, NewPodBuilder(name, namespace, agnhostImage).OnNode(node).WithArgs(args).WithPorts([]corev1.ContainerPort{
 		{
@@ -193,10 +193,10 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 	if podIPs.ipv4 == nil {
 		// "IPv4" is invalid in IPv6 only cluster with K8s>=1.21
 		// error: Service "s1" is invalid: spec.ipFamilies[0]: Invalid value: "IPv4": not configured on this cluster
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, namespace))
-	svc, err := data.CreateService(name, namespace, 80, 80, map[string]string{"app": "agnhost", "antrea-e2e": name}, false, false, svcType, &ipProtocol)
+	svc, err := data.CreateService(name, namespace, 80, 80, map[string]string{"app": "agnhost", "antrea-e2e": name}, false, false, svcType, ipFamilies)
 	require.NoError(t, err)
 	t.Logf("Created service Cluster IP %v", svc.Spec.ClusterIP)
 

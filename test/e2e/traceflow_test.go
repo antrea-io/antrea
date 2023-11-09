@@ -1122,15 +1122,15 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	var agnhostIPv4Str, agnhostIPv6Str, svcIPv4Name, svcIPv6Name string
 	if agnhostIP.ipv4 != nil {
 		agnhostIPv4Str = agnhostIP.ipv4.String()
-		ipv4Protocol := corev1.IPv4Protocol
-		svcIPv4, err := data.CreateService("agnhost-ipv4", data.testNamespace, 80, 8080, map[string]string{"app": "agnhost-server"}, false, false, corev1.ServiceTypeClusterIP, &ipv4Protocol)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		svcIPv4, err := data.CreateService("agnhost-ipv4", data.testNamespace, 80, 8080, map[string]string{"app": "agnhost-server"}, false, false, corev1.ServiceTypeClusterIP, ipFamilies)
 		require.NoError(t, err)
 		svcIPv4Name = svcIPv4.Name
 	}
 	if agnhostIP.ipv6 != nil {
 		agnhostIPv6Str = agnhostIP.ipv6.String()
-		ipv6Protocol := corev1.IPv6Protocol
-		svcIPv6, err := data.CreateService("agnhost-ipv6", data.testNamespace, 80, 8080, map[string]string{"app": "agnhost-server"}, false, false, corev1.ServiceTypeClusterIP, &ipv6Protocol)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		svcIPv6, err := data.CreateService("agnhost-ipv6", data.testNamespace, 80, 8080, map[string]string{"app": "agnhost-server"}, false, false, corev1.ServiceTypeClusterIP, ipFamilies)
 		require.NoError(t, err)
 		svcIPv6Name = svcIPv6.Name
 	}

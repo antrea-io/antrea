@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -65,12 +66,12 @@ func TestProxy(t *testing.T) {
 
 func testProxyServiceSessionAffinityCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyServiceSessionAffinity(&ipFamily, []string{"169.254.169.1", "169.254.169.2"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		testProxyServiceSessionAffinity(ipFamilies, []string{"169.254.169.1", "169.254.169.2"}, data, t)
 	}
 	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyServiceSessionAffinity(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		testProxyServiceSessionAffinity(ipFamilies, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
 	}
 }
 
@@ -174,18 +175,18 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 
 	clusterIngressIP := []string{"169.254.169.1"}
 	localIngressIP := []string{"169.254.169.2"}
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	if isIPv6 {
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 		clusterIngressIP = []string{"fd75::aabb:ccdd:ef00"}
 		localIngressIP = []string{"fd75::aabb:ccdd:ef01"}
 	}
 
 	// Create two LoadBalancer Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
 	// of another one is Local.
-	_, err = data.createAgnhostLoadBalancerService("agnhost-cluster", true, false, clusterIngressIP, &ipProtocol, nil)
+	_, err = data.createAgnhostLoadBalancerService("agnhost-cluster", true, false, clusterIngressIP, ipFamilies, nil)
 	require.NoError(t, err)
-	svc, err := data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, &ipProtocol, nil)
+	svc, err := data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, ipFamilies, nil)
 	require.NoError(t, err)
 
 	// For the 'Local' externalTrafficPolicy, setup the health checks.
@@ -301,10 +302,10 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 
 	nodes := []string{nodeName(0), nodeName(1)}
 	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	if isIPv6 {
 		nodeIPs = []string{controlPlaneNodeIPv6(), workerNodeIPv6(1)}
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 	}
 
 	// Create a busybox Pod on every Node. The busybox Pod is used as a client.
@@ -322,7 +323,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	// Create two NodePort Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
 	// of another one is Local.
 	var portCluster, portLocal string
-	nodePortSvc, err := data.createAgnhostNodePortService("agnhost-cluster", true, false, &ipProtocol)
+	nodePortSvc, err := data.createAgnhostNodePortService("agnhost-cluster", true, false, ipFamilies)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -331,7 +332,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 		}
 	}
 	require.NotEqual(t, "", portCluster, "NodePort port number should not be empty")
-	nodePortSvc, err = data.createAgnhostNodePortService("agnhost-local", true, true, &ipProtocol)
+	nodePortSvc, err = data.createAgnhostNodePortService("agnhost-local", true, true, ipFamilies)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -409,9 +410,9 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 
 	// Create a NodePort Service.
 	nodePortIP := controlPlaneNodeIPv4()
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	var portStr string
-	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", data.testNamespace, true, false, &ipProtocol)
+	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", data.testNamespace, true, false, ipFamilies)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -526,12 +527,12 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyServiceSessionAffinity(&ipFamily, []string{"169.254.169.1", "169.254.169.2"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		testProxyServiceSessionAffinity(ipFamilies, []string{"169.254.169.1", "169.254.169.2"}, data, t)
 	}
 	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyServiceSessionAffinity(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		testProxyServiceSessionAffinity(ipFamilies, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
 	}
 }
 
@@ -560,10 +561,10 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	svcName := fmt.Sprintf("nodeport-external-traffic-policy-test-ipv6-%v", isIPv6)
 	nodes := []string{nodeName(0), nodeName(1)}
 	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	if isIPv6 {
 		nodeIPs = []string{controlPlaneNodeIPv6(), workerNodeIPv6(1)}
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 	}
 
 	// Create agnhost Pods which are not on host network.
@@ -576,7 +577,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 
 	// Create a NodePort Service whose externalTrafficPolicy is Cluster and backend Pods are created above.
 	var portStr string
-	nodePortSvc, err := data.createAgnhostNodePortService(svcName, false, false, &ipProtocol)
+	nodePortSvc, err := data.createAgnhostNodePortService(svcName, false, false, ipFamilies)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -605,7 +606,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	testNodePortLocalFromRemote(t, data, nodes, reverseStrs(urls), nodeIPs, reverseStrs(podNames))
 }
 
-func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
+func testProxyServiceSessionAffinity(ipFamilies []corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
 
@@ -614,10 +615,10 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	defer data.DeletePodAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, data.testNamespace))
-	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, true, ipFamily)
+	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, true, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
+	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, data.testNamespace)
 	require.NoError(t, err)
 
@@ -626,10 +627,10 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	defer data.DeletePodAndWait(defaultTimeout, busyboxPod, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, data.testNamespace))
 	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, data.testNamespace, svc.Spec.ClusterIP, 5)
-	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
+	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", ipFamilies, stdout, stderr))
 	for _, ingressIP := range ingressIPs {
 		stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, data.testNamespace, ingressIP, 5)
-		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
+		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", ipFamilies, stdout, stderr))
 	}
 
 	// Hold on to make sure that the Service is realized.
@@ -640,7 +641,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	tableSessionAffinityName := "SessionAffinity"
 	tableSessionAffinityOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableSessionAffinityName)})
 	require.NoError(t, err)
-	if *ipFamily == corev1.IPv4Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv4Protocol) {
 		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
 		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
 		for _, ingressIP := range ingressIPs {
@@ -679,20 +680,20 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	node := nodeName(1)
 	workerNodeIP := workerNodeIPv4(1)
 	controllerNodeIP := controlPlaneNodeIPv4()
-	ipProtocol := corev1.IPv4Protocol
+	ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 	lbClusterIngressIP := []string{"192.168.240.1"}
 	lbLocalIngressIP := []string{"192.168.240.2"}
 	if isIPv6 {
 		workerNodeIP = workerNodeIPv6(1)
 		controllerNodeIP = controlPlaneNodeIPv6()
-		ipProtocol = corev1.IPv6Protocol
+		ipFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 		lbClusterIngressIP = []string{"fd75::aabb:ccdd:ef00"}
 		lbLocalIngressIP = []string{"fd75::aabb:ccdd:ef01"}
 	}
 
 	// Create a ClusterIP Service.
 	serviceClusterIP := fmt.Sprintf("clusterip-%v", isIPv6)
-	clusterIPSvc, err := data.createAgnhostClusterIPService(serviceClusterIP, true, &ipProtocol)
+	clusterIPSvc, err := data.createAgnhostClusterIPService(serviceClusterIP, true, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, serviceClusterIP, data.testNamespace)
 	require.NoError(t, err)
 
@@ -701,7 +702,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	var nodePortCluster, nodePortLocal string
 	serviceNodePortCluster := fmt.Sprintf("nodeport-cluster-%v", isIPv6)
 	serviceNodePortLocal := fmt.Sprintf("nodeport-local-%v", isIPv6)
-	nodePortSvc, err := data.createAgnhostNodePortService(serviceNodePortCluster, true, false, &ipProtocol)
+	nodePortSvc, err := data.createAgnhostNodePortService(serviceNodePortCluster, true, false, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortCluster, data.testNamespace)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
@@ -711,7 +712,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 		}
 	}
 	require.NotEqual(t, "", nodePortCluster, "NodePort port number should not be empty")
-	nodePortSvc, err = data.createAgnhostNodePortService(serviceNodePortLocal, true, true, &ipProtocol)
+	nodePortSvc, err = data.createAgnhostNodePortService(serviceNodePortLocal, true, true, ipFamilies)
 	require.NoError(t, err)
 	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortLocal, data.testNamespace)
 	for _, port := range nodePortSvc.Spec.Ports {
@@ -726,9 +727,9 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	// of another one is Local.
 	serviceLBCluster := fmt.Sprintf("lb-cluster-%v", isIPv6)
 	serviceLBLocal := fmt.Sprintf("lb-local-%v", isIPv6)
-	_, err = data.createAgnhostLoadBalancerService(serviceLBCluster, true, false, lbClusterIngressIP, &ipProtocol, nil)
+	_, err = data.createAgnhostLoadBalancerService(serviceLBCluster, true, false, lbClusterIngressIP, ipFamilies, nil)
 	require.NoError(t, err)
-	_, err = data.createAgnhostLoadBalancerService(serviceLBLocal, true, true, lbLocalIngressIP, &ipProtocol, nil)
+	_, err = data.createAgnhostLoadBalancerService(serviceLBLocal, true, true, lbLocalIngressIP, ipFamilies, nil)
 	require.NoError(t, err)
 
 	// These are test urls.
@@ -864,12 +865,12 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 
 func testProxyEndpointLifeCycleCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyEndpointLifeCycle(&ipFamily, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		testProxyEndpointLifeCycle(ipFamilies, data, t)
 	}
 	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyEndpointLifeCycle(&ipFamily, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		testProxyEndpointLifeCycle(ipFamilies, data, t)
 	}
 }
 
@@ -884,22 +885,22 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyEndpointLifeCycle(&ipFamily, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		testProxyEndpointLifeCycle(ipFamilies, data, t)
 	}
 	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyEndpointLifeCycle(&ipFamily, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		testProxyEndpointLifeCycle(ipFamilies, data, t)
 	}
 }
 
-func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
+func testProxyEndpointLifeCycle(ipFamilies []corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
 	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
+	_, err = data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 
@@ -909,7 +910,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	var nginxIP string
-	if *ipFamily == corev1.IPv6Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv6Protocol) {
 		nginxIP = nginxIPs.ipv6.String()
 	} else {
 		nginxIP = nginxIPs.ipv4.String()
@@ -919,7 +920,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	keywords["EndpointDNAT"] = fmt.Sprintf("nat(dst=%s)", net.JoinHostPort(nginxIP, "80")) // endpointNATTable
 
 	var groupKeywords []string
-	if *ipFamily == corev1.IPv6Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv6Protocol) {
 		groupKeywords = append(groupKeywords,
 			fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString((*nginxIPs.ipv6)[8:16]), "0"), strings.TrimLeft(hex.EncodeToString((*nginxIPs.ipv6)[:8]), "0")))
 	} else {
@@ -958,12 +959,12 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 
 func testProxyServiceLifeCycleCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyServiceLifeCycle(&ipFamily, []string{"169.254.169.1", "169.254.169.2"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		testProxyServiceLifeCycle(ipFamilies, []string{"169.254.169.1", "169.254.169.2"}, data, t)
 	}
 	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyServiceLifeCycle(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		testProxyServiceLifeCycle(ipFamilies, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
 	}
 }
 
@@ -978,16 +979,16 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyServiceLifeCycle(&ipFamily, []string{"169.254.169.1", "169.254.169.2"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
+		testProxyServiceLifeCycle(ipFamilies, []string{"169.254.169.1", "169.254.169.2"}, data, t)
 	}
 	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyServiceLifeCycle(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
+		ipFamilies := []corev1.IPFamily{corev1.IPv6Protocol}
+		testProxyServiceLifeCycle(ipFamilies, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
 	}
 }
 
-func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
+func testProxyServiceLifeCycle(ipFamilies []corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
 
@@ -996,15 +997,15 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 	var nginxIP string
-	if *ipFamily == corev1.IPv6Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv6Protocol) {
 		nginxIP = nginxIPs.ipv6.String()
 	} else {
 		nginxIP = nginxIPs.ipv4.String()
 	}
-	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
+	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)
+	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamilies)
 	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, data.testNamespace)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
@@ -1014,7 +1015,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	time.Sleep(3 * time.Second)
 
 	var svcLBflows []string
-	if *ipFamily == corev1.IPv6Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv6Protocol) {
 		svcLBflows = append(svcLBflows, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
 		for _, ingressIP := range ingressIPs {
 			svcLBflows = append(svcLBflows, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
@@ -1027,7 +1028,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	}
 
 	tableEndpointDNATFlowFormat := "nat(dst=%s:80)"
-	if *ipFamily == corev1.IPv6Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv6Protocol) {
 		tableEndpointDNATFlowFormat = "nat(dst=[%s]:80)"
 	}
 	expectedFlows := []expectTableFlows{
@@ -1042,7 +1043,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	}
 
 	var groupKeyword string
-	if *ipFamily == corev1.IPv6Protocol {
+	if slices.Contains(ipFamilies, corev1.IPv6Protocol) {
 		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127],load:0x%x->NXM_NX_REG4[0..15]",
 			strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()[8:16]), "0"),
 			strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()[:8]), "0"),
@@ -1135,7 +1136,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			skipIfNotIPv4Cluster(t)
 			ingressNodeIP := controlPlaneNodeIPv4()
-			ipProtocol := corev1.IPv4Protocol
+			ipFamilies := []corev1.IPFamily{corev1.IPv4Protocol}
 			lbIP := "1.1.2.1"
 			internalClientIP := internalClientIPs.ipv4.String()
 			externalClientIP := "1.1.1.1"
@@ -1170,7 +1171,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			annotations := map[string]string{
 				types.ServiceLoadBalancerModeAnnotationKey: "dsr",
 			}
-			service, err := data.createAgnhostLoadBalancerService(serviceName, tc.withSessionAffinity, false, []string{lbIP}, &ipProtocol, annotations)
+			service, err := data.createAgnhostLoadBalancerService(serviceName, tc.withSessionAffinity, false, []string{lbIP}, ipFamilies, annotations)
 			require.NoError(t, err)
 			defer data.deleteServiceAndWait(defaultTimeout, serviceName, data.testNamespace)
 

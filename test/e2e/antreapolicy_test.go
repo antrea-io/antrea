@@ -2691,11 +2691,11 @@ func testAuditLoggingK8sService(t *testing.T, data *TestData) {
 	serverPodName, serverIP, nginxCleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, namespaces["x"], false)
 	defer nginxCleanupFunc()
 	serverPort := int32(80)
-	ipFamily := v1.IPv4Protocol
+	ipFamilies := []v1.IPFamily{v1.IPv4Protocol}
 	if IPFamily(podIPs[namespaces["x"]+"/a"][0]) == "v6" {
-		ipFamily = v1.IPv6Protocol
+		ipFamilies = []v1.IPFamily{v1.IPv6Protocol}
 	}
-	service, err := data.CreateService(serviceName, namespaces["x"], serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, v1.ServiceTypeClusterIP, &ipFamily)
+	service, err := data.CreateService(serviceName, namespaces["x"], serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, v1.ServiceTypeClusterIP, ipFamilies)
 	if err != nil {
 		t.Fatalf("Error when creating nginx service: %v", err)
 	}
@@ -3765,9 +3765,9 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a NodePort Service.
-	ipProtocol := v1.IPv4Protocol
+	ipFamilies := []v1.IPFamily{v1.IPv4Protocol}
 	var nodePort int32
-	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", serverNamespace, false, false, &ipProtocol)
+	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", serverNamespace, false, false, ipFamilies)
 	failOnError(err, t)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {

@@ -431,7 +431,7 @@ jobs:
         run: |
           mkdir log
           mkdir test-e2e-fa-coverage
-          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility
+          ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility --ip-family dual
       - name: Tar coverage files
         run: tar -czf test-e2e-fa-coverage.tar.gz test-e2e-fa-coverage
       - name: Upload coverage for test-e2e-fa-coverage
