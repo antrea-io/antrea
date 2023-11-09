@@ -23,7 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -43,7 +43,7 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 
 	klog.V(2).InfoS("Validating Traceflow", "request", review.Request)
 
-	var newObj crdv1alpha1.Traceflow
+	var newObj crdv1beta1.Traceflow
 	if review.Request.Object.Raw != nil {
 		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
 			klog.ErrorS(err, "Error de-serializing current Traceflow")
@@ -67,7 +67,7 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 	}
 }
 
-func (c *Controller) validate(tf *crdv1alpha1.Traceflow) (allowed bool, deniedReason string) {
+func (c *Controller) validate(tf *crdv1beta1.Traceflow) (allowed bool, deniedReason string) {
 	if !tf.Spec.LiveTraffic {
 		if tf.Spec.Source.Namespace == "" || tf.Spec.Source.Pod == "" {
 			return false, "source Pod must be specified in non-live-traffic Traceflow"
