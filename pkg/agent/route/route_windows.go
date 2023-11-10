@@ -573,3 +573,19 @@ func (c *Client) DeleteRouteForLink(dstCIDR *net.IPNet, linkIndex int) error {
 func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error {
 	return errors.New("ClearConntrackEntryForService is not implemented on Windows")
 }
+
+func (c *Client) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, prevIPSetEntries, curIPSetEntries sets.Set[string], isIPv6 bool) error {
+	return errors.New("AddOrUpdateNodeNetworkPolicyIPSet is not implemented on Windows")
+}
+
+func (c *Client) DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) error {
+	return errors.New("DeleteNodeNetworkPolicyIPSet is not implemented on Windows")
+}
+
+func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error {
+	return errors.New("AddOrUpdateNodeNetworkPolicyIPTables is not implemented on Windows")
+}
+
+func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
+	return errors.New("DeleteNodeNetworkPolicyIPTables is not implemented on Windows")
+}

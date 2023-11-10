@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/config"
 	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
@@ -1718,6 +1719,195 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 				_, exists = c.clusterNodeIPs.Load(tt.podCIDR.String())
 			}
 			assert.False(t, exists)
+		})
+	}
+}
+
+func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
+	ipv4SetName := "TEST-IPSET-4"
+	ipv4Net1 := "1.1.1.1/32"
+	ipv4Net2 := "2.2.2.2/32"
+	ipv4Net3 := "3.3.3.3/32"
+	ipv6SetName := "TEST-IPSET-6"
+	ipv6Net1 := "fec0::1111/128"
+	ipv6Net2 := "fec0::2222/128"
+	ipv6Net3 := "fec0::3333/128"
+
+	tests := []struct {
+		name             string
+		ipsetName        string
+		prevIPSetEntries sets.Set[string]
+		curIPSetEntries  sets.Set[string]
+		isIPv6           bool
+		expectedCalls    func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:            "IPv4, add an ipset and delete it",
+			ipsetName:       ipv4SetName,
+			curIPSetEntries: sets.New[string](ipv4Net1, ipv4Net3),
+			isIPv6:          false,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv4SetName, ipset.HashNet, false).Times(1)
+				mockIPSet.AddEntry(ipv4SetName, ipv4Net1).Times(1)
+				mockIPSet.AddEntry(ipv4SetName, ipv4Net3).Times(1)
+				mockIPSet.DestroyIPSet(ipv4SetName).Times(1)
+			},
+		},
+		{
+			name:             "IPv4, update an ipset and delete it",
+			ipsetName:        ipv4SetName,
+			prevIPSetEntries: sets.New[string](ipv4Net1, ipv4Net2),
+			curIPSetEntries:  sets.New[string](ipv4Net1, ipv4Net3),
+			isIPv6:           false,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv4SetName, ipset.HashNet, false).Times(1)
+				mockIPSet.AddEntry(ipv4SetName, ipv4Net3).Times(1)
+				mockIPSet.DelEntry(ipv4SetName, ipv4Net2).Times(1)
+				mockIPSet.DestroyIPSet(ipv4SetName).Times(1)
+			},
+		},
+		{
+			name:            "IPv6, add an ipset and delete it",
+			ipsetName:       ipv6SetName,
+			curIPSetEntries: sets.New[string](ipv6Net1, ipv6Net3),
+			isIPv6:          true,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv6SetName, ipset.HashNet, true).Times(1)
+				mockIPSet.AddEntry(ipv6SetName, ipv6Net1).Times(1)
+				mockIPSet.AddEntry(ipv6SetName, ipv6Net3).Times(1)
+				mockIPSet.DestroyIPSet(ipv6SetName).Times(1)
+			},
+		},
+		{
+			name:             "IPv6, update an ipset and delete it",
+			ipsetName:        ipv6SetName,
+			prevIPSetEntries: sets.New[string](ipv6Net1, ipv6Net2),
+			curIPSetEntries:  sets.New[string](ipv6Net1, ipv6Net3),
+			isIPv6:           true,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv6SetName, ipset.HashNet, true).Times(1)
+				mockIPSet.AddEntry(ipv6SetName, ipv6Net3).Times(1)
+				mockIPSet.DelEntry(ipv6SetName, ipv6Net2).Times(1)
+				mockIPSet.DestroyIPSet(ipv6SetName).Times(1)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{ipset: mockIPSet}
+			tt.expectedCalls(mockIPSet.EXPECT())
+
+			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPSet(tt.ipsetName, tt.prevIPSetEntries, tt.curIPSetEntries, tt.isIPv6))
+			var exists bool
+			if tt.isIPv6 {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv6.Load(tt.ipsetName)
+			} else {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv4.Load(tt.ipsetName)
+			}
+			assert.True(t, exists)
+
+			assert.NoError(t, c.DeleteNodeNetworkPolicyIPSet(tt.ipsetName, tt.isIPv6))
+			if tt.isIPv6 {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv6.Load(tt.ipsetName)
+			} else {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv4.Load(tt.ipsetName)
+			}
+			assert.False(t, exists)
+		})
+	}
+}
+
+func TestAddAndDeleteNodeNetworkPolicyIPTables(t *testing.T) {
+	chain1 := "TEST-CHAIN1"
+	chain2 := "TEST-CHAIN2"
+	chains := []string{chain1, chain2}
+	rules := [][]string{
+		{
+			"-A TEST-CHAIN1 -j ACCEPT -p tcp --dport 80",
+			"-A TEST-CHAIN1 -j ACCEPT -p tcp --dport 443",
+		},
+		{
+			"-A TEST-CHAIN2 -j ACCEPT -p tcp --dport 80",
+			"-A TEST-CHAIN2 -j ACCEPT -p tcp --dport 443",
+		},
+	}
+	tests := []struct {
+		name           string
+		iptablesChains []string
+		iptablesRules  [][]string
+		isIPv6         bool
+		expectedCalls  func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:           "IPv4",
+			iptablesChains: chains,
+			iptablesRules:  rules,
+			isIPv6:         false,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.Restore(`*filter
+:TEST-CHAIN1 - [0:0]
+:TEST-CHAIN2 - [0:0]
+-A TEST-CHAIN1 -j ACCEPT -p tcp --dport 80
+-A TEST-CHAIN1 -j ACCEPT -p tcp --dport 443
+-A TEST-CHAIN2 -j ACCEPT -p tcp --dport 80
+-A TEST-CHAIN2 -j ACCEPT -p tcp --dport 443
+COMMIT
+`, false, false)
+				mockIPTables.DeleteChain(iptables.ProtocolIPv4, iptables.FilterTable, chain1)
+				mockIPTables.DeleteChain(iptables.ProtocolIPv4, iptables.FilterTable, chain2)
+			},
+		},
+		{
+			name:           "IPv6",
+			iptablesChains: chains,
+			iptablesRules:  rules,
+			isIPv6:         true,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.Restore(`*filter
+:TEST-CHAIN1 - [0:0]
+:TEST-CHAIN2 - [0:0]
+-A TEST-CHAIN1 -j ACCEPT -p tcp --dport 80
+-A TEST-CHAIN1 -j ACCEPT -p tcp --dport 443
+-A TEST-CHAIN2 -j ACCEPT -p tcp --dport 80
+-A TEST-CHAIN2 -j ACCEPT -p tcp --dport 443
+COMMIT
+`, false, true)
+				mockIPTables.DeleteChain(iptables.ProtocolIPv6, iptables.FilterTable, chain1)
+				mockIPTables.DeleteChain(iptables.ProtocolIPv6, iptables.FilterTable, chain2)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			c := &Client{iptables: mockIPTables}
+			tt.expectedCalls(mockIPTables.EXPECT())
+
+			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables(tt.iptablesChains, tt.iptablesRules, tt.isIPv6))
+			for _, chain := range chains {
+				var exists bool
+				if tt.isIPv6 {
+					_, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(chain)
+				} else {
+					_, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(chain)
+				}
+				assert.True(t, exists)
+			}
+
+			assert.NoError(t, c.DeleteNodeNetworkPolicyIPTables(tt.iptablesChains, tt.isIPv6))
+			for _, chain := range chains {
+				var exists bool
+				if tt.isIPv6 {
+					_, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(chain)
+				} else {
+					_, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(chain)
+				}
+				assert.False(t, exists)
+			}
 		})
 	}
 }

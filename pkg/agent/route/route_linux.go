@@ -126,6 +126,14 @@ type Client struct {
 	clusterNodeIP6s sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
+	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
+	nodeNetworkPolicyIPSetsIPv4 sync.Map
+	// nodeNetworkPolicyIPSetsIPv6 caches all existing IPv6 ipsets for NodeNetworkPolicy.
+	nodeNetworkPolicyIPSetsIPv6 sync.Map
+	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 iptables chains and rules within the chains for NodeNetworkPolicy.
+	nodeNetworkPolicyIPTablesIPv4 sync.Map
+	// nodeNetworkPolicyIPSetsIPv6 caches all existing IPv6 iptables chains and rules within the chains for NodeNetworkPolicy.
+	nodeNetworkPolicyIPTablesIPv6 sync.Map
 }
 
 // NewClient returns a route client.
@@ -1699,4 +1707,86 @@ func generateNeigh(ip net.IP, linkIndex int) *netlink.Neigh {
 		IP:           ip,
 		HardwareAddr: globalVMAC,
 	}
+}
+
+func (c *Client) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, prevIPSetEntries, curIPSetEntries sets.Set[string], isIPv6 bool) error {
+	ipsetEntriesToAdd := curIPSetEntries.Difference(prevIPSetEntries)
+	ipsetEntriesToDelete := prevIPSetEntries.Difference(curIPSetEntries)
+
+	if err := c.ipset.CreateIPSet(ipsetName, ipset.HashNet, isIPv6); err != nil {
+		return err
+	}
+	for ipsetEntry := range ipsetEntriesToAdd {
+		if err := c.ipset.AddEntry(ipsetName, ipsetEntry); err != nil {
+			return err
+		}
+	}
+	for ipsetEntry := range ipsetEntriesToDelete {
+		if err := c.ipset.DelEntry(ipsetName, ipsetEntry); err != nil {
+			return err
+		}
+	}
+	if isIPv6 {
+		c.nodeNetworkPolicyIPSetsIPv6.Store(ipsetName, curIPSetEntries)
+	} else {
+		c.nodeNetworkPolicyIPSetsIPv4.Store(ipsetName, curIPSetEntries)
+	}
+	return nil
+}
+
+func (c *Client) DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) error {
+	if err := c.ipset.DestroyIPSet(ipsetName); err != nil {
+		return err
+	}
+	if isIPv6 {
+		c.nodeNetworkPolicyIPSetsIPv6.Delete(ipsetName)
+	} else {
+		c.nodeNetworkPolicyIPSetsIPv4.Delete(ipsetName)
+	}
+	return nil
+}
+
+func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error {
+	iptablesData := bytes.NewBuffer(nil)
+
+	writeLine(iptablesData, "*filter")
+	for _, iptablesChain := range iptablesChains {
+		writeLine(iptablesData, iptables.MakeChainLine(iptablesChain))
+	}
+	for _, rules := range iptablesRules {
+		for _, rule := range rules {
+			writeLine(iptablesData, rule)
+		}
+	}
+	writeLine(iptablesData, "COMMIT")
+
+	if err := c.iptables.Restore(iptablesData.String(), false, isIPv6); err != nil {
+		return err
+	}
+	for index, iptablesChain := range iptablesChains {
+		if isIPv6 {
+			c.nodeNetworkPolicyIPTablesIPv6.Store(iptablesChain, iptablesChains[index])
+		} else {
+			c.nodeNetworkPolicyIPTablesIPv4.Store(iptablesChain, iptablesChains[index])
+		}
+	}
+	return nil
+}
+
+func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
+	ipProtocol := iptables.ProtocolIPv4
+	if isIPv6 {
+		ipProtocol = iptables.ProtocolIPv6
+	}
+	for _, iptablesChain := range iptablesChains {
+		if err := c.iptables.DeleteChain(ipProtocol, iptables.FilterTable, iptablesChain); err != nil {
+			return err
+		}
+		if isIPv6 {
+			c.nodeNetworkPolicyIPTablesIPv6.Delete(iptablesChain)
+		} else {
+			c.nodeNetworkPolicyIPTablesIPv4.Delete(iptablesChain)
+		}
+	}
+	return nil
 }
