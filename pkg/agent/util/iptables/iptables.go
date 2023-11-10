@@ -26,6 +26,7 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/coreos/go-iptables/iptables"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 )
 
@@ -36,7 +37,7 @@ const (
 	RawTable    = "raw"
 
 	AcceptTarget     = "ACCEPT"
-	DROPTarget       = "DROP"
+	DropTarget       = "DROP"
 	MasqueradeTarget = "MASQUERADE"
 	MarkTarget       = "MARK"
 	ReturnTarget     = "RETURN"
@@ -44,8 +45,10 @@ const (
 	NoTrackTarget    = "NOTRACK"
 	SNATTarget       = "SNAT"
 	DNATTarget       = "DNAT"
+	RejectTarget     = "REJECT"
 
 	PreRoutingChain  = "PREROUTING"
+	InputChain       = "INPUT"
 	ForwardChain     = "FORWARD"
 	PostRoutingChain = "POSTROUTING"
 	OutputChain      = "OUTPUT"
@@ -71,6 +74,14 @@ const (
 	ProtocolIPv6
 )
 
+const (
+	ProtocolTCP    = "tcp"
+	ProtocolUDP    = "udp"
+	ProtocolSCTP   = "sctp"
+	ProtocolICMP   = "icmp"
+	ProtocolICMPv6 = "icmp6"
+)
+
 // https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
 // iptables-restore: support acquiring the lock.
 var restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
@@ -93,6 +104,28 @@ type Interface interface {
 	Restore(data string, flush bool, useIPv6 bool) error
 
 	Save() ([]byte, error)
+}
+
+type IPTablesRuleBuilder interface {
+	MatchCIDRSrc(cidr string) IPTablesRuleBuilder
+	MatchCIDRDst(cidr string) IPTablesRuleBuilder
+	MatchIPSetSrc(ipset string) IPTablesRuleBuilder
+	MatchIPSetDst(ipset string) IPTablesRuleBuilder
+	MatchTransProtocol(protocol string) IPTablesRuleBuilder
+	MatchDstPort(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder
+	MatchSrcPort(port, endPort *int32) IPTablesRuleBuilder
+	MatchICMP(icmpType, icmpCode *int32, ipProtocol Protocol) IPTablesRuleBuilder
+	MatchEstablishedOrRelated() IPTablesRuleBuilder
+	MatchInputInterface(interfaceName string) IPTablesRuleBuilder
+	MatchOutputInterface(interfaceName string) IPTablesRuleBuilder
+	SetTarget(target string) IPTablesRuleBuilder
+	SetComment(comment string) IPTablesRuleBuilder
+	CopyBuilder() IPTablesRuleBuilder
+	Done() IPTablesRule
+}
+
+type IPTablesRule interface {
+	GetRule() string
 }
 
 type Client struct {
@@ -351,4 +384,8 @@ func (c *Client) Save() ([]byte, error) {
 
 func MakeChainLine(chain string) string {
 	return fmt.Sprintf(":%s - [0:0]", chain)
+}
+
+func IsIPv6Protocol(protocol Protocol) bool {
+	return protocol == ProtocolIPv6
 }

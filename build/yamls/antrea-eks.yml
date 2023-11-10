@@ -5625,6 +5625,9 @@ data:
     # Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
     #  EgressSeparateSubnet: false
 
+    # Allow users to apply ClusterNetworkPolicy to Kubernetes Nodes.
+    #  NodeNetworkPolicy: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -6925,7 +6928,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: fe9081d7718e258905728726bb8f3a8d42a332d7f4e0d8faaa9731b3c4b51aa4
+        checksum/config: f4ad8910666191c02982d1b7b202e3c4bd20fb4a8179dcb5696119f3b1490a72
       labels:
         app: antrea
         component: antrea-agent
@@ -7164,7 +7167,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: fe9081d7718e258905728726bb8f3a8d42a332d7f4e0d8faaa9731b3c4b51aa4
+        checksum/config: f4ad8910666191c02982d1b7b202e3c4bd20fb4a8179dcb5696119f3b1490a72
       labels:
         app: antrea
         component: antrea-controller

@@ -18,6 +18,8 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
@@ -105,4 +107,16 @@ type Interface interface {
 
 	// ClearConntrackEntryForService deletes a conntrack entry for a Service connection.
 	ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error
+
+	// AddOrUpdateNodeNetworkPolicyIPSet adds or updates ipset created for NodeNetworkPolicy.
+	AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, ipsetEntries sets.Set[string], isIPv6 bool) error
+
+	// DeleteNodeNetworkPolicyIPSet deletes ipset created for NodeNetworkPolicy.
+	DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) error
+
+	// AddOrUpdateNodeNetworkPolicyIPTables adds or updates iptables chains and rules within the chains for NodeNetworkPolicy.
+	AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error
+
+	// DeleteNodeNetworkPolicyIPTables deletes iptables chains and rules within the chains for NodeNetworkPolicy.
+	DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error
 }

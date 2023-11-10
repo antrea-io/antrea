@@ -57,6 +57,7 @@ edit the Agent configuration in the
 | `AdminNetworkPolicy`          | Controller         | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
 | `EgressTrafficShaping`        | Agent              | `false` | Alpha | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                |
 | `EgressSeparateSubnet`        | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | No                 |                                               |
+| `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 
 ## Description and Requirements of Features
 
@@ -404,6 +405,14 @@ this [document](antrea-l7-network-policy.md#prerequisites) for more information 
 
 The `AdminNetworkPolicy` API (which currently includes the AdminNetworkPolicy and BaselineAdminNetworkPolicy objects)
 complements the Antrea-native policies and help cluster administrators to set security postures in a portable manner.
+
+### NodeNetworkPolicy
+
+`NodeNetworkPolicy` allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
+
+#### Requirements for this Feature
+
+This feature is only supported for Linux Nodes at the moment.
 
 ### EgressTrafficShaping
 
