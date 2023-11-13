@@ -91,6 +91,10 @@ func TestNetworkPolicy(t *testing.T) {
 		t.Cleanup(exportLogsForSubtest(t, data))
 		testIngressPolicyWithEndPort(t, data)
 	})
+	t.Run("testAllowHairpinService", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
+		testAllowHairpinService(t, data)
+	})
 }
 
 func testNetworkPolicyStats(t *testing.T, data *TestData) {
@@ -926,6 +930,49 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
 		npCheck(serverIPs.ipv6.String())
+	}
+}
+
+func testAllowHairpinService(t *testing.T, data *TestData) {
+	serverNode := workerNodeName(1)
+	serverPort := int32(80)
+	serverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, data.testNamespace, false)
+	defer cleanupFunc()
+
+	service, err := data.CreateService("nginx", data.testNamespace, serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeClusterIP, nil)
+	if err != nil {
+		t.Fatalf("Error when creating nginx service: %v", err)
+	}
+	defer data.deleteService(service.Namespace, service.Name)
+
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", serverNode, data.testNamespace, false)
+	defer cleanupFunc()
+
+	spec := &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+	}
+	np, err := data.createNetworkPolicy("test-networkpolicy-ns-iso", spec)
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	npCheck := func(clientName, serverIP, containerName string, serverPort int32, wantErr bool) {
+		if err = data.runNetcatCommandFromTestPodWithProtocol(clientName, data.testNamespace, containerName, serverIP, serverPort, "tcp"); wantErr && err == nil {
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
+		} else if !wantErr && err != nil {
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
+		}
+	}
+
+	for _, clusterIP := range service.Spec.ClusterIPs {
+		npCheck(serverName, clusterIP, nginxContainerName, serverPort, false)
+		npCheck(clientName, clusterIP, busyboxContainerName, serverPort, true)
 	}
 }
 
