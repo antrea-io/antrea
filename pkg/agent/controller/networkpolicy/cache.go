@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	RuleIDLength                  = 16
+	ruleIDLength                  = 16
 	appliedToGroupIndex           = "appliedToGroup"
 	addressGroupIndex             = "addressGroup"
 	policyIndex                   = "policy"
@@ -137,7 +137,7 @@ func hashRule(r *rule) string {
 	b, _ := json.Marshal(r)
 	hash.Write(b)
 	hashValue := hex.EncodeToString(hash.Sum(nil))
-	return hashValue[:RuleIDLength]
+	return hashValue[:ruleIDLength]
 }
 
 // CompletedRule contains IPAddresses and Pods flattened from AddressGroups and AppliedToGroups.
