@@ -2272,6 +2272,12 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 			MatchRegMark(ToUplinkRegMark).
 			Action().GotoTable(IngressMetricTable.GetID()).
 			Done(),
+		// This generates the flow to match the hairpin service packets and forward them to stageConntrack.
+		IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchCTMark(HairpinCTMark).
+			Action().GotoStage(stageConntrack).
+			Done(),
 	}
 	if f.enableAntreaPolicy && f.proxyAll {
 		// This generates the flow to match the NodePort Service packets and forward them to AntreaPolicyIngressRuleTable.
