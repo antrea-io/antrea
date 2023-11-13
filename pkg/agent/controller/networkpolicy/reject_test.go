@@ -38,95 +38,95 @@ func TestGetRejectType(t *testing.T) {
 		antreaProxyEnabled bool
 		srcIsLocal         bool
 		dstIsLocal         bool
-		expectRejectType   RejectType
+		expectRejectType   rejectType
 	}{
 		{
-			name:               "RejectPodLocal",
+			name:               "rejectPodLocal",
 			isServiceTraffic:   false,
 			antreaProxyEnabled: true,
 			srcIsLocal:         true,
 			dstIsLocal:         true,
-			expectRejectType:   RejectPodLocal,
+			expectRejectType:   rejectPodLocal,
 		},
 		{
-			name:               "RejectPodRemoteToLocal",
+			name:               "rejectPodRemoteToLocal",
 			isServiceTraffic:   false,
 			antreaProxyEnabled: true,
 			srcIsLocal:         false,
 			dstIsLocal:         true,
-			expectRejectType:   RejectPodRemoteToLocal,
+			expectRejectType:   rejectPodRemoteToLocal,
 		},
 		{
-			name:               "RejectPodLocalToRemote",
+			name:               "rejectPodLocalToRemote",
 			isServiceTraffic:   false,
 			antreaProxyEnabled: true,
 			srcIsLocal:         true,
 			dstIsLocal:         false,
-			expectRejectType:   RejectPodLocalToRemote,
+			expectRejectType:   rejectPodLocalToRemote,
 		},
 		{
-			name:               "RejectServiceLocal",
+			name:               "rejectServiceLocal",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: true,
 			srcIsLocal:         true,
 			dstIsLocal:         true,
-			expectRejectType:   RejectServiceLocal,
+			expectRejectType:   rejectServiceLocal,
 		},
 		{
-			name:               "RejectServiceRemoteToLocal",
+			name:               "rejectServiceRemoteToLocal",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: true,
 			srcIsLocal:         false,
 			dstIsLocal:         true,
-			expectRejectType:   RejectServiceRemoteToLocal,
+			expectRejectType:   rejectServiceRemoteToLocal,
 		},
 		{
-			name:               "RejectServiceLocalToRemote",
+			name:               "rejectServiceLocalToRemote",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: true,
 			srcIsLocal:         true,
 			dstIsLocal:         false,
-			expectRejectType:   RejectServiceLocalToRemote,
+			expectRejectType:   rejectServiceLocalToRemote,
 		},
 		{
-			name:               "RejectNoAPServiceLocal",
+			name:               "rejectNoAPServiceLocal",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: false,
 			srcIsLocal:         true,
 			dstIsLocal:         true,
-			expectRejectType:   RejectNoAPServiceLocal,
+			expectRejectType:   rejectNoAPServiceLocal,
 		},
 		{
-			name:               "RejectNoAPServiceRemoteToLocal",
+			name:               "rejectNoAPServiceRemoteToLocal",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: false,
 			srcIsLocal:         false,
 			dstIsLocal:         true,
-			expectRejectType:   RejectNoAPServiceRemoteToLocal,
+			expectRejectType:   rejectNoAPServiceRemoteToLocal,
 		},
 		{
-			name:               "RejectServiceRemoteToExternal",
+			name:               "rejectServiceRemoteToExternal",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: true,
 			srcIsLocal:         false,
 			dstIsLocal:         false,
-			expectRejectType:   RejectServiceRemoteToExternal,
+			expectRejectType:   rejectServiceRemoteToExternal,
 		},
 		{
-			name:               "Unsupported pod2pod remote2remote",
+			name:               "unsupported pod2pod remote2remote",
 			isServiceTraffic:   false,
 			antreaProxyEnabled: true,
 			srcIsLocal:         false,
 			dstIsLocal:         false,
-			expectRejectType:   Unsupported,
+			expectRejectType:   unsupported,
 		},
 		{
-			name:               "Unsupported noAP remote2remote",
+			name:               "unsupported noAP remote2remote",
 			isServiceTraffic:   true,
 			antreaProxyEnabled: false,
 			srcIsLocal:         false,
 			dstIsLocal:         false,
-			expectRejectType:   Unsupported,
+			expectRejectType:   unsupported,
 		},
 	}
 	for _, tt := range tests {
@@ -273,7 +273,7 @@ func TestGetRejectOFPorts(t *testing.T) {
 	}
 	tests := []struct {
 		name          string
-		rejectType    RejectType
+		rejectType    rejectType
 		tunPort       uint32
 		srcInterface  *interfacestore.InterfaceConfig
 		dstInterface  *interfacestore.InterfaceConfig
@@ -281,92 +281,92 @@ func TestGetRejectOFPorts(t *testing.T) {
 		expectOutPort uint32
 	}{
 		{
-			name:          "RejectPodLocal",
-			rejectType:    RejectPodLocal,
+			name:          "rejectPodLocal",
+			rejectType:    rejectPodLocal,
 			srcInterface:  srcIface,
 			dstInterface:  dstIface,
 			expectInPort:  uint32(srcIface.OFPort),
 			expectOutPort: uint32(dstIface.OFPort),
 		},
 		{
-			name:          "RejectPodLocalToRemote",
-			rejectType:    RejectPodLocalToRemote,
+			name:          "rejectPodLocalToRemote",
+			rejectType:    rejectPodLocalToRemote,
 			srcInterface:  srcIface,
 			expectInPort:  uint32(srcIface.OFPort),
 			expectOutPort: unsetPort,
 		},
 		{
 			name:          "RejectPodLocalToRemoteExternal",
-			rejectType:    RejectPodLocalToRemote,
+			rejectType:    rejectPodLocalToRemote,
 			srcInterface:  externalSrcIface,
 			expectInPort:  uint32(externalSrcIface.OFPort),
 			expectOutPort: uint32(externalSrcIface.UplinkPort.OFPort),
 		},
 		{
-			name:          "RejectPodRemoteToLocal",
-			rejectType:    RejectPodRemoteToLocal,
+			name:          "rejectPodRemoteToLocal",
+			rejectType:    rejectPodRemoteToLocal,
 			dstInterface:  dstIface,
 			expectInPort:  gwPort,
 			expectOutPort: uint32(dstIface.OFPort),
 		},
 		{
 			name:          "RejectPodRemoteToLocalExternal",
-			rejectType:    RejectPodRemoteToLocal,
+			rejectType:    rejectPodRemoteToLocal,
 			dstInterface:  externalDstIface,
 			expectInPort:  uint32(externalDstIface.UplinkPort.OFPort),
 			expectOutPort: uint32(externalDstIface.OFPort),
 		},
 		{
-			name:          "RejectServiceLocal",
-			rejectType:    RejectServiceLocal,
+			name:          "rejectServiceLocal",
+			rejectType:    rejectServiceLocal,
 			srcInterface:  srcIface,
 			expectInPort:  uint32(srcIface.OFPort),
 			expectOutPort: unsetPort,
 		},
 		{
-			name:          "RejectServiceLocalToRemote",
-			rejectType:    RejectServiceLocalToRemote,
+			name:          "rejectServiceLocalToRemote",
+			rejectType:    rejectServiceLocalToRemote,
 			srcInterface:  srcIface,
 			expectInPort:  uint32(srcIface.OFPort),
 			expectOutPort: unsetPort,
 		},
 		{
-			name:          "RejectServiceRemoteToLocal",
-			rejectType:    RejectServiceRemoteToLocal,
+			name:          "rejectServiceRemoteToLocal",
+			rejectType:    rejectServiceRemoteToLocal,
 			expectInPort:  gwPort,
 			expectOutPort: unsetPort,
 		},
 		{
-			name:          "RejectNoAPServiceLocal",
-			rejectType:    RejectNoAPServiceLocal,
+			name:          "rejectNoAPServiceLocal",
+			rejectType:    rejectNoAPServiceLocal,
 			srcInterface:  srcIface,
 			expectInPort:  uint32(srcIface.OFPort),
 			expectOutPort: gwPort,
 		},
 		{
-			name:          "RejectNoAPServiceRemoteToLocal",
-			rejectType:    RejectNoAPServiceRemoteToLocal,
+			name:          "rejectNoAPServiceRemoteToLocal",
+			rejectType:    rejectNoAPServiceRemoteToLocal,
 			tunPort:       tunPort,
 			expectInPort:  tunPort,
 			expectOutPort: gwPort,
 		},
 		{
 			name:          "RejectNoAPServiceRemoteToLocalWithoutTun",
-			rejectType:    RejectNoAPServiceRemoteToLocal,
+			rejectType:    rejectNoAPServiceRemoteToLocal,
 			tunPort:       unsetPort,
 			expectInPort:  gwPort,
 			expectOutPort: gwPort,
 		},
 		{
-			name:          "RejectServiceRemoteToExternal",
-			rejectType:    RejectServiceRemoteToExternal,
+			name:          "rejectServiceRemoteToExternal",
+			rejectType:    rejectServiceRemoteToExternal,
 			tunPort:       tunPort,
 			expectInPort:  tunPort,
 			expectOutPort: unsetPort,
 		},
 		{
 			name:          "RejectServiceRemoteToExternalWithoutTun",
-			rejectType:    RejectServiceRemoteToExternal,
+			rejectType:    rejectServiceRemoteToExternal,
 			tunPort:       unsetPort,
 			expectInPort:  gwPort,
 			expectOutPort: unsetPort,
@@ -392,7 +392,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 	l3ForwardingTableID := openflow.L3ForwardingTable.GetID()
 	ctrl := gomock.NewController(t)
 	type args struct {
-		rejectType        RejectType
+		rejectType        rejectType
 		nodeType          config.NodeType
 		isFlexibleIPAMSrc bool
 		isFlexibleIPAMDst bool
@@ -406,7 +406,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		{
 			name: "RejectServiceLocalFlexibleIPAMSrc",
 			args: args{
-				rejectType:        RejectServiceLocal,
+				rejectType:        rejectServiceLocal,
 				nodeType:          config.K8sNode,
 				isFlexibleIPAMSrc: true,
 				isFlexibleIPAMDst: false,
@@ -422,7 +422,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		{
 			name: "RejectServiceOtherSrc",
 			args: args{
-				rejectType:        RejectServiceLocal,
+				rejectType:        rejectServiceLocal,
 				nodeType:          config.K8sNode,
 				isFlexibleIPAMSrc: false,
 				isFlexibleIPAMDst: false,
@@ -437,7 +437,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		{
 			name: "RejectLocalToRemoteFlexibleIPAMSrc",
 			args: args{
-				rejectType:        RejectPodLocalToRemote,
+				rejectType:        rejectPodLocalToRemote,
 				nodeType:          config.K8sNode,
 				isFlexibleIPAMSrc: true,
 				isFlexibleIPAMDst: false,
@@ -453,7 +453,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		{
 			name: "RejectLocalToRemoteFlexibleIPAMSrc",
 			args: args{
-				rejectType:        RejectPodLocalToRemote,
+				rejectType:        rejectPodLocalToRemote,
 				nodeType:          config.K8sNode,
 				isFlexibleIPAMSrc: false,
 				isFlexibleIPAMDst: false,
@@ -468,7 +468,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		{
 			name: "RejectServiceRemoteToLocalFlexibleIPAMDst",
 			args: args{
-				rejectType:        RejectServiceRemoteToLocal,
+				rejectType:        rejectServiceRemoteToLocal,
 				nodeType:          config.K8sNode,
 				isFlexibleIPAMSrc: false,
 				isFlexibleIPAMDst: true,
@@ -483,7 +483,7 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 		{
 			name: "Default",
 			args: args{
-				rejectType:        RejectServiceRemoteToLocal,
+				rejectType:        rejectServiceRemoteToLocal,
 				nodeType:          config.K8sNode,
 				isFlexibleIPAMSrc: false,
 				isFlexibleIPAMDst: false,

@@ -27,47 +27,47 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-type RejectType int
+type rejectType int
 
 const (
-	// RejectPodLocal represents this packetOut is used to reject Pod-to-Pod traffic
+	// rejectPodLocal represents this packetOut is used to reject Pod-to-Pod traffic
 	// and for this response, the srcPod and the dstPod are on the same Node.
-	RejectPodLocal RejectType = iota
-	// RejectPodRemoteToLocal represents this packetOut is used to reject Pod-to-Pod
+	rejectPodLocal rejectType = iota
+	// rejectPodRemoteToLocal represents this packetOut is used to reject Pod-to-Pod
 	// traffic and for this response, the srcPod is on a remote Node and the dstPod is
 	// on the local Node.
-	RejectPodRemoteToLocal
-	// RejectPodLocalToRemote represents this packetOut is used to reject Pod-to-Pod
+	rejectPodRemoteToLocal
+	// rejectPodLocalToRemote represents this packetOut is used to reject Pod-to-Pod
 	// traffic and for this response, the srcPod is on the local Node and the dstPod is
 	// on a remote Node.
-	RejectPodLocalToRemote
-	// RejectServiceLocal represents this packetOut is used to reject Service traffic,
+	rejectPodLocalToRemote
+	// rejectServiceLocal represents this packetOut is used to reject Service traffic,
 	// when AntreaProxy is enabled. The EndpointPod and the dstPod of the reject
 	// response are on the same Node.
-	RejectServiceLocal
-	// RejectServiceRemoteToLocal represents this packetOut is used to reject Service
+	rejectServiceLocal
+	// rejectServiceRemoteToLocal represents this packetOut is used to reject Service
 	// traffic, when AntreaProxy is enabled. The EndpointPod is on a remote Node and
 	// the dstPod of the reject response is on the local Node.
-	RejectServiceRemoteToLocal
-	// RejectServiceLocalToRemote represents this packetOut is used to reject Service
+	rejectServiceRemoteToLocal
+	// rejectServiceLocalToRemote represents this packetOut is used to reject Service
 	// traffic, when AntreaProxy is enabled. The EndpointPod is on the local Node and
 	// the dstPod of the reject response is on a remote Node.
-	RejectServiceLocalToRemote
-	// RejectNoAPServiceLocal represents this packetOut is used to reject Service
+	rejectServiceLocalToRemote
+	// rejectNoAPServiceLocal represents this packetOut is used to reject Service
 	// traffic, when AntreaProxy is disabled. The EndpointPod and the dstPod of the
 	// reject response are on the same Node.
-	RejectNoAPServiceLocal
-	// RejectNoAPServiceRemoteToLocal represents this packetOut is used to reject
+	rejectNoAPServiceLocal
+	// rejectNoAPServiceRemoteToLocal represents this packetOut is used to reject
 	// Service traffic, when AntreaProxy is disabled. The EndpointPod is on a remote
 	// Node and the dstPod of the reject response is on the local Node.
-	RejectNoAPServiceRemoteToLocal
-	// RejectServiceRemoteToExternal represents this packetOut is used to reject
+	rejectNoAPServiceRemoteToLocal
+	// rejectServiceRemoteToExternal represents this packetOut is used to reject
 	// Service traffic, when AntreaProxy is enabled. The EndpointPod is on a remote
 	// Node and the destination of the reject response is an external client.
-	RejectServiceRemoteToExternal
-	// Unsupported indicates that Antrea couldn't generate packetOut for current
+	rejectServiceRemoteToExternal
+	// unsupported indicates that Antrea couldn't generate packetOut for current
 	// packetIn.
-	Unsupported
+	unsupported
 )
 
 // rejectRequest sends reject response to the requesting client, based on the
@@ -154,10 +154,10 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		return dstIsLocal && dstMAC == gwIfaces[0].MAC.String()
 	}
 	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcIsLocal, dstIsDirect)
-	if packetOutType == Unsupported {
+	if packetOutType == unsupported {
 		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
 	}
-	if packetOutType == RejectServiceRemoteToExternal {
+	if packetOutType == rejectServiceRemoteToExternal {
 		dstMAC = openflow.GlobalVirtualMAC.String()
 	}
 	// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
@@ -166,7 +166,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	// L3ForwardingTable. So we need to re-write MAC here. There is no need to check
 	// whether AntreaIPAM mode is enabled. Because if AntreaIPAM mode is disabled,
 	// this re-write doesn't change anything.
-	if packetOutType == RejectPodLocal {
+	if packetOutType == rejectPodLocal {
 		srcMAC = sIface.MAC.String()
 		dstMAC = dIface.MAC.String()
 	}
@@ -187,76 +187,76 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		mutateFunc)
 }
 
-// getRejectType returns RejectType of a rejection.
-func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal bool) RejectType {
+// getRejectType returns rejectType of a rejection.
+func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal bool) rejectType {
 	if !isServiceTraffic {
 		if srcIsLocal {
 			if dstIsLocal {
-				return RejectPodLocal
+				return rejectPodLocal
 			}
-			return RejectPodLocalToRemote
+			return rejectPodLocalToRemote
 		}
 		if dstIsLocal {
-			return RejectPodRemoteToLocal
+			return rejectPodRemoteToLocal
 		}
-		return Unsupported
+		return unsupported
 	}
 	if !antreaProxyEnabled {
 		if srcIsLocal {
-			return RejectNoAPServiceLocal
+			return rejectNoAPServiceLocal
 		}
 		if dstIsLocal {
-			return RejectNoAPServiceRemoteToLocal
+			return rejectNoAPServiceRemoteToLocal
 		}
-		return Unsupported
+		return unsupported
 	}
 	if srcIsLocal {
 		if dstIsLocal {
-			return RejectServiceLocal
+			return rejectServiceLocal
 		}
-		return RejectServiceLocalToRemote
+		return rejectServiceLocalToRemote
 	}
 	if dstIsLocal {
-		return RejectServiceRemoteToLocal
+		return rejectServiceRemoteToLocal
 	}
-	return RejectServiceRemoteToExternal
+	return rejectServiceRemoteToExternal
 }
 
-// getRejectOFPorts returns the inPort and outPort of a packetOut based on the RejectType.
-func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.InterfaceConfig, gwOFPort, tunOFPort uint32) (uint32, uint32) {
+// getRejectOFPorts returns the inPort and outPort of a packetOut based on the rejectType.
+func getRejectOFPorts(rejectType rejectType, sIface, dIface *interfacestore.InterfaceConfig, gwOFPort, tunOFPort uint32) (uint32, uint32) {
 	inPort := gwOFPort
 	outPort := uint32(0)
 	switch rejectType {
-	case RejectPodLocal:
+	case rejectPodLocal:
 		inPort = uint32(sIface.OFPort)
 		outPort = uint32(dIface.OFPort)
-	case RejectServiceLocal:
+	case rejectServiceLocal:
 		fallthrough
-	case RejectServiceLocalToRemote:
-		// For RejectServiceLocal and RejectServiceLocalToRemote, we set inPort as the
+	case rejectServiceLocalToRemote:
+		// For rejectServiceLocal and rejectServiceLocalToRemote, we set inPort as the
 		// OFPort of the srcPod to simulate its rejection. And we don't set outPort, since
 		// it's Service traffic load-balanced by AntreaProxy. The reject response packet
 		// needs to be UnDNATed by the pipeline, instead of directly sending it out
 		// through outPort.
 		inPort = uint32(sIface.OFPort)
-	case RejectPodRemoteToLocal:
+	case rejectPodRemoteToLocal:
 		if dIface.Type == interfacestore.ExternalEntityInterface {
 			inPort = uint32(dIface.EntityInterfaceConfig.UplinkPort.OFPort)
 		} else {
 			inPort = gwOFPort
 		}
 		outPort = uint32(dIface.OFPort)
-	case RejectServiceRemoteToLocal:
+	case rejectServiceRemoteToLocal:
 		inPort = gwOFPort
-	case RejectPodLocalToRemote:
+	case rejectPodLocalToRemote:
 		inPort = uint32(sIface.OFPort)
 		if sIface.Type == interfacestore.ExternalEntityInterface {
 			outPort = uint32(sIface.EntityInterfaceConfig.UplinkPort.OFPort)
 		}
-	case RejectNoAPServiceLocal:
+	case rejectNoAPServiceLocal:
 		inPort = uint32(sIface.OFPort)
 		outPort = gwOFPort
-	case RejectNoAPServiceRemoteToLocal:
+	case rejectNoAPServiceRemoteToLocal:
 		inPort = tunOFPort
 		if inPort == 0 {
 			// If tunnel interface is not found, which means we are in noEncap mode, then use
@@ -264,7 +264,7 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 			inPort = gwOFPort
 		}
 		outPort = gwOFPort
-	case RejectServiceRemoteToExternal:
+	case rejectServiceRemoteToExternal:
 		inPort = tunOFPort
 		if inPort == 0 {
 			// If tunnel interface is not found, which means we are in noEncap mode, then use
@@ -275,14 +275,14 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	return inPort, outPort
 }
 
-// getRejectPacketOutMutateFunc returns the mutate func of a packetOut based on the RejectType.
-func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst bool, ctZone uint32) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
+// getRejectPacketOutMutateFunc returns the mutate func of a packetOut based on the rejectType.
+func getRejectPacketOutMutateFunc(rejectType rejectType, nodeType config.NodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst bool, ctZone uint32) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
 	var mutatePacketOut func(binding.PacketOutBuilder) binding.PacketOutBuilder
 	mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 		return packetOutBuilder.AddLoadRegMark(openflow.GeneratedRejectPacketOutRegMark)
 	}
 	switch rejectType {
-	case RejectServiceLocal:
+	case rejectServiceLocal:
 		tableID := openflow.ConntrackTable.GetID()
 		if isFlexibleIPAMSrc {
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
@@ -297,7 +297,7 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 					AddResubmitAction(nil, &tableID)
 			}
 		}
-	case RejectPodLocalToRemote:
+	case rejectPodLocalToRemote:
 		tableID := openflow.L3ForwardingTable.GetID()
 		// L3ForwardingTable is not initialized for ExternalNode case since layer 3 is not needed.
 		if nodeType == config.ExternalNode {
@@ -316,7 +316,7 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 					AddResubmitAction(nil, &tableID)
 			}
 		}
-	case RejectServiceRemoteToLocal:
+	case rejectServiceRemoteToLocal:
 		if isFlexibleIPAMDst {
 			tableID := openflow.ConntrackTable.GetID()
 			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
