@@ -176,3 +176,56 @@ func TestGcContainerIPs(t *testing.T) {
 	runTests(t, false)
 	runTests(t, true)
 }
+
+// TestGarbageCollectContainerIPs tests some edge cases and logic that depends on the real OS
+// filesystem. The actual GC logic is tested by TestGcContainerIPs.
+func TestGarbageCollectContainerIPs(t *testing.T) {
+	ips := sets.New[string]()
+	tempDir, err := os.MkdirTemp("", "test-networks")
+	require.NoError(t, err)
+	savedDir := dataDir
+	defer func() {
+		dataDir = savedDir
+	}()
+	dataDir = tempDir
+	defer os.RemoveAll(tempDir)
+
+	idx := 0
+	networkName := func() string {
+		idx++
+		return fmt.Sprintf("net%d", idx)
+	}
+
+	lockFile := func(network string) string {
+		return filepath.Join(tempDir, network, "lock")
+	}
+
+	t.Run("missing directory", func(t *testing.T) {
+		network := networkName()
+		// there is no directory in tempDir for the "antrea" network
+		// we don't expect an error, and the lock file should not be created
+		require.NoError(t, GarbageCollectContainerIPs(network, ips))
+		assert.NoFileExists(t, lockFile(network))
+	})
+
+	t.Run("not a directory", func(t *testing.T) {
+		network := networkName()
+		netDir := filepath.Join(tempDir, network)
+		// create a file instead of a directory: GarbageCollectContainerIPs should return an
+		// error
+		_, err := os.Create(netDir)
+		require.NoError(t, err)
+		defer os.Remove(netDir)
+		assert.ErrorContains(t, GarbageCollectContainerIPs(network, ips), "not a directory")
+	})
+
+	t.Run("lock file created", func(t *testing.T) {
+		network := networkName()
+		netDir := filepath.Join(tempDir, network)
+		require.NoError(t, os.Mkdir(netDir, 0o755))
+		defer os.RemoveAll(netDir)
+		// make sure that the lock file is created in the right place
+		require.NoError(t, GarbageCollectContainerIPs(network, ips))
+		assert.FileExists(t, lockFile(network))
+	})
+}

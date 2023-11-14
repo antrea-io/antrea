@@ -22,12 +22,14 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 	"github.com/spf13/afero"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 )
 
-const dataDir = "/var/lib/cni/networks"
+// dataDir is a variable so it can be overridden by tests if needed
+var dataDir = "/var/lib/cni/networks"
 
 func networkDir(network string) string {
 	return filepath.Join(dataDir, network)
@@ -48,7 +50,7 @@ func GarbageCollectContainerIPs(network string, desiredIPs sets.Set[string]) err
 		return fmt.Errorf("path '%s' is not a directory: %w", dir, err)
 	}
 
-	lk, err := NewFileLock(dataDir)
+	lk, err := disk.NewFileLock(dir)
 	if err != nil {
 		return err
 	}
@@ -75,33 +77,32 @@ func gcContainerIPs(fs afero.Fs, dir string, desiredIPs sets.Set[string]) error 
 		return fmt.Errorf("error when gathering IP filenames in the host-local data directory: %w", err)
 	}
 
-	allocatedIPs := sets.New[string]()
+	hasRemovalError := false
 	for _, p := range paths {
 		ip := getIPFromPath(p)
 		if net.ParseIP(ip) == nil {
 			// not a valid IP, nothing to do
 			continue
 		}
-		allocatedIPs.Insert(ip)
 		if desiredIPs.Has(ip) {
 			// IP is in-use
 			continue
 		}
 		if err := fs.Remove(p); err != nil {
 			klog.ErrorS(err, "Failed to release unused IP from host-local IPAM plugin", "IP", ip)
+			hasRemovalError = true
 			continue
 		}
-		allocatedIPs.Delete(ip)
 		klog.InfoS("Unused IP was successfully released from host-local IPAM plugin", "IP", ip)
 	}
 
-	if allocatedIPs.Difference(desiredIPs).Len() > 0 {
+	if hasRemovalError {
 		return fmt.Errorf("not all unused IPs could be released from host-local IPAM plugin, some IPs may be leaked")
 	}
 
-	// Note that it is perfectly possible for some IPs to be in desiredIPs but not in
-	// allocatedIPs. This can be the case when another IPAM plugin (e.g., AntreaIPAM) is also
-	// used.
+	// Note that it is perfectly possible for some IPs to be in desiredIPs but not in the
+	// host-local data directory. This can be the case when another IPAM plugin (e.g.,
+	// AntreaIPAM) is also used.
 
 	return nil
 }

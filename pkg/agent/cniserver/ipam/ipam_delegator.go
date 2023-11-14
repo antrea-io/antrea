@@ -88,11 +88,11 @@ func (d *IPAMDelegator) Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, netw
 	return true, nil
 }
 
-// GarbageCollectContainerIPs will IPs allocated by the delegated IPAM plugin
-// that are no longer in-use (if there is any). It should be called on an agent
-// restart to provide garbage collection for IPs, and to avoid IP leakage in
-// case of missed CNI DEL events. Normally, it is not Antrea's responsibility to
-// implement this, as the above layers should ensure that there is always one
+// GarbageCollectContainerIPs will release IPs allocated by the delegated IPAM
+// plugin that are no longer in-use (if there is any). It should be called on an
+// agent restart to provide garbage collection for IPs, and to avoid IP leakage
+// in case of missed CNI DEL events. Normally, it is not Antrea's responsibility
+// to implement this, as the above layers should ensure that there is always one
 // successful CNI DEL for every corresponding CNI ADD. However, we include this
 // support to increase robustness in case of a container runtime bug.
 // Only the host-local plugin is supported.
