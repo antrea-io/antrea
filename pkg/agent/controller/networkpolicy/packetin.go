@@ -107,6 +107,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return fmt.Errorf("error in parsing packetIn: %v", err)
 	}
+	matchers := pktIn.GetMatches()
 
 	// Get 5-tuple information
 	tuple := flowexporter.Tuple{
@@ -125,6 +126,15 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	denyConn.FlowKey = tuple
 	denyConn.DestinationServiceAddress = tuple.DestinationAddress
 	denyConn.DestinationServicePort = tuple.DestinationPort
+	denyConn.Mark = getCTMarkValue(matchers)
+	dstSvcAddress := getCTNwDstValue(matchers)
+	dstSvcPort := getCTTpDstValue(matchers)
+	if dstSvcAddress != nil {
+		denyConn.DestinationServiceAddress = dstSvcAddress
+	}
+	if dstSvcPort != 0 {
+		denyConn.DestinationServicePort = dstSvcPort
+	}
 
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
 	if conn, exist := c.denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&denyConn)); exist {
@@ -132,7 +142,6 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		return nil
 	}
 
-	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table ID
 	tableID := getPacketInTableID(pktIn)
@@ -223,4 +232,46 @@ func getPacketInTableID(pktIn *ofctrl.PacketIn) uint8 {
 		}
 	}
 	return tableID
+}
+
+func getCTMarkValue(matchers *ofctrl.Matchers) uint32 {
+	ctMark := matchers.GetMatchByName("NXM_NX_CT_MARK")
+	if ctMark == nil {
+		return 0
+	}
+	ctMarkValue, ok := ctMark.GetValue().(uint32)
+	if !ok {
+		return 0
+	}
+	return ctMarkValue
+}
+
+func getCTNwDstValue(matchers *ofctrl.Matchers) net.IP {
+	nwDst := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
+	if nwDst != nil {
+		nwDstValue, ok := nwDst.GetValue().(net.IP)
+		if ok {
+			return nwDstValue
+		}
+	}
+	nwDst = matchers.GetMatchByName("NXM_NX_CT_IPV6_DST")
+	if nwDst != nil {
+		nwDstValue, ok := nwDst.GetValue().(net.IP)
+		if ok {
+			return nwDstValue
+		}
+	}
+	return nil
+}
+
+func getCTTpDstValue(matchers *ofctrl.Matchers) uint16 {
+	port := matchers.GetMatchByName("NXM_NX_CT_TP_DST")
+	if port == nil {
+		return 0
+	}
+	portValue, ok := port.GetValue().(uint16)
+	if !ok {
+		return 0
+	}
+	return portValue
 }
