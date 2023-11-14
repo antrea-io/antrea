@@ -24,8 +24,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-const iperfPort = 5201
-
 // TestBandwidth is the top-level test which contains all subtests for
 // Bandwidth related test cases so they can share setup, teardown.
 func TestBandwidth(t *testing.T) {
