@@ -82,6 +82,7 @@ func TestNetworkPolicy(t *testing.T) {
 		testIngressPolicyWithEndPort(t, data)
 	})
 	t.Run("testAllowHairpinService", func(t *testing.T) {
+		skipIfProxyDisabled(t)
 		testAllowHairpinService(t, data)
 	})
 }
