@@ -1777,3 +1777,10 @@ Similar RBAC is applied to the ClusterGroup resource.
 - NetworkPolicies are connection/flow oriented and stateful. They apply to
   connections, instead of individual packets, which means established connections
   won't be blocked by new rules.
+- For hairpin service traffic, when a Pod initiates traffic towards the service it provides,
+  and the same Pod is selected as the Endpoint, NetworkPolicies will consistently permit
+  this traffic during ingress enforcement if AntreaProxy is enabled. However, when AntreaProxy
+  is disabled, NetworkPolicies may not function as expected for hairpin service traffic.
+  This is due to kube-proxy performing SNAT, which conceals the original source IP from Antrea.
+  Consequently, NetworkPolicies are unable to differentiate between hairpin service traffic and
+  external traffic in this scenario.
