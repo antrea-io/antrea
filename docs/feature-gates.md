@@ -173,7 +173,7 @@ This feature is currently only supported for Nodes running Linux. Windows suppor
 Stats API, which can be accessed by kubectl get commands, e.g. `kubectl get networkpolicystats`. The statistical data
 includes total number of sessions, packets, and bytes allowed or denied by a NetworkPolicy. It is collected
 asynchronously so there may be a delay of up to 1 minute for changes to be reflected in API responses. The feature
-supports K8s NetworkPolicies and Antrea native policies, the latter of which requires
+supports K8s NetworkPolicies and Antrea-native policies, the latter of which requires
 `AntreaPolicy` to be enabled. Usage examples:
 
 ```bash

@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 
@@ -104,6 +105,9 @@ type resourceEndpoint struct {
 	resourceName         string
 	namespaced           bool
 	supportSorting       bool
+	params               []flagInfo
+	parameterTransform   func(args map[string]string) (k8sruntime.Object, error)
+	restMethod           restMethod
 }
 
 func (e *resourceEndpoint) OutputType() OutputType {
@@ -134,6 +138,7 @@ func (e *resourceEndpoint) flags() []flagInfo {
 	if e.supportSorting {
 		flags = append(flags, getSortByFlag())
 	}
+	flags = append(flags, e.params...)
 	return flags
 }
 
@@ -144,6 +149,13 @@ func getSortByFlag() flagInfo {
 		usage:        "Get resources in specific order.",
 	}
 }
+
+type restMethod uint
+
+const (
+	restGet restMethod = iota
+	restPost
+)
 
 type nonResourceEndpoint struct {
 	path       string
@@ -434,6 +446,7 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 			if cd.controllerEndpoint.nonResourceEndpoint != nil && cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
 				return output.TableOutputForQueryEndpoint(obj, writer)
 			}
+			return output.TableOutputForGetCommands(obj, writer)
 		} else {
 			return output.TableOutput(obj, writer)
 		}
@@ -442,7 +455,6 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	default:
 		return fmt.Errorf("unsupported format type: %v", ft)
 	}
-	return nil
 }
 
 func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (map[string]string, error) {

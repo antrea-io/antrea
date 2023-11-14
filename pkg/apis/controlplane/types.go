@@ -448,6 +448,42 @@ type NetworkPolicyNodeStatus struct {
 	Message string
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
+type NetworkPolicyEvaluation struct {
+	metav1.TypeMeta
+	Request  *NetworkPolicyEvaluationRequest
+	Response *NetworkPolicyEvaluationResponse
+}
+
+// Entity contains Namespace and Pod name as a request parameter.
+type Entity struct {
+	Pod *PodReference
+}
+
+// NetworkPolicyEvaluationRequest is the request body of NetworkPolicy evaluation.
+type NetworkPolicyEvaluationRequest struct {
+	Source      Entity
+	Destination Entity
+}
+
+// RuleRef contains basic information for the rule.
+type RuleRef struct {
+	Direction Direction
+	Name      string
+	Action    *crdv1beta1.RuleAction
+}
+
+// NetworkPolicyEvaluationResponse is the response of NetworkPolicy evaluation.
+type NetworkPolicyEvaluationResponse struct {
+	// The reference of the effective NetworkPolicy.
+	NetworkPolicy NetworkPolicyReference
+	RuleIndex     int32
+	// The content of the effective rule.
+	Rule RuleRef
+}
+
 type GroupReference struct {
 	// Namespace of the Group. Empty for ClusterGroup.
 	Namespace string

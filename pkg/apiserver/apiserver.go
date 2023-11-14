@@ -52,6 +52,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/groupmember"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/ipgroupassociation"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicyevaluation"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/multicastgroup"
@@ -200,6 +201,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
+	networkPolicyEvaluationStorage := networkpolicyevaluation.NewREST(controllernetworkpolicy.NewPolicyRuleQuerier(c.extraConfig.endpointQuerier))
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupMembershipStorage := groupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
@@ -214,6 +216,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
 	cpv1beta2Storage["networkpolicies"] = networkPolicyStorage
 	cpv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
+	cpv1beta2Storage["networkpolicyevaluation"] = networkPolicyEvaluationStorage
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
 	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
 	cpv1beta2Storage["ipgroupassociations"] = ipGroupAssociationStorage

@@ -44,6 +44,11 @@ var (
 		Version:  SchemeGroupVersion.Version,
 		Resource: "groups",
 	}
+	NetworkPolicyEvaluationVersionResource = schema.GroupVersionResource{
+		Group:    SchemeGroupVersion.Group,
+		Version:  SchemeGroupVersion.Version,
+		Resource: "networkpolicyevaluation",
+	}
 )
 
 // Resource takes an unqualified resource and returns a Group qualified GroupResource.
@@ -69,6 +74,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
 		&NetworkPolicyStatus{},
+		&NetworkPolicyEvaluation{},
 		&NodeStatsSummary{},
 		&ClusterGroupMembers{},
 		&GroupMembers{},

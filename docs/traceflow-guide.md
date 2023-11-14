@@ -140,7 +140,7 @@ will fail. But you can specify a different timeout value, by adding
 `timeout: <value-in-seconds>` to the Traceflow `spec`.
 
 In some cases, it might be useful to capture the packets dropped by
-NetworkPolicies (inc. K8s NetworkPolicies or Antrea native policies). You can
+NetworkPolicies (inc. K8s NetworkPolicies or Antrea-native policies). You can
 add `droppedOnly: true` to the live-traffic Traceflow `spec`, then the first
 packet that matches the Traceflow spec and is dropped by a NetworkPolicy will
 be captured and traced.

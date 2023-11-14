@@ -25,6 +25,7 @@ running in three different modes:
   - [controllerinfo and agentinfo commands](#controllerinfo-and-agentinfo-commands)
   - [NetworkPolicy commands](#networkpolicy-commands)
     - [Mapping endpoints to NetworkPolicies](#mapping-endpoints-to-networkpolicies)
+    - [Evaluating expected NetworkPolicy behavior](#evaluating-expected-networkpolicy-behavior)
   - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
@@ -262,6 +263,20 @@ Namespace.
 
 This command only works in "controller mode" and **as of now it can only be run
 from inside the Antrea Controller Pod, and not from out-of-cluster**.
+
+#### Evaluating expected NetworkPolicy behavior
+
+`antctl` supports evaluating all the existing Antrea-native NetworkPolicies,
+Kubernetes NetworkPolicies and AdminNetworkPolicies to predict the effective
+policy rule for traffic between source and destination Pods.
+
+```bash
+antctl query networkpolicyevaluation -S NAMESPACE/POD -D NAMESPACE/POD
+```
+
+If only Pod name is provided, the command will default to the "default" Namespace.
+
+This command only works in "controller mode".
 
 ### Dumping Pod network interface information
 

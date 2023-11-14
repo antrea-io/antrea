@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"encoding/json"
 	"io"
 	"reflect"
 	"sort"
@@ -159,5 +160,40 @@ func (r Response) GetTableRow(maxColumnLength int) []string {
 }
 
 func (r Response) SortRows() bool {
+	return false
+}
+
+type EvaluationResponse struct {
+	*cpv1beta.NetworkPolicyEvaluation
+}
+
+func EvaluationTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
+	var eval cpv1beta.NetworkPolicyEvaluation
+	if err := json.NewDecoder(reader).Decode(&eval); err != nil {
+		return nil, err
+	}
+	return EvaluationResponse{&eval}, nil
+}
+
+var _ common.TableOutput = new(EvaluationResponse)
+
+func (r EvaluationResponse) GetTableHeader() []string {
+	return []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION"}
+}
+
+func (r EvaluationResponse) GetTableRow(_ int) []string {
+	if r.NetworkPolicyEvaluation != nil && r.Response != nil {
+		return []string{
+			r.Response.NetworkPolicy.Name,
+			r.Response.NetworkPolicy.Namespace,
+			string(r.Response.NetworkPolicy.Type),
+			common.Int32ToString(r.Response.RuleIndex),
+			string(r.Response.Rule.Direction),
+		}
+	}
+	return make([]string, 5)
+}
+
+func (r EvaluationResponse) SortRows() bool {
 	return false
 }

@@ -130,3 +130,20 @@ func TestListTransform(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluationResponseTransform(t *testing.T) {
+	test := EvaluationResponse{&cpv1beta.NetworkPolicyEvaluation{}}
+	assert.Equal(t, []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION"}, test.GetTableHeader())
+	assert.False(t, test.SortRows())
+	assert.Equal(t, []string{"", "", "", "", ""}, test.GetTableRow(32))
+	test.Response = &cpv1beta.NetworkPolicyEvaluationResponse{
+		NetworkPolicy: cpv1beta.NetworkPolicyReference{
+			Type:      cpv1beta.K8sNetworkPolicy,
+			Namespace: "ns",
+			Name:      "testName",
+		},
+		RuleIndex: 10,
+		Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
+	}
+	assert.Equal(t, []string{"testName", "ns", "K8sNetworkPolicy", "10", "In"}, test.GetTableRow(32))
+}

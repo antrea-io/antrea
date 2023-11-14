@@ -110,13 +110,15 @@ func TestSinglePolicyResponse(t *testing.T) {
 			},
 			argsMock: []string{namespace, pod},
 			mockQueryResponse: &antreatypes.EndpointNetworkPolicyRules{
-				AppliedPolicies: []*controlplane.NetworkPolicyReference{
-					{Name: "policy1"},
+				AppliedPolicies: []*antreatypes.NetworkPolicy{
+					{SourceRef: &controlplane.NetworkPolicyReference{Name: "policy1"}},
 				},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
 					{
-						Policy: &controlplane.NetworkPolicyReference{Name: "policy2"},
-						Index:  0,
+						Policy: &antreatypes.NetworkPolicy{
+							SourceRef: &controlplane.NetworkPolicyReference{Name: "policy2"},
+						},
+						Index: 0,
 						Rule: &controlplane.NetworkPolicyRule{
 							Direction: controlplane.DirectionIn,
 						},
@@ -151,8 +153,9 @@ func TestMultiPolicyResponse(t *testing.T) {
 			},
 			argsMock: []string{namespace, pod},
 			mockQueryResponse: &antreatypes.EndpointNetworkPolicyRules{
-				AppliedPolicies: []*controlplane.NetworkPolicyReference{
-					{Name: "policy1"}, {Name: "policy2"},
+				AppliedPolicies: []*antreatypes.NetworkPolicy{
+					{SourceRef: &controlplane.NetworkPolicyReference{Name: "policy1"}},
+					{SourceRef: &controlplane.NetworkPolicyReference{Name: "policy2"}},
 				},
 			},
 		},

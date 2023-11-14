@@ -24,6 +24,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
+	"antrea.io/antrea/pkg/antctl/parameter"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
@@ -511,6 +512,37 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 			transformedResponse: reflect.TypeOf(endpointserver.EndpointQueryResponse{}),
+		},
+		{
+			use:     "networkpolicyevaluation",
+			aliases: []string{"networkpoliciesevaluation", "networkpolicyeval", "networkpolicieseval", "netpoleval"},
+			short:   "Analyze effective NetworkPolicy rules.",
+			long:    "Analyze network policies in the cluster and return the rule expected to be effective on the source and destination endpoints provided.",
+			example: `  Query effective NetworkPolicy rule between two Pods
+  $ antctl query networkpolicyevaluation -S ns1/pod1 -D ns2/pod2
+`,
+			commandGroup: query,
+			controllerEndpoint: &endpoint{
+				resourceEndpoint: &resourceEndpoint{
+					groupVersionResource: &cpv1beta.NetworkPolicyEvaluationVersionResource,
+					params: []flagInfo{
+						{
+							name:      "source",
+							usage:     "Source endpoint, specified by <Namespace>/<name>.",
+							shorthand: "S",
+						},
+						{
+							name:      "destination",
+							usage:     "Destination endpoint, specified by <Namespace>/<name>.",
+							shorthand: "D",
+						},
+					},
+					parameterTransform: parameter.NewNetworkPolicyEvaluation,
+					restMethod:         restPost,
+				},
+				addonTransform: networkpolicy.EvaluationTransform,
+			},
+			transformedResponse: reflect.TypeOf(networkpolicy.EvaluationResponse{}),
 		},
 		{
 			use:   "flowrecords",
