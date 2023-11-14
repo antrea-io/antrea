@@ -200,18 +200,18 @@ func getNewConn() *flowexporter.Connection {
 	}
 	flowKey := flowexporter.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(randomNum1), DestinationPort: uint16(randomNum2)}
 	return &flowexporter.Connection{
-		StartTime:                 time.Now().Add(-time.Duration(randomNum1) * time.Second),
-		StopTime:                  time.Now(),
-		IsPresent:                 true,
-		ReadyToDelete:             false,
-		FlowKey:                   flowKey,
-		OriginalPackets:           10,
-		OriginalBytes:             100,
-		ReversePackets:            5,
-		ReverseBytes:              50,
-		DestinationServiceAddress: svc,
-		DestinationServicePort:    30000,
-		TCPState:                  "SYN_SENT",
+		StartTime:                  time.Now().Add(-time.Duration(randomNum1) * time.Second),
+		StopTime:                   time.Now(),
+		IsPresent:                  true,
+		ReadyToDelete:              false,
+		FlowKey:                    flowKey,
+		OriginalPackets:            10,
+		OriginalBytes:              100,
+		ReversePackets:             5,
+		ReverseBytes:               50,
+		OriginalDestinationAddress: svc,
+		OriginalDestinationPort:    30000,
+		TCPState:                   "SYN_SENT",
 	}
 }
 

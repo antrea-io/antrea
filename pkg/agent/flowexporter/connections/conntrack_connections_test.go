@@ -242,7 +242,7 @@ func testAddNewConn(mockPodStore *podstoretest.MockInterface, mockProxier *proxy
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 
 	protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
-	serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress.String(), conn.DestinationServicePort, protocol)
+	serviceStr := fmt.Sprintf("%s:%d/%s", conn.OriginalDestinationAddress.String(), conn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 
 	ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])

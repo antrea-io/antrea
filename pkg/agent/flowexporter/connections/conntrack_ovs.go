@@ -165,9 +165,9 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			if !isReply {
 				svcAddr, err := netip.ParseAddr(fields[len(fields)-1])
 				if err != nil {
-					return nil, fmt.Errorf("parsing destination service address failed: %w", err)
+					return nil, fmt.Errorf("parsing original destination address failed: %w", err)
 				}
-				conn.DestinationServiceAddress = svcAddr
+				conn.OriginalDestinationAddress = svcAddr
 			}
 		case strings.Contains(fs, "sport"):
 			fields := strings.Split(fs, "=")
@@ -189,7 +189,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 				return nil, fmt.Errorf("conversion of dport %s to int failed: %v", fields[len(fields)-1], err)
 			}
 			if !isReply {
-				conn.DestinationServicePort = uint16(val)
+				conn.OriginalDestinationPort = uint16(val)
 			}
 		case strings.Contains(fs, "packets"):
 			fields := strings.Split(fs, "=")
