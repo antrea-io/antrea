@@ -93,6 +93,7 @@ func TestNetworkPolicy(t *testing.T) {
 	})
 	t.Run("testAllowHairpinService", func(t *testing.T) {
 		t.Cleanup(exportLogsForSubtest(t, data))
+		skipIfProxyDisabled(t)
 		testAllowHairpinService(t, data)
 	})
 }
