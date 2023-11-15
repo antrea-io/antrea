@@ -77,6 +77,7 @@ import (
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/lazy"
 	"antrea.io/antrea/pkg/util/podstore"
 	"antrea.io/antrea/pkg/version"
 )
@@ -323,23 +324,19 @@ func run(o *Options) error {
 		externalEntityUpdateChannel = channel.NewSubscribableChannel("ExternalEntityUpdate", 100)
 	}
 
-	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
-	// StretchedNetworkPolicyController, and secondary network controller.
-	var localPodInformer cache.SharedIndexInformer
-	if o.enableNodePortLocal || enableBridgingMode || enableMulticlusterNP || enableFlowExporter ||
-		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
-		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
+	// Lazily initialize localPodInformer when it's required by any module.
+	localPodInformer := lazy.New(func() cache.SharedIndexInformer {
 		listOptions := func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
 		}
-		localPodInformer = coreinformers.NewFilteredPodInformer(
+		return coreinformers.NewFilteredPodInformer(
 			k8sClient,
 			metav1.NamespaceAll,
 			resyncPeriodDisabled,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
 			listOptions,
 		)
-	}
+	})
 
 	var mcDefaultRouteController *mcroute.MCDefaultRouteController
 	var mcStrechedNetworkPolicyController *mcroute.StretchedNetworkPolicyController
@@ -383,7 +380,7 @@ func run(o *Options) error {
 		mcStrechedNetworkPolicyController = mcroute.NewMCAgentStretchedNetworkPolicyController(
 			ofClient,
 			ifaceStore,
-			localPodInformer,
+			localPodInformer.Get(),
 			namespaceInformer,
 			labelIDInformer,
 			podUpdateChannel,
@@ -622,7 +619,7 @@ func run(o *Options) error {
 
 	var flowExporter *exporter.FlowExporter
 	if enableFlowExporter {
-		podStore := podstore.NewPodStore(localPodInformer)
+		podStore := podstore.NewPodStore(localPodInformer.Get())
 		flowExporterOptions := &flowexporter.FlowExporterOptions{
 			FlowCollectorAddr:      o.flowCollectorAddr,
 			FlowCollectorProto:     o.flowCollectorProto,
@@ -677,7 +674,7 @@ func run(o *Options) error {
 		nplController, err := npl.InitializeNPLAgent(
 			k8sClient,
 			serviceInformer,
-			localPodInformer,
+			localPodInformer.Get(),
 			o.nplStartPort,
 			o.nplEndPort,
 			nodeConfig.Name,
@@ -691,7 +688,7 @@ func run(o *Options) error {
 	// Antrea IPAM is needed by bridging mode and secondary network IPAM.
 	if enableAntreaIPAM {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
-			crdClient, namespaceInformer, ipPoolInformer, localPodInformer, enableBridgingMode)
+			crdClient, namespaceInformer, ipPoolInformer, localPodInformer.Get(), enableBridgingMode)
 		if err != nil {
 			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
 		}
@@ -701,7 +698,7 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		if err := secondarynetwork.Initialize(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
-			k8sClient, localPodInformer, nodeConfig.Name, cniPodInfoStore,
+			k8sClient, localPodInformer.Get(), nodeConfig.Name, cniPodInfoStore,
 			stopCh,
 			&o.config.SecondaryNetwork, ovsdbConnection); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
@@ -714,15 +711,15 @@ func run(o *Options) error {
 			ovsBridgeClient,
 			ovsCtlClient,
 			trafficControlInformer,
-			localPodInformer,
+			localPodInformer.Get(),
 			namespaceInformer,
 			podUpdateChannel)
 		go tcController.Run(stopCh)
 	}
 
 	//  Start the localPodInformer
-	if localPodInformer != nil {
-		go localPodInformer.Run(stopCh)
+	if localPodInformer.Evaluated() {
+		go localPodInformer.Get().Run(stopCh)
 	}
 
 	informerFactory.Start(stopCh)
