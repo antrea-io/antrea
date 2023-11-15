@@ -260,8 +260,8 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 			return
 		}
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
-			clusterIP := conn.DestinationServiceAddress.String()
-			svcPort := conn.DestinationServicePort
+			clusterIP := conn.OriginalDestinationAddress.String()
+			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 			if err != nil {
 				klog.InfoS("Could not retrieve Service protocol", "error", err)

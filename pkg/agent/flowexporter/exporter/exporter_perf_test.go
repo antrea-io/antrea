@@ -273,7 +273,7 @@ func addConns(connStore *connections.ConntrackConnectionStore, expirePriorityQue
 			DestinationPodNamespace:    "ns2",
 			DestinationPodName:         "pod2",
 			DestinationServicePortName: "service",
-			DestinationServiceAddress:  svc,
+			OriginalDestinationAddress: svc,
 			TCPState:                   "SYN_SENT",
 		}
 		connKey := flowexporter.NewConnectionKey(conn)
