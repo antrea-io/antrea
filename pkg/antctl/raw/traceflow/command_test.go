@@ -31,7 +31,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
@@ -112,19 +112,19 @@ func TestParseFlow(t *testing.T) {
 	tcs := []struct {
 		flow     string
 		success  bool
-		expected *v1alpha1.Traceflow
+		expected *v1beta1.Traceflow
 	}{
 		{
 			flow:    "udp,udp_src=1234,udp_dst=4321",
 			success: true,
-			expected: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Packet: v1alpha1.Packet{
-						IPHeader: v1alpha1.IPHeader{
+			expected: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Packet: v1beta1.Packet{
+						IPHeader: &v1beta1.IPHeader{
 							Protocol: 17,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							UDP: &v1alpha1.UDPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							UDP: &v1beta1.UDPHeader{
 								SrcPort: 1234,
 								DstPort: 4321,
 							},
@@ -136,13 +136,13 @@ func TestParseFlow(t *testing.T) {
 		{
 			flow:    " icmp,",
 			success: true,
-			expected: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Packet: v1alpha1.Packet{
-						IPHeader: v1alpha1.IPHeader{
+			expected: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Packet: v1beta1.Packet{
+						IPHeader: &v1beta1.IPHeader{
 							Protocol: 1,
 						},
-						TransportHeader: v1alpha1.TransportHeader{},
+						TransportHeader: v1beta1.TransportHeader{},
 					},
 				},
 			},
@@ -150,14 +150,14 @@ func TestParseFlow(t *testing.T) {
 		{
 			flow:    "tcp,tcp_dst=4321",
 			success: true,
-			expected: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Packet: v1alpha1.Packet{
-						IPHeader: v1alpha1.IPHeader{
+			expected: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Packet: v1beta1.Packet{
+						IPHeader: &v1beta1.IPHeader{
 							Protocol: 6,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
@@ -168,14 +168,14 @@ func TestParseFlow(t *testing.T) {
 		{
 			flow:    "tcp,tcp_dst=4321,ipv6",
 			success: true,
-			expected: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Packet: v1alpha1.Packet{
-						IPv6Header: &v1alpha1.IPv6Header{
+			expected: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Packet: v1beta1.Packet{
+						IPv6Header: &v1beta1.IPv6Header{
 							NextHeader: &protocolTCP,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
@@ -279,8 +279,8 @@ source: default/pod-1
 			client := antreafakeclient.NewSimpleClientset()
 			client.PrependReactor("create", "traceflows", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				createAction := action.(k8stesting.CreateAction)
-				obj := createAction.GetObject().(*v1alpha1.Traceflow)
-				obj.Status.Phase = v1alpha1.Succeeded
+				obj := createAction.GetObject().(*v1beta1.Traceflow)
+				obj.Status.Phase = v1beta1.Succeeded
 				return false, obj, nil
 			})
 
@@ -377,23 +377,23 @@ func TestNewTraceflow(t *testing.T) {
 		dst         string
 		liveTraffic string
 		droppedOnly string
-		expectedTf  *v1alpha1.Traceflow
+		expectedTf  *v1beta1.Traceflow
 	}{
 		{
 			name: "dummy-traceflow-dst-pod",
 			dst:  dstPod,
-			expectedTf: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Destination: v1alpha1.Destination{
+			expectedTf: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Destination: v1beta1.Destination{
 						Namespace: "default",
 						Pod:       "pod-2",
 					},
-					Packet: v1alpha1.Packet{
-						IPv6Header: &v1alpha1.IPv6Header{
+					Packet: v1beta1.Packet{
+						IPv6Header: &v1beta1.IPv6Header{
 							NextHeader: &protocolTCP,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
@@ -405,18 +405,18 @@ func TestNewTraceflow(t *testing.T) {
 		{
 			name: "dummy-traceflow-src-pod",
 			src:  srcPod,
-			expectedTf: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
+			expectedTf: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Source: v1beta1.Source{
 						Namespace: "default",
 						Pod:       "pod-1",
 					},
-					Packet: v1alpha1.Packet{
-						IPv6Header: &v1alpha1.IPv6Header{
+					Packet: v1beta1.Packet{
+						IPv6Header: &v1beta1.IPv6Header{
 							NextHeader: &protocolTCP,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
@@ -429,21 +429,21 @@ func TestNewTraceflow(t *testing.T) {
 			name: "dummy-traceflow-pod-to-ipv4",
 			src:  "pod-1",
 			dst:  ipv4,
-			expectedTf: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
+			expectedTf: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Source: v1beta1.Source{
 						Namespace: "default",
 						Pod:       "pod-1",
 					},
-					Destination: v1alpha1.Destination{
+					Destination: v1beta1.Destination{
 						IP: ipv4,
 					},
-					Packet: v1alpha1.Packet{
-						IPv6Header: &v1alpha1.IPv6Header{
+					Packet: v1beta1.Packet{
+						IPv6Header: &v1beta1.IPv6Header{
 							NextHeader: &protocolTCP,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
@@ -457,21 +457,21 @@ func TestNewTraceflow(t *testing.T) {
 			src:         ipv4,
 			dst:         "pod-2",
 			liveTraffic: "1",
-			expectedTf: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
+			expectedTf: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Source: v1beta1.Source{
 						IP: ipv4,
 					},
-					Destination: v1alpha1.Destination{
+					Destination: v1beta1.Destination{
 						Namespace: "default",
 						Pod:       "pod-2",
 					},
-					Packet: v1alpha1.Packet{
-						IPv6Header: &v1alpha1.IPv6Header{
+					Packet: v1beta1.Packet{
+						IPv6Header: &v1beta1.IPv6Header{
 							NextHeader: &protocolTCP,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
@@ -485,22 +485,22 @@ func TestNewTraceflow(t *testing.T) {
 			name: "dummy-traceflow-pod-to-service",
 			src:  srcPod,
 			dst:  "service",
-			expectedTf: &v1alpha1.Traceflow{
-				Spec: v1alpha1.TraceflowSpec{
-					Source: v1alpha1.Source{
+			expectedTf: &v1beta1.Traceflow{
+				Spec: v1beta1.TraceflowSpec{
+					Source: v1beta1.Source{
 						Namespace: "default",
 						Pod:       "pod-1",
 					},
-					Destination: v1alpha1.Destination{
+					Destination: v1beta1.Destination{
 						Namespace: "default",
 						Service:   "service",
 					},
-					Packet: v1alpha1.Packet{
-						IPv6Header: &v1alpha1.IPv6Header{
+					Packet: v1beta1.Packet{
+						IPv6Header: &v1beta1.IPv6Header{
 							NextHeader: &protocolTCP,
 						},
-						TransportHeader: v1alpha1.TransportHeader{
-							TCP: &v1alpha1.TCPHeader{
+						TransportHeader: v1beta1.TransportHeader{
+							TCP: &v1beta1.TCPHeader{
 								DstPort: 4321,
 							},
 						},
