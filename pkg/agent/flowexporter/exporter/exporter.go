@@ -521,7 +521,7 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 			}
 		case "destinationClusterIPv4":
 			if conn.DestinationServicePortName != "" {
-				ie.SetIPAddressValue(conn.DestinationServiceAddress.AsSlice())
+				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
 				// Sending dummy IP as IPFIX collector expects constant length of data for IP field.
 				// We should probably think of better approach as this involves customization of IPFIX collector to ignore
@@ -530,14 +530,14 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 			}
 		case "destinationClusterIPv6":
 			if conn.DestinationServicePortName != "" {
-				ie.SetIPAddressValue(conn.DestinationServiceAddress.AsSlice())
+				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
 				// Same as destinationClusterIPv4.
 				ie.SetIPAddressValue(net.ParseIP("::"))
 			}
 		case "destinationServicePort":
 			if conn.DestinationServicePortName != "" {
-				ie.SetUnsigned16Value(conn.DestinationServicePort)
+				ie.SetUnsigned16Value(conn.OriginalDestinationPort)
 			} else {
 				ie.SetUnsigned16Value(uint16(0))
 			}

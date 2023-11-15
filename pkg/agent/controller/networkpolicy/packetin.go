@@ -124,16 +124,16 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	// Generate deny connection and add to deny connection store
 	denyConn := flowexporter.Connection{}
 	denyConn.FlowKey = tuple
-	denyConn.DestinationServiceAddress = tuple.DestinationAddress
-	denyConn.DestinationServicePort = tuple.DestinationPort
+	denyConn.OriginalDestinationAddress = tuple.DestinationAddress
+	denyConn.OriginalDestinationPort = tuple.DestinationPort
 	denyConn.Mark = getCTMarkValue(matchers)
-	dstSvcAddress := getCTNwDstValue(matchers)
-	dstSvcPort := getCTTpDstValue(matchers)
-	if dstSvcAddress.IsValid() {
-		denyConn.DestinationServiceAddress = dstSvcAddress
+	nwDstValue := getCTNwDstValue(matchers)
+	dstPortValue := getCTTpDstValue(matchers)
+	if nwDstValue.IsValid() {
+		denyConn.OriginalDestinationAddress = nwDstValue
 	}
-	if dstSvcPort != 0 {
-		denyConn.DestinationServicePort = dstSvcPort
+	if dstPortValue != 0 {
+		denyConn.OriginalDestinationPort = dstPortValue
 	}
 
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
