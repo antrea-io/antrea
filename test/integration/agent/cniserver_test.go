@@ -34,12 +34,15 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	mock "go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sFake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
@@ -151,7 +154,6 @@ var (
 	ipamMock       *ipamtest.MockIPAMDriver
 	ovsServiceMock *ovsconfigtest.MockOVSBridgeClient
 	ofServiceMock  *openflowtest.MockClient
-	testNodeConfig *config.NodeConfig
 	routeMock      *routetest.MockInterface
 )
 
@@ -567,7 +569,7 @@ func newTester() *cmdAddDelTester {
 	tester.networkReadyCh = make(chan struct{})
 	tester.server = cniserver.New(testSock,
 		"",
-		testNodeConfig,
+		getTestNodeConfig(false),
 		k8sFake.NewSimpleClientset(),
 		routeMock,
 		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
@@ -721,9 +723,8 @@ func TestAntreaServerFunc(t *testing.T) {
 }
 
 func setupChainTest(
-	controller *mock.Controller, inServer *cniserver.CNIServer, netNS ns.NetNS, newServer bool) (
-	server *cniserver.CNIServer, hostVeth, containerVeth net.Interface, err error) {
-
+	testNodeConfig *config.NodeConfig, controller *mock.Controller, inServer *cniserver.CNIServer, netNS ns.NetNS, newServer bool,
+) (server *cniserver.CNIServer, hostVeth, containerVeth net.Interface, err error) {
 	if newServer {
 		routeMock = routetest.NewMockInterface(controller)
 		networkReadyCh := make(chan struct{})
@@ -763,6 +764,7 @@ func TestCNIServerChaining(t *testing.T) {
 		t.Skipf("Skip test runs only in container")
 	}
 
+	testNodeConfig := getTestNodeConfig(false)
 	testRequire := require.New(t)
 	controller := mock.NewController(t)
 	var server *cniserver.CNIServer
@@ -785,7 +787,7 @@ func TestCNIServerChaining(t *testing.T) {
 		testRequire.Nil(err)
 
 		var hostVeth net.Interface
-		server, hostVeth, _, err = setupChainTest(controller, server, netNS, newServer)
+		server, hostVeth, _, err = setupChainTest(testNodeConfig, controller, server, netNS, newServer)
 		testRequire.Nil(err)
 		if newServer {
 			ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
@@ -850,12 +852,108 @@ func TestCNIServerChaining(t *testing.T) {
 	}
 }
 
-func init() {
-	nodeName := "node1"
-	gwIP := net.ParseIP("192.168.1.1")
-	gwMAC, _ = net.ParseMAC("11:11:11:11:11:11")
-	nodeGateway := &config.GatewayConfig{IPv4: gwIP, MAC: gwMAC, Name: ""}
-	_, nodePodCIDR, _ := net.ParseCIDR("192.168.1.0/24")
+func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
+	// Running in a container is required as we modify /var/lib/cni/networks.
+	if _, inContainer := os.LookupEnv("INCONTAINER"); !inContainer {
+		t.Skipf("Skip test runs only in container")
+	}
 
-	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDR, GatewayConfig: nodeGateway}
+	testNodeConfig := getTestNodeConfig(true)
+
+	usedIPv4 := net.ParseIP("10.0.0.1")
+	usedIPv6 := net.ParseIP("2001:db8:a::1")
+	unusedIPv4 := net.ParseIP("10.0.0.2")
+	unusedIPv6 := net.ParseIP("2001:db8:a::2")
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: testNodeConfig.Name,
+		},
+		Status: corev1.PodStatus{
+			PodIP: usedIPv4.String(),
+			PodIPs: []corev1.PodIP{
+				{IP: usedIPv4.String()},
+				{IP: usedIPv6.String()},
+			},
+		},
+	}
+
+	// we need to use the default data dir, as it is hardcoded in the Antrea logic
+	const ipamDataDir = "/var/lib/cni/networks"
+	// make sure we start from a clean state, this will not interfere with any other test
+	require.NoError(t, os.RemoveAll(ipamDataDir))
+	// clean up directory at the end of the test
+	defer os.RemoveAll(ipamDataDir)
+
+	// reserve all 4 IPs using host-local IPAM
+	const rangeID = "0"
+	reserveIPs := func(cID string, ips ...net.IP) {
+		ipamStore, err := disk.New("antrea", ipamDataDir)
+		require.NoError(t, err)
+		defer ipamStore.Close()
+		ipamStore.Lock()
+		defer ipamStore.Unlock()
+		for _, ip := range ips {
+			reserved, err := ipamStore.Reserve(cID, IFName, ip, rangeID)
+			require.NoError(t, err)
+			require.True(t, reserved) // should not have been previously reserved
+		}
+	}
+	reserveIPs("c0", usedIPv4, usedIPv6)
+	reserveIPs("c1", unusedIPv4, unusedIPv6)
+
+	// create mocks and test CNIServer
+	controller := mock.NewController(t)
+	ovsServiceMock := ovsconfigtest.NewMockOVSBridgeClient(controller)
+	ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
+	ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
+	ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
+	ofServiceMock := openflowtest.NewMockClient(controller)
+	routeMock := routetest.NewMockInterface(controller)
+	ifaceStore := interfacestore.NewInterfaceStore()
+	networkReadyCh := make(chan struct{})
+	k8sClient := k8sFake.NewSimpleClientset(pod)
+	server := cniserver.New(
+		testSock,
+		"",
+		testNodeConfig,
+		k8sClient,
+		routeMock,
+		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
+		networkReadyCh,
+	)
+
+	// call Initialize, which will run reconciliation and perform host-local IPAM garbage collection
+	server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
+
+	getIPs := func(cID string) []net.IP {
+		ipamStore, err := disk.New("antrea", "")
+		require.NoError(t, err)
+		defer ipamStore.Close()
+		ipamStore.Lock()
+		defer ipamStore.Unlock()
+		return ipamStore.GetByID(cID, IFName)
+	}
+	assert.ElementsMatch(t, getIPs("c0"), []net.IP{usedIPv4, usedIPv6})
+	assert.Empty(t, getIPs("c1"))
+}
+
+func getTestNodeConfig(dualStack bool) *config.NodeConfig {
+	nodeName := "node1"
+	gwIPv4 := net.ParseIP("192.168.1.1")
+	_, nodePodCIDRv4, _ := net.ParseCIDR("192.168.1.0/24")
+	gwMAC, _ := net.ParseMAC("11:11:11:11:11:11")
+	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, MAC: gwMAC}
+	nodeConfig := &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDRv4, GatewayConfig: gateway}
+	if dualStack {
+		gwIPv6 := net.ParseIP("fd74:ca9b:172:18::1")
+		_, nodePodCIDRv6, _ := net.ParseCIDR("fd74:ca9b:172:18::/64")
+		gateway.IPv6 = gwIPv6
+		nodeConfig.PodIPv6CIDR = nodePodCIDRv6
+	}
+	return nodeConfig
 }
