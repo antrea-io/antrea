@@ -96,6 +96,10 @@ func TestNetworkPolicy(t *testing.T) {
 		skipIfProxyDisabled(t)
 		testAllowHairpinService(t, data)
 	})
+	t.Run("testNetworkPolicyAfterAgentRestart", func(t *testing.T) {
+		t.Cleanup(exportLogsForSubtest(t, data))
+		testNetworkPolicyAfterAgentRestart(t, data)
+	})
 }
 
 func testNetworkPolicyStats(t *testing.T, data *TestData) {
@@ -704,6 +708,94 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	}
 }
 
+// The test validates that Pods can't bypass NetworkPolicy when antrea-agent restarts.
+func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
+	workerNode := workerNodeName(1)
+	var isolatedPod, deniedPod, allowedPod string
+	var isolatedPodIPs, deniedPodIPs, allowedPodIPs *PodIPs
+	var wg sync.WaitGroup
+	createTestPod := func(prefix string) (string, *PodIPs) {
+		defer wg.Done()
+		podName, podIPs, cleanup := createAndWaitForPod(t, data, data.createNginxPodOnNode, prefix, workerNode, data.testNamespace, false)
+		t.Cleanup(cleanup)
+		return podName, podIPs
+	}
+	wg.Add(3)
+	go func() {
+		isolatedPod, isolatedPodIPs = createTestPod("test-isolated")
+	}()
+	go func() {
+		deniedPod, deniedPodIPs = createTestPod("test-denied")
+	}()
+	go func() {
+		allowedPod, allowedPodIPs = createTestPod("test-allowed")
+	}()
+	wg.Wait()
+
+	allowedPeer := networkingv1.NetworkPolicyPeer{
+		PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": allowedPod}},
+	}
+	netpol, err := data.createNetworkPolicy("test-isolated", &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": isolatedPod}},
+		Ingress:     []networkingv1.NetworkPolicyIngressRule{{From: []networkingv1.NetworkPolicyPeer{allowedPeer}}},
+		Egress:      []networkingv1.NetworkPolicyEgressRule{{To: []networkingv1.NetworkPolicyPeer{allowedPeer}}},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { data.deleteNetworkpolicy(netpol) })
+
+	checkFunc := func(testPod string, testPodIPs *PodIPs, expectErr bool) {
+		var wg sync.WaitGroup
+		checkOne := func(clientPod, serverPod string, serverIP *net.IP) {
+			defer wg.Done()
+			if serverIP != nil {
+				_, _, err := data.runWgetCommandFromTestPodWithRetry(clientPod, data.testNamespace, nginxContainerName, serverIP.String(), 1)
+				if expectErr && err == nil {
+					t.Errorf("Pod %s should not be able to connect %s, but was able to connect", clientPod, serverPod)
+				} else if !expectErr && err != nil {
+					t.Errorf("Pod %s should be able to connect %s, but was not able to connect, err: %v", clientPod, serverPod, err)
+				}
+			}
+		}
+		wg.Add(4)
+		go checkOne(isolatedPod, testPod, testPodIPs.ipv4)
+		go checkOne(isolatedPod, testPod, testPodIPs.ipv6)
+		go checkOne(testPod, isolatedPod, isolatedPodIPs.ipv4)
+		go checkOne(testPod, isolatedPod, isolatedPodIPs.ipv6)
+		wg.Wait()
+	}
+
+	scaleFunc := func(replicas int32) {
+		scale, err := data.clientset.AppsV1().Deployments(antreaNamespace).GetScale(context.TODO(), antreaDeployment, metav1.GetOptions{})
+		require.NoError(t, err)
+		scale.Spec.Replicas = replicas
+		_, err = data.clientset.AppsV1().Deployments(antreaNamespace).UpdateScale(context.TODO(), antreaDeployment, scale, metav1.UpdateOptions{})
+		require.NoError(t, err)
+	}
+
+	// Scale antrea-controller to 0 so antrea-agent will lose connection with antrea-controller.
+	scaleFunc(0)
+	t.Cleanup(func() { scaleFunc(1) })
+
+	// Restart the antrea-agent.
+	_, err = data.deleteAntreaAgentOnNode(workerNode, 30, defaultTimeout)
+	require.NoError(t, err)
+	antreaPod, err := data.getAntreaPodOnNode(workerNode)
+	require.NoError(t, err)
+	// Make sure the new antrea-agent disconnects from antrea-controller but connects to OVS.
+	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionFalse)
+	waitForAgentCondition(t, data, antreaPod, v1beta1.OpenflowConnectionUp, corev1.ConditionTrue)
+	// Even the new antrea-agent can't connect to antrea-controller, the previous policy should continue working.
+	checkFunc(deniedPod, deniedPodIPs, true)
+	checkFunc(allowedPod, allowedPodIPs, false)
+
+	// Scale antrea-controller to 1 so antrea-agent will connect to antrea-controller.
+	scaleFunc(1)
+	// Make sure antrea-agent connects to antrea-controller.
+	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionTrue)
+	checkFunc(deniedPod, deniedPodIPs, true)
+	checkFunc(allowedPod, allowedPodIPs, false)
+}
+
 func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", data.testNamespace, false)
@@ -1039,8 +1131,9 @@ func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditi
 		t.Logf("cmds: %s", cmds)
 
 		stdout, _, err := runAntctl(podName, cmds, data)
+		// The server may not be available yet.
 		if err != nil {
-			return true, err
+			return false, nil
 		}
 		var agentInfo agentinfo.AntreaAgentInfoResponse
 		err = json.Unmarshal([]byte(stdout), &agentInfo)
