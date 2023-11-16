@@ -6908,7 +6908,6 @@ spec:
           securityContext:
             capabilities:
               add:
-                # SYS_MODULE is required to load the OVS kernel module.
                 - SYS_MODULE
           env:
             # SKIP_CNI_BINARIES takes in values as a comma separated list of
@@ -6996,7 +6995,6 @@ spec:
             # rolling update. Set failureThreshold to 8 so it can tolerate 70s of disconnection.
             failureThreshold: 8
           securityContext:
-            # antrea-agent needs to perform sysctl configuration.
             privileged: true
           volumeMounts:
           - name: antrea-config
@@ -7044,7 +7042,6 @@ spec:
             - "--log_file_max_size=100"
             - "--log_file_max_num=4"
           securityContext:
-            # capabilities required by OVS daemons
             capabilities:
               add:
                 - SYS_NICE
@@ -7088,7 +7085,7 @@ spec:
           securityContext:
             capabilities:
               add:
-              - NET_ADMIN
+                - NET_ADMIN
           volumeMounts:
           - name: host-var-run-antrea
             mountPath: /var/run/openvswitch

@@ -25,16 +25,25 @@ Kubernetes: `>= 1.16.0-0`
 | agent.antreaAgent.logFileMaxNum | int | `4` | Max number of log files. |
 | agent.antreaAgent.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
 | agent.antreaAgent.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-agent container. |
+| agent.antreaAgent.securityContext.capabilities | list | `[]` | Capabilities for the antrea-agent container. |
+| agent.antreaAgent.securityContext.privileged | bool | `true` | Run the antrea-agent container as privileged. Currently we require this to be true (for sysctl configurations), but we may support running as non-privileged in the future. |
 | agent.antreaIPsec.resources | object | `{"requests":{"cpu":"50m"}}` | Resource requests and limits for the antrea-ipsec container (when IPsec is enabled). |
+| agent.antreaIPsec.securityContext.capabilities | list | `["NET_ADMIN"]` | Capabilities for the antrea-ipsec container. |
+| agent.antreaIPsec.securityContext.privileged | bool | `false` | Run the antrea-ipsec container as privileged. |
 | agent.antreaOVS.extraArgs | list | `[]` | Extra command-line arguments for antrea-ovs. |
 | agent.antreaOVS.logFileMaxNum | int | `4` | Max number of log files. |
 | agent.antreaOVS.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
 | agent.antreaOVS.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-ovs container. |
+| agent.antreaOVS.securityContext.capabilities | list | `["SYS_NICE","NET_ADMIN","SYS_ADMIN","IPC_LOCK"]` | Capabilities for the antrea-ovs container. |
+| agent.antreaOVS.securityContext.privileged | bool | `false` | Run the antrea-ovs container as privileged. |
 | agent.apiPort | int | `10350` | Port for the antrea-agent APIServer to serve on. |
 | agent.dnsPolicy | string | `""` | DNS Policy for the antrea-agent Pods. If empty, the Kubernetes default will be used. |
 | agent.enablePrometheusMetrics | bool | `true` | Enable metrics exposure via Prometheus. |
 | agent.extraVolumes | list | `[]` | Additional volumes for antrea-agent Pods. |
+| agent.installCNI.extraEnv | object | `{}` | Extra environment variables to be injected into install-cni. |
 | agent.installCNI.resources | object | `{"requests":{"cpu":"100m"}}` | Resource requests and limits for the install-cni initContainer. |
+| agent.installCNI.securityContext.capabilities | list | `["SYS_MODULE"]` | Capabilities for the install-cni initContainer. |
+| agent.installCNI.securityContext.privileged | bool | `false` | Run the install-cni container as privileged. |
 | agent.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for the antrea-agent Pods. |
 | agent.podAnnotations | object | `{}` | Annotations to be added to antrea-agent Pods. |
 | agent.podLabels | object | `{}` | Labels to be added to antrea-agent Pods. |
