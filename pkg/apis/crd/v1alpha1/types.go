@@ -948,7 +948,13 @@ type FirstNSamplingConfig struct {
 
 const DefaultPacketSamplingTimeout int32 = 60
 
+type PacketSamplingPhase string
 
+const (
+	Running   PacketSamplingPhase = "Running"
+	Succeeded PacketSamplingPhase = "Succeeded"
+	Failed    PacketSamplingPhase = "Failed"
+)
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -981,12 +987,9 @@ type PacketSamplingSpec struct {
 	Authentication       BundleServerAuthConfiguration `json:"authentication,omitempty"`
 }
 
-type PacketSamplingPhase string
-
-const (
-	PacketSamplingSucceed PacketSamplingPhase = "Succeed"
-)
-
 type PacketSamplingStatus struct {
-	Reason string `json:"reason,omitempty"`
+	Phase              PacketSamplingPhase `json:"phase,omitempty"`
+	Reason             string              `json:"reason,omitempty"`
+	UID                string              `json:"uid,omitempty"`
+	NumCapturedPackets int32               `json:"numCapturedPackets,omitempty"`
 }

@@ -3,9 +3,12 @@ package packetsampling
 import (
 	"net"
 	"os"
+	"path"
 	"runtime"
 	"sync"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/google/gopacket/pcapgo"
 	"golang.org/x/time/rate"
@@ -136,6 +139,68 @@ func (c *Controller) deletePacketSampling(obj interface{}) {
 	ps := obj.(*crdv1alpha1.PacketSampling)
 	klog.Infof("Processing PacketSampling %s DELETE event", ps.Name)
 
-	err := deletPcapngFile(ps.Status)
+	err := deletePcapngFile(ps.Status.UID)
+	if err != nil {
+		klog.ErrorS(err, "Couldn't delete pcapng file")
+
+	}
+	c.enqueuePacketSampling(ps)
+
+}
+
+func deletePcapngFile(uid string) error {
+	return os.Remove(uidToPath(uid))
+}
+
+func uidToPath(uid string) string {
+	return path.Join(packetDirectory, uid+".pcapng")
+}
+
+func (c *Controller) worker() {
+	for c.processPacketSamplingItem() {
+
+	}
+}
+
+func (c *Controller) processPacketSamplingItem() bool {
+	obj, quit := c.queue.Get()
+	if quit {
+		return false
+	}
+
+	defer c.queue.Done(obj)
+
+	if key, ok := obj.(string); !ok {
+		c.queue.Forget(obj)
+		klog.Errorf("Expected string in work queue but got %#v", obj)
+		return true
+	} else if err := c.syncPacketSampling(key); err == nil {
+		c.queue.Forget(key)
+	} else {
+		klog.Errorf("Error syncing PacketSampling %s, existing. Error: %v", key, err)
+	}
+	return true
+}
+
+func (c *Controller) syncPacketSampling(psName string) error {
+	startTime := time.Now()
+
+	defer func() {
+		klog.V(4).Infof("Finished syncing PacketSampling for %s. (%v)", psName, time.Since(startTime))
+	}()
+
+	ps, err := c.packetSamplingLister.Get(psName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			c.cleanupPakcetSampling(psName)
+			return nil
+
+		}
+		return err
+	}
+
+	switch ps.Status.Phase {
+
+	}
 
 }

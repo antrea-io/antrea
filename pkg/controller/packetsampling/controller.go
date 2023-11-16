@@ -8,8 +8,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	"k8s.io/client-go/tools/cache"
@@ -29,6 +30,10 @@ const (
 	// reason for timeout
 	samplingTimeout = "PacketSampling timeout"
 
+	// How long to wait before retrying the processing of a traceflow.
+	minRetryDelay = 5 * time.Second
+	maxRetryDelay = 300 * time.Second
+
 	defaultTimeoutDuration = time.Second * time.Duration(crdv1alpha1.DefaultPacketSamplingTimeout)
 )
 
@@ -37,7 +42,7 @@ var (
 )
 
 type Controller struct {
-	client                     versiond.Interface
+	client                     versioned.Interface
 	podInformer                coreinformers.PodInformer
 	podLister                  corelisters.PodLister
 	packetSamplingInformer     crdinformers.PacketSamplingInformer
@@ -50,7 +55,7 @@ type Controller struct {
 	runningPacketSamplings     map[string]string
 }
 
-func NewPacketSamplingController(client versiond.Interface, podInformer coreinformers.PodInformer, packetSamplingInformer crdinformers.PacketSamplingInformer) *Controller {
+func NewPacketSamplingController(client versioned.Interface, podInformer coreinformers.PodInformer, packetSamplingInformer crdinformers.PacketSamplingInformer) *Controller {
 
 	c := &Controller{
 		client:                     client,
@@ -67,8 +72,9 @@ func NewPacketSamplingController(client versiond.Interface, podInformer coreinfo
 			AddFunc:    c.addPacketSampling,
 			UpdateFunc: c.updatePacketSampling,
 			DeleteFunc: c.deletePacketSampling,
-		},
+		}, resyncPeriod,
 	)
+	return c
 }
 
 func (c *Controller) enqueuePacketSampling(ps *crdv1alpha1.PacketSampling) {
@@ -125,4 +131,5 @@ func (c *Controller) processPacketSamplingItem() bool {
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
 	}
+	return true
 }
