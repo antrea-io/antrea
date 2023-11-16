@@ -565,8 +565,6 @@ function deliver_antrea_linux_containerd {
     echo "==== Start building and delivering Linux containerd images ===="
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
-    # containerd is the runtime, need to load the image via ctr.
-    ctr -n=k8s.io images import antrea-ubuntu.tar
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
@@ -574,13 +572,23 @@ function deliver_antrea_linux_containerd {
     k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
     e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
 
-    for i in "${!harbor_images[@]}"; do
-        ctr -n=k8s.io images delete "${antrea_images[i]}"
-        ctr -n=k8s.io images pull "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}"
-        ctr -n=k8s.io images tag "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}" "${antrea_images[i]}"
+    echo "===== Deliver Antrea YAML to Controller nodes ====="
+    IP=$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')
+    HOST_IPS=$(ip addr show | grep -oP 'inet \K[\d.]+')
+    matched=false
+    for host_ip in $HOST_IPS; do
+        if [[ $host_ip == $IP ]]; then
+            matched=true
+            break
+        fi
     done
-    echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 !~ /win/ {print $6}' | while read IP; do
+    if [[ $matched == false ]]; then
+        # Copy the YAML file only if the jumper node is not the control-plane node.
+        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ${WORKDIR}/antrea.yml jenkins@${IP}:${WORKDIR}/antrea.yml
+    fi
+
+    echo "===== Deliver Antrea to all Linux nodes and pull necessary images on these nodes ====="
+    kubectl get nodes --selector=kubernetes.io/os=linux --no-headers=true -o custom-columns=IP:.status.addresses[0].address | while read -r IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
 
