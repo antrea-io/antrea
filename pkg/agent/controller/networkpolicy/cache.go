@@ -551,13 +551,14 @@ func (c *ruleCache) addAddressGroupLocked(group *v1beta.AddressGroup) error {
 
 // PatchAddressGroup updates a cached *v1beta.AddressGroup.
 // The rules referencing it will be regarded as dirty.
-func (c *ruleCache) PatchAddressGroup(patch *v1beta.AddressGroupPatch) error {
+// It returns a copy of the patched AddressGroup, or an error if the AddressGroup doesn't exist.
+func (c *ruleCache) PatchAddressGroup(patch *v1beta.AddressGroupPatch) (*v1beta.AddressGroup, error) {
 	c.addressSetLock.Lock()
 	defer c.addressSetLock.Unlock()
 
 	groupMemberSet, exists := c.addressSetByGroup[patch.Name]
 	if !exists {
-		return fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
+		return nil, fmt.Errorf("AddressGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
 	for i := range patch.AddedGroupMembers {
 		groupMemberSet.Insert(&patch.AddedGroupMembers[i])
@@ -567,7 +568,16 @@ func (c *ruleCache) PatchAddressGroup(patch *v1beta.AddressGroupPatch) error {
 	}
 
 	c.onAddressGroupUpdate(patch.Name)
-	return nil
+
+	members := make([]v1beta.GroupMember, 0, len(groupMemberSet))
+	for _, member := range groupMemberSet {
+		members = append(members, *member)
+	}
+	group := &v1beta.AddressGroup{
+		ObjectMeta:   patch.ObjectMeta,
+		GroupMembers: members,
+	}
+	return group, nil
 }
 
 // DeleteAddressGroup deletes a cached *v1beta.AddressGroup.
@@ -639,13 +649,14 @@ func (c *ruleCache) addAppliedToGroupLocked(group *v1beta.AppliedToGroup) error 
 
 // PatchAppliedToGroup updates a cached *v1beta.AppliedToGroupPatch.
 // The rules referencing it will be regarded as dirty.
-func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error {
+// It returns a copy of the patched AppliedToGroup, or an error if the AppliedToGroup doesn't exist.
+func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) (*v1beta.AppliedToGroup, error) {
 	c.appliedToSetLock.Lock()
 	defer c.appliedToSetLock.Unlock()
 
 	memberSet, exists := c.appliedToSetByGroup[patch.Name]
 	if !exists {
-		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
+		return nil, fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
 	for i := range patch.AddedGroupMembers {
 		memberSet.Insert(&patch.AddedGroupMembers[i])
@@ -654,7 +665,16 @@ func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error
 		memberSet.Delete(&patch.RemovedGroupMembers[i])
 	}
 	c.onAppliedToGroupUpdate(patch.Name)
-	return nil
+
+	members := make([]v1beta.GroupMember, 0, len(memberSet))
+	for _, member := range memberSet {
+		members = append(members, *member)
+	}
+	group := &v1beta.AppliedToGroup{
+		ObjectMeta:   patch.ObjectMeta,
+		GroupMembers: members,
+	}
+	return group, nil
 }
 
 // DeleteAppliedToGroup deletes a cached *v1beta.AppliedToGroup.
