@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -253,7 +254,24 @@ func (c *AntreaIPAMController) cleanIPPoolForStatefulSet(namespacedName string) 
 }
 
 // Find IP Pools annotated to StatefulSet via direct annotation or Namespace annotation
-func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) []string {
+func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) ([]string, []net.IP) {
+
+	// Inspect IP annotation for the Pods
+	ipStrings, _ := ss.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
+	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
+	var ips []net.IP
+	if ipStrings != "" {
+		splittedIPStrings := strings.Split(ipStrings, annotation.AntreaIPAMAnnotationDelimiter)
+		for _, ipString := range splittedIPStrings {
+			ip := net.ParseIP(ipString)
+			if ip == nil {
+				klog.ErrorS(nil, "Ignored invalid Pod IP annotation in the StatefulSet template", "annotation", ipStrings, "statefulSet", klog.KObj(ss))
+				ips = nil
+				break
+			}
+			ips = append(ips, ip)
+		}
+	}
 
 	// Inspect pool annotation for the Pods
 	// In order to avoid extra API call in IPAM driver, IPAM annotations are defined
@@ -261,7 +279,7 @@ func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) 
 	annotations, exists := ss.Spec.Template.Annotations[annotation.AntreaIPAMAnnotationKey]
 	if exists {
 		// Stateful Set Pod is annotated with dedicated IP pool
-		return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter)
+		return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter), ips
 	}
 
 	// Inspect Namespace
@@ -269,15 +287,15 @@ func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) 
 	if err != nil {
 		// Should never happen
 		klog.Errorf("Namespace %s not found for StatefulSet %s", ss.Namespace, ss.Name)
-		return nil
+		return nil, nil
 	}
 
 	annotations, exists = namespace.Annotations[annotation.AntreaIPAMAnnotationKey]
 	if exists {
-		return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter)
+		return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter), ips
 	}
 
-	return nil
+	return nil, nil
 
 }
 
@@ -287,7 +305,11 @@ func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) 
 func (c *AntreaIPAMController) preallocateIPPoolForStatefulSet(ss *appsv1.StatefulSet) error {
 	klog.InfoS("Processing create notification", "Namespace", ss.Namespace, "StatefulSet", ss.Name)
 
-	ipPools := c.getIPPoolsForStatefulSet(ss)
+	ipPools, ips := c.getIPPoolsForStatefulSet(ss)
+	var ip net.IP
+	if len(ips) > 0 {
+		ip = ips[0]
+	}
 
 	if ipPools == nil {
 		// nothing to preallocate
@@ -310,7 +332,7 @@ func (c *AntreaIPAMController) preallocateIPPoolForStatefulSet(ss *appsv1.Statef
 	// in the pool. This safeguards us from double allocation in case agent allocated IP by the time
 	// controller task is executed. Note also that StatefulSet resize will not be handled.
 	if size > 0 {
-		err = allocator.AllocateStatefulSet(ss.Namespace, ss.Name, size)
+		err = allocator.AllocateStatefulSet(ss.Namespace, ss.Name, size, ip)
 		if err != nil {
 			return fmt.Errorf("failed to preallocate continuous IP space of size %d from Pool %s: %s", size, ipPoolName, err)
 		}
