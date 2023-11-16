@@ -1774,3 +1774,10 @@ Similar RBAC is applied to the ClusterGroup resource.
   matched at the same priority with conflicting actions. It will be the policy writer's
   responsibility to identify such ambiguities in rule definitions and avoid potential
   nondeterministic rule enforcement results.
+- For hairpin service traffic, when a Pod initiates traffic towards the service it provides,
+  and the same Pod is selected as the Endpoint, NetworkPolicies will consistently permit
+  this traffic during ingress enforcement if AntreaProxy is enabled. However, when AntreaProxy
+  is disabled, NetworkPolicies may not function as expected for hairpin service traffic.
+  This is due to kube-proxy performing SNAT, which conceals the original source IP from Antrea.
+  Consequently, NetworkPolicies are unable to differentiate between hairpin service traffic and
+  external traffic in this scenario.
