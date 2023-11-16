@@ -600,8 +600,8 @@ func getNormalizedUID(name string) string {
 }
 
 // createAppliedToGroup creates an AppliedToGroup object corresponding to the provided selectors.
-func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nSel, eSel *metav1.LabelSelector) *antreatypes.AppliedToGroup {
-	groupSelector := antreatypes.NewGroupSelector(npNsName, pSel, nSel, eSel, nil)
+func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nSel, eSel, nodeSel *metav1.LabelSelector) *antreatypes.AppliedToGroup {
+	groupSelector := antreatypes.NewGroupSelector(npNsName, pSel, nSel, eSel, nodeSel)
 	appliedToGroupUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Construct a new AppliedToGroup.
 	appliedToGroup := &antreatypes.AppliedToGroup{
@@ -691,7 +691,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	// addressGroups tracks all distinct AddressGroups referred to by the K8s NetworkPolicy.
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 
-	newAppliedToGroup := n.createAppliedToGroup(np.Namespace, &np.Spec.PodSelector, nil, nil)
+	newAppliedToGroup := n.createAppliedToGroup(np.Namespace, &np.Spec.PodSelector, nil, nil, nil)
 	appliedToGroups = mergeAppliedToGroups(appliedToGroups, newAppliedToGroup)
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	// Retrieve Namespace logging annotation.
@@ -1115,7 +1115,7 @@ func (c *NetworkPolicyController) getNodeMemberSet(selector labels.Selector) con
 	groupMemberSet := controlplane.GroupMemberSet{}
 	nodes, _ := c.nodeLister.List(selector)
 	for _, node := range nodes {
-		groupMemberSet.Insert(nodeToGroupMember(node))
+		groupMemberSet.Insert(nodeToGroupMember(node, true))
 	}
 	return groupMemberSet
 }
@@ -1215,14 +1215,16 @@ func podToGroupMember(pod *v1.Pod, includeIP bool) *controlplane.GroupMember {
 	return memberPod
 }
 
-func nodeToGroupMember(node *v1.Node) (member *controlplane.GroupMember) {
+func nodeToGroupMember(node *v1.Node, includeIP bool) (member *controlplane.GroupMember) {
 	member = &controlplane.GroupMember{Node: &controlplane.NodeReference{Name: node.Name}}
 	ips, err := k8s.GetNodeAllAddrs(node)
 	if err != nil {
 		klog.ErrorS(err, "Error getting Node IP addresses", "Node", node.Name)
 	}
-	for ip := range ips {
-		member.IPs = append(member.IPs, ipStrToIPAddress(ip))
+	if includeIP {
+		for ip := range ips {
+			member.IPs = append(member.IPs, ipStrToIPAddress(ip))
+		}
 	}
 	return
 }
@@ -1300,7 +1302,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		}
 		klog.V(2).InfoS("Updating existing AppliedToGroup", "Service", *appliedToGroup.Service, "numNodes", appGroupNodeNames.Len())
 	} else {
-		pods, externalEntities, err := n.getAppliedToWorkloads(appliedToGroup)
+		pods, externalEntities, nodes, err := n.getAppliedToWorkloads(appliedToGroup)
 		if err != nil {
 			klog.ErrorS(err, "Error when getting AppliedTo workloads for AppliedToGroup", "AppliedToGroup", appliedToGroup.Name)
 			updatedAppliedToGroup = &antreatypes.AppliedToGroup{
@@ -1342,6 +1344,15 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 				memberSetByNode[entityNodeKey] = entitySet
 				appGroupNodeNames.Insert(entityNodeKey)
 			}
+			for _, node := range nodes {
+				nodeSet := memberSetByNode[node.Name]
+				if nodeSet == nil {
+					nodeSet = controlplane.GroupMemberSet{}
+				}
+				nodeSet.Insert(nodeToGroupMember(node, false))
+				memberSetByNode[node.Name] = nodeSet
+				appGroupNodeNames.Insert(node.Name)
+			}
 			updatedAppliedToGroup = &antreatypes.AppliedToGroup{
 				UID:               appliedToGroup.UID,
 				Name:              appliedToGroup.Name,
@@ -1359,18 +1370,23 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	return nil
 }
 
-// getAppliedToWorkloads returns a list of workloads (Pods and ExternalEntities) selected by an AppliedToGroup
-// for standalone selectors or corresponding to a ClusterGroup.
-func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity, error) {
+// getAppliedToWorkloads returns a list of workloads (Pods, ExternalEntities or Nodes) selected by an AppliedToGroup
+// for standalone selectors or Pods and ExternalEntities corresponding to a ClusterGroup.
+func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity, []*v1.Node, error) {
 	// Check if an internal Group object exists corresponding to this AppliedToGroup
 	group, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		// This AppliedToGroup is derived from a ClusterGroup.
 		grp := group.(*antreatypes.Group)
-		return n.getInternalGroupWorkloads(grp)
+		pods, ees, err := n.getInternalGroupWorkloads(grp)
+		return pods, ees, nil, err
+	}
+	if g.Selector.NodeSelector != nil {
+		nodes, err := n.nodeLister.List(g.Selector.NodeSelector)
+		return nil, nil, nodes, err
 	}
 	pods, ees := n.groupingInterface.GetEntities(appliedToGroupType, g.Name)
-	return pods, ees, nil
+	return pods, ees, nil, nil
 }
 
 // getInternalGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.

@@ -2982,6 +2982,12 @@ func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.
 							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
 						},
 					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select Nodes in cluster as workloads in AppliedTo fields. Cannot be set with any other selector.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
 				},
 			},
 		},
@@ -4570,7 +4576,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					},
 					"nodeSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Select certain Nodes which match the label selector. A NodeSelector cannot be set in AppliedTo field or set with any other selector.",
+							Description: "Select certain Nodes which match the label selector. A NodeSelector cannot be set with any other selector.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},

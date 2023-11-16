@@ -181,7 +181,7 @@ func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo [
 		if at.Group != "" {
 			atg = n.createAppliedToGroupForGroup(namespace, at.Group)
 		} else {
-			atg = n.createAppliedToGroup(namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			atg = n.createAppliedToGroup(namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector, nil)
 		}
 		if atg != nil {
 			appliedToGroups = append(appliedToGroups, atg)
