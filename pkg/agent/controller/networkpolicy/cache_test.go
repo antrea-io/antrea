@@ -1039,7 +1039,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
-			err := c.PatchAppliedToGroup(tt.args)
+			ret, err := c.PatchAppliedToGroup(tt.args)
 			if (err == nil) == tt.expectedErr {
 				t.Fatalf("Got error %v, expected %t", err, tt.expectedErr)
 			}
@@ -1048,6 +1048,9 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			}
 			actualPods, _ := c.appliedToSetByGroup[tt.args.Name]
 			assert.ElementsMatch(t, tt.expectedPods, actualPods.Items(), "stored Pods not equal")
+			if !tt.expectedErr {
+				assert.Equal(t, len(ret.GroupMembers), len(actualPods))
+			}
 		})
 	}
 }
@@ -1116,7 +1119,7 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
-			err := c.PatchAddressGroup(tt.args)
+			ret, err := c.PatchAddressGroup(tt.args)
 			if (err == nil) == tt.expectedErr {
 				t.Fatalf("Got error %v, expected %t", err, tt.expectedErr)
 			}
@@ -1125,6 +1128,9 @@ func TestRuleCachePatchAddressGroup(t *testing.T) {
 			}
 			actualAddresses, _ := c.addressSetByGroup[tt.args.Name]
 			assert.ElementsMatch(t, tt.expectedAddresses, actualAddresses.Items(), "stored addresses not equal")
+			if !tt.expectedErr {
+				assert.Equal(t, len(ret.GroupMembers), len(actualAddresses))
+			}
 		})
 	}
 }

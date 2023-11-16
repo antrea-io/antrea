@@ -20,6 +20,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -462,6 +463,7 @@ func run(o *Options) error {
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
+		afero.NewOsFs(),
 		nodeKey,
 		podUpdateChannel,
 		externalEntityUpdateChannel,
