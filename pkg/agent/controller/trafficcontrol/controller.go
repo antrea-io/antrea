@@ -920,7 +920,12 @@ func (c *Controller) syncTrafficControl(tcName string) error {
 		for _, port := range sets.List(newOfPorts) {
 			ofPorts = append(ofPorts, uint32(port))
 		}
-		if err = c.ofClient.InstallTrafficControlMarkFlows(tc.Name, ofPorts, targetOFPort, tc.Spec.Direction, tc.Spec.Action); err != nil {
+		if err = c.ofClient.InstallTrafficControlMarkFlows(tc.Name,
+			ofPorts,
+			targetOFPort,
+			tc.Spec.Direction,
+			tc.Spec.Action,
+			types.TrafficControlFlowPriorityMedium); err != nil {
 			return err
 		}
 	}

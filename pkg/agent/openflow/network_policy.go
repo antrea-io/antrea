@@ -2218,7 +2218,7 @@ func (f *featureNetworkPolicy) l7NPTrafficControlFlows() []binding.Flow {
 		// This generates the flow to output the packets marked with L7NPRedirectCTMark to an application-aware engine
 		// via the target ofPort. Note that, before outputting the packets, VLAN ID stored on field L7NPRuleVlanIDCTMarkField
 		// will be copied to VLAN ID register (OXM_OF_VLAN_VID) to set VLAN ID of the packets.
-		OutputTable.ofTable.BuildFlow(priorityHigh+1).
+		OutputTable.ofTable.BuildFlow(priorityHigh+2).
 			Cookie(cookieID).
 			MatchRegMark(OutputToOFPortRegMark).
 			MatchCTMark(L7NPRedirectCTMark).

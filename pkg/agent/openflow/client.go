@@ -39,6 +39,19 @@ import (
 
 const maxRetryForOFSwitch = 5
 
+func tcPriorityToOFPriority(p types.TrafficControlFlowPriority) uint16 {
+	switch p {
+	case types.TrafficControlFlowPriorityHigh:
+		return priorityHigh
+	case types.TrafficControlFlowPriorityMedium:
+		return priorityNormal
+	case types.TrafficControlFlowPriorityLow:
+		return priorityLow
+	default:
+		return 0
+	}
+}
+
 // Client is the interface to program OVS flows for entity connectivity of Antrea.
 type Client interface {
 	// Initialize sets up all basic flows on the specific OVS bridge. It returns a channel which
@@ -323,7 +336,12 @@ type Client interface {
 		igmp ofutil.Message) error
 
 	// InstallTrafficControlMarkFlows installs the flows to mark the packets for a traffic control rule.
-	InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction crdv1alpha2.Direction, action crdv1alpha2.TrafficControlAction) error
+	InstallTrafficControlMarkFlows(name string,
+		sourceOFPorts []uint32,
+		targetOFPort uint32,
+		direction crdv1alpha2.Direction,
+		action crdv1alpha2.TrafficControlAction,
+		priority types.TrafficControlFlowPriority) error
 
 	// UninstallTrafficControlMarkFlows removes the flows for a traffic control rule.
 	UninstallTrafficControlMarkFlows(name string) error
@@ -1449,8 +1467,13 @@ func (c *client) SendIGMPQueryPacketOut(
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction crdv1alpha2.Direction, action crdv1alpha2.TrafficControlAction) error {
-	flows := c.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, direction, action)
+func (c *client) InstallTrafficControlMarkFlows(name string,
+	sourceOFPorts []uint32,
+	targetOFPort uint32,
+	direction crdv1alpha2.Direction,
+	action crdv1alpha2.TrafficControlAction,
+	priority types.TrafficControlFlowPriority) error {
+	flows := c.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, direction, action, tcPriorityToOFPriority(priority))
 	cacheKey := fmt.Sprintf("tc_%s", name)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
