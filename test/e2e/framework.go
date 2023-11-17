@@ -148,6 +148,8 @@ const (
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
 
 	defaultCHDatabaseURL = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
+	iperfPort            = 5201
+	iperfSvcPort         = 9999
 )
 
 type ClusterNode struct {

@@ -63,8 +63,8 @@ type Connection struct {
 	DestinationPodNamespace        string
 	DestinationPodName             string
 	DestinationServicePortName     string
-	DestinationServiceAddress      netip.Addr
-	DestinationServicePort         uint16
+	OriginalDestinationAddress     netip.Addr
+	OriginalDestinationPort        uint16
 	IngressNetworkPolicyName       string
 	IngressNetworkPolicyNamespace  string
 	IngressNetworkPolicyType       uint8

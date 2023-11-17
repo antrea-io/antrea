@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -71,8 +70,6 @@ func TestReconcile(t *testing.T) {
 			resExport3,
 		},
 	}
-	scheme := runtime.NewScheme()
-	mcv1alpha1.AddToScheme(scheme)
 	now := metav1.Now()
 	memberClusterAnnounce1 := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
@@ -123,8 +120,8 @@ func TestReconcile(t *testing.T) {
 			defer func() {
 				getResourceExportsByClusterIDFunc = getResourceExportsByClusterID
 			}()
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResExports).WithObjects(tt.existingMemberAnnounce).Build()
-			c := NewStaleResCleanupController(fakeClient, scheme)
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResExports).WithObjects(tt.existingMemberAnnounce).Build()
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme)
 			ctx := context.Background()
 			_, err := c.Reconcile(ctx, ctrl.Request{
 				NamespacedName: types.NamespacedName{

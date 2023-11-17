@@ -25,16 +25,14 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 var clusterSetWebhookUnderTest *clusterSetValidator
@@ -183,12 +181,7 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 		},
 	}
 
-	newScheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
-	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcv1alpha1.AddToScheme(newScheme))
-	utilruntime.Must(mcv1alpha2.AddToScheme(newScheme))
-	decoder, err := admission.NewDecoder(newScheme)
+	decoder, err := admission.NewDecoder(common.TestScheme)
 	if err != nil {
 		klog.ErrorS(err, "Error constructing a decoder")
 	}
@@ -201,7 +194,7 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 		if tt.existingMemberClusterAnnounce != nil {
 			objects = append(objects, tt.existingMemberClusterAnnounce)
 		}
-		fakeClient := fake.NewClientBuilder().WithScheme(newScheme).WithObjects(objects...).Build()
+		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(objects...).Build()
 		clusterSetWebhookUnderTest = &clusterSetValidator{
 			Client:    fakeClient,
 			namespace: "mcs1",

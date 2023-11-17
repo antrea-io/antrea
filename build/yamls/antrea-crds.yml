@@ -5021,6 +5021,8 @@ spec:
                               type: string
                             networkPolicy:
                               type: string
+                            networkPolicyRule:
+                              type: string
                             ttl:
                               type: integer
                               minimum: 0

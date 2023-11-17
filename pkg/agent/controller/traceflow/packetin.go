@@ -207,6 +207,10 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
 			if npRef != nil {
 				ob.NetworkPolicy = npRef.ToString()
+				ruleRef := c.networkPolicyQuerier.GetRuleByFlowID(egressInfo)
+				if ruleRef != nil {
+					ob.NetworkPolicyRule = ruleRef.Name
+				}
 			}
 			obs = append(obs, *ob)
 		}
@@ -222,6 +226,10 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressInfo)
 		if npRef != nil {
 			ob.NetworkPolicy = npRef.ToString()
+			ruleRef := c.networkPolicyQuerier.GetRuleByFlowID(ingressInfo)
+			if ruleRef != nil {
+				ob.NetworkPolicyRule = ruleRef.Name
+			}
 		}
 		obs = append(obs, *ob)
 	}
@@ -237,6 +245,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			if ruleRef := c.networkPolicyQuerier.GetRuleByFlowID(notAllowConjInfo); ruleRef != nil {
 				if npRef := ruleRef.PolicyRef; npRef != nil {
 					ob.NetworkPolicy = npRef.ToString()
+					ob.NetworkPolicyRule = ruleRef.Name
 				}
 				if ruleRef.Action != nil && *ruleRef.Action == crdv1beta1.RuleActionReject {
 					ob.Action = crdv1beta1.ActionRejected

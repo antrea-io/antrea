@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"time"
 
@@ -107,6 +108,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return fmt.Errorf("error in parsing packetIn: %v", err)
 	}
+	matchers := pktIn.GetMatches()
 
 	// Get 5-tuple information
 	sourceAddr, _ := netip.AddrFromSlice(packet.SourceIP)
@@ -122,8 +124,17 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	// Generate deny connection and add to deny connection store
 	denyConn := flowexporter.Connection{}
 	denyConn.FlowKey = tuple
-	denyConn.DestinationServiceAddress = tuple.DestinationAddress
-	denyConn.DestinationServicePort = tuple.DestinationPort
+	denyConn.OriginalDestinationAddress = tuple.DestinationAddress
+	denyConn.OriginalDestinationPort = tuple.DestinationPort
+	denyConn.Mark = getCTMarkValue(matchers)
+	nwDstValue := getCTNwDstValue(matchers)
+	dstPortValue := getCTTpDstValue(matchers)
+	if nwDstValue.IsValid() {
+		denyConn.OriginalDestinationAddress = nwDstValue
+	}
+	if dstPortValue != 0 {
+		denyConn.OriginalDestinationPort = dstPortValue
+	}
 
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
 	if conn, exist := c.denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&denyConn)); exist {
@@ -131,7 +142,6 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		return nil
 	}
 
-	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table ID
 	tableID := getPacketInTableID(pktIn)
@@ -222,4 +232,48 @@ func getPacketInTableID(pktIn *ofctrl.PacketIn) uint8 {
 		}
 	}
 	return tableID
+}
+
+func getCTMarkValue(matchers *ofctrl.Matchers) uint32 {
+	ctMark := matchers.GetMatchByName("NXM_NX_CT_MARK")
+	if ctMark == nil {
+		return 0
+	}
+	ctMarkValue, ok := ctMark.GetValue().(uint32)
+	if !ok {
+		return 0
+	}
+	return ctMarkValue
+}
+
+func getCTNwDstValue(matchers *ofctrl.Matchers) netip.Addr {
+	nwDst := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
+	if nwDst != nil {
+		if nwDstValue, ok := nwDst.GetValue().(net.IP); ok {
+			if ip, ok := netip.AddrFromSlice(nwDstValue.To4()); ok {
+				return ip
+			}
+		}
+	}
+	nwDst = matchers.GetMatchByName("NXM_NX_CT_IPV6_DST")
+	if nwDst != nil {
+		if nwDstValue, ok := nwDst.GetValue().(net.IP); ok {
+			if ip, ok := netip.AddrFromSlice(nwDstValue.To16()); ok {
+				return ip
+			}
+		}
+	}
+	return netip.Addr{}
+}
+
+func getCTTpDstValue(matchers *ofctrl.Matchers) uint16 {
+	port := matchers.GetMatchByName("NXM_NX_CT_TP_DST")
+	if port == nil {
+		return 0
+	}
+	portValue, ok := port.GetValue().(uint16)
+	if !ok {
+		return 0
+	}
+	return portValue
 }

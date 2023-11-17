@@ -88,7 +88,6 @@ func TestGatewayReconciler(t *testing.T) {
 		resExport      *mcv1alpha1.ResourceExport
 		expectedInfo   []mcv1alpha1.GatewayInfo
 		expectedErr    string
-		isDelete       bool
 	}{
 		{
 			name: "create a ResourceExport successfully",
@@ -140,7 +139,6 @@ func TestGatewayReconciler(t *testing.T) {
 				Name:      "node-1",
 			},
 			resExport: existingResExport,
-			isDelete:  true,
 		},
 	}
 
@@ -174,14 +172,15 @@ func TestGatewayReconciler(t *testing.T) {
 					Namespace: common.LeaderNamespace,
 					Name:      common.NewClusterInfoResourceExportName(common.LocalClusterID),
 				}
+				isDelete := tt.gateway == nil
 				err := fakeRemoteClient.Get(common.TestCtx, ciExportName, &ciExport)
-				if tt.isDelete && !apierrors.IsNotFound(err) {
+				if isDelete && !apierrors.IsNotFound(err) {
 					t.Errorf("Gateway Reconciler expects not found error but got error = %v", err)
 				}
 				if err == nil && !reflect.DeepEqual(ciExport.Spec.ClusterInfo.GatewayInfos, tt.expectedInfo) {
 					t.Errorf("Expected GatewayInfos are %v but got %v", tt.expectedInfo, ciExport.Spec.ClusterInfo.GatewayInfos)
 				}
-				if !tt.isDelete && apierrors.IsNotFound(err) {
+				if !isDelete && apierrors.IsNotFound(err) {
 					t.Errorf("Expected a ClusterInfo kind of ResourceExport but got error = %v", err)
 				}
 			}

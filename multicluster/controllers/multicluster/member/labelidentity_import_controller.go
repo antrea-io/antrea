@@ -21,7 +21,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,8 +36,6 @@ import (
 
 // LabelIdentityResourceImportReconciler reconciles a LabelIdentity kind of ResourceImport object in the member cluster.
 type LabelIdentityResourceImportReconciler struct {
-	client.Client
-	Scheme             *runtime.Scheme
 	localClusterClient client.Client
 	localClusterID     string
 	namespace          string
@@ -47,11 +44,9 @@ type LabelIdentityResourceImportReconciler struct {
 	manager ctrl.Manager
 }
 
-func newLabelIdentityResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client,
+func newLabelIdentityResourceImportReconciler(localClusterClient client.Client,
 	localClusterID string, namespace string, remoteCommonArea commonarea.RemoteCommonArea) *LabelIdentityResourceImportReconciler {
 	return &LabelIdentityResourceImportReconciler{
-		Client:             client,
-		Scheme:             scheme,
 		localClusterClient: localClusterClient,
 		localClusterID:     localClusterID,
 		namespace:          namespace,

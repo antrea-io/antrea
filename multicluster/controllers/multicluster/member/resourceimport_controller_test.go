@@ -135,7 +135,7 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 		},
 	}
 
-	r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
+	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -205,7 +205,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 		},
 	}
 
-	r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
+	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
 
@@ -446,7 +446,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 	}
 
-	r := newResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", remoteCluster)
+	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
 
@@ -557,7 +557,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	go func() {
 		c.commonAreaCreationCh <- struct{}{}
 	}()
-	r := newLabelIdentityResourceImportReconciler(fakeClient, common.TestScheme, fakeClient, localClusterID, "default", ca)
+	r := newLabelIdentityResourceImportReconciler(fakeClient, localClusterID, "default", ca)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)

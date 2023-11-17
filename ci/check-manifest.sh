@@ -31,19 +31,16 @@ YAMLS=(
     "build/yamls/antrea-eks.yml"
     "build/yamls/antrea-gke.yml"
     "build/yamls/antrea-aks.yml"
-    "build/yamls/antrea-windows.yml"
     "build/yamls/flow-aggregator.yml"
 )
+
+YAMLS+=($(ls build/yamls/antrea-windows*.yml))
 
 rm "${YAMLS[@]}"
 make manifest
 diff="$(git status --porcelain ${YAMLS[@]})"
 
-MULTICLUSTER_YAMLS=(
-    "multicluster/build/yamls/antrea-multicluster-leader-global.yml"
-    "multicluster/build/yamls/antrea-multicluster-leader-namespaced.yml"
-    "multicluster/build/yamls/antrea-multicluster-member.yml"
-)
+MULTICLUSTER_YAMLS=($(ls multicluster/build/yamls/*.yml))
 
 rm "${MULTICLUSTER_YAMLS[@]}"
 cd multicluster; make manifests; cd ..
