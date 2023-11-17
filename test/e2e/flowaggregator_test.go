@@ -330,7 +330,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			dstPodName: "perftest-d",
 		}
 		if !isIPv6 {
-			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()      
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
 			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
