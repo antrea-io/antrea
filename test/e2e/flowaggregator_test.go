@@ -331,10 +331,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		if !isIPv6 {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		}
 	})
 
@@ -366,10 +366,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		if !isIPv6 {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, false)
 		}
 	})
 
@@ -401,10 +401,90 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		if !isIPv6 {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podDIPs.IPv4.String(), podAIPs.IPv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podDIPs.IPv6.String(), podAIPs.IPv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, false, false)
+		}
+	})
+
+	// IntraNodeDenyConnIngressANPThroughSvc tests the case, where Pods are deployed on same Node with an Antrea
+	// ingress deny policy rule applied to destination Pod (one reject rule, one drop rule) and their flow information
+	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
+	// perftest-a -> svcB -> perftest-b (Ingress reject), perftest-a -> svcD ->perftest-d (Ingress drop)
+	t.Run("IntraNodeDenyConnIngressANPThroughSvc", func(t *testing.T) {
+		skipIfAntreaPolicyDisabled(t)
+		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-b", "perftest-d", controlPlaneNodeName(), controlPlaneNodeName(), true)
+		defer func() {
+			if anp1 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp1); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+			if anp2 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp2); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+		}()
+		testFlow1 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-b",
+			svcIP:       svcB.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		testFlow2 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-d",
+			svcIP:       svcD.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		if !isIPv6 {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
+		} else {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
+		}
+	})
+
+	// IntraNodeDenyConnEgressANPThroughSvc tests the case, where Pods are deployed on same Node with an Antrea
+	// egress deny policy rule applied to source Pod (one reject rule, one drop rule) and their flow information
+	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
+	// perftest-a (Egress reject) -> svcB ->perftest-b, perftest-a (Egress drop) -> svcD -> perftest-d
+	t.Run("IntraNodeDenyConnEgressANPThroughSvc", func(t *testing.T) {
+		skipIfAntreaPolicyDisabled(t)
+		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-b", "perftest-d", controlPlaneNodeName(), controlPlaneNodeName(), false)
+		defer func() {
+			if anp1 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp1); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+			if anp2 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp2); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+		}()
+		testFlow1 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-b",
+			svcIP:       svcB.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		testFlow2 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-d",
+			svcIP:       svcD.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		if !isIPv6 {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podBIPs.IPv4.String(), podAIPs.IPv4.String(), podDIPs.IPv4.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
+		} else {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podBIPs.IPv6.String(), podAIPs.IPv6.String(), podDIPs.IPv6.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, true, true, true)
 		}
 	})
 
@@ -457,10 +537,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		if !isIPv6 {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		}
 	})
 
@@ -492,10 +572,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		if !isIPv6 {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, false)
 		}
 	})
 
@@ -527,10 +607,95 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		if !isIPv6 {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podBIPs.IPv4.String(), podEIPs.IPv4.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false, false)
 		} else {
 			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podBIPs.IPv6.String(), podEIPs.IPv6.String()
-			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false)
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, false, false)
+		}
+	})
+
+	// InterNodeDenyConnIngressANPThroughSvc tests the case, where Pods are deployed on different Node with an Antrea
+	// ingress deny policy rule applied to destination Pod (one reject rule, one drop rule) and their flow information
+	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
+	// perftest-a -> svcC -> perftest-c (Ingress reject), perftest-a -> svcE -> perftest-e (Ingress drop)
+	t.Run("InterNodeDenyConnIngressANPThroughSvc", func(t *testing.T) {
+		skipIfAntreaPolicyDisabled(t)
+		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c", "perftest-e", controlPlaneNodeName(), workerNodeName(1), true)
+		defer func() {
+			if anp1 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp1); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+			if anp2 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp2); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+		}()
+		// In theory, it's not possible to retrieve service information for these two flows because the packets are
+		// either rejected or dropped in other nodes. Nevertheless, we can still observe the connection being recorded
+		// in the conntrack table on the source node in cases of drop. This results in the aggregation process still
+		// occurring within our flow-aggregator. Consequently, we can still see the service information when dealing
+		// with inter-node traffic subject to an ingress drop network policy
+		testFlow1 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-c",
+			svcIP:       svcC.Spec.ClusterIP,
+			checkDstSvc: false,
+		}
+		testFlow2 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-e",
+			svcIP:       svcE.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		if !isIPv6 {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
+		} else {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
+		}
+	})
+
+	// InterNodeDenyConnEgressANPThroughSvc tests the case, where Pods are deployed on different Node with an Antrea
+	// egress deny policy rule applied to source Pod (one reject rule, one drop rule) and their flow information
+	// is exported as IPFIX flow records. The test also verify if the service information is well filled in the record.
+	// perftest-a (Egress reject) -> svcC -> perftest-c, perftest-a (Egress drop) -> svcE -> perftest-e
+	t.Run("InterNodeDenyConnEgressANPThroughSvc", func(t *testing.T) {
+		skipIfAntreaPolicyDisabled(t)
+		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c", "perftest-e", controlPlaneNodeName(), workerNodeName(1), false)
+		defer func() {
+			if anp1 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp1); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+			if anp2 != nil {
+				if err = data.deleteAntreaNetworkpolicy(anp2); err != nil {
+					t.Errorf("Error when deleting Antrea Network Policy: %v", err)
+				}
+			}
+		}()
+		testFlow1 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-c",
+			svcIP:       svcC.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		testFlow2 := testFlow{
+			srcPodName:  "perftest-a",
+			dstPodName:  "perftest-e",
+			svcIP:       svcE.Spec.ClusterIP,
+			checkDstSvc: true,
+		}
+		if !isIPv6 {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv4.String(), podCIPs.IPv4.String(), podAIPs.IPv4.String(), podEIPs.IPv4.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
+		} else {
+			testFlow1.srcIP, testFlow1.dstIP, testFlow2.srcIP, testFlow2.dstIP = podAIPs.IPv6.String(), podCIPs.IPv6.String(), podAIPs.IPv6.String(), podEIPs.IPv6.String()
+			checkRecordsForDenyFlows(t, data, testFlow1, testFlow2, isIPv6, false, true, true)
 		}
 	})
 
