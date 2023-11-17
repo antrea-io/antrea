@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func TestControllerValidate(t *testing.T) {
@@ -35,8 +35,8 @@ func TestControllerValidate(t *testing.T) {
 		pods []*v1.Pod
 
 		// input
-		oldSpec *crdv1alpha1.TraceflowSpec
-		newSpec *crdv1alpha1.TraceflowSpec
+		oldSpec *crdv1beta1.TraceflowSpec
+		newSpec *crdv1beta1.TraceflowSpec
 
 		// expected output
 		allowed      bool
@@ -44,22 +44,22 @@ func TestControllerValidate(t *testing.T) {
 	}{
 		{
 			name: "Source Pod must be specified in non-live-traffic Traceflow",
-			newSpec: &crdv1alpha1.TraceflowSpec{
-				Destination: crdv1alpha1.Destination{IP: "10.0.0.2"},
+			newSpec: &crdv1beta1.TraceflowSpec{
+				Destination: crdv1beta1.Destination{IP: "10.0.0.2"},
 			},
 			deniedReason: "source Pod must be specified in non-live-traffic Traceflow",
 		},
 		{
 			name: "Traceflow should have either source or destination Pod assigned",
-			newSpec: &crdv1alpha1.TraceflowSpec{
+			newSpec: &crdv1beta1.TraceflowSpec{
 				LiveTraffic: true,
 			},
 			deniedReason: "Traceflow tf has neither source nor destination Pod specified",
 		},
 		{
 			name: "Assigned source pod must exist",
-			newSpec: &crdv1alpha1.TraceflowSpec{
-				Source: crdv1alpha1.Source{
+			newSpec: &crdv1beta1.TraceflowSpec{
+				Source: crdv1beta1.Source{
 					Namespace: "test-ns",
 					Pod:       "test-pod",
 				},
@@ -74,8 +74,8 @@ func TestControllerValidate(t *testing.T) {
 					Spec:       v1.PodSpec{HostNetwork: true},
 				},
 			},
-			newSpec: &crdv1alpha1.TraceflowSpec{
-				Source: crdv1alpha1.Source{
+			newSpec: &crdv1beta1.TraceflowSpec{
+				Source: crdv1beta1.Source{
 					Namespace: "test-ns",
 					Pod:       "test-pod",
 				},
@@ -89,8 +89,8 @@ func TestControllerValidate(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-pod"},
 				},
 			},
-			newSpec: &crdv1alpha1.TraceflowSpec{
-				Source: crdv1alpha1.Source{
+			newSpec: &crdv1beta1.TraceflowSpec{
+				Source: crdv1beta1.Source{
 					Namespace: "test-ns",
 					Pod:       "test-pod",
 				},
@@ -148,8 +148,8 @@ func TestControllerValidate(t *testing.T) {
 	}
 }
 
-func toRawExtension(spec *crdv1alpha1.TraceflowSpec) runtime.RawExtension {
-	tf := &crdv1alpha1.Traceflow{Spec: *spec}
+func toRawExtension(spec *crdv1beta1.TraceflowSpec) runtime.RawExtension {
+	tf := &crdv1beta1.Traceflow{Spec: *spec}
 	tf.Name = "tf"
 	raw, _ := json.Marshal(tf)
 	return runtime.RawExtension{Raw: raw}
