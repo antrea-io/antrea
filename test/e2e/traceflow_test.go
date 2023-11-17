@@ -188,9 +188,11 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 							Action:    v1beta1.ActionForwarded,
 						},
 						{
-							Component:     v1beta1.ComponentNetworkPolicy,
-							ComponentInfo: "IngressMetric",
-							Action:        v1beta1.ActionDropped,
+							Component:         v1beta1.ComponentNetworkPolicy,
+							ComponentInfo:     "IngressMetric",
+							Action:            v1beta1.ActionDropped,
+							NetworkPolicy:     fmt.Sprintf("AntreaNetworkPolicy:%s/test-annp-deny-ingress", data.testNamespace),
+							NetworkPolicyRule: "ingress-drop",
 						},
 					},
 				},
@@ -236,9 +238,11 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 							Action:    v1beta1.ActionForwarded,
 						},
 						{
-							Component:     v1beta1.ComponentNetworkPolicy,
-							ComponentInfo: "IngressMetric",
-							Action:        v1beta1.ActionRejected,
+							Component:         v1beta1.ComponentNetworkPolicy,
+							ComponentInfo:     "IngressMetric",
+							Action:            v1beta1.ActionRejected,
+							NetworkPolicy:     fmt.Sprintf("AntreaNetworkPolicy:%s/test-annp-reject-ingress", data.testNamespace),
+							NetworkPolicyRule: "ingress-reject",
 						},
 					},
 				},
@@ -284,9 +288,11 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 							Action:    v1beta1.ActionForwarded,
 						},
 						{
-							Component:     v1beta1.ComponentNetworkPolicy,
-							ComponentInfo: "IngressMetric",
-							Action:        v1beta1.ActionDropped,
+							Component:         v1beta1.ComponentNetworkPolicy,
+							ComponentInfo:     "IngressMetric",
+							Action:            v1beta1.ActionDropped,
+							NetworkPolicy:     fmt.Sprintf("AntreaNetworkPolicy:%s/test-annp-deny-ingress", data.testNamespace),
+							NetworkPolicyRule: "ingress-drop",
 						},
 					},
 				},
@@ -421,6 +427,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentNetworkPolicy,
@@ -473,6 +480,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -524,6 +532,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -569,6 +578,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -632,6 +642,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -746,11 +757,13 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressDefaultRule",
 							Action:        v1beta1.ActionDropped,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 					},
 				},
@@ -798,6 +811,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -849,6 +863,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -894,6 +909,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -967,6 +983,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1015,6 +1032,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1063,6 +1081,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1227,6 +1246,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1292,6 +1312,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1352,6 +1373,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1428,6 +1450,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1505,6 +1528,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1548,6 +1572,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1615,6 +1640,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1683,6 +1709,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1742,6 +1769,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1815,6 +1843,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1889,6 +1918,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -1937,6 +1967,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1beta1.ActionForwarded,
+							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 						{
 							Component:     v1beta1.ComponentForwarding,
@@ -2314,7 +2345,9 @@ func compareObservations(expected v1beta1.NodeResult, actual v1beta1.NodeResult)
 			exObs[i].TranslatedDstIP != acObs[i].TranslatedDstIP ||
 			exObs[i].EgressIP != acObs[i].EgressIP ||
 			exObs[i].Egress != acObs[i].Egress ||
-			exObs[i].Action != acObs[i].Action {
+			exObs[i].Action != acObs[i].Action ||
+			exObs[i].NetworkPolicy != acObs[i].NetworkPolicy ||
+			exObs[i].NetworkPolicyRule != acObs[i].NetworkPolicyRule {
 			return fmt.Errorf("Observations should be %v, but got %v", exObs, acObs)
 		}
 	}
@@ -2324,8 +2357,10 @@ func compareObservations(expected v1beta1.NodeResult, actual v1beta1.NodeResult)
 // createANNPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
 func (data *TestData) createANNPDenyIngress(key string, value string, name string, isReject bool) (*v1beta1.NetworkPolicy, error) {
 	dropACT := v1beta1.RuleActionDrop
+	ingressRuleName := "ingress-drop"
 	if isReject {
 		dropACT = v1beta1.RuleActionReject
+		ingressRuleName = "ingress-reject"
 	}
 	annp := v1beta1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2352,6 +2387,7 @@ func (data *TestData) createANNPDenyIngress(key string, value string, name strin
 					Action: &dropACT,
 					Ports:  []v1beta1.NetworkPolicyPort{},
 					From:   []v1beta1.NetworkPolicyPeer{},
+					Name:   ingressRuleName,
 				},
 			},
 			Egress: []v1beta1.Rule{},
