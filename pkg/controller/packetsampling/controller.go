@@ -1,6 +1,7 @@
 package packetsampling
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -117,6 +118,10 @@ func (c *Controller) repostPacketSampling() {
 
 }
 
+func (c *Controller) startTraceflow() error {
+	return nil
+}
+
 func (c *Controller) processPacketSamplingItem() bool {
 	obj, quit := c.queue.Get()
 	if quit {
@@ -132,4 +137,63 @@ func (c *Controller) processPacketSamplingItem() bool {
 		return true
 	}
 	return true
+}
+
+type packetSamplingUpdater struct {
+	ps          *crdv1alpha1.PacketSampling
+	controller  *Controller
+	phase       *crdv1alpha1.PacketSamplingPhase
+	reason      *string
+	uid         *string
+	tag         *int8
+	packetsPath *string
+}
+
+func newPacketSamplingUpdater(base *crdv1alpha1.PacketSampling, c *Controller) *packetSamplingUpdater {
+	return &packetSamplingUpdater{
+		tf:         base,
+		controller: c,
+	}
+}
+
+func (u *packetSamplingUpdater) Phase(phase crdv1alpha1.PacketSamplingPhase) *packetSamplingUpdater {
+	u.phase = &phase
+	return u
+}
+
+func (u *packetSamplingUpdater) Reason(reason string) *packetSamplingUpdater {
+	u.reason = &reason
+	return u
+}
+
+func (u *packetSamplingUpdater) UID(uid string) *packetSamplingUpdater {
+	u.uid = &uid
+	return u
+}
+
+func (u *packetSamplingUpdater) PacketsPath(path string) *packetSamplingUpdater {
+	u.packetsPath = &path
+	return u
+}
+
+func (u *packetSamplingUpdater) Update() error {
+	newPS := u.ps.DeepCopy()
+	if u.phase != nil {
+		newPS.Status.Phase = *u.phase
+	}
+	if u.ps.Status.Phase == crdv1alpha1.PacketSamplingRunning && u.ps.Status.StartTime == nil {
+		time := metav1.Now()
+		t.tf.Status.StartTime = &time
+	}
+	if t.tag != nil {
+		newTF.Status.DataplaneTag = *t.tag
+	}
+	if t.reason != nil {
+		newTF.Status.Reason = *t.reason
+	}
+	if t.packetsPath != nil {
+		newTF.Status.Sampling.PacketsPath = *t.packetsPath
+	}
+	_, err := t.controller.client.CrdV1beta1().Traceflows().UpdateStatus(context.TODO(), newTF, metav1.UpdateOptions{})
+	return err
 }

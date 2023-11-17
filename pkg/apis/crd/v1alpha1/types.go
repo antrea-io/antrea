@@ -951,9 +951,9 @@ const DefaultPacketSamplingTimeout int32 = 60
 type PacketSamplingPhase string
 
 const (
-	Running   PacketSamplingPhase = "Running"
-	Succeeded PacketSamplingPhase = "Succeeded"
-	Failed    PacketSamplingPhase = "Failed"
+	PacketSamplingRunning   PacketSamplingPhase = "Running"
+	PacketSamplingSucceeded PacketSamplingPhase = "Succeeded"
+	PacketSamplingFailed    PacketSamplingPhase = "Failed"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -992,4 +992,5 @@ type PacketSamplingStatus struct {
 	Reason             string              `json:"reason,omitempty"`
 	UID                string              `json:"uid,omitempty"`
 	NumCapturedPackets int32               `json:"numCapturedPackets,omitempty"`
+	StartTime          *metav1.Time        `json:"startTime,omitempty"`
 }
