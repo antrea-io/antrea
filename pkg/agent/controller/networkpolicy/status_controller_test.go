@@ -164,7 +164,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	policy.Generation = 1
 	ruleCache.AddNetworkPolicy(policy)
 	rule1 := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))[0]
-	statusController.SetRuleRealization(rule1.ID, policy.UID, "")
+	statusController.SetRuleRealization(rule1.ID, policy.UID, reconcileErrorNil)
 
 	matchGeneration := func(generation int64) error {
 		return wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (done bool, err error) {
@@ -187,7 +187,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	for _, rule := range rules {
 		// Only call SetRuleRealization for new rule.
 		if rule.ID != rule1.ID {
-			statusController.SetRuleRealization(rule.ID, policy.UID, "")
+			statusController.SetRuleRealization(rule.ID, policy.UID, reconcileErrorNil)
 		}
 	}
 	assert.NoError(t, matchGeneration(policy.Generation), "The generation should be updated to %v but was not updated", policy.Generation)
@@ -220,7 +220,7 @@ func BenchmarkSyncHandler(b *testing.B) {
 	ruleCache.AddNetworkPolicy(policy)
 	rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
 	for _, rule := range rules {
-		statusController.SetRuleRealization(rule.ID, policy.UID, "")
+		statusController.SetRuleRealization(rule.ID, policy.UID, reconcileErrorNil)
 	}
 
 	b.ReportAllocs()
