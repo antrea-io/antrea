@@ -41,7 +41,7 @@ import (
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/querier"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -83,20 +83,24 @@ var (
 
 type fakeTraceflowController struct {
 	*Controller
-	kubeClient         kubernetes.Interface
-	mockController     *gomock.Controller
-	mockOFClient       *openflowtest.MockClient
-	crdClient          *fakeversioned.Clientset
-	crdInformerFactory crdinformers.SharedInformerFactory
+	kubeClient           kubernetes.Interface
+	mockController       *gomock.Controller
+	mockOFClient         *openflowtest.MockClient
+	crdClient            *fakeversioned.Clientset
+	crdInformerFactory   crdinformers.SharedInformerFactory
+	networkPolicyQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier
+	egressQuerier        *queriertest.MockEgressQuerier
 }
 
-func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, npQuerier querier.AgentNetworkPolicyInfoQuerier, egressQuerier querier.EgressQuerier) *fakeTraceflowController {
+func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig) *fakeTraceflowController {
 	controller := gomock.NewController(t)
 	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3)
 	mockOFClient := openflowtest.NewMockClient(controller)
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
+	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(controller)
+	egressQuerier := queriertest.NewMockEgressQuerier(controller)
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, pod1.Namespace, pod1.Name, pod1IPv4, pod1MAC.String(), int32(ofPortPod1))
@@ -122,12 +126,14 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 	}
 
 	return &fakeTraceflowController{
-		Controller:         tfController,
-		kubeClient:         kubeClient,
-		mockController:     controller,
-		mockOFClient:       mockOFClient,
-		crdClient:          crdClient,
-		crdInformerFactory: crdInformerFactory,
+		Controller:           tfController,
+		kubeClient:           kubeClient,
+		mockController:       controller,
+		mockOFClient:         mockOFClient,
+		crdClient:            crdClient,
+		crdInformerFactory:   crdInformerFactory,
+		networkPolicyQuerier: npQuerier,
+		egressQuerier:        egressQuerier,
 	}
 }
 
@@ -471,7 +477,7 @@ func TestPreparePacket(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil)
 			podInterfaces := tfc.interfaceStore.GetContainerInterfacesByPod(pod1.Name, pod1.Namespace)
 			if tt.intf != nil {
 				podInterfaces[0] = tt.intf
@@ -515,7 +521,7 @@ func TestErrTraceflowCRD(t *testing.T) {
 	expectedTf.Status.Phase = crdv1beta1.Failed
 	expectedTf.Status.Reason = reason
 
-	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil, nil, nil)
+	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil)
 
 	gotTf, err := tfc.errorTraceflowCRD(tf, reason)
 	require.NoError(t, err)
@@ -640,7 +646,7 @@ func TestStartTraceflow(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, tt.nodeConfig, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, tt.nodeConfig)
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(tfc.mockOFClient)
 			}
@@ -728,7 +734,7 @@ func TestSyncTraceflow(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			tfc.crdInformerFactory.Start(stopCh)
@@ -783,7 +789,7 @@ func TestProcessTraceflowItem(t *testing.T) {
 		expected: true,
 	}
 
-	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil, nil, nil)
+	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	tfc.crdInformerFactory.Start(stopCh)
@@ -829,7 +835,7 @@ func TestValidateTraceflow(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil)
 			tfc.enableAntreaProxy = tt.antreaProxyEnabled
 			err := tfc.validateTraceflow(tt.tf)
 			assert.ErrorContains(t, err, tt.expectedErr)

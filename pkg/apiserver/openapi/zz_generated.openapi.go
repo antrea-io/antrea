@@ -4936,6 +4936,13 @@ func schema_pkg_apis_crd_v1beta1_Observation(ref common.ReferenceCallback) commo
 							Format:      "",
 						},
 					},
+					"networkPolicyRule": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NetworkPolicyRule is the name of an ingress or an egress rule in NetworkPolicy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"egress": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Egress is the name of the Egress.",

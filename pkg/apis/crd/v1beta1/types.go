@@ -1135,6 +1135,8 @@ type Observation struct {
 	DstMAC string `json:"dstMAC,omitempty" yaml:"dstMAC,omitempty"`
 	// NetworkPolicy is the combination of Namespace and NetworkPolicyName.
 	NetworkPolicy string `json:"networkPolicy,omitempty" yaml:"networkPolicy,omitempty"`
+	// NetworkPolicyRule is the name of an ingress or an egress rule in NetworkPolicy.
+	NetworkPolicyRule string `json:"networkPolicyRule,omitempty" yaml:"networkPolicyRule,omitempty"`
 	// Egress is the name of the Egress.
 	Egress string `json:"egress,omitempty" yaml:"egress,omitempty"`
 	// TTL is the observation TTL.
