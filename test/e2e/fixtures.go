@@ -216,7 +216,7 @@ func createDirectory(path string) error {
 	return os.Mkdir(path, 0700)
 }
 
-func (data *TestData) setupLogDirectoryForTest(testName string) error {
+func (data *TestData) SetupLogDirectoryForTest(testName string) error {
 	// sanitize the testName: it can contain '/' if the test is a subtest
 	testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
 	path := filepath.Join(testOptions.logsExportDir, testName)
@@ -232,7 +232,7 @@ func (data *TestData) setupLogDirectoryForTest(testName string) error {
 }
 
 func setupTest(tb testing.TB) (*TestData, error) {
-	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
+	if err := testData.SetupLogDirectoryForTest(tb.Name()); err != nil {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err
 	}
@@ -276,15 +276,15 @@ func setupTestForFlowAggregator(tb testing.TB, o flowVisibilityTestOptions) (*Te
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
-	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
+	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
 		return nil, v4Enabled, v6Enabled, err
 	}
 	var ipStr string
-	if v6Enabled && ipfixCollectorIP.ipv6 != nil {
-		ipStr = ipfixCollectorIP.ipv6.String()
+	if v6Enabled && ipfixCollectorIP.IPv6 != nil {
+		ipStr = ipfixCollectorIP.IPv6.String()
 	} else {
-		ipStr = ipfixCollectorIP.ipv4.String()
+		ipStr = ipfixCollectorIP.IPv4.String()
 	}
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 

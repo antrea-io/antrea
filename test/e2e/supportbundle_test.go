@@ -78,7 +78,7 @@ func testSupportBundle(name string, t *testing.T) {
 	podIP, err := data.podWaitForIPs(defaultTimeout, podName, metav1.NamespaceSystem)
 	require.NoError(t, err)
 
-	for _, podIPStr := range podIP.ipStrings {
+	for _, podIPStr := range podIP.IPStrings {
 		getAndCheckSupportBundle(t, name, podIPStr, podPort, token, podName, data)
 	}
 }

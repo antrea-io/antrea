@@ -166,9 +166,9 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		podName, ips, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, data.testNamespace, false)
 		busyboxes = append(busyboxes, podName)
 		if !isIPv6 {
-			busyboxIPs = append(busyboxIPs, ips.ipv4.String())
+			busyboxIPs = append(busyboxIPs, ips.IPv4.String())
 		} else {
-			busyboxIPs = append(busyboxIPs, ips.ipv6.String())
+			busyboxIPs = append(busyboxIPs, ips.IPv6.String())
 		}
 	}
 
@@ -313,9 +313,9 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 		podName, ips, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, data.testNamespace, false)
 		busyboxes = append(busyboxes, podName)
 		if !isIPv6 {
-			busyboxIPs = append(busyboxIPs, ips.ipv4.String())
+			busyboxIPs = append(busyboxIPs, ips.IPv4.String())
 		} else {
-			busyboxIPs = append(busyboxIPs, ips.ipv6.String())
+			busyboxIPs = append(busyboxIPs, ips.IPv6.String())
 		}
 	}
 
@@ -642,14 +642,14 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	require.NoError(t, err)
 	if *ipFamily == corev1.IPv4Protocol {
 		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.IPv4.To4()), "0")))
 		for _, ingressIP := range ingressIPs {
 			require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
 		}
 	} else {
 		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[8:16]), "0")))
-		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[0:8]), "0")))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.IPv6)[8:16]), "0")))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.IPv6)[0:8]), "0")))
 		for _, ingressIP := range ingressIPs {
 			require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
 		}
@@ -910,9 +910,9 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, err)
 	var nginxIP string
 	if *ipFamily == corev1.IPv6Protocol {
-		nginxIP = nginxIPs.ipv6.String()
+		nginxIP = nginxIPs.IPv6.String()
 	} else {
-		nginxIP = nginxIPs.ipv4.String()
+		nginxIP = nginxIPs.IPv4.String()
 	}
 
 	keywords := make(map[string]string)
@@ -921,9 +921,9 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	var groupKeywords []string
 	if *ipFamily == corev1.IPv6Protocol {
 		groupKeywords = append(groupKeywords,
-			fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString((*nginxIPs.ipv6)[8:16]), "0"), strings.TrimLeft(hex.EncodeToString((*nginxIPs.ipv6)[:8]), "0")))
+			fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString((*nginxIPs.IPv6)[8:16]), "0"), strings.TrimLeft(hex.EncodeToString((*nginxIPs.IPv6)[:8]), "0")))
 	} else {
-		groupKeywords = append(groupKeywords, fmt.Sprintf("0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0")))
+		groupKeywords = append(groupKeywords, fmt.Sprintf("0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIPs.IPv4.To4()), "0")))
 	}
 
 	for tableName, keyword := range keywords {
@@ -997,9 +997,9 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	require.NoError(t, err)
 	var nginxIP string
 	if *ipFamily == corev1.IPv6Protocol {
-		nginxIP = nginxIPs.ipv6.String()
+		nginxIP = nginxIPs.IPv6.String()
 	} else {
-		nginxIP = nginxIPs.ipv4.String()
+		nginxIP = nginxIPs.IPv4.String()
 	}
 	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
@@ -1044,11 +1044,11 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	var groupKeyword string
 	if *ipFamily == corev1.IPv6Protocol {
 		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127],load:0x%x->NXM_NX_REG4[0..15]",
-			strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()[8:16]), "0"),
-			strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()[:8]), "0"),
+			strings.TrimLeft(hex.EncodeToString(nginxIPs.IPv6.To16()[8:16]), "0"),
+			strings.TrimLeft(hex.EncodeToString(nginxIPs.IPv6.To16()[:8]), "0"),
 			80)
 	} else {
-		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
+		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.IPv4.To4()), "0"), 80)
 	}
 	groupOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
@@ -1137,7 +1137,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			ingressNodeIP := controlPlaneNodeIPv4()
 			ipProtocol := corev1.IPv4Protocol
 			lbIP := "1.1.2.1"
-			internalClientIP := internalClientIPs.ipv4.String()
+			internalClientIP := internalClientIPs.IPv4.String()
 			externalClientIP := "1.1.1.1"
 			externalClientGateway := "1.1.1.254"
 			externalIPPrefix := 24

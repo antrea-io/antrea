@@ -80,7 +80,7 @@ func testBenchmarkBandwidthIntraNode(t *testing.T, data *TestData) {
 	if err != nil {
 		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 	}
-	podBIP := podBIPs.ipv4.String()
+	podBIP := podBIPs.IPv4.String()
 	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "toolbox", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", podBIP)})
 	if err != nil {
 		t.Fatalf("Error when running iperf3 client: %v", err)
@@ -194,11 +194,11 @@ func testPodTrafficShaping(t *testing.T, data *TestData) {
 				// Allow a certain deviation.
 				assert.InEpsilon(t, actualBandwidth, tt.expectedBandwidth, 0.1)
 			}
-			if podIPs.ipv4 != nil {
-				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.ipv4.String())})
+			if podIPs.IPv4 != nil {
+				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.IPv4.String())})
 			}
-			if podIPs.ipv6 != nil {
-				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -6 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.ipv6.String())})
+			if podIPs.IPv6 != nil {
+				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -6 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.IPv6.String())})
 			}
 		})
 	}
