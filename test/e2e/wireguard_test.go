@@ -89,11 +89,11 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 	}
 	podIPs := waitForPodIPs(t, data, podInfos)
 	for _, pi := range podInfos {
-		if pi.os == "linux" && pi.nodeName != nodeName(0) {
-			if podIPs[pi.name].ipv4 != nil {
-				peerPodIP = podIPs[pi.name].ipv4.String()
+		if pi.OS == "linux" && pi.NodeName != nodeName(0) {
+			if podIPs[pi.Name].IPv4 != nil {
+				peerPodIP = podIPs[pi.Name].IPv4.String()
 			} else {
-				peerPodIP = podIPs[pi.name].ipv6.String()
+				peerPodIP = podIPs[pi.Name].IPv6.String()
 			}
 			break
 		}

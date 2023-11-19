@@ -255,42 +255,42 @@ func TestAntreaIPAM(t *testing.T) {
 
 func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 	numPods := 2 // Two AntreaIPAM Pods, can be increased
-	podInfos := make([]podInfo, numPods)
-	for idx := range podInfos {
-		podInfos[idx].name = randName(fmt.Sprintf("test-antrea-ipam-pod-%d-", idx))
-		podInfos[idx].namespace = testAntreaIPAMNamespace
+	PodInfos := make([]PodInfo, numPods)
+	for idx := range PodInfos {
+		PodInfos[idx].Name = randName(fmt.Sprintf("test-antrea-ipam-pod-%d-", idx))
+		PodInfos[idx].Namespace = testAntreaIPAMNamespace
 	}
 	// One Per-Node IPAM Pod
-	podInfos = append(podInfos, podInfo{
-		name:      randName("test-pod-0-"),
-		namespace: data.testNamespace,
+	PodInfos = append(PodInfos, PodInfo{
+		Name:      randName("test-pod-0-"),
+		Namespace: data.testNamespace,
 	})
 	workerNode := workerNodeName(1)
 
 	t.Logf("Creating %d agnhost Pods on '%s'", numPods+1, workerNode)
-	for i := range podInfos {
-		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNodeWithAnnotations(podInfos[i].name, podInfos[i].namespace, workerNode, nil); err != nil {
-			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
+	for i := range PodInfos {
+		PodInfos[i].OS = clusterInfo.nodesOS[workerNode]
+		if err := data.createAgnhostPodOnNodeWithAnnotations(PodInfos[i].Name, PodInfos[i].Namespace, workerNode, nil); err != nil {
+			t.Fatalf("Error when creating agnhost test Pod '%s': %v", PodInfos[i], err)
 		}
-		defer deletePodWrapper(t, data, podInfos[i].namespace, podInfos[i].name)
+		defer deletePodWrapper(t, data, PodInfos[i].Namespace, PodInfos[i].Name)
 	}
 
-	data.runPingMesh(t, podInfos, agnhostContainerName)
+	data.runPingMesh(t, PodInfos, agnhostContainerName)
 }
 
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	maxNodes := 3
-	var podInfos []podInfo
+	var PodInfos []PodInfo
 	for _, namespace := range []string{data.testNamespace, testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
 		createdPodInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "differentnodes")
 		defer deletePods()
 		if len(createdPodInfos) > maxNodes {
 			createdPodInfos = createdPodInfos[:maxNodes]
 		}
-		podInfos = append(podInfos, createdPodInfos...)
+		PodInfos = append(PodInfos, createdPodInfos...)
 	}
-	data.runPingMesh(t, podInfos, agnhostContainerName)
+	data.runPingMesh(t, PodInfos, agnhostContainerName)
 }
 
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {
@@ -345,7 +345,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	if err != nil {
 		t.Fatalf("Error when waiting Pod IPs: %v", err)
 	}
-	isBelongTo, ipAddressState, err := checkIPPoolAllocation(t, data, ipPoolName, podIPs.ipv4.String())
+	isBelongTo, ipAddressState, err := checkIPPoolAllocation(t, data, ipPoolName, podIPs.IPv4.String())
 	if err != nil {
 		t.Fatalf("Error when checking IPPoolAllocation: %v", err)
 	}
