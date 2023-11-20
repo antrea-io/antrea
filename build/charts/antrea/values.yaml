@@ -235,10 +235,19 @@ agent:
   # -- Additional volumes for antrea-agent Pods.
   extraVolumes: []
   installCNI:
+    # -- Extra environment variables to be injected into install-cni.
+    extraEnv: {}
     # -- Resource requests and limits for the install-cni initContainer.
     resources:
       requests:
         cpu: "100m"
+    securityContext:
+      # -- Run the install-cni container as privileged.
+      privileged: false
+      # -- Capabilities for the install-cni initContainer.
+      capabilities:
+        # Used to load the Wireguard and OVS kernel modules.
+        - SYS_MODULE
   antreaAgent:
     # -- Extra environment variables to be injected into antrea-agent.
     extraEnv: {}
@@ -254,6 +263,13 @@ agent:
     resources:
       requests:
         cpu: "200m"
+    securityContext:
+      # -- Run the antrea-agent container as privileged. Currently we require
+      # this to be true (for sysctl configurations), but we may support running
+      # as non-privileged in the future.
+      privileged: true
+      # -- Capabilities for the antrea-agent container.
+      capabilities: []
   antreaOVS:
     # -- Max size in MBs of any single log file.
     logFileMaxSize: 100
@@ -265,12 +281,28 @@ agent:
     resources:
       requests:
         cpu: "200m"
+    securityContext:
+      # -- Run the antrea-ovs container as privileged.
+      privileged: false
+      # -- Capabilities for the antrea-ovs container.
+      capabilities:
+        # These are the capabilities required by the OVS daemons.
+        - SYS_NICE
+        - NET_ADMIN
+        - SYS_ADMIN
+        - IPC_LOCK
   antreaIPsec:
     # -- Resource requests and limits for the antrea-ipsec container (when IPsec
     # is enabled).
     resources:
       requests:
         cpu: "50m"
+    securityContext:
+      # -- Run the antrea-ipsec container as privileged.
+      privileged: false
+      # -- Capabilities for the antrea-ipsec container.
+      capabilities:
+        - NET_ADMIN
 
 controller:
   # -- Port for the antrea-controller APIServer to serve on.
