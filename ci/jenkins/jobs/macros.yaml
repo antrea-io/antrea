@@ -239,6 +239,7 @@
           #  we have configured for running conformance and NetworkPolicy tests on Kind, 
           #  so clusters older than that can de deleted safely.
           ./ci/kind/kind-setup.sh destroy --all --until 135
+          ./ci/kind/kind-install.sh
           ./ci/kind/kind-setup.sh --antrea-cni create "${{JOB_NAME}}-${{BUILD_NUMBER}}"
           kind export kubeconfig -n "${{JOB_NAME}}-${{BUILD_NUMBER}}" --kubeconfig ${{PWD}}/.kube/config
           set +ex
