@@ -29,8 +29,6 @@ on:
         type: boolean
         default: false
 
-env:
-  KIND_VERSION: v0.18.0
 
 jobs:
   test:
@@ -61,6 +59,7 @@ jobs:
           ./hack/build-antrea-linux-all.sh --pull
       - name: Install Kind
         run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
           chmod +x ./kind
           sudo mv kind /usr/local/bin
