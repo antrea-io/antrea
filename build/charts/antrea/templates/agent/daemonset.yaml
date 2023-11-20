@@ -93,12 +93,23 @@ spec:
           {{- else }}
           command: ["install_cni"]
           {{- end }}
+          {{- with .Values.agent.installCNI.securityContext }}
           securityContext:
+            {{- if .privileged }}
+            privileged: true
+            {{- else }}
+            {{- with .capabilities }}
             capabilities:
               add:
-                # SYS_MODULE is required to load the OVS kernel module.
-                - SYS_MODULE
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
           env:
+            {{- range $k, $v := .Values.agent.installCNI.extraEnv }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
             # SKIP_CNI_BINARIES takes in values as a comma separated list of
             # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
             - name: SKIP_CNI_BINARIES
@@ -200,9 +211,18 @@ spec:
             # scenario, otherwise the DaemonSet controller would restart all agents at once, as opposed to performing a
             # rolling update. Set failureThreshold to 8 so it can tolerate 70s of disconnection.
             failureThreshold: 8
+          {{- with .Values.agent.antreaAgent.securityContext }}
           securityContext:
-            # antrea-agent needs to perform sysctl configuration.
+            {{- if .privileged }}
             privileged: true
+            {{- else }}
+            {{- with .capabilities }}
+            capabilities:
+              add:
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
           volumeMounts:
           - name: antrea-config
             mountPath: /etc/antrea/antrea-agent.conf
@@ -263,14 +283,18 @@ spec:
             {{- with .Values.agent.antreaOVS.extraArgs }}
             {{- toYaml . | trim | nindent 12 }}
             {{- end }}
+          {{- with .Values.agent.antreaOVS.securityContext }}
           securityContext:
-            # capabilities required by OVS daemons
+            {{- if .privileged }}
+            privileged: true
+            {{- else }}
+            {{- with .capabilities }}
             capabilities:
               add:
-                - SYS_NICE
-                - NET_ADMIN
-                - SYS_ADMIN
-                - IPC_LOCK
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
           livenessProbe:
             exec:
               # docker CRI doesn't honor timeoutSeconds, add "timeout" to the command as a workaround.
@@ -304,10 +328,18 @@ spec:
                 - timeout 5 container_liveness_probe ovs-ipsec
             initialDelaySeconds: 5
             periodSeconds: 5
+          {{- with .Values.agent.antreaIPsec.securityContext }}
           securityContext:
+            {{- if .privileged }}
+            privileged: true
+            {{- else }}
+            {{- with .capabilities }}
             capabilities:
               add:
-              - NET_ADMIN
+                {{- toYaml . | nindent 16 }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
           volumeMounts:
           - name: host-var-run-antrea
             mountPath: /var/run/openvswitch
