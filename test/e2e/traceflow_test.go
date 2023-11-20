@@ -667,7 +667,8 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 			ipVersion: 4,
 			tf: &v1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, pod0IPv4Str, node1Pods[1])),
+					Name:        randName(fmt.Sprintf("%s-%s-to-%s-", data.testNamespace, pod0IPv4Str, node1Pods[1])),
+					Annotations: map[string]string{"a": "a"},
 				},
 				Spec: v1beta1.TraceflowSpec{
 					Source: v1beta1.Source{
