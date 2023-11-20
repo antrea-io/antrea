@@ -260,7 +260,7 @@ func (pc *podConfigurator) configureInterfaces(
 	// be dropped by OVS.
 	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, &result.Result); err != nil {
 		// Do not return an error and fail the interface creation.
-		klog.ErrorS(err, "Failed to advertise IP address for container", "container ID", containerID)
+		klog.ErrorS(err, "Failed to advertise IP address for container", "container", containerID)
 	}
 	// Mark the manipulation as success to cancel deferred operations.
 	success = true
@@ -479,7 +479,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 
 	// clean-up IPs that may still be allocated
 	klog.V(4).InfoS("Running IPAM garbage collection for unused Pod IPs")
-	if err := ipam.GarbageCollectContainerIPs(antreaCNIType, desiredPodIPs); err != nil {
+	if err := ipam.GarbageCollectContainerIPs(AntreaCNIType, desiredPodIPs); err != nil {
 		klog.ErrorS(err, "Error when garbage collecting previously-allocated IPs")
 	}
 
