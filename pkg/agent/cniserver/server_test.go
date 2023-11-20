@@ -114,13 +114,12 @@ func TestLoadNetConfig(t *testing.T) {
 	)
 }
 
-func TestRequestCheck(t *testing.T) {
-	cniService := newCNIServer(t)
-	valid := cniService.isCNIVersionSupported(unsupportedCNIVersion)
+func TestCNIVersionCheck(t *testing.T) {
+	valid := IsCNIVersionSupported(unsupportedCNIVersion)
 	if valid {
 		t.Error("Failed to return error for unsupported version")
 	}
-	valid = cniService.isCNIVersionSupported(supportedCNIVersion)
+	valid = IsCNIVersionSupported(supportedCNIVersion)
 	if !valid {
 		t.Error("Failed accept supported version")
 	}
@@ -673,7 +672,6 @@ func newCNIServer(t *testing.T) *CNIServer {
 		networkReadyCh:  networkReadyCh,
 	}
 	close(networkReadyCh)
-	cniServer.supportedCNIVersions = buildVersionSet()
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
@@ -687,7 +685,7 @@ func generateNetworkConfiguration(name, cniVersion, cniType, ipamType string) *t
 	}
 	netCfg.CNIVersion = cniVersion
 	if cniType == "" {
-		netCfg.Type = antreaCNIType
+		netCfg.Type = AntreaCNIType
 	} else {
 		netCfg.Type = "cniType"
 	}

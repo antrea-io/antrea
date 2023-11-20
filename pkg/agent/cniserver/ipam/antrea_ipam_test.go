@@ -541,8 +541,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 	testCases := []struct {
 		name        string
 		networkConf *argtypes.NetworkConfig
-		args        *invoke.Args
-		k8sArgs     *argtypes.K8sArgs
 		initFunc    func(stopCh chan struct{}) *AntreaIPAM
 		expectedRes error
 	}{
@@ -588,14 +586,6 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 						testApple,
 					},
 				},
-			},
-			k8sArgs: &argtypes.K8sArgs{
-				CommonArgs:        cnitypes.CommonArgs{},
-				K8S_POD_NAME:      "test-pod",
-				K8S_POD_NAMESPACE: "test-ns",
-			},
-			args: &invoke.Args{
-				ContainerID: "container-id",
 			},
 			expectedRes: nil,
 			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
@@ -646,7 +636,16 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 				defer close(stopCh)
 			}
 
-			_, err := d.secondaryNetworkAdd(tt.args, tt.k8sArgs, tt.networkConf)
+			args := &invoke.Args{
+				ContainerID: "container-id",
+			}
+			k8sArgs := &argtypes.K8sArgs{
+				CommonArgs:        cnitypes.CommonArgs{},
+				K8S_POD_NAME:      "test-pod",
+				K8S_POD_NAMESPACE: "test-ns",
+			}
+
+			_, err := d.secondaryNetworkAdd(args, k8sArgs, tt.networkConf)
 			assert.Equal(t, tt.expectedRes, err)
 		})
 	}
