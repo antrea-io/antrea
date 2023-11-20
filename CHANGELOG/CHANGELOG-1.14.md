@@ -1,5 +1,13 @@
 # Changelog 1.14
 
+## 1.14.1 - 2023-11-21
+
+### Fixed
+
+- Fix the CrashLookBackOff issue when using the UBI-based image. ([#5723](https://github.com/antrea-io/antrea/pull/5723), [@antoninbas])
+- Skip enforcement of ingress NetworkPolicies rules for hairpinned Service traffic (Pod accessing itself via a Service). ([#5687](https://github.com/antrea-io/antrea/pull/5687) [#5705](https://github.com/antrea-io/antrea/pull/5705), [@GraysonWu])
+- Set net.ipv4.conf.antrea-gw0.arp_announce to 1 to fix an ARP request leak when a Node or hostNetwork Pod accesses a local Pod and AntreaIPAM is enabled. ([#5657](https://github.com/antrea-io/antrea/pull/5657), [@gran-vmv])
+
 ## 1.14.0 - 2023-10-27
 
 ### Added
