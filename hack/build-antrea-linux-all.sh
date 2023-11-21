@@ -107,7 +107,7 @@ if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ]; then
 fi
 if [ "$DISTRO" == "ubi" ]; then
     if $COVERAGE ; then
-        echoerr "No coverage build for UBI8"
+        echoerr "No coverage build for UBI9"
         exit 1
     fi
     ARGS="$ARGS --distro ubi"
@@ -134,8 +134,8 @@ if $PULL; then
         docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION golang:$GO_VERSION
     fi
     if [ "$DISTRO" == "ubi" ]; then
-        docker pull $PLATFORM_ARG centos:centos7
-        docker pull $PLATFORM_ARG registry.access.redhat.com/ubi8
+        docker pull $PLATFORM_ARG quay.io/centos/centos:stream9
+        docker pull $PLATFORM_ARG registry.access.redhat.com/ubi9
     fi
 fi
 
