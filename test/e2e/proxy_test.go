@@ -1101,7 +1101,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 	backendNode2 := workerNodeName(2)
 
 	internalClient := "internal-client"
-	err = NewPodBuilder(internalClient, data.testNamespace, toolboxImage).OnNode(ingressNode).Create(data)
+	err = NewPodBuilder(internalClient, data.testNamespace, ToolboxImage).OnNode(ingressNode).Create(data)
 	require.NoError(t, err, "Failed to create internal client")
 	defer deletePodWrapper(t, data, data.testNamespace, internalClient)
 	internalClientIPs, err := data.podWaitForIPs(defaultTimeout, internalClient, data.testNamespace)
@@ -1145,7 +1145,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			// Create another netns to fake an external network on the host network Pod.
 			externalClient := randName("external-client-")
 			cmd, externalNetns := getCommandInFakeExternalNetwork("sleep infinity", externalIPPrefix, externalClientIP, externalClientGateway)
-			err := NewPodBuilder(externalClient, data.testNamespace, toolboxImage).OnNode(ingressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data)
+			err := NewPodBuilder(externalClient, data.testNamespace, ToolboxImage).OnNode(ingressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data)
 			require.NoError(t, err, "Failed to create external client")
 			defer deletePodWrapper(t, data, data.testNamespace, externalClient)
 			err = data.podWaitForRunning(defaultTimeout, externalClient, data.testNamespace)

@@ -797,14 +797,14 @@ func testEgressUpdateBandwidth(t *testing.T, data *TestData) {
 	fakeExternalCmd := "iperf3 -s"
 	cmd, _ := getCommandInFakeExternalNetwork(fakeExternalCmd, 24, "1.1.1.1", "1.1.1.254")
 
-	err := NewPodBuilder(fakeExternalName, data.testNamespace, toolboxImage).OnNode(egressNode).WithCommand([]string{"bash", "-c", cmd}).InHostNetwork().Privileged().Create(data)
+	err := NewPodBuilder(fakeExternalName, data.testNamespace, ToolboxImage).OnNode(egressNode).WithCommand([]string{"bash", "-c", cmd}).InHostNetwork().Privileged().Create(data)
 	require.NoError(t, err, "Failed to create fake external Pod")
 	defer deletePodWrapper(t, data, data.testNamespace, fakeExternalName)
 	err = data.podWaitForRunning(defaultTimeout, fakeExternalName, data.testNamespace)
 	require.NoError(t, err, "Error when waiting for fake external Pod to be in the Running state")
 
 	clientPodName := "client-pod"
-	err = NewPodBuilder(clientPodName, data.testNamespace, toolboxImage).OnNode(egressNode).Create(data)
+	err = NewPodBuilder(clientPodName, data.testNamespace, ToolboxImage).OnNode(egressNode).Create(data)
 	require.NoError(t, err, "Failed to create client Pod")
 	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
 	err = data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace)

@@ -211,7 +211,7 @@ fi
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/antrea/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
-                    "projects.registry.vmware.com/antrea/toolbox:1.1-0")
+                    "projects.registry.vmware.com/antrea/toolbox:1.3-0")
 
 FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.8.2" \
                             "projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0" \

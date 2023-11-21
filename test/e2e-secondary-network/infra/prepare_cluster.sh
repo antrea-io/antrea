@@ -18,14 +18,13 @@ THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 pushd $THIS_DIR
 
 _usage="Usage: $0 [--setup] [--cleanup]
-                  [--network <sriov or veth>] [--host-name <name>] [--help]
+                  [--network <sriov>] [--host-name <name>] [--help]
 
 Deploy Antrea CNI and its native secondary network prerequisites on an existing/running K8s cluster control node.
 
         --setup                                 Deploy all the pre-requisite plugins and CRDs for secondary network configuration.
         --cleanup                               Remove all the pre-requisite plugins and CRDs deployed for secondary network configuration.
-	--network                               sriov or veth (provide --network=sriov for sriov based secondary network configuration.
-	                                        --network=veth for veth based secondary network configuration).
+        --network                               Secondary network type, can be sriov or vlan.
         --host-name <k8s control node name/IP>  K8s cluster control node's host name or IP address."
 
 _ssh_config_info="Prerequisite: Kubernetes(K8s) cluster is up and running at the local or remote server.
@@ -64,12 +63,9 @@ function print_help {
 
 NAMESPACE="kube-system"
 ANTREA_DS="ds/antrea-agent"
-WHEREABOUTS_CNI_REL_TAG=v0.6.1
-export URL_WHEREABOUTS_IP_POOLS="https://raw.githubusercontent.com/k8snetworkplumbingwg/whereabouts/$WHEREABOUTS_CNI_REL_TAG/doc/crds/whereabouts.cni.cncf.io_ippools.yaml"
-export URL_WHEREABOUTS_OVERLAPPING_IP_RANGE_RES="https://raw.githubusercontent.com/k8snetworkplumbingwg/whereabouts/$WHEREABOUTS_CNI_REL_TAG/doc/crds/whereabouts.cni.cncf.io_overlappingrangeipreservations.yaml"
 export YAML_ANTREA='antrea.yml'
 export YAML_NET_ATTACH_DEF_CRD='network-attachment-definition-crd.yml'
-export YAML_VIRTUAL_NET_INSTANCE='virtual-network-instance-crd.yml'
+export YAML_SECONDARY_NETWORKS='secondary-networks.yml'
 
 action=''
 configure=''
@@ -78,12 +74,12 @@ network=''
 
 function generateAntreaConfig() {
         genManifest=$THIS_DIR/../../../hack/generate-manifest.sh
-	echo $genManifest
+        echo $genManifest
         if [ "$1" == "sriov" ]; then
-                $genManifest --sriov --whereabouts --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREA
-        elif [ "$1" == "veth" ]; then
-                $genManifest --whereabouts --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREA
-	else
+                $genManifest --sriov --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREA
+        elif [ "$1" == "vlan" ]; then
+                $genManifest --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREAc
+        else
               echoerr "Incorrect network option $1. Failed to generate antrea.yml"
               exit 1
         fi
@@ -102,30 +98,13 @@ function AntreaCNI() {
               echoerr "Failed to $action Antrea CNI"
               exit 1
         fi
-	# Setting timeout to report lack of progress after set time is elapsed
+        # Setting timeout to report lack of progress after set time is elapsed
         kubectl patch $ANTREA_DS -p '{"spec":{"progressDeadlineSeconds":30}}' -n $NAMESPACE
         kubectl -n $NAMESPACE rollout status $ANTREA_DS
 }
 
-function WhereaboutsCNI() {
-        kubectl $action -f $URL_WHEREABOUTS_IP_POOLS
-        if [ $? -ne 0 ]; then
-                echoerr "Failed to $action Whereabouts CNI"
-                exit 1
-        fi
-        echo "$action WhereaboutsCNI Done!"
-
-        kubectl $action -f $URL_WHEREABOUTS_OVERLAPPING_IP_RANGE_RES
-        if [ $? -ne 0 ]; then
-                echoerr "Failed to $action Whereabouts overlapping IP Range reservation"
-                exit 1
-        fi
-        echo "$action WhereaboutsOverlappingIpRangeRes Done!"
-}
-
-
 function VirtualNetworks() {
-        kubectl $action -f $YAML_VIRTUAL_NET_INSTANCE
+        kubectl $action -f $YAML_SECONDARY_NETWORKS
         if [ $? -ne 0 ]; then
                 echoerr "Failed to $action Virtual Network Instance: $instance"
                 exit 1
@@ -147,7 +126,6 @@ function NetworkAttachmentDefinition() {
 
 function configureSecondaryNetworkPrerequisite() {
         NetworkAttachmentDefinition
-        WhereaboutsCNI
         AntreaCNI
         echo "Setup is up and running..."
 }
@@ -181,10 +159,10 @@ while [[ $# -gt 0 ]]; do
                 hostName="$2"
                 shift 2
                 ;;
-	--network)
-		network=$2
-		shift 2
-		;;
+        --network)
+                network=$2
+                shift 2
+                ;;
         --help)
                 print_usage
                 exit 0
@@ -198,7 +176,7 @@ done
 
 # Download all the prerequisite files.
 if [[ $configure == true ]]; then
-        # Generate antrea.yml with --sriov and --whereabouts config options.
+        # Generate antrea.yml with --sriov config option.
         generateAntreaConfig $network
 fi
 configureSecondaryNetworkPrerequisite

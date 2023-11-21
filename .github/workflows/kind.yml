@@ -511,6 +511,50 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
+  test-secondary-network:
+    name: Antrea-native (VLAN) secondary network tests on a Kind cluster on Linux
+    needs: [build-antrea-coverage-image]
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Free disk space
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+    - name: Download Antrea image from previous job
+      uses: actions/download-artifact@v4
+      with:
+        name: antrea-ubuntu-cov
+    - name: Load Antrea image
+      run: |
+        docker load -i antrea-ubuntu.tar
+    - name: Install Kind
+      run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
+        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+        chmod +x ./kind
+        sudo mv kind /usr/local/bin
+    - name: Run secondary network tests
+      run: |
+        mkdir log
+        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-secondary-network-kind.sh
+    - name: Tar log files
+      if: ${{ failure() }}
+      run: tar -czf log.tar.gz log
+    - name: Upload test log
+      uses: actions/upload-artifact@v4
+      if: ${{ failure() }}
+      with:
+        name: secondary-network.tar.gz
+        path: log.tar.gz
+        retention-days: 30
+
   test-upgrade-from-N-1:
     name: Upgrade from Antrea version N-1
     needs: build-antrea-coverage-image

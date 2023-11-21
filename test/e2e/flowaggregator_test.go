@@ -1732,7 +1732,7 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string, 
 func createPerftestPods(data *TestData) (*PodIPs, *PodIPs, *PodIPs, *PodIPs, *PodIPs, error) {
 	cmd := []string{"iperf3", "-s"}
 	create := func(name string, nodeName string, ports []corev1.ContainerPort) error {
-		return NewPodBuilder(name, data.testNamespace, toolboxImage).WithContainerName("iperf").WithCommand(cmd).OnNode(nodeName).WithPorts(ports).Create(data)
+		return NewPodBuilder(name, data.testNamespace, ToolboxImage).WithContainerName("iperf").WithCommand(cmd).OnNode(nodeName).WithPorts(ports).Create(data)
 	}
 	var err error
 	var podIPsArray [5]*PodIPs
@@ -1888,7 +1888,7 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	clientPodName := "l7flowexportertestpodclient"
 	clientPodLabels := map[string]string{"flowexportertest": "l7"}
 	clientPodAnnotations := map[string]string{antreaagenttypes.L7FlowExporterAnnotationKey: "both"}
-	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, toolboxImage).OnNode(nodeName).WithContainerName("l7flowexporter").WithLabels(clientPodLabels).WithAnnotations(clientPodAnnotations).Create(data))
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, ToolboxImage).OnNode(nodeName).WithContainerName("l7flowexporter").WithLabels(clientPodLabels).WithAnnotations(clientPodAnnotations).Create(data))
 	clientPodIPs, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoErrorf(t, err, "Error when waiting for IP for Pod '%s': %v", clientPodName, err)
 	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
