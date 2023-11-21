@@ -64,6 +64,7 @@ The labels in this list originated within Kubernetes at
 | area/proxy/clusterip               | Issues or PRs related to the implementation of ClusterIP Services | Any |
 | area/proxy/nodeport                | Issues or PRs related to the implementation of NodePort Services | Any |
 | area/proxy/nodeportlocal           | Issues or PRs related to the NodePortLocal feature | Any |
+| area/secondary-network             | Issues or PRs related to support for secondary networks in Antrea | Any |
 | area/security/access-control       | Issues or PRs related to access control | Any |
 | area/security/controlplane         | Issues or PRs related to controlplane security | Any |
 | area/security/dataplane            | Issues or PRs related to dataplane security | Any |
