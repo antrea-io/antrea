@@ -23,7 +23,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -56,6 +55,7 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -111,9 +111,9 @@ type Initializer struct {
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	enableL7NetworkPolicy bool
 	connectUplinkToBridge bool
-	// networkReadyCh should be closed once the Node's network is ready.
+	// podNetworkWait should be decremented once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	networkReadyCh        chan<- struct{}
+	podNetworkWait        *utilwait.Group
 	stopCh                <-chan struct{}
 	nodeType              config.NodeType
 	externalNodeNamespace string
@@ -134,7 +134,7 @@ func NewInitializer(
 	wireGuardConfig *config.WireGuardConfig,
 	egressConfig *config.EgressConfig,
 	serviceConfig *config.ServiceConfig,
-	networkReadyCh chan<- struct{},
+	podNetworkWait *utilwait.Group,
 	stopCh <-chan struct{},
 	nodeType config.NodeType,
 	externalNodeNamespace string,
@@ -157,7 +157,7 @@ func NewInitializer(
 		egressConfig:          egressConfig,
 		serviceConfig:         serviceConfig,
 		l7NetworkPolicyConfig: &config.L7NetworkPolicyConfig{},
-		networkReadyCh:        networkReadyCh,
+		podNetworkWait:        podNetworkWait,
 		stopCh:                stopCh,
 		nodeType:              nodeType,
 		externalNodeNamespace: externalNodeNamespace,
@@ -395,9 +395,6 @@ func (i *Initializer) restorePortConfigs() error {
 // Initialize sets up agent initial configurations.
 func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
-	// wg is used to wait for the asynchronous initialization.
-	var wg sync.WaitGroup
-
 	if err := i.initNodeLocalConfig(); err != nil {
 		return err
 	}
@@ -473,10 +470,10 @@ func (i *Initializer) Initialize() error {
 	}
 
 	if i.nodeType == config.K8sNode {
-		wg.Add(1)
+		i.podNetworkWait.Increment()
 		// routeClient.Initialize() should be after i.setupOVSBridge() which
 		// creates the host gateway interface.
-		if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
+		if err := i.routeClient.Initialize(i.nodeConfig, i.podNetworkWait.Done); err != nil {
 			return err
 		}
 
@@ -484,12 +481,6 @@ func (i *Initializer) Initialize() error {
 		if err := i.initOpenFlowPipeline(); err != nil {
 			return err
 		}
-
-		// The Node's network is ready only when both synchronous and asynchronous initialization are done.
-		go func() {
-			wg.Wait()
-			close(i.networkReadyCh)
-		}()
 	} else {
 		// Install OpenFlow entries on OVS bridge.
 		if err := i.initOpenFlowPipeline(); err != nil {
