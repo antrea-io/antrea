@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/wait"
 )
 
 type vethPair struct {
@@ -413,7 +414,7 @@ func parsePrevResult(conf *types.NetworkConfig) error {
 	return nil
 }
 
-func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *containerAccessArbitrator) error {
+func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *containerAccessArbitrator, podNetworkWait *wait.Group) error {
 	// desiredPods is the set of Pods that should be present, based on the
 	// current list of Pods got from the Kubernetes API.
 	desiredPods := sets.New[string]()
@@ -445,21 +446,34 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				missingIfConfigs = append(missingIfConfigs, containerConfig)
 				continue
 			}
-			// This interface matches an existing Pod.
-			// We rely on the interface cache / store - which is initialized from the persistent
-			// OVSDB - to map the Pod to its interface configuration. The interface
-			// configuration includes the parameters we need to replay the flows.
-			klog.V(4).InfoS("Syncing Pod interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
-			if err := pc.ofClient.InstallPodFlows(
-				containerConfig.InterfaceName,
-				containerConfig.IPs,
-				containerConfig.MAC,
-				uint32(containerConfig.OFPort),
-				containerConfig.VLANID,
-				nil,
-			); err != nil {
-				klog.ErrorS(err, "Error when re-installing flows for Pod", "Pod", klog.KRef(namespace, name))
-			}
+			go func(containerID, pod, namespace string) {
+				// Do not install Pod flows until all preconditions are met.
+				podNetworkWait.Wait()
+				// To avoid race condition with CNIServer CNI event handlers.
+				containerAccess.lockContainer(containerID)
+				defer containerAccess.unlockContainer(containerID)
+
+				containerConfig, exists := pc.ifaceStore.GetContainerInterface(containerID)
+				if !exists {
+					klog.InfoS("The container interface had been deleted, skip installing flows for Pod", "Pod", klog.KRef(namespace, name), "containerID", containerID)
+					return
+				}
+				// This interface matches an existing Pod.
+				// We rely on the interface cache / store - which is initialized from the persistent
+				// OVSDB - to map the Pod to its interface configuration. The interface
+				// configuration includes the parameters we need to replay the flows.
+				klog.V(4).InfoS("Syncing Pod interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
+				if err := pc.ofClient.InstallPodFlows(
+					containerConfig.InterfaceName,
+					containerConfig.IPs,
+					containerConfig.MAC,
+					uint32(containerConfig.OFPort),
+					containerConfig.VLANID,
+					nil,
+				); err != nil {
+					klog.ErrorS(err, "Error when re-installing flows for Pod", "Pod", klog.KRef(namespace, name))
+				}
+			}(containerConfig.ContainerID, name, namespace)
 		} else {
 			// clean-up and delete interface
 			klog.V(4).InfoS("Deleting interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)

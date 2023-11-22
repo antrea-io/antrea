@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -663,15 +664,13 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 }
 
 func newCNIServer(t *testing.T) *CNIServer {
-	networkReadyCh := make(chan struct{})
 	cniServer := &CNIServer{
 		cniSocket:       testSocket,
 		nodeConfig:      testNodeConfig,
 		serverVersion:   cni.AntreaCNIVersion,
 		containerAccess: newContainerAccessArbitrator(),
-		networkReadyCh:  networkReadyCh,
+		podNetworkWait:  wait.NewGroup(),
 	}
-	close(networkReadyCh)
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer
 }
