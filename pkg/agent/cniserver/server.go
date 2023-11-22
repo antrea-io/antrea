@@ -45,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -118,8 +119,8 @@ type CNIServer struct {
 	disableTXChecksumOffload   bool
 	secondaryNetworkEnabled    bool
 	networkConfig              *config.NetworkConfig
-	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
-	networkReadyCh <-chan struct{}
+	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
+	podNetworkWait *wait.Group
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -441,11 +442,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return resp, err
 	}
 
-	select {
-	case <-time.After(networkReadyTimeout):
-		klog.ErrorS(nil, "Cannot process CmdAdd request for container because network is not ready", "container", cniConfig.ContainerId, "timeout", networkReadyTimeout)
+	if err := s.podNetworkWait.WaitWithTimeout(networkReadyTimeout); err != nil {
+		klog.ErrorS(err, "Cannot process CmdAdd request for container because network is not ready", "container", cniConfig.ContainerId, "timeout", networkReadyTimeout)
 		return s.tryAgainLaterResponse(), nil
-	case <-s.networkReadyCh:
 	}
 
 	result := &ipam.IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}}
@@ -634,7 +633,7 @@ func New(
 	routeClient route.Interface,
 	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
 	networkConfig *config.NetworkConfig,
-	networkReadyCh <-chan struct{},
+	podNetworkWait *wait.Group,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
@@ -650,7 +649,7 @@ func New(
 		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
 		networkConfig:              networkConfig,
-		networkReadyCh:             networkReadyCh,
+		podNetworkWait:             podNetworkWait,
 	}
 }
 
@@ -773,7 +772,7 @@ func (s *CNIServer) reconcile() error {
 		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)
 	}
 
-	return s.podConfigurator.reconcile(pods.Items, s.containerAccess)
+	return s.podConfigurator.reconcile(pods.Items, s.containerAccess, s.podNetworkWait)
 }
 
 func init() {

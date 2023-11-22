@@ -737,7 +737,8 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 		checkOne := func(clientPod, serverPod string, serverIP *net.IP) {
 			defer wg.Done()
 			if serverIP != nil {
-				_, _, err := data.runWgetCommandFromTestPodWithRetry(clientPod, data.testNamespace, nginxContainerName, serverIP.String(), 1)
+				cmd := []string{"wget", "-O", "-", serverIP.String(), "-T", "1"}
+				_, _, err := data.RunCommandFromPod(data.testNamespace, clientPod, nginxContainerName, cmd)
 				if expectErr && err == nil {
 					t.Errorf("Pod %s should not be able to connect %s, but was able to connect", clientPod, serverPod)
 				} else if !expectErr && err != nil {
@@ -768,6 +769,12 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	// Restart the antrea-agent.
 	_, err = data.deleteAntreaAgentOnNode(workerNode, 30, defaultTimeout)
 	require.NoError(t, err)
+
+	// While the new antrea-agent starts, the denied Pod should never connect to the isolated Pod successfully.
+	for i := 0; i < 5; i++ {
+		checkFunc(deniedPod, deniedPodIPs, true)
+	}
+
 	antreaPod, err := data.getAntreaPodOnNode(workerNode)
 	require.NoError(t, err)
 	// Make sure the new antrea-agent disconnects from antrea-controller but connects to OVS.

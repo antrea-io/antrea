@@ -57,6 +57,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -295,7 +296,7 @@ type cmdAddDelTester struct {
 	targetNS       ns.NetNS
 	request        *cnimsg.CniCmdRequest
 	vethName       string
-	networkReadyCh chan struct{}
+	podNetworkWait *wait.Group
 }
 
 func (tester *cmdAddDelTester) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
@@ -564,14 +565,14 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
-	tester.networkReadyCh = make(chan struct{})
+	tester.podNetworkWait = wait.NewGroup()
 	tester.server = cniserver.New(testSock,
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		routeMock,
 		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
-		tester.networkReadyCh)
+		tester.podNetworkWait.Increment())
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	ctx := context.Background()
 	tester.ctx = ctx
@@ -607,7 +608,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname, false).Return(int32(10), nil).AnyTimes()
 	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any(), uint16(0), nil).Return(nil)
 
-	close(tester.networkReadyCh)
+	tester.podNetworkWait.Done()
 	// Test ips allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
 	testRequire.Nil(err)
@@ -726,15 +727,14 @@ func setupChainTest(
 
 	if newServer {
 		routeMock = routetest.NewMockInterface(controller)
-		networkReadyCh := make(chan struct{})
-		close(networkReadyCh)
+		podNetworkWait := wait.NewGroup()
 		server = cniserver.New(testSock,
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			routeMock,
 			true, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
-			networkReadyCh)
+			podNetworkWait)
 	} else {
 		server = inServer
 	}
