@@ -46,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -143,10 +144,11 @@ type Controller struct {
 	fullSyncGroup         sync.WaitGroup
 	ifaceStore            interfacestore.InterfaceStore
 	// denyConnStore is for storing deny connections for flow exporter.
-	denyConnStore *connections.DenyConnectionStore
-	gwPort        uint32
-	tunPort       uint32
-	nodeConfig    *config.NodeConfig
+	denyConnStore  *connections.DenyConnectionStore
+	gwPort         uint32
+	tunPort        uint32
+	nodeConfig     *config.NodeConfig
+	podNetworkWait *utilwait.Group
 
 	// The fileStores store runtime.Objects in files and use them as the fallback data source when agent can't connect
 	// to antrea-controller on startup.
@@ -181,7 +183,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	v4Enabled bool,
 	v6Enabled bool,
 	gwPort, tunPort uint32,
-	nodeConfig *config.NodeConfig) (*Controller, error) {
+	nodeConfig *config.NodeConfig,
+	podNetworkWait *utilwait.Group) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider:   antreaClientGetter,
@@ -196,6 +199,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		gwPort:                 gwPort,
 		tunPort:                tunPort,
 		nodeConfig:             nodeConfig,
+		podNetworkWait:         podNetworkWait.Increment(),
 	}
 
 	if l7NetworkPolicyEnabled {
@@ -610,6 +614,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("All watchers have completed full sync, installing flows for init events")
 	// Batch install all rules in queue after fullSync is finished.
 	c.processAllItemsInQueue()
+	c.podNetworkWait.Done()
 
 	klog.Infof("Starting NetworkPolicy workers now")
 	defer c.queue.ShutDown()
