@@ -79,6 +79,7 @@ import (
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/podstore"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 	"antrea.io/antrea/pkg/version"
 )
 
@@ -226,9 +227,12 @@ func run(o *Options) error {
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
 
-	// networkReadyCh is used to notify that the Node's network is ready.
-	// Functions that rely on the Node's network should wait for the channel to close.
-	networkReadyCh := make(chan struct{})
+	// podNetworkWait is used to wait and notify that preconditions for Pod network are ready.
+	// Processes that are supposed to finish before enabling Pod network should increment the wait group and decrement
+	// it when finished.
+	// Processes that enable Pod network should wait for it.
+	podNetworkWait := utilwait.NewGroup()
+
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -275,7 +279,7 @@ func run(o *Options) error {
 		wireguardConfig,
 		egressConfig,
 		serviceConfig,
-		networkReadyCh,
+		podNetworkWait,
 		stopCh,
 		o.nodeType,
 		o.config.ExternalNode.ExternalNodeNamespace,
@@ -483,6 +487,7 @@ func run(o *Options) error {
 		gwPort,
 		tunPort,
 		nodeConfig,
+		podNetworkWait,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
@@ -555,7 +560,7 @@ func run(o *Options) error {
 			enableAntreaIPAM,
 			o.config.DisableTXChecksumOffload,
 			networkConfig,
-			networkReadyCh)
+			podNetworkWait)
 
 		if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 			cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
