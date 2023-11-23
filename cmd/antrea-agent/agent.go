@@ -467,6 +467,7 @@ func run(o *Options) error {
 		antreaPolicyEnabled,
 		l7NetworkPolicyEnabled,
 		o.enableAntreaProxy,
+		o.config.AntreaProxy.ProxyAll,
 		statusManagerEnabled,
 		multicastEnabled,
 		auditLoggerOptions,

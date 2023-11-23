@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,7 +33,8 @@ import (
 )
 
 const (
-	realizedRulePolicyIndex = "policy"
+	realizedRulePolicyIndex = "realizedRule"
+	failedRulePolicyIndex   = "failedRule"
 )
 
 // StatusManager keeps track of the realized NetworkPolicy rules. It syncs the status of a NetworkPolicy to the
@@ -42,7 +44,7 @@ const (
 // DeleteRuleRealization is supposed to be called for the removed rules.
 type StatusManager interface {
 	// SetRuleRealization updates the actual status for the given NetworkPolicy rule.
-	SetRuleRealization(ruleID string, policyID types.UID)
+	SetRuleRealization(ruleID string, policyID types.UID, failedReason string)
 	// DeleteRuleRealization deletes the actual status for the given NetworkPolicy rule.
 	DeleteRuleRealization(ruleID string)
 	// Resync triggers syncing status with the antrea-controller for the given NetworkPolicy.
@@ -73,13 +75,35 @@ type realizedRule struct {
 	policyID types.UID
 }
 
+type failedRule struct {
+	RuleID   string    `json:"ruleID"`
+	PolicyID types.UID `json:"policyID"`
+	Reason   string    `json:"reason"`
+}
+
 func realizedRuleKeyFunc(obj interface{}) (string, error) {
-	return obj.(*realizedRule).ruleID, nil
+	if r, ok := obj.(*realizedRule); ok {
+		return r.ruleID, nil
+	} else if r, ok := obj.(*failedRule); ok {
+		return r.RuleID, nil
+	}
+	return "", fmt.Errorf("unknown type of object")
 }
 
 func realizedRulePolicyIndexFunc(obj interface{}) ([]string, error) {
-	rule := obj.(*realizedRule)
+	rule, ok := obj.(*realizedRule)
+	if !ok {
+		return nil, nil
+	}
 	return []string{string(rule.policyID)}, nil
+}
+
+func failedRulePolicyIndexFunc(obj interface{}) ([]string, error) {
+	rule, ok := obj.(*failedRule)
+	if !ok {
+		return nil, nil
+	}
+	return []string{string(rule.PolicyID)}, nil
 }
 
 func newStatusController(antreaClientProvider agent.AntreaClientProvider, nodeName string, ruleCache *ruleCache) *StatusController {
@@ -89,19 +113,25 @@ func newStatusController(antreaClientProvider agent.AntreaClientProvider, nodeNa
 		ruleCache:              ruleCache,
 		realizedRules: cache.NewIndexer(realizedRuleKeyFunc, cache.Indexers{
 			realizedRulePolicyIndex: realizedRulePolicyIndexFunc,
+			failedRulePolicyIndex:   failedRulePolicyIndexFunc,
 		}),
 		queue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicystatus"),
 	}
 }
 
-func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID) {
+func (c *StatusController) SetRuleRealization(ruleID string, policyID types.UID, failedReason string) {
 	_, exists, _ := c.realizedRules.GetByKey(ruleID)
 	// This rule has been realized before. The current call must be triggered by group member updates, which doesn't
 	// affect the policy's realization status.
 	if exists {
 		return
 	}
-	c.realizedRules.Add(&realizedRule{ruleID: ruleID, policyID: policyID})
+	if failedReason != "" {
+		c.realizedRules.Add(&failedRule{RuleID: ruleID, PolicyID: policyID, Reason: failedReason})
+	} else {
+		c.realizedRules.Add(&realizedRule{ruleID: ruleID, policyID: policyID})
+	}
+
 	c.queue.Add(policyID)
 }
 
@@ -112,7 +142,14 @@ func (c *StatusController) DeleteRuleRealization(ruleID string) {
 		return
 	}
 	c.realizedRules.Delete(obj)
-	c.queue.Add(obj.(*realizedRule).policyID)
+	var policyID types.UID
+	switch v := obj.(type) {
+	case realizedRule:
+		policyID = v.policyID
+	case failedRule:
+		policyID = v.PolicyID
+	}
+	c.queue.Add(policyID)
 }
 
 func (c *StatusController) Resync(policyID types.UID) {
@@ -170,8 +207,10 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 		return nil
 	}
 	actualRules, _ := c.realizedRules.ByIndex(realizedRulePolicyIndex, string(uid))
-	// desiredRules should match actualRules exactly.
-	if len(desiredRules) != len(actualRules) {
+	faildRules, _ := c.realizedRules.ByIndex(failedRulePolicyIndex, string(uid))
+
+	// desiredRules should match actualRules and invalidRules exactly.
+	if len(desiredRules) != len(actualRules)+len(faildRules) {
 		return nil
 	}
 	desiredRuleSet := sets.New[string]()
@@ -185,8 +224,26 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 		}
 		desiredRuleSet.Delete(ruleID)
 	}
+	var failedRules []*failedRule
+	for _, r := range faildRules {
+		ir := r.(*failedRule)
+		failedRules = append(failedRules, ir)
+		ruleID := ir.RuleID
+		if !desiredRuleSet.Has(ruleID) {
+			return nil
+		}
+		desiredRuleSet.Delete(ruleID)
+	}
 	if len(desiredRuleSet) > 0 {
 		return nil
+	}
+
+	realizationFailure := false
+	message := ""
+	if len(failedRules) > 0 {
+		realizationFailure = true
+		m, _ := json.Marshal(failedRules)
+		message = string(m)
 	}
 
 	// At this point, all desired rules have been realized and all undesired rules have been removed, report it to the antrea-controller.
@@ -199,7 +256,8 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 			{
 				NodeName:           c.nodeName,
 				Generation:         policy.Generation,
-				RealizationFailure: false,
+				RealizationFailure: realizationFailure,
+				Message:            message,
 			},
 		},
 	}
