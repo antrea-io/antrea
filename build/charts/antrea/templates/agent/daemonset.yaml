@@ -67,19 +67,6 @@ spec:
       {{- end }}
       serviceAccountName: antrea-agent
       initContainers:
-        {{- if .Values.whereabouts.enable }}
-        - name: install-whereabouts-config
-          image: {{ include "antreaImage" . | quote }}
-          resources:
-            requests:
-              cpu: "100m"
-          command: ["install_whereabouts_config"]
-          volumeMounts:
-          - name: whereabouts-cni-conf
-            mountPath: /host/etc/cni/net.d/whereabouts.d
-          - name: whereabouts-secret
-            mountPath: /var/run/secrets/whereabouts
-        {{- end }}
       {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
       containers:
       {{- end }}
@@ -260,12 +247,6 @@ spec:
             mountPropagation: HostToContainer
           - name: xtables-lock
             mountPath: /run/xtables.lock
-          {{- if .Values.whereabouts.enable }}
-          - name: whereabouts-cni-conf
-            mountPath: /host/etc/cni/net.d/whereabouts.d
-          - name: whereabouts-secret
-            mountPath: /var/run/secrets/whereabouts
-          {{- end }}
           {{- with .Values.agent.antreaAgent.extraVolumeMounts }}
           {{- toYaml . | trim | nindent 10 }}
           {{- end }}
@@ -396,12 +377,4 @@ spec:
             type: FileOrCreate
         {{- with .Values.agent.extraVolumes }}
         {{- toYaml . | trim | nindent 8 }}
-        {{- end }}
-        {{- if .Values.whereabouts.enable }}
-        - hostPath:
-            path: /host/etc/cni/net.d/whereabouts.d
-          name: whereabouts-cni-conf
-        - name: whereabouts-secret
-          secret:
-            secretName: whereabouts-cni-secret
         {{- end }}

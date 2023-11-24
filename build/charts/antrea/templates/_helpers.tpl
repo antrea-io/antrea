@@ -21,3 +21,9 @@
 {{- define "antreaImage" -}}
 {{- print .Values.image.repository ":" (include "antreaImageTag" .) -}}
 {{- end -}}
+
+{{- define "validateValues" -}}
+{{- if (.Values.whereabouts).enable -}}
+{{- fail "Whereabouts is no longer included with Antrea and whereabouts.enable must not be set" -}}
+{{- end -}}
+{{- end -}}

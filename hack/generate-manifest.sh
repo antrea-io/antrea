@@ -39,7 +39,6 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
         --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
         --flexible-ipam               Generates a manifest with flexible IPAM enabled.
-        --whereabouts                 Generates a manifest which enables whereabouts configuration for secondary network IPAM.
         --help, -h                    Print this message and exit
         --multicast                   Generates a manifest for multicast.
         --multicast-interfaces        Multicast interface names (default is empty)
@@ -78,7 +77,6 @@ SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
 HW_OFFLOAD=false
 SRIOV=false
-WHEREABOUTS=false
 FLEXIBLE_IPAM=false
 MULTICAST=false
 MULTICAST_INTERFACES=""
@@ -155,13 +153,9 @@ case $key in
     --sriov)
     SRIOV=true
     shift
-    ;;   
+    ;;
     --flexible-ipam)
     FLEXIBLE_IPAM=true
-    shift
-    ;;
-    --whereabouts)
-    WHEREABOUTS=true
     shift
     ;;
     --multicast)
@@ -326,10 +320,6 @@ agent:
     name: host-kubelet
 EOF
     HELM_VALUES_FILES+=("$TMP_DIR/sriov.yml")
-fi
-
-if $WHEREABOUTS; then
-    HELM_VALUES+=("whereabouts.enable=true")
 fi
 
 if [ "$MODE" == "dev" ]; then
