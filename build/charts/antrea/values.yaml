@@ -393,10 +393,6 @@ webhooks:
 # -- Global log verbosity switch for all Antrea components.
 logVerbosity: 0
 
-whereabouts:
-  # -- Install and configure Whereabouts, for use by the antrea-agent.
-  enable: false
-
 # Configure Multicluster defaults for both Antrea Controller and Agent.
 multicluster:
   # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
