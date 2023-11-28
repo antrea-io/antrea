@@ -383,8 +383,8 @@ function destroy {
       clean_kind
   else
       kind delete cluster --name $CLUSTER_NAME
-      delete_networks
   fi
+  delete_networks
 }
 
 function printUnixTimestamp {
