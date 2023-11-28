@@ -1,3 +1,4 @@
+{{- include "validateValues" . }}
 The Antrea CNI has been successfully installed
 
 You are using version {{ .Chart.Version }}
