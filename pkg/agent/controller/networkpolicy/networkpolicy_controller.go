@@ -171,6 +171,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		nodeConfig:             nodeConfig,
 	}
 
+	fmt.Println("new NetworkPolicyController created")
 	if l7NetworkPolicyEnabled {
 		c.l7RuleReconciler = l7engine.NewReconciler()
 		c.l7VlanIDAllocator = newL7VlanIDAllocator()
