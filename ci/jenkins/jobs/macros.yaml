@@ -246,7 +246,7 @@
           ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
           return_code=$?
           set -ex
-          kind delete cluster --name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+          ./ci/kind/kind-setup.sh destroy "${{JOB_NAME}}-${{BUILD_NUMBER}}"
           exit $return_code
 
 - builder:
