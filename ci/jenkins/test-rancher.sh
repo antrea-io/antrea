@@ -29,6 +29,7 @@ MODE="report"
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
 GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
+GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
 CLUSTER_NAME=""
 
@@ -130,7 +131,7 @@ function deliver_antrea {
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE="${WORKSPACE}/../gocache"
     export PATH=${GOROOT}/bin:$PATH
 
@@ -187,7 +188,7 @@ function run_e2e {
     echo "====== Running Antrea E2E Tests ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
@@ -222,7 +223,7 @@ function run_conformance {
     echo "====== Running Antrea Conformance Tests ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
@@ -263,6 +264,8 @@ function clean_tmp() {
 
 rancher_login
 
+source $WORKSPACE/ci/jenkins/utils.sh
+check_and_upgrade_golang
 clean_tmp
 trap clean_vm_agent EXIT
 deliver_antrea
