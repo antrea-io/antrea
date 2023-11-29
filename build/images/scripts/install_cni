@@ -54,12 +54,14 @@ install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.con
 # Hence, delete older 10-antrea.conf file.
 rm -f /host/etc/cni/net.d/10-antrea.conf
 
-# Load the OVS kernel module
-modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
+if [[ -z "${SKIP_LOADING_KERNEL_MODULES:-}" ]]; then
+    # Load the OVS kernel module
+    modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
 
-# Load the WireGuard kernel module. This is only required when WireGuard encryption is enabled.
-# We could parse the antrea config file in the init-container to dynamically load this kernel module in the future.
-modprobe wireguard || (echo "Failed to load the WireGuard kernel module, WireGuard encryption will not be available")
+    # Load the WireGuard kernel module. This is only required when WireGuard encryption is enabled.
+    # We could parse the antrea config file in the init-container to dynamically load this kernel module in the future.
+    modprobe wireguard || (echo "Failed to load the WireGuard kernel module, WireGuard encryption will not be available")
+fi
 
 # Change the default permissions of the run directory.
 chmod 0750 /var/run/antrea

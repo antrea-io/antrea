@@ -31,6 +31,7 @@ Kubernetes: `>= 1.16.0-0`
 | agent.antreaIPsec.securityContext.capabilities | list | `["NET_ADMIN"]` | Capabilities for the antrea-ipsec container. |
 | agent.antreaIPsec.securityContext.privileged | bool | `false` | Run the antrea-ipsec container as privileged. |
 | agent.antreaOVS.extraArgs | list | `[]` | Extra command-line arguments for antrea-ovs. |
+| agent.antreaOVS.extraEnv | object | `{}` | Extra environment variables to be injected into antrea-ovs. |
 | agent.antreaOVS.logFileMaxNum | int | `4` | Max number of log files. |
 | agent.antreaOVS.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
 | agent.antreaOVS.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-ovs container. |
@@ -38,6 +39,7 @@ Kubernetes: `>= 1.16.0-0`
 | agent.antreaOVS.securityContext.privileged | bool | `false` | Run the antrea-ovs container as privileged. |
 | agent.apiPort | int | `10350` | Port for the antrea-agent APIServer to serve on. |
 | agent.dnsPolicy | string | `""` | DNS Policy for the antrea-agent Pods. If empty, the Kubernetes default will be used. |
+| agent.dontLoadKernelModules | bool | `false` | Do not try to load any of the required Kernel modules (e.g., openvswitch) during initialization of the antrea-agent. Most users should never need to set this to true, but it may be required with some specific distributions. |
 | agent.enablePrometheusMetrics | bool | `true` | Enable metrics exposure via Prometheus. |
 | agent.extraVolumes | list | `[]` | Additional volumes for antrea-agent Pods. |
 | agent.installCNI.extraEnv | object | `{}` | Extra environment variables to be injected into install-cni. |

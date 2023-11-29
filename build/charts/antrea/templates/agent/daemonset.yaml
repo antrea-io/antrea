@@ -101,6 +101,10 @@ spec:
             # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
             - name: SKIP_CNI_BINARIES
               value: {{ join "," .Values.cni.skipBinaries | quote }}
+            {{- if .Values.agent.dontLoadKernelModules }}
+            - name: SKIP_LOADING_KERNEL_MODULES
+              value: "1"
+            {{- end }}
           volumeMounts:
           - name: antrea-config
             mountPath: /etc/antrea/antrea-cni.conflist
@@ -261,9 +265,19 @@ spec:
             {{- if .Values.ovs.hwOffload }}
             - "--hw-offload"
             {{- end }}
+            {{- if .Values.agent.dontLoadKernelModules }}
+            - "--skip-kmod"
+            {{- end }}
             {{- with .Values.agent.antreaOVS.extraArgs }}
             {{- toYaml . | trim | nindent 12 }}
             {{- end }}
+          {{- if .Values.agent.antreaOVS.extraEnv }}
+          env:
+            {{- range $k, $v := .Values.agent.antreaOVS.extraEnv }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
           {{- with .Values.agent.antreaOVS.securityContext }}
           securityContext:
             {{- if .privileged }}
