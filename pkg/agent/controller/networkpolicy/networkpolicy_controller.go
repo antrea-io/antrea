@@ -23,9 +23,12 @@ import (
 	"time"
 
 	"antrea.io/ofnet/ofctrl"
+	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/workqueue"
@@ -39,6 +42,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/install"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
@@ -58,12 +62,28 @@ const (
 	dnsInterceptRuleID = uint32(1)
 )
 
+const (
+	dataPath           = "/var/run/antrea/networkpolicy"
+	networkPoliciesDir = "network-policies"
+	appliedToGroupsDir = "applied-to-groups"
+	addressGroupsDir   = "address-groups"
+)
+
 type L7RuleReconciler interface {
 	AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta2.L7Protocol, enableLogging bool) error
 	DeleteRule(ruleID string, vlanID uint32) error
 }
 
 var emptyWatch = watch.NewEmptyWatch()
+
+var (
+	scheme = runtime.NewScheme()
+	codecs = serializer.NewCodecFactory(scheme)
+)
+
+func init() {
+	install.Install(scheme)
+}
 
 type packetInAction func(*ofctrl.PacketIn) error
 
@@ -128,6 +148,12 @@ type Controller struct {
 	tunPort       uint32
 	nodeConfig    *config.NodeConfig
 
+	// The fileStores store runtime.Objects in files and use them as the fallback data source when agent can't connect
+	// to antrea-controller on startup.
+	networkPolicyStore  *fileStore
+	appliedToGroupStore *fileStore
+	addressGroupStore   *fileStore
+
 	logPacketAction           packetInAction
 	rejectRequestAction       packetInAction
 	storeDenyConnectionAction packetInAction
@@ -137,6 +163,7 @@ type Controller struct {
 func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
+	fs afero.Fs,
 	nodeName string,
 	podUpdateSubscriber channel.Subscriber,
 	externalEntityUpdateSubscriber channel.Subscriber,
@@ -176,8 +203,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		c.l7VlanIDAllocator = newL7VlanIDAllocator()
 	}
 
+	var err error
 	if antreaPolicyEnabled {
-		var err error
 		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort); err != nil {
 			return nil, err
 		}
@@ -189,6 +216,23 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
 		v4Enabled, v6Enabled, antreaPolicyEnabled, multicastEnabled)
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, externalEntityUpdateSubscriber, groupIDUpdates, nodeType)
+
+	serializer := protobuf.NewSerializer(scheme, scheme)
+	codec := codecs.CodecForVersions(serializer, serializer, v1beta2.SchemeGroupVersion, v1beta2.SchemeGroupVersion)
+	fs = afero.NewBasePathFs(fs, dataPath)
+	c.networkPolicyStore, err = newFileStore(fs, networkPoliciesDir, codec)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file store for NetworkPolicy: %w", err)
+	}
+	c.appliedToGroupStore, err = newFileStore(fs, appliedToGroupsDir, codec)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file store for AppliedToGroup: %w", err)
+	}
+	c.addressGroupStore, err = newFileStore(fs, addressGroupsDir, codec)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file store for AddressGroup: %w", err)
+	}
+
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
 	}
@@ -235,6 +279,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					"policyName", policy.SourceRef.ToString())
 				return nil
 			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if err := c.networkPolicyStore.save(policy); err != nil {
+				klog.ErrorS(err, "Failed to store the NetworkPolicy to file", "policyName", policy.SourceRef.ToString())
+			}
 			c.ruleCache.AddNetworkPolicy(policy)
 			klog.InfoS("NetworkPolicy applied to Pods on this Node", "policyName", policy.SourceRef.ToString())
 			return nil
@@ -248,6 +297,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				klog.InfoS("Ignore Antrea-native policy since AntreaPolicy feature gate is not enabled",
 					"policyName", policy.SourceRef.ToString())
 				return nil
+			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if err := c.networkPolicyStore.save(policy); err != nil {
+				klog.ErrorS(err, "Failed to store the NetworkPolicy to file", "policyName", policy.SourceRef.ToString())
 			}
 			updated := c.ruleCache.UpdateNetworkPolicy(policy)
 			// If any rule or the generation changes, we ensure statusManager will resync the policy's status once, in
@@ -269,6 +323,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			}
 			c.ruleCache.DeleteNetworkPolicy(policy)
 			klog.InfoS("NetworkPolicy no longer applied to Pods on this Node", "policyName", policy.SourceRef.ToString())
+			if err := c.networkPolicyStore.save(policy); err != nil {
+				klog.ErrorS(err, "Failed to delete the NetworkPolicy from file", "policyName", policy.SourceRef.ToString())
+			}
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
@@ -293,9 +350,15 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					c.statusManager.Resync(policies[i].UID)
 				}
 			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if err := c.networkPolicyStore.replaceAll(objs); err != nil {
+				klog.ErrorS(err, "Failed to store the NetworkPolicies to files")
+			}
 			c.ruleCache.ReplaceNetworkPolicies(policies)
 			return nil
 		},
+		FallbackFunc:      c.networkPolicyStore.loadAll,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
@@ -314,15 +377,28 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if err := c.appliedToGroupStore.save(group); err != nil {
+				klog.ErrorS(err, "Failed to store the AppliedToGroup to file", "groupName", group.Name)
+			}
 			c.ruleCache.AddAppliedToGroup(group)
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta2.AppliedToGroupPatch)
+			patch, ok := obj.(*v1beta2.AppliedToGroupPatch)
 			if !ok {
-				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
+				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroupPatch: %v", obj)
 			}
-			c.ruleCache.PatchAppliedToGroup(group)
+			group, err := c.ruleCache.PatchAppliedToGroup(patch)
+			if err != nil {
+				return err
+			}
+			// It's fine to store the object to file after applying the patch to ruleCache because the returned object
+			// is newly created, and ruleCache itself doesn't use it.
+			if err := c.appliedToGroupStore.save(group); err != nil {
+				klog.ErrorS(err, "Failed to store the AppliedToGroup to file", "groupName", group.Name)
+			}
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
@@ -331,6 +407,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
 			c.ruleCache.DeleteAppliedToGroup(group)
+			if err := c.appliedToGroupStore.delete(group); err != nil {
+				klog.ErrorS(err, "Failed to delete the AppliedToGroup from file", "groupName", group.Name)
+			}
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
@@ -342,9 +421,15 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", objs[i])
 				}
 			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if c.appliedToGroupStore.replaceAll(objs); err != nil {
+				klog.ErrorS(err, "Failed to store the AppliedToGroups to files")
+			}
 			c.ruleCache.ReplaceAppliedToGroups(groups)
 			return nil
 		},
+		FallbackFunc:      c.appliedToGroupStore.loadAll,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
@@ -363,15 +448,28 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if err := c.addressGroupStore.save(group); err != nil {
+				klog.ErrorS(err, "Failed to store the AddressGroup to file", "groupName", group.Name)
+			}
 			c.ruleCache.AddAddressGroup(group)
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta2.AddressGroupPatch)
+			patch, ok := obj.(*v1beta2.AddressGroupPatch)
 			if !ok {
-				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
+				return fmt.Errorf("cannot convert to *v1beta1.AddressGroupPatch: %v", obj)
 			}
-			c.ruleCache.PatchAddressGroup(group)
+			group, err := c.ruleCache.PatchAddressGroup(patch)
+			if err != nil {
+				return err
+			}
+			// It's fine to store the object to file after applying the patch to ruleCache because the returned object
+			// is newly created, and ruleCache itself doesn't use it.
+			if err := c.addressGroupStore.save(group); err != nil {
+				klog.ErrorS(err, "Failed to store the AddressGroup to file", "groupName", group.Name)
+			}
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
@@ -380,6 +478,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
 			c.ruleCache.DeleteAddressGroup(group)
+			if err := c.addressGroupStore.delete(group); err != nil {
+				klog.ErrorS(err, "Failed to delete the AddressGroup from file", "groupName", group.Name)
+			}
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
@@ -391,9 +492,15 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", objs[i])
 				}
 			}
+			// Storing the object to file first because its GroupVersionKind can be updated in-place during
+			// serialization, which may incur data race if we add it to ruleCache first.
+			if c.addressGroupStore.replaceAll(objs); err != nil {
+				klog.ErrorS(err, "Failed to store the AddressGroups to files")
+			}
 			c.ruleCache.ReplaceAddressGroups(groups)
 			return nil
 		},
+		FallbackFunc:      c.addressGroupStore.loadAll,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
@@ -741,6 +848,8 @@ type watcher struct {
 	DeleteFunc func(obj runtime.Object) error
 	// ReplaceFunc is the function that handles init events.
 	ReplaceFunc func(objs []runtime.Object) error
+	// FallbackFunc is the function that provides the data when it can't start the watch successfully.
+	FallbackFunc func() ([]runtime.Object, error)
 	// connected represents whether the watch has connected to apiserver successfully.
 	connected bool
 	// lock protects connected.
@@ -763,17 +872,46 @@ func (w *watcher) setConnected(connected bool) {
 	w.connected = connected
 }
 
+// fallback gets init events from the FallbackFunc if the watcher hasn't been synced once.
+func (w *watcher) fallback() {
+	// If the watcher has been synced once, the fallback data source doesn't have newer data, do nothing.
+	if w.fullSynced {
+		return
+	}
+	klog.InfoS("Getting init events for %s from fallback", w.objectType)
+	objects, err := w.FallbackFunc()
+	if err != nil {
+		klog.ErrorS(err, "Failed to get init events for %s from fallback", w.objectType)
+		return
+	}
+	if err := w.ReplaceFunc(objects); err != nil {
+		klog.ErrorS(err, "Failed to handle init events")
+		return
+	}
+	w.onFullSync()
+}
+
+func (w *watcher) onFullSync() {
+	if !w.fullSynced {
+		w.fullSynced = true
+		// Notify fullSyncWaitGroup that all events before bookmark is handled
+		w.fullSyncWaitGroup.Done()
+	}
+}
+
 func (w *watcher) watch() {
 	klog.Infof("Starting watch for %s", w.objectType)
 	watcher, err := w.watchFunc()
 	if err != nil {
 		klog.Warningf("Failed to start watch for %s: %v", w.objectType, err)
+		w.fallback()
 		return
 	}
 	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
 	// e.g. timeout error. Make sure that watcher is not empty and log warning otherwise.
 	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
 		klog.Warningf("Failed to start watch for %s, please ensure antrea service is reachable for the agent", w.objectType)
+		w.fallback()
 		return
 	}
 
@@ -814,11 +952,7 @@ loop:
 		klog.Errorf("Failed to handle init events: %v", err)
 		return
 	}
-	if !w.fullSynced {
-		w.fullSynced = true
-		// Notify fullSyncWaitGroup that all events before bookmark is handled
-		w.fullSyncWaitGroup.Done()
-	}
+	w.onFullSync()
 
 	for {
 		select {
