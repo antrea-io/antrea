@@ -29,6 +29,7 @@ DEFAULT_KUBECONFIG_PATH=$DEFAULT_WORKDIR/kube.conf
 WORKDIR=$DEFAULT_WORKDIR
 KUBECONFIG_PATH=$DEFAULT_KUBECONFIG_PATH
 TEST_FAILURE=false
+GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
 # Cluster configuration
 CLUSTER_NAME="kubernetes"
@@ -280,7 +281,7 @@ function install_on_windows {
 function run_e2e_vms {
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
@@ -304,7 +305,7 @@ function build_antrea_binary {
     echo "====== Building Antrea binaries for the Following Commit ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=/usr/local/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${WORKSPACE}/../gocache
     export PATH=${GOROOT}/bin:$PATH
 
@@ -315,6 +316,8 @@ function build_antrea_binary {
 }
 
 trap clean_antrea EXIT
+source $WORKSPACE/ci/jenkins/utils.sh
+check_and_upgrade_golang
 fetch_vm_ip
 apply_antrea
 build_antrea_binary
