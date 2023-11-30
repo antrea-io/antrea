@@ -32,7 +32,7 @@ spec:
       serviceAccountName: antrea-agent
       initContainers:
       - name: init-inotify-limit
-        image: projects.registry.vmware.com/library/busybox:latest
+        image: projects.registry.vmware.com/antrea/busybox:latest
         command: ['sysctl', '-w', 'fs.inotify.max_user_instances=200']
         securityContext:
           privileged: true
