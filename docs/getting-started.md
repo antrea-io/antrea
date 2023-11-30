@@ -69,7 +69,7 @@ encountered when running Antrea on specific OSes are documented
 There are also a few network prerequisites which need to be satisfied, and they depend
 on the tunnel mode you choose, please check [network requirements](./network-requirements.md).
 
-## Installation
+## Installation / Upgrade
 
 To deploy a released version of Antrea, pick a deployment manifest from the
 [list of releases](https://github.com/antrea-io/antrea/releases). For any
@@ -85,6 +85,9 @@ checked-in [deployment yaml](../build/yamls/antrea.yml):
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea.yml
 ```
+
+You can use the same `kubectl apply` command to upgrade to a more recent version
+of Antrea.
 
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
