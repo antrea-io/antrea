@@ -114,10 +114,12 @@ spec:
             mountPath: /host/etc/cni/net.d
           - name: host-cni-bin
             mountPath: /host/opt/cni/bin
+          {{- if not .Values.agent.dontLoadKernelModules }}
           # For loading the OVS kernel module.
           - name: host-lib-modules
             mountPath: /lib/modules
             readOnly: true
+          {{- end }}
           # For changing the default permissions of the run directory.
           - name: host-var-run-antrea
             mountPath: /var/run/antrea
@@ -382,9 +384,11 @@ spec:
             path: /var/log/antrea
             # we use subPath to create logging subdirectories for different component (e.g. OVS)
             type: DirectoryOrCreate
+        {{- if not .Values.agent.dontLoadKernelModules }}
         - name: host-lib-modules
           hostPath:
             path: /lib/modules
+        {{- end }}
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock
