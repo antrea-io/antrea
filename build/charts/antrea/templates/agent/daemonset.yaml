@@ -101,6 +101,10 @@ spec:
             # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
             - name: SKIP_CNI_BINARIES
               value: {{ join "," .Values.cni.skipBinaries | quote }}
+            {{- if .Values.agent.dontLoadKernelModules }}
+            - name: SKIP_LOADING_KERNEL_MODULES
+              value: "1"
+            {{- end }}
           volumeMounts:
           - name: antrea-config
             mountPath: /etc/antrea/antrea-cni.conflist
@@ -110,10 +114,12 @@ spec:
             mountPath: /host/etc/cni/net.d
           - name: host-cni-bin
             mountPath: /host/opt/cni/bin
+          {{- if not .Values.agent.dontLoadKernelModules }}
           # For loading the OVS kernel module.
           - name: host-lib-modules
             mountPath: /lib/modules
             readOnly: true
+          {{- end }}
           # For changing the default permissions of the run directory.
           - name: host-var-run-antrea
             mountPath: /var/run/antrea
@@ -261,9 +267,19 @@ spec:
             {{- if .Values.ovs.hwOffload }}
             - "--hw-offload"
             {{- end }}
+            {{- if .Values.agent.dontLoadKernelModules }}
+            - "--skip-kmod"
+            {{- end }}
             {{- with .Values.agent.antreaOVS.extraArgs }}
             {{- toYaml . | trim | nindent 12 }}
             {{- end }}
+          {{- if .Values.agent.antreaOVS.extraEnv }}
+          env:
+            {{- range $k, $v := .Values.agent.antreaOVS.extraEnv }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
           {{- with .Values.agent.antreaOVS.securityContext }}
           securityContext:
             {{- if .privileged }}
@@ -368,9 +384,11 @@ spec:
             path: /var/log/antrea
             # we use subPath to create logging subdirectories for different component (e.g. OVS)
             type: DirectoryOrCreate
+        {{- if not .Values.agent.dontLoadKernelModules }}
         - name: host-lib-modules
           hostPath:
             path: /lib/modules
+        {{- end }}
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock
