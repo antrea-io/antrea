@@ -40,6 +40,9 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
         --test-only                   Only run test on current cluster. Not set up/clean up the cluster.
+        --antrea-controller-image     The Antrea controller image to use for the test. Default is antrea/antrea-controller-ubuntu.
+        --antrea-agent-image          The Antrea agent image to use for the test. Default is antrea/antrea-agent-ubuntu.
+        --antrea-image-tag            The Antrea image tag to use for the test. Default is latest.
         --help, -h                    Print this message and exit.
 "
 
@@ -82,6 +85,10 @@ setup_only=false
 cleanup_only=false
 test_only=false
 run=""
+antrea_controller_image="antrea/antrea-controller-ubuntu"
+antrea_agent_image="antrea/antrea-agent-ubuntu"
+use_non_default_images=false
+antrea_image_tag="latest"
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -155,6 +162,20 @@ case $key in
     test_only=true
     shift
     ;;
+    --antrea-controller-image)
+    antrea_controller_image="$2"
+    use_non_default_images=true
+    shift 2
+    ;;
+    --antrea-agent-image)
+    antrea_agent_image="$2"
+    use_non_default_images=true
+    shift 2
+    ;;
+    --antrea-image-tag)
+    antrea_image_tag="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -184,6 +205,11 @@ fi
 if [[ $cleanup_only == "true" ]];then
   $TESTBED_CMD destroy kind
   exit 0
+fi
+
+if $use_non_default_images && $coverage; then
+    echoerr "Cannot use non-default images when coverage is enabled"
+    exit 1
 fi
 
 trap "quit" INT EXIT
@@ -235,11 +261,11 @@ done
 # The Antrea images should not be pulled, as we want to use the local build.
 if $coverage; then
     manifest_args="$manifest_args --coverage"
-    COMMON_IMAGES_LIST+=("antrea/antrea-agent-ubuntu-coverage:latest" \
-                         "antrea/antrea-controller-ubuntu-coverage:latest")
+    COMMON_IMAGES_LIST+=("${antrea_controller_image}-coverage:${antrea_image_tag}" \
+                         "${antrea_agent_image}-coverage:${antrea_image_tag}")
 else
-    COMMON_IMAGES_LIST+=("antrea/antrea-agent-ubuntu:latest" \
-                         "antrea/antrea-controller-ubuntu:latest")
+    COMMON_IMAGES_LIST+=("${antrea_controller_image}:${antrea_image_tag}" \
+                         "${antrea_agent_image}:${antrea_image_tag}")
 fi
 if $flow_visibility; then
     if $coverage; then
