@@ -70,6 +70,14 @@ const (
     }
 }`
 
+	netAttachNoIPAMTemplate = `{
+    "cniVersion": "{{.CNIVersion}}",
+    "type": "{{.CNIType}}",
+    "networkType": "{{.NetworkType}}",
+    "mtu": {{.MTU}},
+    "vlan": {{.VLAN}}
+}`
+
 	defaultCNIVersion = "0.3.0"
 	defaultMTU        = 1500
 	sriovDeviceID     = "sriov-device-id"
@@ -82,10 +90,10 @@ const (
 )
 
 func testNetwork(name string, networkType cnipodcache.NetworkType) *netdefv1.NetworkAttachmentDefinition {
-	return testNetworkExt(name, "", "", string(networkType), "", 0, 0)
+	return testNetworkExt(name, "", "", string(networkType), "", 0, 0, false)
 }
 
-func testNetworkExt(name, cniVersion, cniType, networkType, ipamType string, mtu int, vlan int) *netdefv1.NetworkAttachmentDefinition {
+func testNetworkExt(name, cniVersion, cniType, networkType, ipamType string, mtu, vlan int, noIPAM bool) *netdefv1.NetworkAttachmentDefinition {
 	if cniVersion == "" {
 		cniVersion = defaultCNIVersion
 	}
@@ -103,7 +111,13 @@ func testNetworkExt(name, cniVersion, cniType, networkType, ipamType string, mtu
 		MTU         int
 		VLAN        int
 	}{cniVersion, cniType, networkType, ipamType, mtu, vlan}
-	tmpl := template.Must(template.New("test").Parse(netAttachTemplate))
+
+	var tmpl *template.Template
+	if !noIPAM {
+		tmpl = template.Must(template.New("test").Parse(netAttachTemplate))
+	} else {
+		tmpl = template.Must(template.New("test").Parse(netAttachNoIPAMTemplate))
+	}
 	var b bytes.Buffer
 	tmpl.Execute(&b, &data)
 	return &netdefv1.NetworkAttachmentDefinition{
@@ -216,7 +230,6 @@ func TestPodControllerRun(t *testing.T) {
 		InterfaceRequest: interfaceName,
 	})
 	network := testNetwork(networkName, sriovNetworkType)
-
 	ipamResult := testIPAMResult("148.14.24.100/24")
 
 	var interfaceConfigured int32
@@ -288,6 +301,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		ipamType           string
 		mtu                int
 		vlan               int
+		noIPAM             bool
 		doNotCreateNetwork bool
 		interfaceCreated   bool
 		expectedErr        string
@@ -316,10 +330,27 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		{
 			name:             "default MTU",
 			networkType:      vlanNetworkType,
-			vlan:             0,
 			interfaceCreated: true,
 			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24"), nil)
+				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNs(containerID),
+					interfaceName,
+					1500,
+					uint16(0),
+					gomock.Any(),
+				).Return(ovsPortUUID, nil)
+			},
+		},
+		{
+			name:             "no IPAM",
+			networkType:      vlanNetworkType,
+			noIPAM:           true,
+			interfaceCreated: true,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
 					podName,
 					testNamespace,
@@ -427,6 +458,24 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			},
 			expectedErr: "interface creation failure",
 		},
+		{
+			name:        "interface failure with no IPAM",
+			networkType: vlanNetworkType,
+			noIPAM:      true,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNs(containerID),
+					interfaceName,
+					1500,
+					uint16(0),
+					gomock.Any(),
+				).Return("", errors.New("interface creation failure"))
+			},
+			expectedErr: "interface creation failure",
+		},
 	}
 
 	for _, tc := range tests {
@@ -435,7 +484,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			pc, mockIPAM, interfaceConfigurator := testPodController(ctrl)
 			savedCNIConfig := *cniConfigInfo
 
-			network1 := testNetworkExt(networkName, tc.cniVersion, tc.cniType, string(tc.networkType), tc.ipamType, tc.mtu, tc.vlan)
+			network1 := testNetworkExt(networkName, tc.cniVersion, tc.cniType, string(tc.networkType), tc.ipamType, tc.mtu, tc.vlan, tc.noIPAM)
 			if !tc.doNotCreateNetwork {
 				pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network1, metav1.CreateOptions{})
 			}
@@ -499,7 +548,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		savedCNIConfig := *cniConfig
 		network1 := testNetwork("net1", sriovNetworkType)
 		testVLAN := 100
-		network2 := testNetworkExt("net2", "", "", string(vlanNetworkType), "", defaultMTU, testVLAN)
+		network2 := testNetworkExt("net2", "", "", string(vlanNetworkType), "", defaultMTU, testVLAN, false)
 
 		podOwner1 := &crdv1a2.PodOwner{
 			Name:        podName,

@@ -164,7 +164,7 @@ func (pc *PodController) deletePodSecondaryNetwork(podCNIInfo *cnipodcache.CNICo
 			IFName:      iface,
 		}
 		if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
-			return fmt.Errorf("Failed to clean-up whereabouts IPAM %v", err)
+			return fmt.Errorf("failed to clean up IPAM: %v", err)
 		}
 
 		// Delete map entry for secNetInstIface, secNetInstConfig
@@ -231,10 +231,13 @@ func (pc *PodController) handleAddUpdatePod(obj interface{}) error {
 	}
 
 	err = pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
-	// We do not return error to retry, if at least one secondary network is configured.
-	if (err != nil) && (len(podCNIInfo.Interfaces) == 0) {
-		// Return error to requeue and retry.
-		return err
+	if err != nil {
+		klog.ErrorS(err, "Error when configuring secondary network", "pod", klog.KObj(pod))
+		if len(podCNIInfo.Interfaces) == 0 {
+			// Return error to requeue and retry.
+			return err
+		}
+		// We do not return error to retry, if at least one secondary network is configured.
 	}
 	return nil
 }
@@ -309,28 +312,42 @@ func (pc *PodController) configureSecondaryInterface(
 		}
 	}
 
-	podOwner := &crdv1a2.PodOwner{
-		Name:        pod.Name,
-		Namespace:   pod.Namespace,
-		ContainerID: podCNIInfo.ContainerID,
-		IFName:      network.InterfaceRequest,
-	}
-	ipamResult, err := pc.ipamAllocator.SecondaryNetworkAllocate(podOwner, &networkConfig.NetworkConfig)
-	if err != nil {
-		return fmt.Errorf("secondary network IPAM failed: %v", err)
-	}
-	result := &ipamResult.Result
-	for _, ip := range result.IPs {
-		ip.Interface = current.Int(1)
+	var result *current.Result
+	var vlanID uint16
+	var ifConfigErr error
+	if networkConfig.IPAM != nil {
+		podOwner := &crdv1a2.PodOwner{
+			Name:        pod.Name,
+			Namespace:   pod.Namespace,
+			ContainerID: podCNIInfo.ContainerID,
+			IFName:      network.InterfaceRequest,
+		}
+		ipamResult, err := pc.ipamAllocator.SecondaryNetworkAllocate(podOwner, &networkConfig.NetworkConfig)
+		if err != nil {
+			return fmt.Errorf("secondary network IPAM failed: %v", err)
+		}
+		defer func() {
+			if ifConfigErr != nil {
+				// Interface creation failed. Free allocated IP address
+				if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
+					klog.ErrorS(err, "IPAM de-allocation failed: ", err)
+				}
+			}
+		}()
+		result = &ipamResult.Result
+		for _, ip := range result.IPs {
+			ip.Interface = current.Int(1)
+		}
+		vlanID = ipamResult.VLANID
+	} else {
+		result = &current.Result{}
 	}
 
 	var ovsPortUUID string
-	var ifConfigErr error
 	switch networkConfig.NetworkType {
 	case sriovNetworkType:
 		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, podCNIInfo, int(networkConfig.MTU), result)
 	case vlanNetworkType:
-		vlanID := ipamResult.VLANID
 		if networkConfig.VLAN > 0 {
 			// Let VLAN ID in the CNI network configuration override the IPPool subnet
 			// VLAN.
@@ -341,14 +358,10 @@ func (pc *PodController) configureSecondaryInterface(
 			podCNIInfo.ContainerID, podCNIInfo.ContainerNetNS, network.InterfaceRequest,
 			int(networkConfig.MTU), vlanID, result)
 	}
-
 	if ifConfigErr != nil {
-		// Interface creation failed. Free allocated IP address
-		if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
-			klog.ErrorS(err, "IPAM de-allocation failed: ", err)
-		}
 		return ifConfigErr
 	}
+
 	// Update Pod CNI cache with the network config which was successfully configured.
 	if podCNIInfo.Interfaces == nil {
 		podCNIInfo.Interfaces = make(map[string]*cnipodcache.InterfaceInfo)
@@ -425,8 +438,10 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	if networkConfig.MTU < 0 {
 		return &networkConfig, fmt.Errorf("invalid MTU %d", networkConfig.MTU)
 	}
-	if networkConfig.IPAM.Type != ipam.AntreaIPAMType {
-		return &networkConfig, fmt.Errorf("unsupported IPAM type %s", networkConfig.IPAM.Type)
+	if networkConfig.IPAM != nil {
+		if networkConfig.IPAM.Type != ipam.AntreaIPAMType {
+			return &networkConfig, fmt.Errorf("unsupported IPAM type %s", networkConfig.IPAM.Type)
+		}
 	}
 
 	if networkConfig.MTU == 0 {

@@ -46,8 +46,11 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	containerIface := result.Interfaces[1]
 	klog.InfoS("Configured SR-IOV interface", "Pod", klog.KRef(podNamespace, podName), "interface", containerInterfaceName, "hostInterface", hostIface)
 
-	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
-		klog.ErrorS(err, "Failed to advertise IP address for SR-IOV interface", "container", containerID, "interface", containerInterfaceName)
+	if result.IPs != nil {
+		if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
+			klog.ErrorS(err, "Failed to advertise IP address for SR-IOV interface",
+				"container", containerID, "interface", containerInterfaceName)
+		}
 	}
 	return nil
 }
@@ -84,8 +87,11 @@ func (pc *podConfigurator) ConfigureVLANSecondaryInterface(
 	}
 	klog.InfoS("Configured VLAN interface", "Pod", klog.KRef(podNamespace, podName), "interface", containerInterfaceName, "hostInterface", hostIface)
 
-	if err := pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
-		klog.ErrorS(err, "Failed to advertise IP address for VLAN interface", "container", containerID, "interface", containerInterfaceName)
+	if result.IPs != nil {
+		if err := pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
+			klog.ErrorS(err, "Failed to advertise IP address for VLAN interface",
+				"container", containerID, "interface", containerInterfaceName)
+		}
 	}
 	success = true
 	return ovsPortUUID, nil
