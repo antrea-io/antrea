@@ -234,6 +234,10 @@ agent:
     type: RollingUpdate
   # -- Additional volumes for antrea-agent Pods.
   extraVolumes: []
+  # -- Do not try to load any of the required Kernel modules (e.g., openvswitch)
+  # during initialization of the antrea-agent. Most users should never need to
+  # set this to true, but it may be required with some specific distributions.
+  dontLoadKernelModules: false
   installCNI:
     # -- Extra environment variables to be injected into install-cni.
     extraEnv: {}
@@ -271,6 +275,8 @@ agent:
       # -- Capabilities for the antrea-agent container.
       capabilities: []
   antreaOVS:
+    # -- Extra environment variables to be injected into antrea-ovs.
+    extraEnv: {}
     # -- Max size in MBs of any single log file.
     logFileMaxSize: 100
     # -- Max number of log files.
