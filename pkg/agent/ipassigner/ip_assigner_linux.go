@@ -143,10 +143,10 @@ func (a *ipAssigner) loadIPAddresses() (sets.Set[string], error) {
 }
 
 // AssignIP ensures the provided IP is assigned to the dummy device and the ARP/NDP responders.
-func (a *ipAssigner) AssignIP(ip string, forceAdvertise bool) error {
+func (a *ipAssigner) AssignIP(ip string, forceAdvertise bool) (bool, error) {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
-		return fmt.Errorf("invalid IP %s", ip)
+		return false, fmt.Errorf("invalid IP %s", ip)
 	}
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -156,14 +156,14 @@ func (a *ipAssigner) AssignIP(ip string, forceAdvertise bool) error {
 		if forceAdvertise {
 			a.advertise(parsedIP)
 		}
-		return nil
+		return false, nil
 	}
 
 	if a.dummyDevice != nil {
 		addr := util.NewIPNet(parsedIP)
 		if err := netlink.AddrAdd(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
 			if !errors.Is(err, unix.EEXIST) {
-				return fmt.Errorf("failed to add IP %v to interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+				return false, fmt.Errorf("failed to add IP %v to interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
 			} else {
 				klog.InfoS("IP was already assigned to interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
 			}
@@ -174,18 +174,18 @@ func (a *ipAssigner) AssignIP(ip string, forceAdvertise bool) error {
 
 	if utilnet.IsIPv4(parsedIP) && a.arpResponder != nil {
 		if err := a.arpResponder.AddIP(parsedIP); err != nil {
-			return fmt.Errorf("failed to assign IP %v to ARP responder: %v", ip, err)
+			return false, fmt.Errorf("failed to assign IP %v to ARP responder: %v", ip, err)
 		}
 	}
 	if utilnet.IsIPv6(parsedIP) && a.ndpResponder != nil {
 		if err := a.ndpResponder.AddIP(parsedIP); err != nil {
-			return fmt.Errorf("failed to assign IP %v to NDP responder: %v", ip, err)
+			return false, fmt.Errorf("failed to assign IP %v to NDP responder: %v", ip, err)
 		}
 	}
 	// Always advertise the IP when the IP is newly assigned to this Node.
 	a.advertise(parsedIP)
 	a.assignedIPs.Insert(ip)
-	return nil
+	return true, nil
 }
 
 func (a *ipAssigner) advertise(ip net.IP) {
@@ -203,24 +203,24 @@ func (a *ipAssigner) advertise(ip net.IP) {
 }
 
 // UnassignIP ensures the provided IP is not assigned to the dummy device.
-func (a *ipAssigner) UnassignIP(ip string) error {
+func (a *ipAssigner) UnassignIP(ip string) (bool, error) {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
-		return fmt.Errorf("invalid IP %s", ip)
+		return false, fmt.Errorf("invalid IP %s", ip)
 	}
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
 	if !a.assignedIPs.Has(ip) {
 		klog.V(2).InfoS("The IP is not assigned", "ip", ip)
-		return nil
+		return false, nil
 	}
 
 	if a.dummyDevice != nil {
 		addr := util.NewIPNet(parsedIP)
 		if err := netlink.AddrDel(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
 			if !errors.Is(err, unix.EADDRNOTAVAIL) {
-				return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+				return false, fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
 			} else {
 				klog.InfoS("IP does not exist on interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
 			}
@@ -230,17 +230,17 @@ func (a *ipAssigner) UnassignIP(ip string) error {
 
 	if utilnet.IsIPv4(parsedIP) && a.arpResponder != nil {
 		if err := a.arpResponder.RemoveIP(parsedIP); err != nil {
-			return fmt.Errorf("failed to remove IP %v from ARP responder: %v", ip, err)
+			return false, fmt.Errorf("failed to remove IP %v from ARP responder: %v", ip, err)
 		}
 	}
 	if utilnet.IsIPv6(parsedIP) && a.ndpResponder != nil {
 		if err := a.ndpResponder.RemoveIP(parsedIP); err != nil {
-			return fmt.Errorf("failed to remove IP %v from NDP responder: %v", ip, err)
+			return false, fmt.Errorf("failed to remove IP %v from NDP responder: %v", ip, err)
 		}
 	}
 
 	a.assignedIPs.Delete(ip)
-	return nil
+	return true, nil
 }
 
 // AssignedIPs return the IPs that are assigned to the dummy device.
