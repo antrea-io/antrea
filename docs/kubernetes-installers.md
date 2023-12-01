@@ -26,6 +26,8 @@ work with that Antrea version.
 | v1.10.0 | Rancher v2.7.0, K8s v1.24.10 | vSphere | Ubuntu 22.04.1 LTS (5.15.0-57-generic) amd64, docker://20.10.21 | 4 vCPUs, 4GB RAM |  |  |
 | v1.11.0 | Kubeadm v1.20.2 | N/A | openEuler 22.03 LTS, docker://18.09.0 | 10GB RAM | | |
 | v1.11.0 | Kubeadm v1.25.5 | N/A | openEuler 22.03 LTS, containerd://1.6.18 | 10GB RAM | | |
+| v1.15.0 | Talos v1.5.5 | Docker provisioner | Talos | 2 vCPUs, 2.1 GB RAM | Pass | Requires Antrea v1.15 or above |
+| - | - | QEMU provisioner | Talos | 2 vCPUs, 2.1 GB RAM | Pass | Requires Antrea v1.15 or above |
 
 ## Installer-specific instructions
 
@@ -71,6 +73,59 @@ To deploy Antrea on Kind, please follow these [steps](kind.md).
 ### Minikube
 
 To deploy Antrea on minikube, please follow these [steps](minikube.md).
+
+### Talos
+
+[Talos](https://www.talos.dev/) is a Linux distribution designed for running
+Kubernetes. Antrea can be used as the CNI on Talos clusters (tested with both
+the Docker provisioner and the QEMU provisioner). However, because of some
+built-in security settings in Talos, the default configuration values cannot be
+used when installing Antrea. You will need to install Antrea using Helm, with a
+few custom values. Antrea v1.15 or above is required.
+
+Follow these steps to deploy Antrea on a Talos cluster:
+
+* Make sure that your Talos cluster is created without a CNI. To ensure this,
+  you can use a config patch. For example, to create a Talos cluster without a
+  CNI, using the Docker provisioner:
+
+  ```bash
+  cat << EOF > ./patch.yaml
+  cluster:
+  network:
+    cni:
+      name: none
+  EOF
+
+  talosctl cluster create --config-patch=@patch.yaml --wait=false --workers 2
+  ```
+
+  Notice how we use `--wait=false`: the cluster will never be "ready" until a
+  CNI is installed.
+
+  Note that while we use the Docker provisioner here, you can use the Talos
+  platform of your choice.
+
+* Ensure that you retrieve the Kubeconfig for your new cluster once it is
+  available. You may need to use the `talosctl kubeconfig` command for this.
+
+* Install Antrea using Helm, with the appropriate values:
+
+  ```bash
+  cat << EOF > ./values.yaml
+  agent:
+    dontLoadKernelModules: true
+    installCNI:
+      securityContext:
+        capabilities: []
+  EOF
+
+  helm install -n kube-system antrea -f value.yml antrea/antrea
+  ```
+
+  The above configuration will drop all capabilities from the `installCNI`
+  container, and instruct the Antrea Agent not to try loading any Kernel module
+  explicitly.
 
 ## Updating the list
 
