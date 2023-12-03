@@ -60,7 +60,6 @@ import (
 	"antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/secondarynetwork"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/stats"
 	support "antrea.io/antrea/pkg/agent/supportbundlecollection"
@@ -535,7 +534,6 @@ func run(o *Options) error {
 	}
 
 	var cniServer *cniserver.CNIServer
-	var cniPodInfoStore cnipodcache.CNIPodInfoStore
 	var externalNodeController *externalnode.ExternalNodeController
 	var localExternalNodeInformer cache.SharedIndexInformer
 
@@ -554,17 +552,9 @@ func run(o *Options) error {
 			networkConfig,
 			networkReadyCh)
 
-		if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-			cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
-			err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
-			if err != nil {
-				return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
-			}
-		} else {
-			err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
-			if err != nil {
-				return fmt.Errorf("error initializing CNI server: %v", err)
-			}
+		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel)
+		if err != nil {
+			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
 		}
 	} else {
 		listOptions := func(options *metav1.ListOptions) {
@@ -700,8 +690,8 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		if err := secondarynetwork.Initialize(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
-			k8sClient, localPodInformer.Get(), nodeConfig.Name, cniPodInfoStore,
-			stopCh,
+			k8sClient, localPodInformer.Get(), nodeConfig.Name,
+			podUpdateChannel, stopCh,
 			&o.config.SecondaryNetwork, ovsdbConnection); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
 		}

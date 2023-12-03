@@ -37,10 +37,12 @@ import (
 
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	"antrea.io/antrea/pkg/agent/cniserver/types"
+	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	cnipodcache "antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
+	"antrea.io/antrea/pkg/agent/types"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 const (
@@ -70,7 +72,7 @@ type InterfaceConfigurator interface {
 }
 
 type IPAMAllocator interface {
-	SecondaryNetworkAllocate(podOwner *crdv1a2.PodOwner, networkConfig *types.NetworkConfig) (*ipam.IPAMResult, error)
+	SecondaryNetworkAllocate(podOwner *crdv1a2.PodOwner, networkConfig *cnitypes.NetworkConfig) (*ipam.IPAMResult, error)
 	SecondaryNetworkRelease(podOwner *crdv1a2.PodOwner) error
 }
 
@@ -80,6 +82,7 @@ type PodController struct {
 	queue                 workqueue.RateLimitingInterface
 	podInformer           cache.SharedIndexInformer
 	nodeName              string
+	podUpdateSubscriber   channel.Subscriber
 	podCache              cnipodcache.CNIPodInfoStore
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	interfaceConfigurator InterfaceConfigurator
@@ -92,7 +95,7 @@ func NewPodController(
 	netAttachDefClient netdefclient.K8sCniCncfIoV1Interface,
 	podInformer cache.SharedIndexInformer,
 	nodeName string,
-	podCache cnipodcache.CNIPodInfoStore,
+	podUpdateSubscriber channel.Subscriber,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 ) (*PodController, error) {
 	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient)
@@ -105,7 +108,8 @@ func NewPodController(
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "podcontroller"),
 		podInformer:           podInformer,
 		nodeName:              nodeName,
-		podCache:              podCache,
+		podUpdateSubscriber:   podUpdateSubscriber,
+		podCache:              cnipodcache.NewCNIPodInfoStore(),
 		ovsBridgeClient:       ovsBridgeClient,
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         ipam.GetSecondaryNetworkAllocator(),
@@ -118,11 +122,16 @@ func NewPodController(
 		},
 		resyncPeriod,
 	)
+	// podUpdateSubscriber can be nil with test code.
+	if podUpdateSubscriber != nil {
+		// Subscribe Pod CNI add/del events.
+		podUpdateSubscriber.Subscribe(pc.processCNIUpdate)
+	}
 	return &pc, nil
 }
 
-func podKeyGet(pod *corev1.Pod) string {
-	return pod.Namespace + "/" + pod.Name
+func podKeyGet(podName, podNamespace string) string {
+	return podNamespace + "/" + podName
 }
 
 func generatePodSecondaryIfaceName(podCNIInfo *cnipodcache.CNIConfigInfo) (string, error) {
@@ -147,9 +156,8 @@ func (pc *PodController) deletePodSecondaryNetwork(podCNIInfo *cnipodcache.CNICo
 	// NOTE: SR-IOV VF interface clean-up, upon Pod delete will be handled by SR-IOV device
 	// plugin. Not handled here.
 	for iface, interfaceInfo := range podCNIInfo.Interfaces {
-		klog.V(1).InfoS("Deleting secondary interface",
-			"Pod", klog.KRef(podCNIInfo.PodNamespace, podCNIInfo.PodName),
-			"interface", iface, "interfaceInfo", *interfaceInfo)
+		klog.InfoS("Deleting secondary interface",
+			"Pod", klog.KRef(podCNIInfo.PodNamespace, podCNIInfo.PodName), "interface", iface)
 		if interfaceInfo.NetworkType == vlanNetworkType {
 			if err := pc.interfaceConfigurator.DeleteVLANSecondaryInterface(podCNIInfo.ContainerID,
 				interfaceInfo.HostInterfaceName, interfaceInfo.OVSPortUUID); err != nil {
@@ -188,8 +196,27 @@ func (pc *PodController) enqueuePod(obj interface{}) {
 			return
 		}
 	}
-	podKey := podKeyGet(pod)
+	podKey := podKeyGet(pod.Name, pod.Namespace)
 	pc.queue.Add(podKey)
+}
+
+// processCNIUpdate will be called when CNIServer publishes a Pod update event.
+func (pc *PodController) processCNIUpdate(e interface{}) {
+	event := e.(types.PodUpdate)
+	if event.IsAdd {
+		// Go cache the CNI server info at CNIConfigInfo cache, for podWatch usage
+		cniInfo := &cnipodcache.CNIConfigInfo{PodName: event.PodName, PodNamespace: event.PodNamespace,
+			ContainerID: event.ContainerID, ContainerNetNS: event.NetNS, PodCNIDeleted: false}
+		pc.podCache.AddCNIConfigInfo(cniInfo)
+	} else {
+		containerInfo := pc.podCache.GetCNIConfigInfoByContainerID(event.PodName, event.PodNamespace, event.ContainerID)
+		if containerInfo != nil {
+			// Update PodCNIDeleted = true.
+			// This is to let Podwatch controller know that the CNI server cleaned up this Pod's primary network configuration.
+			pc.podCache.SetPodCNIDeleted(containerInfo)
+		}
+	}
+	pc.queue.Add(podKeyGet(event.PodName, event.PodNamespace))
 }
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
@@ -217,7 +244,7 @@ func (pc *PodController) handleAddUpdatePod(obj interface{}) error {
 	// Avoid processing Pod annotation, if we already have at least one secondary network successfully configured on this Pod.
 	// We do not support/handle Annotation updates yet.
 	if len(podCNIInfo.Interfaces) > 0 {
-		klog.V(1).InfoS("Secondary network already configured on this Pod and annotation update not supported, skipping update", "pod", klog.KObj(pod))
+		klog.V(1).InfoS("Secondary network already configured on this Pod and annotation update not supported, skipping update", "Pod", klog.KObj(pod))
 		return nil
 	}
 
@@ -232,7 +259,7 @@ func (pc *PodController) handleAddUpdatePod(obj interface{}) error {
 
 	err = pc.configurePodSecondaryNetwork(pod, networklist, podCNIInfo)
 	if err != nil {
-		klog.ErrorS(err, "Error when configuring secondary network", "pod", klog.KObj(pod))
+		klog.ErrorS(err, "Error when configuring secondary network", "Pod", klog.KObj(pod))
 		if len(podCNIInfo.Interfaces) == 0 {
 			// Return error to requeue and retry.
 			return err
@@ -251,6 +278,7 @@ func (pc *PodController) handleRemovePod(key string) error {
 	for _, info := range podCNIInfo {
 		// Delete all secondary interfaces and release IPAM.
 		if err = pc.deletePodSecondaryNetwork(info); err != nil {
+			klog.ErrorS(err, "Error when deleting secondary network", "Pod", klog.KRef(info.PodNamespace, info.PodName))
 			// Return error to requeue Pod delete.
 			return err
 		} else {

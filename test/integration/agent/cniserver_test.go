@@ -574,7 +574,7 @@ func newTester() *cmdAddDelTester {
 		routeMock,
 		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
 		tester.networkReadyCh)
-	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100))
 	ctx := context.Background()
 	tester.ctx = ctx
 	return tester
@@ -795,7 +795,7 @@ func TestCNIServerChaining(t *testing.T) {
 			ifaceStore := interfacestore.NewInterfaceStore()
 			ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
 			ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
-			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
+			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100))
 			testRequire.Nil(err)
 		}
 
@@ -928,7 +928,7 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 	)
 
 	// call Initialize, which will run reconciliation and perform host-local IPAM garbage collection
-	server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
+	server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100))
 
 	getIPs := func(cID string) []net.IP {
 		ipamStore, err := disk.New("antrea", "")

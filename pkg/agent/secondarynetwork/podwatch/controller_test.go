@@ -209,8 +209,8 @@ func TestPodControllerRun(t *testing.T) {
 		netdefclient,
 		informerFactory.Core().V1().Pods().Informer(),
 		testNode,
-		podCache,
-		nil)
+		nil, nil)
+	podController.podCache = podCache
 	podController.interfaceConfigurator = interfaceConfigurator
 	podController.ipamAllocator = mockIPAM
 

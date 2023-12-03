@@ -31,7 +31,6 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -72,8 +71,6 @@ type podConfigurator struct {
 	// podUpdateNotifier is used for notifying updates of local Pods to other components which may benefit from this
 	// information, i.e. NetworkPolicyController, EgressController.
 	podUpdateNotifier channel.Notifier
-	// consumed by secondary network creation.
-	podInfoStore cnipodcache.CNIPodInfoStore
 }
 
 func newPodConfigurator(
@@ -86,7 +83,6 @@ func newPodConfigurator(
 	isOvsHardwareOffloadEnabled bool,
 	disableTXChecksumOffload bool,
 	podUpdateNotifier channel.Notifier,
-	podInfoStore cnipodcache.CNIPodInfoStore,
 ) (*podConfigurator, error) {
 	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled, disableTXChecksumOffload)
 	if err != nil {
@@ -100,7 +96,6 @@ func newPodConfigurator(
 		gatewayMAC:        gatewayMAC,
 		ifConfigurator:    ifConfigurator,
 		podUpdateNotifier: podUpdateNotifier,
-		podInfoStore:      podInfoStore,
 	}, nil
 }
 
@@ -243,7 +238,8 @@ func (pc *podConfigurator) configureInterfaces(
 	}
 
 	var containerConfig *interfacestore.InterfaceConfig
-	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, hostIface, containerIface, result.IPs, result.VLANID, containerAccess); err != nil {
+	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, containerNetNS,
+		hostIface, containerIface, result.IPs, result.VLANID, containerAccess); err != nil {
 		return fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
 	}
 	defer func() {
@@ -486,7 +482,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	return nil
 }
 
-func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, containerConfig *interfacestore.InterfaceConfig) error {
+func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string, containerConfig *interfacestore.InterfaceConfig) error {
 	// create OVS Port and add attach container configuration into external_ids
 	containerID := containerConfig.ContainerID
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
@@ -519,8 +515,9 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 	event := agenttypes.PodUpdate{
 		PodName:      containerConfig.PodName,
 		PodNamespace: containerConfig.PodNamespace,
-		IsAdd:        true,
 		ContainerID:  containerConfig.ContainerID,
+		NetNS:        netNS,
+		IsAdd:        true,
 	}
 	pc.podUpdateNotifier.Notify(event)
 	return nil
@@ -548,8 +545,8 @@ func (pc *podConfigurator) disconnectInterfaceFromOVS(containerConfig *interface
 	event := agenttypes.PodUpdate{
 		PodName:      containerConfig.PodName,
 		PodNamespace: containerConfig.PodNamespace,
-		IsAdd:        false,
 		ContainerID:  containerConfig.ContainerID,
+		IsAdd:        false,
 	}
 	pc.podUpdateNotifier.Notify(event)
 	klog.Infof("Removed interfaces for container %s", containerID)
@@ -577,8 +574,8 @@ func (pc *podConfigurator) connectInterceptedInterface(
 	if err = pc.routeClient.MigrateRoutesToGw(hostIface.Name); err != nil {
 		return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
 	}
-	_, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, hostIface,
-		containerIface, containerIPs, 0, containerAccess)
+	_, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, containerNetNS,
+		hostIface, containerIface, containerIPs, 0, containerAccess)
 	return err
 }
 
