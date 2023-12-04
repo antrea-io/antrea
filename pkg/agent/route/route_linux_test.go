@@ -59,9 +59,12 @@ func TestSyncRoutes(t *testing.T) {
 	nodeRoute2 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.2.0/24"), Gw: net.ParseIP("1.1.1.2")}
 	serviceRoute1 := &netlink.Route{Dst: ip.MustParseCIDR("169.254.0.253/32"), LinkIndex: 10}
 	serviceRoute2 := &netlink.Route{Dst: ip.MustParseCIDR("169.254.0.252/32"), Gw: net.ParseIP("169.254.0.253")}
-	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*nodeRoute1, *serviceRoute1}, nil)
+	egressRoute1 := &netlink.Route{Scope: netlink.SCOPE_LINK, Dst: ip.MustParseCIDR("10.10.10.0/24"), LinkIndex: 10, Table: 101}
+	egressRoute2 := &netlink.Route{Gw: net.ParseIP("10.10.10.1"), LinkIndex: 10, Table: 101}
+	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*nodeRoute1, *serviceRoute1, *egressRoute1}, nil)
 	mockNetlink.EXPECT().RouteReplace(nodeRoute2)
 	mockNetlink.EXPECT().RouteReplace(serviceRoute2)
+	mockNetlink.EXPECT().RouteReplace(egressRoute2)
 	mockNetlink.EXPECT().RouteReplace(&netlink.Route{
 		LinkIndex: 10,
 		Dst:       ip.MustParseCIDR("192.168.0.0/24"),
@@ -95,8 +98,47 @@ func TestSyncRoutes(t *testing.T) {
 	c.nodeRoutes.Store("192.168.2.0/24", []*netlink.Route{nodeRoute2})
 	c.serviceRoutes.Store("169.254.0.253/32", serviceRoute1)
 	c.serviceRoutes.Store("169.254.0.252/32", serviceRoute2)
+	c.egressRoutes.Store(101, []*netlink.Route{egressRoute1, egressRoute2})
 
 	assert.NoError(t, c.syncRoute())
+}
+
+func TestRestoreEgressRoutesAndRules(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+
+	// route1 and route2 should be removed
+	route1 := &netlink.Route{Scope: netlink.SCOPE_LINK, Dst: ip.MustParseCIDR("10.10.10.0/24"), LinkIndex: 10, Table: 101}
+	route2 := &netlink.Route{Gw: net.ParseIP("10.10.10.1"), LinkIndex: 10, Table: 101}
+	route3 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.1.0/24"), Gw: net.ParseIP("1.1.1.1")}
+	route4 := &netlink.Route{Gw: net.ParseIP("192.168.1.1"), LinkIndex: 8}
+	// rule1 should be removed
+	rule1 := netlink.NewRule()
+	rule1.Table = 101
+	rule1.Mark = 1
+	rule1.Mask = int(types.SNATIPMarkMask)
+	rule2 := netlink.NewRule()
+	rule2.Table = 50
+	rule2.Mark = 10
+	rule2.Mask = int(types.SNATIPMarkMask)
+
+	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*route1, *route2, *route3, *route4}, nil)
+	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1, *rule2}, nil)
+	mockNetlink.EXPECT().RouteDel(route1)
+	mockNetlink.EXPECT().RouteDel(route2)
+	mockNetlink.EXPECT().RuleDel(rule1)
+	c := &Client{
+		netlink:       mockNetlink,
+		proxyAll:      true,
+		nodeRoutes:    sync.Map{},
+		serviceRoutes: sync.Map{},
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{LinkIndex: 10, IPv4: net.ParseIP("192.168.0.1"), IPv6: net.ParseIP("aabb:ccdd::1")},
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.0.0/24"),
+			PodIPv6CIDR:   ip.MustParseCIDR("aabb:ccdd::/64"),
+		},
+	}
+	assert.NoError(t, c.RestoreEgressRoutesAndRules(101, 120))
 }
 
 func TestSyncIPSet(t *testing.T) {
@@ -1718,6 +1760,114 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 				_, exists = c.clusterNodeIPs.Load(tt.podCIDR.String())
 			}
 			assert.False(t, exists)
+		})
+	}
+}
+
+func TestEgressRoutes(t *testing.T) {
+	tests := []struct {
+		name          string
+		tableID       uint32
+		dev           int
+		gateway       net.IP
+		prefixLength  int
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:         "IPv4",
+			tableID:      101,
+			dev:          10,
+			gateway:      net.ParseIP("1.1.1.1"),
+			prefixLength: 24,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{Dst: ip.MustParseCIDR("1.1.1.0/24"), Scope: netlink.SCOPE_LINK, LinkIndex: 10, Table: 101})
+				mockNetlink.RouteReplace(&netlink.Route{Gw: net.ParseIP("1.1.1.1"), LinkIndex: 10, Table: 101})
+
+				mockNetlink.RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("1.1.1.0/24"), Scope: netlink.SCOPE_LINK, LinkIndex: 10, Table: 101})
+				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("1.1.1.1"), LinkIndex: 10, Table: 101})
+			},
+		},
+		{
+			name:         "IPv6",
+			tableID:      102,
+			dev:          11,
+			gateway:      net.ParseIP("1122:3344::5566"),
+			prefixLength: 80,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{Dst: ip.MustParseCIDR("1122:3344::/80"), Scope: netlink.SCOPE_LINK, LinkIndex: 11, Table: 102})
+				mockNetlink.RouteReplace(&netlink.Route{Gw: net.ParseIP("1122:3344::5566"), LinkIndex: 11, Table: 102})
+
+				mockNetlink.RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("1122:3344::/80"), Scope: netlink.SCOPE_LINK, LinkIndex: 11, Table: 102})
+				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("1122:3344::5566"), LinkIndex: 11, Table: 102})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:    mockNetlink,
+				nodeConfig: nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			assert.NoError(t, c.AddEgressRoutes(tt.tableID, tt.dev, tt.gateway, tt.prefixLength))
+			assert.NoError(t, c.DeleteEgressRoutes(tt.tableID))
+			c.egressRoutes.Range(func(key, value any) bool {
+				t.Errorf("The egressRoutes should be empty but contains %v:%v", key, value)
+				return true
+			})
+		})
+	}
+}
+
+func TestEgressRule(t *testing.T) {
+	tests := []struct {
+		name          string
+		tableID       uint32
+		mark          uint32
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:    "normal",
+			tableID: 101,
+			mark:    1,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				rule := netlink.NewRule()
+				rule.Table = 101
+				rule.Mark = 1
+				rule.Mask = int(types.SNATIPMarkMask)
+				mockNetlink.RuleAdd(rule)
+				mockNetlink.RuleDel(rule)
+			},
+		},
+		{
+			name:    "not found",
+			tableID: 101,
+			mark:    1,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				rule := netlink.NewRule()
+				rule.Table = 101
+				rule.Mark = 1
+				rule.Mask = int(types.SNATIPMarkMask)
+				mockNetlink.RuleAdd(rule)
+				mockNetlink.RuleDel(rule).Return(fmt.Errorf("no such process"))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:    mockNetlink,
+				nodeConfig: nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark))
+			assert.NoError(t, c.DeleteEgressRule(tt.tableID, tt.mark))
 		})
 	}
 }

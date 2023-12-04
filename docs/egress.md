@@ -12,6 +12,7 @@
   - [Bandwidth](#bandwidth)
 - [The ExternalIPPool resource](#the-externalippool-resource)
   - [IPRanges](#ipranges)
+  - [SubnetInfo](#subnetinfo)
   - [NodeSelector](#nodeselector)
 - [Usage examples](#usage-examples)
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
@@ -197,6 +198,52 @@ spec:
 The `ipRanges` field contains a list of IP ranges representing the available IPs
 of this IP pool. Each IP range may consist of a `cidr` or a pair of `start` and
 `end` IPs (which are themselves included in the range).
+
+### SubnetInfo
+
+By default, it's assumed that the IPs allocated from the pool are in the same
+subnet as the Node IPs. Starting with Antrea v1.15, IPs can be allocated from a
+subnet different from the Node IPs.
+
+The optional `subnetInfo` field contains the subnet attributes of the IPs in
+this pool. When using a different subnet:
+
+* `gateway` and `prefixLength` must be set. Antrea will route Egress traffic to
+the specified gateway when the destination is not in the same subnet of the
+Egress IP, otherwise route it to the destination directly.
+
+* Optionally, you can specify `vlan` if the underlying network is expecting it.
+Once set, Antrea will tag Egress traffic leaving the Egress Node with the
+specified VLAN ID. Correspondingly, it's expected that reply traffic towards
+these Egress IPs is also tagged with the specified VLAN ID when arriving at the
+Egress Node.
+
+An example of ExternalIPPool using a different subnet is as below:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ExternalIPPool
+metadata:
+  name: prod-external-ip-pool
+spec:
+  ipRanges:
+  - start: 10.10.0.2
+    end: 10.10.0.10
+  subnetInfo:
+    gateway: 10.10.0.1
+    prefixLength: 24
+    vlan: 10
+  nodeSelector:
+    matchLabels:
+      network-role: egress-gateway
+```
+
+**Note**: Specifying different subnets is currently in alpha version. To use
+this feature, users should enable the `EgressSeparateSubnet` feature gate.
+Currently, the maximum number of different subnets that can be supported in a
+cluster is 20, which should be sufficient for most cases. If you need to have
+more subnets, please raise an issue with your use case, and we will consider
+revising the limit based on that.
 
 ### NodeSelector
 

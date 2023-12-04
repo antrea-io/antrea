@@ -146,6 +146,10 @@ const (
 	// alpha: v1.14
 	// Enable Egress traffic shaping.
 	EgressTrafficShaping featuregate.Feature = "EgressTrafficShaping"
+
+	// alpha: v1.15
+	// Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
+	EgressSeparateSubnet featuregate.Feature = "EgressSeparateSubnet"
 )
 
 var (
@@ -184,6 +188,7 @@ var (
 		LoadBalancerModeDSR:         {Default: false, PreRelease: featuregate.Alpha},
 		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
+		EgressSeparateSubnet:        {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
@@ -211,6 +216,7 @@ var (
 		Traceflow,
 		TrafficControl,
 		EgressTrafficShaping,
+		EgressSeparateSubnet,
 	)
 
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
@@ -255,6 +261,7 @@ var (
 		LoadBalancerModeDSR:         {},
 		CleanupStaleUDPSvcConntrack: {},
 		EgressTrafficShaping:        {},
+		EgressSeparateSubnet:        {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

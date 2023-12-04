@@ -1617,7 +1617,7 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 			snatIP:                net.ParseIP("192.168.77.100"),
 			trafficShapingEnabled: false,
 			expectedFlows: []string{
-				"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+new+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ip,tun_dst=192.168.77.100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
 		{
@@ -1625,7 +1625,7 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 			snatIP:                net.ParseIP("fec0:192:168:77::100"),
 			trafficShapingEnabled: false,
 			expectedFlows: []string{
-				"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+new+trk,ipv6,tun_ipv6_dst=fec0:192:168:77::100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ipv6,tun_ipv6_dst=fec0:192:168:77::100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
 		{
@@ -1683,7 +1683,7 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 			trafficShapingEnabled: false,
 			snatMark:              uint32(100),
 			expectedFlows: []string{
-				"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+new+trk,ip,in_port=100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=200,ct_state=+trk,ip,in_port=100 actions=set_field:0x64/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
 		{

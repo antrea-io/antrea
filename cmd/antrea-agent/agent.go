@@ -517,8 +517,9 @@ func run(o *Options) error {
 	if o.enableEgress {
 		egressController, err = egress.NewEgressController(
 			ofClient, k8sClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
-			memberlistCluster, egressInformer, nodeInformer, podUpdateChannel, serviceCIDRProvider, o.config.Egress.MaxEgressIPsPerNode,
+			memberlistCluster, egressInformer, externalIPPoolInformer, nodeInformer, podUpdateChannel, serviceCIDRProvider, o.config.Egress.MaxEgressIPsPerNode,
 			features.DefaultFeatureGate.Enabled(features.EgressTrafficShaping),
+			features.DefaultFeatureGate.Enabled(features.EgressSeparateSubnet),
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)

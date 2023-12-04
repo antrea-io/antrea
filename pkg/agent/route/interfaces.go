@@ -59,6 +59,21 @@ type Interface interface {
 	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
 	DeleteSNATRule(mark uint32) error
 
+	// RestoreEgressRoutesAndRules restores the routes and rules configured on the system for Egress to the cache.
+	RestoreEgressRoutesAndRules(minTableID, maxTableID int) error
+
+	// AddEgressRoutes creates a route table which routes Egress traffic to the provided gateway via the device.
+	AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error
+
+	// DeleteEgressRoutes deletes the routes installed by AddEgressRoute.
+	DeleteEgressRoutes(tableID uint32) error
+
+	// AddEgressRule creates an IP rule which makes Egress traffic with the provided mark look up the specified table.
+	AddEgressRule(tableID uint32, mark uint32) error
+
+	// DeleteEgressRule deletes the IP rule installed by AddEgressRule.
+	DeleteEgressRule(tableID uint32, mark uint32) error
+
 	// AddNodePort adds configurations when a NodePort Service is created.
 	AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
 

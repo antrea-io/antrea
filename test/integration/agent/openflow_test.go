@@ -1699,7 +1699,7 @@ func expectedExternalFlows(ipProtoStr, gwMACStr string) []expectTableFlows {
 }
 
 func prepareEgressMarkFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint32, vMAC, localGwMAC net.HardwareAddr, trafficShaping bool) []expectTableFlows {
-	var ipProtoStr, tunDstFieldName, nextTableName, ctStateMatch string
+	var ipProtoStr, tunDstFieldName, nextTableName string
 	if snatIP.To4() != nil {
 		tunDstFieldName = "tun_dst"
 		ipProtoStr = "ip"
@@ -1709,21 +1709,19 @@ func prepareEgressMarkFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint
 	}
 	if trafficShaping {
 		nextTableName = "EgressQoS"
-		ctStateMatch = "+trk"
 	} else {
 		nextTableName = "L2ForwardingCalc"
-		ctStateMatch = "+new+trk"
 	}
 	return []expectTableFlows{
 		{
 			"EgressMark",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,ct_state=%s,%s,%s=%s", ctStateMatch, ipProtoStr, tunDstFieldName, snatIP),
+					MatchStr: fmt.Sprintf("priority=200,ct_state=+trk,%s,%s=%s", ipProtoStr, tunDstFieldName, snatIP),
 					ActStr:   fmt.Sprintf("set_field:0x%x/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:%s", mark, nextTableName),
 				},
 				{
-					MatchStr: fmt.Sprintf("priority=200,ct_state=%s,%s,in_port=%d", ctStateMatch, ipProtoStr, podOFPort),
+					MatchStr: fmt.Sprintf("priority=200,ct_state=+trk,%s,in_port=%d", ipProtoStr, podOFPort),
 					ActStr:   fmt.Sprintf("set_field:0x%x/0xff->pkt_mark,set_field:0x20/0xf0->reg0,goto_table:%s", mark, nextTableName),
 				},
 				{

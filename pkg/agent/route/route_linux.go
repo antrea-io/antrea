@@ -124,6 +124,8 @@ type Client struct {
 	clusterNodeIPs sync.Map
 	// clusterNodeIP6s stores the IPv6 of all other Nodes in the cluster
 	clusterNodeIP6s sync.Map
+	// egressRoutes caches ip routes about Egresses.
+	egressRoutes sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 }
@@ -233,6 +235,7 @@ type routeKey struct {
 	linkIndex int
 	dst       string
 	gw        string
+	tableID   int
 }
 
 func (c *Client) syncRoute() error {
@@ -250,6 +253,7 @@ func (c *Client) syncRoute() error {
 			linkIndex: r.LinkIndex,
 			dst:       r.Dst.String(),
 			gw:        r.Gw.String(),
+			tableID:   r.Table,
 		})
 	}
 	restoreRoute := func(route *netlink.Route) bool {
@@ -257,6 +261,7 @@ func (c *Client) syncRoute() error {
 			linkIndex: route.LinkIndex,
 			dst:       route.Dst.String(),
 			gw:        route.Gw.String(),
+			tableID:   route.Table,
 		}) {
 			return true
 		}
@@ -280,6 +285,14 @@ func (c *Client) syncRoute() error {
 			return restoreRoute(route)
 		})
 	}
+	c.egressRoutes.Range(func(_, v any) bool {
+		for _, route := range v.([]*netlink.Route) {
+			if !restoreRoute(route) {
+				return false
+			}
+		}
+		return true
+	})
 	// These routes are installed automatically by the kernel when the address is configured on
 	// the interface (with "proto kernel"). If these routes are deleted manually by mistake, we
 	// restore them as part of this sync (without "proto kernel"). An alternative would be to
@@ -980,6 +993,38 @@ func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 	return routes, nil
 }
 
+// RestoreEgressRoutesAndRules simply deletes all IP routes and rules created for Egress for now.
+// It may be better to keep the ones whose Egress IPs are still on this Node, but it's a bit hard to achieve it at the
+// moment because the marks are not permanent and could change upon restart.
+func (c *Client) RestoreEgressRoutesAndRules(minTableID, maxTableID int) error {
+	klog.InfoS("Restoring IP routes and rules for Egress")
+	routes, err := c.netlink.RouteList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range routes {
+		route := routes[i]
+		// Not routes created for Egress.
+		if route.Table < minTableID || route.Table > maxTableID {
+			continue
+		}
+		c.netlink.RouteDel(&route)
+	}
+	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range rules {
+		rule := rules[i]
+		// Not rules created for Egress.
+		if rule.Table < minTableID || rule.Table > maxTableID {
+			continue
+		}
+		c.netlink.RuleDel(&rule)
+	}
+	return nil
+}
+
 // getIPv6Gateways returns the IPv6 gateway addresses of the given CIDRs.
 func getIPv6Gateways(podCIDRs []string) sets.Set[string] {
 	ipv6GWs := sets.New[string]()
@@ -1276,6 +1321,88 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+}
+
+func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
+	var dst *net.IPNet
+	if gateway.To4() != nil {
+		mask := net.CIDRMask(prefixLength, 32)
+		dst = &net.IPNet{
+			IP:   gateway.To4().Mask(mask),
+			Mask: mask,
+		}
+	} else {
+		mask := net.CIDRMask(prefixLength, 128)
+		dst = &net.IPNet{
+			IP:   gateway.Mask(mask),
+			Mask: mask,
+		}
+	}
+	// Install routes for the subnet, for example:
+	// tableID=101, dev=eth.10, gateway=172.20.10.1, prefixLength=24
+	// $ ip route show table 101
+	// 172.20.10.0/24 dev eth0.10 table 101
+	// default via 172.20.10.1 dev eth0.10 table 101
+	localRoute := &netlink.Route{
+		Scope:     netlink.SCOPE_LINK,
+		Dst:       dst,
+		LinkIndex: dev,
+		Table:     int(tableID),
+	}
+	defaultRoute := &netlink.Route{
+		LinkIndex: dev,
+		Gw:        gateway,
+		Table:     int(tableID),
+	}
+	if err := c.netlink.RouteReplace(localRoute); err != nil {
+		return err
+	}
+	if err := c.netlink.RouteReplace(defaultRoute); err != nil {
+		return err
+	}
+	c.egressRoutes.Store(tableID, []*netlink.Route{localRoute, defaultRoute})
+	return nil
+}
+
+func (c *Client) DeleteEgressRoutes(tableID uint32) error {
+	value, exists := c.egressRoutes.Load(tableID)
+	if !exists {
+		return nil
+	}
+	routes := value.([]*netlink.Route)
+	for _, route := range routes {
+		if err := c.netlink.RouteDel(route); err != nil {
+			if err.Error() != "no such process" {
+				return err
+			}
+		}
+	}
+	c.egressRoutes.Delete(tableID)
+	return nil
+}
+
+func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
+	rule := netlink.NewRule()
+	rule.Table = int(tableID)
+	rule.Mark = int(mark)
+	rule.Mask = int(types.SNATIPMarkMask)
+	if err := c.netlink.RuleAdd(rule); err != nil {
+		return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+	}
+	return nil
+}
+
+func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
+	rule := netlink.NewRule()
+	rule.Table = int(tableID)
+	rule.Mark = int(mark)
+	rule.Mask = int(types.SNATIPMarkMask)
+	if err := c.netlink.RuleDel(rule); err != nil {
+		if err.Error() != "no such process" {
+			return fmt.Errorf("error deleting ip rule %v: %w", rule, err)
+		}
+	}
+	return nil
 }
 
 // addVirtualServiceIPRoute is used to add a route which is used to route the packets whose destination IP is a virtual

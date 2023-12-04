@@ -95,6 +95,9 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.skipCases, "skip-cases", "", "Key words to skip cases")
 	flag.StringVar(&testOptions.linuxVMs, "linuxVMs", "", "hostname of Linux VMs")
 	flag.StringVar(&testOptions.windowsVMs, "windowsVMs", "", "hostname of Windows VMs")
+	flag.StringVar(&testOptions.externalServerIPs, "external-server-ips", "", "IP addresses of external server, at most one IP per IP family")
+	flag.StringVar(&testOptions.vlanSubnets, "vlan-subnets", "", "IP subnets of the VLAN network the Nodes reside in, at most one subnet per IP family")
+	flag.IntVar(&testOptions.vlanID, "vlan-id", 0, "ID of the VLAN network the Nodes reside in")
 	flag.Parse()
 
 	cleanupLogging := testOptions.setupLogging()
@@ -129,6 +132,9 @@ func testMain(m *testing.M) int {
 		log.Printf("Service IPv6 network: '%s'", clusterInfo.svcV6NetworkCIDR)
 	}
 	log.Printf("Num nodes: %d", clusterInfo.numNodes)
+	if err := testData.collectExternalInfo(); err != nil {
+		log.Fatalf("Error when collecting external information: %v", err)
+	}
 	err = ensureAntreaRunning(testData)
 	if err != nil {
 		log.Fatalf("Error when deploying Antrea: %v", err)

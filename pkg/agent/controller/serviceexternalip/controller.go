@@ -393,7 +393,7 @@ func (c *ServiceExternalIPController) assignIP(ip string, service apimachineryty
 	c.assignedIPsMutex.Lock()
 	defer c.assignedIPsMutex.Unlock()
 	if _, ok := c.assignedIPs[ip]; !ok {
-		if _, err := c.ipAssigner.AssignIP(ip, true); err != nil {
+		if _, err := c.ipAssigner.AssignIP(ip, nil, true); err != nil {
 			return err
 		}
 		c.assignedIPs[ip] = sets.New[string](service.String())

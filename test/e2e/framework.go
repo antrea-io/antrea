@@ -188,7 +188,19 @@ type ClusterInfo struct {
 	k8sServicePort       int32
 }
 
+type ExternalInfo struct {
+	externalServerIPv4 string
+	externalServerIPv6 string
+
+	vlanSubnetIPv4  string
+	vlanGatewayIPv4 string
+	vlanSubnetIPv6  string
+	vlanGatewayIPv6 string
+	vlanID          int
+}
+
 var clusterInfo ClusterInfo
+var externalInfo ExternalInfo
 
 type TestOptions struct {
 	providerName        string
@@ -206,6 +218,10 @@ type TestOptions struct {
 	// deployAntrea determines whether to deploy Antrea before running tests. It requires antrea.yml to be present in
 	// the home directory of the control-plane Node. Note it doesn't affect the tests that redeploy Antrea themselves.
 	deployAntrea bool
+
+	externalServerIPs string
+	vlanSubnets       string
+	vlanID            int
 }
 
 type flowVisibilityTestOptions struct {
@@ -464,6 +480,38 @@ func (data *TestData) RunCommandOnNode(nodeName string, cmd string) (code int, s
 func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
 	code int, stdout, stderr string, err error) {
 	return data.provider.RunCommandOnNodeExt(nodeName, cmd, envs, stdin, sudo)
+}
+
+func (data *TestData) collectExternalInfo() error {
+	ips := strings.Split(testOptions.externalServerIPs, ",")
+	for _, ip := range ips {
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			continue
+		}
+		if parsedIP.To4() != nil {
+			externalInfo.externalServerIPv4 = ip
+		} else {
+			externalInfo.externalServerIPv6 = ip
+		}
+	}
+
+	subnets := strings.Split(testOptions.vlanSubnets, ",")
+	for _, subnet := range subnets {
+		gatewayIP, _, err := net.ParseCIDR(subnet)
+		if err != nil {
+			continue
+		}
+		if gatewayIP.To4() != nil {
+			externalInfo.vlanSubnetIPv4 = subnet
+			externalInfo.vlanGatewayIPv4 = gatewayIP.String()
+		} else {
+			externalInfo.vlanSubnetIPv6 = subnet
+			externalInfo.vlanGatewayIPv6 = gatewayIP.String()
+		}
+	}
+	externalInfo.vlanID = testOptions.vlanID
+	return nil
 }
 
 func (data *TestData) collectClusterInfo() error {

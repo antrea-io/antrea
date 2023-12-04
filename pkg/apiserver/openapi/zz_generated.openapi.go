@@ -130,6 +130,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService":                                schema_pkg_apis_crd_v1beta1_PeerService(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Rule":                                       schema_pkg_apis_crd_v1beta1_Rule(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Source":                                     schema_pkg_apis_crd_v1beta1_Source(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo":                                 schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader":                                  schema_pkg_apis_crd_v1beta1_TCPHeader(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol":                                schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
@@ -3766,6 +3767,12 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 							},
 						},
 					},
+					"subnetInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes. Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"),
+						},
+					},
 					"nodeSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.",
@@ -3778,7 +3785,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
 	}
 }
 
@@ -5267,6 +5274,43 @@ func schema_pkg_apis_crd_v1beta1_Source(ref common.ReferenceCallback) common.Ope
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_SubnetInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SubnetInfo specifies subnet attributes for IP Range.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"gateway": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Gateway IP for this subnet, e.g. 10.10.1.1.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"prefixLength": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Prefix length for the subnet, e.g. 24.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vlan": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VLAN ID for this subnet. Default is 0. Valid value is 0~4094.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"gateway", "prefixLength"},
 			},
 		},
 	}

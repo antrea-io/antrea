@@ -26,8 +26,8 @@ package testing
 import (
 	reflect "reflect"
 
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	gomock "go.uber.org/mock/gomock"
-	sets "k8s.io/apimachinery/pkg/util/sets"
 )
 
 // MockIPAssigner is a mock of IPAssigner interface.
@@ -54,25 +54,25 @@ func (m *MockIPAssigner) EXPECT() *MockIPAssignerMockRecorder {
 }
 
 // AssignIP mocks base method.
-func (m *MockIPAssigner) AssignIP(arg0 string, arg1 bool) (bool, error) {
+func (m *MockIPAssigner) AssignIP(arg0 string, arg1 *v1beta1.SubnetInfo, arg2 bool) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssignIP", arg0, arg1)
+	ret := m.ctrl.Call(m, "AssignIP", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AssignIP indicates an expected call of AssignIP.
-func (mr *MockIPAssignerMockRecorder) AssignIP(arg0, arg1 any) *gomock.Call {
+func (mr *MockIPAssignerMockRecorder) AssignIP(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), arg0, arg1, arg2)
 }
 
 // AssignedIPs mocks base method.
-func (m *MockIPAssigner) AssignedIPs() sets.Set[string] {
+func (m *MockIPAssigner) AssignedIPs() map[string]*v1beta1.SubnetInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignedIPs")
-	ret0, _ := ret[0].(sets.Set[string])
+	ret0, _ := ret[0].(map[string]*v1beta1.SubnetInfo)
 	return ret0
 }
 
@@ -82,8 +82,23 @@ func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignedIPs", reflect.TypeOf((*MockIPAssigner)(nil).AssignedIPs))
 }
 
+// GetInterfaceID mocks base method.
+func (m *MockIPAssigner) GetInterfaceID(arg0 *v1beta1.SubnetInfo) (int, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceID", arg0)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetInterfaceID indicates an expected call of GetInterfaceID.
+func (mr *MockIPAssignerMockRecorder) GetInterfaceID(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceID", reflect.TypeOf((*MockIPAssigner)(nil).GetInterfaceID), arg0)
+}
+
 // InitIPs mocks base method.
-func (m *MockIPAssigner) InitIPs(arg0 sets.Set[string]) error {
+func (m *MockIPAssigner) InitIPs(arg0 map[string]*v1beta1.SubnetInfo) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InitIPs", arg0)
 	ret0, _ := ret[0].(error)
