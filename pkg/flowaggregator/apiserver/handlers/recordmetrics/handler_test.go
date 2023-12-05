@@ -31,10 +31,14 @@ func TestRecordMetricsQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	faq := queriertest.NewMockFlowAggregatorQuerier(ctrl)
 	faq.EXPECT().GetRecordMetrics().Return(querier.Metrics{
-		NumRecordsExported: 20,
-		NumRecordsReceived: 15,
-		NumFlows:           30,
-		NumConnToCollector: 1,
+		NumRecordsExported:     20,
+		NumRecordsReceived:     15,
+		NumFlows:               30,
+		NumConnToCollector:     1,
+		WithClickHouseExporter: true,
+		WithS3Exporter:         true,
+		WithLogExporter:        true,
+		WithIPFIXExporter:      true,
 	})
 
 	handler := HandleFunc(faq)
@@ -48,12 +52,16 @@ func TestRecordMetricsQuery(t *testing.T) {
 	err = json.Unmarshal(recorder.Body.Bytes(), &received)
 	assert.Nil(t, err)
 	assert.Equal(t, Response{
-		NumRecordsExported: 20,
-		NumRecordsReceived: 15,
-		NumFlows:           30,
-		NumConnToCollector: 1,
+		NumRecordsExported:     20,
+		NumRecordsReceived:     15,
+		NumFlows:               30,
+		NumConnToCollector:     1,
+		WithClickHouseExporter: true,
+		WithS3Exporter:         true,
+		WithLogExporter:        true,
+		WithIPFIXExporter:      true,
 	}, received)
 
-	assert.Equal(t, received.GetTableRow(0), []string{"20", "15", "30", "1"})
+	assert.Equal(t, received.GetTableRow(0), []string{"20", "15", "30", "1", "true", "true", "true", "true"})
 
 }
