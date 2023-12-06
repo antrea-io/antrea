@@ -39,7 +39,6 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/cni"
@@ -115,7 +114,6 @@ type CNIServer struct {
 	// Enable AntreaIPAM for secondary networks implementd by other CNIs.
 	enableSecondaryNetworkIPAM bool
 	disableTXChecksumOffload   bool
-	secondaryNetworkEnabled    bool
 	networkConfig              *config.NetworkConfig
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
@@ -523,13 +521,6 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	// mark success as true to avoid rollback
 	success = true
 
-	if s.secondaryNetworkEnabled {
-		// Go cache the CNI server info at CNIConfigInfo cache, for podWatch usage
-		cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: cniVersion, PodName: podName, PodNamespace: podNamespace,
-			ContainerID: cniConfig.ContainerId, ContainerNetNS: netNS, PodCNIDeleted: false}
-		s.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)
-	}
-
 	return resultToResponse(cniResult), nil
 }
 
@@ -558,16 +549,7 @@ func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniC
 		return s.configInterfaceFailureResponse(err), nil
 	}
 	klog.InfoS("CmdDel for container succeeded", "container", cniConfig.ContainerId)
-	if s.secondaryNetworkEnabled {
-		podName := string(cniConfig.K8S_POD_NAME)
-		podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-		containerInfo := s.podConfigurator.podInfoStore.GetCNIConfigInfoByContainerID(podName, podNamespace, cniConfig.ContainerId)
-		if containerInfo != nil {
-			// Update PodCNIDeleted = true.
-			// This is to let Podwatch controller know that the CNI server cleaned up this Pod's primary network configuration.
-			s.podConfigurator.podInfoStore.SetPodCNIDeleted(containerInfo)
-		}
-	}
+
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
@@ -652,21 +634,12 @@ func (s *CNIServer) Initialize(
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	podUpdateNotifier channel.Notifier,
-	podInfoStore cnipodcache.CNIPodInfoStore,
 ) error {
 	var err error
-	// If podInfoStore is not nil, secondaryNetwork configuration is supported.
-	if podInfoStore != nil {
-		s.secondaryNetworkEnabled = true
-	} else {
-		s.secondaryNetworkEnabled = false
-	}
-
 	s.podConfigurator, err = newPodConfigurator(
 		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
 		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(),
-		s.disableTXChecksumOffload,
-		podUpdateNotifier, podInfoStore)
+		s.disableTXChecksumOffload, podUpdateNotifier)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
 	}

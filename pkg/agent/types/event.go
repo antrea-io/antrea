@@ -17,6 +17,7 @@ package types
 type PodUpdate struct {
 	PodNamespace string
 	PodName      string
-	IsAdd        bool
 	ContainerID  string
+	NetNS        string
+	IsAdd        bool
 }

@@ -24,7 +24,7 @@ import (
 )
 
 func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient) (*podConfigurator, error) {
-	return newPodConfigurator(ovsBridgeClient, nil, nil, nil, nil, ovsconfig.OVSDatapathSystem, false, false, nil, nil)
+	return newPodConfigurator(ovsBridgeClient, nil, nil, nil, nil, ovsconfig.OVSDatapathSystem, false, false, nil)
 }
 
 // ConfigureSriovSecondaryInterface configures a SR-IOV secondary interface for a Pod.
