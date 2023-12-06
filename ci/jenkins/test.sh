@@ -166,6 +166,25 @@ function export_govc_env_var {
     export GOVC_DATASTORE=$GOVC_DATASTORE
 }
 
+function clean_images {
+    # Before pruning
+    if [ -f /tmp/prune_lock ]; then
+        echo "Pruning already in progress. Exiting."
+        exit 1
+    fi
+
+    # Create lock file
+    touch /tmp/prune_lock
+
+    # Perform pruning
+    ${CLEAN_STALE_IMAGES}
+
+    # Remove lock file
+    rm /tmp/prune_lock
+
+}
+
+
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
     clean_ns "monitoring"
@@ -183,8 +202,13 @@ function clean_antrea {
     for antrea_yml in ${WORKDIR}/*.yml; do
         kubectl delete -f $antrea_yml --ignore-not-found=true || true
     done
-    docker images | grep 'antrea' | awk '{print $3}' | xargs -r docker rmi || true
-    docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    
+    if [[ $TESTBED_TYPE == "kind" ]]; then
+       clean_images
+    elif
+       docker images | grep 'antrea' | awk '{print $3}' | xargs -r docker rmi || true
+       docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    fi
 }
 
 function clean_for_windows_install_cni {
@@ -675,7 +699,11 @@ function deliver_antrea {
 
     git show --numstat
     make clean
-    ${CLEAN_STALE_IMAGES}
+
+    if [[ $TESTBED_TYPE != "kind" ]]; then
+        ${CLEAN_STALE_IMAGES}
+    fi
+
     ${PRINT_DOCKER_STATUS}
     if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
