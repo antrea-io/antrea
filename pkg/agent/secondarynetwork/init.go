@@ -26,10 +26,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -46,7 +46,7 @@ func Initialize(
 	k8sClient clientset.Interface,
 	podInformer cache.SharedIndexInformer,
 	nodeName string,
-	podCache cnipodcache.CNIPodInfoStore,
+	podUpdateSubscriber channel.Subscriber,
 	stopCh <-chan struct{},
 	config *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB) error {
 
@@ -66,7 +66,7 @@ func Initialize(
 	// k8s.v1.cni.cncf.io/networks Annotation defined.
 	if podWatchController, err := podwatch.NewPodController(
 		k8sClient, netAttachDefClient, podInformer,
-		nodeName, podCache, ovsBridgeClient); err != nil {
+		nodeName, podUpdateSubscriber, ovsBridgeClient); err != nil {
 		return err
 	} else {
 		go podWatchController.Run(stopCh)

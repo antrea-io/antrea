@@ -66,6 +66,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	podName string,
 	podNamespace string,
 	containerID string,
+	netNS string,
 	hostIface *current.Interface,
 	containerIface *current.Interface,
 	ips []*current.IPConfig,
@@ -87,7 +88,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
 	//   way to create OVS port.
 	if hostInterfaceExistsFunc(hostIfAlias) {
-		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
+		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, netNS, containerConfig)
 	}
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
 	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
