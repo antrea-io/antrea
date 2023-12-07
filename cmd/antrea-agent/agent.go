@@ -554,7 +554,7 @@ func run(o *Options) error {
 
 		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel)
 		if err != nil {
-			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
+			return fmt.Errorf("error initializing CNI server: %w", err)
 		}
 	} else {
 		listOptions := func(options *metav1.ListOptions) {
