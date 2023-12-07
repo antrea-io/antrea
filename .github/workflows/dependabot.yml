@@ -38,7 +38,7 @@ jobs:
         token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     - name: Run go mod tidy

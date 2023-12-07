@@ -41,7 +41,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     - name: Run unit tests
@@ -66,7 +66,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
       - name: Run unit tests
@@ -91,7 +91,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
       - name: Run integration tests
@@ -125,7 +125,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     - name: Run golangci-lint
@@ -142,7 +142,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
       - name: Run golangci-lint
@@ -159,7 +159,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     - name: Build Antrea binaries for amd64
@@ -186,7 +186,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     - name: Build Antrea windows binaries
@@ -203,7 +203,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -225,7 +225,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
     - name: Run verify scripts
@@ -263,7 +263,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from go.mod
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
       - name: Run Go benchmark test
