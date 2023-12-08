@@ -600,12 +600,8 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
-	runIpCmd := func(nodeName string, cmd []string, outputFilters ...string) ([]string, error) {
-		antreaPodName, err := data.getAntreaPodOnNode(nodeName)
-		if err != nil {
-			return nil, err
-		}
-		stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+	runCmdWithOutputFilters := func(nodeName string, cmd []string, outputFilters ...string) ([]string, error) {
+		stdout, _, err := data.RunCommandFromAntreaPodOnNode(nodeName, cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -628,12 +624,12 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 
 	getMroutes := func(nodeName string, iface string, outputFilters ...string) ([]string, error) {
 		cmd := []string{"ip", "mroute", "show", "iif", iface}
-		return runIpCmd(nodeName, cmd, outputFilters...)
+		return runCmdWithOutputFilters(nodeName, cmd, outputFilters...)
 	}
 
-	getMaddr := func(nodeName string, iface string, outputFilters ...string) ([]string, error) {
+	getMaddrs := func(nodeName string, iface string, outputFilters ...string) ([]string, error) {
 		cmd := []string{"ip", "maddr", "show", "dev", iface}
-		return runIpCmd(nodeName, cmd, outputFilters...)
+		return runCmdWithOutputFilters(nodeName, cmd, outputFilters...)
 	}
 
 	readyReceivers := sets.New[int]()
@@ -641,16 +637,16 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
 		if !senderReady {
 			// Sender pods should add an outbound multicast route except when running as HostNetwork.
-			mRouteResult, err := getMroutes(nodeName(mc.senderConfig.nodeIdx), gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))
+			mRoutesResult, err := getMroutes(nodeName(mc.senderConfig.nodeIdx), gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))
 			if err != nil {
 				return false, err
 			}
 			if !mc.senderConfig.isHostNetwork {
-				if len(mRouteResult) == 0 {
+				if len(mRoutesResult) == 0 {
 					return false, nil
 				}
 			} else {
-				if len(mRouteResult) != 0 {
+				if len(mRoutesResult) != 0 {
 					return false, nil
 				}
 			}
@@ -664,23 +660,23 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			}
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
 				if checkReceiverRoute {
-					mRouteResult, err := getMroutes(nodeName(receiver.nodeIdx), receiverMulticastInterface, mc.group.String())
+					mRoutesResult, err := getMroutes(nodeName(receiver.nodeIdx), receiverMulticastInterface, mc.group.String())
 					if err != nil {
 						return false, err
 					}
 					// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
 					// the receivers should configure corresponding inbound multicast routes.
 					if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
-						if len(mRouteResult) == 0 {
+						if len(mRoutesResult) == 0 {
 							return false, nil
 						}
 					} else {
-						if len(mRouteResult) != 0 {
+						if len(mRoutesResult) != 0 {
 							return false, nil
 						}
 					}
 				}
-				mAddrResult, err := getMaddr(nodeName(receiver.nodeIdx), receiverMulticastInterface, mc.group.String())
+				mAddrsResult, err := getMaddrs(nodeName(receiver.nodeIdx), receiverMulticastInterface, mc.group.String())
 				if err != nil {
 					return false, err
 				}
@@ -688,11 +684,11 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 				// Note that in HostNetwork mode, the "join multicast" action is taken by mcjoin,
 				// which will not persist after mcjoin exits.
 				if !receiver.isHostNetwork {
-					if len(mAddrResult) == 0 {
+					if len(mAddrsResult) == 0 {
 						return false, nil
 					}
 				} else {
-					if len(mAddrResult) != 0 {
+					if len(mAddrsResult) != 0 {
 						return false, nil
 					}
 				}
