@@ -98,8 +98,7 @@ var policies = []*networkingv1.NetworkPolicy{
 					From: []networkingv1.NetworkPolicyPeer{
 						{
 							PodSelector: &metav1.LabelSelector{
-								MatchLabels:      map[string]string{"foo": "bar"},
-								MatchExpressions: nil,
+								MatchLabels: map[string]string{"foo": "bar"},
 							},
 						},
 					},
@@ -110,14 +109,14 @@ var policies = []*networkingv1.NetworkPolicy{
 					To: []networkingv1.NetworkPolicyPeer{
 						{
 							PodSelector: &metav1.LabelSelector{
-								MatchLabels:      map[string]string{"foo": "bar"},
-								MatchExpressions: nil,
+								MatchLabels: map[string]string{"foo": "bar"},
 							},
 						},
 					},
 				},
 			},
 			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,
 			},
 		},
@@ -134,6 +133,38 @@ var policies = []*networkingv1.NetworkPolicy{
 			},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeEgress,
+			},
+		},
+	},
+	{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-multiple-ingress-rules",
+			Namespace: "testNamespace",
+			UID:       types.UID("uid-3"),
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"foo": "bar"},
+			},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "baz"},
+							},
+						},
+					},
+				},
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+				},
 			},
 		},
 	},
@@ -184,6 +215,7 @@ func makeControllerAndEndpointQuerier(objects ...runtime.Object) *endpointQuerie
 func TestEndpointQuery(t *testing.T) {
 	policyRef0 := PolicyRef{policies[0].Namespace, policies[0].Name, policies[0].UID}
 	policyRef1 := PolicyRef{policies[1].Namespace, policies[1].Name, policies[1].UID}
+	policyRef2 := PolicyRef{policies[2].Namespace, policies[2].Name, policies[2].UID}
 
 	testCases := []struct {
 		name             string
@@ -246,6 +278,26 @@ func TestEndpointQuery(t *testing.T) {
 						Rules: []Rule{
 							{policyRef0, v1beta2.DirectionOut, 0},
 							{policyRef0, v1beta2.DirectionIn, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			"MultipleRule", // Pod is selected by policy with multiple rules
+			[]runtime.Object{namespaces[0], pods[0], policies[2]},
+			"testNamespace",
+			"podA",
+			&EndpointQueryResponse{
+				[]Endpoint{
+					{
+						Namespace: "testNamespace",
+						Name:      "podA",
+						Policies: []Policy{
+							{policyRef2},
+						},
+						Rules: []Rule{
+							{policyRef2, v1beta2.DirectionIn, 1},
 						},
 					},
 				},

@@ -20,6 +20,7 @@ package networkpolicy
 import (
 	"k8s.io/apimachinery/pkg/types"
 
+	"antrea.io/antrea/pkg/apis/controlplane"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -127,13 +128,11 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 			return nil, err
 		}
 		for _, policy := range policies {
-			egressIndex := 0
-			ingressIndex := 0
+			egressIndex, ingressIndex := 0, 0
 			for _, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
 				for _, addressGroupTrial := range rule.To.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
 						egress = append(egress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: egressIndex})
-						egressIndex++
 						// an AddressGroup can only be referenced in a rule once
 						break
 					}
@@ -141,10 +140,17 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 				for _, addressGroupTrial := range rule.From.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
 						ingress = append(ingress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: ingressIndex})
-						ingressIndex++
 						// an AddressGroup can only be referenced in a rule once
 						break
 					}
+				}
+				// IngressIndex/egressIndex indicates the current rule's index among this policy's original ingress/egress
+				// rules. The calculation accounts for policy rules not referencing this pod, and guarantees that
+				// users can reference the rules from configuration without accessing the internal policies.
+				if rule.Direction == controlplane.DirectionIn {
+					ingressIndex++
+				} else {
+					egressIndex++
 				}
 			}
 		}
