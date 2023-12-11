@@ -188,18 +188,6 @@ these scenarios:
 * OpenFlow connection
 * The connection between CNI plugin and CNI server
 
-## Antrea Management on Windows
-
-### Antrea Agent Management
-
-The Antrea Agent is running as a process on the Windows Node, but it is managed using a DaemonSet. The utility
-[Rancher Wins](https://github.com/rancher/wins) is used to manage the host process from inside the DaemonSet Pod.
-The Antrea Agent is configured using a ConfigMap, and the environment variables are set by kubelet on Windows.
-
-### OVS Management
-
-OVS is running as 2 Windows Services: one for ovsdb-server and one for ovs-vswitchd.
-
 ## Traffic walkthrough
 
 ### Pod-to-Pod Traffic

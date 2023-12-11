@@ -8,18 +8,24 @@
   - [Antrea Windows demo](#antrea-windows-demo)
 - [Deploying Antrea on Windows Worker Node](#deploying-antrea-on-windows-worker-node)
   - [Prerequisites](#prerequisites)
-  - [Installation as a Service (containerd based runtimes)](#installation-as-a-service-containerd-based-runtimes)
-  - [Installation as a Pod (Docker/containerd based runtimes)](#installation-as-a-pod-dockercontainerd-based-runtimes)
+  - [Installation as a Pod](#installation-as-a-pod)
     - [Download &amp; Configure Antrea for Linux](#download--configure-antrea-for-linux)
     - [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset)
     - [Join Windows worker Nodes](#join-windows-worker-nodes)
       - [1. (Optional) Install OVS (provided by Antrea or your own)](#1-optional-install-ovs-provided-by-antrea-or-your-own)
       - [2. Disable Windows Firewall](#2-disable-windows-firewall)
-      - [3. Install wins, kubelet, kubeadm and configure kubelet startup params](#3-install-wins-kubelet-kubeadm-and-configure-kubelet-startup-params)
+      - [3. Install kubelet, kubeadm and configure kubelet startup params](#3-install-kubelet-kubeadm-and-configure-kubelet-startup-params)
       - [4. Prepare Node environment needed by antrea-agent](#4-prepare-node-environment-needed-by-antrea-agent)
       - [5. Run kubeadm to join the Node](#5-run-kubeadm-to-join-the-node)
       - [Verify your installation](#verify-your-installation)
+  - [Installation as a Service](#installation-as-a-service)
+  - [Installation as a Pod using wins for Docker (DEPRECATED)](#installation-as-a-pod-using-wins-for-docker-deprecated)
+    - [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset-1)
+    - [Join Windows worker Nodes](#join-windows-worker-nodes-1)
   - [Add Windows kube-proxy DaemonSet (only for Kubernetes versions prior to 1.26)](#add-windows-kube-proxy-daemonset-only-for-kubernetes-versions-prior-to-126)
+    - [Common steps](#common-steps)
+    - [For containerd](#for-containerd)
+    - [For docker](#for-docker)
   - [Manually run kube-proxy and antrea-agent on Windows worker Nodes](#manually-run-kube-proxy-and-antrea-agent-on-windows-worker-nodes)
 - [Known issues](#known-issues)
 <!-- /toc -->
@@ -63,6 +69,17 @@ the Windows Nodes in the demo.
 
 ## Deploying Antrea on Windows Worker Node
 
+Running Antrea on Windows Nodes requires the containerd container runtime. The
+recommended installation method is [Installation as a
+Pod](#installation-as-a-pod), and it requires containerd 1.6 or higher. If you
+prefer running the Antrea Agent as a Windows service, or if you are using
+containerd 1.5, you can use the [Installation as a
+Service](#installation-as-a-service) method.
+
+Note that [Docker support](#installation-as-a-pod-using-wins-for-docker-deprecated)
+is deprecated. We no longer test Antrea support with Docker on Windows, and the
+installation method will be removed from the documentation in a later release.
+
 ### Prerequisites
 
 * Obtain a Windows Server 2019 license (or higher) in order to configure the
@@ -73,74 +90,15 @@ the Windows Nodes in the demo.
   with management tools. If your Nodes do not have the virtualization
   capabilities required by Hyper-V, you could try the workaround
   described in the [Known issues](#known-issues) section.
-* Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
-* [Install OVS](https://docs.openvswitch.org/en/latest/intro/install/windows/)
-  and configure the daemons as Windows service.
-  - The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
-  - If OVS driver is not signed, please refer to the Windows doc about how to
-    [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
-  - If you don't have a self-signed OVS package and just want to try the
-    Antrea on Windows, Antrea provides a test-signed OVS package for you.
-    See details in [Join Windows worker Nodes](#join-windows-worker-nodes)
-    section.
-* Some manifests are from [sig-windows-tool](https://github.com/kubernetes-sigs/sig-windows-tools)
-  repo. Release version v0.1.5 has been verified.
+* Install [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1)
+  if not yet present.
 
-### Installation as a Service (containerd based runtimes)
+### Installation as a Pod
 
-First install Antrea (v0.13.0+ is required for containerd). The following
-command deploys Antrea with the version specified by `<TAG>`:
-
-```bash
-kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
-```
-
-Then, you can run the following commands. [nssm](https://nssm.cc/) will install
-Antrea as a Windows service. Please ensure `nssm` is on your machine, which is
-a handy tool to manage services on Windows. NOTE: `<KubernetesVersion>`,
-`<KubeconfigPath>` and `<KubeletKubeconfigPath>` should be set by you.
-`<KubeProxyKubeconfigPath>` is an optional parameter that is specific to
-kube-proxy mode. E.g.
-
-```powershell
-$InstallKubeProxy=$false # Only for kube-proxy mode
-$KubernetesVersion="v1.23.5"
-$KubeConfig="C:/Users/Administrator/.kube/config" # admin kubeconfig
-$KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
-if ($InstallKubeProxy) { $KubeProxyKubeconfigPath="C:/Users/Administrator/kubeproxy.conf" }
-```
-
-```powershell
-$TAG="v1.13.0"
-$KubernetesVersion="<KubernetesVersion>"
-$KubeConfig="<KubeconfigPath>"
-$KubeletKubeconfigPath="<KubeletKubeconfigPath>"
-if ($InstallKubeProxy) { $KubeProxyKubeconfigPath="<KubeProxyKubeconfigPath>" }
-$KubernetesHome="c:/k"
-$AntreaHome="c:/k/antrea"
-$KubeProxyLogPath="c:/var/log/kube-proxy"
-
-curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Helper.psm1"
-Import-Module ./Helper.psm1
-
-Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
-New-KubeProxyServiceInterface
-
-New-DirectoryIfNotExist "${AntreaHome}/logs"
-New-DirectoryIfNotExist "${KubeProxyLogPath}"
-# Install kube-proxy service
-if ($InstallKubeProxy) { nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=${KubeProxyKubeconfigPath} --log-dir=${KubeProxyLogPath} --logtostderr=false --alsologtostderr" }
-nssm install antrea-agent "${AntreaHome}/bin/antrea-agent.exe" "--config=${AntreaHome}/etc/antrea-agent.conf --logtostderr=false --log_dir=${AntreaHome}/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
-
-nssm set antrea-agent DependOnService ovs-vswitchd
-if ($InstallKubeProxy) { nssm set antrea-agent DependOnService kube-proxy ovs-vswitchd }
-nssm set antrea-agent Start SERVICE_DELAYED_AUTO_START
-
-if ($InstallKubeProxy) { Start-Service kube-proxy }
-Start-Service antrea-agent
-```
-
-### Installation as a Pod (Docker/containerd based runtimes)
+This installation method requires Antrea 1.10 or higher, and containerd 1.6 or
+higher (containerd 1.7 or higher is recommended). It relies on support for
+[Windows HostProcess containers](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
+which is generally available starting with K8s 1.26.
 
 Starting with Antrea v1.13, Antrea will take over all the responsibilities of
 kube-proxy for Windows nodes by default. Since Kubernetes 1.26, kube-proxy
@@ -148,10 +106,6 @@ should not be deployed on Windows Nodes with Antrea, as kube-proxy userspace
 mode is deprecated. For Kubernetes versions prior to 1.26, Antrea can work
 with userspace kube-proxy on Windows Nodes.
 For more information refer to section [Add Windows kube-proxy DaemonSet (only for Kubernetes versions prior to 1.26)](#add-windows-kube-proxy-daemonset-only-for-kubernetes-versions-prior-to-126)
-
-Installing Antrea using [wins](https://github.com/rancher/wins) gives you a lot
-of flexibility to manage it as a Pod if you are using Docker on Windows, this is
-how you can run Antrea in a Pod.
 
 #### Download & Configure Antrea for Linux
 
@@ -182,22 +136,12 @@ enabled by default.
       proxyAll: true
 ```
 
-An example command that downloads the antrea-agent manifest, sets
-kubeAPIServerOverride, and deploys the antrea-agent DaemonSet with Docker
-runtime is like below:
+For earlier versions of Antrea, you will need to enable `proxyAll` manually.
 
-```bash
-KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
-curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows.yml | \
-sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERVER}\"|g" | \
-kubectl apply -f -
-```
-
-Since Antrea 1.10, you can also deploy antrea-agent Windows DaemonSet with
-containerd runtime by applying file `antrea-windows-containerd.yml`. The
-following commands downloads the antrea-agent manifest, sets
-kubeAPIServerOverride, and deploys the antrea-agent DaemonSet with containerd
-runtime:
+To deploy the antrea-agent Windows DaemonSet, apply the file
+`antrea-windows-containerd.yml`. For example, the following commands download
+the antrea-agent manifest, set `kubeAPIServerOverride`, and deploy the
+antrea-agent DaemonSet:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
@@ -206,10 +150,11 @@ sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERV
 kubectl apply -f -
 ```
 
-Since Antrea 1.13, you can deploy both antrea-agent and antrea-ovs Windows DaemonSets
-with containerd runtime by applying file `antrea-windows-containerd-with-ovs.yml`. The
-following commands download the manifest, set kubeAPIServerOverride, and deploy
-the antrea-agent and antrea-ovs Windows DaemonSets with containerd runtime:
+Starting with Antrea 1.13, you can deploy both the antrea-agent and antrea-ovs
+Windows DaemonSets by applying the file
+`antrea-windows-containerd-with-ovs.yml`. The following commands download the
+manifest, set `kubeAPIServerOverride`, and deploy the antrea-agent and
+antrea-ovs Windows DaemonSets:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
@@ -254,7 +199,7 @@ Bcdedit.exe -set TESTSIGNING ON
 Restart-Computer
 ```
 
-Then, install the OVS using the script.
+Then, install OVS using the script.
 
 ```powershell
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Install-OVS.ps1
@@ -275,42 +220,17 @@ get-service ovs-vswitchd
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 ```
 
-##### 3. Install wins, kubelet, kubeadm and configure kubelet startup params
+##### 3. Install kubelet, kubeadm and configure kubelet startup params
 
-Firstly, install wins, kubelet, kubeadm using script `PrepareNode.ps1` provided
-by kubernetes. The third component [`wins`](https://github.com/rancher/wins) is
-used to run kube-proxy and antrea-agent on Windows host inside the Windows
-container. Specify the Node IP, Kubernetes Version and container runtime while
-running the script. If you do not specify any container runtime, it will be
-containerd by default. The following command downloads and executes `Prepare-Node.ps1`:
+Firstly, install kubelet and kubeadm using the script `PrepareNode.ps1` provided
+by kubernetes. Specify the Node IP, Kubernetes Version and container runtime
+while running the script. The following command downloads and executes
+`Prepare-Node.ps1`:
 
 ```powershell
 # Example:
 curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-Node.ps1"
-.\Prepare-Node.ps1 -KubernetesVersion v1.27.0 -NodeIP 192.168.1.10 
-
-```
-
-You can specify the ContainerRuntime parameter as docker if you want to run kubelet
-using docker runtime on the node. (Note: Docker has been deprecated since k8s version 1.24).
-
-```powershell
-# Example:
-curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-Node.ps1"
-.\Prepare-Node.ps1 -KubernetesVersion v1.23.5 -NodeIP 192.168.1.10 -ContainerRuntime
-docker
-
-```
-
-You can specify the InstallKubeProxy parameter as true if you want to install
-kube-proxy on the node. The default value of the parameter is false. (Note: since
-k8s version 1.26 kube-proxy kernel datapath has been deprecated on windows and antrea
-can only run with proxyAll enabled)
-
-```powershell
-
-.\Prepare-Node.ps1 -KubernetesVersion v1.25.0 -InstallKubeProxy:$true -NodeIP 192.168.1.10
-
+.\Prepare-Node.ps1 -KubernetesVersion v1.29.0 -NodeIP 192.168.1.10
 ```
 
 ##### 4. Prepare Node environment needed by antrea-agent
@@ -320,26 +240,14 @@ Run the following commands to prepare the Node environment needed by antrea-agen
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-$TAG="v1.13.0"
+$TAG="v1.14.0"
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Clean-AntreaNetwork.ps1
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Prepare-ServiceInterface.ps1
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Prepare-AntreaAgent.ps1
-.\Prepare-AntreaAgent.ps1
+.\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false [other options]
 ```
 
-The script `Prepare-AntreaAgent.ps1` performs following tasks:
-
-* Prepare network adapter for kube-proxy (for Kubernetes versions prior to 1.26).
-
-    kube-proxy needs a network adapter to configure Kubernetes Services IPs and
-    uses the adapter for proxying connections to Service. Use following script
-    to create the network adapter. The adapter will be deleted automatically by
-    Windows after the Windows Node reboots.
-
-    Starting from Kubernetes 1.26, the kube-proxy userspace mode is no longer
-    supported. For clusters running a version higher than 1.26, you should skip
-    the preparation of the kube-proxy network adapter by executing the command
-    `.\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false`.
+The script `Prepare-AntreaAgent.ps1` performs the following tasks:
 
 * Remove stale network resources created by antrea-agent.
 
@@ -348,67 +256,47 @@ The script `Prepare-AntreaAgent.ps1` performs following tasks:
 
 * Ensure OVS services are running.
 
-    This script starts OVS services on the Node if they are not running. This step
-    needs to be skipped in case of OVS containerization. Hence, you need to specify
-    the parameter `RunOVSServices` as false.
+    This script starts OVS services on the Node if they are not running. This
+    step needs to be skipped in case of OVS containerization. In that case, you
+    need to specify the parameter `RunOVSServices` as false.
 
     ```powershell
-    & C:\k\antrea\Prepare-AntreaAgent.ps1 -RunOVSServices $false
+    .\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false -RunOVSServices $false
     ```
 
-As you know from the task details from above, the script must be executed every
-time you restart the Node to prepare the environment for antrea-agent.
+The script must be executed every time you restart the Node to prepare the
+environment for antrea-agent.
 
-You could make the script be executed automatically after Windows startup by
-using different methods. Here're two examples for your reference:
+You can ensure that the script is executed automatically after each Windows
+startup by using different methods. Here are two examples for your reference:
 
-* Example1: Update kubelet service.
+* Example 1: Update kubelet service.
 
 Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invoke
 `Prepare-AntreaAgent.ps1` when starting kubelet service:
 
 ```powershell
-& C:\k\antrea\Prepare-AntreaAgent.ps1
+& C:\k\antrea\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false -RunOVSServices $false
 ```
 
-* Example2: Create a ScheduledJob that runs at startup.
+* Example 2: Create a ScheduledJob that runs at startup.
 
 ```powershell
 $trigger = New-JobTrigger -AtStartup -RandomDelay 00:00:30 
 $options = New-ScheduledJobOption -RunElevated
-Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock { Invoke-Expression C:\k\antrea\Prepare-AntreaAgent.ps1 } -ScheduledJobOption $options
+Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock { Invoke-Expression C:\k\antrea\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false -RunOVSServices $false } -ScheduledJobOption $options
 ```
 
 ##### 5. Run kubeadm to join the Node
 
-On Windows Node, run the `kubeadm join` command to join the cluster. The token
-is provided by the control-plane Node. If you forgot the token, or the token
-has expired, you can run `kubeadm token create --print-join-command`
-(on the control-plane Node) to generate a new token and join command. An example
+On Windows Nodes, run the `kubeadm join` command to join the cluster. The token
+is provided by the control-plane Node. If you lost the token, or the token has
+expired, you can run `kubeadm token create --print-join-command` (on the
+control-plane Node) to generate a new token and join command. An example
 `kubeadm join` command is like below:
 
 ```powershell
 kubeadm join 192.168.101.5:6443 --token tdp0jt.rshv3uobkuoobb4v  --discovery-token-ca-cert-hash sha256:84a163e57bf470f18565e44eaa2a657bed4da9748b441e9643ac856a274a30b9
-```
-
-Then, set the Node IP used by kubelet.
-Open file `/var/lib/kubelet/kubeadm-flags.env`:
-
-```text
-KUBELET_KUBEADM_ARGS="--network-plugin=cni --pod-infra-container-image=mcr.microsoft.com/oss/kubernetes/pause:1.3.0"
-```
-
-Append `--node-ip=$NODE_IP` at the end of params. Replace `$NODE_IP` with
-the address for kubelet. It should look like:
-
-```text
-KUBELET_KUBEADM_ARGS="--network-plugin=cni --pod-infra-container-image=mcr.microsoft.com/oss/kubernetes/pause:1.3.0 --node-ip=$NODE_IP"
-```
-
-Restart kubelet service for changes to take effect.
-
-```powershell
-restart-service kubelet
 ```
 
 ##### Verify your installation
@@ -421,10 +309,10 @@ Nodes and Pods in your cluster by running:
 ```bash
 # Show Nodes
 kubectl get nodes -o wide -n kube-system
-NAME                           STATUS   ROLES                  AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
-control-plane                  Ready    control-plane,master   1h    v1.23.5   10.176.27.168   <none>        Ubuntu 20.04.3 LTS                        5.11.0-1022-generic   docker://20.10.14
-win-5akrf2tpq91                Ready    <none>                 1h    v1.23.5   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.2686       docker://20.10.9
-win-5akrf2tpq92                Ready    <none>                 1h    v1.23.5   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.2686       docker://20.10.9
+NAME                           STATUS   ROLES           AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION       CONTAINER-RUNTIME
+control-plane                  Ready    control-plane   1h    v1.29.0   10.176.27.168   <none>        Ubuntu 22.04.3 LTS               6.2.0-1017-generic   containerd://1.6.26
+win-5akrf2tpq91                Ready    <none>          1h    v1.29.0   10.176.27.150   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.6
+win-5akrf2tpq92                Ready    <none>          1h    v1.29.0   10.176.27.197   <none>        Windows Server 2019 Datacenter   10.0.17763.5206      containerd://1.6.6
 
 # Show antrea-agent and kube-proxy Pods
 kubectl get pods -o wide -n kube-system | grep windows
@@ -432,48 +320,165 @@ antrea-agent-windows-6hvkw                             1/1     Running     0    
 kube-proxy-windows-2d45w                               1/1     Running     0          102s
 ```
 
+### Installation as a Service
+
+First, you will need to install OVS and configure the OVS daemons as Windows
+services:
+
+- The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
+- If OVS driver is not signed, please refer to the Windows doc about how to
+  [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
+- If you don't have a self-signed OVS package and just want to try Antrea on
+  Windows, Antrea provides a test-signed OVS package for you. See details in
+  [Join Windows worker Nodes](#join-windows-worker-nodes) section.
+
+Then, install Antrea (v0.13.0+ is required for containerd). The following
+command deploys Antrea with the version specified by `<TAG>`:
+
+```bash
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
+```
+
+Then, you can run the following commands. [nssm](https://nssm.cc/) will install
+Antrea as a Windows service. Please ensure `nssm` is on your machine, which is
+a handy tool to manage services on Windows. NOTE: `<KubernetesVersion>`,
+`<KubeconfigPath>` and `<KubeletKubeconfigPath>` should be set by you.
+`<KubeProxyKubeconfigPath>` is an optional parameter that is specific to
+kube-proxy mode. For example:
+
+```powershell
+# kube-proxy mode is no longer supported starting with K8s version 1.26
+$InstallKubeProxy=$false
+$KubernetesVersion="v1.23.5"
+$KubeConfig="C:/Users/Administrator/.kube/config" # admin kubeconfig
+$KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
+if ($InstallKubeProxy) { $KubeProxyKubeconfigPath="C:/Users/Administrator/kubeproxy.conf" }
+```
+
+```powershell
+$TAG="v1.14.0"
+$KubernetesVersion="<KubernetesVersion>"
+$KubeConfig="<KubeconfigPath>"
+$KubeletKubeconfigPath="<KubeletKubeconfigPath>"
+if ($InstallKubeProxy) { $KubeProxyKubeconfigPath="<KubeProxyKubeconfigPath>" }
+$KubernetesHome="c:/k"
+$AntreaHome="c:/k/antrea"
+$KubeProxyLogPath="c:/var/log/kube-proxy"
+
+curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Helper.psm1"
+Import-Module ./Helper.psm1
+
+Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
+New-KubeProxyServiceInterface
+
+New-DirectoryIfNotExist "${AntreaHome}/logs"
+New-DirectoryIfNotExist "${KubeProxyLogPath}"
+# Install kube-proxy service
+if ($InstallKubeProxy) { nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=${KubeProxyKubeconfigPath} --log-dir=${KubeProxyLogPath} --logtostderr=false --alsologtostderr" }
+nssm install antrea-agent "${AntreaHome}/bin/antrea-agent.exe" "--config=${AntreaHome}/etc/antrea-agent.conf --logtostderr=false --log_dir=${AntreaHome}/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
+
+nssm set antrea-agent DependOnService ovs-vswitchd
+if ($InstallKubeProxy) { nssm set antrea-agent DependOnService kube-proxy ovs-vswitchd }
+nssm set antrea-agent Start SERVICE_DELAYED_AUTO_START
+
+if ($InstallKubeProxy) { Start-Service kube-proxy }
+Start-Service antrea-agent
+```
+
+### Installation as a Pod using wins for Docker (DEPRECATED)
+
+*Dockershim was deprecated in K8s 1.20, and removed in K8s version 1.24. These
+ steps may work with [cri-dockerd](https://github.com/Mirantis/cri-dockerd) but
+ this is not something we validated. Antrea is no longer tested with Docker on
+ Windows, and we intend to remove these steps from the documentation in Antrea
+ version 2.0.*
+
+Running Antrea with Docker on Windows uses
+[wins](https://github.com/rancher/wins), which lets you run services on the
+Window hosts, while managing them as if they were Pods.
+
+#### Add Windows antrea-agent DaemonSet
+
+For example, these commands will download the antrea-agent manifest, set
+kubeAPIServerOverride, and deploy the antrea-agent DaemonSet when using the
+Docker container runtime:
+
+```bash
+KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
+curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows.yml | \
+sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERVER}\"|g" | \
+kubectl apply -f -
+```
+
+#### Join Windows worker Nodes
+
+The steps to join Windows worker Nodes are similar to the ones for the
+containerd runtime, with the following differences:
+
+1. OVS containerization is not supported, so OVS userspace processes need to be
+   run as Windows native services.
+2. When running the `Prepare-Node.ps1` script, you will need to explicitly
+   specify that you are using the docker container runtime. The script will then
+   take are of installing wins. For example:
+
+   ```powershell
+   .\Prepare-Node.ps1 -KubernetesVersion v1.23.5 -NodeIP 192.168.1.10 -ContainerRuntime docker
+   ```
+
+If you want to install and use userspace kube-proxy on the Node (no longer
+supported since K8s version 1.26), follow instructions in [Add Windows
+kube-proxy DaemonSet (only for Kubernetes versions prior to 1.26)](#add-windows-kube-proxy-daemonset-only-for-kubernetes-versions-prior-to-126).
+
 ### Add Windows kube-proxy DaemonSet (only for Kubernetes versions prior to 1.26)
 
-Starting from Kubernetes 1.26, Antrea will no longer support Windows kube-proxy
-because kube-proxy userspace mode is deprecated and kernelspace mode does not
-work with Antrea. For a cluster with Kubernetes version 1.26 or later, please
-refer to [Deploying Antrea on Windows Worker Node](#deploying-antrea-on-windows-worker-node)
+Starting from Kubernetes 1.26, Antrea no longer supports Windows kube-proxy
+because the kube-proxy userspace mode has been removed, and the kernel
+implementation does not work with Antrea. Clusters using recent K8s versions
+will need to follow the normal [installation guide](#deploying-antrea-on-windows-worker-node)
+and use AntreaProxy with `proxyAll` enabled.
 
-First, deploy a Windows-compatible version of kube-proxy. You can download `kube-proxy.yaml`
-from the Kubernetes github repository to deploy kube-proxy. The kube-proxy version
-in the YAML file must be set to a Windows compatible version. The following command
-downloads and applies `kube-proxy.yml`:
+For older K8s versions, you can use kube-proxy userspace mode by following the
+instructions below.
+
+#### Common steps
+
+When running `Prepare-Node.ps1`, make sure that you set `InstallKubeProxy` to
+true. For example:
+
+```powershell
+.\Prepare-Node.ps1 -KubernetesVersion v1.25.0 -InstallKubeProxy:$true -NodeIP 192.168.1.10
+```
+
+When running `Prepare-AntreaAgent.ps1`, make sure that you set
+`InstallKubeProxy` to true. For example:
+
+```powershell
+.\Prepare-AntreaAgent.ps1 -InstallKubeProxy $true`
+```
+
+This will take care of preparing the network adapter for kube-proxy. kube-proxy
+needs a network adapter to configure Kubernetes Services IPs and uses the
+adapter for proxying connections to Services. The adapter will be deleted
+automatically by Windows after the Windows Node reboots
+(`Prepare-AntreaAgent.ps1` needs to run at every startup).
+
+After that, you will need to deploy a Windows-compatible version of
+kube-proxy. You can download `kube-proxy.yaml` from the Kubernetes github
+repository to deploy kube-proxy. The kube-proxy version in the YAML file must be
+set to a Windows compatible version. The following command downloads
+`kube-proxy.yml`:
 
 ```bash
 curl -L "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/kube-proxy.yml" | sed 's/VERSION-nanoserver/v1.20.0/g' > kube-proxy.yml
 ```
 
+Before applying the downloaded manifest, you will need to make some changes
+(which depend on your container runtime).
+
+#### For containerd
+
 Replace the content of `run-script.ps1` in the `kube-proxy-windows` ConfigMap
-with following:
-
-```yaml
-apiVersion: v1
-data:
-  run-script.ps1: |-
-    $ErrorActionPreference = "Stop";
-    mkdir -force /host/var/lib/kube-proxy/var/run/secrets/kubernetes.io/serviceaccount
-    mkdir -force /host/k/kube-proxy
-
-    cp -force /k/kube-proxy/* /host/k/kube-proxy
-    cp -force /var/lib/kube-proxy/* /host/var/lib/kube-proxy
-    cp -force /var/run/secrets/kubernetes.io/serviceaccount/* /host/var/lib/kube-proxy/var/run/secrets/kubernetes.io/serviceaccount
-
-    wins cli process run --path /k/kube-proxy/kube-proxy.exe --args "--v=3 --config=/var/lib/kube-proxy/config.conf --proxy-mode=userspace --hostname-override=$env:NODE_NAME"
-
-kind: ConfigMap
-metadata:
-  labels:
-    app: kube-proxy
-  name: kube-proxy-windows
-  namespace: kube-system
-```
-
-For containerd runtime, replace the content of `run-script.ps1` with following:
+with the following:
 
 ```yaml
 apiVersion: v1
@@ -494,29 +499,8 @@ metadata:
   namespace: kube-system
 ```
 
-Set the `hostNetwork` option to `true` in spec of kube-proxy-windows DaemonSet spec.
-
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  labels:
-    k8s-app: kube-proxy
-  name: kube-proxy-windows
-  namespace: kube-system
-spec:
-  selector:
-    matchLabels:
-      k8s-app: kube-proxy-windows
-  template:
-    metadata:
-      labels:
-        k8s-app: kube-proxy-windows
-    spec:
-      hostNetwork: true
-```
-
-For containerd runtime, also add the following to the kube-proxy-windows DaemonSet spec.
+Set the `hostNetwork` option to `true` and add the following to the
+kube-proxy-windows DaemonSet spec:
 
 ```yaml
 apiVersion: apps/v1
@@ -549,19 +533,64 @@ spec:
         - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/kube-proxy-windows/run-script.ps1
 ```
 
-Then apply the `kube-proxy.yml`.
+#### For docker
 
-```bash
-kubectl apply -f kube-proxy.yml
+Replace the content of `run-script.ps1` in the `kube-proxy-windows` ConfigMap
+with the following:
+
+```yaml
+apiVersion: v1
+data:
+  run-script.ps1: |-
+    $ErrorActionPreference = "Stop";
+    mkdir -force /host/var/lib/kube-proxy/var/run/secrets/kubernetes.io/serviceaccount
+    mkdir -force /host/k/kube-proxy
+
+    cp -force /k/kube-proxy/* /host/k/kube-proxy
+    cp -force /var/lib/kube-proxy/* /host/var/lib/kube-proxy
+    cp -force /var/run/secrets/kubernetes.io/serviceaccount/* /host/var/lib/kube-proxy/var/run/secrets/kubernetes.io/serviceaccount
+
+    wins cli process run --path /k/kube-proxy/kube-proxy.exe --args "--v=3 --config=/var/lib/kube-proxy/config.conf --proxy-mode=userspace --hostname-override=$env:NODE_NAME"
+
+kind: ConfigMap
+metadata:
+  labels:
+    app: kube-proxy
+  name: kube-proxy-windows
+  namespace: kube-system
+```
+
+Set the `hostNetwork` option to `true` in the spec of kube-proxy-windows
+DaemonSet spec:
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    k8s-app: kube-proxy
+  name: kube-proxy-windows
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy-windows
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-proxy-windows
+    spec:
+      hostNetwork: true
 ```
 
 ### Manually run kube-proxy and antrea-agent on Windows worker Nodes
 
 Aside from starting kube-proxy and antrea-agent from the management Pods, Antrea
 also provides powershell scripts which help install and run these two components
-directly without Pod. Please complete the steps in [Installation](#installation-as-a-pod-dockercontainerd-based-runtimes)
-section, and skip the [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset)
-step. And then run the following commands in powershell.
+directly without Pods. Please complete the steps in
+[Installation](#installation-as-a-pod) section, and skip the
+[Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset) step.
+Then run the following commands in powershell.
 
 ```powershell
 mkdir c:\k\antrea
