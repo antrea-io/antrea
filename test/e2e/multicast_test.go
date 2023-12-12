@@ -606,16 +606,12 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			return nil, err
 		}
 		res := make([]string, 0)
+	outer:
 		for _, line := range strings.Split(stdout, "\n") {
-			add := true
 			for _, f := range outputFilters {
 				if !strings.Contains(line, f) {
-					add = false
-					break
+					continue outer
 				}
-			}
-			if !add {
-				continue
 			}
 			res = append(res, line)
 		}
