@@ -687,14 +687,14 @@ func generateNetworkConfiguration(name, cniVersion, cniType, ipamType string) *t
 	if cniType == "" {
 		netCfg.Type = AntreaCNIType
 	} else {
-		netCfg.Type = "cniType"
+		netCfg.Type = cniType
 	}
 	netCfg.IPAM = &types.IPAMConfig{Type: ipamType}
 	return netCfg
 }
 
 func newRequest(args string, netCfg *types.NetworkConfig, path string, t *testing.T) (*cnipb.CniCmdRequest, string) {
-	containerID := generateUUID(t)
+	_, _, containerID := cniservertest.ParseCNIArgs(args)
 	networkConfig, err := json.Marshal(netCfg)
 	if err != nil {
 		t.Error("Failed to generate Network configuration")

@@ -33,6 +33,7 @@ import (
 var ipamDrivers map[string][]IPAMDriver
 
 // A cache of IPAM results.
+// TODO: We should get rid of using global variables to store status, which makes testing complicated.
 var ipamResults = sync.Map{}
 
 type IPAMResult struct {
@@ -57,6 +58,10 @@ func ResetIPAMDrivers(ipamType string) {
 	if ipamDrivers != nil {
 		delete(ipamDrivers, ipamType)
 	}
+}
+
+func ResetIPAMResults() {
+	ipamResults = sync.Map{}
 }
 
 func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {

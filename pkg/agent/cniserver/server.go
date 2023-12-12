@@ -296,7 +296,7 @@ func (s *CNIServer) incompatibleCniVersionResponse(cniVersion string) *cnipb.Cni
 
 func (s *CNIServer) unsupportedFieldResponse(key string, value interface{}) *cnipb.CniCmdResponse {
 	cniErrorCode := cnipb.ErrorCode_UNSUPPORTED_FIELD
-	cniErrorMsg := fmt.Sprintf("Network configuration does not support key %s and value %v", key, value)
+	cniErrorMsg := fmt.Sprintf("Network configuration does not support %s=%v", key, value)
 	return s.generateCNIErrorResponse(cniErrorCode, cniErrorMsg)
 }
 
@@ -537,17 +537,20 @@ func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniC
 	if s.isChaining {
 		return s.interceptDel(cniConfig)
 	}
-	// Release IP to IPAM driver
-	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
-		klog.ErrorS(err, "Failed to delete IP addresses for container", "container", cniConfig.ContainerId)
-		return s.ipamFailureResponse(err), nil
-	}
-	klog.InfoS("Deleted IP addresses for container", "container", cniConfig.ContainerId)
+
 	// Remove host interface and OVS configuration
 	if err := s.podConfigurator.removeInterfaces(cniConfig.ContainerId); err != nil {
 		klog.ErrorS(err, "Failed to remove interfaces for container", "container", cniConfig.ContainerId)
 		return s.configInterfaceFailureResponse(err), nil
 	}
+	klog.InfoS("Deleted interfaces for container", "container", cniConfig.ContainerId)
+
+	// Release IP to IPAM driver
+	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
+		klog.ErrorS(err, "Failed to delete IP addresses for container", "container", cniConfig.ContainerId)
+		return s.ipamFailureResponse(err), nil
+	}
+
 	klog.InfoS("CmdDel for container succeeded", "container", cniConfig.ContainerId)
 
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
