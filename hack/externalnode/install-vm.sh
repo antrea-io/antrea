@@ -58,7 +58,7 @@ ANTREA_AGENT_ANTREA_KUBECONFIG="antrea-agent.antrea.kubeconfig"
 
 # Docker variables
 ANTREA_VERSION="latest"
-ANTREA_DOCKER_REGISTRY="antrea/antrea-ubuntu"
+ANTREA_DOCKER_REGISTRY="antrea/antrea-agent-ubuntu"
 ANTREA_DOCKER_IMAGE="${ANTREA_DOCKER_REGISTRY}:${ANTREA_VERSION}"
 
 NODE_NAME="$(hostname)"
@@ -227,7 +227,7 @@ version: "3"
 
 services:
   antrea-ovs:
-    image: $ANTREA_DOCKER_IMAGE
+    image: $ANTREA_AGENT_DOCKER_IMAGE
     container_name: antrea-ovs
     volumes:
         - /var/log/openvswitch:/var/log/openvswitch
@@ -248,7 +248,7 @@ services:
           window: 10s
 
   antrea-agent:
-    image: $ANTREA_DOCKER_IMAGE
+    image: $ANTREA_AGENT_DOCKER_IMAGE
     container_name: antrea-agent
     volumes:
         - /etc/antrea/:/etc/antrea
@@ -356,15 +356,15 @@ EOF
 # Function to deploy and run Antrea specific containers.
 deploy_antrea_containers() {
     set +eo pipefail
-    if [ -z "$(docker images -q $ANTREA_DOCKER_IMAGE)" ]; then
-        echo "Downloading the Docker image $ANTREA_DOCKER_IMAGE"
-        docker pull $ANTREA_DOCKER_IMAGE
+    if [ -z "$(docker images -q $ANTREA_AGENT_DOCKER_IMAGE)" ]; then
+        echo "Downloading the Docker image $ANTREA_AGENT_DOCKER_IMAGE"
+        docker pull $ANTREA_AGENT_DOCKER_IMAGE
         if [[ "$?" -ne 0 ]]; then
-            echoerr "Error, Downloading the Docker image $ANTREA_DOCKER_IMAGE"
+            echoerr "Error, Downloading the Docker image $ANTREA_AGENT_DOCKER_IMAGE"
             exit 2
         fi
     else
-        echo "$ANTREA_DOCKER_IMAGE image is already loaded to Docker"
+        echo "$ANTREA_AGENT_DOCKER_IMAGE image is already loaded to Docker"
     fi
     # Start Antrea/OVS containers as part of system startup.
     setup_antrea_agent_service

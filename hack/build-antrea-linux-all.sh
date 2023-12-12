@@ -161,8 +161,12 @@ cd -
 export NO_PULL=1
 if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
+        make build-controller-ubuntu-coverage
+        make build-agent-ubuntu-coverage
         make build-ubuntu-coverage
     else
+        make build-controller-ubuntu
+        make build-agent-ubuntu
         make
     fi
 elif [ "$DISTRO" == "ubi" ]; then

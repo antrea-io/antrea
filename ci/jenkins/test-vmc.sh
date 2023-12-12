@@ -285,18 +285,28 @@ function copy_image {
   IP=$3
   version=$4
   need_cleanup=$5
-  ${SCP_WITH_ANTREA_CI_KEY} $filename capv@${IP}:/home/capv
+  if [[ $filename != "" ]]; then
+      ${SCP_WITH_ANTREA_CI_KEY} $filename capv@${IP}:/home/capv
+  fi
   if [ $TEST_OS == 'centos-7' ]; then
       ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
       if [[ $need_cleanup == 'true' ]]; then
           ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
       fi
-      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      if [[ $filename == "" ]]; then
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      else
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      fi
   else
       if [[ $need_cleanup == 'true' ]]; then
           ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
       fi
-      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      if [[ $filename == "" ]]; then
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      else
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      fi
   fi
   ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
@@ -424,10 +434,10 @@ function deliver_antrea {
     export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
 
     if [[ "$COVERAGE" == true ]]; then
-        docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
+        docker save -o antrea-ubuntu-coverage.tar antrea/antrea-agent-ubuntu-coverage:${DOCKER_IMG_VERSION} antrea/antrea-controller-ubuntu-coverage:${DOCKER_IMG_VERSION}
         docker save -o flow-aggregator-coverage.tar antrea/flow-aggregator-coverage:${DOCKER_IMG_VERSION}
     else
-        docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+        docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:${DOCKER_IMG_VERSION} antrea/antrea-controller-ubuntu:${DOCKER_IMG_VERSION}
         docker save -o flow-aggregator.tar antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
 
@@ -439,10 +449,12 @@ function deliver_antrea {
     do
         ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
         if [[ "$COVERAGE" == true ]]; then
-            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-agent-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image "" docker.io/antrea/antrea-controller-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} false
             copy_image flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         else
-            copy_image antrea-ubuntu.tar docker.io/antrea/antrea-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image antrea-ubuntu.tar docker.io/antrea/antrea-agent-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image "" docker.io/antrea/antrea-controller-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} false
             copy_image flow-aggregator.tar docker.io/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         fi
     done

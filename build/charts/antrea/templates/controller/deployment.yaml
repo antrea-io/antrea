@@ -60,8 +60,8 @@ spec:
       serviceAccountName: antrea-controller
       containers:
         - name: antrea-controller
-          image: {{ include "antreaImage" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "antreaControllerImage" . | quote }}
+          imagePullPolicy: {{ .Values.controllerImage.pullPolicy }}
           resources: {{- .Values.controller.antreaController.resources | toYaml | nindent 12 }}
           {{- if ((.Values.testing).coverage) }}
           command: ["/bin/sh"]

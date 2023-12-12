@@ -27,6 +27,8 @@ export ANTREA_CNI_REPO=${ANTREA_CNI_REPO:-'https://github.com/antrea-io/antrea.g
 export ANTREA_CNI_BRANCH=${ANTREA_CNI_BRANCH:-''}
 export ANTREA_CNI_PR=${ANTREA_CNI_PR:-''}
 export ANTREA_CNI_HARBOR_IMAGE=${ANTREA_CNI_HARBOR_IMAGE:-${HARBOR_REGISTRY}/${HARBOR_PROJECT}/antrea}
+export ANTREA_AGENT_CNI_HARBOR_IMAGE=${ANTREA_AGENT_CNI_HARBOR_IMAGE:-${HARBOR_REGISTRY}/${HARBOR_PROJECT}/antrea-agent-ubuntu}
+export ANTREA_CONTROLLER_CNI_HARBOR_IMAGE=${ANTREA_CONTROLLER_CNI_HARBOR_IMAGE:-${HARBOR_REGISTRY}/${HARBOR_PROJECT}/antrea-controller-ubuntu}
 
 export GOPATH=${WORKSPACE}
 export PATH=/usr/local/go/bin/:$GOPATH/src/k8s.io/kubernetes/third_party/etcd:$PATH
@@ -110,8 +112,10 @@ EOF
     fi
 
     sudo docker tag antrea/antrea-ubuntu "$ANTREA_CNI_HARBOR_IMAGE"
+    sudo docker tag antrea/antrea-agent-ubuntu "$ANTREA_AGENT_CNI_HARBOR_IMAGE"
+    sudo docker tag antrea/antrea-controller-ubuntu "$ANTREA_CONTROLLER_CNI_HARBOR_IMAGE"
 
-    IMG_NAME="$ANTREA_CNI_HARBOR_IMAGE" bash $WORKSPACE/antrea-cni/hack/generate-manifest.sh --hw-offload > $ARTIFACTS/antrea.yml
+    AGENT_IMAGE="$ANTREA_AGENT_CNI_HARBOR_IMAGE" CONTROLLER_IMAGE="$ANTREA_CONTROLLER_CNI_HARBOR_IMAGE" bash $WORKSPACE/antrea-cni/hack/generate-manifest.sh --hw-offload > $ARTIFACTS/antrea.yml
     let status=status+$?
     if [ "$status" != 0 ]; then
         echo "ERROR: Failed to generate antrea manifest!"

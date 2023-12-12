@@ -1,6 +1,14 @@
 # -- Container image to use for Antrea components.
-image:
-  repository: "antrea/antrea-ubuntu"
+# DEPRECATED: use agentImage and controllerImage instead.
+image: {}
+# -- Container image to use for the antrea-agent component.
+agentImage:
+  repository: "antrea/antrea-agent-ubuntu"
+  pullPolicy: "IfNotPresent"
+  tag: ""
+# -- Container image to use for the antrea-controller component.
+controllerImage:
+  repository: "antrea/antrea-controller-ubuntu"
   pullPolicy: "IfNotPresent"
   tag: ""
 

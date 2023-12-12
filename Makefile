@@ -332,6 +332,26 @@ else
 endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
+.PHONY: build-controller-ubuntu
+build-controller-ubuntu:
+	@echo "===> Building antrea/antrea-controller-ubuntu Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-controller-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.controller.ubuntu $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-controller-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.controller.ubuntu $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-controller-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-controller-ubuntu
+
+.PHONY: build-agent-ubuntu
+build-agent-ubuntu:
+	@echo "===> Building antrea/antrea-agent-ubuntu Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.agent.ubuntu $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.agent.ubuntu $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-agent-ubuntu
+
 # Build bins in a golang container, and build the antrea-ubuntu Docker image.
 .PHONY: build-ubuntu
 build-ubuntu:
@@ -373,6 +393,26 @@ else
 	docker build --pull -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-coverage
+
+.PHONY: build-controller-ubuntu-coverage
+build-controller-ubuntu-coverage:
+	@echo "===> Building Antrea bins and antrea/antrea-controller-ubuntu-coverage Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-controller-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.controller.build.coverage $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-controller-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.controller.build.coverage $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-controller-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-controller-ubuntu-coverage
+
+.PHONY: build-agent-ubuntu-coverage
+build-agent-ubuntu-coverage:
+	@echo "===> Building Antrea bins and antrea/antrea-agent-ubuntu-coverage Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-agent-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.agent.build.coverage $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-agent-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.agent.build.coverage $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-agent-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-agent-ubuntu-coverage
 
 .PHONY: build-scale-simulator
 build-scale-simulator:

@@ -235,9 +235,11 @@ done
 # The Antrea images should not be pulled, as we want to use the local build.
 if $coverage; then
     manifest_args="$manifest_args --coverage"
-    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
+    COMMON_IMAGES_LIST+=("antrea/antrea-agent-ubuntu-coverage:latest" \
+                         "antrea/antrea-controller-ubuntu-coverage:latest")
 else
-    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
+    COMMON_IMAGES_LIST+=("antrea/antrea-agent-ubuntu:latest" \
+                         "antrea/antrea-controller-ubuntu:latest")
 fi
 if $flow_visibility; then
     if $coverage; then

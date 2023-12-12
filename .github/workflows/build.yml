@@ -49,7 +49,11 @@ jobs:
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         ./hack/build-antrea-linux-all.sh --pull --push-base-images
         docker tag antrea/antrea-ubuntu:latest antrea/antrea-ubuntu-amd64:latest
+        docker tag antrea/antrea-controller-ubuntu:latest antrea/antrea-controller-ubuntu-amd64:latest
+        docker tag antrea/antrea-agent-ubuntu:latest antrea/antrea-agent-ubuntu-amd64:latest
         docker push antrea/antrea-ubuntu-amd64:latest
+        docker push antrea/antrea-controller-ubuntu-amd64:latest
+        docker push antrea/antrea-agent-ubuntu-amd64:latest
     - name: Trigger Antrea arm builds and multi-arch manifest update
       if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: benc-uk/workflow-dispatch@v1

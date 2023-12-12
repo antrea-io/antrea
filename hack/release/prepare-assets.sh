@@ -104,7 +104,8 @@ cp ./hack/externalnode/install-vm.ps1 "$OUTPUT_DIR/"
 
 export IMG_TAG=$VERSION
 
-export IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu
+export AGENT_IMAGE=projects.registry.vmware.com/antrea/antrea-agent-ubuntu
+export CONTROLLER_IMAGE=projects.registry.vmware.com/antrea/antrea-controller-ubuntu
 ./hack/generate-standard-manifests.sh --mode release --out "$OUTPUT_DIR"
 
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
