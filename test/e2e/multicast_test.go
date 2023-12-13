@@ -600,25 +600,49 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
+	runCmdWithOutputFilters := func(nodeName string, cmd []string, outputFilters ...string) ([]string, error) {
+		stdout, _, err := data.RunCommandFromAntreaPodOnNode(nodeName, cmd)
+		if err != nil {
+			return nil, err
+		}
+		res := make([]string, 0)
+	outer:
+		for _, line := range strings.Split(stdout, "\n") {
+			for _, f := range outputFilters {
+				if !strings.Contains(line, f) {
+					continue outer
+				}
+			}
+			res = append(res, line)
+		}
+		return res, nil
+	}
+
+	getMroutes := func(nodeName string, iface string, outputFilters ...string) ([]string, error) {
+		cmd := []string{"ip", "mroute", "show", "iif", iface}
+		return runCmdWithOutputFilters(nodeName, cmd, outputFilters...)
+	}
+
+	getMaddrs := func(nodeName string, iface string, outputFilters ...string) ([]string, error) {
+		cmd := []string{"ip", "maddr", "show", "dev", iface}
+		return runCmdWithOutputFilters(nodeName, cmd, outputFilters...)
+	}
+
 	readyReceivers := sets.New[int]()
 	senderReady := false
 	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
 		if !senderReady {
-			// Sender pods should add an outbound multicast route except running as HostNetwork.
-			cmd := fmt.Sprintf("ip mroute show iif %s | grep %s | grep '%s'", gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))
-			if testOptions.providerName == "kind" {
-				cmd = "/bin/sh -c " + cmd
-			}
-			_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), cmd)
+			// Sender pods should add an outbound multicast route except when running as HostNetwork.
+			mRoutesResult, err := getMroutes(nodeName(mc.senderConfig.nodeIdx), gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))
 			if err != nil {
 				return false, err
 			}
 			if !mc.senderConfig.isHostNetwork {
-				if len(mrouteResult) == 0 {
+				if len(mRoutesResult) == 0 {
 					return false, nil
 				}
 			} else {
-				if len(mrouteResult) != 0 {
+				if len(mRoutesResult) != 0 {
 					return false, nil
 				}
 			}
@@ -632,31 +656,23 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			}
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
 				if checkReceiverRoute {
-					cmd := fmt.Sprintf("ip mroute show iif %s | grep %s", receiverMulticastInterface, mc.group.String())
-					if testOptions.providerName == "kind" {
-						cmd = "/bin/sh -c " + cmd
-					}
-					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), cmd)
+					mRoutesResult, err := getMroutes(nodeName(receiver.nodeIdx), receiverMulticastInterface, mc.group.String())
 					if err != nil {
 						return false, err
 					}
 					// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
 					// the receivers should configure corresponding inbound multicast routes.
 					if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
-						if len(mRouteResult) == 0 {
+						if len(mRoutesResult) == 0 {
 							return false, nil
 						}
 					} else {
-						if len(mRouteResult) != 0 {
+						if len(mRoutesResult) != 0 {
 							return false, nil
 						}
 					}
 				}
-				cmd := fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String())
-				if testOptions.providerName == "kind" {
-					cmd = "/bin/sh -c " + cmd
-				}
-				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), cmd)
+				mAddrsResult, err := getMaddrs(nodeName(receiver.nodeIdx), receiverMulticastInterface, mc.group.String())
 				if err != nil {
 					return false, err
 				}
@@ -664,11 +680,11 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 				// Note that in HostNetwork mode, the "join multicast" action is taken by mcjoin,
 				// which will not persist after mcjoin exits.
 				if !receiver.isHostNetwork {
-					if len(mAddrResult) == 0 {
+					if len(mAddrsResult) == 0 {
 						return false, nil
 					}
 				} else {
-					if len(mAddrResult) != 0 {
+					if len(mAddrsResult) != 0 {
 						return false, nil
 					}
 				}
