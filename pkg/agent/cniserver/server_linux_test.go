@@ -223,8 +223,6 @@ func createCNIRequestAndInterfaceName(t *testing.T, name string, cniType string,
 }
 
 func TestCmdAdd(t *testing.T) {
-	controller := gomock.NewController(t)
-	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ctx := context.TODO()
 
 	versionedIPAMResult, err := ipamResult.GetAsVersion(supportedCNIVersion)
@@ -232,7 +230,6 @@ func TestCmdAdd(t *testing.T) {
 
 	for _, tc := range []struct {
 		name                       string
-		podName                    string
 		ipamType                   string
 		ipamAdd                    bool
 		ipamError                  error
@@ -248,7 +245,6 @@ func TestCmdAdd(t *testing.T) {
 	}{
 		{
 			name:                       "secondary-IPAM",
-			podName:                    "pod0",
 			ipamType:                   ipam.AntreaIPAMType,
 			cniType:                    "cniType",
 			enableSecondaryNetworkIPAM: true,
@@ -257,7 +253,6 @@ func TestCmdAdd(t *testing.T) {
 			response:                   resultToResponse(versionedIPAMResult),
 		}, {
 			name:                       "secondary-IPAM-failure",
-			podName:                    "pod1",
 			ipamType:                   ipam.AntreaIPAMType,
 			cniType:                    "cniType",
 			enableSecondaryNetworkIPAM: true,
@@ -272,7 +267,6 @@ func TestCmdAdd(t *testing.T) {
 			},
 		}, {
 			name:                       "chaining",
-			podName:                    "pod2",
 			ipamType:                   "test-cni-ipam",
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 true,
@@ -281,7 +275,6 @@ func TestCmdAdd(t *testing.T) {
 			containerIfaceExist:        true,
 		}, {
 			name:                       "add-general-cni",
-			podName:                    "pod3",
 			ipamType:                   "test-cni-ipam",
 			ipamAdd:                    true,
 			enableSecondaryNetworkIPAM: false,
@@ -291,7 +284,6 @@ func TestCmdAdd(t *testing.T) {
 			containerIfaceExist:        true,
 		}, {
 			name:                       "add-general-cni-failure",
-			podName:                    "pod3",
 			ipamType:                   "test-cni-ipam",
 			ipamAdd:                    true,
 			enableSecondaryNetworkIPAM: false,
@@ -304,9 +296,12 @@ func TestCmdAdd(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockGetNSPath(nil)()
+			ipam.ResetIPAMResults()
+			controller := gomock.NewController(t)
+			ipamMock := ipamtest.NewMockIPAMDriver(controller)
 			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
-			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, tc.podName, tc.cniType, ipamResult, tc.ipamType, true)
+			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			testIfaceConfigurator.hostIfaceName = hostInterfaceName
 			cniserver.podConfigurator.ifConfigurator = testIfaceConfigurator
 			if tc.ipamAdd {
@@ -371,15 +366,12 @@ func TestCmdAdd(t *testing.T) {
 }
 
 func TestCmdDel(t *testing.T) {
-	controller := gomock.NewController(t)
-	ipamMock := ipamtest.NewMockIPAMDriver(controller)
 	ovsPortID := generateUUID(t)
 	ovsPort := int32(100)
 	ctx := context.TODO()
 
 	for _, tc := range []struct {
 		name                       string
-		podName                    string
 		ipamType                   string
 		ipamDel                    bool
 		ipamError                  error
@@ -387,6 +379,7 @@ func TestCmdDel(t *testing.T) {
 		enableSecondaryNetworkIPAM bool
 		isChaining                 bool
 		disconnectOVS              bool
+		disconnectOVSErr           error
 		migrateRoute               bool
 		delLocalIPAMRoute          bool
 		delLocalIPAMRouteError     error
@@ -394,7 +387,6 @@ func TestCmdDel(t *testing.T) {
 	}{
 		{
 			name:                       "secondary-IPAM",
-			podName:                    "pod1",
 			ipamType:                   ipam.AntreaIPAMType,
 			cniType:                    "cniType",
 			ipamDel:                    true,
@@ -404,7 +396,6 @@ func TestCmdDel(t *testing.T) {
 		},
 		{
 			name:                       "secondary-IPAM-failure",
-			podName:                    "pod1",
 			ipamType:                   ipam.AntreaIPAMType,
 			cniType:                    "cniType",
 			ipamDel:                    true,
@@ -419,8 +410,39 @@ func TestCmdDel(t *testing.T) {
 			},
 		},
 		{
+			name:                       "IPAM-failure",
+			ipamType:                   "host-local",
+			ipamDel:                    true,
+			ipamError:                  fmt.Errorf("failed to release IP"),
+			enableSecondaryNetworkIPAM: false,
+			isChaining:                 false,
+			disconnectOVS:              true,
+			delLocalIPAMRoute:          true,
+			response: &cnipb.CniCmdResponse{
+				Error: &cnipb.Error{
+					Code:    cnipb.ErrorCode_IPAM_FAILURE,
+					Message: "failed to release IP",
+				},
+			},
+		},
+		{
+			name:                       "del-ovs-failure",
+			ipamType:                   "host-local",
+			enableSecondaryNetworkIPAM: false,
+			isChaining:                 false,
+			disconnectOVS:              true,
+			disconnectOVSErr:           ovsconfig.NewTransactionError(fmt.Errorf("failed to delete port"), true),
+			ipamDel:                    false,
+			delLocalIPAMRoute:          false,
+			response: &cnipb.CniCmdResponse{
+				Error: &cnipb.Error{
+					Code:    cnipb.ErrorCode_CONFIG_INTERFACE_FAILURE,
+					Message: fmt.Sprintf("failed to delete OVS port for container %s: failed to delete port", testPodInfraContainerID),
+				},
+			},
+		},
+		{
 			name:                       "chaining",
-			podName:                    "pod2",
 			ipamType:                   "test-delete",
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 true,
@@ -429,7 +451,6 @@ func TestCmdDel(t *testing.T) {
 		},
 		{
 			name:                       "del-general-cni",
-			podName:                    "pod3",
 			ipamType:                   "test-delete",
 			ipamDel:                    true,
 			enableSecondaryNetworkIPAM: false,
@@ -439,9 +460,8 @@ func TestCmdDel(t *testing.T) {
 		},
 		{
 			name:                       "del-general-cni-failure",
-			podName:                    "pod3",
 			ipamType:                   "test-delete",
-			ipamDel:                    true,
+			ipamDel:                    false,
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 false,
 			disconnectOVS:              true,
@@ -450,10 +470,12 @@ func TestCmdDel(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			ipamMock := ipamtest.NewMockIPAMDriver(controller)
 			cniserver := newMockCNIServer(t, controller, ipamMock, tc.ipamType, tc.enableSecondaryNetworkIPAM, tc.isChaining)
-			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, tc.podName, tc.cniType, ipamResult, tc.ipamType, true)
+			requestMsg, hostInterfaceName := createCNIRequestAndInterfaceName(t, testPodNameA, tc.cniType, ipamResult, tc.ipamType, true)
 			containerID := requestMsg.CniArgs.ContainerId
-			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID, tc.podName, testPodNamespace, containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0)
+			containerIfaceConfig := interfacestore.NewContainerInterface(hostInterfaceName, containerID, testPodNameA, testPodNamespace, containerVethMac, []net.IP{net.ParseIP("10.1.2.100")}, 0)
 			containerIfaceConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: ovsPortID, OFPort: ovsPort}
 			ifaceStore.AddInterface(containerIfaceConfig)
 			testIfaceConfigurator := newTestInterfaceConfigurator()
@@ -472,7 +494,7 @@ func TestCmdDel(t *testing.T) {
 				}
 			}
 			if tc.disconnectOVS {
-				mockOVSBridgeClient.EXPECT().DeletePort(ovsPortID).Return(nil).Times(1)
+				mockOVSBridgeClient.EXPECT().DeletePort(ovsPortID).Return(tc.disconnectOVSErr).Times(1)
 				mockOFClient.EXPECT().UninstallPodFlows(hostInterfaceName).Return(nil).Times(1)
 			}
 			if tc.migrateRoute {
