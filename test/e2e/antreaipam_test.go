@@ -331,6 +331,35 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
 
+	stsName2 := randName("sts-test-")
+	ipOffsets = []int32{3}
+	size = len(ipOffsets)
+	reservedIPOffsets = ipOffsets
+	startIPString := subnetIPv4RangesMap[testAntreaIPAMNamespace].Spec.IPRanges[0].Start
+	offset := int(ipOffsets[0])
+	if dedicatedIPPoolKey != nil {
+		startIPString = subnetIPv4RangesMap[*dedicatedIPPoolKey].Spec.IPRanges[0].Start
+	}
+	expectedPodIP := utilnet.AddIPOffset(utilnet.BigForIP(net.ParseIP(startIPString)), offset)
+	mutateFunc = func(sts *appsv1.StatefulSet) {
+		if sts.Spec.Template.Annotations == nil {
+			sts.Spec.Template.Annotations = map[string]string{}
+		}
+		if dedicatedIPPoolKey != nil {
+			sts.Spec.Template.Annotations[annotation.AntreaIPAMAnnotationKey] = ipPoolName
+		}
+		sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = expectedPodIP.String()
+	}
+	_, cleanup2, err := data.createStatefulSet(stsName2, testAntreaIPAMNamespace, int32(size), agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil, mutateFunc)
+	if err != nil {
+		t.Fatalf("Error when creating StatefulSet '%s': %v", stsName2, err)
+	}
+	defer cleanup2()
+	if err := data.waitForStatefulSetPods(defaultTimeout, stsName2, testAntreaIPAMNamespace); err != nil {
+		t.Fatalf("Error when waiting for StatefulSet Pods to get IPs: %v", err)
+	}
+	checkStatefulSetIPPoolAllocation(t, data, stsName2, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
+
 	podName := randName("test-standalone-pod-")
 	podAnnotations := map[string]string{}
 	if dedicatedIPPoolKey != nil {
@@ -349,12 +378,12 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	if err != nil {
 		t.Fatalf("Error when checking IPPoolAllocation: %v", err)
 	}
-	startIPString := subnetIPv4RangesMap[testAntreaIPAMNamespace].Spec.IPRanges[0].Start
-	offset := 2
+	startIPString = subnetIPv4RangesMap[testAntreaIPAMNamespace].Spec.IPRanges[0].Start
+	offset = 2
 	if dedicatedIPPoolKey != nil {
 		startIPString = subnetIPv4RangesMap[*dedicatedIPPoolKey].Spec.IPRanges[0].Start
 	}
-	expectedPodIP := utilnet.AddIPOffset(utilnet.BigForIP(net.ParseIP(startIPString)), offset)
+	expectedPodIP = utilnet.AddIPOffset(utilnet.BigForIP(net.ParseIP(startIPString)), offset)
 	assert.True(t, isBelongTo)
 	assert.True(t, reflect.DeepEqual(ipAddressState, &crdv1alpha2.IPAddressState{
 		IPAddress: expectedPodIP.String(),
@@ -368,7 +397,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 		},
 	}))
 
-	ipOffsets = []int32{0, 1, 3}
+	ipOffsets = []int32{0, 1, 4}
 	size = len(ipOffsets)
 	reservedIPOffsets = ipOffsets
 	_, err = data.updateStatefulSetSize(stsName, testAntreaIPAMNamespace, int32(size))
@@ -393,6 +422,9 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 
 	cleanup()
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, nil, nil)
+
+	cleanup2()
+	checkStatefulSetIPPoolAllocation(t, data, stsName2, testAntreaIPAMNamespace, ipPoolName, nil, nil)
 }
 
 func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string, namespace string, ipPoolName string, ipOffsets, reservedIPOffsets []int32) {

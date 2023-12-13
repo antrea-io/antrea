@@ -421,7 +421,7 @@ func TestAllocateReleaseStatefulSet(t *testing.T) {
 	}
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
-	err := allocator.AllocateStatefulSet(testNamespace, setName, 7)
+	err := allocator.AllocateStatefulSet(testNamespace, setName, 7, nil)
 	require.NoError(t, err)
 
 	// Make sure reserved IPs are respected for next allocate
@@ -433,4 +433,22 @@ func TestAllocateReleaseStatefulSet(t *testing.T) {
 
 	// Make sure reserved IPs are released
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100"})
+
+	allocator = newTestIPPoolAllocator(&pool, stopCh)
+	err = allocator.AllocateStatefulSet(testNamespace, setName, 1, net.ParseIP("10.2.2.101"))
+	require.NoError(t, err)
+
+	// Make sure specified IP is reserved
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.102"})
+
+	// Release the set
+	err = allocator.ReleaseStatefulSet(testNamespace, setName)
+	require.NoError(t, err)
+
+	// Make sure reserved IP is released
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.101"})
+
+	// Invalid IP will result in an error
+	err = allocator.AllocateStatefulSet(testNamespace, setName, 1, net.ParseIP("10.2.3.103"))
+	require.Error(t, err)
 }
