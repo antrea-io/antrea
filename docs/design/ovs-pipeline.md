@@ -1175,13 +1175,13 @@ traffic to the next table, [AntreaPolicyEgressRuleTable].
 [ClassifierTable]: #classifiertable-0
 [SpoofGuardTable]: #spoofguardtable-10
 [ARPResponderTable]: #arprespondertable-20
-[ServiceHairpinTable]: #serviceHairpinTable-23
+[ServiceHairpinTable]: #servicehairpintable-23
 [ConntrackTable]: #conntracktable-30
 [ConntrackStateTable]: #conntrackstatetable-31
 [DNATTable]: #dnattable-40
-[SessionAffinityTable]: #sessionAffinityTable-40
-[ServiceLBTable]: #serviceLBTable-41
-[EndpointDNATTable]: #endpointDNATTable-42
+[SessionAffinityTable]: #sessionaffinitytable-40
+[ServiceLBTable]: #servicelbtable-41
+[EndpointDNATTable]: #endpointdnattable-42
 [AntreaPolicyEgressRuleTable]: #antreapolicyegressruletable-45
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
@@ -1193,5 +1193,5 @@ traffic to the next table, [AntreaPolicyEgressRuleTable].
 [IngressRuleTable]: #ingressruletable-90
 [IngressDefaultTable]: #ingressdefaulttable-100
 [ConntrackCommitTable]: #conntrackcommittable-105
-[HairpinSNATTable]: #hairpinSNATTable-108
+[HairpinSNATTable]: #hairpinsnattable-108
 [L2ForwardingOutTable]: #l2forwardingouttable-110
