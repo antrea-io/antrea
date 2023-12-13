@@ -435,7 +435,7 @@ func (a *IPPoolAllocator) AllocateReservedOrNext(state v1alpha2.IPAddressPhase, 
 // This functionality is useful when StatefulSet does not have a dedicated IP Pool assigned.
 // It returns error if such range is not available. In this case IPs for the StatefulSet will
 // be allocated on the fly, and there is no guarantee for continuous IPs.
-func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int) error {
+func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int, ip net.IP) error {
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
@@ -450,7 +450,13 @@ func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int) 
 			}
 		}
 
-		ips, err := allocators.AllocateRange(size)
+		var ips []net.IP
+		if size == 1 && ip != nil {
+			err = allocators.AllocateIP(ip)
+			ips = []net.IP{ip}
+		} else {
+			ips, err = allocators.AllocateRange(size)
+		}
 		if err != nil {
 			return err
 		}

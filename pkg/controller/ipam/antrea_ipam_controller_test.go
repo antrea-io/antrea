@@ -17,10 +17,12 @@ package ipam
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -281,4 +283,63 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+}
+
+func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
+	tests := []struct {
+		name        string
+		prepareFunc func(*appsv1.StatefulSet)
+		hasIPPool   bool
+		expectedIPs []net.IP
+	}{
+		{
+			name: "no annotation",
+			prepareFunc: func(sts *appsv1.StatefulSet) {
+				delete(sts.Spec.Template.Annotations, annotation.AntreaIPAMAnnotationKey)
+			},
+			hasIPPool:   false,
+			expectedIPs: nil,
+		},
+		{
+			name:        "ippool",
+			prepareFunc: func(sts *appsv1.StatefulSet) {},
+			hasIPPool:   true,
+			expectedIPs: nil,
+		},
+		{
+			name: "valid ip",
+			prepareFunc: func(sts *appsv1.StatefulSet) {
+				sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = "10.2.2.109"
+			},
+			hasIPPool:   true,
+			expectedIPs: []net.IP{net.ParseIP("10.2.2.109")},
+		},
+		{
+			name: "invalid ip",
+			prepareFunc: func(sts *appsv1.StatefulSet) {
+				sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = "10.2.2.109, a.b.c.d"
+			},
+			hasIPPool:   true,
+			expectedIPs: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			namespace, pool, statefulSet := initTestObjects(false, true, 1)
+			tt.prepareFunc(statefulSet)
+			controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+
+			got, got1 := controller.getIPPoolsForStatefulSet(statefulSet)
+			var want []string
+			if tt.hasIPPool {
+				want = []string{pool.Name}
+			}
+			assert.Equalf(t, want, got, "Unexpected IPPool result")
+			assert.Equalf(t, tt.expectedIPs, got1, "Unexpected IP result")
+		})
+	}
 }
