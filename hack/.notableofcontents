@@ -26,6 +26,7 @@ docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
 docs/maintainers/updating-ovs-windows.md
+docs/migrate-to-antrea.md
 docs/multicluster/api.md
 docs/multicluster/antctl.md
 docs/multicluster/architecture.md

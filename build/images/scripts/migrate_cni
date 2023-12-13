@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# Copyright 2024 Antrea Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+CRICTL="crictl --runtime-endpoint $RUNTIME_ENDPOINT"
+
+for file in /etc/cni/net.d/*; do
+    if [[ $file == *.conf || $file == *.conflist || $file == *.json ]]; then
+        if [[ $file != *10-antrea.conflist ]]; then
+            mv $file $file.bak
+        fi
+    fi
+done
+
+# Remove rules added by the previous CNI in CHAIN CNI-HOSTPORT-DNAT.
+# CHAIN CNI-HOSTPORT-DNAT is created by portmap for ingress controllers. It will not be deleted
+# even if the CNI is removed, so we delete the stale rules here.
+if iptables -t nat -S | grep -q "CNI-HOSTPORT-DNAT"; then
+    rules=$(iptables -t nat -L CNI-HOSTPORT-DNAT --line-numbers | grep -v "antrea" | awk 'NR>2 {print $1}')
+    chains=$(iptables -t nat -L CNI-HOSTPORT-DNAT | grep -v "antrea" | awk 'NR>2 {print $1}')
+    for rule in $rules; do
+        iptables -t nat -D CNI-HOSTPORT-DNAT "$rule"
+    done
+    for chain in $chains; do
+        iptables -t nat -F "$chain"
+        iptables -t nat -X "$chain"
+    done
+fi
+
+pods=$($CRICTL pods -q)
+for pod in $pods; do
+    network_type=$($CRICTL inspectp $pod | jq -r .status.linux.namespaces.options.network)
+    if [ "$network_type" == "POD" ]; then
+        $CRICTL stopp $pod && $CRICTL rmp $pod
+    fi
+done
