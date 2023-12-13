@@ -2421,6 +2421,47 @@ func testANNPBasic(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testANNPUpdate tests traffic from X/B to Y/A on port 80 will be dropped, and
+// update on the Antrea NetworkPolicy allows traffic from X/B to Y/A on port 80.
+func testANNPUpdate(t *testing.T, data *TestData) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespaces["y"], "np-before-update").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionDrop, "", "")
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
+	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
+	failOnError(err, t)
+	failOnError(data.waitForANNPRealized(t, annp.Namespace, annp.Name, policyRealizedTimeout), t)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
+	_, wrong, _ := reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("Failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
+	}
+
+	updatedBuilder := &AntreaNetworkPolicySpecBuilder{}
+	updatedBuilder = updatedBuilder.SetName(namespaces["y"], "np-before-update").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	updatedBuilder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]}, nil,
+		nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "")
+	updatedReachability := NewReachability(allPods, Connected)
+	annp, err = k8sUtils.CreateOrUpdateANNP(updatedBuilder.Get())
+	failOnError(err, t)
+	failOnError(data.waitForANNPRealized(t, annp.Namespace, annp.Name, policyRealizedTimeout), t)
+	k8sUtils.Validate(allPods, updatedReachability, []int32{80}, ProtocolTCP)
+	_, wrong, _ = reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("Failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
+	}
+	failOnError(k8sUtils.DeleteANNP(annp.Namespace, annp.Name), t)
+}
+
 // testANNPMultipleAppliedTo tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea
 // NetworkPolicy that applies to multiple AppliedTos, one of which doesn't select any Pod. It also ensures the Policy is
 // updated correctly when one of its AppliedToGroup starts and stops selecting Pods.
@@ -4356,6 +4397,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t) })
 		t.Run("Case=ANNPPortRange", func(t *testing.T) { testANNPPortRange(t) })
 		t.Run("Case=ANNPBasic", func(t *testing.T) { testANNPBasic(t) })
+		t.Run("Case=ANNPUpdate", func(t *testing.T) { testANNPUpdate(t, data) })
 		t.Run("Case=testANNPMultipleAppliedToSingleRule", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true) })
 		t.Run("Case=testANNPMultipleAppliedToMultipleRules", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false) })
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })

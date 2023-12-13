@@ -957,7 +957,8 @@ func (data *TestData) CreateOrUpdateANNP(annp *crdv1beta1.NetworkPolicy) (*crdv1
 		return annp, err
 	} else if npReturned.Name != "" {
 		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", annp.Name)
-		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), annp, metav1.UpdateOptions{})
+		npReturned.Spec = annp.Spec
+		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), npReturned, metav1.UpdateOptions{})
 		return annp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", annp.Name)
