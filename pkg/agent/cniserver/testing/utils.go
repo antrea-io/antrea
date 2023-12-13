@@ -14,10 +14,31 @@
 
 package testing
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 const argsFormat = "IgnoreUnknown=1;K8S_POD_NAMESPACE=%s;K8S_POD_NAME=%s;K8S_POD_INFRA_CONTAINER_ID=%s"
 
-func GenerateCNIArgs(podName string, podNamespace string, podInfraContainerID string) string {
+func GenerateCNIArgs(podName, podNamespace, podInfraContainerID string) string {
 	return fmt.Sprintf(argsFormat, podNamespace, podName, podInfraContainerID)
+}
+
+func ParseCNIArgs(args string) (podName, podNamespace, podInfraContainerID string) {
+	strs := strings.Split(args, ";")
+	for _, str := range strs {
+		fields := strings.Split(str, "=")
+		if len(fields) == 2 {
+			switch fields[0] {
+			case "K8S_POD_NAMESPACE":
+				podNamespace = fields[1]
+			case "K8S_POD_NAME":
+				podName = fields[1]
+			case "K8S_POD_INFRA_CONTAINER_ID":
+				podInfraContainerID = fields[1]
+			}
+		}
+	}
+	return
 }
