@@ -29,6 +29,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	ipamtest "antrea.io/antrea/pkg/agent/cniserver/ipam/testing"
@@ -43,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/wait"
 )
 
@@ -76,6 +79,80 @@ var (
 	ifaceStore          interfacestore.InterfaceStore
 
 	emptyResponse = &cnipb.CniCmdResponse{CniResult: []byte("")}
+
+	nodeName = "node1"
+	gwMAC    = utilip.MustParseMAC("00:00:11:11:11:11")
+	pod1     = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "p1",
+			Namespace: testPodNamespace,
+		},
+		Spec: v1.PodSpec{
+			NodeName: nodeName,
+		},
+	}
+	pod2 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "p2",
+			Namespace: testPodNamespace,
+		},
+		Spec: v1.PodSpec{
+			NodeName:    nodeName,
+			HostNetwork: true,
+		},
+	}
+	pod3 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "p3",
+			Namespace: testPodNamespace,
+		},
+		Spec: v1.PodSpec{
+			NodeName: nodeName,
+		},
+	}
+	normalInterface = &interfacestore.InterfaceConfig{
+		InterfaceName: "iface1",
+		Type:          interfacestore.ContainerInterface,
+		IPs:           []net.IP{net.ParseIP("1.1.1.1")},
+		MAC:           utilip.MustParseMAC("00:11:22:33:44:01"),
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			PortUUID: generateUUID(),
+			OFPort:   int32(3),
+		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			PodName:      pod1.Name,
+			PodNamespace: testPodNamespace,
+			ContainerID:  generateUUID(),
+		},
+	}
+	staleInterface = &interfacestore.InterfaceConfig{
+		InterfaceName: "iface3",
+		Type:          interfacestore.ContainerInterface,
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			PortUUID: generateUUID(),
+			OFPort:   int32(4),
+		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			PodName:      "non-existing-pod",
+			PodNamespace: testPodNamespace,
+			ContainerID:  generateUUID(),
+		},
+	}
+	unconnectedInterface = &interfacestore.InterfaceConfig{
+		InterfaceName: "iface4",
+		Type:          interfacestore.ContainerInterface,
+		IPs:           []net.IP{net.ParseIP("1.1.1.2")},
+		MAC:           utilip.MustParseMAC("00:11:22:33:44:02"),
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			PortUUID: generateUUID(),
+			OFPort:   int32(-1),
+		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			PodName:      pod3.Name,
+			PodNamespace: testPodNamespace,
+			ContainerID:  generateUUID(),
+		},
+	}
 )
 
 func TestLoadNetConfig(t *testing.T) {
@@ -695,7 +772,7 @@ func generateNetworkConfiguration(name, cniVersion, cniType, ipamType string) *t
 }
 
 func newRequest(args string, netCfg *types.NetworkConfig, path string, t *testing.T) (*cnipb.CniCmdRequest, string) {
-	containerID := generateUUID(t)
+	containerID := generateUUID()
 	networkConfig, err := json.Marshal(netCfg)
 	if err != nil {
 		t.Error("Failed to generate Network configuration")
@@ -714,11 +791,8 @@ func newRequest(args string, netCfg *types.NetworkConfig, path string, t *testin
 	return cmdRequest, containerID
 }
 
-func generateUUID(t *testing.T) string {
-	newID, err := uuid.NewUUID()
-	if err != nil {
-		t.Fatal("Failed to generate UUID")
-	}
+func generateUUID() string {
+	newID, _ := uuid.NewUUID()
 	return newID.String()
 }
 
