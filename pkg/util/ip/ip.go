@@ -195,6 +195,14 @@ func MustParseCIDR(cidr string) *net.IPNet {
 	return ipNet
 }
 
+func MustParseMAC(mac string) net.HardwareAddr {
+	addr, err := net.ParseMAC(mac)
+	if err != nil {
+		panic(fmt.Errorf("cannot parse '%v': %v", mac, err))
+	}
+	return addr
+}
+
 // IPNetEqual returns if the provided IPNets are the same subnet.
 func IPNetEqual(ipNet1, ipNet2 *net.IPNet) bool {
 	if ipNet1 == nil && ipNet2 == nil {

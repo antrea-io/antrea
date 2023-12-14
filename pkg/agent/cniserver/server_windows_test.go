@@ -28,9 +28,6 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
@@ -326,8 +323,8 @@ func TestCmdAdd(t *testing.T) {
 
 	dockerInfraContainer := "261a1970-5b6c-11ed-8caf-000c294e5d03"
 	dockerWorkContainer := "261e579a-5b6c-11ed-8caf-000c294e5d03"
-	unknownInfraContainer := generateUUID(t)
-	containerdInfraContainer := generateUUID(t)
+	unknownInfraContainer := generateUUID()
+	containerdInfraContainer := generateUUID()
 
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
@@ -450,7 +447,7 @@ func TestCmdAdd(t *testing.T) {
 			podName:             "pod8",
 			containerID:         containerdInfraContainer,
 			infraContainerID:    containerdInfraContainer,
-			netns:               generateUUID(t),
+			netns:               generateUUID(),
 			ipamAdd:             true,
 			connectOVS:          true,
 			containerIfaceExist: true,
@@ -459,7 +456,7 @@ func TestCmdAdd(t *testing.T) {
 			podName:             "pod9",
 			containerID:         containerdInfraContainer,
 			infraContainerID:    containerdInfraContainer,
-			netns:               generateUUID(t),
+			netns:               generateUUID(),
 			oriIPAMResult:       oriIPAMResult,
 			connectOVS:          true,
 			containerIfaceExist: true,
@@ -469,7 +466,7 @@ func TestCmdAdd(t *testing.T) {
 			podName:           "pod10",
 			containerID:       containerdInfraContainer,
 			infraContainerID:  containerdInfraContainer,
-			netns:             generateUUID(t),
+			netns:             generateUUID(),
 			ipamDel:           true,
 			oriIPAMResult:     oriIPAMResult,
 			endpointAttachErr: fmt.Errorf("unable to attach HnsEndpoint"),
@@ -483,14 +480,14 @@ func TestCmdAdd(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			isDocker := isDockerContainer(tc.netns)
-			testUtil := newHnsTestUtil(generateUUID(t), tc.existingHnsEndpoints, isDocker, tc.isAttached, tc.hnsEndpointCreateErr, tc.endpointAttachErr)
+			testUtil := newHnsTestUtil(generateUUID(), tc.existingHnsEndpoints, isDocker, tc.isAttached, tc.hnsEndpointCreateErr, tc.endpointAttachErr)
 			testUtil.setFunctions()
 			defer testUtil.restore()
 			waiter := newAsyncWaiter(tc.podName, tc.infraContainerID)
 			server := newMockCNIServer(t, controller, waiter.notifier)
 			requestMsg, ovsPortName := prepareSetup(t, ipamType, tc.podName, tc.containerID, tc.infraContainerID, tc.netns, nil)
 			if tc.endpointExists {
-				server.podConfigurator.ifConfigurator.(*ifConfigurator).addEndpoint(getHnsEndpoint(generateUUID(t), ovsPortName))
+				server.podConfigurator.ifConfigurator.(*ifConfigurator).addEndpoint(getHnsEndpoint(generateUUID(), ovsPortName))
 			}
 			if tc.oriIPAMResult != nil {
 				ipam.AddIPAMResult(tc.infraContainerID, tc.oriIPAMResult)
@@ -501,7 +498,7 @@ func TestCmdAdd(t *testing.T) {
 			if tc.ipamDel {
 				ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).Times(1)
 			}
-			ovsPortID := generateUUID(t)
+			ovsPortID := generateUUID()
 			if tc.connectOVS {
 				if isDocker {
 					mockOVSBridgeClient.EXPECT().CreateInternalPort(ovsPortName, int32(0), gomock.Any(), gomock.Any()).Return(ovsPortID, nil).Times(1)
@@ -615,7 +612,7 @@ func TestCmdDel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			isDocker := isDockerContainer(tc.netns)
 			requestMsg, ovsPortName := prepareSetup(t, ipamType, tc.podName, tc.containerID, tc.containerID, tc.netns, nil)
-			hnsEndpoint := getHnsEndpoint(generateUUID(t), ovsPortName)
+			hnsEndpoint := getHnsEndpoint(generateUUID(), ovsPortName)
 			var existingHnsEndpoints []hcsshim.HNSEndpoint
 			if tc.endpointExists {
 				existingHnsEndpoints = append(existingHnsEndpoints, *hnsEndpoint)
@@ -625,7 +622,7 @@ func TestCmdDel(t *testing.T) {
 			defer testUtil.restore()
 			waiter := newAsyncWaiter(tc.podName, tc.containerID)
 			server := newMockCNIServer(t, controller, waiter.notifier)
-			ovsPortID := generateUUID(t)
+			ovsPortID := generateUUID()
 			if tc.endpointExists {
 				server.podConfigurator.ifConfigurator.(*ifConfigurator).addEndpoint(hnsEndpoint)
 			}
@@ -683,7 +680,7 @@ func TestCmdCheck(t *testing.T) {
 	defer mockSetInterfaceMTU(nil)()
 	defer mockListHnsEndpoint(nil, nil)()
 	defer mockGetNetInterfaceAddrs(containerIPNet, nil)()
-	defer mockGetHnsEndpointByName(generateUUID(t), mac)()
+	defer mockGetHnsEndpointByName(generateUUID(), mac)()
 
 	wrapperIPAMResult := func(ipamResult current.Result, interfaces []*current.Interface) *current.Result {
 		result := ipamResult
@@ -721,7 +718,7 @@ func TestCmdCheck(t *testing.T) {
 				{Name: "pod0-6631b7", Mac: "11:22:33:44:33:22", Sandbox: ""},
 				{Name: "pod0-6631b7_eth0", Mac: "11:22:33:44:33:22", Sandbox: "none"},
 			}),
-			existingIface: wrapperContainerInterface("pod0-6631b7", containerID, "pod0", generateUUID(t), mac, containerIP),
+			existingIface: wrapperContainerInterface("pod0-6631b7", containerID, "pod0", generateUUID(), mac, containerIP),
 			netInterface: &net.Interface{
 				Name:         "vEthernet (pod0-6631b7)",
 				HardwareAddr: mac,
@@ -737,7 +734,7 @@ func TestCmdCheck(t *testing.T) {
 				{Name: "pod1-6631b7", Mac: "11:22:33:44:33:22", Sandbox: ""},
 				{Name: "pod1-6631b7_eth0", Mac: "11:22:33:44:33:22", Sandbox: "invalid-namespace"},
 			}),
-			existingIface: wrapperContainerInterface("pod1-6631b7", containerID, "pod1", generateUUID(t), mac, containerIP),
+			existingIface: wrapperContainerInterface("pod1-6631b7", containerID, "pod1", generateUUID(), mac, containerIP),
 			netInterface: &net.Interface{
 				Name:         "vEthernet (pod1-6631b7)",
 				HardwareAddr: mac,
@@ -759,7 +756,7 @@ func TestCmdCheck(t *testing.T) {
 				{Name: "pod2-6631b7", Mac: "11:22:33:44:33:22", Sandbox: ""},
 				{Name: "eth0", Mac: "11:22:33:44:33:22", Sandbox: "none"},
 			}),
-			existingIface: wrapperContainerInterface("pod2-6631b7", containerID, "pod2", generateUUID(t), mac, containerIP),
+			existingIface: wrapperContainerInterface("pod2-6631b7", containerID, "pod2", generateUUID(), mac, containerIP),
 			netInterface: &net.Interface{
 				Name:         "vEthernet (pod2-6631b7)",
 				HardwareAddr: mac,
@@ -781,7 +778,7 @@ func TestCmdCheck(t *testing.T) {
 				{Name: "pod3-6631b7", Mac: "11:22:33:44:33:22", Sandbox: ""},
 				{Name: "pod3-6631b7_eth0", Mac: "11:22:33:44:33:33", Sandbox: "none"},
 			}),
-			existingIface: wrapperContainerInterface("pod3-6631b7", containerID, "pod3", generateUUID(t), mac, containerIP),
+			existingIface: wrapperContainerInterface("pod3-6631b7", containerID, "pod3", generateUUID(), mac, containerIP),
 			netInterface: &net.Interface{
 				Name:         "vEthernet (pod3-6631b7)",
 				HardwareAddr: mac,
@@ -856,10 +853,10 @@ func TestReconcile(t *testing.T) {
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
-	nodeName := "node1"
+
 	defer mockHostInterfaceExists()()
 	defer mockGetHnsNetworkByName()()
-	missingEndpoint := getHnsEndpoint(generateUUID(t), "iface4")
+	missingEndpoint := getHnsEndpoint(generateUUID(), "iface4")
 	testUtil := newHnsTestUtil(missingEndpoint.Id, []hcsshim.HNSEndpoint{*missingEndpoint}, false, true, nil, nil)
 	testUtil.createHnsEndpoint(missingEndpoint)
 	testUtil.setFunctions()
@@ -867,105 +864,45 @@ func TestReconcile(t *testing.T) {
 
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
-	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	pods := []runtime.Object{
-		&v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "p1",
-				Namespace: testPodNamespace,
-			},
-			Spec: v1.PodSpec{
-				NodeName: nodeName,
-			},
-		},
-		&v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "p2",
-				Namespace: testPodNamespace,
-			},
-			Spec: v1.PodSpec{
-				NodeName:    nodeName,
-				HostNetwork: true,
-			},
-		},
-		&v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "p4",
-				Namespace: testPodNamespace,
-			},
-			Spec: v1.PodSpec{
-				NodeName: nodeName,
-			},
-		},
-	}
-	kubeClient := fakeclientset.NewSimpleClientset(pods...)
+	kubeClient := fakeclientset.NewSimpleClientset(pod1, pod2, pod3)
 	cniServer.kubeClient = kubeClient
-	containerIfaces := map[string]*interfacestore.InterfaceConfig{
-		"iface1": {
-			InterfaceName: "iface1",
-			Type:          interfacestore.ContainerInterface,
-			OVSPortConfig: &interfacestore.OVSPortConfig{
-				PortUUID: generateUUID(t),
-				OFPort:   int32(3),
-			},
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-				PodName:      "p1",
-				PodNamespace: testPodNamespace,
-				ContainerID:  generateUUID(t),
-			},
-		},
-		"iface3": {
-			InterfaceName: "iface3",
-			Type:          interfacestore.ContainerInterface,
-			OVSPortConfig: &interfacestore.OVSPortConfig{
-				PortUUID: generateUUID(t),
-				OFPort:   int32(4),
-			},
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-				PodName:      "p3",
-				PodNamespace: testPodNamespace,
-				ContainerID:  generateUUID(t),
-			},
-		},
-		"iface4": {
-			InterfaceName: "iface4",
-			Type:          interfacestore.ContainerInterface,
-			OVSPortConfig: &interfacestore.OVSPortConfig{
-				PortUUID: generateUUID(t),
-				OFPort:   int32(-1),
-			},
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-				PodName:      "p4",
-				PodNamespace: testPodNamespace,
-				ContainerID:  generateUUID(t),
-			},
-		},
-	}
-	for _, containerIface := range containerIfaces {
+	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface} {
 		ifaceStore.AddInterface(containerIface)
 	}
-	pod4IfaceName := "iface4"
-	pod4Iface := containerIfaces["iface4"]
-	waiter := newAsyncWaiter(pod4Iface.PodName, pod4Iface.ContainerID)
+	waiter := newAsyncWaiter(unconnectedInterface.PodName, unconnectedInterface.ContainerID)
 	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, waiter.notifier, nil)
 	cniServer.nodeConfig = &config.NodeConfig{Name: nodeName}
 
 	// Re-install Pod1 flows
-	mockOFClient.EXPECT().InstallPodFlows("iface1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	podFlowsInstalled := make(chan string, 2)
+	mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
+		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
+			podFlowsInstalled <- interfaceName
+		}).Times(1)
 	// Uninstall Pod3 flows which is deleted.
-	iface := containerIfaces["iface3"]
-	mockOFClient.EXPECT().UninstallPodFlows("iface3").Return(nil).Times(1)
-	mockOVSBridgeClient.EXPECT().DeletePort(iface.PortUUID).Return(nil).Times(1)
+	mockOFClient.EXPECT().UninstallPodFlows(staleInterface.InterfaceName).Return(nil).Times(1)
+	mockOVSBridgeClient.EXPECT().DeletePort(staleInterface.PortUUID).Return(nil).Times(1)
 	mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(1)
 	// Re-connect to Pod4
-	hostIfaces.Store(fmt.Sprintf("vEthernet (%s)", pod4IfaceName), true)
-	mockOVSBridgeClient.EXPECT().SetInterfaceType(pod4IfaceName, "internal").Return(nil).Times(1)
-	mockOVSBridgeClient.EXPECT().GetOFPort(pod4IfaceName, true).Return(int32(5), nil).Times(1)
-	mockOFClient.EXPECT().InstallPodFlows(pod4IfaceName, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	hostIfaces.Store(fmt.Sprintf("vEthernet (%s)", unconnectedInterface.InterfaceName), true)
+	mockOVSBridgeClient.EXPECT().SetInterfaceType(unconnectedInterface.InterfaceName, "internal").Return(nil).Times(1)
+	mockOVSBridgeClient.EXPECT().GetOFPort(unconnectedInterface.InterfaceName, true).Return(int32(5), nil).Times(1)
+	mockOFClient.EXPECT().InstallPodFlows(unconnectedInterface.InterfaceName, unconnectedInterface.IPs, unconnectedInterface.MAC, uint32(5), uint16(0), nil).
+		Do(func(interfaceName string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
+			podFlowsInstalled <- interfaceName
+		}).Times(1)
 	err := cniServer.reconcile()
 	assert.NoError(t, err)
 	_, exists := ifaceStore.GetInterfaceByName("iface3")
 	assert.False(t, exists)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-podFlowsInstalled:
+		case <-time.After(500 * time.Millisecond):
+			t.Errorf("InstallPodFlows should be called 2 times but was only called %d times", i)
+			break
+		}
+	}
 	waiter.wait()
 	waiter.close()
 }
