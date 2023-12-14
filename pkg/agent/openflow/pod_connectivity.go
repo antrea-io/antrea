@@ -200,7 +200,11 @@ func (f *featurePodConnectivity) replayFlows() []*openflow15.FlowMod {
 }
 
 // trafficControlMarkFlows generates the flows to mark the packets that need to be redirected or mirrored.
-func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32, targetOFPort uint32, direction v1alpha2.Direction, action v1alpha2.TrafficControlAction) []binding.Flow {
+func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
+	targetOFPort uint32,
+	direction v1alpha2.Direction,
+	action v1alpha2.TrafficControlAction,
+	priority uint16) []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var actionRegMark *binding.RegMark
 	if action == v1alpha2.ActionRedirect {
@@ -212,7 +216,7 @@ func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 	for _, port := range sourceOFPorts {
 		if direction == v1alpha2.DirectionIngress || direction == v1alpha2.DirectionBoth {
 			// This generates the flow to mark the packets destined for a provided port.
-			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priorityNormal).
+			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priority).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, port).
 				Action().LoadToRegField(TrafficControlTargetOFPortField, targetOFPort).
@@ -222,7 +226,7 @@ func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 		}
 		// This generates the flow to mark the packets sourced from a provided port.
 		if direction == v1alpha2.DirectionEgress || direction == v1alpha2.DirectionBoth {
-			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priorityNormal).
+			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priority).
 				Cookie(cookieID).
 				MatchInPort(port).
 				Action().LoadToRegField(TrafficControlTargetOFPortField, targetOFPort).

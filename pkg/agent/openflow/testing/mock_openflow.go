@@ -532,17 +532,17 @@ func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0, arg1, arg2, arg3, 
 }
 
 // InstallTrafficControlMarkFlows mocks base method.
-func (m *MockClient) InstallTrafficControlMarkFlows(arg0 string, arg1 []uint32, arg2 uint32, arg3 v1alpha2.Direction, arg4 v1alpha2.TrafficControlAction) error {
+func (m *MockClient) InstallTrafficControlMarkFlows(arg0 string, arg1 []uint32, arg2 uint32, arg3 v1alpha2.Direction, arg4 v1alpha2.TrafficControlAction, arg5 types.TrafficControlFlowPriority) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallTrafficControlMarkFlows", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "InstallTrafficControlMarkFlows", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallTrafficControlMarkFlows indicates an expected call of InstallTrafficControlMarkFlows.
-func (mr *MockClientMockRecorder) InstallTrafficControlMarkFlows(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallTrafficControlMarkFlows(arg0, arg1, arg2, arg3, arg4, arg5 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlMarkFlows), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlMarkFlows), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // InstallTrafficControlReturnPortFlow mocks base method.

@@ -2425,7 +2425,7 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 
 			cacheKey := fmt.Sprintf("tc_%s", tcName)
 
-			assert.NoError(t, fc.InstallTrafficControlMarkFlows(tcName, sourceOFPorts, targetOFPort, tc.direction, tc.action))
+			assert.NoError(t, fc.InstallTrafficControlMarkFlows(tcName, sourceOFPorts, targetOFPort, tc.direction, tc.action, types.TrafficControlFlowPriorityMedium))
 			fCacheI, ok := fc.featurePodConnectivity.tcCachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -2768,7 +2768,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	)
 	sourceOFPorts := []uint32{50, 100}
 	targetOFPort := uint32(200)
-	addFlowInCache(fc.featurePodConnectivity.tcCachedFlows, "tcFlows", fc.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, v1alpha2.DirectionEgress, v1alpha2.ActionMirror))
+	addFlowInCache(fc.featurePodConnectivity.tcCachedFlows, "tcFlows", fc.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, v1alpha2.DirectionEgress, v1alpha2.ActionMirror, priorityNormal))
 	replayedFlows = append(replayedFlows,
 		"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
 		"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
