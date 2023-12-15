@@ -367,10 +367,10 @@ labels are included on your issue:
   will ensure the appropriate reviewers shepherd the issue or PR through to its
   closure. For an overview of areas, see the
   [`docs/github-labels.md`](docs/contributors/github-labels.md).
-* **size** (optional) -- if you have an idea of the size (lines of code, complexity,
-  effort) of the issue, you can label it using a [size label](#size). The size
-  can be updated during backlog grooming by contributors. This estimate is used
-  to guide the number of features selected for a milestone.
+* **size** (optional) -- if you have an idea of the size (lines of code,
+  complexity, effort) of the issue, you can label it using a size label. The
+  size can be updated during backlog grooming by contributors. This estimate is
+  used to guide the number of features selected for a milestone.
 
 All other labels will be assigned during issue triage.
 

@@ -73,7 +73,7 @@ A supermajority is defined as two-thirds of members in the group.
 
 The code of conduct is overseen by the Antrea project maintainers. Possible code
 of conduct violations should be emailed to the project maintainers at
-cncf-antrea-maintainers@lists.cncf.io.
+<cncf-antrea-maintainers@lists.cncf.io>.
 
 If the possible violation is against one of the project maintainers that member
 will be recused from voting on the issue. Such issues must be escalated to the

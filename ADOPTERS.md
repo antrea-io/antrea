@@ -40,7 +40,7 @@ antrea nodes in one cluster for upgrading.
 4. We use Antrea's Egress feature to keep the original source ip to ensure
 Internal Pods can get the real source IP of the request.
 
-You can contact us with mkt@transwarp.io
+You can contact us with <mkt@transwarp.io>
 
 **[TeraSky](https://terasky.com)**
 
@@ -88,7 +88,7 @@ add a line where people can find you.
 a maximum size of 50KB to the [adopters](docs/assets/adopters) directory.
 Name the image file something that reflects your company (e.g., if your company
 is called Acme, name the image acme-logo.png). Then add an inline html link
-directly bellow the [Antrea Adopters section](#Antrea-Adopters). Use the
+directly bellow the [Antrea Adopters section](#antrea-adopters). Use the
 following format:
 
     ```html

@@ -140,7 +140,7 @@ following:
 2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
 ip link delete flannel cni0` **on each Node**.
 3. Ensure [requirements](#ensuring-requirements-are-satisfied) are satisfied.
-4. [Deploy Antrea](#installation).
+4. [Deploy Antrea](#installation--upgrade).
 5. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
 --ignore-daemonsets <node name> && kubectl uncordon <node name>`. The
 `--ignore-daemonsets` flag will ignore DaemonSet-managed Pods, including the

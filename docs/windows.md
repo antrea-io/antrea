@@ -50,7 +50,7 @@ management Pods. It is recommended to run OVS daemons as Windows services.
 We also support running OVS processes inside a container. If you don't want to
 run antrea-agent and kube-proxy from the management Pods Antrea also provides
 scripts which help to install and run these two components directly without Pod.
-Please see [Manually run kube-proxy and antrea-agent on Windows worker Nodes](#Manually-run-kube-proxy-and-antrea-agent-on-Windows-worker-Nodes)
+Please see [Manually run kube-proxy and antrea-agent on Windows worker Nodes](#manually-run-kube-proxy-and-antrea-agent-on-windows-worker-nodes)
 section for details.
 
 ### Antrea Windows demo
@@ -72,7 +72,7 @@ the Windows Nodes in the demo.
 * Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
   with management tools. If your Nodes do not have the virtualization
   capabilities required by Hyper-V, you could try the workaround
-  described in the [Known issues](#Known-issues) section.
+  described in the [Known issues](#known-issues) section.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
 * [Install OVS](https://docs.openvswitch.org/en/latest/intro/install/windows/)
   and configure the daemons as Windows service.
@@ -81,7 +81,7 @@ the Windows Nodes in the demo.
     [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
   - If you don't have a self-signed OVS package and just want to try the
     Antrea on Windows, Antrea provides a test-signed OVS package for you.
-    See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
+    See details in [Join Windows worker Nodes](#join-windows-worker-nodes)
     section.
 * Some manifests are from [sig-windows-tool](https://github.com/kubernetes-sigs/sig-windows-tools)
   repo. Release version v0.1.5 has been verified.
@@ -437,7 +437,7 @@ kube-proxy-windows-2d45w                               1/1     Running     0    
 Starting from Kubernetes 1.26, Antrea will no longer support Windows kube-proxy
 because kube-proxy userspace mode is deprecated and kernelspace mode does not
 work with Antrea. For a cluster with Kubernetes version 1.26 or later, please
-refer to [Deploying Antrea on Windows Worker Node](#Deploying-Antrea-on-Windows-Worker-Node)
+refer to [Deploying Antrea on Windows Worker Node](#deploying-antrea-on-windows-worker-node)
 
 First, deploy a Windows-compatible version of kube-proxy. You can download `kube-proxy.yaml`
 from the Kubernetes github repository to deploy kube-proxy. The kube-proxy version
@@ -559,10 +559,9 @@ kubectl apply -f kube-proxy.yml
 
 Aside from starting kube-proxy and antrea-agent from the management Pods, Antrea
 also provides powershell scripts which help install and run these two components
-directly without Pod. Please complete the steps in [Installation](#Installation)
-section, skip [Add Windows kube-proxy DaemonSet](#Add-Windows-kube-proxy-DaemonSet)
-and [Add Windows antrea-agent DaemonSet](#Add-Windows-antrea-agent-DaemonSet)
-steps. And then run the following commands in powershell.
+directly without Pod. Please complete the steps in [Installation](#installation-as-a-pod-dockercontainerd-based-runtimes)
+section, and skip the [Add Windows antrea-agent DaemonSet](#add-windows-antrea-agent-daemonset)
+step. And then run the following commands in powershell.
 
 ```powershell
 mkdir c:\k\antrea
