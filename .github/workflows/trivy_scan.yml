@@ -63,7 +63,7 @@ jobs:
         output: 'trivy.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt'
     - name: Upload Trivy scan reports
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: trivy-scan-reports
         path: trivy.*.txt
