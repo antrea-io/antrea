@@ -208,6 +208,9 @@ FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector
 if $proxy_all; then
     COMMON_IMAGES_LIST+=("registry.k8s.io/echoserver:1.10")
 fi
+if $flow_visibility; then
+    COMMON_IMAGES_LIST+=("${FLOW_VISIBILITY_IMAGE_LIST[@]}")
+fi
 # Silence CLI suggestions.
 export DOCKER_CLI_HINTS=false
 for image in "${COMMON_IMAGES_LIST[@]}"; do
@@ -225,7 +228,6 @@ else
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
 fi
 if $flow_visibility; then
-    COMMON_IMAGES_LIST+=("${FLOW_VISIBILITY_IMAGE_LIST[@]}")
     if $coverage; then
         COMMON_IMAGES_LIST+=("antrea/flow-aggregator-coverage:latest")
     else
