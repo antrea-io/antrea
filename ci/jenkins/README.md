@@ -199,7 +199,7 @@ set -e
 
 * [daily-whole-conformance](https://jenkins.antrea-ci.rocks/job/antrea-daily-whole-conformance-for-period/):
   daily community tests using sonobuoy, with certified-conformance mode. If build fails, Jenkins will
-  send an email to projectantrea-dev@googlegroups.com for notification.
+  send an email to <projectantrea-dev@googlegroups.com> for notification.
 
 * Microsoft Windows conformance: community tests related to Microsoft Windows.
   It focuses on: "[sig-network].+[Conformance]|[sig-windows]".
