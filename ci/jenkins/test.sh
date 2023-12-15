@@ -41,7 +41,7 @@ WIN_IMAGE_NODE=""
 GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
-WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
+WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]"
 WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 WINDOWS_NETWORKPOLICY_SKIP="SCTP"
 WINDOWS_NETWORKPOLICY_CONTAINERD_SKIP="\[sig-storage\]|SCTP"
@@ -633,8 +633,8 @@ function deliver_antrea_windows_containerd {
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
-        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2")
-        e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2")
+        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.45" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.8")
+        e2e_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.45" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "k8sprow.azurecr.io/kubernetes-e2e-test-images/pause:3.8")
         # Pull necessary images in advance to avoid transient error
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && ctr -n k8s.io images tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
