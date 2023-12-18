@@ -127,7 +127,7 @@ func (ns *fakeNS) clear() {
 }
 
 func createNS(t *testing.T, waitForComplete bool) *fakeNS {
-	nsPath := generateUUID(t)
+	nsPath := generateUUID()
 	fakeNs := &fakeNS{path: nsPath, fd: uintptr(unsafe.Pointer(&nsPath)), waitCompleted: waitForComplete, stopCh: make(chan struct{})}
 	validNSs.Store(nsPath, fakeNs)
 	return fakeNs

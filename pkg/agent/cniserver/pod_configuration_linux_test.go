@@ -136,7 +136,7 @@ func TestConnectInterceptedInterface(t *testing.T) {
 	testPodName := "test-pod"
 	podNamespace := testPodNamespace
 	hostInterfaceName := util.GenerateContainerInterfaceName(testPodName, testPodNamespace, testPodInfraContainerID)
-	containerID := generateUUID(t)
+	containerID := generateUUID()
 	containerNetNS := "container-ns"
 	containerDev := "eth0"
 
@@ -210,7 +210,7 @@ func TestConnectInterceptedInterface(t *testing.T) {
 			if tc.migratedRoute {
 				mockRoute.EXPECT().MigrateRoutesToGw(hostInterfaceName).Return(tc.migrateRouteErr)
 			}
-			ovsPortID := generateUUID(t)
+			ovsPortID := generateUUID()
 			if tc.connectedOVS {
 				mockOVSBridgeClient.EXPECT().CreatePort(hostInterfaceName, gomock.Any(), gomock.Any()).Return(ovsPortID, tc.createOVSPortErr).Times(1)
 				if tc.createOVSPortErr == nil {
@@ -239,7 +239,7 @@ func TestConnectInterceptedInterface(t *testing.T) {
 
 func TestCreateOVSPort(t *testing.T) {
 	controller := gomock.NewController(t)
-	containerID := generateUUID(t)
+	containerID := generateUUID()
 	podName := "p0"
 	podNameSpace := testPodNamespace
 
@@ -271,10 +271,10 @@ func TestCreateOVSPort(t *testing.T) {
 			containerConfig := buildContainerConfig(tc.portName, containerID, podName, podNameSpace, &current.Interface{Mac: "01:02:03:04:05:06"}, ipamResult.IPs, tc.vlanID)
 			attachInfo := BuildOVSPortExternalIDs(containerConfig)
 			if tc.createOVSPort {
-				mockOVSBridgeClient.EXPECT().CreatePort(tc.portName, tc.portName, attachInfo).Times(1).Return(generateUUID(t), nil)
+				mockOVSBridgeClient.EXPECT().CreatePort(tc.portName, tc.portName, attachInfo).Times(1).Return(generateUUID(), nil)
 			}
 			if tc.createOVSAccessPort {
-				mockOVSBridgeClient.EXPECT().CreateAccessPort(tc.portName, tc.portName, attachInfo, tc.vlanID).Times(1).Return(generateUUID(t), nil)
+				mockOVSBridgeClient.EXPECT().CreateAccessPort(tc.portName, tc.portName, attachInfo, tc.vlanID).Times(1).Return(generateUUID(), nil)
 			}
 			_, err := podConfigurator.createOVSPort(tc.portName, attachInfo, tc.vlanID)
 			assert.NoError(t, err)
@@ -283,8 +283,8 @@ func TestCreateOVSPort(t *testing.T) {
 }
 
 func TestParseOVSPortInterfaceConfig(t *testing.T) {
-	containerID := generateUUID(t)
-	portUUID := generateUUID(t)
+	containerID := generateUUID()
+	portUUID := generateUUID()
 	ofPort := int32(1)
 	containerIPs := "1.1.1.2,aabb:1122::101:102"
 	parsedIPs := []net.IP{net.ParseIP("1.1.1.2"), net.ParseIP("aabb:1122::101:102")}
@@ -398,14 +398,14 @@ func TestParseOVSPortInterfaceConfig(t *testing.T) {
 func TestCheckHostInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	hostIfaceName := "port1"
-	containerID := generateUUID(t)
+	containerID := generateUUID()
 	containerIntf := &current.Interface{Name: ifname, Sandbox: netns, Mac: "01:02:03:04:05:06"}
 	interfaces := []*current.Interface{containerIntf, {Name: hostIfaceName}}
 	containeIPs := ipamResult.IPs
 	ifaceMAC, _ := net.ParseMAC("01:02:03:04:05:06")
 	containerInterface := interfacestore.NewContainerInterface(hostIfaceName, containerID, "pod1", testPodNamespace, ifaceMAC, []net.IP{containerIP}, 1)
 	containerInterface.OVSPortConfig = &interfacestore.OVSPortConfig{
-		PortUUID: generateUUID(t),
+		PortUUID: generateUUID(),
 		OFPort:   int32(10),
 	}
 
@@ -454,7 +454,7 @@ func TestCheckHostInterface(t *testing.T) {
 
 func TestConfigureSriovSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
-	containerID := generateUUID(t)
+	containerID := generateUUID()
 	containerNS := "containerNS"
 
 	for _, tc := range []struct {
