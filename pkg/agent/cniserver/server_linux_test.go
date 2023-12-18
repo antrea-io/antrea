@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
@@ -27,9 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
@@ -326,7 +324,7 @@ func TestCmdAdd(t *testing.T) {
 			if tc.addLocalIPAMRoute {
 				mockRoute.EXPECT().AddLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(tc.addLocalIPAMRouteError).Times(1)
 			}
-			ovsPortID := generateUUID(t)
+			ovsPortID := generateUUID()
 			if tc.connectOVS {
 				mockOVSBridgeClient.EXPECT().CreatePort(hostInterfaceName, gomock.Any(), gomock.Any()).Return(ovsPortID, nil).Times(1)
 				mockOVSBridgeClient.EXPECT().GetOFPort(hostInterfaceName, false).Return(int32(100), nil).Times(1)
@@ -366,7 +364,7 @@ func TestCmdAdd(t *testing.T) {
 }
 
 func TestCmdDel(t *testing.T) {
-	ovsPortID := generateUUID(t)
+	ovsPortID := generateUUID()
 	ovsPort := int32(100)
 	ctx := context.TODO()
 
@@ -521,7 +519,7 @@ func TestCmdDel(t *testing.T) {
 func TestCmdCheck(t *testing.T) {
 	controller := gomock.NewController(t)
 	ipamMock := ipamtest.NewMockIPAMDriver(controller)
-	ovsPortID := generateUUID(t)
+	ovsPortID := generateUUID()
 	ovsPort := int32(100)
 	ctx := context.TODO()
 
@@ -613,98 +611,33 @@ func TestReconcile(t *testing.T) {
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
-	nodeName := "node1"
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
-	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
 	cniServer.podConfigurator, _ = newPodConfigurator(mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100))
 	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
 	cniServer.nodeConfig = &config.NodeConfig{
 		Name: nodeName,
 	}
-	pods := []runtime.Object{
-		&v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "p1",
-				Namespace: testPodNamespace,
-			},
-			Spec: v1.PodSpec{
-				NodeName: nodeName,
-			},
-		},
-		&v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "p2",
-				Namespace: testPodNamespace,
-			},
-			Spec: v1.PodSpec{
-				NodeName:    nodeName,
-				HostNetwork: true,
-			},
-		},
-		&v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "p4",
-				Namespace: testPodNamespace,
-			},
-			Spec: v1.PodSpec{
-				NodeName: nodeName,
-			},
-		},
-	}
-	containerIfaces := map[string]*interfacestore.InterfaceConfig{
-		"iface1": {
-			InterfaceName: "iface1",
-			Type:          interfacestore.ContainerInterface,
-			OVSPortConfig: &interfacestore.OVSPortConfig{
-				PortUUID: generateUUID(t),
-				OFPort:   int32(3),
-			},
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-				PodName:      "p1",
-				PodNamespace: testPodNamespace,
-				ContainerID:  generateUUID(t),
-			},
-		},
-		"iface3": {
-			InterfaceName: "iface3",
-			Type:          interfacestore.ContainerInterface,
-			OVSPortConfig: &interfacestore.OVSPortConfig{
-				PortUUID: generateUUID(t),
-				OFPort:   int32(4),
-			},
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-				PodName:      "p3",
-				PodNamespace: testPodNamespace,
-				ContainerID:  generateUUID(t),
-			},
-		},
-		"iface4": {
-			InterfaceName: "iface4",
-			Type:          interfacestore.ContainerInterface,
-			OVSPortConfig: &interfacestore.OVSPortConfig{
-				PortUUID: generateUUID(t),
-				OFPort:   int32(-1),
-			},
-			ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
-				PodName:      "p4",
-				PodNamespace: testPodNamespace,
-				ContainerID:  generateUUID(t),
-			},
-		},
-	}
-	kubeClient := fakeclientset.NewSimpleClientset(pods...)
+	kubeClient := fakeclientset.NewSimpleClientset(pod1, pod2, pod3)
 	cniServer.kubeClient = kubeClient
-	for _, containerIface := range containerIfaces {
+	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface} {
 		ifaceStore.AddInterface(containerIface)
 	}
-	mockOFClient.EXPECT().InstallPodFlows("iface1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	iface := containerIfaces["iface3"]
-	mockOFClient.EXPECT().UninstallPodFlows("iface3").Return(nil).Times(1)
-	mockOVSBridgeClient.EXPECT().DeletePort(iface.PortUUID).Return(nil).Times(1)
+	podFlowsInstalled := make(chan struct{})
+	mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
+		Do(func(_ string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
+			close(podFlowsInstalled)
+		}).Times(1)
+	mockOFClient.EXPECT().UninstallPodFlows(staleInterface.InterfaceName).Return(nil).Times(1)
+	mockOVSBridgeClient.EXPECT().DeletePort(staleInterface.PortUUID).Return(nil).Times(1)
 	mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(1)
 	err := cniServer.reconcile()
 	assert.NoError(t, err)
-	_, exists := ifaceStore.GetInterfaceByName("iface3")
+	_, exists := ifaceStore.GetInterfaceByName(staleInterface.InterfaceName)
 	assert.False(t, exists)
+	select {
+	case <-podFlowsInstalled:
+	case <-time.After(500 * time.Millisecond):
+		t.Errorf("InstallPodFlows for %s should be called but was not", normalInterface.InterfaceName)
+	}
 }
