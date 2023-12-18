@@ -84,7 +84,7 @@ jobs:
         run: |
           ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}"
       - name: Upload test log
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ failure() || inputs.always-upload-logs }}
         with:
           name: sonobuoy.tar.gz
