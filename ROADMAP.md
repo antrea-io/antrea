@@ -14,7 +14,7 @@ features. Reach us through Issues, Slack and / or Google Group!
 
 Antrea [version 2](https://github.com/antrea-io/antrea/issues/4832) is coming in
 2024. We are graduating some popular features to Beta or GA, deprecating some
-legacy APIs, droppping support for old K8s versions (< 1.19) to improve support
+legacy APIs, dropping support for old K8s versions (< 1.19) to improve support
 for newer ones, and more! This is a big milestone for the project, stay tuned!
 
 ### K8s Node security
@@ -80,7 +80,7 @@ through a dedicated Antrea API!
 We recently added the SecondaryNetwork feature, which supports provisioning
 additional networks for Pods, using the same constructs made popular by
 [Multus](https://github.com/k8snetworkplumbingwg/multus-cni). However, at the
-moment, options for network "types" are limited. We plan on supporting new uses
+moment, options for network "types" are limited. We plan on supporting new use
 cases (e.g., secondary network overlays, network acceleration with DPDK), as
 well as on improving user experience for this feature (with some useful
 documentation).
@@ -89,8 +89,8 @@ documentation).
 
 Support for L7 NetworkPolicies was added in version 1.10, providing the ability
 to select traffic based on the application-layer context. However, the feature
-currently only supports HTTP traffic, and we plan to extend support to other
-protocols, such as DNS.
+currently only supports HTTP and TLS traffic, and we plan to extend support to
+other protocols, such as DNS.
 
 ### Multi-cluster networking
 
