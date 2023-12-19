@@ -94,9 +94,9 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 * **Windows Node support**: Thanks to the portability of Open vSwitch, Antrea
   can use the same data plane implementation on both Linux and Windows
   Kubernetes Nodes.
-* **Multi-cluster networking**: Federate multiple K8s clusters and benefit from
-  a unified data plane (including multi-cluster Services) and a unified security
-  posture. Refer to the [Antrea Multi-cluster documentation](docs/multicluster/user-guide.md)
+* **Multi-cluster networking**: Federate multiple Kubernetes clusters and
+  benefit from a unified data plane (including multi-cluster Services) and a
+  unified security posture. Refer to the [Antrea Multi-cluster documentation](docs/multicluster/user-guide.md)
   to get started.
 * **Troubleshooting and monitoring tools**: Antrea comes with CLI and UI tools
   which provide visibility and diagnostics capabilities (packet tracing, policy

@@ -54,11 +54,11 @@ documentation.
 
 ### More robust FQDN support in Antrea NetworkPolicy
 
-Antrea provides a comprehensive network policy model, which builds upon
-Kubernetes Network Policies and provides many additional capabilities. One of
-them is the ability to define policy rules using domain names (FQDNs). We think
-there is some room to improve user experience with this feature, and we are
-working on making it more stable.
+Antrea provides a comprehensive network policy model, which builds upon K8s
+Network Policies and provides many additional capabilities. One of them is the
+ability to define policy rules using domain names (FQDNs). We think there is
+some room to improve user experience with this feature, and we are working on
+making it more stable.
 
 ### Implementation of new upstream NetworkPolicy APIs
 
