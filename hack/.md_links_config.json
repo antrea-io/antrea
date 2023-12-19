@@ -35,6 +35,9 @@
         },
         {
             "pattern": "https://twitter.com/*"
+        },
+        {
+            "pattern": "https://www.wireguard.com*"
         }
     ],
     "retryOn429": false,
