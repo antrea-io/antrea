@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       antrea-repository:
-        description: 'The Antrea repository to check-out'
+        description: 'The Antrea repository to check-out; it will typically be a personal Antrea fork such as "<your-github-user>/antrea"'
         required: true
         type: string
       antrea-ref:
-        description: 'The Git ref to use when checking-out the Antrea repository'
+        description: 'The Git ref to use when checking-out the Antrea repository, usually a branch or tag name'
         required: true
         type: string
       push:
