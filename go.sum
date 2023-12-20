@@ -150,8 +150,8 @@ github.com/confluentinc/bincover v0.1.0 h1:M4Gfj4rCXuUQVe8TqT/VXcAMjLyvN81oDRy79
 github.com/confluentinc/bincover v0.1.0/go.mod h1:qeI1wx0RxdGTZtrJY0HVlgJ4NqC/X2Z+fHbvy87tgHE=
 github.com/containerd/cgroups v1.1.0 h1:v8rEWFl6EoqHB+swVNjVoCJE8o3jX7e8nqBGPLaDFBM=
 github.com/containerd/cgroups v1.1.0/go.mod h1:6ppBcbh/NOOUU+dMKrykgaBnK9lCIBxHqJDGwsa1mIw=
-github.com/containerd/containerd v1.6.23 h1:KYJd6UJhKHzwMhiD70iTtSmU+k4565ac22GOTI3AuTA=
-github.com/containerd/containerd v1.6.23/go.mod h1:UrQOiyzrLi3n4aezYJbQH6Il+YzTvnHFbEuO3yfDrM4=
+github.com/containerd/containerd v1.6.26 h1:VVfrE6ZpyisvB1fzoY8Vkiq4sy+i5oF4uk7zu03RaHs=
+github.com/containerd/containerd v1.6.26/go.mod h1:I4TRdsdoo5MlKob5khDJS2EPT1l1oMNaE2MBm6FrwxM=
 github.com/containernetworking/cni v1.1.1 h1:ky20T7c0MvKvbMOwS/FrlbNwjEoqJEUUYfsL4b0mc4k=
 github.com/containernetworking/cni v1.1.1/go.mod h1:sDpYKmGVENF3s6uvMvGgldDWeG8dMxakj/u+i9ht9vw=
 github.com/containernetworking/plugins v1.1.1 h1:+AGfFigZ5TiQH00vhR8qPeSatj53eNGz0C1d3wVYlHE=
