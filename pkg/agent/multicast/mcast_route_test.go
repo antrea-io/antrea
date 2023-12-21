@@ -236,7 +236,7 @@ func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
-	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false)
+	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false, false)
 }
 
 func (c *MRouteClient) initialize(t *testing.T) error {

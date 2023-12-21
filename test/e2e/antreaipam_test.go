@@ -251,6 +251,12 @@ func TestAntreaIPAM(t *testing.T) {
 		testAntreaIPAMStatefulSet(t, data, nil)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
+
+	t.Run("testMulticastWithFlexibleIPAM", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		skipIfNotIPv4Cluster(t)
+		runMulticastTestCases(t, data, testAntreaIPAMNamespace)
+	})
 }
 
 func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {

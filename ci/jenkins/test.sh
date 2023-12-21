@@ -1145,7 +1145,7 @@ EOF
 
 export KUBECONFIG=${KUBECONFIG_PATH}
 if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-    ./hack/generate-manifest.sh --flexible-ipam --verbose-log > build/yamls/antrea.yml
+    ./hack/generate-manifest.sh --flexible-ipam --multicast --verbose-log > build/yamls/antrea.yml
 fi
 
 if [[ $TESTCASE =~ "multicast" ]]; then
