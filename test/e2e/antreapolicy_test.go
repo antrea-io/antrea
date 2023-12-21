@@ -3877,17 +3877,16 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 }
 
-func testACNPIGMPQueryAllow(t *testing.T, data *TestData) {
-	testACNPIGMPQuery(t, data, "test-acnp-igmp-query-allow", "testMulticastIGMPQueryAllow", "224.3.4.13", crdv1beta1.RuleActionAllow)
+func testACNPIGMPQueryAllow(t *testing.T, data *TestData, testNamespace string) {
+	testACNPIGMPQuery(t, data, "test-acnp-igmp-query-allow", "testMulticastIGMPQueryAllow", "224.3.4.13", crdv1beta1.RuleActionAllow, testNamespace)
 }
 
-func testACNPIGMPQueryDrop(t *testing.T, data *TestData) {
-	testACNPIGMPQuery(t, data, "test-acnp-igmp-query-drop", "testMulticastIGMPQueryDrop", "224.3.4.14", crdv1beta1.RuleActionDrop)
+func testACNPIGMPQueryDrop(t *testing.T, data *TestData, testNamespace string) {
+	testACNPIGMPQuery(t, data, "test-acnp-igmp-query-drop", "testMulticastIGMPQueryDrop", "224.3.4.14", crdv1beta1.RuleActionDrop, testNamespace)
 }
 
-func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAddress string, action crdv1beta1.RuleAction) {
+func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAddress string, action crdv1beta1.RuleAction, testNamespace string) {
 	mcjoinWaitTimeout := defaultTimeout / time.Second
-	testNamespace := data.testNamespace
 	mc := multicastTestcase{
 		name:            caseName,
 		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
@@ -3898,7 +3897,7 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
 	defer cleanupFunc()
 	var wg sync.WaitGroup
-	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
+	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, testNamespace, &wg)
 	for _, cleanupFunc := range cleanupFuncs {
 		defer cleanupFunc()
 	}
@@ -3909,11 +3908,11 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), data.testNamespace, true)
 	defer cleanupFunc()
 
 	queryGroupAddress := "224.0.0.1"
-	cmd, err := generatePacketCaptureCmd(t, data, 15, queryGroupAddress, nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0])
+	cmd, err := generatePacketCaptureCmd(t, data, 15, queryGroupAddress, nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0], testNamespace)
 	if err != nil {
 		t.Fatalf("failed to call generateConnCheckCmd: %v", err)
 	}
@@ -3963,17 +3962,16 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 	}
 }
 
-func testACNPMulticastEgressAllow(t *testing.T, data *TestData) {
-	testACNPMulticastEgress(t, data, "test-acnp-multicast-egress-allow", "testMulticastEgressAllowTraffic", "224.3.4.15", crdv1beta1.RuleActionAllow)
+func testACNPMulticastEgressAllow(t *testing.T, data *TestData, testNamespace string) {
+	testACNPMulticastEgress(t, data, "test-acnp-multicast-egress-allow", "testMulticastEgressAllowTraffic", "224.3.4.15", crdv1beta1.RuleActionAllow, testNamespace)
 }
 
-func testACNPMulticastEgressDrop(t *testing.T, data *TestData) {
-	testACNPMulticastEgress(t, data, "test-acnp-multicast-egress-drop", "testMulticastEgressDropTrafficFor", "224.3.4.16", crdv1beta1.RuleActionDrop)
+func testACNPMulticastEgressDrop(t *testing.T, data *TestData, testNamespace string) {
+	testACNPMulticastEgress(t, data, "test-acnp-multicast-egress-drop", "testMulticastEgressDropTrafficFor", "224.3.4.16", crdv1beta1.RuleActionDrop, testNamespace)
 }
 
-func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, groupAddress string, action crdv1beta1.RuleAction) {
+func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, groupAddress string, action crdv1beta1.RuleAction, testNamespace string) {
 	mcjoinWaitTimeout := defaultTimeout / time.Second
-	testNamespace := data.testNamespace
 	mc := multicastTestcase{
 		name:            caseName,
 		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
@@ -3984,7 +3982,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
 	defer cleanupFunc()
 	var wg sync.WaitGroup
-	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
+	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, testNamespace, &wg)
 	for _, cleanupFunc := range cleanupFuncs {
 		defer cleanupFunc()
 	}
@@ -3996,9 +3994,9 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 	// check if receiver can receive multicast packet
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), data.testNamespace, true)
 	defer cleanupFunc()
-	cmd, err := generatePacketCaptureCmd(t, data, 5, mc.group.String(), nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0])
+	cmd, err := generatePacketCaptureCmd(t, data, 5, mc.group.String(), nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0], testNamespace)
 	if err != nil {
 		t.Fatalf("failed to call generateConnCheckCmd: %v", err)
 	}
@@ -4084,9 +4082,9 @@ func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator 
 	}
 }
 
-func generatePacketCaptureCmd(t *testing.T, data *TestData, timeout int, hostIP, nodeName, podName string) (string, error) {
+func generatePacketCaptureCmd(t *testing.T, data *TestData, timeout int, hostIP, nodeName, podName string, testNamespace string) (string, error) {
 	agentPodName := getAntreaPodName(t, data, nodeName)
-	cmds := []string{"antctl", "get", "podinterface", podName, "-n", data.testNamespace, "-o", "json"}
+	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
 	stdout, stderr, err := runAntctl(agentPodName, cmds, data)
 	var podInterfaceInfo []podinterface.Response
 	if err := json.Unmarshal([]byte(stdout), &podInterfaceInfo); err != nil {
@@ -4448,12 +4446,16 @@ func TestAntreaPolicy(t *testing.T) {
 
 	t.Run("TestMulticastNP", func(t *testing.T) {
 		skipIfMulticastDisabled(t, data)
-		t.Run("Case=MulticastNPIGMPQueryAllow", func(t *testing.T) { testACNPIGMPQueryAllow(t, data) })
-		t.Run("Case=MulticastNPIGMPQueryDrop", func(t *testing.T) { testACNPIGMPQueryDrop(t, data) })
-		t.Run("Case=MulticastNPPolicyEgressAllow", func(t *testing.T) { testACNPMulticastEgressAllow(t, data) })
-		t.Run("Case=MulticastNPPolicyEgressDrop", func(t *testing.T) { testACNPMulticastEgressDrop(t, data) })
+		testMulticastNP(t, data, data.testNamespace)
 	})
 	k8sUtils.Cleanup(namespaces)
+}
+
+func testMulticastNP(t *testing.T, data *TestData, testNamespace string) {
+	t.Run("Case=MulticastNPIGMPQueryAllow", func(t *testing.T) { testACNPIGMPQueryAllow(t, data, testNamespace) })
+	t.Run("Case=MulticastNPIGMPQueryDrop", func(t *testing.T) { testACNPIGMPQueryDrop(t, data, testNamespace) })
+	t.Run("Case=MulticastNPPolicyEgressAllow", func(t *testing.T) { testACNPMulticastEgressAllow(t, data, testNamespace) })
+	t.Run("Case=MulticastNPPolicyEgressDrop", func(t *testing.T) { testACNPMulticastEgressDrop(t, data, testNamespace) })
 }
 
 func TestAntreaPolicyStatus(t *testing.T) {

@@ -155,6 +155,7 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 
 		t.Run("Case=ACNPAntreaIPAMNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, testAntreaIPAMNamespace) })
 		t.Run("Case=ACNPAntreaIPAMVLAN11NodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, testAntreaIPAMNamespace11) })
+		t.Run("Case=ACNPAntreaIPAMMulticast", func(t *testing.T) { testMulticastNP(t, data, testAntreaIPAMNamespace) })
 	})
 	// print results for reachability tests
 	printResults()

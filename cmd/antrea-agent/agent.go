@@ -782,7 +782,8 @@ func run(o *Options) error {
 			o.igmpQueryVersions,
 			validator,
 			networkConfig.TrafficEncapMode.SupportsEncap(),
-			nodeInformer)
+			nodeInformer,
+			enableBridgingMode)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}
