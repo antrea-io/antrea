@@ -38,6 +38,7 @@ IP_MODE=""
 K8S_VERSION="1.28.2-00"
 WINDOWS_YAML_SUFFIX="windows"
 WIN_IMAGE_NODE=""
+echo "" > WIN_DHCP
 GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
@@ -256,6 +257,19 @@ function collect_windows_network_info_and_logs {
     tar zcf debug_logs.tar.gz "${DEBUG_LOG_PATH}"
 }
 
+function check_dhcp_status {
+    echo "===== Check Interface DHCP Status ====="
+    WINIP=$(kubectl get nodes -o wide --no-headers=true | awk '$1 ~ /win-0/ {print $6}')
+    WIN_BRINT_DHCP=$(ssh -o StrictHostKeyChecking=no -n administrator@${WINIP} 'powershell.exe "(Get-NetIPInterface -InterfaceAlias br-int -AddressFamily IPv4).Dhcp"')
+    WIN_DHCP=$(<WIN_DHCP)
+    if [[ ${WIN_DHCP} == ${WIN_BRINT_DHCP} ]]; then
+        echo "Newly created uplink DHCP status is consistent with the original adapter."
+    else
+        echo "Newly created uplink DHCP status is different from the original adapter. Original DHCP: $WIN_DHCP, br-int DHCP: $WIN_BRINT_DHCP"
+        exit 1
+    fi
+}
+
 function wait_for_antrea_windows_pods_ready {
     kubectl apply -f "${WORKDIR}/antrea.yml"
     if [[ "${PROXY_ALL}" == false && ${TESTCASE} =~ "windows-e2e" ]]; then
@@ -277,6 +291,7 @@ function wait_for_antrea_windows_pods_ready {
         done
         sleep 10
     done
+    check_dhcp_status
 }
 
 function wait_for_antrea_windows_processes_ready {
@@ -295,6 +310,7 @@ function wait_for_antrea_windows_processes_ready {
         done
         sleep 10
     done
+    check_dhcp_status
 }
 
 function clean_ns {
@@ -652,6 +668,11 @@ function deliver_antrea_windows_containerd {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
         fi
     done
+    # Add Windows interface DHCP check using CI script to obtain the original interface status.
+    WINIP=$(kubectl get nodes -o wide --no-headers=true | awk '$1 ~ /win-0/ {print $6}')
+    WIN_DHCP=$(ssh -o StrictHostKeyChecking=no -n administrator@${WINIP} 'powershell.exe "(Get-NetIPInterface -InterfaceAlias \"Ethernet0 2\" -AddressFamily IPv4).Dhcp"')
+    echo "Original adapter DHCP status: $WIN_DHCP"
+    echo $WIN_DHCP > WIN_DHCP
     rm -f antrea-windows.tar
     echo "==== Finish building and delivering Windows containerd images ===="
 }
