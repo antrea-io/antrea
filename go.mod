@@ -52,7 +52,7 @@ require (
 	github.com/ti-mo/conntrack v0.5.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/vmware/go-ipfix v0.7.0
-	go.uber.org/mock v0.3.0
+	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.17.0
 	golang.org/x/mod v0.14.0
 	golang.org/x/net v0.19.0
