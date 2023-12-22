@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,10 @@ func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeI
 
 func (c *FakeCrdV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPolicyInterface {
 	return &FakeNetworkPolicies{c, namespace}
+}
+
+func (c *FakeCrdV1alpha1) PacketSamplings() v1alpha1.PacketSamplingInterface {
+	return &FakePacketSamplings{c}
 }
 
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {

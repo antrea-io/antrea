@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	"antrea.io/antrea/pkg/agent/metrics"
 	"fmt"
 	"math/rand"
 	"net"
@@ -26,7 +27,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
@@ -234,8 +234,12 @@ type Client interface {
 	// InstallTraceflowFlows installs flows for a Traceflow request.
 	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
 
+	InstallPacketSamplingFlows(dataplaneTag uint8, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
+
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
+
+	UninstallPacketSamplingFlows(dataplaneTag uint8) error
 
 	// GetPolicyInfoFromConjunction returns the following policy information for the provided conjunction ID:
 	// NetworkPolicy reference, OF priority, rule name, label
@@ -1225,6 +1229,26 @@ func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet,
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
+func (c *client) InstallPacketSamplingFlows(dataplaneTag uint8, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
+	var flows []binding.Flow
+
+	for _, f := range c.traceableFeatures {
+		flows = append(flows, f.flowsToTrace(dataplaneTag,
+			c.ovsMetersAreSupported,
+			true,
+			true,
+			false,
+			packet,
+			ofPort,
+			timeoutSeconds)...)
+
+	}
+
+	return c.addFlows(c.featureTraceflow.cachedFlows, cacheKey, flows)
+
+}
+
 func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	var flows []binding.Flow
@@ -1242,6 +1266,11 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedO
 }
 
 func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
+	return c.deleteFlows(c.featureTraceflow.cachedFlows, cacheKey)
+}
+
+func (c *client) UninstallPacketSamplingFlows(dataplaneTag uint8) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	return c.deleteFlows(c.featureTraceflow.cachedFlows, cacheKey)
 }

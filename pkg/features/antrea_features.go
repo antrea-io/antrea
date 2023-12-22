@@ -67,6 +67,10 @@ const (
 	// Allows to trace path from a generated packet.
 	Traceflow featuregate.Feature = "Traceflow"
 
+	// alpha: v1.5
+	// Allows to capture sampling packtes for a flow.
+	PacketSampling featuregate.Feature = "PacketSampling"
+
 	// alpha: v0.9
 	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
 	FlowExporter featuregate.Feature = "FlowExporter"
@@ -167,6 +171,7 @@ var (
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
 		CleanupStaleUDPSvcConntrack: {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
+		PacketSampling:              {Default: true, PreRelease: featuregate.Alpha},
 		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
@@ -209,6 +214,7 @@ var (
 		SupportBundleCollection,
 		TopologyAwareHints,
 		Traceflow,
+		PacketSampling,
 		TrafficControl,
 		EgressTrafficShaping,
 	)
@@ -229,6 +235,7 @@ var (
 		ServiceExternalIP,
 		SupportBundleCollection,
 		Traceflow,
+		PacketSampling,
 	)
 
 	// UnsupportedFeaturesOnWindows records the features not supported on

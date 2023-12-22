@@ -4387,6 +4387,185 @@ spec:
       - anp
 
 ---
+# Source: crds/packetsampling.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: packetsamplings.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - jsonPath: .status.phase
+          description: The phase of the Traceflow.
+          name: Phase
+          type: string
+        - jsonPath: .spec.source.pod
+          description: The name of the source Pod.
+          name: Source-Pod
+          type: string
+          priority: 10
+        - jsonPath: .spec.destination.pod
+          description: The name of the destination Pod.
+          name: Destination-Pod
+          type: string
+          priority: 10
+        - jsonPath: .spec.destination.ip
+          description: The IP address of the destination.
+          name: Destination-IP
+          type: string
+          priority: 10
+        - jsonPath: .spec.timeout
+          description: Timeout in seconds.
+          name: Timeout
+          type: integer
+          priority: 10
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              properties:
+                source:
+                  type: object
+                  properties:
+                    pod:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                destination:
+                  type: object
+                  properties:
+                    pod:
+                      type: string
+                    service:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                packet:
+                  type: object
+                  properties:
+                    ipHeader:
+                      type: object
+                      properties:
+                        srcIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        protocol:
+                          type: integer
+                        ttl:
+                          type: integer
+                        flags:
+                          type: integer
+                    ipv6Header:
+                      type: object
+                      properties:
+                        srcIP:
+                          type: string
+                          format: ipv6
+                        nextHeader:
+                          type: integer
+                        hopLimit:
+                          type: integer
+                    transportHeader:
+                      type: object
+                      properties:
+                        icmp:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            sequence:
+                              type: integer
+                        udp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                            dstPort:
+                              type: integer
+                        tcp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                            dstPort:
+                              type: integer
+                            flags:
+                              type: integer
+                timeout:
+                  type: integer
+                type:
+                  type: string
+                firstNSamplingConfig:
+                  type: object
+                  properties:
+                    number:
+                      type: integer
+                fileServer:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                authentication:
+                  type: object
+                  properties:
+                    authType:
+                      type: string
+                      enum: [ "BearerToken", "APIKey", "BasicAuthentication" ]
+                    authSecret:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+            status:
+              type: object
+              properties:
+                reason:
+                  type: string
+                dataplaneTag:
+                  type: integer
+                phase:
+                  type: string
+                startTime:
+                  type: string
+
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: packetsamplings
+    singular: packetsampling
+    kind: PacketSampling
+    shortNames:
+      - ps
+
+---
 # Source: crds/supportbundlecollection.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -6194,6 +6373,19 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - packetsamplings
+      - packetsamplings/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - egresses
     verbs:
       - get
@@ -6598,6 +6790,19 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - packetsamplings
+      - packetsamplings/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - externalentities
       - clustergroups
       - groups
@@ -6931,6 +7136,7 @@ spec:
             - "--alsologtostderr"
             - "--log_file_max_size=100"
             - "--log_file_max_num=4"
+            - "--v=4"
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -7141,6 +7347,7 @@ spec:
             - "--alsologtostderr"
             - "--log_file_max_size=100"
             - "--log_file_max_num=4"
+            - "--v=4"
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME

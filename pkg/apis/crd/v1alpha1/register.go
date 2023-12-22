@@ -61,6 +61,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ExternalNodeList{},
 		&SupportBundleCollection{},
 		&SupportBundleCollectionList{},
+		&PacketSampling{},
 	)
 
 	metav1.AddToGroupVersion(
