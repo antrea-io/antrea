@@ -15,12 +15,14 @@
 package packetsampling
 
 import (
-	"antrea.io/antrea/pkg/util/compress"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spf13/afero"
 	"time"
+
+	"github.com/spf13/afero"
+
+	"antrea.io/antrea/pkg/util/compress"
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"

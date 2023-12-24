@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"sync"
 	"time"
 
@@ -11,16 +12,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+
+	"k8s.io/client-go/tools/cache"
+
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/client-go/util/workqueue"
 )
@@ -35,7 +38,7 @@ const (
 	defaultWorkers = 4
 
 	// reason for timeout
-	samplingTimeout = "PacketSampling timeout"
+	samplingTimeoutReason = "PacketSampling timeout"
 
 	// How long to wait before retrying the processing of a traceflow.
 	minRetryDelay = 5 * time.Second
@@ -67,7 +70,6 @@ type Controller struct {
 }
 
 func NewPacketSamplingController(client versioned.Interface, podInformer coreinformers.PodInformer, packetSamplingInformer crdinformers.PacketSamplingInformer) *Controller {
-
 	c := &Controller{
 		client:                     client,
 		podInformer:                podInformer,
@@ -133,9 +135,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		}
 	}
 
-	for i := 0; i < defaultWorkers; i++ {
-		go wait.Until(c.worker, time.Second, stopCh)
-	}
+	go func() {
+		wait.Until(c.checkPacketSamplingTimeout, timeoutCheckInterval, stopCh)
+	}()
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
@@ -144,25 +146,25 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 }
 
+func (c *Controller) checkPacketSamplingTimeout() {
+	c.runningPacketSamplingsMutex.Lock()
+	ss := make([]string, 0, len(c.runningPacketSamplings))
+	for _, psName := range c.runningPacketSamplings {
+		ss = append(ss, psName)
+	}
+	c.runningPacketSamplingsMutex.Unlock()
+
+	for _, psName := range ss {
+		// Re-post all running PacketSampling requests to the work queue to
+		// be processed and checked for timeout.
+		c.queue.Add(psName)
+	}
+}
+
 func (c *Controller) worker() {
 	for c.processPacketSamplingItem() {
 
 	}
-}
-
-func (c *Controller) repostPacketSampling() {
-	c.runningPacketSamplingsMutex.Lock()
-
-	pss := make([]string, 0, len(c.runningPacketSamplings))
-	for _, psName := range c.runningPacketSamplings {
-		pss = append(pss, psName)
-	}
-	c.runningPacketSamplingsMutex.Unlock()
-
-	for _, psName := range pss {
-		c.queue.Add(psName)
-	}
-
 }
 
 func (c *Controller) startPacketSampling(ps *crdv1alpha1.PacketSampling) error {
@@ -177,6 +179,16 @@ func (c *Controller) startPacketSampling(ps *crdv1alpha1.PacketSampling) error {
 	if err != nil {
 		c.deallocateTag(ps.Name, tag)
 	}
+
+	updater := newPacketSamplingUpdater(ps, c).
+		Phase(crdv1alpha1.PacketSamplingRunning).
+		Tag(tag).UID(uuid.New().String())
+
+	err = updater.Update()
+	if err != nil {
+		c.deallocateTag(ps.Name, tag)
+	}
+
 	return err
 }
 
@@ -187,7 +199,7 @@ func (c *Controller) updatePacketSamplingStatus(ps *crdv1alpha1.PacketSampling, 
 		t := metav1.Now()
 		update.Status.StartTime = &t
 	}
-	update.Status.DataplaneTag = dataPlaneTag
+	update.Status.DataplaneTag = int8(dataPlaneTag)
 	if reason != "" {
 		update.Status.Reason = reason
 	}
@@ -284,7 +296,7 @@ func (c *Controller) occupyTag(ps *crdv1alpha1.PacketSampling) error {
 func (c *Controller) syncPacketSampling(name string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(4).Infof("Finsished sync for packetsampling for %s.(%v)", name, time.Since(startTime))
+		klog.V(4).Infof("Finished sync for packetsampling for %s.(%v)", name, time.Since(startTime))
 	}()
 
 	ps, err := c.packetSamplingLister.Get(name)
@@ -353,11 +365,11 @@ func (u *packetSamplingUpdater) Update() error {
 		newPS.Status.Phase = *u.phase
 	}
 	if u.ps.Status.Phase == crdv1alpha1.PacketSamplingRunning && u.ps.Status.StartTime == nil {
-		time := metav1.Now()
-		u.ps.Status.StartTime = &time
+		curTime := metav1.Now()
+		u.ps.Status.StartTime = &curTime
 	}
 	if u.tag != nil {
-		newPS.Status.DataplaneTag = *u.tag
+		newPS.Status.DataplaneTag = int8(*u.tag)
 	}
 	if u.reason != nil {
 		newPS.Status.Reason = *u.reason
@@ -369,7 +381,7 @@ func (u *packetSamplingUpdater) Update() error {
 	return err
 }
 
-// checkTraceflowStatus is only called for Traceflows in the Running phase
+// checkPacketSamplingStatus is only called for PacketSamplings in the Running phase
 func (c *Controller) checkPacketSamplingStatus(ps *crdv1alpha1.PacketSampling) error {
 	if checkPacketSamplingSucceeded(ps) {
 		c.deallocateTagForPS(ps)
@@ -383,8 +395,7 @@ func (c *Controller) checkPacketSamplingStatus(ps *crdv1alpha1.PacketSampling) e
 		c.deallocateTagForPS(ps)
 		return newPacketSamplingUpdater(ps, c).
 			Phase(crdv1alpha1.PacketSamplingFailed).
-			//TODO: var
-			Reason("Timeout").
+			Reason(samplingTimeoutReason).
 			Tag(0).
 			Update()
 	}

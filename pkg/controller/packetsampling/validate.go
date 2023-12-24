@@ -15,9 +15,10 @@
 package packetsampling
 
 import (
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"encoding/json"
 	"fmt"
+
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

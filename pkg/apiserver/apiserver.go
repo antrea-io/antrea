@@ -15,9 +15,10 @@
 package apiserver
 
 import (
-	"antrea.io/antrea/pkg/controller/packetsampling"
 	"context"
 	"time"
+
+	"antrea.io/antrea/pkg/controller/packetsampling"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

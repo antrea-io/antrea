@@ -15,10 +15,11 @@
 package openflow
 
 import (
-	"antrea.io/antrea/pkg/agent/metrics"
 	"fmt"
 	"math/rand"
 	"net"
+
+	"antrea.io/antrea/pkg/agent/metrics"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
@@ -985,6 +986,9 @@ func (c *client) generatePipelines() {
 	c.featureTraceflow = newFeatureTraceflow()
 	c.activatedFeatures = append(c.activatedFeatures, c.featureTraceflow)
 
+	c.featurePacketSampling = newFeaturePacketSampling()
+	c.activatedFeatures = append(c.activatedFeatures, c.featureTraceflow)
+
 	// Pipelines to generate.
 	pipelineIDs := []binding.PipelineID{pipelineRoot, pipelineIP}
 	if c.networkConfig.IPv4Enabled {
@@ -1237,15 +1241,14 @@ func (c *client) InstallPacketSamplingFlows(dataplaneTag uint8, receiverOnly boo
 		flows = append(flows, f.flowsToTrace(dataplaneTag,
 			c.ovsMetersAreSupported,
 			true,
-			true,
 			false,
+			receiverOnly,
 			packet,
 			ofPort,
 			timeoutSeconds)...)
 
 	}
-
-	return c.addFlows(c.featureTraceflow.cachedFlows, cacheKey, flows)
+	return c.addFlows(c.featurePacketSampling.cachedFlows, cacheKey, flows)
 
 }
 
@@ -1267,7 +1270,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedO
 
 func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
-	return c.deleteFlows(c.featureTraceflow.cachedFlows, cacheKey)
+	return c.deleteFlows(c.featurePacketSampling.cachedFlows, cacheKey)
 }
 
 func (c *client) UninstallPacketSamplingFlows(dataplaneTag uint8) error {

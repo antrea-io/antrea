@@ -15,13 +15,14 @@
 package main
 
 import (
-	"antrea.io/antrea/pkg/controller/packetsampling"
 	"context"
 	"fmt"
 	"net"
 	"os"
 	"path"
 	"time"
+
+	"antrea.io/antrea/pkg/controller/packetsampling"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

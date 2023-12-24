@@ -995,5 +995,5 @@ type PacketSamplingStatus struct {
 	NumCapturedPackets int32               `json:"numCapturedPackets,omitempty"`
 	PacketsPath        string              `json:"packetsPath,omitempty"`
 	StartTime          *metav1.Time        `json:"startTime,omitempty"`
-	DataplaneTag       uint8               `json:"dataplaneTag,omitempty"`
+	DataplaneTag       int8                `json:"dataplaneTag,omitempty"`
 }

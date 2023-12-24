@@ -15,11 +15,12 @@
 package main
 
 import (
-	"antrea.io/antrea/pkg/agent/controller/packetsampling"
 	"context"
 	"fmt"
 	"net"
 	"time"
+
+	"antrea.io/antrea/pkg/agent/controller/packetsampling"
 
 	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

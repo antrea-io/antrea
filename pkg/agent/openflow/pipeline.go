@@ -451,6 +451,8 @@ type client struct {
 	featureTraceflow  *featureTraceflow
 	traceableFeatures []traceableFeature
 
+	featurePacketSampling *featurePacketSampling
+
 	pipelines map[binding.PipelineID]binding.Pipeline
 
 	// ofEntryOperations is a wrapper interface for operating multiple OpenFlow entries with action AddAll / ModifyAll / DeleteAll.
