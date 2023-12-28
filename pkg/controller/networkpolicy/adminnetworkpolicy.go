@@ -244,9 +244,9 @@ func (n *NetworkPolicyController) processClusterSubject(subject v1alpha1.AdminNe
 	var appliedToGroups []*antreatypes.AppliedToGroup
 	var atg *antreatypes.AppliedToGroup
 	if subject.Pods != nil {
-		atg = n.createAppliedToGroup("", &subject.Pods.PodSelector, &subject.Pods.NamespaceSelector, nil)
+		atg = n.createAppliedToGroup("", &subject.Pods.PodSelector, &subject.Pods.NamespaceSelector, nil, nil)
 	} else if subject.Namespaces != nil {
-		atg = n.createAppliedToGroup("", nil, subject.Namespaces, nil)
+		atg = n.createAppliedToGroup("", nil, subject.Namespaces, nil, nil)
 	}
 	if atg != nil {
 		appliedToGroups = append(appliedToGroups, atg)
