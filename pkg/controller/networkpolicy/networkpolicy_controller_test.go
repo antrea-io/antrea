@@ -2520,6 +2520,7 @@ func TestInternalGroupKeyFunc(t *testing.T) {
 func TestGetAppliedToWorkloads(t *testing.T) {
 	var emptyEEs []*v1alpha2.ExternalEntity
 	var emptyPods []*corev1.Pod
+	var emptyNodes []*corev1.Node
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cgA := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
@@ -2569,11 +2570,34 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	podA.Labels = map[string]string{"foo1": "bar1"}
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"foo3": "bar3"}
+
+	selectorD := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"foo4": "bar4",
+		},
+	}
+	nodeSelector, _ := metav1.LabelSelectorAsSelector(&selectorD)
+	nodeGroup := antreatypes.GroupSelector{
+		NodeSelector: nodeSelector,
+	}
+	nodeA := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeA",
+			Labels: map[string]string{"foo4": "bar4"},
+		},
+	}
+	nodeB := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeB",
+			Labels: map[string]string{"foo5": "bar5"},
+		},
+	}
 	tests := []struct {
-		name    string
-		inATG   *antreatypes.AppliedToGroup
-		expPods []*corev1.Pod
-		expEEs  []*v1alpha2.ExternalEntity
+		name     string
+		inATG    *antreatypes.AppliedToGroup
+		expPods  []*corev1.Pod
+		expEEs   []*v1alpha2.ExternalEntity
+		expNodes []*corev1.Node
 	}{
 		{
 			name: "atg-for-cg",
@@ -2581,8 +2605,9 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 				Name: cgA.Name,
 				UID:  cgA.UID,
 			},
-			expPods: []*corev1.Pod{podA},
-			expEEs:  emptyEEs,
+			expPods:  []*corev1.Pod{podA},
+			expEEs:   emptyEEs,
+			expNodes: emptyNodes,
 		},
 		{
 			name: "atg-for-cg-no-pod-match",
@@ -2590,8 +2615,9 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 				Name: cgB.Name,
 				UID:  cgB.UID,
 			},
-			expPods: emptyPods,
-			expEEs:  emptyEEs,
+			expPods:  emptyPods,
+			expEEs:   emptyEEs,
+			expNodes: emptyNodes,
 		},
 		{
 			name: "atg-for-nested-cg-one-child-empty",
@@ -2599,8 +2625,9 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 				Name: nestedCG1.Name,
 				UID:  nestedCG1.UID,
 			},
-			expPods: []*corev1.Pod{podA},
-			expEEs:  emptyEEs,
+			expPods:  []*corev1.Pod{podA},
+			expEEs:   emptyEEs,
+			expNodes: emptyNodes,
 		},
 		{
 			name: "atg-for-nested-cg-both-children-match-pod",
@@ -2608,8 +2635,9 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 				Name: nestedCG2.Name,
 				UID:  nestedCG2.UID,
 			},
-			expPods: []*corev1.Pod{podA, podB},
-			expEEs:  emptyEEs,
+			expPods:  []*corev1.Pod{podA, podB},
+			expEEs:   emptyEEs,
+			expNodes: emptyNodes,
 		},
 		{
 			name: "atg-for-nested-cg-children-overlap-pod",
@@ -2617,11 +2645,25 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 				Name: nestedCG3.Name,
 				UID:  nestedCG3.UID,
 			},
-			expPods: []*corev1.Pod{podA, podB},
-			expEEs:  emptyEEs,
+			expPods:  []*corev1.Pod{podA, podB},
+			expEEs:   emptyEEs,
+			expNodes: emptyNodes,
+		},
+		{
+			name: "atg-for-node",
+			inATG: &antreatypes.AppliedToGroup{
+				Selector: &nodeGroup,
+			},
+			expPods:  emptyPods,
+			expEEs:   emptyEEs,
+			expNodes: []*corev1.Node{nodeA},
 		},
 	}
-	_, c := newController(nil, nil)
+	_, c := newController([]runtime.Object{nodeA, nodeB}, nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
 	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
@@ -2632,10 +2674,11 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualPods, actualEEs, actualErr := c.getAppliedToWorkloads(tt.inATG)
+			actualPods, actualEEs, actualNodes, actualErr := c.getAppliedToWorkloads(tt.inATG)
 			assert.NoError(t, actualErr)
 			assert.Equal(t, tt.expEEs, actualEEs)
 			assert.Equal(t, tt.expPods, actualPods)
+			assert.Equal(t, tt.expNodes, actualNodes)
 		})
 	}
 }
@@ -3782,6 +3825,69 @@ func TestSyncAppliedToGroupWithExternalEntity(t *testing.T) {
 	}
 }
 
+func TestSyncAppliedToGroupWithNode(t *testing.T) {
+	selector := metav1.LabelSelector{
+		MatchLabels: map[string]string{"foo1": "bar1"},
+	}
+	nodeA := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeA",
+			Labels: map[string]string{"foo1": "bar1"},
+		},
+	}
+	nodeB := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeB",
+			Labels: map[string]string{"foo1": "bar1"},
+		},
+	}
+	nodeC := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeC",
+			Labels: map[string]string{"foo2": "bar2"},
+		},
+	}
+
+	_, npc := newController([]runtime.Object{nodeA, nodeB, nodeC}, nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	npc.informerFactory.Start(stopCh)
+	npc.informerFactory.WaitForCacheSync(stopCh)
+	groupSelector := antreatypes.NewGroupSelector("", nil, nil, nil, &selector)
+	appGroupID := getNormalizedUID(groupSelector.NormalizedName)
+	appliedToGroup := &antreatypes.AppliedToGroup{
+		Name:     appGroupID,
+		UID:      types.UID(appGroupID),
+		Selector: groupSelector,
+	}
+	npc.appliedToGroupStore.Create(appliedToGroup)
+	npc.syncAppliedToGroup(appGroupID)
+
+	expectedAppliedToGroup := &antreatypes.AppliedToGroup{
+		Name:     appGroupID,
+		UID:      types.UID(appGroupID),
+		Selector: groupSelector,
+		SpanMeta: antreatypes.SpanMeta{
+			NodeNames: sets.Set[string](sets.NewString("nodeA", "nodeB")),
+		},
+		GroupMemberByNode: map[string]controlplane.GroupMemberSet{
+			"nodeA": controlplane.NewGroupMemberSet(&controlplane.GroupMember{
+				Node: &controlplane.NodeReference{
+					Name: "nodeA",
+				},
+			}),
+			"nodeB": controlplane.NewGroupMemberSet(&controlplane.GroupMember{
+				Node: &controlplane.NodeReference{
+					Name: "nodeB",
+				},
+			}),
+		},
+	}
+	gotAppliedToGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
+	gotAppliedToGroup := gotAppliedToGroupObj.(*antreatypes.AppliedToGroup)
+	assert.Equal(t, expectedAppliedToGroup, gotAppliedToGroup)
+}
+
 func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface, items ...string) {
 	require.Equal(t, len(items), queue.Len())
 	expectedItems := sets.New[string](items...)
@@ -3799,5 +3905,76 @@ func checkGroupItemExistence(t *testing.T, store storage.Interface, groups ...st
 	for _, group := range groups {
 		_, exists, _ := store.Get(group)
 		assert.True(t, exists)
+	}
+}
+
+func TestNodeToGroupMember(t *testing.T) {
+	tests := []struct {
+		name                string
+		node                *corev1.Node
+		includeIP           bool
+		expectedGroupMember *controlplane.GroupMember
+	}{
+		{
+			name: "node-to-group-member-with-ip",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+				},
+				Spec: corev1.NodeSpec{
+					PodCIDR: "172.16.10.0/24",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "192.168.1.2",
+						},
+					},
+				},
+			},
+			includeIP: true,
+			expectedGroupMember: &controlplane.GroupMember{
+				Node: &controlplane.NodeReference{
+					Name: "node1",
+				},
+				IPs: []controlplane.IPAddress{
+					ipStrToIPAddress("192.168.1.2"),
+					ipStrToIPAddress("172.16.10.1"),
+				},
+			},
+		},
+		{
+			name: "node-to-group-member-without-ip",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node2",
+				},
+				Spec: corev1.NodeSpec{
+					PodCIDR: "172.16.11.0/24",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "192.168.1.3",
+						},
+					},
+				},
+			},
+			includeIP: false,
+			expectedGroupMember: &controlplane.GroupMember{
+				Node: &controlplane.NodeReference{
+					Name: "node2",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMember := nodeToGroupMember(tt.node, tt.includeIP)
+			assert.Equal(t, tt.expectedGroupMember.Node, gotMember.Node)
+			assert.ElementsMatch(t, tt.expectedGroupMember.IPs, gotMember.IPs)
+		})
 	}
 }

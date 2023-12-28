@@ -558,7 +558,7 @@ type NetworkPolicyPeer struct {
 	// +optional
 	ServiceAccount *NamespacedName `json:"serviceAccount,omitempty"`
 	// Select certain Nodes which match the label selector.
-	// A NodeSelector cannot be set in AppliedTo field or set with any other selector.
+	// A NodeSelector cannot be set with any other selector.
 	// +optional
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 	// Define scope of the Pod/NamespaceSelector(s) of this peer.
@@ -607,6 +607,10 @@ type AppliedTo struct {
 	// Cannot be set with any other selector.
 	// +optional
 	Service *NamespacedName `json:"service,omitempty"`
+	// Select Nodes in cluster as workloads in AppliedTo fields.
+	// Cannot be set with any other selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 }
 
 type PeerNamespaces struct {

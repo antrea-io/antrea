@@ -221,6 +221,11 @@ func (in *AppliedTo) DeepCopyInto(out *AppliedTo) {
 		*out = new(NamespacedName)
 		**out = **in
 	}
+	if in.NodeSelector != nil {
+		in, out := &in.NodeSelector, &out.NodeSelector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
