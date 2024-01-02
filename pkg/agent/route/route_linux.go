@@ -182,15 +182,17 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		return fmt.Errorf("failed to initialize ip routes: %v", err)
 	}
 
+	// Ensure IPv4 forwarding is enabled if it is a dual-stack or IPv4-only cluster.
+	if c.nodeConfig.NodeIPv4Addr != nil {
+		if err := sysctl.EnsureSysctlNetValue("ipv4/ip_forward", 1); err != nil {
+			return fmt.Errorf("failed to enable IPv4 forwarding: %w", err)
+		}
+	}
+
 	// Ensure IPv6 forwarding is enabled if it is a dual-stack or IPv6-only cluster.
 	if c.nodeConfig.NodeIPv6Addr != nil {
-		sysctlFilename := "ipv6/conf/all/forwarding"
-		v, err := sysctl.GetSysctlNet(sysctlFilename)
-		if err != nil {
-			return fmt.Errorf("failed to read value of sysctl file: %s", sysctlFilename)
-		}
-		if v != 1 {
-			return fmt.Errorf("IPv6 forwarding is not enabled")
+		if err := sysctl.EnsureSysctlNetValue("ipv6/conf/all/forwarding", 1); err != nil {
+			return fmt.Errorf("failed to enable IPv6 forwarding: %w", err)
 		}
 	}
 
