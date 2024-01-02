@@ -35,6 +35,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -406,6 +407,11 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				exists, err := hasIP(data, egress.Status.EgressNode, egress.Spec.EgressIP)
 				require.NoError(t, err, "Failed to check if IP exists on Node")
 				assert.True(t, exists, "Didn't find desired IP on Node")
+				// Testing the events recorded during creation of an Egress resource.
+				expectedMessage := fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.expectedEgressIP, egress.Status.EgressNode)
+				events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
+				require.NoError(t, err)
+				assert.Contains(t, events.Items[0].Message, expectedMessage)
 			}
 
 			checkEIPStatus := func(expectedUsed int) {

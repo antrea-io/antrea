@@ -19,9 +19,14 @@ import "k8s.io/apimachinery/pkg/util/sets"
 // IPAssigner provides methods to assign or unassign IP.
 type IPAssigner interface {
 	// AssignIP ensures the provided IP is assigned to the system.
-	AssignIP(ip string, forceAdvertise bool) error
+	// It returns true only in the case when there is no error and the IP provided
+	// was not assigned to the interface before the operation, in all other cases it
+	// returns false.
+	AssignIP(ip string, forceAdvertise bool) (bool, error)
 	// UnassignIP ensures the provided IP is not assigned to the system.
-	UnassignIP(ip string) error
+	// It returns true only in the case when there is no error and the IP provided
+	// was assigned to the interface before the operation.
+	UnassignIP(ip string) (bool, error)
 	// AssignedIPs return the IPs that are assigned to the system by this IPAssigner.
 	AssignedIPs() sets.Set[string]
 	// InitIPs ensures the IPs that are assigned to the system match the given IPs.

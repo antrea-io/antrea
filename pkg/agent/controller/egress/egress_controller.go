@@ -33,7 +33,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -49,6 +52,7 @@ import (
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -136,6 +140,7 @@ type egressBinding struct {
 type EgressController struct {
 	ofClient             openflow.Client
 	routeClient          route.Interface
+	k8sClient            kubernetes.Interface
 	crdClient            clientsetversioned.Interface
 	antreaClientProvider agent.AntreaClientProvider
 
@@ -175,10 +180,14 @@ type EgressController struct {
 	serviceCIDRUpdateRetryDelay time.Duration
 
 	trafficShapingEnabled bool
+
+	eventBroadcaster record.EventBroadcaster
+	record           record.EventRecorder
 }
 
 func NewEgressController(
 	ofClient openflow.Client,
+	k8sClient kubernetes.Interface,
 	antreaClientGetter agent.AntreaClientProvider,
 	crdClient clientsetversioned.Interface,
 	ifaceStore interfacestore.InterfaceStore,
@@ -196,9 +205,17 @@ func NewEgressController(
 	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
 	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	recorder := eventBroadcaster.NewRecorder(
+		scheme.Scheme,
+		corev1.EventSource{Component: controllerName},
+	)
+
 	c := &EgressController{
 		ofClient:             ofClient,
 		routeClient:          routeClient,
+		k8sClient:            k8sClient,
 		antreaClientProvider: antreaClientGetter,
 		crdClient:            crdClient,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egressgroup"),
@@ -220,6 +237,9 @@ func NewEgressController(
 		serviceCIDRUpdateRetryDelay: 10 * time.Second,
 
 		trafficShapingEnabled: openflow.OVSMetersAreSupported() && trafficShapingEnabled,
+
+		eventBroadcaster: eventBroadcaster,
+		record:           recorder,
 	}
 	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice)
 	if err != nil {
@@ -387,6 +407,12 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
+
+	c.eventBroadcaster.StartStructuredLogging(0)
+	c.eventBroadcaster.StartRecordingToSink(&v1.EventSinkImpl{
+		Interface: c.k8sClient.CoreV1().Events(""),
+	})
+	defer c.eventBroadcaster.Shutdown()
 
 	go c.localIPDetector.Run(stopCh)
 	go c.egressIPScheduler.Run(stopCh)
@@ -848,13 +874,21 @@ func (c *EgressController) syncEgress(egressName string) error {
 		// Ensure the Egress IP is assigned to the system. Force advertising the IP if it was previously assigned to
 		// another Node in the Egress API. This could force refreshing other peers' neighbor cache when the Egress IP is
 		// obtained by this Node and another Node at the same time in some situations, e.g. split brain.
-		if err := c.ipAssigner.AssignIP(desiredEgressIP, egress.Status.EgressNode != c.nodeName); err != nil {
+		assigned, err := c.ipAssigner.AssignIP(desiredEgressIP, egress.Status.EgressNode != c.nodeName)
+		if err != nil {
 			return err
+		}
+		if assigned {
+			c.record.Eventf(egress, corev1.EventTypeNormal, "IPAssigned", "Assigned Egress %s with IP %s on Node %s", egress.Name, desiredEgressIP, desiredNode)
 		}
 	} else {
 		// Unassign the Egress IP from the local Node if it was assigned by the agent.
-		if err := c.ipAssigner.UnassignIP(desiredEgressIP); err != nil {
+		unassigned, err := c.ipAssigner.UnassignIP(desiredEgressIP)
+		if err != nil {
 			return err
+		}
+		if unassigned {
+			c.record.Eventf(egress, corev1.EventTypeNormal, "IPUnassigned", "Unassigned Egress %s with IP %s from Node %s", egress.Name, desiredEgressIP, c.nodeName)
 		}
 	}
 
@@ -951,7 +985,7 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 		}
 	}
 	// Unassign the Egress IP from the local Node if it was assigned by the agent.
-	if err := c.ipAssigner.UnassignIP(eState.egressIP); err != nil {
+	if _, err := c.ipAssigner.UnassignIP(eState.egressIP); err != nil {
 		return err
 	}
 	// Remove the Egress's state.

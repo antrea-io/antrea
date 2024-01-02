@@ -182,6 +182,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	mockServiceCIDRProvider := servicecidrtest.NewMockInterface(controller)
 	mockServiceCIDRProvider.EXPECT().AddEventHandler(gomock.Any())
 	egressController, _ := NewEgressController(mockOFClient,
+		k8sClient,
 		&antreaClientGetter{clientset},
 		crdClient,
 		ifaceStore,

@@ -40,7 +40,7 @@ func TestIPAssigner(t *testing.T) {
 	require.NoError(t, err, "Failed to find the dummy device")
 	defer netlink.LinkDel(dummyDevice)
 
-	err = ipAssigner.AssignIP("x", false)
+	_, err = ipAssigner.AssignIP("x", false)
 	assert.Error(t, err, "Assigning an invalid IP should fail")
 
 	ip1 := "10.10.10.10"
@@ -49,7 +49,7 @@ func TestIPAssigner(t *testing.T) {
 	desiredIPs := sets.New[string](ip1, ip2, ip3)
 
 	for ip := range desiredIPs {
-		errAssign := ipAssigner.AssignIP(ip, false)
+		_, errAssign := ipAssigner.AssignIP(ip, false)
 		cmd := exec.Command("ip", "addr")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -79,7 +79,7 @@ func TestIPAssigner(t *testing.T) {
 	assert.Equal(t, newDesiredIPs, actualIPs, "Actual IPs don't match")
 
 	for ip := range newDesiredIPs {
-		err = newIPAssigner.UnassignIP(ip)
+		_, err = newIPAssigner.UnassignIP(ip)
 		assert.NoError(t, err, "Failed to unassign a valid IP")
 	}
 	assert.Equal(t, sets.New[string](), newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
