@@ -80,7 +80,7 @@ welcome feature requests for protocols that you are interested in.
 An example layer 7 NetworkPolicy for the HTTP protocol is like below:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: ingress-allow-http-request-to-api-v2
@@ -123,7 +123,7 @@ The following NetworkPolicy grants access of privileged URLs to specific clients
 accessible:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: allow-privileged-url-to-admin-role
@@ -156,7 +156,7 @@ spec:
 The following NetworkPolicy prevents applications from accessing unauthorized domains:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: allow-web-access-to-internal-domain
@@ -185,7 +185,7 @@ spec:
 The following NetworkPolicy blocks network traffic using an unauthorized application protocol regardless of the port used.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: allow-http-only
@@ -208,7 +208,7 @@ spec:
 An example layer 7 NetworkPolicy for the TLS protocol is like below:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: ingress-allow-tls-handshake
@@ -241,7 +241,7 @@ exact matches and wildcards are supported, e.g. `*.foo.com`, `*.foo.*`, `foo.bar
 The following NetworkPolicy prevents applications from accessing unauthorized SSL/TLS server names:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: allow-tls-handshake-to-internal
@@ -270,7 +270,7 @@ spec:
 The following NetworkPolicy blocks network traffic using an unauthorized application protocol regardless of the port used.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: allow-tls-only
