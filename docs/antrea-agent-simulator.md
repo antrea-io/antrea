@@ -6,18 +6,18 @@ cluster.
 
 ## Build the images
 
-  ```bash
+```bash
 make build-scale-simulator
-  ```
+```
 
 ## Create the yaml file
 
 This demo uses 1 simulator, this command will create a yaml file
 build/yamls/antrea-scale.yml
 
-  ```bash
+```bash
 make manifest-scale
-  ```
+```
 
 The above yaml will create one simulated Node/Pod, to change the number of
 instances, you can modify `spec.replicas` of the StatefulSet
@@ -30,21 +30,21 @@ after deploying it.
 To prevent Pods from being scheduled on the simulated Node(s), you can use the
 following taint.
 
-  ```bash
+```bash
 kubectl taint -l 'antrea/instance=simulator' node mocknode=true:NoExecute
-  ```
+```
 
 ## Create secret for kubemark
 
-  ```bash
-kubectl create secret generic kubeconfig --type=Opaque --namespace=kube-system --from-file=<path to kubeconfig file>
-  ```
+```bash
+kubectl create secret generic kubeconfig --type=Opaque --namespace=kube-system --from-file=admin.conf=<path to kubeconfig file>
+```
 
 ## Apply the yaml file
 
-  ```bash
+```bash
 kubectl apply -f build/yamls/antrea-scale.yml
-  ```
+```
 
 check the simulated Node:
 
