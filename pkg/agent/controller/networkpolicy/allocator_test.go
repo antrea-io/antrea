@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -234,7 +235,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 			fakeClock.SetTime(expectedDeleteTime.Add(-10 * time.Millisecond))
 
 			// We wait for a small duration and ensure that the rule is not deleted.
-			err := wait.PollImmediate(10*time.Millisecond, 100*time.Millisecond, func() (bool, error) {
+			err := wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 100*time.Millisecond, true, func(ctx context.Context) (bool, error) {
 				return ruleHasBeenDeleted(), nil
 			})
 			require.Error(t, err, "Rule ID was unexpectedly released")
@@ -244,9 +245,10 @@ func TestIdAllocatorWorker(t *testing.T) {
 
 			fakeClock.SetTime(expectedDeleteTime.Add(10 * time.Millisecond))
 
-			err = wait.PollImmediate(10*time.Millisecond, 1*time.Second, func() (bool, error) {
-				return ruleHasBeenDeleted(), nil
-			})
+			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 1*time.Second, true,
+				func(ctx context.Context) (bool, error) {
+					return ruleHasBeenDeleted(), nil
+				})
 			require.NoError(t, err, "Rule ID was not released")
 			_, exists, err = a.getRuleFromAsyncCache(tt.expectedID)
 			require.NoError(t, err)

@@ -458,7 +458,7 @@ func TestIPPoolHasIP(t *testing.T) {
 func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName string, expectedStatus antreacrds.IPPoolUsage) {
 	exists := controller.IPPoolExists(poolName)
 	require.True(t, exists)
-	err := wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (found bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (found bool, err error) {
 		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 		if err != nil {
 			return false, err

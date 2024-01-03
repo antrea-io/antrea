@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -33,9 +32,9 @@ type FakeTiers struct {
 	Fake *FakeCrdV1alpha1
 }
 
-var tiersResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1alpha1", Resource: "tiers"}
+var tiersResource = v1alpha1.SchemeGroupVersion.WithResource("tiers")
 
-var tiersKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1alpha1", Kind: "Tier"}
+var tiersKind = v1alpha1.SchemeGroupVersion.WithKind("Tier")
 
 // Get takes name of the tier, and returns the corresponding tier object, and an error if there is any.
 func (c *FakeTiers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Tier, err error) {

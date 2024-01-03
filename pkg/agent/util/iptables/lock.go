@@ -18,6 +18,7 @@
 package iptables
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -40,12 +41,13 @@ func Lock(lockFilePath string, timeout time.Duration) (func() error, error) {
 	}
 
 	// Check whether the lock is available every 200ms.
-	if err := wait.PollImmediate(waitIntervalMicroSeconds*time.Microsecond, timeout, func() (bool, error) {
-		if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-			return false, nil
-		}
-		return true, nil
-	}); err != nil {
+	if err := wait.PollUntilContextTimeout(context.TODO(), waitIntervalMicroSeconds*time.Microsecond, timeout, true,
+		func(ctx context.Context) (bool, error) {
+			if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
 		lockFile.Close()
 		return nil, fmt.Errorf("error acquiring xtables lock: %v", err)
 	}

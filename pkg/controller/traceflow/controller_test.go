@@ -153,7 +153,7 @@ func TestTraceflow(t *testing.T) {
 func (tfc *traceflowController) waitForPodInNamespace(ns string, name string, timeout time.Duration) (*corev1.Pod, error) {
 	var pod *corev1.Pod
 	var err error
-	if err = wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		// Make sure dummy Pod is synced by informer
 		pod, err = tfc.podLister.Pods(ns).Get(name)
 		if err != nil {
@@ -169,7 +169,7 @@ func (tfc *traceflowController) waitForPodInNamespace(ns string, name string, ti
 func (tfc *traceflowController) waitForTraceflow(name string, phase crdv1beta1.TraceflowPhase, timeout time.Duration) (*crdv1beta1.Traceflow, error) {
 	var tf *crdv1beta1.Traceflow
 	var err error
-	if err = wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		tf, err = tfc.client.CrdV1beta1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil

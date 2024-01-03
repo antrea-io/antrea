@@ -114,8 +114,8 @@ func TestMemberClusterStatus(t *testing.T) {
 			ObservedGeneration: 1,
 		},
 	}
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).WithStatusSubresource(existingClusterSet).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).WithStatusSubresource(existingClusterSet).Build()
 	conditions := []mcv1alpha2.ClusterCondition{
 		{
 			Message: "Member Connected",

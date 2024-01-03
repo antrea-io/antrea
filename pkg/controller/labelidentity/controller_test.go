@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	fakeversioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
@@ -78,7 +77,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 	go c.labelIdentityIndex.Run(stopCh)
 	go c.Run(stopCh)
 
-	assert.NoError(t, wait.Poll(10*time.Millisecond, time.Second, func() (done bool, err error) {
-		return index.HasSynced(), nil
-	}), "LabelIdentityIndex hasn't been synced in 1 second after starting LabelIdentityController")
+	assert.Eventually(t, func() bool {
+		return index.HasSynced()
+	}, 1*time.Second, 10*time.Millisecond, "LabelIdentityIndex hasn't been synced in 1 second after starting LabelIdentityController")
 }

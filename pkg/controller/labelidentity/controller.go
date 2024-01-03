@@ -15,6 +15,7 @@
 package labelidentity
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 
@@ -96,12 +97,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 	initialLabelCount := len(c.labelInformer.Informer().GetStore().List())
 	// Wait until initial label identities are processed before setting labelIdentityIndex as synced.
-	if err := wait.PollImmediateUntil(100*time.Millisecond, func() (done bool, err error) {
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 100*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
 		if uint64(initialLabelCount) > c.labelAddEvents.Load() {
 			return false, nil
 		}
 		return true, nil
-	}, stopCh); err == nil {
+	}); err == nil {
 		c.labelIdentityIndex.setSynced(true)
 	}
 	<-stopCh

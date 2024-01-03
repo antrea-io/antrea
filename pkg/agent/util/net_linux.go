@@ -18,6 +18,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -276,14 +277,15 @@ func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interfac
 func RenameInterface(from, to string) error {
 	klog.InfoS("Renaming interface", "oldName", from, "newName", to)
 	var renameErr error
-	pollErr := wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-		renameErr = renameHostInterface(from, to)
-		if renameErr != nil {
-			klog.InfoS("Unable to rename host interface name with error, retrying", "oldName", from, "newName", to, "err", renameErr)
-			return false, nil
-		}
-		return true, nil
-	})
+	pollErr := wait.PollUntilContextTimeout(context.TODO(), time.Millisecond*100, time.Second, false,
+		func(ctx context.Context) (done bool, err error) {
+			renameErr = renameHostInterface(from, to)
+			if renameErr != nil {
+				klog.InfoS("Unable to rename host interface name with error, retrying", "oldName", from, "newName", to, "err", renameErr)
+				return false, nil
+			}
+			return true, nil
+		})
 	if pollErr != nil {
 		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
 	}

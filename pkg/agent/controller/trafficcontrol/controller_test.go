@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -288,9 +287,9 @@ func generateTrafficControlState(direction v1alpha2.Direction,
 }
 
 func waitEvents(t *testing.T, expectedEvents int, c *fakeController) {
-	require.NoError(t, wait.Poll(10*time.Millisecond, 5*time.Second, func() (done bool, err error) {
-		return c.queue.Len() == expectedEvents, nil
-	}))
+	require.Eventually(t, func() bool {
+		return c.queue.Len() == expectedEvents
+	}, 5*time.Second, 10*time.Millisecond)
 }
 
 func TestTrafficControlAdd(t *testing.T) {

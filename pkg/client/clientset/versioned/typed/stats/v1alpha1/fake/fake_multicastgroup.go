@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
@@ -32,9 +31,9 @@ type FakeMulticastGroups struct {
 	Fake *FakeStatsV1alpha1
 }
 
-var multicastgroupsResource = schema.GroupVersionResource{Group: "stats.antrea.io", Version: "v1alpha1", Resource: "multicastgroups"}
+var multicastgroupsResource = v1alpha1.SchemeGroupVersion.WithResource("multicastgroups")
 
-var multicastgroupsKind = schema.GroupVersionKind{Group: "stats.antrea.io", Version: "v1alpha1", Kind: "MulticastGroup"}
+var multicastgroupsKind = v1alpha1.SchemeGroupVersion.WithKind("MulticastGroup")
 
 // Get takes name of the multicastGroup, and returns the corresponding multicastGroup object, and an error if there is any.
 func (c *FakeMulticastGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.MulticastGroup, err error) {

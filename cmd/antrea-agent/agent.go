@@ -778,10 +778,10 @@ func run(o *Options) error {
 		// Service would fail.
 		if o.config.AntreaProxy.ProxyAll {
 			klog.InfoS("Waiting for AntreaProxy to be ready")
-			if err := wait.PollUntil(time.Second, func() (bool, error) {
+			if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), time.Second, false, func(ctx context.Context) (bool, error) {
 				klog.V(2).InfoS("Checking if AntreaProxy is ready")
 				return proxier.GetProxyProvider().SyncedOnce(), nil
-			}, stopCh); err != nil {
+			}); err != nil {
 				return fmt.Errorf("error when waiting for AntreaProxy to be ready: %v", err)
 			}
 			klog.InfoS("AntreaProxy is ready")

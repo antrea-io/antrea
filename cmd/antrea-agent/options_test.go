@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
@@ -93,7 +93,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			name:             "default",
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
-				Enable:                  pointer.Bool(true),
+				Enable:                  ptr.To(true),
 				DefaultLoadBalancerMode: config.LoadBalancerModeNAT.String(),
 			},
 			expectedDefaultLoadBalancerMode: config.LoadBalancerModeNAT,
@@ -103,7 +103,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			enabledDSR:       true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
-				Enable:                  pointer.Bool(true),
+				Enable:                  ptr.To(true),
 				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
 			},
 			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
@@ -111,7 +111,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 		{
 			name: "LoadBalancerModeDSR disabled",
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
-				Enable:                  pointer.Bool(true),
+				Enable:                  ptr.To(true),
 				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
 			},
 			trafficEncapMode: config.TrafficEncapModeEncap,
@@ -121,7 +121,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			name:       "unsupported encap mode",
 			enabledDSR: true,
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
-				Enable:                  pointer.Bool(true),
+				Enable:                  ptr.To(true),
 				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
 			},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
@@ -131,7 +131,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			name:             "invalid LoadBalancerMode",
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
-				Enable:                  pointer.Bool(true),
+				Enable:                  ptr.To(true),
 				DefaultLoadBalancerMode: "drs",
 			},
 			expectedErr: "LoadBalancerMode drs is unknown",

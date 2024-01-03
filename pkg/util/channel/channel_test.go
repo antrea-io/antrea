@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type eventReceiver struct {
@@ -71,17 +70,17 @@ func TestSubscribe(t *testing.T) {
 
 	var errReceiver int
 	var errReceivedEvents sets.Set[string]
-	assert.NoError(t, wait.PollImmediate(10*time.Millisecond, 100*time.Millisecond, func() (done bool, err error) {
+	assert.Eventually(t, func() bool {
 		for i, r := range eventReceivers {
 			receivedEvents := r.received()
 			if !receivedEvents.Equal(desiredEvents) {
 				errReceiver = i
 				errReceivedEvents = receivedEvents
-				return false, nil
+				return false
 			}
 		}
-		return true, nil
-	}), "Receiver %d failed to receive all events, expected %d events, got %d events", errReceiver, len(desiredEvents), len(errReceivedEvents))
+		return true
+	}, 100*time.Millisecond, 10*time.Millisecond, "Receiver %d failed to receive all events, expected %d events, got %d events", errReceiver, len(desiredEvents), len(errReceivedEvents))
 }
 
 func TestNotify(t *testing.T) {

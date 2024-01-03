@@ -558,7 +558,7 @@ func toPodAddEvent(pod *corev1.Pod) antreatypes.PodUpdate {
 }
 
 func waitForPodRealized(podLister v1.PodLister, pod *corev1.Pod) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := podLister.Pods(pod.Namespace).Get(pod.Name)
 		if err != nil {
 			return false, nil
@@ -568,7 +568,7 @@ func waitForPodRealized(podLister v1.PodLister, pod *corev1.Pod) error {
 }
 
 func waitForPodLabelUpdate(podLister v1.PodLister, pod *corev1.Pod) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		getPod, err := podLister.Pods(pod.Namespace).Get(pod.Name)
 		if err != nil || !reflect.DeepEqual(pod.Labels, getPod.Labels) {
 			return false, nil
@@ -578,7 +578,7 @@ func waitForPodLabelUpdate(podLister v1.PodLister, pod *corev1.Pod) error {
 }
 
 func waitForNSRealized(c *fakeStretchedNetworkPolicyController, ns *corev1.Namespace) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := c.namespaceLister.Get(ns.Name)
 		if err != nil {
 			return false, nil
@@ -588,7 +588,7 @@ func waitForNSRealized(c *fakeStretchedNetworkPolicyController, ns *corev1.Names
 }
 
 func waitForLabelIdentityRealized(c *fakeStretchedNetworkPolicyController, labelIdentity *v1alpha1.LabelIdentity) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := c.labelIdentityLister.Get(labelIdentity.Name)
 		if err != nil {
 			return false, nil

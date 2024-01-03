@@ -31,8 +31,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
@@ -153,9 +155,15 @@ func GetRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common
 	config.QPS = common.ResourceExchangeQPS
 	config.Burst = common.ResourceExchangeBurst
 	remoteCommonAreaMgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: "0",
-		Namespace:          clusterSet.Spec.Namespace,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				clusterSet.Spec.Namespace: {},
+			},
+		},
 	})
 	if err != nil {
 		klog.ErrorS(err, "Error creating manager for RemoteCommonArea", "cluster", clusterID)

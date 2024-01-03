@@ -20,6 +20,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                            | Change                                               |
 | :----------------------------- | ---------------------------------------------------- |
+| kubernetes-1.29.2              | Upgraded K8s libraries to v1.29.2                    |
 | kubernetes-1.26.4-build.1      | Replace github.com/golang/mock with go.uber.org/mock |
 | kubernetes-1.26.4-build.0      | Upgraded Go to v1.21                                 |
 | kubernetes-1.26.4              | Upgraded K8s libraries to v1.26.4                    |

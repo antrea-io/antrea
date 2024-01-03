@@ -16,6 +16,7 @@ package l7engine
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -494,7 +495,7 @@ func (r *Reconciler) startSuricata() {
 	r.startSuricataFn()
 
 	// Wait Suricata command socket file to be ready.
-	err = wait.PollImmediate(100*time.Millisecond, 5*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 		if _, err = defaultFS.Stat(suricataCommandSocket); err != nil {
 			return false, nil
 		}

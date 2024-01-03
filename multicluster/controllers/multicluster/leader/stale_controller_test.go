@@ -76,6 +76,7 @@ func TestReconcile(t *testing.T) {
 			Name:              "member-announce-from-cluster-1",
 			Namespace:         "default",
 			DeletionTimestamp: &now,
+			Finalizers:        []string{"test-membercluster-announce-finalizer"},
 		},
 		ClusterID: "cluster-1",
 	}
@@ -120,7 +121,8 @@ func TestReconcile(t *testing.T) {
 			defer func() {
 				getResourceExportsByClusterIDFunc = getResourceExportsByClusterID
 			}()
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResExports).WithObjects(tt.existingMemberAnnounce).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResExports).
+				WithObjects(tt.existingMemberAnnounce).WithStatusSubresource(tt.existingMemberAnnounce).Build()
 			c := NewStaleResCleanupController(fakeClient, common.TestScheme)
 			ctx := context.Background()
 			_, err := c.Reconcile(ctx, ctrl.Request{

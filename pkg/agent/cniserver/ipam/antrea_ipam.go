@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -353,7 +354,7 @@ func (d *AntreaIPAM) owns(k8sArgs *types.K8sArgs) (mineType, *poolallocator.IPPo
 }
 
 func (d *AntreaIPAM) waitForControllerReady() error {
-	err := wait.PollImmediate(500*time.Millisecond, 5*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 		d.controllerMutex.RLock()
 		defer d.controllerMutex.RUnlock()
 		if d.controller == nil {

@@ -6,8 +6,6 @@ metrics:
   bindAddress: "0"
 webhook:
   port: 9443
-leaderElection:
-  leaderElect: false
 serviceCIDR: ""
 podCIDRs:
   - ""

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -30,9 +29,9 @@ type FakeNodeStatsSummaries struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var nodestatssummariesResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "nodestatssummaries"}
+var nodestatssummariesResource = v1beta2.SchemeGroupVersion.WithResource("nodestatssummaries")
 
-var nodestatssummariesKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "NodeStatsSummary"}
+var nodestatssummariesKind = v1beta2.SchemeGroupVersion.WithKind("NodeStatsSummary")
 
 // Create takes the representation of a nodeStatsSummary and creates it.  Returns the server's representation of the nodeStatsSummary, and an error, if there is any.
 func (c *FakeNodeStatsSummaries) Create(ctx context.Context, nodeStatsSummary *v1beta2.NodeStatsSummary, opts v1.CreateOptions) (result *v1beta2.NodeStatsSummary, err error) {

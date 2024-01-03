@@ -20,6 +20,7 @@ package util
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -180,7 +181,7 @@ func EnableHostInterface(ifaceName string) error {
 	// Enable-NetAdapter is not a blocking operation based on our testing.
 	// It returns immediately no matter whether the interface has been enabled or not.
 	// So we need to check the interface status to ensure it is up before returning.
-	if err := wait.PollImmediate(commandRetryInterval, commandRetryTimeout, func() (done bool, err error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), commandRetryInterval, commandRetryTimeout, true, func(ctx context.Context) (done bool, err error) {
 		if _, err := runCommand(cmd); err != nil {
 			klog.Errorf("Failed to run command %s: %v", cmd, err)
 			return false, nil
@@ -468,7 +469,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 	var ipFound bool
 	// On the current Windows testbed, it takes a maximum of 1.8 seconds to obtain a valid IP.
 	// Therefore, we set the timeout limit to triple of that value, allowing a maximum wait of 6 seconds here.
-	err = wait.PollImmediate(1*time.Second, 6*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, 6*time.Second, true, func(ctx context.Context) (bool, error) {
 		var checkErr error
 		adapter, ipFound, checkErr = adapterIPExists(nodeIPNet.IP, uplinkAdapter.HardwareAddr, ContainerVNICPrefix)
 		if checkErr != nil {
@@ -477,7 +478,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 		return ipFound, nil
 	})
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
+		if wait.Interrupted(err) {
 			dhcpStatus, err := InterfaceIPv4DhcpEnabled(uplinkAdapter.Name)
 			if err != nil {
 				klog.ErrorS(err, "Failed to get IPv4 DHCP status on the network adapter", "adapter", uplinkAdapter.Name)
@@ -1015,7 +1016,7 @@ func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interfac
 
 func RenameInterface(from, to string) error {
 	var renameErr error
-	pollErr := wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
+	pollErr := wait.PollUntilContextTimeout(context.TODO(), time.Millisecond*100, time.Second, false, func(ctx context.Context) (done bool, err error) {
 		renameErr = renameHostInterface(from, to)
 		if renameErr != nil {
 			klog.ErrorS(renameErr, "Failed to rename adapter, retrying")

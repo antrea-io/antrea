@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -30,9 +29,9 @@ type FakeIPGroupAssociations struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var ipgroupassociationsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "ipgroupassociations"}
+var ipgroupassociationsResource = v1beta2.SchemeGroupVersion.WithResource("ipgroupassociations")
 
-var ipgroupassociationsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "IPGroupAssociation"}
+var ipgroupassociationsKind = v1beta2.SchemeGroupVersion.WithKind("IPGroupAssociation")
 
 // Get takes name of the iPGroupAssociation, and returns the corresponding iPGroupAssociation object, and an error if there is any.
 func (c *FakeIPGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.IPGroupAssociation, err error) {

@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -138,13 +139,14 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	statusController.SetRuleRealization(rule1.ID, policy.UID)
 
 	matchGeneration := func(generation int64) error {
-		return wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (done bool, err error) {
-			status := statusControl.getNetworkPolicyStatus()
-			if status == nil {
-				return false, nil
-			}
-			return status.Nodes[0].Generation == generation, nil
-		})
+		return wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
+			func(ctx context.Context) (done bool, err error) {
+				status := statusControl.getNetworkPolicyStatus()
+				if status == nil {
+					return false, nil
+				}
+				return status.Nodes[0].Generation == generation, nil
+			})
 	}
 	assert.NoError(t, matchGeneration(policy.Generation), "The generation should be updated to %v but was not updated", policy.Generation)
 

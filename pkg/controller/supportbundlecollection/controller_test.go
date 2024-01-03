@@ -865,7 +865,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		}
 		bundle, err := testClient.crdClient.CrdV1alpha1().SupportBundleCollections().Create(context.TODO(), generateSupportBundleResource(bundleConfig), metav1.CreateOptions{})
 		require.Nil(t, err)
-		err = wait.PollImmediate(time.Millisecond*50, time.Second, func() (done bool, err error) {
+		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
 			_, getErr := controller.supportBundleCollectionLister.Get(tc.bundleConfig.name)
 			if getErr == nil {
 				return true, nil
@@ -1060,7 +1060,7 @@ func TestSyncSupportBundleCollection(t *testing.T) {
 	go controller.worker()
 
 	for _, tc := range testCases {
-		err := wait.PollImmediate(time.Millisecond*100, time.Second, func() (done bool, err error) {
+		err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second, true, func(ctx context.Context) (done bool, err error) {
 			_, exists, err := controller.supportBundleCollectionStore.Get(tc.bundleConfig.name)
 			if err != nil {
 				return false, err

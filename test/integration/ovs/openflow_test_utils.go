@@ -15,6 +15,7 @@
 package ovs
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -71,7 +72,7 @@ func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName s
 	if table == "" {
 		table = fmt.Sprintf("%d", tableID)
 	}
-	if err := wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), openFlowCheckInterval, openFlowCheckTimeout, true, func(ctx context.Context) (done bool, err error) {
 		unexpectedFlows = unexpectedFlows[:0]
 		if tableName != "" {
 			flowList, err = OfctlDumpTableFlows(ovsCtlClient, tableName)
@@ -108,25 +109,26 @@ func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID bi
 	}
 	groupStr := fmt.Sprintf("group_id=%d,type=%s,%s", groupID, groupType, strings.Join(bucketStrs, ","))
 	var groupList [][]string
-	if err := wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
-		groupList, err = OfCtlDumpGroups(ovsCtlClient)
-		require.NoError(t, err, "Error dumping groups")
-		found := false
-		for _, groupElems := range groupList {
-			groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
-			var groupElemStrs []string
-			for _, elem := range groupElems[1:] {
-				elemStr := strings.Join(strings.Split(elem, ",")[1:], ",")
-				groupElemStrs = append(groupElemStrs, elemStr)
+	if err := wait.PollUntilContextTimeout(context.TODO(), openFlowCheckInterval, openFlowCheckTimeout, true,
+		func(ctx context.Context) (done bool, err error) {
+			groupList, err = OfCtlDumpGroups(ovsCtlClient)
+			require.NoError(t, err, "Error dumping groups")
+			found := false
+			for _, groupElems := range groupList {
+				groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
+				var groupElemStrs []string
+				for _, elem := range groupElems[1:] {
+					elemStr := strings.Join(strings.Split(elem, ",")[1:], ",")
+					groupElemStrs = append(groupElemStrs, elemStr)
+				}
+				groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElemStrs, ",bucket="))
+				if strings.Contains(groupEntry, groupStr) {
+					found = true
+					break
+				}
 			}
-			groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElemStrs, ",bucket="))
-			if strings.Contains(groupEntry, groupStr) {
-				found = true
-				break
-			}
-		}
-		return found == expectFound, nil
-	}); err != nil {
+			return found == expectFound, nil
+		}); err != nil {
 		if expectFound {
 			t.Errorf("Failed to install group: %s", groupStr)
 		} else {

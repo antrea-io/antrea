@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	k8sversion "k8s.io/apimachinery/pkg/version"
+	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
@@ -45,7 +46,9 @@ import (
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	systeminstall "antrea.io/antrea/pkg/apis/system/install"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/apiserver"
 	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/pkg/apiserver/openapi"
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/querier"
@@ -199,6 +202,9 @@ func newConfig(aq agentquerier.AgentQuerier,
 		return fmt.Errorf("disconnected from OFSwitch")
 	})
 	serverConfig.LivezChecks = append(serverConfig.LivezChecks, ovsConnCheck)
+	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(
+		openapi.GetOpenAPIDefinitions,
+		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 
 	completedServerCfg := serverConfig.Complete(nil)
 	return &completedServerCfg, nil

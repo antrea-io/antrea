@@ -108,17 +108,18 @@ func TestIPsecCertificateApproverAndSigner(t *testing.T) {
 
 			csr, err := clientset.CertificatesV1().CertificateSigningRequests().Create(context.TODO(), tt.csr, metav1.CreateOptions{})
 			require.NoError(t, err)
-			err = wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (done bool, err error) {
-				csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), tt.csr.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				if !isCertificateRequestApproved(csr) {
-					return false, nil
-				}
-				if len(csr.Status.Certificate) == 0 {
-					return false, nil
-				}
-				return true, nil
-			})
+			err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 10*time.Second, true,
+				func(ctx context.Context) (done bool, err error) {
+					csr, err = clientset.CertificatesV1().CertificateSigningRequests().Get(context.TODO(), tt.csr.Name, metav1.GetOptions{})
+					require.NoError(t, err)
+					if !isCertificateRequestApproved(csr) {
+						return false, nil
+					}
+					if len(csr.Status.Certificate) == 0 {
+						return false, nil
+					}
+					return true, nil
+				})
 			require.NoError(t, err)
 			issued := csr.Status.Certificate
 			parsed, err := certutil.ParseCertsPEM(issued)

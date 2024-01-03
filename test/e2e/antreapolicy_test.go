@@ -3917,7 +3917,7 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 	}
 
 	// check if IGMP can be sent to Pod
-	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		captured, err := checkPacketCaptureResult(t, data, tcpdumpName, cmd)
 		if captured {
 			return true, nil
@@ -4000,7 +4000,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 		t.Fatalf("failed to call generateConnCheckCmd: %v", err)
 	}
 
-	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		captured, err := checkPacketCaptureResult(t, data, tcpdumpName, cmd)
 		if captured {
 			return true, nil
@@ -4050,7 +4050,7 @@ func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator 
 	}
 	cmd := []string{"cat", logDir + logfileName}
 
-	if err := wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 		if err != nil || stderr != "" {
 			// file may not exist yet
@@ -4652,7 +4652,7 @@ func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 }
 
 func checkANNPStatus(t *testing.T, data *TestData, annp *crdv1beta1.NetworkPolicy, expectedStatus crdv1beta1.NetworkPolicyStatus) *crdv1beta1.NetworkPolicy {
-	err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, policyRealizedTimeout, false, func(ctx context.Context) (bool, error) {
 		var err error
 		annp, err = data.crdClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
 		if err != nil {
@@ -4665,7 +4665,7 @@ func checkANNPStatus(t *testing.T, data *TestData, annp *crdv1beta1.NetworkPolic
 }
 
 func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1beta1.ClusterNetworkPolicy, expectedStatus crdv1beta1.NetworkPolicyStatus) *crdv1beta1.ClusterNetworkPolicy {
-	err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, policyRealizedTimeout, false, func(ctx context.Context) (bool, error) {
 		var err error
 		acnp, err = data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), acnp.Name, metav1.GetOptions{})
 		if err != nil {
@@ -4682,7 +4682,7 @@ func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1beta1.ClusterNetwo
 // resource's Generation and the Phase is set to Realized.
 func (data *TestData) waitForANNPRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -4699,7 +4699,7 @@ func (data *TestData) waitForANNPRealized(t *testing.T, namespace string, name s
 // resource's Generation and the Phase is set to Realized.
 func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be realized", name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -4820,7 +4820,7 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 		totalSessionsPerRule += sessionsPerAddressFamily
 	}
 
-	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(data.testNamespace).Get(context.TODO(), "np1", metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -4955,7 +4955,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 		totalSessionsPerRule += sessionsPerAddressFamily
 	}
 
-	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		stats, err := data.crdClient.StatsV1alpha1().AntreaClusterNetworkPolicyStats().Get(context.TODO(), "cnp1", metav1.GetOptions{})
 		if err != nil {
 			return false, err

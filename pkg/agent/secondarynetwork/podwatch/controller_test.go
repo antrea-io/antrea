@@ -39,7 +39,6 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
@@ -280,9 +279,9 @@ func TestPodControllerRun(t *testing.T) {
 	require.NoError(t, err, "error when creating test Pod")
 
 	// Wait for ConfigureSriovSecondaryInterface is called.
-	assert.NoError(t, wait.Poll(10*time.Millisecond, 1*time.Second, func() (bool, error) {
-		return atomic.LoadInt32(&interfaceConfigured) == 1, nil
-	}))
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&interfaceConfigured) == 1
+	}, 1*time.Second, 10*time.Millisecond)
 	_, exists := podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.True(t, exists)
 
@@ -306,9 +305,9 @@ func TestPodControllerRun(t *testing.T) {
 	// Since interface is not saved to the interface store, interface creation should be
 	// triggered again.
 	podController.processCNIUpdate(event)
-	assert.NoError(t, wait.Poll(10*time.Millisecond, 1*time.Second, func() (bool, error) {
-		return atomic.LoadInt32(&interfaceConfigured) == 2, nil
-	}))
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&interfaceConfigured) == 2
+	}, 1*time.Second, 10*time.Millisecond)
 
 	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
 		Do(func(*interfacestore.InterfaceConfig) {
@@ -318,9 +317,9 @@ func TestPodControllerRun(t *testing.T) {
 	require.NoError(t, client.CoreV1().Pods(testNamespace).Delete(context.Background(),
 		podName, metav1.DeleteOptions{}), "error when deleting test Pod")
 
-	assert.NoError(t, wait.Poll(10*time.Millisecond, 1*time.Second, func() (bool, error) {
-		return atomic.LoadInt32(&interfaceConfigured) == 1, nil
-	}))
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&interfaceConfigured) == 1
+	}, 1*time.Second, 10*time.Millisecond)
 	_, exists = podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.False(t, exists)
 
@@ -336,9 +335,9 @@ func TestPodControllerRun(t *testing.T) {
 	podController.processCNIUpdate(event)
 	_, exists = cniCache.Load(podKey)
 	assert.False(t, exists)
-	assert.NoError(t, wait.Poll(10*time.Millisecond, 1*time.Second, func() (bool, error) {
-		return atomic.LoadInt32(&interfaceConfigured) == 0, nil
-	}))
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&interfaceConfigured) == 0
+	}, 1*time.Second, 10*time.Millisecond)
 
 	interfaceStore.DeleteInterface(containerConfig)
 	podController.processCNIUpdate(event)
@@ -593,18 +592,18 @@ func TestPodControllerAddPod(t *testing.T) {
 		_, err := pc.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(),
 			pod, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test Pod")
-		assert.NoError(t, wait.Poll(10*time.Millisecond, 1*time.Second, func() (bool, error) {
+		assert.Eventually(t, func() bool {
 			_, ok, err := pc.podInformer.GetIndexer().GetByKey(podKey)
-			return ok, err
-		}))
+			return ok == true && err == nil
+		}, 1*time.Second, 10*time.Millisecond)
 	}
 	deletePodFn := func(pc *podController, podName string) {
 		require.NoError(t, pc.kubeClient.CoreV1().Pods(testNamespace).Delete(context.Background(),
 			podName, metav1.DeleteOptions{}), "error when deleting test Pod")
-		assert.NoError(t, wait.Poll(10*time.Millisecond, 1*time.Second, func() (bool, error) {
+		assert.Eventually(t, func() bool {
 			_, ok, err := pc.podInformer.GetIndexer().GetByKey(podKey)
-			return !ok, err
-		}))
+			return !ok && err == nil
+		}, 1*time.Second, 10*time.Millisecond)
 	}
 
 	t.Run("multiple network interfaces", func(t *testing.T) {

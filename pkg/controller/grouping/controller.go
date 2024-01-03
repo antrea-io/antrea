@@ -15,6 +15,7 @@
 package grouping
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -184,7 +185,7 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	}
 
 	// Wait until all event handlers process the initial resources before setting groupEntityIndex as synced.
-	if err := wait.PollImmediateUntil(100*time.Millisecond, func() (done bool, err error) {
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 100*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
 		if uint64(initialPodCount) > c.podAddEvents.Load() {
 			return false, nil
 		}
@@ -197,7 +198,7 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 			}
 		}
 		return true, nil
-	}, stopCh); err == nil {
+	}); err == nil {
 		c.groupEntityIndex.setSynced(true)
 	}
 
