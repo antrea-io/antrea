@@ -221,10 +221,11 @@ kubectl apply -f dhcp-server.yml
 Once again, if you are using our [test cluster], no edits are required and you
 can apply the file as is. Otherwise, make sure that you edit the
 `dhcp-server-conf` ConfigMap at the top of the file: the
-[dhcpd.conf](https://man.openbsd.org/dhcpd.conf.5) configuration data needs to
-be correct for our use case. You will need to ensure that the subnet matches the
-parent interface's network and that the range of allocatable addresses does not
-include the IP addresses assigned to the parent interfaces.
+[dhcpd.conf](https://manpages.ubuntu.com/manpages/jammy/en/man5/dhcpd.conf.5.html)
+configuration data needs to be correct for our use case. You will need to ensure
+that the subnet matches the parent interface's network and that the range of
+allocatable addresses does not include the IP addresses assigned to the parent
+interfaces.
 
 ### Step 6: Run the DHCP daemons
 
