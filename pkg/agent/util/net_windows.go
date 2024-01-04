@@ -529,6 +529,8 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 	}
 
 	// Enable OVS Extension on the HNS Network. If an error occurs, delete the HNS Network and return the error.
+	// While the hnsshim API allows for enabling the OVS extension when creating an HNS network, it can cause the adapter being unable
+	// to obtain a valid DHCP IP in case of network interruption. Therefore, we have to enable the OVS extension after running adapterIPExists.
 	if err = EnableHNSNetworkExtension(hnsNet.Id, OVSExtensionID); err != nil {
 		return err
 	}
