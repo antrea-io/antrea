@@ -745,12 +745,12 @@ jobs:
     steps:
     - name: Delete antrea-ubuntu-cov
       if: ${{ needs.build-antrea-coverage-image.result == 'success' }}
-      uses: geekyeggo/delete-artifact@v2
+      uses: geekyeggo/delete-artifact@v4
       with:
         name: antrea-ubuntu-cov
     - name: Delete flow-aggregator
       if: ${{ needs.build-flow-aggregator-coverage-image.result == 'success' }}
-      uses: geekyeggo/delete-artifact@v2
+      uses: geekyeggo/delete-artifact@v4
       with:
         name: flow-aggregator-cov
         failOnError: false
