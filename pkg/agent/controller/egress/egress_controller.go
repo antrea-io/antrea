@@ -644,7 +644,7 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 		return fmt.Errorf("error deleting ip rule for mark %v: %w", ipState.mark, err)
 	}
 	rt.marks.Delete(ipState.mark)
-	// Delete the route table If it is not used by any Egress.
+	// Delete the route table if it is not used by any Egress.
 	if rt.marks.Len() == 0 {
 		if err := c.routeClient.DeleteEgressRoutes(rt.tableID); err != nil {
 			return fmt.Errorf("error deleting route table for subnet %v: %w", ipState.subnetInfo, err)

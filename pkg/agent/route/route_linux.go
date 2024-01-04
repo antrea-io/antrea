@@ -993,7 +993,7 @@ func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 	return routes, nil
 }
 
-// RestoreEgressRoutesAndRules simply deletes all IP routes and rules created for Egress for now.
+// RestoreEgressRoutesAndRules simply deletes all IP routes and rules created for Egresses for now.
 // It may be better to keep the ones whose Egress IPs are still on this Node, but it's a bit hard to achieve it at the
 // moment because the marks are not permanent and could change upon restart.
 func (c *Client) RestoreEgressRoutesAndRules(minTableID, maxTableID int) error {

@@ -40,13 +40,13 @@ import (
 // It can be used to determine whether it's safe to delete an interface when it's no longer used.
 const vlanInterfacePrefix = "antrea-ext."
 
-// assignee is the unit that IPs are assigned to. All IPs from the same subnet share an assignee.
+// assignee is the unit that IPs are assigned to. All IPs from the same VLAN share an assignee.
 type assignee struct {
 	// logicalInterface is the interface IPs should be logically assigned to. It's also used for IP advertisement.
 	// The field must not be nil.
 	logicalInterface *net.Interface
 	// link is used for IP link management and IP address add/del operation. The field can be nil if IPs don't need to
-	// assigned to an interface physically.
+	// be assigned to an interface physically.
 	link netlink.Link
 	// arpResponder is used for ARP responder for IPv4 address. The field should be nil if the interface can respond to
 	// ARP queries itself.
@@ -80,7 +80,7 @@ func (as *assignee) deletable() bool {
 
 func (as *assignee) destroy() error {
 	if err := netlink.LinkDel(as.link); err != nil {
-		return fmt.Errorf("error deleting interface %v", as.link)
+		return fmt.Errorf("error deleting interface %v: %w", as.link, err)
 	}
 	return nil
 }
@@ -433,6 +433,7 @@ func (a *ipAssigner) AssignedIPs() map[string]*crdv1b1.SubnetInfo {
 // InitIPs loads the IPs from the dummy/vlan devices and replaces the IPs that are assigned to it
 // with the given ones. This function also adds the given IPs to the ARP/NDP responder if
 // applicable. It can be used to recover the IP assigner to the desired state after Agent restarts.
+// It's not thread-safe and should only be called once for initialization before calling other methods.
 func (a *ipAssigner) InitIPs(desired map[string]*crdv1b1.SubnetInfo) error {
 	if err := a.loadIPAddresses(); err != nil {
 		return fmt.Errorf("error when loading IP addresses from the system: %v", err)
@@ -453,6 +454,8 @@ func (a *ipAssigner) InitIPs(desired map[string]*crdv1b1.SubnetInfo) error {
 }
 
 func (a *ipAssigner) GetInterfaceID(subnetInfo *crdv1b1.SubnetInfo) (int, bool) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
 	as, _ := a.getAssignee(subnetInfo, false)
 	// The assignee doesn't exist, meaning the IP has been unassigned previously.
 	if as == nil {

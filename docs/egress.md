@@ -201,9 +201,9 @@ of this IP pool. Each IP range may consist of a `cidr` or a pair of `start` and
 
 ### SubnetInfo
 
-By default, it's assumed that the IPs allocated from the pool are in the same
-subnet as the Node IPs. Starting with Antrea v1.15, IPs can be allocated from a
-subnet different from the Node IPs.
+By default, it's assumed that the IPs allocated from an ExternalIPPool are in
+the same subnet as the Node IPs. Starting with Antrea v1.15, IPs can be
+allocated from a subnet different from the Node IPs.
 
 The optional `subnetInfo` field contains the subnet attributes of the IPs in
 this pool. When using a different subnet:
@@ -218,7 +218,7 @@ specified VLAN ID. Correspondingly, it's expected that reply traffic towards
 these Egress IPs is also tagged with the specified VLAN ID when arriving at the
 Egress Node.
 
-An example of ExternalIPPool using a different subnet is as below:
+An example of ExternalIPPool using a non-default subnet is as below:
 
 ```yaml
 apiVersion: crd.antrea.io/v1beta1

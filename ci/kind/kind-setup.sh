@@ -71,7 +71,7 @@ where:
     bridge network created by kind.
   --vlan-subnets: specifies the subnets of the VLAN to which all Nodes will be connected, in addition to the primary network.
     The IP expression of the subnet will be used as the gateway IP. For example, '--vlan-subnets 10.100.100.1/24' means
-    10.100.100.1/24 will be assigned to the VLAN sub-interface of the network.
+    that a VLAN sub-interface will be created on the primary Docker bridge, and it will be assigned the 10.100.100.1/24 address.
   --vlan-id: specifies the ID of the VLAN to which all Nodes will be connected, in addition to the primary network. Note,
     '--vlan-subnets' and '--vlan-id' must be specified together.
   --extra-networks: an extra network creates a separate Docker bridge network (named 'antrea-<idx>') with the assigned
@@ -256,7 +256,7 @@ function configure_vlan_subnets {
   docker_run_with_host_net ip link set $vlan_interface up
   IFS=',' read -r -a vlan_subnets <<< "$VLAN_SUBNETS"
   for s in "${vlan_subnets[@]}" ; do
-    echo "configuring extra IP $s to vlan interface $vlan_interface"
+    echo "Configuring extra IP $s to vlan interface $vlan_interface"
     docker_run_with_host_net ip addr add dev $vlan_interface $s
   done
   docker_run_with_host_net iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT
@@ -274,9 +274,9 @@ function delete_vlan_subnets {
   for interface in $found_vlan_interfaces ; do
     if [[ $interface =~ ${vlan_interface_prefix}[0-9]+@${bridge_interface} ]]; then
       interface_name=${interface%@*}
-      docker_run_with_host_net ip link del $interface_name
       docker_run_with_host_net iptables -t filter -D FORWARD -i $bridge_interface -o $interface_name -j ACCEPT || true
       docker_run_with_host_net iptables -t filter -D FORWARD -o $bridge_interface -i $interface_name -j ACCEPT || true
+      docker_run_with_host_net ip link del $interface_name
     fi
   done
 }
@@ -641,6 +641,13 @@ fi
 if [[ $ACTION == "destroy" ]]; then
       destroy
       exit 0
+fi
+
+if [[ -n "$VLAN_SUBNETS" || -n "$VLAN_ID" ]]; then
+  if [[ -z "$VLAN_SUBNETS" || -z "$VLAN_ID" ]]; then
+    echoerr "'--vlan-subnets' and '--vlan-id' must be specified together"
+    exit 1
+  fi
 fi
 
 kind_version=$(kind version | awk  '{print $2}')

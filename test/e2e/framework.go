@@ -485,9 +485,12 @@ func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]
 func (data *TestData) collectExternalInfo() error {
 	ips := strings.Split(testOptions.externalServerIPs, ",")
 	for _, ip := range ips {
+		if ip == "" {
+			continue
+		}
 		parsedIP := net.ParseIP(ip)
 		if parsedIP == nil {
-			continue
+			return fmt.Errorf("invalid external server IP %s", ip)
 		}
 		if parsedIP.To4() != nil {
 			externalInfo.externalServerIPv4 = ip
@@ -498,9 +501,12 @@ func (data *TestData) collectExternalInfo() error {
 
 	subnets := strings.Split(testOptions.vlanSubnets, ",")
 	for _, subnet := range subnets {
+		if subnet == "" {
+			continue
+		}
 		gatewayIP, _, err := net.ParseCIDR(subnet)
 		if err != nil {
-			continue
+			return fmt.Errorf("invalid vlan subnet %s: %w", subnet, err)
 		}
 		if gatewayIP.To4() != nil {
 			externalInfo.vlanSubnetIPv4 = subnet
