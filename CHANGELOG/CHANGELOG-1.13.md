@@ -1,5 +1,19 @@
 # Changelog 1.13
 
+## 1.13.3 - 2024-01-13
+
+### Fixed
+
+- Update `Install-WindowsCNI-Containerd.ps1` script to make it compatible with containerd 1.7. ([#5528](https://github.com/antrea-io/antrea/pull/5528), [@NamanAg30])
+- Store NetworkPolicy in filesystem as fallback data source to let antrea-agent fallback to use the files if it can't connect to antrea-controller on startup. ([#5739](https://github.com/antrea-io/antrea/pull/5739), [@tnqn])
+- Support Local ExternalTrafficPolicy for Services with ExternalIPs when Antrea proxyAll mode is enabled. ([#5795](https://github.com/antrea-io/antrea/pull/5795), [@tnqn])
+- Enable Pod network after realizing initial NetworkPolicies to avoid traffic from/to Pods bypassing NetworkPolicy when antrea-agent restarts. ([#5777](https://github.com/antrea-io/antrea/pull/5777), [@tnqn])
+- Fix Clean-AntreaNetwork.ps1 invocation in Prepare-AntreaAgent.ps1 for containerized OVS on Windows. ([#5859](https://github.com/antrea-io/antrea/pull/5859), [@antoninbas])
+- Fix `antctl trace-packet` command failure which is caused by arguments missing issue. ([#5838](https://github.com/antrea-io/antrea/pull/5838), [@luolanzone])
+- Skip enforcement of ingress NetworkPolicies rules for hairpinned Service traffic (Pod accessing itself via a Service). ([#5687](https://github.com/antrea-io/antrea/pull/5687) [#5705](https://github.com/antrea-io/antrea/pull/5705), [@GraysonWu])
+- Set net.ipv4.conf.antrea-gw0.arp_announce to 1 to fix an ARP request leak when a Node or hostNetwork Pod accesses a local Pod and AntreaIPAM is enabled. ([#5657](https://github.com/antrea-io/antrea/pull/5657), [@gran-vmv])
+- Add DHCP IP retries in PrepareHNSNetwork on Windows to fix the potential race condition issue where acquiring a DHCP IP address may fail after CreateHNSNetwork. ([#5819](https://github.com/antrea-io/antrea/pull/5819), [@XinShuYang])
+
 ## 1.13.2 - 2023-11-01
 
 ### Fixed
