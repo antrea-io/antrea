@@ -20,6 +20,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,6 +80,7 @@ type testCase struct {
 	query          string
 	calledTrace    bool
 	expectedStatus int
+	execErr        *ovsctl.ExecError
 }
 
 func TestPodFlows(t *testing.T) {
@@ -197,6 +200,26 @@ func TestPodFlows(t *testing.T) {
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
 		},
+		{
+			test:           "Mock syntax error",
+			query:          "",
+			calledTrace:    true,
+			expectedStatus: http.StatusInternalServerError,
+			execErr: ovsctl.NewExecError(&exec.ExitError{
+				ProcessState: &os.ProcessState{},
+				Stderr:       []byte("syntax error"),
+			}, "server returned an error"),
+		},
+		{
+			test:           "Mock command exec error",
+			query:          "",
+			calledTrace:    true,
+			expectedStatus: http.StatusInternalServerError,
+			execErr: ovsctl.NewExecError(&exec.Error{
+				Name: "fake err",
+				Err:  errors.New("command not run correctly"),
+			}, "server returned an error"),
+		},
 	}
 	for i := range testcases {
 		tc := testcases[i]
@@ -243,7 +266,7 @@ func TestPodFlows(t *testing.T) {
 				if tc.expectedStatus == http.StatusOK {
 					ctl.EXPECT().Trace(gomock.Any()).Return(testTraceResult, nil).Times(1)
 				} else {
-					ctl.EXPECT().Trace(gomock.Any()).Return(nil, errors.New("tracing error")).Times(1)
+					ctl.EXPECT().Trace(gomock.Any()).Return("", tc.execErr).Times(1)
 				}
 			}
 		} else {
