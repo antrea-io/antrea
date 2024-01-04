@@ -173,7 +173,7 @@ Consider the following Antrea ClusterNetworkPolicy (ACNP) in the Application tie
 example for the remainder of this document.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: cnp0

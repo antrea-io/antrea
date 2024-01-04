@@ -619,7 +619,7 @@ Service name and Namespace in the `toServices` field of an Antrea-native policy,
 of the `toServices` peer to `ClusterSet`:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-drop-tenant-to-secured-mc-service
@@ -657,7 +657,7 @@ Policy rules can be created to enforce security postures on ingress traffic from
 clusters in a ClusterSet:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: drop-tenant-access-to-admin-namespace
@@ -679,8 +679,8 @@ spec:
 ```
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
-kind: AntreaNetworkPolicy
+apiVersion: crd.antrea.io/v1beta1
+kind: NetworkPolicy
 metadata:
   name: db-svc-allow-ingress-from-client-only
   namespace: prod-us-west
