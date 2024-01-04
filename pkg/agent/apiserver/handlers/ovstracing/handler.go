@@ -76,7 +76,7 @@ func getServiceClusterIP(aq querier.AgentQuerier, name, namespace string) (net.I
 		if k8serrors.IsNotFound(err) {
 			return nil, handlers.NewHandlerError(errors.New("Service not found"), http.StatusNotFound)
 		}
-		klog.Errorf("Failed to get Service from Kubernetes API: %v", err)
+		klog.ErrorS(err, "Failed to get Service from Kubernetes API")
 		return nil, handlers.NewHandlerError(errors.New("Kubernetes API error"), http.StatusInternalServerError)
 	}
 	return net.ParseIP(srv.Spec.ClusterIP).To4(), nil
@@ -127,7 +127,7 @@ func getPeerAddress(aq querier.AgentQuerier, peer *tracingPeer, addrFamily uint8
 			err := handlers.NewHandlerError(fmt.Errorf("Pod %s/%s not found", peer.namespace, peer.name), http.StatusNotFound)
 			return nil, nil, err
 		}
-		klog.Errorf("Failed to get Pod from Kubernetes API: %v", err)
+		klog.ErrorS(err, "Failed to get Pod from Kubernetes API")
 		return nil, nil, handlers.NewHandlerError(errors.New("Kubernetes API error"), http.StatusInternalServerError)
 	}
 	// Return IP only assuming it should be a remote Pod.
@@ -356,7 +356,7 @@ func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 	return &request, nil
 }
 
-// HandleFunc returns the function which can handle API requests to "/ovsflows".
+// HandleFunc returns the function which can handle API requests to "/ovstracing".
 func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var traceReq *ovsctl.TracingRequest
@@ -380,9 +380,11 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 				// ovs-appctl has been executed but returned an error (e.g. the provided
 				// "flow" expression is incorrect). Return the error output to the client in
 				// this case.
-				out = execErr.GetErrorOutput()
+				klog.ErrorS(execErr, "Tracing command failed")
+				http.Error(w, execErr.GetErrorOutput(), http.StatusInternalServerError)
+				return
 			} else {
-				klog.Errorf("Failed to execute tracing command: %v", err)
+				klog.ErrorS(err, "Failed to execute tracing command")
 				http.Error(w, "failed to execute tracing command", http.StatusInternalServerError)
 				return
 			}
