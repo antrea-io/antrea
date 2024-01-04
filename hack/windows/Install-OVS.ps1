@@ -41,9 +41,9 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
-$OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-3.0.5-antrea.0-win64.zip"
+$OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-3.0.5-antrea.1-win64.zip"
 # Use a SHA256 hash to ensure that the downloaded archive is correct.
-$OVSPublishedHash = 'fd27703ef7314b26b98cffb7aea27d569530ebd3ac3c98daa981ca2654373032'
+$OVSPublishedHash = '813a0c32067f40ce4aca9ceb7cd745a120e26906e9266d13cc8bf75b147bb6a5'
 $WorkDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 $OVSDownloadDir = $WorkDir
 $PowerShellModuleBase = "C:\Windows\System32\WindowsPowerShell\v1.0\Modules"
@@ -154,6 +154,7 @@ function InstallOVS() {
     if ($ImportCertificate) {
         $CertificateFile = "$OVSDriverDir\package.cer"
         if (!(Test-Path $CertificateFile)) {
+            Log "No existing OVS driver certificate found, generating a new one."
             $ExportType = [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert;
             $Cert = (Get-AuthenticodeSignature $DriverFile).SignerCertificate;
             [System.IO.File]::WriteAllBytes($CertificateFile, $Cert.Export($ExportType));
