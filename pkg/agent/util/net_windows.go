@@ -59,6 +59,10 @@ const (
 
 	AntreaNatName = "antrea-nat"
 	LocalVMSwitch = "antrea-switch"
+
+	// IP_ADAPTER_DHCP_ENABLED is defined in the Win32 API document.
+	// https://learn.microsoft.com/en-us/windows/win32/api/iptypes/ns-iptypes-ip_adapter_addresses_lh
+	IP_ADAPTER_DHCP_ENABLED = 0x00000004
 )
 
 var (
@@ -453,10 +457,29 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 			hnsNetworkDelete(hnsNet)
 		}
 	}()
-
-	adapter, ipFound, err := adapterIPExists(nodeIPNet.IP, uplinkAdapter.HardwareAddr, ContainerVNICPrefix)
+	var adapter *net.Interface
+	var ipFound bool
+	// On the current Windows testbed, it takes a maximum of 1.8 seconds to obtain a valid IP.
+	// Therefore, we set the timeout limit to triple of that value, allowing a maximum wait of 6 seconds here.
+	err = wait.PollImmediate(1*time.Second, 6*time.Second, func() (bool, error) {
+		var checkErr error
+		adapter, ipFound, checkErr = adapterIPExists(nodeIPNet.IP, uplinkAdapter.HardwareAddr, ContainerVNICPrefix)
+		if checkErr != nil {
+			return false, checkErr
+		}
+		return ipFound, nil
+	})
 	if err != nil {
-		return err
+		if err == wait.ErrWaitTimeout {
+			dhcpStatus, err := InterfaceIPv4DhcpEnabled(uplinkAdapter.Name)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get IPv4 DHCP status on the network adapter", "adapter", uplinkAdapter.Name)
+			} else {
+				klog.ErrorS(err, "Timeout acquiring IP for the adapter", "dhcpStatus", dhcpStatus)
+			}
+		} else {
+			return err
+		}
 	}
 	vNicName, index := adapter.Name, adapter.Index
 	// By default, "ipFound" should be true after Windows creates the HNSNetwork. The following check is for some corner
@@ -636,6 +659,16 @@ func HostInterfaceExists(ifaceName string) bool {
 		return false
 	}
 	return true
+}
+
+// InterfaceIPv4DhcpEnabled returns the IPv4 DHCP status on the specified interface.
+func InterfaceIPv4DhcpEnabled(ifaceName string) (bool, error) {
+	adapter, err := getAdapterInAllCompartmentsByName(ifaceName)
+	if err != nil {
+		return false, err
+	}
+	ipv4Dhcp := (adapter.flags&IP_ADAPTER_DHCP_ENABLED != 0)
+	return ipv4Dhcp, nil
 }
 
 // SetInterfaceMTU configures interface MTU on host for Pods. MTU change cannot be realized with HNSEndpoint because
@@ -1072,6 +1105,7 @@ type updateIPInterfaceFunc func(entry *antreasyscall.MibIPInterfaceRow) *antreas
 type adapter struct {
 	net.Interface
 	compartmentID uint32
+	flags         uint32
 }
 
 func (a *adapter) setMTU(mtu int, family uint16) error {
@@ -1255,6 +1289,7 @@ func getAdaptersByName(name string) ([]adapter, error) {
 		adapter := adapter{
 			Interface:     ifi,
 			compartmentID: aa.CompartmentId,
+			flags:         aa.Flags,
 		}
 		adapters = append(adapters, adapter)
 	}

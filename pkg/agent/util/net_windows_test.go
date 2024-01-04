@@ -307,6 +307,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 	setVMCmd := fmt.Sprintf("Set-VMSwitch -ComputerName $(hostname) -Name %s -EnableSoftwareRsc $True", LocalHNSNetwork)
 	tests := []struct {
 		name                   string
+		testAdapterAddresses   *windows.IpAdapterAddresses
 		nodeIPNet              *net.IPNet
 		dnsServers             string
 		newName                string
@@ -320,42 +321,47 @@ func TestPrepareHNSNetwork(t *testing.T) {
 		wantErr                error
 	}{
 		{
-			name:       "Prepare Success",
-			nodeIPNet:  &ipv4PublicIPNet,
-			dnsServers: testDNSServer,
-			newName:    testNewName,
-			ipFound:    true,
+			name:                 "Prepare Success",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4PublicIPNet,
+			dnsServers:           testDNSServer,
+			newName:              testNewName,
+			ipFound:              true,
 			wantCmds: []string{getAdapterCmd, renameAdapterCmd, renameNetCmd,
 				getVMCmd, setVMCmd},
 		},
 		{
-			name:                "Create Error",
-			nodeIPNet:           &ipv4PublicIPNet,
-			dnsServers:          testDNSServer,
-			ipFound:             true,
-			hnsNetworkCreateErr: testInvalidErr,
-			wantErr:             fmt.Errorf("error creating HNSNetwork: invalid"),
+			name:                 "Create Error",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4PublicIPNet,
+			dnsServers:           testDNSServer,
+			ipFound:              true,
+			hnsNetworkCreateErr:  testInvalidErr,
+			wantErr:              fmt.Errorf("error creating HNSNetwork: invalid"),
 		},
 		{
-			name:                "adapter Err",
-			nodeIPNet:           &ipv4PublicIPNet,
-			dnsServers:          testDNSServer,
-			ipFound:             true,
-			testNetInterfaceErr: testInvalidErr,
-			wantErr:             testInvalidErr,
+			name:                 "adapter Err",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4PublicIPNet,
+			dnsServers:           testDNSServer,
+			ipFound:              true,
+			testNetInterfaceErr:  testInvalidErr,
+			wantErr:              testInvalidErr,
 		},
 		{
-			name:       "Rename Err",
-			nodeIPNet:  &ipv4PublicIPNet,
-			dnsServers: testDNSServer,
-			newName:    testNewName,
-			ipFound:    true,
-			commandErr: testInvalidErr,
-			wantCmds:   []string{getAdapterCmd},
-			wantErr:    testInvalidErr,
+			name:                 "Rename Err",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4PublicIPNet,
+			dnsServers:           testDNSServer,
+			newName:              testNewName,
+			ipFound:              true,
+			commandErr:           testInvalidErr,
+			wantCmds:             []string{getAdapterCmd},
+			wantErr:              testInvalidErr,
 		},
 		{
 			name:                   "Enable HNS Err",
+			testAdapterAddresses:   createTestAdapterAddresses(testAdapterName),
 			nodeIPNet:              &ipv4PublicIPNet,
 			dnsServers:             testDNSServer,
 			ipFound:                true,
@@ -363,46 +369,51 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			wantErr:                testInvalidErr,
 		},
 		{
-			name:       "Enable RSC Err",
-			nodeIPNet:  &ipv4PublicIPNet,
-			dnsServers: testDNSServer,
-			ipFound:    true,
-			commandErr: testInvalidErr,
-			wantCmds:   []string{getVMCmd},
-			wantErr:    testInvalidErr,
+			name:                 "Enable RSC Err",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4PublicIPNet,
+			dnsServers:           testDNSServer,
+			ipFound:              true,
+			commandErr:           testInvalidErr,
+			wantCmds:             []string{getVMCmd},
+			wantErr:              testInvalidErr,
 		},
 		{
-			name:       "IP Not Found",
-			nodeIPNet:  &ipv4ZeroIPNet,
-			dnsServers: testDNSServer,
-			ipFound:    false,
-			wantCmds:   []string{newIPCmd, setServerCmd, getVMCmd, setVMCmd},
+			name:                 "IP Not Found",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4ZeroIPNet,
+			dnsServers:           testDNSServer,
+			ipFound:              false,
+			wantCmds:             []string{newIPCmd, setServerCmd, getVMCmd, setVMCmd},
 		},
 		{
-			name:       "IP Not Found Configure Default Err",
-			nodeIPNet:  &ipv4ZeroIPNet,
-			dnsServers: testDNSServer,
-			ipFound:    false,
-			commandErr: testInvalidErr,
-			wantCmds:   []string{newIPCmd},
-			wantErr:    testInvalidErr,
+			name:                 "IP Not Found Configure Default Err",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4ZeroIPNet,
+			dnsServers:           testDNSServer,
+			ipFound:              false,
+			commandErr:           testInvalidErr,
+			wantCmds:             []string{newIPCmd},
+			wantErr:              testInvalidErr,
 		},
 		{
-			name:       "IP Not Found Set adapter Err",
-			nodeIPNet:  &ipv4ZeroIPNet,
-			dnsServers: testDNSServer,
-			ipFound:    false,
-			commandErr: alreadyExistsErr,
-			wantCmds:   []string{newIPCmd, setServerCmd},
-			wantErr:    alreadyExistsErr,
+			name:                 "IP Not Found Set adapter Err",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4ZeroIPNet,
+			dnsServers:           testDNSServer,
+			ipFound:              false,
+			commandErr:           alreadyExistsErr,
+			wantCmds:             []string{newIPCmd, setServerCmd},
+			wantErr:              alreadyExistsErr,
 		},
 		{
-			name:         "IP Not Found New Net Route Err",
-			nodeIPNet:    &ipv4ZeroIPNet,
-			ipFound:      false,
-			createRowErr: fmt.Errorf("ip route not found"),
-			wantCmds:     []string{newIPCmd},
-			wantErr:      fmt.Errorf("failed to create new IPForward row: ip route not found"),
+			name:                 "IP Not Found New Net Route Err",
+			testAdapterAddresses: createTestAdapterAddresses(testAdapterName),
+			nodeIPNet:            &ipv4ZeroIPNet,
+			ipFound:              false,
+			createRowErr:         fmt.Errorf("ip route not found"),
+			wantCmds:             []string{newIPCmd},
+			wantErr:              fmt.Errorf("failed to create new IPForward row: ip route not found"),
 		},
 	}
 
@@ -415,6 +426,7 @@ func TestPrepareHNSNetwork(t *testing.T) {
 			defer mockHNSNetworkCreate(tc.hnsNetworkCreateErr)()
 			defer mockHNSNetworkDelete(nil)()
 			defer mockAntreaNetIO(&antreasyscalltest.MockNetIO{CreateIPForwardEntryErr: tc.createRowErr})()
+			defer mockGetAdaptersAddresses(tc.testAdapterAddresses, nil)()
 			gotErr := PrepareHNSNetwork(testSubnetCIDR, tc.nodeIPNet, testUplinkAdapter, "testGateway", tc.dnsServers, testRoutes, tc.newName)
 			assert.Equal(t, tc.wantErr, gotErr)
 		})
@@ -1087,6 +1099,7 @@ func TestGetAdapterInAllCompartmentsByName(t *testing.T) {
 			HardwareAddr: testMACAddr,
 		},
 		compartmentID: 1,
+		flags:         IP_ADAPTER_DHCP_ENABLED,
 	}
 	tests := []struct {
 		name            string
@@ -1150,6 +1163,7 @@ func createTestAdapterAddresses(name string) *windows.IpAdapterAddresses {
 		PhysicalAddressLength: 6,
 		PhysicalAddress:       testPhysicalAddress,
 		CompartmentId:         1,
+		Flags:                 IP_ADAPTER_DHCP_ENABLED,
 	}
 }
 
@@ -1182,6 +1196,7 @@ func mockGetAdaptersAddresses(testAdaptersAddresses *windows.IpAdapterAddresses,
 			adapterAddresses.PhysicalAddressLength = testAdaptersAddresses.PhysicalAddressLength
 			adapterAddresses.PhysicalAddress = testAdaptersAddresses.PhysicalAddress
 			adapterAddresses.CompartmentId = testAdaptersAddresses.CompartmentId
+			adapterAddresses.Flags = testAdaptersAddresses.Flags
 		}
 		return err
 	}
