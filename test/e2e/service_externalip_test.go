@@ -207,7 +207,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			var err error
 			var service *v1.Service
 			var eps *v1.Endpoints
-			ipPool := data.createExternalIPPool(t, "test-service-pool-", tt.ipRange, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
+			ipPool := data.createExternalIPPool(t, "test-service-pool-", tt.ipRange, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 
 			annotation := map[string]string{
@@ -324,7 +324,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			}
 			var err error
 			var service *v1.Service
-			ipPool := data.createExternalIPPool(t, "crud-pool-", tt.ipRange, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
+			ipPool := data.createExternalIPPool(t, "crud-pool-", tt.ipRange, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 
 			annotation := map[string]string{
@@ -414,9 +414,9 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 				skipIfNotIPv4Cluster(t)
 			}
 
-			originalPool := data.createExternalIPPool(t, "originalpool-", tt.originalIPRange, nil, map[string]string{v1.LabelHostname: tt.originalNode})
+			originalPool := data.createExternalIPPool(t, "originalpool-", tt.originalIPRange, nil, nil, map[string]string{v1.LabelHostname: tt.originalNode})
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), originalPool.Name, metav1.DeleteOptions{})
-			newPool := data.createExternalIPPool(t, "newpool-", tt.newIPRange, nil, map[string]string{v1.LabelHostname: tt.newNode})
+			newPool := data.createExternalIPPool(t, "newpool-", tt.newIPRange, nil, nil, map[string]string{v1.LabelHostname: tt.newNode})
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), newPool.Name, metav1.DeleteOptions{})
 
 			annotation := map[string]string{
@@ -499,7 +499,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 					Values:   sets.List(nodeCandidates),
 				},
 			}
-			externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", tt.ipRange, matchExpressions, nil)
+			externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", tt.ipRange, nil, matchExpressions, nil)
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), externalIPPoolTwoNodes.Name, metav1.DeleteOptions{})
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: externalIPPoolTwoNodes.Name,
@@ -573,7 +573,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			}
 			nodes := []string{nodeName(0), nodeName(1)}
 			ipRange := v1beta1.IPRange{CIDR: tt.externalIPCIDR}
-			ipPool := data.createExternalIPPool(t, "ippool-", ipRange, nil, nil)
+			ipPool := data.createExternalIPPool(t, "ippool-", ipRange, nil, nil, nil)
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 			agnhosts := []string{"agnhost-0", "agnhost-1"}
 			// Create agnhost Pods on each Node.

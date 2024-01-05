@@ -22,3 +22,18 @@ func GetEgressCondition(conditions []EgressCondition, conditionType EgressCondit
 	}
 	return nil
 }
+
+func CompareSubnetInfo(a, b *SubnetInfo, ignoringGateway bool) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if !ignoringGateway {
+		if a.Gateway != b.Gateway {
+			return false
+		}
+	}
+	return a.VLAN == b.VLAN && a.PrefixLength == b.PrefixLength
+}

@@ -573,3 +573,23 @@ func (c *Client) DeleteRouteForLink(dstCIDR *net.IPNet, linkIndex int) error {
 func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error {
 	return errors.New("ClearConntrackEntryForService is not implemented on Windows")
 }
+
+func (c *Client) RestoreEgressRoutesAndRules(minTableID, maxTableID int) error {
+	return errors.New("RestoreEgressRoutesAndRules is not implemented on Windows")
+}
+
+func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
+	return errors.New("AddEgressRoutes is not implemented on Windows")
+}
+
+func (c *Client) DeleteEgressRoutes(tableID uint32) error {
+	return errors.New("DeleteEgressRoutes is not implemented on Windows")
+}
+
+func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
+	return errors.New("AddEgressRule is not implemented on Windows")
+}
+
+func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
+	return errors.New("DeleteEgressRule is not implemented on Windows")
+}
