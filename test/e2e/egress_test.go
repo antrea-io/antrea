@@ -489,9 +489,12 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				assert.True(t, exists, "Didn't find desired IP on Node")
 				// Testing the events recorded during creation of an Egress resource.
 				expectedMessage := fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.expectedEgressIP, egress.Status.EgressNode)
-				events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
-				require.NoError(t, err)
-				assert.Contains(t, events.Items[0].Message, expectedMessage)
+				assert.EventuallyWithT(t, func(c *assert.CollectT) {
+					events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
+					if assert.NoError(c, err) && assert.Len(c, events.Items, 1) {
+						assert.Contains(c, events.Items[0].Message, expectedMessage)
+					}
+				}, 2*time.Second, 200*time.Millisecond)
 			}
 
 			checkEIPStatus := func(expectedUsed int) {
