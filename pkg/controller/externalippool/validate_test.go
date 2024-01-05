@@ -24,11 +24,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
+
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func marshal(object runtime.Object) []byte {
 	raw, _ := json.Marshal(object)
 	return raw
+}
+
+func mutateExternalIPPool(pool *crdv1b1.ExternalIPPool, mutate func(*crdv1b1.ExternalIPPool)) *crdv1b1.ExternalIPPool {
+	mutate(pool)
+	return pool
 }
 
 func TestControllerValidateExternalIPPool(t *testing.T) {
@@ -38,13 +45,105 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 		expectedResponse *admv1.AdmissionResponse
 	}{
 		{
-			name: "CREATE operation should be allowed",
+			name: "CREATE operation without SubnetInfo should be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "CREATE operation with valid SubnetInfo should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+						Gateway:      "10.10.0.1",
+						PrefixLength: 16,
+						VLAN:         2,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "CREATE operation with invalid SubnetInfo should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+						Gateway:      "10.10.11.1",
+						PrefixLength: 64,
+						VLAN:         2,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "invalid prefixLength 64",
+				},
+			},
+		},
+		{
+			name: "CREATE operation with unmatched SubnetInfo should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+						Gateway:      "10.10.11.1",
+						PrefixLength: 24,
+						VLAN:         2,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "cidr 10.10.10.0/24 must be a strict subset of the subnet",
+				},
+			},
+		},
+		{
+			name: "Adding matched SubnetInfo should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+						Gateway:      "10.10.0.1",
+						PrefixLength: 16,
+						VLAN:         2,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding unmatched SubnetInfo should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+						Gateway:      "10.10.10.1",
+						PrefixLength: 24,
+						VLAN:         2,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IP range 10.10.20.1-10.10.20.2 must be a strict subset of the subnet",
+				},
+			},
 		},
 		{
 			name: "Deleting IPRange should not be allowed",

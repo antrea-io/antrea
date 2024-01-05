@@ -22,6 +22,12 @@ import (
 
 // Interface is created to allow testing.
 type Interface interface {
+	RuleAdd(rule *netlink.Rule) error
+
+	RuleDel(rule *netlink.Rule) error
+
+	RuleList(family int) ([]netlink.Rule, error)
+
 	RouteReplace(route *netlink.Route) error
 
 	RouteList(link netlink.Link, family int) ([]netlink.Route, error)

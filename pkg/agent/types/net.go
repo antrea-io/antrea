@@ -28,3 +28,11 @@ var (
 	// SNAT IP for a "Pod -> external" egress packet, that is to be SNAT'd.
 	SNATIPMarkMask = uint32(0xFF)
 )
+
+// IP Route tables
+const (
+	// MinEgressRouteTable to MaxEgressRouteTable are the route table IDs that can be configured on a Node for Egress traffic.
+	// Each distinct subnet uses one route table. 20 subnets should be enough.
+	MinEgressRouteTable = 101
+	MaxEgressRouteTable = 120
+)

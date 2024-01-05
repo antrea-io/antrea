@@ -33,6 +33,8 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --multicast                   Enables Multicast.
         --flow-visibility             Only run flow visibility related e2e tests.
         --extra-network               Creates an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
+        --extra-vlan                  Creates an subnet-based VLAN that worker Nodes will connect to.
+        --deploy-external-server      Deploy a container running as an external server for the cluster.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --setup-only                  Only perform setting up the cluster and run test.
@@ -72,6 +74,8 @@ node_ipam=false
 multicast=false
 flow_visibility=false
 extra_network=false
+extra_vlan=false
+deploy_external_server=false
 coverage=false
 skiplist=""
 setup_only=false
@@ -121,6 +125,14 @@ case $key in
     ;;
     --extra-network)
     extra_network=true
+    shift
+    ;;
+    --extra-vlan)
+    extra_vlan=true
+    shift
+    ;;
+    --deploy-external-server)
+    deploy_external_server=true
     shift
     ;;
     --coverage)
@@ -237,6 +249,18 @@ fi
 
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
+vlan_args=""
+if $extra_vlan; then
+  vlan_args="$vlan_args --vlan-id 10"
+  if [[ "$ipfamily" == "v4" ]]; then
+    vlan_args="$vlan_args --vlan-subnets 172.100.10.1/24"
+  elif [[ "$ipfamily" == "v6" ]]; then
+    vlan_args="$vlan_args --vlan-subnets fd00:172:100:10::1/96"
+  elif [[ "$ipfamily" == "dual" ]]; then
+    vlan_args="$vlan_args --vlan-subnets 172.100.10.1/24,fd00:172:100:10::1/96"
+  fi
+fi
+
 function setup_cluster {
   args=$1
 
@@ -257,6 +281,8 @@ function setup_cluster {
   if $extra_network && [[ "$mode" != "hybrid" ]]; then
     args="$args --extra-networks \"20.20.30.0/24\""
   fi
+  # Deploy an external server which could be used when testing Pod-to-External traffic.
+  args="$args --deploy-external-server $vlan_args"
 
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind $args"
@@ -310,7 +336,10 @@ function run_test {
   if [ -n "$run" ]; then
     RUN_OPT="-run $run"
   fi
-  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip-cases=$skiplist $coverage_args
+
+  EXTRA_ARGS="$vlan_args --external-server-ips $(docker inspect external-server -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')"
+
+  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then

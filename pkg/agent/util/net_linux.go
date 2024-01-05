@@ -342,6 +342,11 @@ func EnsureARPAnnounceOnInterface(ifaceName string, value int) error {
 	return sysctl.EnsureSysctlNetValue(path, value)
 }
 
+func EnsureRPFilterOnInterface(ifaceName string, value int) error {
+	path := fmt.Sprintf("ipv4/conf/%s/rp_filter", ifaceName)
+	return sysctl.EnsureSysctlNetValue(path, value)
+}
+
 func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
 	link, err := netlinkUtil.LinkByIndex(linkIndex)
 	if err != nil {

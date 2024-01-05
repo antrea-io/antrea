@@ -133,6 +133,25 @@ spec:
                         oneOf:
                           - format: ipv4
                           - format: ipv6
+                subnetInfo:
+                  type: object
+                  required:
+                    - gateway
+                    - prefixLength
+                  properties:
+                    gateway:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                    prefixLength:
+                      type: integer
+                      minimum: 1
+                      maximum: 127
+                    vlan:
+                      type: integer
+                      minimum: 0
+                      maximum: 4094
                 nodeSelector:
                   type: object
                   properties:

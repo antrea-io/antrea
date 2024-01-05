@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/ipassigner"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 const dummyDeviceName = "antrea-dummy0"
@@ -40,16 +41,21 @@ func TestIPAssigner(t *testing.T) {
 	require.NoError(t, err, "Failed to find the dummy device")
 	defer netlink.LinkDel(dummyDevice)
 
-	_, err = ipAssigner.AssignIP("x", false)
+	_, err = ipAssigner.AssignIP("x", nil, false)
 	assert.Error(t, err, "Assigning an invalid IP should fail")
 
 	ip1 := "10.10.10.10"
 	ip2 := "10.10.10.11"
 	ip3 := "2021:124:6020:1006:250:56ff:fea7:36c2"
-	desiredIPs := sets.New[string](ip1, ip2, ip3)
+	ip1VLAN20 := "10.10.20.10"
+	ip2VLAN20 := "10.10.20.11"
+	ip1VLAN30 := "10.10.30.10"
+	subnet20 := &crdv1b1.SubnetInfo{PrefixLength: 24, VLAN: 20}
+	subnet30 := &crdv1b1.SubnetInfo{PrefixLength: 24, VLAN: 30}
+	desiredIPs := map[string]*crdv1b1.SubnetInfo{ip1: nil, ip2: nil, ip3: nil, ip1VLAN20: subnet20, ip2VLAN20: subnet20, ip1VLAN30: subnet30}
 
-	for ip := range desiredIPs {
-		_, errAssign := ipAssigner.AssignIP(ip, false)
+	for ip, subnetInfo := range desiredIPs {
+		_, errAssign := ipAssigner.AssignIP(ip, subnetInfo, false)
 		cmd := exec.Command("ip", "addr")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -60,33 +66,53 @@ func TestIPAssigner(t *testing.T) {
 
 	assert.Equal(t, desiredIPs, ipAssigner.AssignedIPs(), "Assigned IPs don't match")
 
+	vlan20Device, err := netlink.LinkByName("antrea-ext.20")
+	require.NoError(t, err, "Failed to find the VLAN 20 device")
+	defer netlink.LinkDel(vlan20Device)
+	vlan30Device, err := netlink.LinkByName("antrea-ext.30")
+	require.NoError(t, err, "Failed to find the VLAN 30 device")
+	defer netlink.LinkDel(vlan30Device)
+
 	actualIPs, err := listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, desiredIPs, actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/32", ip1), fmt.Sprintf("%s/32", ip2), fmt.Sprintf("%s/128", ip3)), actualIPs, "Actual IPs don't match")
+	actualIPs, err = listIPAddresses(vlan20Device)
+	require.NoError(t, err, "Failed to list IP addresses")
+	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip1VLAN20, subnet20.PrefixLength), fmt.Sprintf("%s/%d", ip2VLAN20, subnet20.PrefixLength)), actualIPs, "Actual IPs don't match")
+	actualIPs, err = listIPAddresses(vlan30Device)
+	require.NoError(t, err, "Failed to list IP addresses")
+	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip1VLAN30, subnet30.PrefixLength)), actualIPs, "Actual IPs don't match")
 
 	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName)
 	require.NoError(t, err, "Initializing new IP assigner failed")
-	assert.Equal(t, sets.New[string](), newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
+	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
 	ip4 := "2021:124:6020:1006:250:56ff:fea7:36c4"
-	newDesiredIPs := sets.New[string](ip1, ip2, ip4)
+	newDesiredIPs := map[string]*crdv1b1.SubnetInfo{ip1: nil, ip2: nil, ip4: nil, ip1VLAN20: subnet20}
 	err = newIPAssigner.InitIPs(newDesiredIPs)
 	require.NoError(t, err, "InitIPs failed")
 	assert.Equal(t, newDesiredIPs, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
 	actualIPs, err = listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, newDesiredIPs, actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/32", ip1), fmt.Sprintf("%s/32", ip2), fmt.Sprintf("%s/128", ip4)), actualIPs, "Actual IPs don't match")
+	actualIPs, err = listIPAddresses(vlan20Device)
+	require.NoError(t, err, "Failed to list IP addresses")
+	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip1VLAN20, subnet20.PrefixLength)), actualIPs, "Actual IPs don't match")
+	_, err = netlink.LinkByName("antrea-ext.30")
+	require.Error(t, err, "VLAN 30 device should be deleted but was not")
 
 	for ip := range newDesiredIPs {
 		_, err = newIPAssigner.UnassignIP(ip)
 		assert.NoError(t, err, "Failed to unassign a valid IP")
 	}
-	assert.Equal(t, sets.New[string](), newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
+	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
 	actualIPs, err = listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
 	assert.Equal(t, sets.New[string](), actualIPs, "Actual IPs don't match")
+	_, err = netlink.LinkByName("antrea-ext.20")
+	require.Error(t, err, "VLAN 20 device should be deleted but was not")
 }
 
 func listIPAddresses(device netlink.Link) (sets.Set[string], error) {
@@ -96,7 +122,9 @@ func listIPAddresses(device netlink.Link) (sets.Set[string], error) {
 	}
 	addresses := sets.New[string]()
 	for _, addr := range addrList {
-		addresses.Insert(addr.IP.String())
+		if addr.IP.IsGlobalUnicast() {
+			addresses.Insert(addr.IPNet.String())
+		}
 	}
 	return addresses, nil
 }

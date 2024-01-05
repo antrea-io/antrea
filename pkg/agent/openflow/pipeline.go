@@ -2327,11 +2327,10 @@ func (f *featureEgress) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding
 		Action().LoadPktMarkRange(mark, snatPktMarkRange).
 		Action().LoadRegMark(ToGatewayRegMark)
 	if f.enableEgressTrafficShaping {
-		// To apply rate-limit on all traffic, instead of just the first one, remove ct_state=+new.
+		// To apply rate-limit on all traffic.
 		fb = fb.Action().GotoTable(EgressQoSTable.GetID())
 	} else {
-		fb = fb.MatchCTStateNew(true).
-			Action().GotoStage(stageSwitching)
+		fb = fb.Action().GotoStage(stageSwitching)
 	}
 	return fb.Done()
 }
@@ -2352,11 +2351,10 @@ func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint
 			Action().LoadPktMarkRange(snatMark, snatPktMarkRange).
 			Action().LoadRegMark(ToGatewayRegMark)
 		if f.enableEgressTrafficShaping {
-			// To apply rate-limit on all traffic, instead of just the first one, remove ct_state=+new.
+			// To apply rate-limit on all traffic.
 			fb = fb.Action().GotoTable(EgressQoSTable.GetID())
 		} else {
-			fb = fb.MatchCTStateNew(true).
-				Action().GotoStage(stageSwitching)
+			fb = fb.Action().GotoStage(stageSwitching)
 		}
 		return fb.Done()
 	}

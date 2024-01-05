@@ -56,6 +56,7 @@ edit the Agent configuration in the
 | `L7NetworkPolicy`             | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |                                               |
 | `AdminNetworkPolicy`          | Controller         | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
 | `EgressTrafficShaping`        | Agent              | `false` | Alpha | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                |
+| `EgressSeparateSubnet`        | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | No                 |                                               |
 
 ## Description and Requirements of Features
 
@@ -413,3 +414,8 @@ bandwidth for all egress traffic belonging to an Egress. Refer to this [document
 
 This feature leverages OVS meters to do the actual rate-limiting, therefore this feature requires OVS meters
 to be supported in the datapath.
+
+### EgressSeparateSubnet
+
+`EgressSeparateSubnet` allows users to allocate Egress IPs from a different subnet from the default Node subnet.
+Refer to this [document](egress.md#subnetinfo) for more information.

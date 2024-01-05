@@ -2654,6 +2654,25 @@ spec:
                         oneOf:
                           - format: ipv4
                           - format: ipv6
+                subnetInfo:
+                  type: object
+                  required:
+                    - gateway
+                    - prefixLength
+                  properties:
+                    gateway:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                    prefixLength:
+                      type: integer
+                      minimum: 1
+                      maximum: 127
+                    vlan:
+                      type: integer
+                      minimum: 0
+                      maximum: 4094
                 nodeSelector:
                   type: object
                   properties:
@@ -5603,6 +5622,9 @@ data:
     # Enable Egress traffic shaping.
     #  EgressTrafficShaping: false
 
+    # Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
+    #  EgressSeparateSubnet: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -6903,7 +6925,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: aa947bf5c403412b9c8cfcbcc335659992f19bd428886e80f43bafa052bac1e6
+        checksum/config: d8e5dd6cc4bd55eeba224229fd8207045291ab3dfafe5f3c3e100c31003d2887
       labels:
         app: antrea
         component: antrea-agent
@@ -7139,7 +7161,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: aa947bf5c403412b9c8cfcbcc335659992f19bd428886e80f43bafa052bac1e6
+        checksum/config: d8e5dd6cc4bd55eeba224229fd8207045291ab3dfafe5f3c3e100c31003d2887
       labels:
         app: antrea
         component: antrea-controller
@@ -7454,9 +7476,9 @@ webhooks:
         namespace: kube-system
         path: "/validate/externalippool"
     rules:
-      - operations: ["UPDATE"]
+      - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha2"]
+        apiVersions: ["v1alpha2", "v1beta1"]
         resources: ["externalippools"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]

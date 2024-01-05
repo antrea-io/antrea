@@ -17,6 +17,7 @@ package externalippool
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -48,12 +50,15 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 
 	switch review.Request.Operation {
 	case admv1.Create:
-		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
 		klog.V(2).Info("Validating CREATE request for ExternalIPPool")
-		// Always allow CREATE request.
+		if msg, allowed = validateIPRangesAndSubnetInfo(newObj.Spec.IPRanges, newObj.Spec.SubnetInfo); !allowed {
+			break
+		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
-
+		if msg, allowed = validateIPRangesAndSubnetInfo(newObj.Spec.IPRanges, newObj.Spec.SubnetInfo); !allowed {
+			break
+		}
 		oldIPRangeSet := getIPRangeSet(oldObj.Spec.IPRanges)
 		newIPRangeSet := getIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
@@ -77,6 +82,48 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		Result:  result,
 	}
 }
+
+func validateIPRangesAndSubnetInfo(ipRanges []crdv1beta1.IPRange, subnetInfo *crdv1beta1.SubnetInfo) (string, bool) {
+	if subnetInfo == nil {
+		return "", true
+	}
+	gatewayIP := net.ParseIP(subnetInfo.Gateway)
+	var mask net.IPMask
+	if gatewayIP.To4() != nil {
+		if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 32 {
+			return fmt.Sprintf("invalid prefixLength %d", subnetInfo.PrefixLength), false
+		}
+		mask = net.CIDRMask(int(subnetInfo.PrefixLength), 32)
+	} else {
+		if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 128 {
+			return fmt.Sprintf("invalid prefixLength %d", subnetInfo.PrefixLength), false
+		}
+		mask = net.CIDRMask(int(subnetInfo.PrefixLength), 128)
+	}
+	subnet := &net.IPNet{
+		IP:   gatewayIP.Mask(mask),
+		Mask: mask,
+	}
+	for _, ipRange := range ipRanges {
+		if ipRange.CIDR != "" {
+			_, cidr, err := net.ParseCIDR(ipRange.CIDR)
+			if err != nil {
+				return err.Error(), false
+			}
+			if !ip.IPNetContains(subnet, cidr) {
+				return fmt.Sprintf("cidr %s must be a strict subset of the subnet", ipRange.CIDR), false
+			}
+		} else {
+			start := net.ParseIP(ipRange.Start)
+			end := net.ParseIP(ipRange.End)
+			if !subnet.Contains(start) || !subnet.Contains(end) {
+				return fmt.Sprintf("IP range %s-%s must be a strict subset of the subnet", ipRange.Start, ipRange.End), false
+			}
+		}
+	}
+	return "", true
+}
+
 func getIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
 	set := sets.New[string]()
 	for _, ipRange := range ipRanges {

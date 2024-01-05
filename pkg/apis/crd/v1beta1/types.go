@@ -210,6 +210,9 @@ type ExternalIPPool struct {
 type ExternalIPPoolSpec struct {
 	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.
 	IPRanges []IPRange `json:"ipRanges"`
+	// The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes.
+	// Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.
+	SubnetInfo *SubnetInfo `json:"subnetInfo,omitempty"`
 	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
 }
@@ -222,6 +225,16 @@ type IPRange struct {
 	Start string `json:"start,omitempty"`
 	// The end IP of the range, e.g. 10.10.20.20, inclusive.
 	End string `json:"end,omitempty"`
+}
+
+// SubnetInfo specifies subnet attributes for IP Range.
+type SubnetInfo struct {
+	// Gateway IP for this subnet, e.g. 10.10.1.1.
+	Gateway string `json:"gateway"`
+	// Prefix length for the subnet, e.g. 24.
+	PrefixLength int32 `json:"prefixLength"`
+	// VLAN ID for this subnet. Default is 0. Valid value is 0~4094.
+	VLAN int32 `json:"vlan,omitempty"`
 }
 
 type ExternalIPPoolStatus struct {

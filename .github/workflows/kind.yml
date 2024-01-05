@@ -237,6 +237,7 @@ jobs:
             --feature-gates AllAlpha=true,AllBeta=true \
             --proxy-all \
             --node-ipam \
+            --extra-vlan \
             --multicast
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
