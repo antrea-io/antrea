@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -2557,7 +2558,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			pktCap.TransportHeader.ICMP = &v1beta1.ICMPEchoRequestHeader{}
 		}
 		if !reflect.DeepEqual(tc.expectedPktCap, pktCap) {
-			t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
+			t.Fatalf("Captured packet should be: %s, but got: %s", spew.Sdump(tc.expectedPktCap), spew.Sdump(tf.Status.CapturedPacket))
 		}
 	}
 }
