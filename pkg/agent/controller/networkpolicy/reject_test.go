@@ -523,6 +523,8 @@ func Test_getRejectPacketOutMutateFunc(t *testing.T) {
 	}
 }
 
+// Only test RejectPodLocal and RejectServiceRemoteToExternal two reject types,
+// considering other types branches are covered by other tests.
 func Test_handleRejectRequest(t *testing.T) {
 	fakeSrcMac := "aa:aa:aa:aa:aa:aa"
 	fakeDstMac := "bb:bb:bb:bb:bb:bb"
@@ -553,8 +555,6 @@ func Test_handleRejectRequest(t *testing.T) {
 		},
 		MAC: net.HardwareAddr([]byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}),
 	}
-	// Only test RejectPodLocal and RejectServiceRemoteToExternal two reject types,
-	// considering other types branches are covered by the UTs above.
 	tests := []struct {
 		name              string
 		packetIn          *ofctrl.PacketIn
