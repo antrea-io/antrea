@@ -57,6 +57,10 @@ func Int64ToString(val int64) string {
 	return strconv.Itoa(int(val))
 }
 
+func BoolToString(val bool) string {
+	return strconv.FormatBool(val)
+}
+
 func GenerateTableElementWithSummary(list []string, maxColumnLength int) string {
 	element := ""
 	sort.Strings(list)
