@@ -24,7 +24,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        VERSION=${{ github.event.inputs.antrea-version }}
+        VERSION=${{ inputs.antrea-version }}
         if [ -z "$VERSION" ]; then
             VERSION=$(gh api /repos/antrea-io/antrea/releases/latest --jq '.tag_name')
         fi
