@@ -553,10 +553,14 @@ func (fa *flowAggregator) GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []m
 
 func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	return querier.Metrics{
-		NumRecordsExported: fa.numRecordsExported,
-		NumRecordsReceived: fa.collectingProcess.GetNumRecordsReceived(),
-		NumFlows:           fa.aggregationProcess.GetNumFlows(),
-		NumConnToCollector: fa.collectingProcess.GetNumConnToCollector(),
+		NumRecordsExported:     fa.numRecordsExported,
+		NumRecordsReceived:     fa.collectingProcess.GetNumRecordsReceived(),
+		NumFlows:               fa.aggregationProcess.GetNumFlows(),
+		NumConnToCollector:     fa.collectingProcess.GetNumConnToCollector(),
+		WithClickHouseExporter: fa.clickHouseExporter != nil,
+		WithS3Exporter:         fa.s3Exporter != nil,
+		WithLogExporter:        fa.logExporter != nil,
+		WithIPFIXExporter:      fa.ipfixExporter != nil,
 	}
 }
 

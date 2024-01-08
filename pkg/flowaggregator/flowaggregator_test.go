@@ -725,17 +725,29 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
 	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
+	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
+	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
+	mockLogExporter := exportertesting.NewMockInterface(ctrl)
 	want := querier.Metrics{
-		NumRecordsExported: 1,
-		NumRecordsReceived: 1,
-		NumFlows:           1,
-		NumConnToCollector: 1,
+		NumRecordsExported:     1,
+		NumRecordsReceived:     1,
+		NumFlows:               1,
+		NumConnToCollector:     1,
+		WithClickHouseExporter: true,
+		WithS3Exporter:         true,
+		WithLogExporter:        true,
+		WithIPFIXExporter:      true,
 	}
 
 	fa := &flowAggregator{
 		collectingProcess:  mockCollectingProcess,
 		aggregationProcess: mockAggregationProcess,
 		numRecordsExported: 1,
+		clickHouseExporter: mockClickHouseExporter,
+		s3Exporter:         mockS3Exporter,
+		logExporter:        mockLogExporter,
+		ipfixExporter:      mockIPFIXExporter,
 	}
 
 	mockCollectingProcess.EXPECT().GetNumRecordsReceived().Return(int64(1))
