@@ -168,7 +168,6 @@ Here are the trigger phrases for individual checks:
 * `/test-windows-e2e`: Windows IPv4 e2e tests
 * `/test-windows-conformance`: Windows IPv4 conformance tests
 * `/test-windows-networkpolicy`: Windows IPv4 networkpolicy tests
-* `/test-windows-proxyall-e2e`: Windows IPv4 e2e tests with proxyAll enabled
 * `/test-ipv6-e2e`: Linux dual stack e2e tests
 * `/test-ipv6-conformance`: Linux dual stack conformance tests
 * `/test-ipv6-networkpolicy`: Linux dual stack networkpolicy tests

@@ -122,24 +122,6 @@
           ./ci/jenkins/test.sh --testcase windows-install-ovs
 
 - builder:
-    name: builder-e2e-win
-    builders:
-      - shell: |-
-          #!/bin/bash
-          set -ex
-          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY}
-
-- builder:
-    name: builder-conformance-win
-    builders:
-      - shell: |-
-          #!/bin/bash
-          set -ex
-          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}}
-
-- builder:
     name: builder-e2e-proxyall-win
     builders:
       - shell: |-
@@ -149,7 +131,7 @@
           ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
 
 - builder:
-      name: builder-e2e-win-containerd
+      name: builder-e2e-win
       builders:
           - shell: |-
                 #!/bin/bash
@@ -158,7 +140,7 @@
                 ./ci/jenkins/test.sh --testcase windows-containerd-e2e --registry ${{DOCKER_REGISTRY}} --win-image-node '{win_image_node}'
 
 - builder:
-      name: builder-conformance-win-containerd
+      name: builder-conformance-win
       builders:
           - shell: |-
                 #!/bin/bash
