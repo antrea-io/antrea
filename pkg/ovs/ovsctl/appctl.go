@@ -38,10 +38,11 @@ func (r *ovsAppctlRunner) RunAppctlCmd(cmd string, needsBridge bool, args ...str
 	if needsBridge {
 		cmdArgs = append(cmdArgs, r.bridge)
 	}
+	cmdArgs = append(cmdArgs, args...)
 	ovsCmd := exec.CommandContext(context.TODO(), "ovs-appctl", cmdArgs...)
 	out, err := ovsCmd.CombinedOutput()
 	if err != nil {
-		return nil, newExecError(err, string(out))
+		return nil, NewExecError(err, string(out))
 	}
 	return out, nil
 }
