@@ -261,7 +261,7 @@ func newBadRequestError(msg string) BadRequestError {
 	return BadRequestError(msg)
 }
 
-func newExecError(err error, errorOutput string) *ExecError {
+func NewExecError(err error, errorOutput string) *ExecError {
 	e := &ExecError{error: err}
 	if e.CommandExecuted() {
 		e.errorOutput = errorOutput
