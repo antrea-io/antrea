@@ -31,8 +31,12 @@ if ($AntreaHnsNetwork) {
     }
 }
 if ($NeedCleanNetwork) {
+    $ovsRunMode = "service"
+    if ($RunOVSServices -eq $false) {
+        $ovsRunMode = "container"
+    }
     Write-Host "Cleaning stale Antrea network resources if they exist..."
-    & $CleanAntreaNetworkScript
+    & $CleanAntreaNetworkScript -OVSRunMode $ovsRunMode
 }
 # Enure OVS services are running.
 Write-Host "Starting ovsdb-server service..."
