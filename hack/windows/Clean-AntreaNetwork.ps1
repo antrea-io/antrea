@@ -10,7 +10,7 @@
   Remove ovsdb-server and ovs-vswitchd services fom the host. The default value is $false. If this argument is set
   as true, this script would remove the two Windows services from the host. Otherwise, we consider that these
   services are supposed to be running on the host, so the script would try to recover them if their statuses are
-  not as expected.
+  not as expected. The parameter is ignored when OVSRunMode is "container".
   .PARAMETER OVSRunMode
   OVS run mode can be <container> if OVS userspace processes were running inside a container in antrea-agent Pod 
   or <service> if OVS userspace processes were running as a Service on host. Default mode is <service>.
