@@ -209,7 +209,7 @@ Example ClusterNetworkPolicies might look like these:
 #### ACNP with stand-alone selectors
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-stand-alone-selectors
@@ -256,7 +256,7 @@ spec:
 #### ACNP with ClusterGroup reference
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-cluster-groups
@@ -289,7 +289,7 @@ spec:
 #### ACNP for complete Pod isolation in selected Namespaces
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: isolate-all-pods-in-namespace
@@ -311,7 +311,7 @@ spec:
 #### ACNP for strict Namespace isolation
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: strict-ns-isolation
@@ -347,7 +347,7 @@ spec:
 #### ACNP for default zero-trust cluster security posture
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: default-cluster-deny
@@ -365,7 +365,7 @@ spec:
 #### ACNP for toServices rule
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-drop-to-services
@@ -390,7 +390,7 @@ spec:
 #### ACNP for ICMP traffic
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-reject-ping-request
@@ -416,7 +416,7 @@ spec:
 #### ACNP for IGMP traffic
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-igmp-drop
@@ -446,7 +446,7 @@ spec:
 #### ACNP for multicast egress traffic
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-multicast-traffic-drop
@@ -468,7 +468,7 @@ spec:
 #### ACNP for HTTP traffic
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: ingress-allow-http-request-to-api-v2
@@ -496,7 +496,7 @@ spec:
 ```
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: allow-web-access-to-internal-domain
@@ -527,7 +527,7 @@ Please refer to [Antrea Layer 7 NetworkPolicy](antrea-l7-network-policy.md) for 
 #### ACNP with log settings
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-log-setting
@@ -777,7 +777,7 @@ policy and cannot be set along with `appliedTo` at the policy level.
 Below is an example of appliedTo-per-rule ACNP usage:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-appliedto-per-rule
@@ -902,7 +902,7 @@ resource, Antrea NetworkPolicy can also be associated with Tiers.
 An example Antrea NetworkPolicy might look like this:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: test-annp
@@ -972,7 +972,7 @@ Pods labeled "role: nondb" in Namespaces labeled "role: db", "test-grp-with-ip-b
 that selects `ipblock` "10.0.10.0/24".
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: annp-with-groups
@@ -1102,7 +1102,7 @@ K8s NetworkPolicy and Antrea-native policy users can take advantage of this rese
 to select Namespaces directly by their `name` in `namespaceSelectors` as follows:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: test-annp-by-name
@@ -1173,7 +1173,7 @@ Namespaces with the `antrea.io/metadata.name: <namespaceName>` label. Users may 
 use this reserved label to select Namespaces by name as follows:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: NetworkPolicy
 metadata:
   name: test-annp-by-name
@@ -1217,7 +1217,7 @@ Consider a minimalistic cluster, where there are only three Namespaces labeled n
 Inside each of these Namespaces, there are three Pods labeled app=a, app=b and app=c.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: allow-self-ns
@@ -1244,7 +1244,7 @@ The policy above ensures that x/a, x/b and x/c can communicate with each other, 
 (unless there are higher precedenced policies which say otherwise). Same for Namespaces y and z.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: deny-self-ns-a-to-b
@@ -1284,7 +1284,7 @@ The standard `Allow`, `Drop` and `Reject` actions apply to FQDN egress rules.
 An example policy using FQDN based filtering could look like this:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-fqdn-all-foobar
@@ -1331,7 +1331,7 @@ specifies an exact match on a DNS name, will drop all egress traffic destined to
 headless Service `svcA` defined in the `default` Namespace:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-fqdn-headless-service
@@ -1370,7 +1370,7 @@ For example, the following rule applies to Pods with label `app=antrea-test-app`
 Nodes on TCP port 6443 which have the labels `node-role.kubernetes.io/control-plane`.
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: egress-control-plane
@@ -1420,7 +1420,7 @@ No matter which sections the `serviceAccount` field is used in, it cannot be use
 An example policy using `serviceAccount` could look like this:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-service-account
@@ -1470,7 +1470,7 @@ There are a few **restrictions** on configuring a policy/rule that applies to No
 An example policy using `service` in `appliedTo` could look like this:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha1
+apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-deny-external-client-nodeport-svc-access
@@ -1751,7 +1751,7 @@ Similar RBAC is applied to the ClusterGroup resource.
   Tiers in a cluster be less than or equal to 10.
 - In order to reduce the churn in the agent, it is recommended to set the policy
   priority (acnp/annp.spec.priority) within the range 1.0 to 100.0.
-- The v1alpha1 policy CRDs support up to 10,000 unique priorities at policy level,
+- The v1beta1 policy CRDs support up to 10,000 unique priorities at policy level,
   and up to 50,000 unique priorities at rule level, across all Tiers except for
   the "baseline" Tier. For any two Antrea-native policy rules, their rule level
   priorities are only considered equal if their policy objects share the same Tier
