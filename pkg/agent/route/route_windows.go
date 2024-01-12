@@ -71,7 +71,13 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool, serviceCIDRProvider servicecidr.Interface) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig,
+	noSNAT bool,
+	proxyAll bool,
+	connectUplinkToBridge bool,
+	nodeNetworkPolicyEnabled bool,
+	multicastEnabled bool,
+	serviceCIDRProvider servicecidr.Interface) (*Client, error) {
 	return &Client{
 		networkConfig:        networkConfig,
 		nodeRoutes:           &sync.Map{},
@@ -592,4 +598,20 @@ func (c *Client) AddEgressRule(tableID uint32, mark uint32) error {
 
 func (c *Client) DeleteEgressRule(tableID uint32, mark uint32) error {
 	return errors.New("DeleteEgressRule is not implemented on Windows")
+}
+
+func (c *Client) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, ipsetEntries sets.Set[string], isIPv6 bool) error {
+	return errors.New("AddOrUpdateNodeNetworkPolicyIPSet is not implemented on Windows")
+}
+
+func (c *Client) DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) error {
+	return errors.New("DeleteNodeNetworkPolicyIPSet is not implemented on Windows")
+}
+
+func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error {
+	return errors.New("AddOrUpdateNodeNetworkPolicyIPTables is not implemented on Windows")
+}
+
+func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
+	return errors.New("DeleteNodeNetworkPolicyIPTables is not implemented on Windows")
 }

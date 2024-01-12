@@ -150,6 +150,10 @@ const (
 	// alpha: v1.15
 	// Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
 	EgressSeparateSubnet featuregate.Feature = "EgressSeparateSubnet"
+
+	// alpha: v1.15
+	// Allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
+	NodeNetworkPolicy featuregate.Feature = "NodeNetworkPolicy"
 )
 
 var (
@@ -189,6 +193,7 @@ var (
 		AdminNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:        {Default: false, PreRelease: featuregate.Alpha},
+		NodeNetworkPolicy:           {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
@@ -217,6 +222,7 @@ var (
 		TrafficControl,
 		EgressTrafficShaping,
 		EgressSeparateSubnet,
+		NodeNetworkPolicy,
 	)
 
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
@@ -262,6 +268,7 @@ var (
 		CleanupStaleUDPSvcConntrack: {},
 		EgressTrafficShaping:        {},
 		EgressSeparateSubnet:        {},
+		NodeNetworkPolicy:           {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

@@ -15,6 +15,8 @@
 package types
 
 import (
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -73,6 +75,17 @@ type Address interface {
 	GetMatchValue() string
 	GetMatchKey(addrType AddressType) *MatchKey
 	GetValue() interface{}
+}
+
+type NodePolicyRule struct {
+	IPSet           string
+	IPSetMembers    sets.Set[string]
+	Priority        *Priority
+	ServiceIPTChain string
+	ServiceIPTRules []string
+	CoreIPTChain    string
+	CoreIPTRule     string
+	IsIPv6          bool
 }
 
 // PolicyRule groups configurations to set up conjunctive match for egress/ingress policy rules.

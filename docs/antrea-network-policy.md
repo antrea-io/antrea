@@ -20,6 +20,7 @@
     - [ACNP for IGMP traffic](#acnp-for-igmp-traffic)
     - [ACNP for multicast egress traffic](#acnp-for-multicast-egress-traffic)
     - [ACNP for HTTP traffic](#acnp-for-http-traffic)
+    - [ACNP for Kubernetes Node traffic](#acnp-for-kubernetes-node-traffic)
     - [ACNP with log settings](#acnp-with-log-settings)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
@@ -523,6 +524,56 @@ spec:
 ```
 
 Please refer to [Antrea Layer 7 NetworkPolicy](antrea-l7-network-policy.md) for extra information.
+
+#### ACNP for Kubernetes Node traffic
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-node-egress-traffic-drop
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - nodeSelector:
+        matchLabels:
+          kubernetes.io/os: linux
+  egress:
+    - action: Drop
+      to:
+        - ipBlock:                 
+            cidr: 192.168.1.0/24
+      ports:
+        - protocol: TCP
+          port: 80
+      name: dropHTTPTrafficToCIDR
+```
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-node-ingress-traffic-drop
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - nodeSelector:
+        matchLabels:
+          kubernetes.io/os: linux
+  ingress:
+    - action: Drop
+      from:
+        - ipBlock:
+            cidr: 192.168.1.0/24
+      ports:
+        - protocol: TCP
+          port: 22
+      name: dropSSHTrafficFromCIDR
+```
+
+Please refer to [Antrea Node NetworkPolicy](antrea-node-network-policy.md) for more information.
 
 #### ACNP with log settings
 

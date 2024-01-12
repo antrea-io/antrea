@@ -487,7 +487,12 @@ func (data *TestData) CreateOrUpdateNamespace(n string, labels map[string]string
 }
 
 // CreateOrUpdateDeployment is a convenience function for idempotent setup of deployments
-func (data *TestData) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
+func (data *TestData) CreateOrUpdateDeployment(ns string,
+	deploymentName string,
+	replicas int32,
+	labels map[string]string,
+	nodeName string,
+	hostNetwork bool) (*appsv1.Deployment, error) {
 	zero := int64(0)
 	log.Infof("Creating/updating Deployment '%s/%s'", ns, deploymentName)
 	makeContainerSpec := func(port int32, protocol v1.Protocol) v1.Container {
@@ -535,6 +540,8 @@ func (data *TestData) CreateOrUpdateDeployment(ns, deploymentName string, replic
 					Namespace: ns,
 				},
 				Spec: v1.PodSpec{
+					NodeName:                      nodeName,
+					HostNetwork:                   hostNetwork,
 					TerminationGracePeriodSeconds: &zero,
 					Containers: []v1.Container{
 						makeContainerSpec(80, "ALL"),
@@ -1160,18 +1167,26 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool) (map[string][]string, error) {
-	for _, ns := range namespaces {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
+	for key, ns := range namespaces {
 		if createNamespaces {
 			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
 			if err != nil {
 				return nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
 			}
 		}
+		var nodeName string
+		var hostNetwork bool
+		if nodeNames != nil {
+			nodeName = nodeNames[key]
+		}
+		if hostNetworks != nil {
+			hostNetwork = hostNetworks[key]
+		}
 		for _, pod := range pods {
 			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)
 			deployment := ns + pod
-			_, err := k.CreateOrUpdateDeployment(ns, deployment, 1, map[string]string{"pod": pod, "app": pod})
+			_, err := k.CreateOrUpdateDeployment(ns, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create/update Deployment '%s/%s': %w", ns, pod, err)
 			}

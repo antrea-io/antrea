@@ -50,6 +50,13 @@ const (
 	L7NetworkPolicyReturnPortName = "antrea-l7-tap1"
 )
 
+const (
+	NodeNetworkPolicyIngressRulesChain = "ANTREA-POL-INGRESS-RULES"
+	NodeNetworkPolicyEgressRulesChain  = "ANTREA-POL-EGRESS-RULES"
+
+	NodeNetworkPolicyPrefix = "ANTREA-POL"
+)
+
 var (
 	// VirtualServiceIPv4 or VirtualServiceIPv6 is used in the following scenarios:
 	// - The IP is used to perform SNAT for packets of Service sourced from Antrea gateway and destined for external

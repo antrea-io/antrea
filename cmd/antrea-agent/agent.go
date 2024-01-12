@@ -140,6 +140,7 @@ func run(o *Options) error {
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
+	nodeNetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.NodeNetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 	enableFlowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
@@ -219,7 +220,13 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
-	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge, multicastEnabled, serviceCIDRProvider)
+	routeClient, err := route.NewClient(networkConfig,
+		o.config.NoSNAT,
+		o.config.AntreaProxy.ProxyAll,
+		connectUplinkToBridge,
+		nodeNetworkPolicyEnabled,
+		multicastEnabled,
+		serviceCIDRProvider)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -462,6 +469,7 @@ func run(o *Options) error {
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
+		routeClient,
 		ifaceStore,
 		afero.NewOsFs(),
 		nodeKey,
@@ -471,6 +479,7 @@ func run(o *Options) error {
 		groupIDUpdates,
 		antreaPolicyEnabled,
 		l7NetworkPolicyEnabled,
+		nodeNetworkPolicyEnabled,
 		o.enableAntreaProxy,
 		statusManagerEnabled,
 		multicastEnabled,
