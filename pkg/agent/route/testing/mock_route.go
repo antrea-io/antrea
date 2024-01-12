@@ -30,6 +30,7 @@ import (
 	config "antrea.io/antrea/pkg/agent/config"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	gomock "go.uber.org/mock/gomock"
+	sets "k8s.io/apimachinery/pkg/util/sets"
 )
 
 // MockInterface is a mock of Interface interface.
@@ -123,6 +124,34 @@ func (m *MockInterface) AddNodePort(arg0 []net.IP, arg1 uint16, arg2 openflow.Pr
 func (mr *MockInterfaceMockRecorder) AddNodePort(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddNodePort", reflect.TypeOf((*MockInterface)(nil).AddNodePort), arg0, arg1, arg2)
+}
+
+// AddOrUpdateNodeNetworkPolicyIPSet mocks base method.
+func (m *MockInterface) AddOrUpdateNodeNetworkPolicyIPSet(arg0 string, arg1 sets.Set[string], arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOrUpdateNodeNetworkPolicyIPSet", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOrUpdateNodeNetworkPolicyIPSet indicates an expected call of AddOrUpdateNodeNetworkPolicyIPSet.
+func (mr *MockInterfaceMockRecorder) AddOrUpdateNodeNetworkPolicyIPSet(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateNodeNetworkPolicyIPSet", reflect.TypeOf((*MockInterface)(nil).AddOrUpdateNodeNetworkPolicyIPSet), arg0, arg1, arg2)
+}
+
+// AddOrUpdateNodeNetworkPolicyIPTables mocks base method.
+func (m *MockInterface) AddOrUpdateNodeNetworkPolicyIPTables(arg0 []string, arg1 [][]string, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOrUpdateNodeNetworkPolicyIPTables", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOrUpdateNodeNetworkPolicyIPTables indicates an expected call of AddOrUpdateNodeNetworkPolicyIPTables.
+func (mr *MockInterfaceMockRecorder) AddOrUpdateNodeNetworkPolicyIPTables(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateNodeNetworkPolicyIPTables", reflect.TypeOf((*MockInterface)(nil).AddOrUpdateNodeNetworkPolicyIPTables), arg0, arg1, arg2)
 }
 
 // AddRouteForLink mocks base method.
@@ -235,6 +264,34 @@ func (m *MockInterface) DeleteLocalAntreaFlexibleIPAMPodRule(arg0 []net.IP) erro
 func (mr *MockInterfaceMockRecorder) DeleteLocalAntreaFlexibleIPAMPodRule(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).DeleteLocalAntreaFlexibleIPAMPodRule), arg0)
+}
+
+// DeleteNodeNetworkPolicyIPSet mocks base method.
+func (m *MockInterface) DeleteNodeNetworkPolicyIPSet(arg0 string, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteNodeNetworkPolicyIPSet", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteNodeNetworkPolicyIPSet indicates an expected call of DeleteNodeNetworkPolicyIPSet.
+func (mr *MockInterfaceMockRecorder) DeleteNodeNetworkPolicyIPSet(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodeNetworkPolicyIPSet", reflect.TypeOf((*MockInterface)(nil).DeleteNodeNetworkPolicyIPSet), arg0, arg1)
+}
+
+// DeleteNodeNetworkPolicyIPTables mocks base method.
+func (m *MockInterface) DeleteNodeNetworkPolicyIPTables(arg0 []string, arg1 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteNodeNetworkPolicyIPTables", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteNodeNetworkPolicyIPTables indicates an expected call of DeleteNodeNetworkPolicyIPTables.
+func (mr *MockInterfaceMockRecorder) DeleteNodeNetworkPolicyIPTables(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNodeNetworkPolicyIPTables", reflect.TypeOf((*MockInterface)(nil).DeleteNodeNetworkPolicyIPTables), arg0, arg1)
 }
 
 // DeleteNodePort mocks base method.

@@ -61,7 +61,7 @@ func TestRouteOperation(t *testing.T) {
 	gwIP2 := net.ParseIP("192.168.3.1")
 	_, destCIDR2, _ := net.ParseCIDR(dest2)
 
-	client, err := NewClient(&config.NetworkConfig{}, true, false, false, false, nil)
+	client, err := NewClient(&config.NetworkConfig{}, true, false, false, false, false, nil)
 
 	require.Nil(t, err)
 	called := false

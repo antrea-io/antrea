@@ -107,12 +107,12 @@ func newCIDR(cidrStr string) *net.IPNet {
 	return tmpIPNet
 }
 
-func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient, v4Enabled, v6Enabled bool) *reconciler {
+func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient, v4Enabled, v6Enabled bool) *podReconciler {
 	f, _ := newMockFQDNController(t, controller, nil)
 	ch := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator()
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch)}
-	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
+	r := newPodReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
 	return r
 }
 
@@ -120,14 +120,14 @@ func TestReconcilerForget(t *testing.T) {
 	prepareMockTables()
 	tests := []struct {
 		name              string
-		lastRealizeds     map[string]*lastRealized
+		lastRealizeds     map[string]*podPolicyLastRealized
 		args              string
 		expectedOFRuleIDs []uint32
 		wantErr           bool
 	}{
 		{
 			"unknown-rule",
-			map[string]*lastRealized{
+			map[string]*podPolicyLastRealized{
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
 					CompletedRule: &CompletedRule{
@@ -141,7 +141,7 @@ func TestReconcilerForget(t *testing.T) {
 		},
 		{
 			"known-single-ofrule",
-			map[string]*lastRealized{
+			map[string]*podPolicyLastRealized{
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8},
 					CompletedRule: &CompletedRule{
@@ -155,7 +155,7 @@ func TestReconcilerForget(t *testing.T) {
 		},
 		{
 			"known-multiple-ofrule",
-			map[string]*lastRealized{
+			map[string]*podPolicyLastRealized{
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
@@ -169,7 +169,7 @@ func TestReconcilerForget(t *testing.T) {
 		},
 		{
 			"known-multiple-ofrule-cnp",
-			map[string]*lastRealized{
+			map[string]*podPolicyLastRealized{
 				"foo": {
 					ofIDs: map[servicesKey]uint32{servicesKey1: 8, servicesKey2: 9},
 					CompletedRule: &CompletedRule{
@@ -864,7 +864,7 @@ func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
 	}
 }
 
-// TestReconcileWithTransientError ensures the reconciler can reconcile a rule properly after the first attempt meets
+// TestReconcileWithTransientError ensures the podReconciler can reconcile a rule properly after the first attempt meets
 // transient error.
 // The input rule is an egress rule with named port, applying to 3 Pods and 1 IPBlock. The first 2 Pods have different
 // port numbers for the named port and the 3rd Pod cannot resolve it.
@@ -922,10 +922,10 @@ func TestReconcileWithTransientError(t *testing.T) {
 	mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any()).Return(transientError).Times(1)
 	err := r.Reconcile(egressRule)
 	assert.Error(t, err)
-	// Ensure the openflow ID is not persistent in lastRealized and is released to idAllocator upon error.
+	// Ensure the openflow ID is not persistent in podPolicyLastRealized and is released to idAllocator upon error.
 	value, exists := r.lastRealizeds.Load(egressRule.ID)
 	assert.True(t, exists)
-	assert.Empty(t, value.(*lastRealized).ofIDs)
+	assert.Empty(t, value.(*podPolicyLastRealized).ofIDs)
 	assert.Equal(t, 1, r.idAllocator.deleteQueue.Len())
 
 	// Make the second call success.
@@ -961,10 +961,10 @@ func TestReconcileWithTransientError(t *testing.T) {
 	}
 	err = r.Reconcile(egressRule)
 	assert.NoError(t, err)
-	// Ensure the openflow IDs are persistent in lastRealized and are not released to idAllocator upon success.
+	// Ensure the openflow IDs are persistent in podPolicyLastRealized and are not released to idAllocator upon success.
 	value, exists = r.lastRealizeds.Load(egressRule.ID)
 	assert.True(t, exists)
-	assert.Len(t, value.(*lastRealized).ofIDs, 3)
+	assert.Len(t, value.(*podPolicyLastRealized).ofIDs, 3)
 	// Ensure the number of released IDs doesn't change.
 	assert.Equal(t, 1, r.idAllocator.deleteQueue.Len())
 
@@ -1075,7 +1075,7 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, true)
 			if tt.numInstalledRules > 0 {
 				// BatchInstall should skip rules already installed
-				r.lastRealizeds.Store(tt.args[0].ID, newLastRealized(tt.args[0]))
+				r.lastRealizeds.Store(tt.args[0].ID, newPodPolicyLastRealized(tt.args[0]))
 			}
 			// TODO: mock idAllocator and priorityAssigner
 			mockOFClient.EXPECT().BatchInstallPolicyRuleFlows(gomock.Any()).

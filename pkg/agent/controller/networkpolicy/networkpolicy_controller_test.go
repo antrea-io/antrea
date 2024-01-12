@@ -80,6 +80,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset},
 		nil,
 		nil,
+		nil,
 		fs,
 		"node1",
 		podUpdateChannel,
@@ -88,6 +89,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 		ch2,
 		true,
 		true,
+		false,
 		true,
 		true,
 		false,
@@ -102,7 +104,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 		&config.NodeConfig{},
 		wait.NewGroup())
 	reconciler := newMockReconciler()
-	controller.reconciler = reconciler
+	controller.podReconciler = reconciler
 	controller.auditLogger = nil
 	return controller, clientset, reconciler
 }

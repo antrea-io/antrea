@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/config"
 	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
@@ -147,17 +148,20 @@ func TestSyncIPSet(t *testing.T) {
 	podCIDRv6Str := "2001:ab03:cd04:55ef::/64"
 	_, podCIDRv6, _ := net.ParseCIDR(podCIDRv6Str)
 	tests := []struct {
-		name                  string
-		proxyAll              bool
-		multicastEnabled      bool
-		connectUplinkToBridge bool
-		networkConfig         *config.NetworkConfig
-		nodeConfig            *config.NodeConfig
-		nodePortsIPv4         []string
-		nodePortsIPv6         []string
-		clusterNodeIPs        map[string]string
-		clusterNodeIP6s       map[string]string
-		expectedCalls         func(ipset *ipsettest.MockInterfaceMockRecorder)
+		name                        string
+		proxyAll                    bool
+		multicastEnabled            bool
+		connectUplinkToBridge       bool
+		nodeNetworkPolicyEnabled    bool
+		networkConfig               *config.NetworkConfig
+		nodeConfig                  *config.NodeConfig
+		nodePortsIPv4               []string
+		nodePortsIPv6               []string
+		clusterNodeIPs              map[string]string
+		clusterNodeIP6s             map[string]string
+		nodeNetworkPolicyIPSetsIPv4 map[string]sets.Set[string]
+		nodeNetworkPolicyIPSetsIPv6 map[string]sets.Set[string]
+		expectedCalls               func(ipset *ipsettest.MockInterfaceMockRecorder)
 	}{
 		{
 			name: "networkPolicyOnly",
@@ -185,9 +189,10 @@ func TestSyncIPSet(t *testing.T) {
 			},
 		},
 		{
-			name:             "encap, proxyAll=true, multicastEnabled=true",
-			proxyAll:         true,
-			multicastEnabled: true,
+			name:                     "encap, proxyAll=true, multicastEnabled=true, nodeNetworkPolicy=true",
+			proxyAll:                 true,
+			multicastEnabled:         true,
+			nodeNetworkPolicyEnabled: true,
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: config.TrafficEncapModeEncap,
 				IPv4Enabled:      true,
@@ -197,10 +202,12 @@ func TestSyncIPSet(t *testing.T) {
 				PodIPv4CIDR: podCIDR,
 				PodIPv6CIDR: podCIDRv6,
 			},
-			nodePortsIPv4:   []string{"192.168.0.2,tcp:10000", "127.0.0.1,tcp:10000"},
-			nodePortsIPv6:   []string{"fe80::e643:4bff:fe44:ee,tcp:10000", "::1,tcp:10000"},
-			clusterNodeIPs:  map[string]string{"172.16.3.0/24": "192.168.0.3", "172.16.4.0/24": "192.168.0.4"},
-			clusterNodeIP6s: map[string]string{"2001:ab03:cd04:5503::/64": "fe80::e643:4bff:fe03", "2001:ab03:cd04:5504::/64": "fe80::e643:4bff:fe04"},
+			nodePortsIPv4:               []string{"192.168.0.2,tcp:10000", "127.0.0.1,tcp:10000"},
+			nodePortsIPv6:               []string{"fe80::e643:4bff:fe44:ee,tcp:10000", "::1,tcp:10000"},
+			clusterNodeIPs:              map[string]string{"172.16.3.0/24": "192.168.0.3", "172.16.4.0/24": "192.168.0.4"},
+			clusterNodeIP6s:             map[string]string{"2001:ab03:cd04:5503::/64": "fe80::e643:4bff:fe03", "2001:ab03:cd04:5504::/64": "fe80::e643:4bff:fe04"},
+			nodeNetworkPolicyIPSetsIPv4: map[string]sets.Set[string]{"ANTREA-POL-RULE1-4": sets.New[string]("1.1.1.1/32", "2.2.2.2/32")},
+			nodeNetworkPolicyIPSetsIPv6: map[string]sets.Set[string]{"ANTREA-POL-RULE1-6": sets.New[string]("fec0::1111/128", "fec0::2222/128")},
 			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
 				mockIPSet.CreateIPSet(antreaPodIPSet, ipset.HashNet, false)
 				mockIPSet.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true)
@@ -218,6 +225,12 @@ func TestSyncIPSet(t *testing.T) {
 				mockIPSet.AddEntry(clusterNodeIPSet, "192.168.0.4")
 				mockIPSet.AddEntry(clusterNodeIP6Set, "fe80::e643:4bff:fe03")
 				mockIPSet.AddEntry(clusterNodeIP6Set, "fe80::e643:4bff:fe04")
+				mockIPSet.CreateIPSet("ANTREA-POL-RULE1-4", ipset.HashNet, false)
+				mockIPSet.CreateIPSet("ANTREA-POL-RULE1-6", ipset.HashNet, true)
+				mockIPSet.AddEntry("ANTREA-POL-RULE1-4", "1.1.1.1/32")
+				mockIPSet.AddEntry("ANTREA-POL-RULE1-4", "2.2.2.2/32")
+				mockIPSet.AddEntry("ANTREA-POL-RULE1-6", "fec0::1111/128")
+				mockIPSet.AddEntry("ANTREA-POL-RULE1-6", "fec0::2222/128")
 			},
 		},
 		{
@@ -247,15 +260,16 @@ func TestSyncIPSet(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ipset := ipsettest.NewMockInterface(ctrl)
 			c := &Client{ipset: ipset,
-				networkConfig:         tt.networkConfig,
-				nodeConfig:            tt.nodeConfig,
-				proxyAll:              tt.proxyAll,
-				multicastEnabled:      tt.multicastEnabled,
-				connectUplinkToBridge: tt.connectUplinkToBridge,
-				nodePortsIPv4:         sync.Map{},
-				nodePortsIPv6:         sync.Map{},
-				clusterNodeIPs:        sync.Map{},
-				clusterNodeIP6s:       sync.Map{},
+				networkConfig:            tt.networkConfig,
+				nodeConfig:               tt.nodeConfig,
+				proxyAll:                 tt.proxyAll,
+				multicastEnabled:         tt.multicastEnabled,
+				connectUplinkToBridge:    tt.connectUplinkToBridge,
+				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
+				nodePortsIPv4:            sync.Map{},
+				nodePortsIPv6:            sync.Map{},
+				clusterNodeIPs:           sync.Map{},
+				clusterNodeIP6s:          sync.Map{},
 			}
 			for _, nodePortIPv4 := range tt.nodePortsIPv4 {
 				c.nodePortsIPv4.Store(nodePortIPv4, struct{}{})
@@ -269,6 +283,12 @@ func TestSyncIPSet(t *testing.T) {
 			for cidr, nodeIP := range tt.clusterNodeIP6s {
 				c.clusterNodeIP6s.Store(cidr, nodeIP)
 			}
+			for set, ips := range tt.nodeNetworkPolicyIPSetsIPv4 {
+				c.nodeNetworkPolicyIPSetsIPv4.Store(set, ips)
+			}
+			for set, ips := range tt.nodeNetworkPolicyIPSetsIPv6 {
+				c.nodeNetworkPolicyIPSetsIPv6.Store(set, ips)
+			}
 			tt.expectedCalls(ipset.EXPECT())
 			assert.NoError(t, c.syncIPSet())
 		})
@@ -277,22 +297,24 @@ func TestSyncIPSet(t *testing.T) {
 
 func TestSyncIPTables(t *testing.T) {
 	tests := []struct {
-		name                  string
-		isCloudEKS            bool
-		proxyAll              bool
-		multicastEnabled      bool
-		connectUplinkToBridge bool
-		networkConfig         *config.NetworkConfig
-		nodeConfig            *config.NodeConfig
-		nodePortsIPv4         []string
-		nodePortsIPv6         []string
-		markToSNATIP          map[uint32]string
-		expectedCalls         func(iptables *iptablestest.MockInterfaceMockRecorder)
+		name                     string
+		isCloudEKS               bool
+		proxyAll                 bool
+		multicastEnabled         bool
+		connectUplinkToBridge    bool
+		nodeNetworkPolicyEnabled bool
+		networkConfig            *config.NetworkConfig
+		nodeConfig               *config.NodeConfig
+		nodePortsIPv4            []string
+		nodePortsIPv6            []string
+		markToSNATIP             map[uint32]string
+		expectedCalls            func(iptables *iptablestest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:             "encap,egress=true,multicastEnabled=true,proxyAll=true",
-			proxyAll:         true,
-			multicastEnabled: true,
+			name:                     "encap,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true",
+			proxyAll:                 true,
+			multicastEnabled:         true,
+			nodeNetworkPolicyEnabled: true,
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: config.TrafficEncapModeEncap,
 				TunnelType:       ovsconfig.GeneveTunnel,
@@ -327,6 +349,10 @@ func TestSyncIPTables(t *testing.T) {
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaOutputChain)
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -341,8 +367,23 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POL-EGRESS-RULES - [0:0]
+:ANTREA-POL-INGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-EGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
+-A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -370,8 +411,23 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POL-EGRESS-RULES - [0:0]
+:ANTREA-POL-INGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-EGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
+-A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -527,16 +583,24 @@ COMMIT
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
 			c := &Client{iptables: mockIPTables,
-				networkConfig:         tt.networkConfig,
-				nodeConfig:            tt.nodeConfig,
-				proxyAll:              tt.proxyAll,
-				isCloudEKS:            tt.isCloudEKS,
-				multicastEnabled:      tt.multicastEnabled,
-				connectUplinkToBridge: tt.connectUplinkToBridge,
-				markToSNATIP:          sync.Map{},
+				networkConfig:            tt.networkConfig,
+				nodeConfig:               tt.nodeConfig,
+				proxyAll:                 tt.proxyAll,
+				isCloudEKS:               tt.isCloudEKS,
+				multicastEnabled:         tt.multicastEnabled,
+				connectUplinkToBridge:    tt.connectUplinkToBridge,
+				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
+				deterministic:            true,
 			}
 			for mark, snatIP := range tt.markToSNATIP {
 				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
+			}
+			if tt.nodeNetworkPolicyEnabled {
+				c.initNodeNetworkPolicy()
+				c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyIngressRulesChain, []string{
+					`-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"`})
+				c.nodeNetworkPolicyIPTablesIPv6.Store(config.NodeNetworkPolicyIngressRulesChain, []string{
+					`-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"`})
 			}
 			tt.expectedCalls(mockIPTables.EXPECT())
 			assert.NoError(t, c.syncIPTables())
@@ -1868,6 +1932,228 @@ func TestEgressRule(t *testing.T) {
 
 			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark))
 			assert.NoError(t, c.DeleteEgressRule(tt.tableID, tt.mark))
+		})
+	}
+}
+
+func TestAddAndDeleteNodeNetworkPolicyIPSet(t *testing.T) {
+	ipv4SetName := "TEST-IPSET-4"
+	ipv4Net1 := "1.1.1.1/32"
+	ipv4Net2 := "2.2.2.2/32"
+	ipv4Net3 := "3.3.3.3/32"
+	ipv6SetName := "TEST-IPSET-6"
+	ipv6Net1 := "fec0::1111/128"
+	ipv6Net2 := "fec0::2222/128"
+	ipv6Net3 := "fec0::3333/128"
+
+	tests := []struct {
+		name             string
+		ipsetName        string
+		prevIPSetEntries sets.Set[string]
+		curIPSetEntries  sets.Set[string]
+		isIPv6           bool
+		expectedCalls    func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:            "IPv4, add an ipset and delete it",
+			ipsetName:       ipv4SetName,
+			curIPSetEntries: sets.New[string](ipv4Net1, ipv4Net3),
+			isIPv6:          false,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv4SetName, ipset.HashNet, false).Times(1)
+				mockIPSet.AddEntry(ipv4SetName, ipv4Net1).Times(1)
+				mockIPSet.AddEntry(ipv4SetName, ipv4Net3).Times(1)
+				mockIPSet.DestroyIPSet(ipv4SetName).Times(1)
+			},
+		},
+		{
+			name:             "IPv4, update an ipset and delete it",
+			ipsetName:        ipv4SetName,
+			prevIPSetEntries: sets.New[string](ipv4Net1, ipv4Net2),
+			curIPSetEntries:  sets.New[string](ipv4Net1, ipv4Net3),
+			isIPv6:           false,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv4SetName, ipset.HashNet, false).Times(1)
+				mockIPSet.AddEntry(ipv4SetName, ipv4Net3).Times(1)
+				mockIPSet.DelEntry(ipv4SetName, ipv4Net2).Times(1)
+				mockIPSet.DestroyIPSet(ipv4SetName).Times(1)
+			},
+		},
+		{
+			name:            "IPv6, add an ipset and delete it",
+			ipsetName:       ipv6SetName,
+			curIPSetEntries: sets.New[string](ipv6Net1, ipv6Net3),
+			isIPv6:          true,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv6SetName, ipset.HashNet, true).Times(1)
+				mockIPSet.AddEntry(ipv6SetName, ipv6Net1).Times(1)
+				mockIPSet.AddEntry(ipv6SetName, ipv6Net3).Times(1)
+				mockIPSet.DestroyIPSet(ipv6SetName).Times(1)
+			},
+		},
+		{
+			name:             "IPv6, update an ipset and delete it",
+			ipsetName:        ipv6SetName,
+			prevIPSetEntries: sets.New[string](ipv6Net1, ipv6Net2),
+			curIPSetEntries:  sets.New[string](ipv6Net1, ipv6Net3),
+			isIPv6:           true,
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(ipv6SetName, ipset.HashNet, true).Times(1)
+				mockIPSet.AddEntry(ipv6SetName, ipv6Net3).Times(1)
+				mockIPSet.DelEntry(ipv6SetName, ipv6Net2).Times(1)
+				mockIPSet.DestroyIPSet(ipv6SetName).Times(1)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{ipset: mockIPSet}
+			tt.expectedCalls(mockIPSet.EXPECT())
+
+			if tt.prevIPSetEntries != nil {
+				if tt.isIPv6 {
+					c.nodeNetworkPolicyIPSetsIPv6.Store(tt.ipsetName, tt.prevIPSetEntries)
+				} else {
+					c.nodeNetworkPolicyIPSetsIPv4.Store(tt.ipsetName, tt.prevIPSetEntries)
+				}
+			}
+
+			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPSet(tt.ipsetName, tt.curIPSetEntries, tt.isIPv6))
+			var exists bool
+			if tt.isIPv6 {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv6.Load(tt.ipsetName)
+			} else {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv4.Load(tt.ipsetName)
+			}
+			assert.True(t, exists)
+
+			assert.NoError(t, c.DeleteNodeNetworkPolicyIPSet(tt.ipsetName, tt.isIPv6))
+			if tt.isIPv6 {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv6.Load(tt.ipsetName)
+			} else {
+				_, exists = c.nodeNetworkPolicyIPSetsIPv4.Load(tt.ipsetName)
+			}
+			assert.False(t, exists)
+		})
+	}
+}
+
+func TestAddAndDeleteNodeNetworkPolicyIPTables(t *testing.T) {
+	ingressChain := config.NodeNetworkPolicyIngressRulesChain
+	ingressRules := []string{
+		"-A ANTREA-POL-INGRESS-RULES -p tcp --dport 80 -j ACCEPT",
+	}
+	svcChain := "ANTREA-POL-12619C0214FB0845"
+	svcRules := []string{
+		"-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 80 -j ACCEPT",
+		"-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 443 -j ACCEPT",
+	}
+
+	tests := []struct {
+		name          string
+		isIPv6        bool
+		expectedCalls func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
+		expectedRules map[string][]string
+	}{
+		{
+			name:   "IPv4",
+			isIPv6: false,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.Restore(`*filter
+:ANTREA-POL-INGRESS-RULES - [0:0]
+-A ANTREA-POL-INGRESS-RULES -p tcp --dport 80 -j ACCEPT
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*filter
+:ANTREA-POL-12619C0214FB0845 - [0:0]
+-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 80 -j ACCEPT
+-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 443 -j ACCEPT
+COMMIT
+`, false, false)
+				mockIPTables.DeleteChain(iptables.ProtocolIPv4, iptables.FilterTable, svcChain).Times(1)
+				mockIPTables.Restore(`*filter
+:ANTREA-POL-INGRESS-RULES - [0:0]
+COMMIT
+`, false, false)
+			},
+		},
+
+		{
+			name:   "IPv6",
+			isIPv6: true,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.Restore(`*filter
+:ANTREA-POL-INGRESS-RULES - [0:0]
+-A ANTREA-POL-INGRESS-RULES -p tcp --dport 80 -j ACCEPT
+COMMIT
+`, false, true)
+				mockIPTables.Restore(`*filter
+:ANTREA-POL-12619C0214FB0845 - [0:0]
+-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 80 -j ACCEPT
+-A ANTREA-POL-12619C0214FB0845 -p tcp --dport 443 -j ACCEPT
+COMMIT
+`, false, true)
+				mockIPTables.DeleteChain(iptables.ProtocolIPv6, iptables.FilterTable, svcChain).Times(1)
+				mockIPTables.Restore(`*filter
+:ANTREA-POL-INGRESS-RULES - [0:0]
+COMMIT
+`, false, true)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			c := &Client{iptables: mockIPTables,
+				networkConfig: &config.NetworkConfig{
+					IPv4Enabled: true,
+					IPv6Enabled: true,
+				},
+			}
+			c.initNodeNetworkPolicy()
+
+			tt.expectedCalls(mockIPTables.EXPECT())
+
+			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{ingressChain}, [][]string{ingressRules}, tt.isIPv6))
+			var gotRules any
+			var exists bool
+			if tt.isIPv6 {
+				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(ingressChain)
+			} else {
+				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(ingressChain)
+			}
+			assert.True(t, exists)
+			assert.EqualValues(t, ingressRules, gotRules)
+
+			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{svcChain}, [][]string{svcRules}, tt.isIPv6))
+			if tt.isIPv6 {
+				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(svcChain)
+			} else {
+				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(svcChain)
+			}
+			assert.True(t, exists)
+			assert.EqualValues(t, svcRules, gotRules)
+
+			assert.NoError(t, c.DeleteNodeNetworkPolicyIPTables([]string{svcChain}, tt.isIPv6))
+			if tt.isIPv6 {
+				_, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(svcChain)
+			} else {
+				_, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(svcChain)
+			}
+			assert.False(t, exists)
+
+			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{ingressChain}, [][]string{nil}, tt.isIPv6))
+			if tt.isIPv6 {
+				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(ingressChain)
+			} else {
+				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(ingressChain)
+			}
+			assert.True(t, exists)
+			assert.EqualValues(t, []string(nil), gotRules)
 		})
 	}
 }
