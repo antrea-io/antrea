@@ -188,6 +188,15 @@ these scenarios:
 * OpenFlow connection
 * The connection between CNI plugin and CNI server
 
+## Antrea and OVS Management on Windows
+
+While we provide different installation methods for Windows, the recommended one starting with
+Antrea v1.13 is to use the `antrea-windows-containerd-with-ovs.yml` manifest. With this method, the
+antrea-agent process and the OVS daemons (ovsdb-server and ovs-vswitchd) run as a Pod on Windows
+worker Nodes, and are managed by a DaemonSet. This installation method relies on
+[Windows HostProcess Pod](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/)
+support.
+
 ## Traffic walkthrough
 
 ### Pod-to-Pod Traffic

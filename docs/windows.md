@@ -6,7 +6,7 @@
 - [Overview](#overview)
   - [Components that run on Windows](#components-that-run-on-windows)
   - [Antrea Windows demo](#antrea-windows-demo)
-- [Deploying Antrea on Windows Worker Node](#deploying-antrea-on-windows-worker-node)
+- [Deploying Antrea on Windows worker Nodes](#deploying-antrea-on-windows-worker-nodes)
   - [Prerequisites](#prerequisites)
   - [Installation as a Pod](#installation-as-a-pod)
     - [Download &amp; Configure Antrea for Linux](#download--configure-antrea-for-linux)
@@ -25,14 +25,14 @@
   - [Add Windows kube-proxy DaemonSet (only for Kubernetes versions prior to 1.26)](#add-windows-kube-proxy-daemonset-only-for-kubernetes-versions-prior-to-126)
     - [Common steps](#common-steps)
     - [For containerd](#for-containerd)
-    - [For docker](#for-docker)
+    - [For Docker](#for-docker)
   - [Manually run kube-proxy and antrea-agent on Windows worker Nodes](#manually-run-kube-proxy-and-antrea-agent-on-windows-worker-nodes)
 - [Known issues](#known-issues)
 <!-- /toc -->
 
 ## Overview
 
-Antrea supports Windows worker Node. On Windows Node, Antrea sets up an overlay
+Antrea supports Windows worker Nodes. On Windows Nodes, Antrea sets up an overlay
 network to forward packets between Nodes and implements NetworkPolicies. Currently
 Geneve, VXLAN, and STT tunnels are supported.
 
@@ -67,7 +67,7 @@ shows the Antrea OVS bridge configuration on a Windows Node, and NetworkPolicy
 enforcement for Windows Pods. Note, OVS driver and daemons are pre-installed on
 the Windows Nodes in the demo.
 
-## Deploying Antrea on Windows Worker Node
+## Deploying Antrea on Windows worker Nodes
 
 Running Antrea on Windows Nodes requires the containerd container runtime. The
 recommended installation method is [Installation as a
@@ -400,7 +400,7 @@ Window hosts, while managing them as if they were Pods.
 #### Add Windows antrea-agent DaemonSet
 
 For example, these commands will download the antrea-agent manifest, set
-kubeAPIServerOverride, and deploy the antrea-agent DaemonSet when using the
+`kubeAPIServerOverride`, and deploy the antrea-agent DaemonSet when using the
 Docker container runtime:
 
 ```bash
@@ -418,8 +418,8 @@ containerd runtime, with the following differences:
 1. OVS containerization is not supported, so OVS userspace processes need to be
    run as Windows native services.
 2. When running the `Prepare-Node.ps1` script, you will need to explicitly
-   specify that you are using the docker container runtime. The script will then
-   take are of installing wins. For example:
+   specify that you are using the Docker container runtime. The script will then
+   take care of installing wins. For example:
 
    ```powershell
    .\Prepare-Node.ps1 -KubernetesVersion v1.23.5 -NodeIP 192.168.1.10 -ContainerRuntime docker
@@ -463,7 +463,7 @@ automatically by Windows after the Windows Node reboots
 (`Prepare-AntreaAgent.ps1` needs to run at every startup).
 
 After that, you will need to deploy a Windows-compatible version of
-kube-proxy. You can download `kube-proxy.yaml` from the Kubernetes github
+kube-proxy. You can download `kube-proxy.yml` from the Kubernetes github
 repository to deploy kube-proxy. The kube-proxy version in the YAML file must be
 set to a Windows compatible version. The following command downloads
 `kube-proxy.yml`:
@@ -533,7 +533,7 @@ spec:
         - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/kube-proxy-windows/run-script.ps1
 ```
 
-#### For docker
+#### For Docker
 
 Replace the content of `run-script.ps1` in the `kube-proxy-windows` ConfigMap
 with the following:
