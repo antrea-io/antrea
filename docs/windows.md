@@ -82,16 +82,16 @@ installation method will be removed from the documentation in a later release.
 
 ### Prerequisites
 
+* Create a Kubernetes cluster.
 * Obtain a Windows Server 2019 license (or higher) in order to configure the
-  Windows Node that hosts Windows containers. And install the latest Windows
-  updates.
-* Deploy a Linux-based Kubernetes cluster.
-* Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
-  with management tools. If your Nodes do not have the virtualization
-  capabilities required by Hyper-V, you could try the workaround
-  described in the [Known issues](#known-issues) section.
-* Install [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1)
-  if not yet present.
+  Windows Nodes that will host Windows containers. And install the latest
+  Windows updates.
+* On each Windows Node, install the following:
+  - [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
+    with management tools. If your Nodes do not have the virtualization
+    capabilities required by Hyper-V, use the workaround described in the
+    [Knownissues](#known-issues) section.
+  - [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1).
 
 ### Installation as a Pod
 
@@ -138,23 +138,11 @@ enabled by default.
 
 For earlier versions of Antrea, you will need to enable `proxyAll` manually.
 
-To deploy the antrea-agent Windows DaemonSet, apply the file
-`antrea-windows-containerd.yml`. For example, the following commands download
-the antrea-agent manifest, set `kubeAPIServerOverride`, and deploy the
-antrea-agent DaemonSet:
-
-```bash
-KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
-curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows-containerd.yml | \
-sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERVER}\"|g" | \
-kubectl apply -f -
-```
-
-Starting with Antrea 1.13, you can deploy both the antrea-agent and antrea-ovs
-Windows DaemonSets by applying the file
-`antrea-windows-containerd-with-ovs.yml`. The following commands download the
-manifest, set `kubeAPIServerOverride`, and deploy the antrea-agent and
-antrea-ovs Windows DaemonSets:
+Starting with Antrea 1.13, you can run both the Antrea Agent and the OVS daemons
+on Windows Nodes using a single DaemonSet, by applying the file
+`antrea-windows-containerd-with-ovs.yml`. This is the recommended installation
+method. The following commands download the manifest, set
+`kubeAPIServerOverride`, and create the DaemonSet:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
@@ -163,53 +151,71 @@ sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERV
 kubectl apply -f -
 ```
 
+Alternatively, to deploy the antrea-agent Windows DaemonSet without the OVS
+daemons, apply the file `antrea-windows-containerd.yml` with the following
+commands:
+
+```bash
+KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
+curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows-containerd.yml | \
+sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERVER}\"|g" | \
+kubectl apply -f -
+```
+
+When using `antrea-windows-containerd.yml`, you will need to install OVS
+userspace daemons as services when you prepare your Windows worker Nodes, in the
+next section.
+
 #### Join Windows worker Nodes
 
 ##### 1. (Optional) Install OVS (provided by Antrea or your own)
 
-Antrea supports running OVS on Windows as native services or inside a
-host-process container. If you have an OVS package with a signed kernel
-driver and want to run OVS inside container, you can skip this step.
+Depending on which method you are using to install Antrea on Windows, and
+depending on whether you are using your own [signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing)
+OVS kernel driver or you want to use the test-signed driver provided by Antrea,
+you will need to invoke the `Install-OVS.ps1` script differently (or not at all).
 
-Antrea provides a pre-built OVS package which contains test-signed OVS kernel
-driver. If you don't have a self-signed OVS package and just want to try the
-Antrea on Windows, this package can be used for testing. We also provide a helper
-script `Install-OVS.ps1` to install the OVS driver and register userspace binaries
-as services.
+| Containerized OVS daemons? | Test-signed OVS driver? | Run this command |
+| -------------------------- | ----------------------- | ---------------- |
+| Yes                        | Yes                     | `.\Install-OVS.ps1 -InstallUserspace $false` |
+| Yes                        | No                      | N/A |
+| No                         | Yes                     | `.\Install-OVS.ps1` |
+| No                         | No                      | `.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>` |
 
-If you want to containerize OVS with an unsigned kernel driver, you must
-pre-install the driver on the worker node before joining cluster. Hence,
-you need to run the `Install-OVS.ps1` script to install only the driver like this:
+If you used `antrea-windows-containerd-with-ovs.yml` to create the antrea-agent
+Windows DaemonSet, then you are using "Containerized OVS daemons". For all other
+methods, you are *not* using "Containerized OVS daemons".
 
-```powershell
-.\Install-OVS.ps1 -InstallUserspace $false
-```
+Antrea provides a pre-built OVS package which contains a test-signed OVS kernel
+driver. If you don't have a self-signed OVS package and just want to try Antrea
+on Windows, this package can be used for testing.
 
-If you want to run OVS as Windows native services, you can run the script like this,
-
-```powershell
-Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>
-```
-
-**[Test-only]** First, if you are using test-signed driver (such as the one provided with Antrea),
-please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
+**[Test-only]** If you are using test-signed driver (such as the one provided with Antrea),
+please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option):
 
 ```powershell
 Bcdedit.exe -set TESTSIGNING ON
 Restart-Computer
 ```
 
-Then, install OVS using the script.
+As an example, if you are using containerized OVS
+(`antrea-windows-containerd-with-ovs.yml`), and you want to use the test-signed
+OVS kernel driver provided by Antrea (not recommended for production), you would
+run the following commands:
 
 ```powershell
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Install-OVS.ps1
-.\Install-OVS.ps1 # Test-only
-.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage> # Production
+.\Install-OVS.ps1 -InstallUserspace $false
 ```
 
-Verify the OVS services are installed.
+And, if you want to run OVS as Windows native services, and you are bringing
+your own OVS package with a signed OVS kernel driver, you would run:
 
 ```powershell
+curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Install-OVS.ps1
+.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>
+
+# verify that the OVS services are installed
 get-service ovsdb-server
 get-service ovs-vswitchd
 ```
@@ -244,7 +250,8 @@ $TAG="v1.14.0"
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Clean-AntreaNetwork.ps1
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Prepare-ServiceInterface.ps1
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Prepare-AntreaAgent.ps1
-.\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false [other options]
+# use -RunOVSServices $false for containerized OVS!
+.\Prepare-AntreaAgent.ps1 -InstallKubeProxy $false [-RunOVSServices $false]
 ```
 
 The script `Prepare-AntreaAgent.ps1` performs the following tasks:
@@ -322,29 +329,26 @@ kube-proxy-windows-2d45w                               1/1     Running     0    
 
 ### Installation as a Service
 
-First, you will need to install OVS and configure the OVS daemons as Windows
-services:
-
-- The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
-- If OVS driver is not signed, please refer to the Windows doc about how to
-  [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
-- If you don't have a self-signed OVS package and just want to try Antrea on
-  Windows, Antrea provides a test-signed OVS package for you. See details in
-  [Join Windows worker Nodes](#join-windows-worker-nodes) section.
-
-Then, install Antrea (v0.13.0+ is required for containerd). The following
+Install Antrea (v0.13.0+ is required for containerd) as usual. The following
 command deploys Antrea with the version specified by `<TAG>`:
 
 ```bash
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
 ```
 
-Then, you can run the following commands. [nssm](https://nssm.cc/) will install
-Antrea as a Windows service. Please ensure `nssm` is on your machine, which is
-a handy tool to manage services on Windows. NOTE: `<KubernetesVersion>`,
-`<KubeconfigPath>` and `<KubeletKubeconfigPath>` should be set by you.
-`<KubeProxyKubeconfigPath>` is an optional parameter that is specific to
-kube-proxy mode. For example:
+When running the Antrea Agent as a Windows service, no DaemonSet is created for
+Windows worker Nodes. You will need to ensure that [nssm](https://nssm.cc/) is
+installed on all your Windows Nodes. `nssm` is a handy tool to manage services
+on Windows.
+
+To prepare your Windows worker Nodes, follow the steps in [Join Windows worker Nodes](#join-windows-worker-nodes).
+With this installation method, OVS daemons are always run as services (not
+containerized), and you will need to run `Install-OVS.ps1` to install them.
+
+When your Nodes are ready, run the following scripts to install the antrea-agent
+service. NOTE: `<KubernetesVersion>`, `<KubeconfigPath>` and
+`<KubeletKubeconfigPath>` should be set by you. `<KubeProxyKubeconfigPath>` is
+an optional parameter that is specific to kube-proxy mode. For example:
 
 ```powershell
 # kube-proxy mode is no longer supported starting with K8s version 1.26
@@ -434,7 +438,7 @@ kube-proxy DaemonSet (only for Kubernetes versions prior to 1.26)](#add-windows-
 Starting from Kubernetes 1.26, Antrea no longer supports Windows kube-proxy
 because the kube-proxy userspace mode has been removed, and the kernel
 implementation does not work with Antrea. Clusters using recent K8s versions
-will need to follow the normal [installation guide](#deploying-antrea-on-windows-worker-node)
+will need to follow the normal [installation guide](#deploying-antrea-on-windows-worker-nodes)
 and use AntreaProxy with `proxyAll` enabled.
 
 For older K8s versions, you can use kube-proxy userspace mode by following the
