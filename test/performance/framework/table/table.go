@@ -17,14 +17,20 @@ package table
 import (
 	"io"
 	"strings"
-	"time"
 
 	"github.com/olekukonko/tablewriter"
 )
 
-func GenerateRow(name, result string, duration time.Duration) []string {
+const (
+	CtxAverageEffectiveTime = "AverageEffectiveTime"
+	CtxMaxEffectiveTime     = "MaxEffectiveTime"
+	CtxMinEffectiveTime     = "MinEffectiveTime"
+	CtxScaleNum             = "Scale"
+)
+
+func GenerateRow(name, result string, duration, avgTime, maxTime, minTime, scaleNum string) []string {
 	name = strings.ReplaceAll(name, " ", "-")
-	return []string{name, result, duration.String()}
+	return []string{name, result, scaleNum, duration, avgTime, maxTime, minTime}
 }
 
 func ShowResult(w io.Writer, rows [][]string) {
@@ -35,7 +41,7 @@ func ShowResult(w io.Writer, rows [][]string) {
 	}
 	table.SetAutoFormatHeaders(false)
 	table.SetAlignment(tablewriter.ALIGN_CENTER)
-	headers := []string{"Name", "Result", "Duration"}
+	headers := []string{"Name", "Result", CtxScaleNum, "Duration", CtxAverageEffectiveTime, CtxMaxEffectiveTime, CtxMinEffectiveTime}
 	table.SetHeader(headers)
 	table.SetAutoMergeCells(true)
 	table.SetAutoWrapText(true)

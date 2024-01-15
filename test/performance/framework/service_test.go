@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors.
+// Copyright 2024 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,4 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package client_pod
+package framework
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestRenderService(t *testing.T) {
+	obj, err := unmarshallService("../assets/service/service.yaml")
+	assert.NoError(t, err, "error reading Service template")
+	fmt.Println(obj)
+}

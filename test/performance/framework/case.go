@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -25,7 +26,7 @@ import (
 	"antrea.io/antrea/test/performance/framework/table"
 )
 
-type RunFunc func(ctx context.Context, data *ScaleData) error
+type RunFunc func(ctx context.Context, ch chan time.Duration, data *ScaleData) ScaleResult
 
 var cases = make(map[string]RunFunc, 128)
 
@@ -56,37 +57,69 @@ func (c *ScaleTestCase) Name() string {
 	return c.name
 }
 
-func (c *ScaleTestCase) Includes(testCases ...ScaleTestCase) ScaleTestCase {
-	panic("ScaleTestCase does not support subside test cases")
+type ScaleResult struct {
+	err            error
+	actualCheckNum int
+	scaleNum       int
 }
 
 func (c *ScaleTestCase) Run(ctx context.Context, testData *ScaleData) error {
 	ctx = wrapScaleTestName(ctx, c.name)
+	done := make(chan ScaleResult, 1)
 
 	startTime := time.Now()
 	caseName := ctx.Value(CtxScaleCaseName).(string)
+	testData.maxCheckNum = 10000
+	ress := make(chan time.Duration, testData.maxCheckNum)
 	res := "failed"
+	scaleNum := 0
 	defer func() {
-		var rows [][]string
-		rows = append(rows, table.GenerateRow(caseName, res, time.Since(startTime)))
-		table.ShowResult(os.Stdout, rows)
+		close(ress)
+		close(done)
 	}()
 
-	done := make(chan interface{}, 1)
 	go func() {
-		done <- c.run(ctx, testData)
+		done <- c.run(ctx, ress, testData)
 	}()
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case err := <-done:
+	case scaleRes := <-done:
+		err := scaleRes.err
 		if err != nil {
 			return err.(error)
 		}
+		scaleNum = scaleRes.scaleNum
 		res = "success"
-		return nil
 	}
+
+	var rows [][]string
+	var total, minRes, maxRes, avg time.Duration
+	count := 0
+	chLen := len(ress)
+	for i := 0; i < chLen; i++ {
+		res := <-ress
+		total += res
+		count++
+
+		if count == 1 || res < minRes {
+			minRes = res
+		}
+
+		if res > maxRes {
+			maxRes = res
+		}
+	}
+
+	if count != 0 {
+		avg = total / time.Duration(count)
+	}
+
+	rows = append(rows, table.GenerateRow(caseName, res, time.Since(startTime).String(),
+		avg.String(), maxRes.String(), minRes.String(), strconv.Itoa(scaleNum)))
+	table.ShowResult(os.Stdout, rows)
+	return nil
 }
 
 type CtxScaleCaseNameType string

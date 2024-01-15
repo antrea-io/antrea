@@ -18,18 +18,12 @@ import (
 	"crypto/rand"
 	"math"
 	"math/big"
-	rand1 "math/rand"
 	"time"
 
 	"k8s.io/client-go/util/retry"
 )
 
 const PodOnRealNodeLabelKey = "realNode"
-
-// LabelCandidates ...
-// label number:              1   2   3   4   5   6   7   8   9   10  11 12
-// pods cover percents:       80% 64% 51% 41% 32% 25% 20% 16% 13% 10% 8% 6%
-var LabelCandidates = []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"}
 
 const (
 	SelectorLabelKeySuffix   = "app-"
@@ -47,26 +41,6 @@ func GenRandInt() int64 {
 		return 0
 	}
 	return i.Int64()
-}
-
-// PickLabels random select specific number of labels, if realNode is true, then no simulate node
-// will be selected. By selecting different number of labels, we can control the size of the
-// portion of the Pods we selected.
-func PickLabels(num int, realNode bool) map[string]string {
-	rand1.Shuffle(len(LabelCandidates), func(i, j int) {
-		LabelCandidates[i], LabelCandidates[j] = LabelCandidates[j], LabelCandidates[i]
-	})
-	result := make(map[string]string)
-	for i := 0; i < num; i++ {
-		result[LabelCandidates[i]] = ""
-	}
-	if len(result) == 0 { // re-pick if no labels is picked.
-		return PickLabels(num, realNode)
-	}
-	if realNode {
-		result[PodOnRealNodeLabelKey] = ""
-	}
-	return result
 }
 
 func CheckTimeout(start time.Time, duration time.Duration) bool {

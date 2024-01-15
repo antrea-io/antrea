@@ -17,12 +17,13 @@ package framework
 import (
 	"context"
 
+	"antrea.io/antrea/test/performance/framework/client_pod"
 	"antrea.io/antrea/test/performance/framework/namespace"
 )
 
 // ScaleDown delete pods/ns and verify if it gets deleted
 func (data *ScaleData) ScaleDown(ctx context.Context) error {
-	return namespace.ScaleDown(ctx, data.kubernetesClientSet, ScaleTestNamespacePrefix)
+	return namespace.ScaleDown(ctx, data.kubernetesClientSet, client_pod.ScaleTestNamespacePrefix)
 }
 
 // ScaleDownOnlyPods delete pods only so it will get recreated inside same ns

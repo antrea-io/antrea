@@ -28,10 +28,11 @@ import (
 )
 
 type options struct {
-	kubeConfigPath string
-	configPath     string
-	timeout        int
-	loglevel       string
+	kubeConfigPath    string
+	configPath        string
+	templateFilesPath string
+	timeout           int
+	loglevel          string
 }
 
 var (
@@ -40,7 +41,8 @@ var (
 
 func init() {
 	flag.StringVar(&option.kubeConfigPath, "kubeConfigPath", "", "Cluster config path")
-	flag.StringVar(&option.configPath, "config", "", "Config file of scale test cases list")
+	flag.StringVar(&option.configPath, "config", "test/performance/scale.yml", "Config file of scale test cases list")
+	flag.StringVar(&option.templateFilesPath, "templateFilesPath", "test/performance/assets", "Template YAML files path of test cases")
 	flag.IntVar(&option.timeout, "timeout", 10, "Timeout limit (minutes) of the whole scale test")
 	flag.StringVar(&option.loglevel, "v", "2", "")
 	flag.Parse()
@@ -66,7 +68,7 @@ func run() error {
 	globalCtx, globalCancelFunc := context.WithTimeout(context.Background(), time.Duration(option.timeout)*time.Minute)
 	defer globalCancelFunc()
 
-	testData, err := framework.ScaleUp(globalCtx, option.kubeConfigPath, option.configPath)
+	testData, err := framework.ScaleUp(globalCtx, option.kubeConfigPath, option.configPath, option.templateFilesPath)
 	if err != nil {
 		return fmt.Errorf("error when creating TestData: %w", err)
 	}
@@ -94,7 +96,7 @@ func run() error {
 			}
 			time.Sleep(config.WaitInterval)
 		}
-		klog.Infoln(strings.Repeat("==", 100))
+		klog.Infoln(strings.Repeat("==", 72))
 	}
 	return nil
 }
