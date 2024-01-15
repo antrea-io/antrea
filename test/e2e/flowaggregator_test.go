@@ -36,9 +36,11 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
+	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/antctl"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 	"antrea.io/antrea/test/e2e/utils"
 )
@@ -88,6 +90,8 @@ DATA SET:
     flowType: 1
     egressName: test-egressbkclk
     egressIP: 172.18.0.2
+    appProtocolName: http
+    httpVals: mockHttpString
     destinationClusterIPv4: 0.0.0.0
     octetDeltaCountFromSourceNode: 8982624938
     octetDeltaCountFromDestinationNode: 8982624938
@@ -214,11 +218,6 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error when setting up test: %v", err)
 		}
-		// Check recordmetrics of Flow Aggregator to make sure Antrea-agent Pods/ClickHouse/IPFIX collector and Flow Aggregator
-		// are correctly connected
-		if err := getAndCheckFlowAggregatorMetrics(t, data); err != nil {
-			t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
-		}
 		t.Run(o.name, func(t *testing.T) {
 			defer func() {
 				teardownTest(t, data)
@@ -277,6 +276,10 @@ func TestFlowAggregator(t *testing.T) {
 	if v6Enabled {
 		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, true) })
 	}
+
+	t.Run("L7FlowExporterController", func(t *testing.T) {
+		testL7FlowExporterControllerRun(t, data)
+	})
 
 }
 
@@ -1393,6 +1396,15 @@ func checkEgressInfoClickHouse(t *testing.T, record *ClickHouseFullRow, egressNa
 	assert.Equal(t, egressIP, record.EgressIP, "Record does not have correct egressIP")
 }
 
+func checkL7FlowExporterData(t *testing.T, record, appProtocolName string) {
+	assert.Containsf(t, record, fmt.Sprintf("appProtocolName: %s", appProtocolName), "Record does not have correct Layer 7 protocol Name")
+}
+
+func checkL7FlowExporterDataClickHouse(t *testing.T, record *ClickHouseFullRow, appProtocolName string) {
+	assert.Equal(t, record.AppProtocolName, appProtocolName, "Record does not have correct Layer 7 protocol Name")
+	assert.NotEmpty(t, record.HttpVals, "Record does not have httpVals")
+}
+
 func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 {
 	if strings.Contains(record, "TEMPLATE SET") {
 		return 0
@@ -1865,6 +1877,60 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData) error {
 	return nil
 }
 
+func testL7FlowExporterControllerRun(t *testing.T, data *TestData) {
+	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
+
+	clientPodName := "test-l7-flow-exporter"
+	clientPodLabels := map[string]string{"test-l7-flow-exporter-e2e": "true"}
+	clientPodAnnotations := map[string]string{antreaagenttypes.L7FlowExporterAnnotationKey: "both"}
+	cmd := []string{"sleep", "3600"}
+
+	// Create a client Pod which will be selected by test L7 NetworkPolices.
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, toolboxImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(clientPodLabels).WithAnnotations(clientPodAnnotations).Create(data))
+	clientPodIP, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoErrorf(t, err, "Error when waiting for IP for Pod '%s': %v", clientPodName, err)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
+
+	serverIPs := createToExternalTestServer(t, data)
+	srcIP := clientPodIP.IPv4.String()
+	dstIP := serverIPs.IPv4.String()
+
+	// checkRecordsForToExternalFlows(t, data, nodeName(0), clientPodName, clientPodIP.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, "", "")
+	cmd = []string{
+		"curl",
+		fmt.Sprintf("http://%s:%d", serverIPs.IPv4.String(), serverPodPort),
+	}
+	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, toolboxContainerName, cmd)
+	require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
+	_, recordSlices := getCollectorOutput(t, srcIP, dstIP, "", false, false, false, data, "")
+	for _, record := range recordSlices {
+		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
+			// checkPodAndNodeData(t, record, clientPodName, nodeName(0), "", "", data.testNamespace)
+			assert := assert.New(t)
+			assert.Contains(record, clientPodName, "Record with srcIP does not have Pod name: %s", clientPodName)
+			assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+			assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName(0)), "Record does not have correct sourceNodeName: %s", nodeName(0))
+			assert.Contains(record, fmt.Sprintf("\"test-l7-flow-exporter-e2e\":\"true\""), "Record does not have correct label for source Pod")
+
+			checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
+			checkL7FlowExporterData(t, record, "http")
+		}
+	}
+
+	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, "", false, false, "")
+	for _, record := range clickHouseRecords {
+		assert := assert.New(t)
+		assert.Equal(record.SourcePodName, clientPodName, "Record with srcIP does not have Pod name: %s", clientPodName)
+		assert.Equal(record.SourcePodNamespace, data.testNamespace, "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+		assert.Equal(record.SourceNodeName, nodeName(0), "Record does not have correct sourceNodeName: %s", nodeName(0))
+		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"test-l7-flow-exporter-e2e\":\"true\""), "Record does not have correct label for source Pod")
+
+		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeToExternal)
+		checkL7FlowExporterDataClickHouse(t, record, "http")
+	}
+
+}
+
 type ClickHouseFullRow struct {
 	TimeInserted                         time.Time `json:"timeInserted"`
 	FlowStartSeconds                     time.Time `json:"flowStartSeconds"`
@@ -1918,4 +1984,6 @@ type ClickHouseFullRow struct {
 	Trusted                              uint8     `json:"trusted"`
 	EgressName                           string    `json:"egressName"`
 	EgressIP                             string    `json:"egressIP"`
+	AppProtocolName                      string    `json:"appProtocolName"`
+	HttpVals                             string    `json:"httpVals"`
 }

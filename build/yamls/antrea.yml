@@ -5628,6 +5628,9 @@ data:
     # Allow users to apply ClusterNetworkPolicy to Kubernetes Nodes.
     #  NodeNetworkPolicy: false
 
+    # Enable L7FlowExporter on Pods and Namespaces to export the application layer flows such as HTTP flows.
+    #  L7FlowExporter: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -6928,7 +6931,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 290f0c748863a7dad1e9d53d62c74f8108a44c5cc803306d351c108062cc1378
+        checksum/config: ac3c14eed7ca0dc28bf2d659cd2c4e4a39d55278fb9a8759c30ea12eff89e518
       labels:
         app: antrea
         component: antrea-agent
@@ -7164,7 +7167,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 290f0c748863a7dad1e9d53d62c74f8108a44c5cc803306d351c108062cc1378
+        checksum/config: ac3c14eed7ca0dc28bf2d659cd2c4e4a39d55278fb9a8759c30ea12eff89e518
       labels:
         app: antrea
         component: antrea-controller

@@ -91,6 +91,13 @@ var (
 	}
 )
 
+type fakeL7Listener struct{}
+
+func (fll *fakeL7Listener) ConsumeL7EventMap() map[flowexporter.ConnectionKey]L7ProtocolFields {
+	l7EventsMap := make(map[flowexporter.ConnectionKey]L7ProtocolFields)
+	return l7EventsMap
+}
+
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	refTime := time.Now()
@@ -216,7 +223,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
 
 	for _, c := range tc {
 		t.Run(c.name, func(t *testing.T) {
@@ -297,7 +304,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
-	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, testFlowExporterOptions)
+	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -319,7 +326,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create connectionStore
 	mockPodStore := podstoretest.NewMockInterface(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, &fakeL7Listener{}, testFlowExporterOptions)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000

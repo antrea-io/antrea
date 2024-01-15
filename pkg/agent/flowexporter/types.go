@@ -84,6 +84,8 @@ type Connection struct {
 	FlowType                             uint8
 	EgressName                           string
 	EgressIP                             string
+	AppProtocolName                      string
+	HttpVals                             string
 }
 
 type ItemToExpire struct {
