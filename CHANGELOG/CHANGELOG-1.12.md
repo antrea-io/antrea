@@ -1,5 +1,23 @@
 # Changelog 1.12
 
+## 1.12.3 - 2024-01-12
+
+### Fixed
+
+- Update `Install-WindowsCNI-Containerd.ps1` script to make it compatible with containerd 1.7. ([#5528](https://github.com/antrea-io/antrea/pull/5528), [@NamanAg30])
+- Store NetworkPolicy in filesystem as fallback data source to let antre-agent fallback to use the files if it can't connect to antrea-controller on startup. ([#5739](https://github.com/antrea-io/antrea/pull/5739), [@tnqn])
+- Support Local ExternalTrafficPolicy for Services with ExternalIPs when Antrea proxyAll mode is enabled. ([#5795](https://github.com/antrea-io/antrea/pull/5795), [@tnqn])
+- Enable Pod network after realizing initial NetworkPolicies to avoid traffic from/to Pods bypassing NetworkPolicy when antrea-agent restarts. ([#5777](https://github.com/antrea-io/antrea/pull/5777), [@tnqn])
+- Fix a deadlock issue in NetworkPolicy Controller which causes a FQDN resolution failure. ([#5566](https://github.com/antrea-io/antrea/pull/5566) [#5583](https://github.com/antrea-io/antrea/pull/5583), [@Dyanngg] [@tnqn])
+- Skip enforcement of ingress NetworkPolicies rules for hairpinned Service traffic (Pod accessing itself via a Service). ([#5687](https://github.com/antrea-io/antrea/pull/5687) [#5705](https://github.com/antrea-io/antrea/pull/5705), [@GraysonWu])
+- Set net.ipv4.conf.antrea-gw0.arp_announce to 1 to fix an ARP request leak when a Node or hostNetwork Pod accesses a local Pod and AntreaIPAM is enabled. ([#5657](https://github.com/antrea-io/antrea/pull/5657), [@gran-vmv])
+- Fix `antctl tf` CLI failure when the Traceflow is using an IPv6 address. ([#5588](https://github.com/antrea-io/antrea/pull/5588), [@Atish-iaf])
+- Fix NetworkPolicy span calculation to avoid out-dated data when multiple NetworkPolicies have the same selector. ([#5554](https://github.com/antrea-io/antrea/pull/5554), [@tnqn])
+- Fix SSL library downloading failure in Install-OVS.ps1 on Windows. ([#5510](https://github.com/antrea-io/antrea/pull/5510), [@XinShuYang])
+- Fix rollback invocation after CmdAdd failure in CNI server. ([#5548](https://github.com/antrea-io/antrea/pull/5548), [@antoninbas])
+- Do not apply Egress to traffic destined for ServiceCIDRs to avoid performance issue and unexpected behaviors. ([#5495](https://github.com/antrea-io/antrea/pull/5495), [@tnqn])
+- Do not delete IPv6 link-local route in route reconciler to fix cross-Node Pod traffic or Pod-to-external traffic. ([#5483](https://github.com/antrea-io/antrea/pull/5483), [@wenyingd])
+
 ## 1.12.2 - 2023-09-15
 
 ### Changed
@@ -92,6 +110,7 @@ all Service ClusterIPs and can restore routes after they are deleted by accident
 - Bump up Suricata to 6.0.12 to fix a L7 NetworkPolicy issue. ([#4968](https://github.com/antrea-io/antrea/pull/4968), [@xliuxu])
 - Fix discovered Service CIDR flapping on Agent start. ([#5017](https://github.com/antrea-io/antrea/pull/5017), [@tnqn])
 
+[@Atish-iaf]: https://github.com/Atish-iaf
 [@antoninbas]: https://github.com/antoninbas
 [@ceclinux]: https://github.com/ceclinux
 [@cr7258]: https://github.com/cr7258
@@ -99,6 +118,7 @@ all Service ClusterIPs and can restore routes after they are deleted by accident
 [@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
 [@GraysonWu]: https://github.com/GraysonWu
+[@NamanAg30]: https://github.com/NamanAg30
 [@heanlan]: https://github.com/heanlan
 [@hongliangl]: https://github.com/hongliangl
 [@hjiajing]: https://github.com/hjiajing
