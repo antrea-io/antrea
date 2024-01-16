@@ -1,0 +1,57 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  labels:
+    app: antrea
+    component: antrea-migrator
+  name: antrea-migrator
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-migrator
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-migrator
+    spec:
+      hostPID: true
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      volumes:
+        - name: cni-cfg
+          hostPath:
+            path: /etc/cni/net.d
+        - name: containerd
+          hostPath:
+            path: /run/containerd
+      initContainers:
+        - name: antrea-migrator-init
+          image: antrea/antrea-migrator:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command:
+            - migrate_cni
+          env:
+            - name: RUNTIME_ENDPOINT
+              value: unix:///run/containerd/containerd.sock
+          volumeMounts:
+            - mountPath: /run/containerd
+              name: containerd
+            - mountPath: /etc/cni/net.d
+              name: cni-cfg
+      containers:
+        - image: antrea/antrea-migrator:latest
+          imagePullPolicy: IfNotPresent
+          name: antrea-migrator

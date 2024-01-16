@@ -380,6 +380,16 @@ build-scale-simulator:
 	docker build -t antrea/antrea-ubuntu-simulator:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.simulator.build.ubuntu $(DOCKER_BUILD_ARGS) .
 	docker tag antrea/antrea-ubuntu-simulator:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-simulator
 
+.PHONY: build-migrator
+build-migrator:
+	@echo "===> Building antrea/antrea-migrator Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-migrator:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.migrator $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-migrator:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.migrator $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-migrator:$(DOCKER_IMG_VERSION) antrea/antrea-migrator
+
 .PHONY: manifest
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
