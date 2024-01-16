@@ -758,10 +758,10 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 			}
 		}
 		wg.Add(4)
-		go checkOne(isolatedPod, testPod, testPodIPs.ipv4)
-		go checkOne(isolatedPod, testPod, testPodIPs.ipv6)
-		go checkOne(testPod, isolatedPod, isolatedPodIPs.ipv4)
-		go checkOne(testPod, isolatedPod, isolatedPodIPs.ipv6)
+		go checkOne(isolatedPod, testPod, testPodIPs.IPv4)
+		go checkOne(isolatedPod, testPod, testPodIPs.IPv6)
+		go checkOne(testPod, isolatedPod, isolatedPodIPs.IPv4)
+		go checkOne(testPod, isolatedPod, isolatedPodIPs.IPv6)
 		wg.Wait()
 	}
 
