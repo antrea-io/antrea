@@ -90,14 +90,14 @@ installation method will be removed from the documentation in a later release.
   - [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
     with management tools. If your Nodes do not have the virtualization
     capabilities required by Hyper-V, use the workaround described in the
-    [Knownissues](#known-issues) section.
+    [Known issues](#known-issues) section.
   - [containerd](https://learn.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=containerd#windows-server-1).
 
 ### Installation as a Pod
 
 This installation method requires Antrea 1.10 or higher, and containerd 1.6 or
 higher (containerd 1.7 or higher is recommended). It relies on support for
-[Windows HostProcess containers](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
+[Windows HostProcess Pods](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
 which is generally available starting with K8s 1.26.
 
 Starting with Antrea v1.13, Antrea will take over all the responsibilities of
@@ -228,9 +228,9 @@ Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 
 ##### 3. Install kubelet, kubeadm and configure kubelet startup params
 
-Firstly, install kubelet and kubeadm using the script `PrepareNode.ps1` provided
-by kubernetes. Specify the Node IP, Kubernetes Version and container runtime
-while running the script. The following command downloads and executes
+Firstly, install kubelet and kubeadm using the provided `PrepareNode.ps1`
+script. Specify the Node IP, Kubernetes Version and container runtime while
+running the script. The following command downloads and executes
 `Prepare-Node.ps1`:
 
 ```powershell
