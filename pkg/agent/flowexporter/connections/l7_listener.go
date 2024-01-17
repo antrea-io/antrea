@@ -101,9 +101,11 @@ func (l *L7Listener) listenAndAcceptConn() {
 	// Remove stale connections
 	if err := os.Remove(l.suricataEventSocketPath); err != nil && !os.IsNotExist(err) {
 		klog.V(2).ErrorS(err, "failed to remove stale socket")
+		return
 	}
 	if err := os.MkdirAll(filepath.Dir(l.suricataEventSocketPath), 0750); err != nil {
 		klog.ErrorS(err, "Failed to create directory %s", filepath.Dir(l.suricataEventSocketPath))
+		return
 	}
 	listener, err := net.Listen("unix", l.suricataEventSocketPath)
 	if err != nil {

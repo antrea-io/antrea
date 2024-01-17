@@ -668,4 +668,4 @@ HTTP fields in the `httpVals` are:
 
 As of now, the only supported layer 7 protocol is `HTTP1.1`. Support for more
 protocols may be added in the future. Antrea supports L7FlowExporter feature only
-on Linux Nodes. Windows Nodes are not supported yet.
+on Linux Nodes.

@@ -271,15 +271,17 @@ func TestFlowAggregator(t *testing.T) {
 
 	if v4Enabled {
 		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, false) })
+		t.Run("L7FlowExporterController_IPv4", func(t *testing.T) {
+			testL7FlowExporterController(t, data, false)
+		})
 	}
 
 	if v6Enabled {
 		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, true) })
+		t.Run("L7FlowExporterController_IPv6", func(t *testing.T) {
+			testL7FlowExporterController(t, data, true)
+		})
 	}
-
-	t.Run("L7FlowExporterController", func(t *testing.T) {
-		testL7FlowExporterControllerRun(t, data)
-	})
 
 }
 
@@ -1877,55 +1879,64 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData) error {
 	return nil
 }
 
-func testL7FlowExporterControllerRun(t *testing.T, data *TestData) {
+func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
+	nodeName := nodeName(1)
+	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "l7flowexportertestpodserver", nodeName, data.testNamespace, false)
+	defer cleanupFunc()
 
-	clientPodName := "test-l7-flow-exporter"
-	clientPodLabels := map[string]string{"test-l7-flow-exporter-e2e": "true"}
+	clientPodName := "l7flowexportertestpodclient"
+	clientPodLabels := map[string]string{"flowexportertest": "l7"}
 	clientPodAnnotations := map[string]string{antreaagenttypes.L7FlowExporterAnnotationKey: "both"}
-	cmd := []string{"sleep", "3600"}
-
-	// Create a client Pod which will be selected by test L7 NetworkPolices.
-	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, toolboxImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(clientPodLabels).WithAnnotations(clientPodAnnotations).Create(data))
-	clientPodIP, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, toolboxImage).OnNode(nodeName).WithContainerName("l7flowexporter").WithLabels(clientPodLabels).WithAnnotations(clientPodAnnotations).Create(data))
+	clientPodIPs, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoErrorf(t, err, "Error when waiting for IP for Pod '%s': %v", clientPodName, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
+	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
 
-	serverIPs := createToExternalTestServer(t, data)
-	srcIP := clientPodIP.IPv4.String()
-	dstIP := serverIPs.IPv4.String()
+	// Wait for the Suricata to start.
+	time.Sleep(3 * time.Second)
 
-	// checkRecordsForToExternalFlows(t, data, nodeName(0), clientPodName, clientPodIP.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6, "", "")
-	cmd = []string{
-		"curl",
-		fmt.Sprintf("http://%s:%d", serverIPs.IPv4.String(), serverPodPort),
+	testFlow1 := testFlow{
+		srcPodName: clientPodName,
 	}
-	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, toolboxContainerName, cmd)
-	require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
-	_, recordSlices := getCollectorOutput(t, srcIP, dstIP, "", false, false, false, data, "")
-	for _, record := range recordSlices {
-		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
-			// checkPodAndNodeData(t, record, clientPodName, nodeName(0), "", "", data.testNamespace)
-			assert := assert.New(t)
-			assert.Contains(record, clientPodName, "Record with srcIP does not have Pod name: %s", clientPodName)
-			assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
-			assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName(0)), "Record does not have correct sourceNodeName: %s", nodeName(0))
-			assert.Contains(record, fmt.Sprintf("\"test-l7-flow-exporter-e2e\":\"true\""), "Record does not have correct label for source Pod")
-
-			checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
-			checkL7FlowExporterData(t, record, "http")
+	var cmd []string
+	if !isIPv6 {
+		testFlow1.srcIP = clientPodIPs.IPv4.String()
+		testFlow1.dstIP = serverIPs.IPv4.String()
+		cmd = []string{
+			"curl",
+			fmt.Sprintf("http://%s:%d", serverIPs.IPv4.String(), serverPodPort),
+		}
+	} else {
+		testFlow1.srcIP = clientPodIPs.IPv6.String()
+		testFlow1.dstIP = serverIPs.IPv6.String()
+		cmd = []string{
+			"curl",
+			"-6",
+			fmt.Sprintf("http://[%s]:%d", serverIPs.IPv6.String(), serverPodPort),
 		}
 	}
+	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, testFlow1.srcPodName, "l7flowexporter", cmd)
+	require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
+	_, recordSlices := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "")
+	for _, record := range recordSlices {
+		assert := assert.New(t)
+		assert.Contains(record, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
+		assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+		assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
+		assert.Contains(record, fmt.Sprintf("\"flowexportertest\":\"l7\""), "Record does not have correct label for source Pod")
 
-	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, "", false, false, "")
+		checkL7FlowExporterData(t, record, "http")
+	}
+
+	clickHouseRecords := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, true, "")
 	for _, record := range clickHouseRecords {
 		assert := assert.New(t)
-		assert.Equal(record.SourcePodName, clientPodName, "Record with srcIP does not have Pod name: %s", clientPodName)
+		assert.Equal(record.SourcePodName, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
 		assert.Equal(record.SourcePodNamespace, data.testNamespace, "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
-		assert.Equal(record.SourceNodeName, nodeName(0), "Record does not have correct sourceNodeName: %s", nodeName(0))
-		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"test-l7-flow-exporter-e2e\":\"true\""), "Record does not have correct label for source Pod")
+		assert.Equal(record.SourceNodeName, nodeName, "Record does not have correct sourceNodeName: %s", nodeName)
+		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"flowexportertest\":\"l7\""), "Record does not have correct label for source Pod")
 
-		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeToExternal)
 		checkL7FlowExporterDataClickHouse(t, record, "http")
 	}
 

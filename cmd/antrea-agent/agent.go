@@ -672,7 +672,8 @@ func run(o *Options) error {
 			networkPolicyController,
 			flowExporterOptions,
 			egressController,
-			l7FlowExporterController)
+			l7FlowExporterController,
+			l7FlowExporterEnabled)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

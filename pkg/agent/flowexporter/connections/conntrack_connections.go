@@ -104,7 +104,8 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
 func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
-	// DeepCopy the L7EventMap before polling the conntrack table to match corresponding L4 connection with L7 events and avoid missing the L7 events for corresponding L4 connection
+	// DeepCopy the L7EventMap before polling the conntrack table to match corresponding L4 connection with L7 events
+	// and avoid missing the L7 events for corresponding L4 connection
 	l7EventMap := cs.l7EventMapGetter.ConsumeL7EventMap()
 
 	var zones []uint16
@@ -337,6 +338,8 @@ func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePrio
 }
 
 func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[flowexporter.Tuple]L7ProtocolFields) {
+	// In case the L7 event is received after the connection is removed from the cs.connections store
+	// we will discard such event
 	for connKey, conn := range cs.connections {
 		l7event, ok := l7EventMap[connKey]
 		if ok {
@@ -349,9 +352,7 @@ func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[flowexporter.
 				conn.AppProtocolName = "http"
 			}
 			// In case L7 event is received after the last planned export of the TCP connection, add
-			// the event back to the queue to be exported in next export cycle. In case the L7 event
-			// is received later than the connkey become unavailable in the cs.connection, we will
-			// discard that event
+			// the event back to the queue to be exported in next export cycle
 			_, exists := cs.expirePriorityQueue.KeyToItem[connKey]
 			if !exists {
 				cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
