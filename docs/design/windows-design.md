@@ -188,17 +188,14 @@ these scenarios:
 * OpenFlow connection
 * The connection between CNI plugin and CNI server
 
-## Antrea Management on Windows
+## Antrea and OVS Management on Windows
 
-### Antrea Agent Management
-
-The Antrea Agent is running as a process on the Windows Node, but it is managed using a DaemonSet. The utility
-[Rancher Wins](https://github.com/rancher/wins) is used to manage the host process from inside the DaemonSet Pod.
-The Antrea Agent is configured using a ConfigMap, and the environment variables are set by kubelet on Windows.
-
-### OVS Management
-
-OVS is running as 2 Windows Services: one for ovsdb-server and one for ovs-vswitchd.
+While we provide different installation methods for Windows, the recommended one starting with
+Antrea v1.13 is to use the `antrea-windows-containerd-with-ovs.yml` manifest. With this method, the
+antrea-agent process and the OVS daemons (ovsdb-server and ovs-vswitchd) run as a Pod on Windows
+worker Nodes, and are managed by a DaemonSet. This installation method relies on
+[Windows HostProcess Pod](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/)
+support.
 
 ## Traffic walkthrough
 
