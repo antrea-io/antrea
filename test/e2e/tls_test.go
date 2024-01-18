@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/apis"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
@@ -34,8 +35,8 @@ const (
 )
 
 var (
-	cipherSuites             = []uint16{cipherSuite}
-	opensslTLS13CipherSuites = []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"}
+	cipherSuites          = []uint16{cipherSuite}
+	curlTLS13CipherSuites = []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"}
 )
 
 // TestAntreaApiserverTLSConfig tests Cipher Suite and TLSVersion config on Antrea apiserver, Controller side or Agent side.
@@ -53,26 +54,27 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 
 	controllerPod, err := data.getAntreaController()
 	assert.NoError(t, err, "failed to get Antrea Controller Pod")
-	controllerPodName := controllerPod.Name
-	controlPlaneNode := controlPlaneNodeName()
-	agentPodName, err := data.getAntreaPodOnNode(controlPlaneNode)
-	assert.NoError(t, err, "failed to get Antrea Agent Pod Name on Control Plane Node")
+	controllerPodNode := controllerPod.Spec.NodeName
+	node := getNodeByName(controllerPodNode)
+	require.NotNil(t, node, "failed to get the Node")
+	nodeIPv4 := node.ipv4Addr
+	nodeIPv6 := node.ipv6Addr
+	clientPodName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "client", controllerPodNode, antreaNamespace, true)
+	defer cleanupFunc()
 
 	tests := []struct {
-		name          string
-		podName       string
-		containerName string
-		apiserver     int
-		apiserverStr  string
+		name         string
+		apiserver    int
+		apiserverStr string
 	}{
-		{"ControllerApiserver", controllerPodName, controllerContainerName, apis.AntreaControllerAPIPort, "Controller"},
-		{"AgentApiserver", agentPodName, agentContainerName, apis.AntreaAgentAPIPort, "Agent"},
+		{"ControllerApiserver", apis.AntreaControllerAPIPort, "Controller"},
+		{"AgentApiserver", apis.AntreaAgentAPIPort, "Agent"},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			data.checkTLS(t, tc.podName, tc.containerName, tc.apiserver, tc.apiserverStr)
+			data.checkTLS(t, clientPodName, toolboxContainerName, tc.apiserver, tc.apiserverStr, nodeIPv4, nodeIPv6)
 		})
 	}
 }
@@ -99,13 +101,13 @@ func (data *TestData) configureTLS(t *testing.T, cipherSuites []uint16, tlsMinVe
 	}
 }
 
-func (data *TestData) checkTLS(t *testing.T, podName string, containerName string, apiserver int, apiserverStr string) {
+func (data *TestData) checkTLS(t *testing.T, podName string, containerName string, apiserver int, apiserverStr string, dstIPv4, dstIPv6 string) {
 	// 1. TLSMaxVersion unset, then a TLS1.3 Cipher Suite should be used.
-	stdouts := data.opensslConnect(t, podName, containerName, false, apiserver)
+	stdouts := data.curlTestTLS(t, podName, containerName, false, apiserver, dstIPv4, dstIPv6)
 	for _, stdout := range stdouts {
 		oneTLS13CS := false
-		for _, cs := range opensslTLS13CipherSuites {
-			if strings.Contains(stdout, fmt.Sprintf("New, TLSv1.3, Cipher is %s", cs)) {
+		for _, cs := range curlTLS13CipherSuites {
+			if strings.Contains(stdout, fmt.Sprintf("SSL connection using TLSv1.3 / %s", cs)) {
 				oneTLS13CS = true
 				break
 			}
@@ -115,43 +117,28 @@ func (data *TestData) checkTLS(t *testing.T, podName string, containerName strin
 	}
 
 	// 2. Set TLSMaxVersion to TLS1.2, then TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 should be used
-	stdouts = data.opensslConnect(t, podName, containerName, true, apiserver)
+	stdouts = data.curlTestTLS(t, podName, containerName, true, apiserver, dstIPv4, dstIPv6)
 	for _, stdout := range stdouts {
-		assert.True(t, strings.Contains(stdout, fmt.Sprintf("New, TLSv1.2, Cipher is %s", cipherSuiteStr)),
+		assert.True(t, strings.Contains(stdout, fmt.Sprintf("SSL connection using TLSv1.2 / %s", cipherSuiteStr)),
 			"Cipher Suite used by %s apiserver should be the TLS1.2 one '%s', output: %s", apiserverStr, cipherSuiteStr, stdout)
 	}
 }
 
-func (data *TestData) opensslConnect(t *testing.T, pod string, container string, tls12 bool, port int) []string {
-	var stdouts []string
-	opensslConnectCommands := []struct {
-		enabled bool
-		ip      string
-		option  string
-	}{
-		{
-			clusterInfo.podV4NetworkCIDR != "",
-			"127.0.0.1",
-			"-4",
-		},
-		{
-			clusterInfo.podV6NetworkCIDR != "",
-			"::1",
-			"-6",
-		},
-	}
-	for _, c := range opensslConnectCommands {
-		if !c.enabled {
+func (data *TestData) curlTestTLS(t *testing.T, pod string, container string, tls12 bool, port int, dstIPv4, dstIPv6 string) []string {
+	var out []string
+	for _, ip := range []string{dstIPv4, dstIPv6} {
+		if ip == "" {
 			continue
 		}
-		cmd := []string{"timeout", "1", "openssl", "s_client", "-connect", net.JoinHostPort(c.ip, fmt.Sprint(port)), c.option}
+		cmd := []string{"curl", "-k", "-v", "--head", fmt.Sprintf("https://%s", net.JoinHostPort(ip, fmt.Sprint(port)))}
 		if tls12 {
-			cmd = append(cmd, "-tls1_2")
+			cmd = append(cmd, "--tls-max", "1.2", "--tlsv1.2")
 		}
 		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, pod, container, cmd)
-		assert.NoError(t, err, "failed to run openssl command on Pod '%s'\nstderr: %s", pod, stderr)
+		assert.NoError(t, err, "failed to run curl command on Pod '%s'\nstdout: %s", pod, stdout)
 		t.Logf("Ran '%s' on Pod %s", strings.Join(cmd, " "), pod)
-		stdouts = append(stdouts, stdout)
+		// Collect stderr as all TLS-related details such as the cipher suite are present in stderr.
+		out = append(out, stderr)
 	}
-	return stdouts
+	return out
 }
