@@ -106,11 +106,11 @@ Kubernetes: `>= 1.16.0-0`
 | multicast.igmpQueryInterval | string | `"125s"` | The interval at which the antrea-agent sends IGMP queries to Pods. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | multicast.igmpQueryVersions | list | `[1,2,3]` | The versions of IGMP queries antrea-agent sends to Pods. Valid versions are 1, 2 and 3. |
 | multicast.multicastInterfaces | list | `[]` | Names of the interfaces on Nodes that are used to forward multicast traffic. |
-| multicluster.enableGateway | bool | `false` | Enable Antrea Multi-cluster Gateway to support cross-cluster traffic. This feature is supported only with encap mode. |
+| multicluster.enableGateway | bool | `false` | Enable Antrea Multi-cluster Gateway to support cross-cluster traffic. |
 | multicluster.enablePodToPodConnectivity | bool | `false` | Enable Multi-cluster Pod to Pod connectivity. |
 | multicluster.enableStretchedNetworkPolicy | bool | `false` | Enable Multi-cluster NetworkPolicy. Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy. |
 | multicluster.namespace | string | `""` | The Namespace where Antrea Multi-cluster Controller is running. The default is antrea-agent's Namespace. |
-| multicluster.trafficEncryptionMode | string | `"none"` | Determines how cross-cluster traffic is encrypted. It has the following options: - none (default):  Cross-cluster traffic will not be encrypted. - wireGuard:       Enable WireGuard for tunnel traffic encryption. |
+| multicluster.trafficEncryptionMode | string | `"none"` | Determines how cross-cluster traffic is encrypted. It can be one of "none" (default) or "wireGuard". When set to "none", cross-cluster traffic will not be encrypted. When set to "wireGuard", cross-cluster traffic will be sent over encrypted WireGuard tunnels. "wireGuard" requires Multi-cluster Gateway to be enabled. Note that when using WireGuard for cross-cluster traffic, encryption is no longer supported for in-cluster traffic. |
 | multicluster.wireGuard.port | int | `51821` | WireGuard tunnel port for cross-cluster traffic. |
 | noSNAT | bool | `false` | Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network. |
 | nodeIPAM.clusterCIDRs | list | `[]` | CIDR ranges to use when allocating Pod IP addresses. |
