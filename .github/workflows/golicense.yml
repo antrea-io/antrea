@@ -42,7 +42,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Cache licensing information for dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: cache
       env:
         cache-name: cache-lichen-deps-licensing-info
