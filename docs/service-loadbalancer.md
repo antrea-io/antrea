@@ -106,7 +106,7 @@ selects the Nodes with label "network-role: ingress-node" to host the external
 IPs:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1beta1
 kind: ExternalIPPool
 metadata:
   name: service-external-ip-pool
