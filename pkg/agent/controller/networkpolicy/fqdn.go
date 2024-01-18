@@ -482,20 +482,22 @@ func (f *fqdnController) onDNSResponseMsg(dnsMsg *dns.Msg, lookupTime time.Time,
 // wait for another attempt of realization of these rules, before forwarding the response to the
 // original client.
 func (f *fqdnController) syncDirtyRules(fqdn string, waitCh chan error, addressUpdate bool) {
+	if waitCh == nil && !addressUpdate {
+		// No dirty rules to sync
+		return
+	}
+	dirtyRules := sets.New[string]()
+	for selectorItem := range f.fqdnToSelectorItem[fqdn] {
+		utilsets.MergeString(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
+	}
 	if waitCh == nil {
 		if addressUpdate {
-			for selectorItem := range f.fqdnToSelectorItem[fqdn] {
-				for ruleID := range f.selectorItemToRuleIDs[selectorItem] {
-					klog.V(4).InfoS("Reconciling dirty rule", "ruleID", ruleID)
-					f.dirtyRuleHandler(ruleID)
-				}
+			for ruleID := range dirtyRules {
+				klog.V(4).InfoS("Reconciling dirty rule for FQDN address updates", "ruleID", ruleID)
+				f.dirtyRuleHandler(ruleID)
 			}
 		}
 	} else {
-		dirtyRules := sets.New[string]()
-		for selectorItem := range f.fqdnToSelectorItem[fqdn] {
-			utilsets.MergeString(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
-		}
 		if !addressUpdate {
 			// If there is no address update for this FQDN, and rules selecting this FQDN
 			// were all previously realized successfully, then there will be no dirty rules
