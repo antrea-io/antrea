@@ -61,7 +61,11 @@ spec:
       containers:
         - name: antrea-controller
           image: {{ include "antreaControllerImage" . | quote }}
+          {{- if .Values.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- else }}
           imagePullPolicy: {{ .Values.controllerImage.pullPolicy }}
+          {{- end }}
           resources: {{- .Values.controller.antreaController.resources | toYaml | nindent 12 }}
           {{- if ((.Values.testing).coverage) }}
           command: ["/bin/sh"]

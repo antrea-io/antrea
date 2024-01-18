@@ -85,6 +85,8 @@ jobs:
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         ./hack/build-antrea-linux-all.sh --pull --push-base-images --distro ubi
         docker push antrea/antrea-ubi:latest
+        docker push antrea/antrea-agent-ubi:latest
+        docker push antrea/antrea-controller-ubi:latest
 
   build-scale:
     needs: check-changes

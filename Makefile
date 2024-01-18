@@ -374,6 +374,26 @@ else
 endif
 	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-ubi
 
+.PHONY: build-agent-ubi
+build-agent-ubi:
+	@echo "===> Building Antrea bins and antrea/antrea-agent-ubi Docker image <==="
+ifneq ($(NO_PULL),"")
+	docker build -t antrea/antrea-agent-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.agent.ubi $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-agent-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.agent.ubi $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-agent-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-agent-ubi
+
+.PHONY: build-controller-ubi
+build-controller-ubi:
+	@echo "===> Building Antrea bins and antrea/antrea-controller-ubi Docker image <==="
+ifneq ($(NO_PULL),"")
+	docker build -t antrea/antrea-controller-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.controller.ubi $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-controller-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.controller.ubi $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-controller-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-controller-ubi
+
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="

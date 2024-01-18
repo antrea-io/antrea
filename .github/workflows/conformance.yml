@@ -66,7 +66,7 @@ jobs:
       - name: Create K8s cluster
         run: |
           # The command also loads local antrea/antrea-agent-ubuntu:latest and antrea/antrea-controller-ubuntu:latest
-          # into Nodes if it exists.
+          # into Nodes if they exist.
           ./ci/kind/kind-setup.sh create kind \
             --k8s-version "${{ inputs.k8s-version }}"
       - name: Install Antrea

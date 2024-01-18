@@ -65,6 +65,8 @@ jobs:
           ./hack/build-antrea-linux-all.sh --pull --distro ubi
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
           docker push antrea/antrea-ubi:"${VERSION}"
+          docker push antrea/antrea-agent-ubi:"${VERSION}"
+          docker push antrea/antrea-controller-ubi:"${VERSION}"
 
   build-windows:
     runs-on: [windows-2019]
