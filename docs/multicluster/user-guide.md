@@ -110,7 +110,11 @@ Antrea v1.11.0, Multi-cluster Gateway also works with the Antrea `noEncap`, `hyb
 and `networkPolicyOnly` modes. For `noEncap` and `hybrid` modes, Antrea Multi-cluster
 deployment is the same as `encap` mode. For `networkPolicyOnly` mode, we need extra
 Antrea configuration changes to support Multi-cluster Gateway. Please check
-[the deployment guide](./policy-only-mode.md) for more information.
+[the deployment guide](./policy-only-mode.md) for more information. When using
+Multi-cluster Gateway, it is not possible to enable WireGuard for inter-Node
+traffic within the same member cluster. It is however possible to [enable
+WireGuard for cross-cluster traffic](#multi-cluster-wireguard-encryption)
+between member clusters.
 
 ### Deploy Antrea Multi-cluster Controller
 
@@ -449,6 +453,10 @@ data:
       wireGuard:
         port: 51821
 ```
+
+When WireGuard encryption is enabled for cross-cluster traffic as part of the
+Multi-cluster feature, in-cluster encryption (for traffic within a given member
+cluster) is no longer supported, not even with IPsec.
 
 ## Multi-cluster Service
 
