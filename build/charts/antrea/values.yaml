@@ -402,7 +402,6 @@ logVerbosity: 0
 # Configure Multicluster defaults for both Antrea Controller and Agent.
 multicluster:
   # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
-  # This feature is supported only with encap mode.
   enableGateway: false
   # -- The Namespace where Antrea Multi-cluster Controller is running.
   # The default is antrea-agent's Namespace.
@@ -412,10 +411,12 @@ multicluster:
   enableStretchedNetworkPolicy: false
   # -- Enable Multi-cluster Pod to Pod connectivity.
   enablePodToPodConnectivity: false
-  # -- Determines how cross-cluster traffic is encrypted.
-  # It has the following options:
-  # - none (default):  Cross-cluster traffic will not be encrypted.
-  # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
+  # -- Determines how cross-cluster traffic is encrypted. It can be one of
+  # "none" (default) or "wireGuard". When set to "none", cross-cluster traffic
+  # will not be encrypted. When set to "wireGuard", cross-cluster traffic will
+  # be sent over encrypted WireGuard tunnels. "wireGuard" requires Multi-cluster
+  # Gateway to be enabled. Note that when using WireGuard for cross-cluster
+  # traffic, encryption is no longer supported for in-cluster traffic.
   trafficEncryptionMode: "none"
   # WireGuard tunnel configuration for cross-cluster traffic.
   wireGuard:
