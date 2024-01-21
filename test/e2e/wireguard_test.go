@@ -69,7 +69,12 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "differentnodes")
 	defer deletePods()
 	numPods := 2
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+
+	mtu, err := data.GetPodInterfaceMTU(podInfos[0].Name, podInfos[0].Namespace)
+	if err != nil {
+		t.Fatalf("Failed to get MTU of Pod %s: %v", podInfos[0].Name, err)
+	}
+	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, mtu-IPHeaderSize-ICMPHeaderSize, false)
 
 	// Make sure that route to Pod on peer Node and route to peer gateway is targeting the WireGuard device.
 	srcPod, err := data.getAntreaPodOnNode(nodeName(0))

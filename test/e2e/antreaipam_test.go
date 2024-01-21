@@ -282,7 +282,7 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 		defer deletePodWrapper(t, data, PodInfos[i].Namespace, PodInfos[i].Name)
 	}
 
-	data.runPingMesh(t, PodInfos, agnhostContainerName)
+	data.runPingMesh(t, PodInfos, agnhostContainerName, 0, true)
 }
 
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
@@ -296,7 +296,7 @@ func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 		}
 		PodInfos = append(PodInfos, createdPodInfos...)
 	}
-	data.runPingMesh(t, PodInfos, agnhostContainerName)
+	data.runPingMesh(t, PodInfos, agnhostContainerName, 0, true)
 }
 
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {

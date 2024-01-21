@@ -79,6 +79,14 @@ func TestIPSec(t *testing.T) {
 	})
 
 	t.Run("testIPSecDeleteStaleTunnelPorts", func(t *testing.T) { testIPSecDeleteStaleTunnelPorts(t, data) })
+	t.Run("testPodConnectivityWithDifferentTrafficConfig", func(t *testing.T) {
+		trafficConfigs := []trafficConfig{
+			{tunnelType: "geneve", multiclusterTrafficEncryptionMode: "none"},
+			{tunnelType: "vxlan", multiclusterTrafficEncryptionMode: "none"},
+			{tunnelType: "gre", multiclusterTrafficEncryptionMode: "none"},
+		}
+		testPodConnectivityWithDifferentTrafficConfigs(t, data, trafficConfigs)
+	})
 }
 
 func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, isCertAuth bool, err error) {
@@ -137,7 +145,11 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, tag)
 	defer deletePods()
 	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].NodeName, podInfos[1].NodeName)
-	data.runPingMesh(t, podInfos[:2], agnhostContainerName)
+	mtu, err := data.GetPodInterfaceMTU(podInfos[0].Name, podInfos[0].Namespace)
+	if err != nil {
+		t.Fatalf("Error when retrieving MTU for Pod '%s': %v", podInfos[0].Name, err)
+	}
+	data.runPingMesh(t, podInfos[:2], toolboxContainerName, mtu, false)
 
 	// Check that there is at least one 'up' Security Association on the Node
 	nodeName := podInfos[0].NodeName

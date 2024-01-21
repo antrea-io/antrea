@@ -211,6 +211,7 @@ func run(o *Options) error {
 			AuthenticationMode: ipsecAuthenticationMode,
 		},
 		EnableMulticlusterGW: enableMulticlusterGW,
+		MulticlusterConfig:   o.config.Multicluster,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{

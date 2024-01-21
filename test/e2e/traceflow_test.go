@@ -1166,7 +1166,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		podInfos[1].Name = node2Pods[2]
 		podInfos[1].Namespace = data.testNamespace
 		podInfos[1].OS = "windows"
-		data.runPingMesh(t, podInfos, agnhostContainerName)
+		data.runPingMesh(t, podInfos, agnhostContainerName, 0, true)
 	}
 
 	// Setup 2 NetworkPolicies:
@@ -2506,7 +2506,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, osString, "", ""}, data.testNamespace, dstPodIPs, agnhostContainerName, 2, 0); err != nil {
+		if err := data.RunPingCommandFromTestPod(PodInfo{srcPod, osString, "", ""}, data.testNamespace, dstPodIPs, agnhostContainerName, 2, 0, true); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}

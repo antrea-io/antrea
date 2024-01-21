@@ -17,7 +17,9 @@ package config
 import (
 	"fmt"
 	"net"
+	"strings"
 
+	agentConfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -36,7 +38,7 @@ const (
 const (
 	vxlanOverhead     = 50
 	geneveOverhead    = 50
-	greOverhead       = 38
+	greOverhead       = 42
 	ipv6ExtraOverhead = 20
 
 	WireGuardOverhead = 80
@@ -209,7 +211,7 @@ type NetworkConfig struct {
 	TransportIfaceCIDRs   []string
 	IPv4Enabled           bool
 	IPv6Enabled           bool
-	// MTUDeduction only counts IPv4 tunnel overhead, no IPsec and WireGuard overhead.
+	// MTUDeduction is the MTU deduction for encapsulation and encryption in cluster.
 	MTUDeduction int
 	// Set by the defaultMTU config option or auto discovered.
 	// Auto discovery will use MTU value of the Node's transport interface.
@@ -217,6 +219,7 @@ type NetworkConfig struct {
 	// encap header.
 	InterfaceMTU         int
 	EnableMulticlusterGW bool
+	MulticlusterConfig   agentConfig.MulticlusterConfig
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4. Legal cases are:
@@ -280,23 +283,33 @@ func (nc *NetworkConfig) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IP
 }
 
 func (nc *NetworkConfig) CalculateMTUDeduction(isIPv6 bool) int {
-	var mtuDeduction int
+	if nc.TrafficEncapMode.SupportsEncap() && isIPv6 {
+		nc.MTUDeduction += ipv6ExtraOverhead
+	}
+	// When WireGuard is enabled, NetworkConfig.TunnelType will be ignored, so we deduct MTU based on WireGuardOverhead.
+	if nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard {
+		nc.MTUDeduction = WireGuardOverhead
+		return nc.MTUDeduction
+	} else if nc.TrafficEncryptionMode == TrafficEncryptionModeIPSec {
+		nc.MTUDeduction = IPSecESPOverhead
+	}
+
 	// When Multi-cluster Gateway is enabled, we need to reduce MTU for potential cross-cluster traffic.
 	if nc.TrafficEncapMode.SupportsEncap() || nc.EnableMulticlusterGW {
 		if nc.TunnelType == ovsconfig.VXLANTunnel {
-			mtuDeduction = vxlanOverhead
+			nc.MTUDeduction += vxlanOverhead
 		} else if nc.TunnelType == ovsconfig.GeneveTunnel {
-			mtuDeduction = geneveOverhead
+			nc.MTUDeduction += geneveOverhead
 		} else if nc.TunnelType == ovsconfig.GRETunnel {
-			mtuDeduction = greOverhead
+			nc.MTUDeduction += greOverhead
 		}
 	}
 
-	if nc.TrafficEncapMode.SupportsEncap() && isIPv6 {
-		mtuDeduction += ipv6ExtraOverhead
+	// When multi-cluster WireGuard is enabled, we need to reduce MTU for potential cross-cluster traffic.
+	if nc.EnableMulticlusterGW && strings.EqualFold(nc.MulticlusterConfig.TrafficEncryptionMode, TrafficEncryptionModeWireGuard.String()) {
+		nc.MTUDeduction += WireGuardOverhead
 	}
-	nc.MTUDeduction = mtuDeduction
-	return mtuDeduction
+	return nc.MTUDeduction
 }
 
 // ServiceConfig includes K8s Service CIDR and available IP addresses for NodePort.

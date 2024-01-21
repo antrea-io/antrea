@@ -2234,18 +2234,18 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
+func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int, fragment bool) error {
 	if podInfo.OS != "windows" && podInfo.OS != "linux" {
 		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.Name)
 	}
 	if targetPodIPs.IPv4 != nil {
-		cmdV4 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv4)
+		cmdV4 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv4, fragment)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV4); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.IPv6 != nil {
-		cmdV6 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv6)
+		cmdV6 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv6, fragment)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV6); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
@@ -2481,6 +2481,20 @@ func (data *TestData) GetTransportInterface() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
+}
+
+func (data *TestData) GetPodInterfaceMTU(podName string, namespace string) (int, error) {
+	cmd := []string{"cat", "/sys/class/net/eth0/mtu"}
+	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, toolboxContainerName, cmd)
+	if stdout == "" || stderr != "" || err != nil {
+		return 0, fmt.Errorf("failed to get interface MTU, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
+	}
+
+	mtu, err := strconv.Atoi(strings.TrimSpace(stdout))
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert MTU to int: %v", err)
+	}
+	return mtu, nil
 }
 
 func (data *TestData) GetNodeMACAddress(node, device string) (string, error) {
@@ -3061,8 +3075,8 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 	return err
 }
 
-func getPingCommand(count int, size int, os string, ip *net.IP) []string {
-	countOption, sizeOption := "-c", "-s"
+func getPingCommand(count int, size int, os string, ip *net.IP, fragment bool) []string {
+	countOption, sizeOption, fragmentOption := "-c", "-s", "-M"
 	if os == "windows" {
 		countOption = "-n"
 		sizeOption = "-l"
@@ -3070,6 +3084,10 @@ func getPingCommand(count int, size int, os string, ip *net.IP) []string {
 	cmd := []string{"ping", countOption, strconv.Itoa(count)}
 	if size != 0 {
 		cmd = append(cmd, sizeOption, strconv.Itoa(size))
+	}
+	if !fragment {
+		cmd = append(cmd, fragmentOption)
+		cmd = append(cmd, "do")
 	}
 	if ip.To4() != nil {
 		cmd = append(cmd, "-4", ip.String())

@@ -28,10 +28,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/config"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
-const pingCount = 5
+const (
+	pingCount = 5
+
+	IPHeaderSize   = 20
+	ICMPHeaderSize = 8
+)
+
+type trafficConfig struct {
+	tunnelType                        string
+	multiclusterTrafficEncryptionMode string
+}
 
 // TestConnectivity is the top-level test which contains all subtests for
 // Connectivity related test cases so they can share setup, teardown.
@@ -42,16 +54,20 @@ func TestConnectivity(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Run("testPodConnectivityOnSameNode", func(t *testing.T) {
-		testPodConnectivityOnSameNode(t, data)
+	t.Run("testPodConnectivityWithDifferentTrafficConfig", func(t *testing.T) {
+		trafficConfigs := []trafficConfig{
+			{tunnelType: "geneve", multiclusterTrafficEncryptionMode: "none"},
+			{tunnelType: "vxlan", multiclusterTrafficEncryptionMode: "none"},
+			{tunnelType: "gre", multiclusterTrafficEncryptionMode: "none"},
+			{tunnelType: "geneve", multiclusterTrafficEncryptionMode: "wireguard"},
+			{tunnelType: "vxlan", multiclusterTrafficEncryptionMode: "wireguard"},
+			{tunnelType: "gre", multiclusterTrafficEncryptionMode: "wireguard"},
+		}
+		testPodConnectivityWithDifferentTrafficConfigs(t, data, trafficConfigs)
 	})
 	t.Run("testHostPortPodConnectivity", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		testHostPortPodConnectivity(t, data)
-	})
-	t.Run("testPodConnectivityDifferentNodes", func(t *testing.T) {
-		skipIfNumNodesLessThan(t, 2)
-		testPodConnectivityDifferentNodes(t, data)
 	})
 	t.Run("testPodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
@@ -70,6 +86,48 @@ func TestConnectivity(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
 		testPingLargeMTU(t, data)
 	})
+}
+
+func testPodConnectivityWithDifferentTrafficConfigs(t *testing.T, data *TestData, trafficConfigs []trafficConfig) {
+	var previousTunnelType string
+	var previousMulticlusterTrafficEncryptionMode string
+	var previousEnableMulticlusterGW bool
+	var previousMulticlusterEnable bool
+	defer func() {
+		ac := func(config *agentconfig.AgentConfig) {
+			config.TunnelType = previousTunnelType
+			config.Multicluster.TrafficEncryptionMode = previousMulticlusterTrafficEncryptionMode
+			config.Multicluster.EnableGateway = previousEnableMulticlusterGW
+			config.FeatureGates[string(features.Multicluster)] = previousMulticlusterEnable
+		}
+		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+			t.Errorf("Failed to restore Antrea Agent Config: %v", err)
+		}
+	}()
+	for _, conf := range trafficConfigs {
+		t.Logf("Testing connectivity with TunnelType %s and multicluster.TrafficEncrptionMode %s", conf.tunnelType, conf.multiclusterTrafficEncryptionMode)
+		ac := func(config *agentconfig.AgentConfig) {
+			previousTunnelType = config.TunnelType
+			previousMulticlusterTrafficEncryptionMode = config.Multicluster.TrafficEncryptionMode
+			previousEnableMulticlusterGW = config.Multicluster.EnableGateway
+			previousMulticlusterEnable = config.FeatureGates[string(features.Multicluster)]
+			config.TunnelType = conf.tunnelType
+			config.Multicluster.TrafficEncryptionMode = conf.multiclusterTrafficEncryptionMode
+			config.Multicluster.EnableGateway = true
+			config.FeatureGates[string(features.Multicluster)] = true
+		}
+		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+			t.Fatalf("Failed to enable tunnelType %s, multicluster.TrafficEncryptionMode %s: %v", conf.tunnelType, conf.multiclusterTrafficEncryptionMode, err)
+		}
+
+		t.Run("testPodConnectivityOnSameNode", func(t *testing.T) {
+			testPodConnectivityOnSameNode(t, data)
+		})
+		t.Run("testPodConnectivityDifferentNodes", func(t *testing.T) {
+			skipIfNumNodesLessThan(t, 2)
+			testPodConnectivityDifferentNodes(t, data)
+		})
+	}
 }
 
 func waitForPodIPs(t *testing.T, data *TestData, podInfos []PodInfo) map[string]*PodIPs {
@@ -92,8 +150,9 @@ func waitForPodIPs(t *testing.T, data *TestData, podInfos []PodInfo) map[string]
 }
 
 // runPingMesh runs a ping mesh between all the provided Pods after first retrieving their IP
-// addresses.
-func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname string) {
+// addresses. If mtu is non-zero, the ping command will be run with the provided MTU value.
+// If mtu is zero, the ping command will be run with the default MTU value.
+func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname string, mtu int, fragment bool) {
 	podIPs := waitForPodIPs(t, data, podInfos)
 
 	t.Logf("Ping mesh test between all Pods")
@@ -110,7 +169,8 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname stri
 			if pi2.Namespace != "" {
 				pod2Namespace = pi2.Namespace
 			}
-			if err := data.RunPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.Name], ctrname, pingCount, 0); err != nil {
+
+			if err := data.RunPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.Name], ctrname, pingCount, mtu, fragment); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", k8s.NamespacedName(podNamespace, pi1.Name), k8s.NamespacedName(pod2Namespace, pi2.Name), err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", k8s.NamespacedName(podNamespace, pi1.Name), k8s.NamespacedName(pod2Namespace, pi2.Name))
@@ -131,16 +191,20 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 		workerNode = workerNodeName(clusterInfo.windowsNodes[0])
 	}
 
-	t.Logf("Creating %d agnhost Pods on '%s'", numPods, workerNode)
+	t.Logf("Creating %d toolbox Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].OS = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNode(podInfos[i].Name, data.testNamespace, workerNode, false); err != nil {
-			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
+		if err := data.createToolboxPodOnNode(podInfos[i].Name, data.testNamespace, workerNode, false); err != nil {
+			t.Fatalf("Error when creating toolbox test Pod '%s': %v", podInfos[i], err)
 		}
 		defer deletePodWrapper(t, data, data.testNamespace, podInfos[i].Name)
 	}
+	mtu, err := data.GetPodInterfaceMTU(podInfos[0].Name, data.testNamespace)
+	if err != nil {
+		t.Fatalf("Error when retrieving MTU for Pod '%s': %v", podInfos[0].Name, err)
+	}
 
-	data.runPingMesh(t, podInfos, agnhostContainerName)
+	data.runPingMesh(t, podInfos, toolboxContainerName, mtu-IPHeaderSize-ICMPHeaderSize, false)
 }
 
 // testPodConnectivityOnSameNode checks that Pods running on the same Node can reach each other, by
@@ -185,13 +249,13 @@ func testHostPortPodConnectivity(t *testing.T, data *TestData) {
 	data.testHostPortPodConnectivity(t, data.testNamespace, data.testNamespace)
 }
 
-// createPodsOnDifferentNodes creates agnhost Pods through a DaemonSet. This function returns information of the created
+// createPodsOnDifferentNodes creates toolbox Pods through a DaemonSet. This function returns information of the created
 // Pods as well as a function which will delete the Pods when called. Since Pods can be on Nodes of different OSes, podInfo
 // slice instead of PodName slice is used to inform caller of correct commands and options. Linux and Windows Pods are
 // alternating in this podInfo slice so that the test can cover different connectivity cases between different OSes.
 func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag string) (podInfos []PodInfo, cleanup func() error) {
 	dsName := "connectivity-test" + tag
-	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
+	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, toolboxContainerName, toolboxImage, []string{"sleep", "3600"}, nil)
 	if err != nil {
 		t.Fatalf("Error when creating DaemonSet '%s': %v", dsName, err)
 	}
@@ -264,7 +328,11 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 	if len(podInfos) > maxPods {
 		podInfos = podInfos[:maxPods]
 	}
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	mtu, err := data.GetPodInterfaceMTU(podInfos[0].Name, data.testNamespace)
+	if err != nil {
+		t.Fatalf("Error when retrieving MTU for Pod '%s': %v", podInfos[0].Name, err)
+	}
+	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, mtu-IPHeaderSize-ICMPHeaderSize, false)
 }
 
 // testPodConnectivityDifferentNodes checks that Pods running on different Nodes can reach each
@@ -315,11 +383,11 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespa
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "antrearestart")
 	defer deletePods()
 
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName, 0, true)
 
 	data.redeployAntrea(t, deployAntreaDefault)
 
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName, 0, true)
 }
 
 // testOVSRestartSameNode verifies that datapath flows are not removed when the Antrea Agent Pod is
@@ -405,7 +473,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 		defer deletePodWrapper(t, data, namespace, podInfos[i].Name)
 	}
 
-	data.runPingMesh(t, podInfos, busyboxContainerName)
+	data.runPingMesh(t, podInfos, busyboxContainerName, 0, true)
 
 	var antreaPodName string
 	var err error
@@ -487,7 +555,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	// This should give Antrea ~10s to restore flows, since we generate 10 "pings" with a 1s
 	// interval.
 	t.Logf("Running second ping mesh to check that flows have been restored")
-	data.runPingMesh(t, podInfos, busyboxContainerName)
+	data.runPingMesh(t, podInfos, busyboxContainerName, 0, true)
 
 	flows2, groups2 := dumpFlows(), dumpGroups()
 	numFlows2, numGroups2 := len(flows2), len(groups2)
@@ -515,7 +583,7 @@ func testPingLargeMTU(t *testing.T, data *TestData) {
 
 	pingSize := 2000
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podInfos[0].Name, podInfos[1].Name)
-	if err := data.RunPingCommandFromTestPod(podInfos[0], data.testNamespace, podIPs[podInfos[1].Name], agnhostContainerName, pingCount, pingSize); err != nil {
+	if err := data.RunPingCommandFromTestPod(podInfos[0], data.testNamespace, podIPs[podInfos[1].Name], agnhostContainerName, pingCount, pingSize, true); err != nil {
 		t.Error(err)
 	}
 }

@@ -1197,10 +1197,6 @@ func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, e
 
 	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
 	mtu -= i.networkConfig.CalculateMTUDeduction(isIPv6)
-
-	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
-		mtu -= config.IPSecESPOverhead
-	}
 	return mtu, nil
 }
 

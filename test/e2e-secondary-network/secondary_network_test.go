@@ -198,7 +198,7 @@ func (data *TestData) pingBetweenInterfaces(t *testing.T) error {
 						} else {
 							IPToPing = antreae2e.PodIPs{IPv6: &ip}
 						}
-						err := data.e2eTestData.RunPingCommandFromTestPod(antreae2e.PodInfo{Name: podData[sourcePod].nameOfPods, OS: osType, NodeName: clusterInfo.controlPlaneNodeName, Namespace: nameSpace}, nameSpace, &IPToPing, ctrName, count, size)
+						err := data.e2eTestData.RunPingCommandFromTestPod(antreae2e.PodInfo{Name: podData[sourcePod].nameOfPods, OS: osType, NodeName: clusterInfo.controlPlaneNodeName, Namespace: nameSpace}, nameSpace, &IPToPing, ctrName, count, size, true)
 						if err == nil {
 							logs.Infof("Ping '%s' -> '%s'( Interface: %s, IP Address: %s): OK", podData[sourcePod].nameOfPods, podData[targetPod].nameOfPods, podData[targetPod].nameOfInterfacePerPod[targetInterface], secondaryIpAddress)
 						} else {
