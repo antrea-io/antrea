@@ -186,6 +186,7 @@ type flagInfo struct {
 	supportedValues []string
 	arg             bool
 	usage           string
+	isBool          bool
 }
 
 // rawCommand defines a full function cobra.Command which lets developers
@@ -562,13 +563,25 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 					argMap[f.name] = args[0]
 				}
 			} else {
-				vs, err := cmd.Flags().GetString(f.name)
-				if err == nil && len(vs) != 0 {
-					if f.supportedValues != nil && !cd.validateFlagValue(vs, f.supportedValues) {
-						return nil, fmt.Errorf("unsupported value %s for flag %s", vs, f.name)
+				if f.isBool {
+					vs, err := cmd.Flags().GetBool(f.name)
+					if err != nil {
+						return nil, fmt.Errorf("error accessing flag %s for command %s: %v", f.name, cmd.Name(), err)
 					}
-					argMap[f.name] = vs
-					continue
+					if vs {
+						argMap[f.name] = ""
+					}
+				} else {
+					vs, err := cmd.Flags().GetString(f.name)
+					if err != nil {
+						return nil, fmt.Errorf("error accessing flag %s for command %s: %v", f.name, cmd.Name(), err)
+					}
+					if err == nil && len(vs) != 0 {
+						if f.supportedValues != nil && !cd.validateFlagValue(vs, f.supportedValues) {
+							return nil, fmt.Errorf("unsupported value %s for flag %s", vs, f.name)
+						}
+						argMap[f.name] = vs
+					}
 				}
 			}
 		}
@@ -639,18 +652,23 @@ func (cd *commandDefinition) newCommandRunE(c AntctlClient, out io.Writer) func(
 
 // applyFlagsToCommand sets up args and flags for the command.
 func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
-	var hasFlag bool
+	var hasArg bool
 	for _, flag := range cd.getEndpoint().flags() {
 		if flag.arg {
 			cmd.Args = cobra.MaximumNArgs(1)
 			cmd.Use += fmt.Sprintf(" [%s]", flag.name)
 			cmd.Long += fmt.Sprintf("\n\nArgs:\n  %s\t%s", flag.name, flag.usage)
-			hasFlag = true
+			hasArg = true
 		} else {
-			cmd.Flags().StringP(flag.name, flag.shorthand, flag.defaultValue, flag.usage)
+			if flag.isBool {
+				// When the flag is a boolean, the default value will always be false.
+				cmd.Flags().BoolP(flag.name, flag.shorthand, false, flag.usage)
+			} else {
+				cmd.Flags().StringP(flag.name, flag.shorthand, flag.defaultValue, flag.usage)
+			}
 		}
 	}
-	if !hasFlag {
+	if !hasArg {
 		cmd.Args = cobra.NoArgs
 	}
 	if cd.commandGroup == get {

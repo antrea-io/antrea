@@ -293,7 +293,7 @@ func GetFlowTableID(tableName string) uint8 {
 func GetTableList() []binding.Table {
 	tables := make([]binding.Table, 0)
 	for _, obj := range tableCache.List() {
-		t := obj.(binding.Table)
+		t := obj.(*Table).ofTable
 		tables = append(tables, t)
 	}
 	return tables

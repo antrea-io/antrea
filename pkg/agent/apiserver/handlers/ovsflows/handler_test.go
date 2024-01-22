@@ -240,6 +240,19 @@ func TestTableFlows(t *testing.T) {
 
 }
 
+func TestTableNamesOnly(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	getFlowTableList = mockGetTableList
+	tc := testCase{
+		test:           "Get table names only",
+		query:          "?table-names-only",
+		expectedStatus: http.StatusOK,
+		resps:          []Response{{"table0"}, {"table1"}},
+	}
+	q := aqtest.NewMockAgentQuerier(ctrl)
+	runHTTPTest(t, &tc, q)
+}
+
 func mockGetFlowTableName(id uint8) string {
 	if id == 80 {
 		return "IngressRule"
@@ -252,6 +265,13 @@ func mockGetFlowTableID(tableName string) uint8 {
 		return 80
 	}
 	return binding.TableIDAll
+}
+
+func mockGetTableList() []binding.Table {
+	return []binding.Table{
+		binding.NewOFTable(0, "table0", 0, 0, 0),
+		binding.NewOFTable(0, "table1", 0, 0, 0),
+	}
 }
 
 func TestGroups(t *testing.T) {
