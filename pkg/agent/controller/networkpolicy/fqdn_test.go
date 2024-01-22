@@ -395,6 +395,10 @@ func TestSyncDirtyRules(t *testing.T) {
 	selectorItem2 := fqdnSelectorItem{
 		matchName: testFQDN2,
 	}
+	testFQDN3 := "*antrea.io"
+	selectorItem3 := fqdnSelectorItem{
+		matchRegex: testFQDN3,
+	}
 	tests := []struct {
 		name                        string
 		fqdnsToSync                 []string
@@ -406,6 +410,17 @@ func TestSyncDirtyRules(t *testing.T) {
 		expectedDirtyRulesRemaining sets.Set[string]
 		expectErr                   bool
 	}{
+		{
+			name:                        "test non-blocking dirty rule sync without address update",
+			fqdnsToSync:                 []string{testFQDN},
+			prevDirtyRules:              sets.New[string](),
+			addressUpdates:              []bool{false},
+			waitChs:                     []chan error{nil},
+			notifications:               []ruleRealizationUpdate{},
+			expectedDirtyRuleSyncCalls:  []string{},
+			expectedDirtyRulesRemaining: sets.New[string](),
+			expectErr:                   false,
+		},
 		{
 			name:                        "test non-blocking dirty rule sync with address update",
 			fqdnsToSync:                 []string{testFQDN},
@@ -482,10 +497,13 @@ func TestSyncDirtyRules(t *testing.T) {
 				dirtyRuleSyncCalls = append(dirtyRuleSyncCalls, s)
 			}
 			f.addFQDNSelector("1", []string{testFQDN})
+			f.addFQDNSelector("1", []string{testFQDN3})
 			f.addFQDNSelector("2", []string{testFQDN})
 			f.addFQDNSelector("2", []string{testFQDN2})
 			f.setFQDNMatchSelector(testFQDN, selectorItem)
 			f.setFQDNMatchSelector(testFQDN2, selectorItem2)
+			f.setFQDNMatchSelector(testFQDN, selectorItem3)
+			f.setFQDNMatchSelector(testFQDN2, selectorItem3)
 			// This simulates failed rule syncs in previous syncDirtyRules() calls
 			if len(tc.prevDirtyRules) > 0 {
 				f.ruleSyncTracker.dirtyRules = tc.prevDirtyRules
