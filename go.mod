@@ -38,7 +38,7 @@ require (
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 	github.com/mdlayher/ndp v0.8.0
 	github.com/mdlayher/packet v1.1.2
-	github.com/miekg/dns v1.1.57
+	github.com/miekg/dns v1.1.58
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/onsi/ginkgo/v2 v2.14.0
 	github.com/onsi/gomega v1.30.0
