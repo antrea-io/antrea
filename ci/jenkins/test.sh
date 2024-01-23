@@ -400,7 +400,7 @@ function deliver_antrea_linux {
     fi
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
 
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
@@ -581,7 +581,7 @@ function deliver_antrea_linux_containerd {
 
     echo "==== Start building and delivering Linux containerd images ===="
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
@@ -740,7 +740,7 @@ function deliver_antrea {
     cp -f build/yamls/*.yml $WORKDIR
 
     echo "====== Delivering Antrea to all Nodes ======"
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
@@ -750,8 +750,9 @@ function deliver_antrea {
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
-            kind load docker-image antrea/antrea-ubuntu:latest --name ${KIND_CLUSTER}
-            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER}  
+            kind load docker-image antrea/antrea-agent-ubuntu:latest --name ${KIND_CLUSTER}
+            kind load docker-image antrea/antrea-controller-ubuntu:latest --name ${KIND_CLUSTER}
+            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
             kubectl config use-context kind-${KIND_CLUSTER}
             docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml 
     elif [[ $TESTBED_TYPE == "jumper" ]]; then

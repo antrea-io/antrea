@@ -411,7 +411,7 @@ function deliver_antrea {
             OLD_ANTREA_VERSION="$(cd $GIT_CHECKOUT_DIR | git tag | sort -Vr | head -n 1)"
         fi
         # Let antrea controller use new Antrea image
-        sed -i "0,/antrea-ubuntu:latest/{s/antrea-ubuntu:latest/antrea-ubuntu:$DOCKER_IMG_VERSION/}" ${GIT_CHECKOUT_DIR}/build/yamls/$antrea_yml
+        sed -i "0,/antrea-controller-ubuntu:latest/{s/antrea-controller-ubuntu:latest/antrea-controller-ubuntu:$DOCKER_IMG_VERSION/}" ${GIT_CHECKOUT_DIR}/build/yamls/$antrea_yml
     fi
 
     sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
@@ -424,10 +424,12 @@ function deliver_antrea {
     export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
 
     if [[ "$COVERAGE" == true ]]; then
-        docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
+        docker save -o antrea-agent-ubuntu-coverage.tar antrea/antrea-agent-ubuntu-coverage:${DOCKER_IMG_VERSION}
+        docker save -o antrea-controller-ubuntu-coverage.tar antrea/antrea-controller-ubuntu-coverage:${DOCKER_IMG_VERSION}
         docker save -o flow-aggregator-coverage.tar antrea/flow-aggregator-coverage:${DOCKER_IMG_VERSION}
     else
-        docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+        docker save -o antrea-agent-ubuntu.tar antrea/antrea-agent-ubuntu:${DOCKER_IMG_VERSION}
+        docker save -o antrea-controller-ubuntu.tar antrea/antrea-controller-ubuntu:${DOCKER_IMG_VERSION}
         docker save -o flow-aggregator.tar antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
 
@@ -439,10 +441,12 @@ function deliver_antrea {
     do
         ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
         if [[ "$COVERAGE" == true ]]; then
-            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image antrea-agent-ubuntu-coverage.tar docker.io/antrea/antrea-agent-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image antrea-controller-ubuntu-coverage.tar docker.io/antrea/antrea-controller-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
             copy_image flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         else
-            copy_image antrea-ubuntu.tar docker.io/antrea/antrea-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image antrea-agent-ubuntu.tar docker.io/antrea/antrea-agent-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image antrea-controller-ubuntu.tar docker.io/antrea/antrea-controller-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
             copy_image flow-aggregator.tar docker.io/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         fi
     done

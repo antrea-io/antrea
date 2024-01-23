@@ -94,7 +94,8 @@ ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
 # ignored as per the .helmignore file.
 cp "$ANTREA_CHART/Chart.yaml" "$ANTREA_CHART/Chart.yaml.bak"
 yq -i '.annotations."artifacthub.io/prerelease" = strenv(PRERELEASE)' "$ANTREA_CHART/Chart.yaml"
-sed -i.bak 's=antrea/antrea-ubuntu=projects.registry.vmware.com/antrea/antrea-ubuntu=g' "$ANTREA_CHART/values.yaml"
+sed -i.bak 's=antrea/antrea-agent-ubuntu=projects.registry.vmware.com/antrea/antrea-agent-ubuntu=g' "$ANTREA_CHART/values.yaml"
+sed -i.bak 's=antrea/antrea-controller-ubuntu=projects.registry.vmware.com/antrea/antrea-controller-ubuntu=g' "$ANTREA_CHART/values.yaml"
 $HELM package --app-version $VERSION --version $VERSION $ANTREA_CHART
 mv "antrea-$VERSION.tgz" "$OUT/antrea-chart.tgz"
 mv "$ANTREA_CHART/Chart.yaml.bak" "$ANTREA_CHART/Chart.yaml"
