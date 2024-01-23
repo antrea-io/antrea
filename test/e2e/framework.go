@@ -2234,18 +2234,35 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int, fragment bool) error {
+// RunPingCommandFromTestPod uses ping to check connectivity between the Pod and the given target Pod IPs.
+// If dontFragment is true and size is 0, it will set the size to the maximum value allowed by the Pod's MTU.
+func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int, dontFragment bool) error {
 	if podInfo.OS != "windows" && podInfo.OS != "linux" {
 		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.Name)
 	}
+	var sizeIPv4, sizeIPv6 int
+	// TODO: GetPodInterfaceMTU should work for Windows.
+	if dontFragment && size == 0 && podInfo.OS == "linux" {
+		mtu, err := data.GetPodInterfaceMTU(ns, podInfo.Name, ctrName)
+		if err != nil {
+			return fmt.Errorf("error when retrieving MTU of Pod '%s': %w", podInfo.Name, err)
+		}
+		// 8 ICMP header, 20 IPv4 header, 40 IPv6 header
+		sizeIPv4 = mtu - 28
+		sizeIPv6 = mtu - 48
+	} else {
+		sizeIPv4 = size
+		sizeIPv6 = size
+	}
+
 	if targetPodIPs.IPv4 != nil {
-		cmdV4 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv4, fragment)
+		cmdV4 := getPingCommand(count, sizeIPv4, podInfo.OS, targetPodIPs.IPv4, dontFragment)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV4); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.IPv6 != nil {
-		cmdV6 := getPingCommand(count, size, podInfo.OS, targetPodIPs.IPv6, fragment)
+		cmdV6 := getPingCommand(count, sizeIPv6, podInfo.OS, targetPodIPs.IPv6, dontFragment)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.Name, ctrName, cmdV6); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
@@ -2483,9 +2500,9 @@ func (data *TestData) GetTransportInterface() (string, error) {
 	return "", fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
 }
 
-func (data *TestData) GetPodInterfaceMTU(podName string, namespace string) (int, error) {
+func (data *TestData) GetPodInterfaceMTU(namespace string, podName string, containerName string) (int, error) {
 	cmd := []string{"cat", "/sys/class/net/eth0/mtu"}
-	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, toolboxContainerName, cmd)
+	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmd)
 	if stdout == "" || stderr != "" || err != nil {
 		return 0, fmt.Errorf("failed to get interface MTU, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 	}
@@ -2855,10 +2872,6 @@ func (data *TestData) createAgnhostPodWithSAOnNode(name string, ns string, nodeN
 	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).WithServiceAccountName(serviceAccountName).Create(data)
 }
 
-func (data *TestData) createAgnhostPodOnNodeWithAnnotations(name string, ns string, nodeName string, annotations map[string]string) error {
-	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithAnnotations(annotations).Create(data)
-}
-
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
 	podSpec := corev1.PodSpec{
 		Tolerations: controlPlaneNoScheduleTolerations(),
@@ -3075,8 +3088,8 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 	return err
 }
 
-func getPingCommand(count int, size int, os string, ip *net.IP, fragment bool) []string {
-	countOption, sizeOption, fragmentOption := "-c", "-s", "-M"
+func getPingCommand(count int, size int, os string, ip *net.IP, dontFragment bool) []string {
+	countOption, sizeOption := "-c", "-s"
 	if os == "windows" {
 		countOption = "-n"
 		sizeOption = "-l"
@@ -3085,10 +3098,10 @@ func getPingCommand(count int, size int, os string, ip *net.IP, fragment bool) [
 	if size != 0 {
 		cmd = append(cmd, sizeOption, strconv.Itoa(size))
 	}
-	if !fragment {
-		cmd = append(cmd, fragmentOption)
-		cmd = append(cmd, "do")
+	if dontFragment {
+		cmd = append(cmd, "-M", "do")
 	}
+
 	if ip.To4() != nil {
 		cmd = append(cmd, "-4", ip.String())
 	} else {

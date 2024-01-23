@@ -273,16 +273,16 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 	})
 	workerNode := workerNodeName(1)
 
-	t.Logf("Creating %d agnhost Pods on '%s'", numPods+1, workerNode)
+	t.Logf("Creating %d toolbox Pods on '%s'", numPods+1, workerNode)
 	for i := range PodInfos {
 		PodInfos[i].OS = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNodeWithAnnotations(PodInfos[i].Name, PodInfos[i].Namespace, workerNode, nil); err != nil {
-			t.Fatalf("Error when creating agnhost test Pod '%s': %v", PodInfos[i], err)
+		if err := data.createToolboxPodOnNode(PodInfos[i].Name, PodInfos[i].Namespace, workerNode, false); err != nil {
+			t.Fatalf("Error when creating toolbox test Pod '%s': %v", PodInfos[i], err)
 		}
 		defer deletePodWrapper(t, data, PodInfos[i].Namespace, PodInfos[i].Name)
 	}
 
-	data.runPingMesh(t, PodInfos, agnhostContainerName, 0, true)
+	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
 }
 
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
@@ -296,7 +296,7 @@ func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 		}
 		PodInfos = append(PodInfos, createdPodInfos...)
 	}
-	data.runPingMesh(t, PodInfos, agnhostContainerName, 0, true)
+	data.runPingMesh(t, PodInfos, toolboxContainerName, true)
 }
 
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {

@@ -129,7 +129,9 @@ func NewMCDefaultRouteController(
 		controller.wireGuardConfig = &config.WireGuardConfig{
 			Port: multiclusterConfig.WireGuard.Port,
 			Name: multiclusterWireGuardInterface,
-			MTU:  controller.nodeConfig.NodeTransportInterfaceMTU,
+			// Regardless of the tunnel type, the WireGuard device must only reduce MTU for encryption because the
+			// packets it transmits have been encapsulated.
+			MTU: nodeConfig.NodeTransportInterfaceMTU - networkConfig.WireGuardMTUDeduction,
 		}
 	}
 	controller.gwInformer.Informer().AddEventHandlerWithResyncPeriod(

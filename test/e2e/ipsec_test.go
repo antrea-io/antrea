@@ -79,14 +79,6 @@ func TestIPSec(t *testing.T) {
 	})
 
 	t.Run("testIPSecDeleteStaleTunnelPorts", func(t *testing.T) { testIPSecDeleteStaleTunnelPorts(t, data) })
-	t.Run("testPodConnectivityWithDifferentTrafficConfig", func(t *testing.T) {
-		trafficConfigs := []trafficConfig{
-			{tunnelType: "geneve", multiclusterTrafficEncryptionMode: "none"},
-			{tunnelType: "vxlan", multiclusterTrafficEncryptionMode: "none"},
-			{tunnelType: "gre", multiclusterTrafficEncryptionMode: "none"},
-		}
-		testPodConnectivityWithDifferentTrafficConfigs(t, data, trafficConfigs)
-	})
 }
 
 func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, isCertAuth bool, err error) {
@@ -145,11 +137,9 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, tag)
 	defer deletePods()
 	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].NodeName, podInfos[1].NodeName)
-	mtu, err := data.GetPodInterfaceMTU(podInfos[0].Name, podInfos[0].Namespace)
-	if err != nil {
-		t.Fatalf("Error when retrieving MTU for Pod '%s': %v", podInfos[0].Name, err)
-	}
-	data.runPingMesh(t, podInfos[:2], toolboxContainerName, mtu, false)
+	// PMTU is wrong when using GRE+IPsec with some Linux kernel versions, do not set DF to work around.
+	// See https://github.com/antrea-io/antrea/issues/5922 for more details.
+	data.runPingMesh(t, podInfos[:2], toolboxContainerName, false)
 
 	// Check that there is at least one 'up' Security Association on the Node
 	nodeName := podInfos[0].NodeName

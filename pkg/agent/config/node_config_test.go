@@ -20,7 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	agentConfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -310,6 +309,12 @@ func TestCalculateMTUDeduction(t *testing.T) {
 		{
 			name:                 "WireGuard enabled",
 			nc:                   &NetworkConfig{TrafficEncryptionMode: TrafficEncryptionModeWireGuard},
+			expectedMTUDeduction: 60,
+		},
+		{
+			name:                 "IPv6 with WireGuard enabled",
+			nc:                   &NetworkConfig{TrafficEncryptionMode: TrafficEncryptionModeWireGuard},
+			isIPv6:               true,
 			expectedMTUDeduction: 80,
 		},
 		{
@@ -320,16 +325,22 @@ func TestCalculateMTUDeduction(t *testing.T) {
 		{
 			name: "Geneve encap with Multicluster WireGuard enabled",
 			nc: &NetworkConfig{
-				TunnelType:           ovsconfig.GeneveTunnel,
-				EnableMulticlusterGW: true,
-				MulticlusterConfig:   agentConfig.MulticlusterConfig{TrafficEncryptionMode: "wireGuard"},
+				TunnelType:                 ovsconfig.GeneveTunnel,
+				EnableMulticlusterGW:       true,
+				MulticlusterEncryptionMode: TrafficEncryptionModeWireGuard,
 			},
-			expectedMTUDeduction: 130,
+			expectedMTUDeduction: 110,
 		},
 		{
 			name:                 "Geneve encap with IPSec enabled",
 			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
 			expectedMTUDeduction: 88,
+		},
+		{
+			name:                 "Geneve encap with IPSec enabled and IPv6",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
+			isIPv6:               true,
+			expectedMTUDeduction: 108,
 		},
 		{
 			name:                 "VXLan encap with IPSec enabled",

@@ -656,7 +656,7 @@ func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace stri
 
 func runPingCommandOnVM(data *TestData, dstVM vmInfo, connected bool) error {
 	dstIP := net.ParseIP(dstVM.ip)
-	cmd := getPingCommand(pingCount, 0, strings.ToLower(linuxOS), &dstIP, true)
+	cmd := getPingCommand(pingCount, 0, strings.ToLower(linuxOS), &dstIP, false)
 	cmdStr := strings.Join(cmd, " ")
 	expCount := pingCount
 	if !connected {
