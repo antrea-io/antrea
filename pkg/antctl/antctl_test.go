@@ -49,6 +49,7 @@ func TestCommandVersionRequestError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := NewMockAntctlClient(ctrl)
 	var bufOut bytes.Buffer
+	applyPersistentFlagsToRoot(rootCmd)
 	CommandList.applyToRootCommand(rootCmd, client, &bufOut)
 
 	client.EXPECT().request(gomock.Any()).Return(nil, serverError)

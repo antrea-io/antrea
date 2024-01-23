@@ -196,6 +196,7 @@ type rawCommand struct {
 	supportAgent          bool
 	supportController     bool
 	supportFlowAggregator bool
+	supportVM             bool
 	commandGroup          commandGroup
 }
 
@@ -217,10 +218,12 @@ type commandDefinition struct {
 	// response struct of the handler, but it is still needed to guide the formatter.
 	// It should always be filled.
 	transformedResponse reflect.Type
+	// supportVM is true when the command is supported by VM mode.
+	supportVM bool
 }
 
 func (cd *commandDefinition) namespaced() bool {
-	if runtime.Mode == runtime.ModeAgent {
+	if runtime.Mode == runtime.ModeAgent || runtime.Mode == runtime.ModeVM {
 		return cd.agentEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint.namespaced
 	} else if runtime.Mode == runtime.ModeController {
 		return cd.controllerEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint.namespaced
@@ -231,7 +234,7 @@ func (cd *commandDefinition) namespaced() bool {
 }
 
 func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
-	if runtime.Mode == runtime.ModeAgent && cd.agentEndpoint != nil {
+	if (runtime.Mode == runtime.ModeAgent || runtime.Mode == runtime.ModeVM) && cd.agentEndpoint != nil {
 		return cd.agentEndpoint.addonTransform
 	} else if runtime.Mode == runtime.ModeController && cd.controllerEndpoint != nil {
 		return cd.controllerEndpoint.addonTransform
@@ -242,7 +245,7 @@ func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single b
 }
 
 func (cd *commandDefinition) getEndpoint() endpointResponder {
-	if runtime.Mode == runtime.ModeAgent {
+	if runtime.Mode == runtime.ModeAgent || runtime.Mode == runtime.ModeVM {
 		if cd.agentEndpoint != nil {
 			if cd.agentEndpoint.resourceEndpoint != nil {
 				return cd.agentEndpoint.resourceEndpoint
@@ -268,7 +271,7 @@ func (cd *commandDefinition) getEndpoint() endpointResponder {
 }
 
 func (cd *commandDefinition) getRequestErrorFallback() func() (io.Reader, error) {
-	if runtime.Mode == runtime.ModeAgent {
+	if runtime.Mode == runtime.ModeAgent || runtime.Mode == runtime.ModeVM {
 		if cd.agentEndpoint != nil {
 			return cd.agentEndpoint.requestErrorFallback
 		}
@@ -284,7 +287,8 @@ func (cd *commandDefinition) getRequestErrorFallback() func() (io.Reader, error)
 	return nil
 }
 
-// applySubCommandToRoot applies the commandDefinition to a cobra.Command with
+//	applySubCommandToRoot applies the commandDefinition to a cobra.Command with
+//
 // the client. It populates basic fields of a cobra.Command and creates the
 // appropriate RunE function for it according to the commandDefinition.
 func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client AntctlClient, out io.Writer) {
@@ -501,7 +505,7 @@ func (cd *commandDefinition) tableOutputForQueryEndpoint(obj interface{}, writer
 // format. If the AddonTransform is set, it will use the function to transform
 // the data first. It will try to output the resp in the format ft specified after
 // doing transform.
-func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool, args map[string]string) (err error) {
+func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool, args map[string]string, mode string) (err error) {
 	var obj interface{}
 	addonTransform := cd.getAddonTransform()
 
@@ -537,7 +541,7 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		return output.YamlOutput(obj, writer)
 	case tableFormatter:
 		if cd.commandGroup == get {
-			return output.TableOutputForGetCommands(obj, writer)
+			return output.TableOutputForGetCommands(obj, writer, mode)
 		} else if cd.commandGroup == query {
 			if cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
 				return cd.tableOutputForQueryEndpoint(obj, writer)
@@ -630,7 +634,7 @@ func (cd *commandDefinition) newCommandRunE(c AntctlClient, out io.Writer) func(
 			}
 		}
 		isSingle := cd.getEndpoint().OutputType() != multiple && (cd.getEndpoint().OutputType() == single || argGet)
-		if err := cd.output(resp, out, formatterType(outputFormat), isSingle, argMap); err != nil {
+		if err := cd.output(resp, out, formatterType(outputFormat), isSingle, argMap, runtime.Mode); err != nil {
 			return err
 		}
 		return requestErr

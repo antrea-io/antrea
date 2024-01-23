@@ -249,11 +249,11 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"FLOW"}
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
+func (r Response) GetTableRow(maxColumnLength int, _ string) []string {
 	return []string{r.Flow}
 }
 

@@ -86,7 +86,7 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"NAMESPACE", "NAME", "INTERFACE-NAME", "IP", "MAC", "PORT-UUID", "OF-PORT", "CONTAINER-ID"}
 }
 
@@ -97,7 +97,7 @@ func (r Response) GetContainerIDStr() string {
 	return r.ContainerID
 }
 
-func (r Response) GetTableRow(_ int) []string {
+func (r Response) GetTableRow(_ int, _ string) []string {
 	return []string{r.PodNamespace, r.PodName, r.InterfaceName, strings.Join(r.IPs, ", "), r.MAC, r.PortUUID, common.Int32ToString(r.OFPort), r.GetContainerIDStr()}
 }
 

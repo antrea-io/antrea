@@ -159,7 +159,7 @@ func RawOutput(obj interface{}, writer io.Writer) error {
 }
 
 // tableOutputForGetCommands formats the table output for "get" commands.
-func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
+func TableOutputForGetCommands(obj interface{}, writer io.Writer, mode string) error {
 	var list []common.TableOutput
 	if reflect.TypeOf(obj).Kind() == reflect.Slice {
 		s := reflect.ValueOf(obj)
@@ -187,11 +187,11 @@ func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
 	}
 
 	// Get the elements and headers of table.
-	args := list[0].GetTableHeader()
+	args := list[0].GetTableHeader(mode)
 	rows := make([][]string, len(list)+1)
-	rows[0] = list[0].GetTableHeader()
+	rows[0] = list[0].GetTableHeader(mode)
 	for i, element := range list {
-		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
+		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength, mode)
 	}
 
 	if list[0].SortRows() {

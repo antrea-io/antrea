@@ -81,11 +81,11 @@ func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"NAMESPACE", "NAME", "INBOUND", "OUTBOUND"}
 }
 
-func (r Response) GetTableRow(_ int) []string {
+func (r Response) GetTableRow(_ int, _ string) []string {
 	return []string{r.PodNamespace, r.PodName, r.Inbound, r.Outbound}
 }
 

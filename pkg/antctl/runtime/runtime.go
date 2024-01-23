@@ -30,6 +30,7 @@ const (
 	ModeController     string = "controller"
 	ModeAgent          string = "agent"
 	ModeFlowAggregator string = "flowaggregator"
+	ModeVM             string = "vm"
 )
 
 var (

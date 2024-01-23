@@ -146,11 +146,11 @@ func priorityToString(p interface{}) string {
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"NAME", "APPLIED-TO", "RULES", "SOURCE", "TIER-PRIORITY", "PRIORITY"}
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
+func (r Response) GetTableRow(maxColumnLength int, _ string) []string {
 	return []string{
 		r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength),
 		strconv.Itoa(len(r.Rules)), r.SourceRef.ToString(),

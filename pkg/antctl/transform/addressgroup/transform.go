@@ -28,9 +28,10 @@ import (
 )
 
 type Response struct {
-	Name  string               `json:"name" yaml:"name"`
-	Pods  []common.GroupMember `json:"pods,omitempty"`
-	Nodes []common.GroupMember `json:"nodes,omitempty"`
+	Name             string               `json:"name" yaml:"name"`
+	Pods             []common.GroupMember `json:"pods,omitempty"`
+	Nodes            []common.GroupMember `json:"nodes,omitempty"`
+	ExternalEntities []common.GroupMember `json:"externalEntities,omitempty"`
 }
 
 func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
@@ -58,16 +59,18 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 
 func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	group := o.(*cpv1beta.AddressGroup)
-	var pods, nodes []common.GroupMember
+	var pods, nodes, externalEntities []common.GroupMember
 	for _, member := range group.GroupMembers {
 		gm := common.GroupMemberTransform(member)
 		if member.Node != nil {
 			nodes = append(nodes, gm)
-			continue
+		} else if member.ExternalEntity != nil {
+			externalEntities = append(externalEntities, gm)
+		} else {
+			pods = append(pods, gm)
 		}
-		pods = append(pods, gm)
 	}
-	return Response{Name: group.Name, Pods: pods, Nodes: nodes}, nil
+	return Response{Name: group.Name, Pods: pods, Nodes: nodes, ExternalEntities: externalEntities}, nil
 }
 
 func Transform(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
@@ -82,8 +85,8 @@ func Transform(reader io.Reader, single bool, opts map[string]string) (interface
 
 var _ common.TableOutput = new(Response)
 
-func (r Response) GetTableHeader() []string {
-	return []string{"NAME", "POD-IPS", "NODE-IPS"}
+func (r Response) GetTableHeader(_ string) []string {
+	return []string{"NAME", "POD-IPS", "NODE-IPS", "EXTERNAL-ENTITY-IPS"}
 }
 
 func (r Response) GetPodIPs(maxColumnLength int) string {
@@ -102,8 +105,16 @@ func (r Response) GetNodeIPs(maxColumnLength int) string {
 	return common.GenerateTableElementWithSummary(list, maxColumnLength)
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.Name, r.GetPodIPs(maxColumnLength), r.GetNodeIPs(maxColumnLength)}
+func (r Response) GetExternalEntityIPs(maxColumnLength int) string {
+	list := make([]string, len(r.ExternalEntities))
+	for i, ee := range r.ExternalEntities {
+		list[i] = ee.IP
+	}
+	return common.GenerateTableElementWithSummary(list, maxColumnLength)
+}
+
+func (r Response) GetTableRow(maxColumnLength int, _ string) []string {
+	return []string{r.Name, r.GetPodIPs(maxColumnLength), r.GetNodeIPs(maxColumnLength), r.GetExternalEntityIPs(maxColumnLength)}
 }
 
 func (r Response) SortRows() bool {

@@ -36,7 +36,7 @@ func output(resources interface{}, single bool, outputFormat string, output io.W
 		if err != nil {
 			return err
 		}
-		err = antctlOutput.TableOutputForGetCommands(obj, output)
+		err = antctlOutput.TableOutputForGetCommands(obj, output, "")
 		if err != nil {
 			return err
 		}

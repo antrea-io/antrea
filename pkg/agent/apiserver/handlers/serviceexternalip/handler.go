@@ -57,11 +57,11 @@ type Response struct {
 
 var _ common.TableOutput = (*Response)(nil)
 
-func (r Response) GetTableHeader() []string {
+func (r Response) GetTableHeader(_ string) []string {
 	return []string{"NAMESPACE", "NAME", "EXTERNAL-IP-POOL", "EXTERNAL-IP", "ASSIGNED-NODE"}
 }
 
-func (r Response) GetTableRow(_ int) []string {
+func (r Response) GetTableRow(_ int, _ string) []string {
 	return []string{r.Namespace, r.ServiceName, r.ExternalIPPool, r.ExternalIP, r.AssignedNode}
 }
 

@@ -24,8 +24,9 @@ import (
 )
 
 type GroupMember struct {
-	Pod  *cpv1beta.PodReference  `json:"pod,omitempty"`
-	Node *cpv1beta.NodeReference `json:"node,omitempty"`
+	Pod            *cpv1beta.PodReference            `json:"pod,omitempty"`
+	ExternalEntity *cpv1beta.ExternalEntityReference `json:"externalEntity,omitempty"`
+	Node           *cpv1beta.NodeReference           `json:"node,omitempty"`
 	// IP maintains the IPAddresses associated with the Pod.
 	IP string `json:"ip,omitempty"`
 	// Ports maintain the named port mapping of this Pod.
@@ -40,12 +41,12 @@ func GroupMemberTransform(member cpv1beta.GroupMember) GroupMember {
 		}
 		ipStr += net.IP(ip).String()
 	}
-	return GroupMember{Pod: member.Pod, IP: ipStr, Ports: member.Ports, Node: member.Node}
+	return GroupMember{Pod: member.Pod, ExternalEntity: member.ExternalEntity, IP: ipStr, Ports: member.Ports, Node: member.Node}
 }
 
 type TableOutput interface {
-	GetTableHeader() []string
-	GetTableRow(maxColumnLength int) []string
+	GetTableHeader(mode string) []string
+	GetTableRow(maxColumnLength int, mode string) []string
 	SortRows() bool
 }
 
