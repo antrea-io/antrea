@@ -55,6 +55,10 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	// If the HNS Network already exists, return immediately.
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err == nil {
+		// Enable OVS Extension on the HNS Network.
+		if err = util.EnableHNSNetworkExtension(hnsNetwork.Id, util.OVSExtensionID); err != nil {
+			return err
+		}
 		// Enable RSC for existing vSwitch.
 		if err = util.EnableRSCOnVSwitch(util.LocalHNSNetwork); err != nil {
 			return err
