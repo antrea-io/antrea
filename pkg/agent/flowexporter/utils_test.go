@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
@@ -94,5 +95,28 @@ func TestPolicyTypeToUint8(t *testing.T) {
 	} {
 		result := PolicyTypeToUint8(tc.policyType)
 		assert.Equal(t, tc.expectedResult, result)
+	}
+}
+
+func TestLookupProtocolMap(t *testing.T) {
+	for _, tc := range []struct {
+		protocol       string
+		expectedResult uint8
+	}{
+		{"icmp", 1},
+		{"igmp", 2},
+		{"tcp", 6},
+		{"udp", 17},
+		{"ipv6-icmp", 58},
+		{"IPV6-ICMP", 58},
+		{"mockProtocol", 0},
+	} {
+		proto, err := LookupProtocolMap(tc.protocol)
+		if tc.expectedResult == 0 {
+			assert.ErrorContains(t, err, "unknown IP protocol specified")
+		} else {
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedResult, proto)
+		}
 	}
 }

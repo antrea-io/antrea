@@ -37,6 +37,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
@@ -77,6 +78,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	groupIDAllocator := openflow.NewGroupAllocator()
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
 	fs := afero.NewMemMapFs()
+	l7reconciler := l7engine.NewReconciler()
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset},
 		nil,
 		nil,
@@ -102,7 +104,8 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 		config.HostGatewayOFPort,
 		config.DefaultTunOFPort,
 		&config.NodeConfig{},
-		wait.NewGroup())
+		wait.NewGroup(),
+		l7reconciler)
 	reconciler := newMockReconciler()
 	controller.podReconciler = reconciler
 	controller.auditLogger = nil

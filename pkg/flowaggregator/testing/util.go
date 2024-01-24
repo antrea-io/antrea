@@ -215,6 +215,14 @@ func PrepareMockIpfixRecord(mockRecord *ipfixentitiestesting.MockRecord, isIPv4 
 	egressIPElem.SetStringValue("172.18.0.1")
 	mockRecord.EXPECT().GetInfoElementWithValue("egressIP").Return(egressIPElem, 0, true)
 
+	appProtocolNameElem := createElement("appProtocolName", ipfixregistry.AntreaEnterpriseID)
+	appProtocolNameElem.SetStringValue("http")
+	mockRecord.EXPECT().GetInfoElementWithValue("appProtocolName").Return(appProtocolNameElem, 0, true)
+
+	httpValsElem := createElement("httpVals", ipfixregistry.AntreaEnterpriseID)
+	httpValsElem.SetStringValue("mockHttpString")
+	mockRecord.EXPECT().GetInfoElementWithValue("httpVals").Return(httpValsElem, 0, true)
+
 	if isIPv4 {
 		sourceIPv4Elem := createElement("sourceIPv4Address", ipfixregistry.IANAEnterpriseID)
 		sourceIPv4Elem.SetIPAddressValue(net.ParseIP("10.10.0.79"))

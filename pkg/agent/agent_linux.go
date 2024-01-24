@@ -343,19 +343,18 @@ func (i *Initializer) installVMInitialFlows() error {
 	return nil
 }
 
-// prepareL7NetworkPolicyInterfaces creates two OVS internal ports. An application-aware engine will connect to OVS
+// prepareL7EngineInterfaces creates two OVS internal ports. An application-aware engine will connect to OVS
 // through these two ports.
-func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
+func (i *Initializer) prepareL7EngineInterfaces() error {
 	trafficControlPortExternalIDs := map[string]interface{}{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl,
 	}
 
-	for _, portName := range []string{config.L7NetworkPolicyTargetPortName, config.L7NetworkPolicyReturnPortName} {
+	for _, portName := range []string{config.L7RedirectTargetPortName, config.L7RedirectReturnPortName} {
 		_, exists := i.ifaceStore.GetInterface(portName)
 		if exists {
 			continue
 		}
-
 		portUUID, err := i.ovsBridgeClient.CreateInternalPort(portName, 0, "", trafficControlPortExternalIDs)
 		if err != nil {
 			return err
@@ -382,22 +381,22 @@ func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
 		i.ifaceStore.AddInterface(itf)
 	}
 
-	targetPort, _ := i.ifaceStore.GetInterfaceByName(config.L7NetworkPolicyTargetPortName)
-	returnPort, _ := i.ifaceStore.GetInterfaceByName(config.L7NetworkPolicyReturnPortName)
+	targetPort, _ := i.ifaceStore.GetInterfaceByName(config.L7RedirectTargetPortName)
+	returnPort, _ := i.ifaceStore.GetInterfaceByName(config.L7RedirectReturnPortName)
 	i.l7NetworkPolicyConfig.TargetOFPort = uint32(targetPort.OFPort)
 	i.l7NetworkPolicyConfig.ReturnOFPort = uint32(returnPort.OFPort)
 	// Set the ports with no-flood to reject ARP flood packets at every startup.
 	if err := i.ovsCtlClient.SetPortNoFlood(int(targetPort.OFPort)); err != nil {
-		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyTargetPortName, err)
+		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7RedirectTargetPortName, err)
 	}
 	if err := i.ovsCtlClient.SetPortNoFlood(int(returnPort.OFPort)); err != nil {
-		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyReturnPortName, err)
+		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7RedirectReturnPortName, err)
 	}
 	// Set MTU of the ports to the calculated MTU value at every startup.
-	if err := i.setInterfaceMTU(config.L7NetworkPolicyTargetPortName, i.networkConfig.InterfaceMTU); err != nil {
+	if err := i.setInterfaceMTU(config.L7RedirectTargetPortName, i.networkConfig.InterfaceMTU); err != nil {
 		return err
 	}
-	if err := i.setInterfaceMTU(config.L7NetworkPolicyReturnPortName, i.networkConfig.InterfaceMTU); err != nil {
+	if err := i.setInterfaceMTU(config.L7RedirectReturnPortName, i.networkConfig.InterfaceMTU); err != nil {
 		return err
 	}
 	// Currently, the maximum of MTU supported by L7 NetworkPolicy engine Suricata is 32678 (assuming that the page size
@@ -405,6 +404,5 @@ func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
 	if i.networkConfig.InterfaceMTU > maxMTUSupportedBySuricata {
 		klog.ErrorS(nil, "L7 NetworkPolicy engine Suricata may fail to start since the interface MTU is greater than the maximum MTU supported by Suricata", "interfaceMTU", i.networkConfig.InterfaceMTU, "maximumMTU", maxMTUSupportedBySuricata)
 	}
-
 	return nil
 }

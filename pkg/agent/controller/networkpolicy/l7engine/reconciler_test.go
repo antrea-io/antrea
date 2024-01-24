@@ -131,45 +131,7 @@ func TestStartSuricata(t *testing.T) {
 
 	fe.startSuricata()
 
-	ok, err := afero.FileContainsBytes(defaultFS, antreaSuricataConfigPath, []byte(`---
-outputs:
-  - eve-log:
-      enabled: yes
-      filetype: regular
-      filename: eve-%Y-%m-%d.json
-      rotate-interval: day
-      pcap-file: false
-      community-id: false
-      community-id-seed: 0
-      xff:
-        enabled: no
-      types:
-        - alert:
-            tagged-packets: yes
-af-packet:
-  - interface: antrea-l7-tap0
-    threads: auto
-    cluster-id: 80
-    cluster-type: cluster_flow
-    defrag: no
-    use-mmap: yes
-    tpacket-v2: yes
-    checksum-checks: no
-    copy-mode: ips
-    copy-iface: antrea-l7-tap1
-  - interface:  antrea-l7-tap1
-    threads: auto
-    cluster-id: 81
-    cluster-type: cluster_flow
-    defrag: no
-    use-mmap: yes
-    tpacket-v2: yes
-    checksum-checks: no
-    copy-mode: ips
-    copy-iface: antrea-l7-tap0
-multi-detect:
-  enabled: yes
-  selector: vlan`))
+	ok, err := afero.FileContainsBytes(defaultFS, antreaSuricataConfigPath, []byte(suricataAntreaConfigData))
 	assert.NoError(t, err)
 	assert.True(t, ok)
 

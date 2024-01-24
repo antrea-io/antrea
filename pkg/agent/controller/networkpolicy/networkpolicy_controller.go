@@ -191,7 +191,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	v6Enabled bool,
 	gwPort, tunPort uint32,
 	nodeConfig *config.NodeConfig,
-	podNetworkWait *utilwait.Group) (*Controller, error) {
+	podNetworkWait *utilwait.Group,
+	l7Reconciler *l7engine.Reconciler) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider:     antreaClientGetter,
@@ -211,7 +212,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	}
 
 	if l7NetworkPolicyEnabled {
-		c.l7RuleReconciler = l7engine.NewReconciler()
+		c.l7RuleReconciler = l7Reconciler
 		c.l7VlanIDAllocator = newL7VlanIDAllocator()
 	}
 

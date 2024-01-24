@@ -72,7 +72,7 @@ forwarded to an application-aware engine for protocol detection and rule enforce
 the layer 7 criteria is also matched, otherwise it will be dropped. Therefore, any rules after a layer 7 rule will not
 be enforced for the traffic that match the layer 7 rule's layer 3/4 criteria.
 
-As of now, the only supported layer 7 protocol is HTTP. More protocols will be supported in the near future, and we
+As of now, the only supported layer 7 protocol is HTTP. Support for more protocols may be added in the future and we
 welcome feature requests for protocols that you are interested in.
 
 ### HTTP

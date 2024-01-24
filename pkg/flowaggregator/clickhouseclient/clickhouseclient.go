@@ -87,9 +87,12 @@ const (
                    reverseThroughputFromDestinationNode,
                    clusterUUID,
                    egressName,
-                   egressIP)
+                   egressIP,
+                   appProtocolName,
+                   httpVals)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?)`
 )
 
 // PrepareClickHouseConnection is used for unit testing
@@ -329,6 +332,8 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 			ch.clusterUUID,
 			record.EgressName,
 			record.EgressIP,
+			record.AppProtocolName,
+			record.HttpVals,
 		)
 
 		if err != nil {

@@ -35,6 +35,9 @@
     - [Output Flow Records](#output-flow-records)
   - [Grafana Flow Collector (migrated)](#grafana-flow-collector-migrated)
   - [ELK Flow Collector (removed)](#elk-flow-collector-removed)
+- [Layer 7 Network Flow Exporter](#layer-7-network-flow-exporter)
+  - [Prerequisites](#prerequisites)
+  - [Usage](#usage)
 <!-- /toc -->
 
 ## Overview
@@ -610,3 +613,59 @@ and other Theia features, please refer to the
 **Starting with Antrea v1.7, support for the ELK Flow Collector has been removed.**
 Please consider using the [Grafana Flow Collector](#grafana-flow-collector-migrated)
 instead, which is actively maintained.
+
+## Layer 7 Network Flow Exporter
+
+In addition to layer 4 network visibility, Antrea adds layer 7 network flow
+export.
+
+### Prerequisites
+
+To achieve L7 (Layer 7) network flow export, the `L7FlowExporter` feature gate
+must be enabled.
+
+### Usage
+
+To export layer 7 flows of a Pod or a Namespace, user can annotate Pods or
+Namespaces with the annotation key `visibility.antrea.io/l7-export` and set the
+value to indicate the traffic flow direction, which can be `ingress`, `egress`
+or `both`.
+
+For example, to enable L7 flow export in the ingress direction on
+Pod test-pod in the default Namespace, you can use:
+
+```bash
+kubectl annotate pod test-pod visibility.antrea.io/l7-export=ingress
+```
+
+Based on the annotation, Flow Exporter will export the L7 flow data to the
+Flow Aggregator or configured IPFix collector using the fields `appProtocolName`
+and `httpVals`.
+
+* `appProtocolName` field is used to indicate the application layer protocol
+name (e.g. http) and it will be empty if application layer data is not exported.
+* `httpVals` stores a serialized JSON dictionary with every HTTP request for
+a connection mapped to a unique transaction ID. This format lets us group all
+the HTTP transactions pertaining to the same connection, into the same exported
+record.
+
+An example of `httpVals` is :
+
+`"{\"0\":{\"hostname\":\"10.10.0.1\",\"url\":\"/public/\",\"http_user_agent\":\"curl/7.74.0\",\"http_content_type\":\"text/html\",\"http_method\":\"GET\",\"protocol\":\"HTTP/1.1\",\"status\":200,\"length\":153}}"`
+
+HTTP fields in the `httpVals` are:
+
+| Http field        | Description                                            |
+|-------------------|--------------------------------------------------------|
+| hostname          | IP address of the sender                               |
+| URL               | url requested on the server                            |
+| http_user_agent   | application used for HTTP                              |
+| http_content_type | type of content being returned by the server           |
+| http_method       | HTTP method used for the request                       |
+| protocol          | HTTP protocol version used for the request or response |
+| status            | HTTP status code                                       |
+| length            | size of the response body                              |
+
+As of now, the only supported layer 7 protocol is `HTTP1.1`. Support for more
+protocols may be added in the future. Antrea supports L7FlowExporter feature only
+on Linux Nodes.

@@ -430,6 +430,7 @@ type client struct {
 	enableEgressTrafficShaping bool
 	enableMulticast            bool
 	enableTrafficControl       bool
+	enableL7FlowExporter       bool
 	enableMulticluster         bool
 	enablePrometheusMetrics    bool
 	connectUplinkToBridge      bool
@@ -2938,6 +2939,7 @@ func NewClient(bridgeName string,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	enableTrafficControl bool,
+	enableL7FlowExporter bool,
 	enableMulticluster bool,
 	groupIDAllocator GroupAllocator,
 	enablePrometheusMetrics bool,
@@ -2957,6 +2959,7 @@ func NewClient(bridgeName string,
 		enableEgressTrafficShaping: enableEgressTrafficShaping,
 		enableMulticast:            enableMulticast,
 		enableTrafficControl:       enableTrafficControl,
+		enableL7FlowExporter:       enableL7FlowExporter,
 		enableMulticluster:         enableMulticluster,
 		enablePrometheusMetrics:    enablePrometheusMetrics,
 		connectUplinkToBridge:      connectUplinkToBridge,

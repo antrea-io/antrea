@@ -116,6 +116,8 @@ func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) er
 		egressNetworkPolicyType,
 		r.EgressName,
 		r.EgressIP,
+		r.AppProtocolName,
+		r.HttpVals,
 	}
 
 	str := strings.Join(fields, ",")

@@ -57,6 +57,62 @@ type scCmdRet struct {
 var (
 	// Declared as a variable for testing.
 	defaultFS = afero.NewOsFs()
+
+	// Create the config file /etc/suricata/antrea.yaml for Antrea which will be included in the default Suricata config file
+	// /etc/suricata/suricata.yaml. Two event logs in the config serve alert gilogging and http event logging purposes respectively.
+	suricataAntreaConfigData = fmt.Sprintf(`%%YAML 1.1
+---
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve-%%Y-%%m-%%d.json
+      rotate-interval: day
+      pcap-file: false
+      community-id: false
+      community-id-seed: 0
+      xff:
+        enabled: no
+      types:
+        - alert:
+            tagged-packets: yes
+  - eve-log:
+      enabled: yes
+      filetype: unix_stream
+      filename: %[1]s
+      pcap-file: false
+      community-id: false
+      community-id-seed: 0
+      xff:
+        enabled: no
+      types:
+        - http:
+            extended: yes
+af-packet:
+  - interface: %[2]s
+    threads: auto
+    cluster-id: 80
+    cluster-type: cluster_flow
+    defrag: no
+    use-mmap: yes
+    tpacket-v2: yes
+    checksum-checks: no
+    copy-mode: ips
+    copy-iface: %[3]s
+  - interface:  %[3]s
+    threads: auto
+    cluster-id: 81
+    cluster-type: cluster_flow
+    defrag: no
+    use-mmap: yes
+    tpacket-v2: yes
+    checksum-checks: no
+    copy-mode: ips
+    copy-iface: %[2]s
+multi-detect:
+  enabled: yes
+  selector: vlan
+`, config.L7SuricataSocketPath, config.L7RedirectTargetPortName, config.L7RedirectReturnPortName)
 )
 
 type threadSafeInt32Set struct {
@@ -204,15 +260,19 @@ func convertProtocolTLS(tls *v1beta.TLSProtocol) string {
 	return strings.Join(keywords, " ")
 }
 
+func (r *Reconciler) StartSuricataOnce() {
+	r.once.Do(func() {
+		r.startSuricata()
+	})
+}
+
 func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protocols []v1beta.L7Protocol, enableLogging bool) error {
 	start := time.Now()
 	defer func() {
 		klog.V(5).Infof("AddRule took %v", time.Since(start))
 	}()
 
-	r.once.Do(func() {
-		r.startSuricata()
-	})
+	r.StartSuricataOnce()
 
 	// Generate the keyword part used in Suricata rules.
 	protoKeywords := make(map[string]sets.Set[string])
@@ -238,14 +298,13 @@ func (r *Reconciler) AddRule(ruleID, policyName string, vlanID uint32, l7Protoco
 	rulesPath := generateTenantRulesPath(vlanID)
 	rulesData := generateTenantRulesData(policyName, protoKeywords, enableLogging)
 	if err := writeConfigFile(rulesPath, rulesData); err != nil {
-		return fmt.Errorf("failed to write Suricata rules data to file %s for L7 rule %s of %s", rulesPath, ruleID, policyName)
+		return fmt.Errorf("failed to write Suricata rules data to file %s for L7 rule %s of %s, err: %w", rulesPath, ruleID, policyName, err)
 	}
 
 	// Add a Suricata tenant.
 	if err := r.addBindingSuricataTenant(vlanID, rulesPath); err != nil {
 		return fmt.Errorf("failed to add Suricata tenant for L7 rule %s of %s: %w", ruleID, policyName, err)
 	}
-
 	return nil
 }
 
@@ -403,49 +462,6 @@ func (r *Reconciler) unregisterSuricataTenantHandler(tenantID, vlanID uint32) (*
 }
 
 func (r *Reconciler) startSuricata() {
-	// Create the config file /etc/suricata/antrea.yaml for Antrea which will be included in the default Suricata config file
-	// /etc/suricata/suricata.yaml.
-	suricataAntreaConfigData := fmt.Sprintf(`%%YAML 1.1
----
-outputs:
-  - eve-log:
-      enabled: yes
-      filetype: regular
-      filename: eve-%%Y-%%m-%%d.json
-      rotate-interval: day
-      pcap-file: false
-      community-id: false
-      community-id-seed: 0
-      xff:
-        enabled: no
-      types:
-        - alert:
-            tagged-packets: yes
-af-packet:
-  - interface: %[1]s
-    threads: auto
-    cluster-id: 80
-    cluster-type: cluster_flow
-    defrag: no
-    use-mmap: yes
-    tpacket-v2: yes
-    checksum-checks: no
-    copy-mode: ips
-    copy-iface: %[2]s
-  - interface:  %[2]s
-    threads: auto
-    cluster-id: 81
-    cluster-type: cluster_flow
-    defrag: no
-    use-mmap: yes
-    tpacket-v2: yes
-    checksum-checks: no
-    copy-mode: ips
-    copy-iface: %[1]s
-multi-detect:
-  enabled: yes
-  selector: vlan
-`, config.L7NetworkPolicyTargetPortName, config.L7NetworkPolicyReturnPortName)
 	f, err := defaultFS.Create(antreaSuricataConfigPath)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create Suricata config file", "FilePath", antreaSuricataConfigPath)
