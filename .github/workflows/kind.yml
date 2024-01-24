@@ -743,6 +743,9 @@ jobs:
     - test-e2e-flow-visibility
     - test-network-policy-conformance-encap
     runs-on: [ubuntu-latest]
+    permissions:
+      # required for deleting artifacts from pull requests
+      actions: write
     steps:
     - name: Delete antrea-ubuntu-cov
       if: ${{ needs.build-antrea-coverage-image.result == 'success' }}
