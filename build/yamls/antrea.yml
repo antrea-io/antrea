@@ -7254,6 +7254,17 @@ spec:
               mountPath: /var/run/antrea/antrea-controller-tls
             - name: host-var-log-antrea
               mountPath: /var/log/antrea
+        - name: sha-agent
+          image: antrea-controller
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: host-var-log-ods
+              mountPath: /var/log/ods
+            - mountPath: /var/run/antrea/antrea-controller-tls
+              name: sha-agent-cert
+            - mountPath: /etc/sha
+              name: config-volume
+          command: [ "start_sha" ]
       volumes:
         - name: antrea-config
           configMap:
@@ -7268,7 +7279,61 @@ spec:
           hostPath:
             path: /var/log/antrea
             type: DirectoryOrCreate
+        - name: host-var-log-ods
+          hostPath:
+            path: /var/log/ods
+            type: DirectoryOrCreate
+        - name: sha-agent-cert
+          projected:
+            defaultMode: 420
+            sources:
+              - secret:
+                  items:
+                    - key: tls.key
+                      path: tls.key
+                    - key: tls.crt
+                      path: tls.crt
+                    - key: ca.crt
+                      path: ca.crt
+                  name: sha-agent-tls-cert
+              - secret:
+                  items:
+                    - key: tls.crt
+                      path: nsx-cert/tls.crt
+                    - key: tls.key
+                      path: nsx-cert/tls.key
+                  name: nsx-secret
+        - configMap:
+            defaultMode: 420
+            name: sha-agent-config
+          name: config-volume
 ---
+
+# This is a FAKE configmap, which only ensures that sha-agent could start up.
+apiVersion: v1
+data:
+  deployment_info.yml: "outer_collector:\n  tsdb:\n    # Access metrics instance via servicename.namespace\n    endpoint: \nmanager_namespace: kube-system\nnorthstar_service_type: \norg_id: \ninstance_id:\nmanager_fqdn: \nmanager_type: \n"
+kind: ConfigMap
+metadata:
+  name: sha-agent-config
+  namespace: kube-system
+
+---
+
+# This is a FAKE secret, which only ensures that sha-agent could start up.
+apiVersion: v1
+data:
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURlekNDQW1NQ0ZCQlFROC83alhzcUhLMENISnlRTmoya2tDS3pNQTBHQ1NxR1NJYjNEUUVCQ3dVQU1Ib3gKQ3pBSkJnTlZCQVlUQWxWVE1Rc3dDUVlEVlFRSURBSkRRVEVTTUJBR0ExVUVCd3dKVUdGc2J5QkJiSFJ2TVE4dwpEUVlEVlFRS0RBWldUWGRoY21VeERqQU1CZ05WQkFzTUJWWkVUbVYwTVNrd0p3WURWUVFERENCRFRpMXpZekl0Ck1UQXRNVGcxTFRFd01TMHhNVEF0TVRZNE16VXhPREUwTnpBZUZ3MHlNekExTURnd016VTFORGhhRncwek16QTEKTURVd016VTFORGhhTUhveEN6QUpCZ05WQkFZVEFsVlRNUXN3Q1FZRFZRUUlEQUpEUVRFU01CQUdBMVVFQnd3SgpVR0ZzYnlCQmJIUnZNUTh3RFFZRFZRUUtEQVpXVFhkaGNtVXhEakFNQmdOVkJBc01CVlpFVG1WME1Ta3dKd1lEClZRUUREQ0JEVGkxell6SXRNVEF0TVRnMUxURXdNUzB4TVRBdE1UWTRNelV4T0RFME56Q0NBU0l3RFFZSktvWkkKaHZjTkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFPMzVSTE1hTUpWcnBGREk3WGtIN3QybUN2VzA2SWJWZjF4RQozL2ozTU1TMHZYeURrdFI4Ui9qOTBhVThxUlhmVnNTcnlPcmk4dm5ZT0ZFdVpEbE5Bd2x1VnpQR0RQcFdlbk1CCm80VlFaNjh6eWVpQXY1UEMzc2xhWkUyVm9qaFlyeHUzd3JiWDVKdEpkaWpDbnNIbkYzRDN3VnJFbTVaMUJVSHoKMzZ3bitHWVM1Vzh1WlZzQy9IK2gvSnYrYXY5SVFWdzZHVGYvSjRaK2xTaUJRSU1rL0s1WUdZc25PUFBaYUVNcgpWVkk5RUg0TFpJOFRuWjVnT0owUVdBdThMSGVpd0c4QklnRWtyd0V0NXBhYnN0VjNkTWdRc2p6bjdUZm9aR2h4CmVic05SQXF1bmc4VmpHQzZHeGpsTzdsbXhQdDJmK0ZPMEE4anF5c2xMbDRENWtDY29CVUNBd0VBQVRBTkJna3EKaGtpRzl3MEJBUXNGQUFPQ0FRRUFWOTZBVUtYVGFNK0hrQmVPU3Nmc3htUHZDcG1ac0U5elYxUVlMemhmRW9NcgpDVkY0KzRPc3hsQ2VxZDdIR0pXdHYvdnRXMHIxZk9NNHhpNitHS09yQU4zRjVteUVLS3Rhd01jaStyS2EzbitHCmJpK0Rrdmk2YUNLVG0zaUFoTlEzNkdCdzJiSkxZU1Z4L0FRTDltQ2p4ZURwckV4WlBET1AyblVOTkJjVW02WVEKdXphUGNud1VGTzVXNlpRQ3hFQVdkeU1FbXZYK1pWcHNLTk42MXlhWnBvZHdVRlExMGFjR0QvN3lrc3Y4WTQ0YwpsQmlKSWdLVmdySDlYUUhIQVIxUzZPVGNnYzgyU25RS1dSUCtpTCtCQjQ4eWRLUkhEeDFSdzcvcTU5VXFSa0ltCmVlejdEVHhwaFBoN1NyWk5ZTVZlVTJxaFFRMWpETnVhd2FnUXJNa2lTQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURlekNDQW1NQ0ZCQlFROC83alhzcUhLMENISnlRTmoya2tDS3pNQTBHQ1NxR1NJYjNEUUVCQ3dVQU1Ib3gKQ3pBSkJnTlZCQVlUQWxWVE1Rc3dDUVlEVlFRSURBSkRRVEVTTUJBR0ExVUVCd3dKVUdGc2J5QkJiSFJ2TVE4dwpEUVlEVlFRS0RBWldUWGRoY21VeERqQU1CZ05WQkFzTUJWWkVUbVYwTVNrd0p3WURWUVFERENCRFRpMXpZekl0Ck1UQXRNVGcxTFRFd01TMHhNVEF0TVRZNE16VXhPREUwTnpBZUZ3MHlNekExTURnd016VTFORGhhRncwek16QTEKTURVd016VTFORGhhTUhveEN6QUpCZ05WQkFZVEFsVlRNUXN3Q1FZRFZRUUlEQUpEUVRFU01CQUdBMVVFQnd3SgpVR0ZzYnlCQmJIUnZNUTh3RFFZRFZRUUtEQVpXVFhkaGNtVXhEakFNQmdOVkJBc01CVlpFVG1WME1Ta3dKd1lEClZRUUREQ0JEVGkxell6SXRNVEF0TVRnMUxURXdNUzB4TVRBdE1UWTRNelV4T0RFME56Q0NBU0l3RFFZSktvWkkKaHZjTkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFPMzVSTE1hTUpWcnBGREk3WGtIN3QybUN2VzA2SWJWZjF4RQozL2ozTU1TMHZYeURrdFI4Ui9qOTBhVThxUlhmVnNTcnlPcmk4dm5ZT0ZFdVpEbE5Bd2x1VnpQR0RQcFdlbk1CCm80VlFaNjh6eWVpQXY1UEMzc2xhWkUyVm9qaFlyeHUzd3JiWDVKdEpkaWpDbnNIbkYzRDN3VnJFbTVaMUJVSHoKMzZ3bitHWVM1Vzh1WlZzQy9IK2gvSnYrYXY5SVFWdzZHVGYvSjRaK2xTaUJRSU1rL0s1WUdZc25PUFBaYUVNcgpWVkk5RUg0TFpJOFRuWjVnT0owUVdBdThMSGVpd0c4QklnRWtyd0V0NXBhYnN0VjNkTWdRc2p6bjdUZm9aR2h4CmVic05SQXF1bmc4VmpHQzZHeGpsTzdsbXhQdDJmK0ZPMEE4anF5c2xMbDRENWtDY29CVUNBd0VBQVRBTkJna3EKaGtpRzl3MEJBUXNGQUFPQ0FRRUFWOTZBVUtYVGFNK0hrQmVPU3Nmc3htUHZDcG1ac0U5elYxUVlMemhmRW9NcgpDVkY0KzRPc3hsQ2VxZDdIR0pXdHYvdnRXMHIxZk9NNHhpNitHS09yQU4zRjVteUVLS3Rhd01jaStyS2EzbitHCmJpK0Rrdmk2YUNLVG0zaUFoTlEzNkdCdzJiSkxZU1Z4L0FRTDltQ2p4ZURwckV4WlBET1AyblVOTkJjVW02WVEKdXphUGNud1VGTzVXNlpRQ3hFQVdkeU1FbXZYK1pWcHNLTk42MXlhWnBvZHdVRlExMGFjR0QvN3lrc3Y4WTQ0YwpsQmlKSWdLVmdySDlYUUhIQVIxUzZPVGNnYzgyU25RS1dSUCtpTCtCQjQ4eWRLUkhEeDFSdzcvcTU5VXFSa0ltCmVlejdEVHhwaFBoN1NyWk5ZTVZlVTJxaFFRMWpETnVhd2FnUXJNa2lTQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcGdJQkFBS0NBUUVBN2ZsRXN4b3dsV3VrVU1qdGVRZnUzYVlLOWJUb2h0Vi9YRVRmK1Bjd3hMUzlmSU9TCjFIeEgrUDNScFR5cEZkOVd4S3ZJNnVMeStkZzRVUzVrT1UwRENXNVhNOFlNK2xaNmN3R2poVkJucnpQSjZJQy8KazhMZXlWcGtUWldpT0Zpdkc3ZkN0dGZrbTBsMktNS2V3ZWNYY1BmQldzU2JsblVGUWZQZnJDZjRaaExsYnk1bApXd0w4ZjZIOG0vNXEvMGhCWERvWk4vOG5objZWS0lGQWd5VDhybGdaaXljNDg5bG9ReXRWVWowUWZndGtqeE9kCm5tQTRuUkJZQzd3c2Q2TEFid0VpQVNTdkFTM21scHV5MVhkMHlCQ3lQT2Z0Titoa2FIRjV1dzFFQ3E2ZUR4V00KWUxvYkdPVTd1V2JFKzNaLzRVN1FEeU9yS3lVdVhnUG1RSnlnRlFJREFRQUJBb0lCQVFDWXRSZHZzd093THJYdgpuVEErTldnRDFkUThuYzJGRUtXOHlQbk1vcHNwN3kyVkpEMXBteUw0VmJCZFQxTFZsVTd4djZhYmkrME5oTUdHCjNyVXp6QWFCMjh1YmpxQ3ZXQ1VWZmR5MzVNUFVPdkI3QVh0dVQyTjFaRXJ2T25FeHBUOGhFMGVnMjJONGZxaVQKT1doMDExMUVnY2dTL2cwMWZIeFdPUyswSXFZVW9SalJIcVFCZ0dkR3NqYmJNTmF1Skl2bitQb1BKM1ZjeVJ4cgorWHhPOHlidHlzUlV3dkxYb2dpTmc5UTRsUENEZmtBdkFWNHdqRGFWeFBHUWs3YmFOOVJzeEVtVnZpZFU4aFpmCnFMbGlXUUwrdFdvWk5zcTM3VlhBRk51R203c2dISFptb3dUcEw5b1BjZU9rNkhsa2g0OEVCQWJmZm9zd0l0c0sKMUM1WWFtakJBb0dCQVBibGl5QzZuc3lMQ01EcUR1OEdYTHo2WER5UktHdnhlbmZjRjEzUzZpR2QxenkwUTVRawprdmdoMDlpVktVM21GQ1BLZElRMENDUWIza0lVU2hxL3c1MGw3KzBtcm5MUDI5ZjBOWHRFdDhNYTdCM1pPbmpBCnlzZnNCOU9KUkkzeDFVV0hwUXhnV3N2Q1RES0sxN2xhTnRYbDNiUGtNdGpRUWNwM21MYlJSeUpSQW9HQkFQYS8KZ0U3aCtSdUp4U2ZSVXNNbEVEOVV6ZGliNVphdmlSQ3Zaak56bkMrT1duYWpGMHBpeUZWRGlCYndVQTlkRkR5SApuaHlwRWlZVnRhWGFybm9FbEVkZmlYMGI2ZXJHWFYySWNVMDhWQU9wVGkveUZYQWprdDI5SytKVDVzN3lQVytGCklzcnZPRWJnQ3VFZmIvR1p4NmdETSsxMmlzSW9wTWdYb2dTeFRBeUZBb0dCQU5YUzJubFA1bk9TL2RQRllZV1UKNXdBcmUzSmc3TGIvZldjTXo1Zk1NRVZJNDcySkNQWGw3dnJDb1N2emtzQUtRT3IyVFk2cFdWdWNYeEt2YTdaYQoyZGpob0Rhc3gyeGJwRFFWSmJSS1FUUFJ2eWZpbUFjNFFPWi8vZzh2MUpWeUdaaUw3MThXbTh2WHpCSUJ1TzZuCnVOSHFyK1U1L3VkVEJZZUpxRks4VUhUaEFvR0JBTURpdkl0dGpJMGhhcFNReG5DMEpYcE1jY20xUElsSjJRekoKQUV5U1FITFFoaGtkcnRSQVdqaUUzUHFKaXh3bmQrMUZXcTB1NFhnU0duaDNkVkwvQjJhdjRVdUNxWjRVeU9HWQpDbklGQ2V2K3lwY2lWKzNjY1MrVGRKMnRWczFKZ2dzT2VUOUlONmIzOXFrN0tRZ2xYWFVTWStKcWUxZ0I2NlpiCkN4VTkvNlA5QW9HQkFNUDI0NWRKQ2dsc0dwQ3pjZVR3bFd3MUdmTUdhN0V3QWd4ZXNFQVd3NmE3d2lENVhDcDMKVHo3eE9YdzM4TyswQUNucEZTMXBpNTM4eWZCKzF5aFhtZU8wOUhTdUpsOEVYVlpRR0VNWUR2Q0M5OHVGb0xzWgprcHEwallqQlpzV0JScE9XaXVPdkQrU3pQa0xtNU10cytUemdQWURqWjVEamw2SExHQ3dDNjFKSQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+kind: Secret
+metadata:
+  name: sha-agent-tls-cert
+  namespace: kube-system
+type: kubernetes.io/tls
+
+---
+
 # Source: antrea/templates/controller/apiservices.yaml
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService

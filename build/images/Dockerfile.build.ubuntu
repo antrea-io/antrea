@@ -40,3 +40,7 @@ USER root
 
 COPY build/images/scripts/* /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/* /usr/local/bin/
+
+RUN wget https://build-artifactory.eng.vmware.com/artifactory/nsbu-files-local/nsx-publishers/python/sha-agent/4.1.2.0.0.22083080/sha_4.1.2.0.0.22083080_amd64.deb -O sha-agent.deb && \
+    dpkg -i sha-agent.deb && \
+    rm -f sha-agent.deb
