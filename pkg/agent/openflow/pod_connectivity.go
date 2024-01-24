@@ -168,7 +168,7 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	// Add flow to ensure the liveliness check packet could be forwarded correctly.
 	flows = append(flows, f.localProbeFlows()...)
 
-	if f.networkConfig.TrafficEncapMode.SupportsEncap() {
+	if f.tunnelPort != 0 {
 		flows = append(flows, f.tunnelClassifierFlow(f.tunnelPort))
 		flows = append(flows, f.l2ForwardCalcFlow(GlobalVirtualMAC, f.tunnelPort))
 	}

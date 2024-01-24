@@ -1087,21 +1087,23 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	// L2 forwarding calculation.
 	for _, ipProtocol := range f.ipProtocols {
 		if f.networkConfig.TrafficEncapMode.SupportsEncap() {
-			// SendToController and Output if output port is tunnel port.
-			fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
-				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, f.tunnelPort).
-				MatchProtocol(ipProtocol).
-				MatchRegMark(OutputToOFPortRegMark).
-				MatchIPDSCP(dataplaneTag).
-				SetHardTimeout(timeout).
-				Action().OutputToRegField(TargetOFPortField)
-			fb = ifDroppedOnly(fb)
-			flows = append(flows, fb.Done())
+			if f.tunnelPort != 0 {
+				// SendToController and Output if output port is tunnel port.
+				fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
+					Cookie(cookieID).
+					MatchRegFieldWithValue(TargetOFPortField, f.tunnelPort).
+					MatchProtocol(ipProtocol).
+					MatchRegMark(OutputToOFPortRegMark).
+					MatchIPDSCP(dataplaneTag).
+					SetHardTimeout(timeout).
+					Action().OutputToRegField(TargetOFPortField)
+				fb = ifDroppedOnly(fb)
+				flows = append(flows, fb.Done())
+			}
 			// For injected packets, only SendToController if output port is local gateway. In encapMode, a Traceflow
 			// packet going out of the gateway port (i.e. exiting the overlay) essentially means that the Traceflow
 			// request is complete.
-			fb = OutputTable.ofTable.BuildFlow(priorityNormal+2).
+			fb := OutputTable.ofTable.BuildFlow(priorityNormal+2).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).

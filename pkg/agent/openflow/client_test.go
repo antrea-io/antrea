@@ -94,6 +94,7 @@ type clientOptions struct {
 	enableMulticluster         bool
 	enableL7NetworkPolicy      bool
 	enableL7FlowExporter       bool
+	trafficEncryptionMode      config.TrafficEncryptionModeType
 }
 
 type clientOptionsFn func(*clientOptions)
@@ -165,6 +166,12 @@ func enableTrafficControl(o *clientOptions) {
 
 func enableMulticluster(o *clientOptions) {
 	o.enableMulticluster = true
+}
+
+func setTrafficEncryptionMode(trafficEncryptionMode config.TrafficEncryptionModeType) clientOptionsFn {
+	return func(o *clientOptions) {
+		o.trafficEncryptionMode = trafficEncryptionMode
+	}
 }
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
@@ -457,9 +464,19 @@ func newFakeClientWithBridge(
 		MAC:    fakeGatewayMAC,
 		OFPort: uint32(2),
 	}
+	networkConfig := &config.NetworkConfig{
+		IPv4Enabled:           enableIPv4,
+		IPv6Enabled:           enableIPv6,
+		TrafficEncapMode:      trafficEncapMode,
+		TrafficEncryptionMode: o.trafficEncryptionMode,
+	}
+	tunnelOFPort := uint32(0)
+	if networkConfig.NeedsTunnelInterface() {
+		tunnelOFPort = 1
+	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig:         gatewayConfig,
-		TunnelOFPort:          uint32(1),
+		TunnelOFPort:          tunnelOFPort,
 		WireGuardConfig:       &config.WireGuardConfig{},
 		PodIPv4CIDR:           fakePodIPv4CIDR,
 		PodIPv6CIDR:           fakePodIPv6CIDR,
@@ -473,11 +490,6 @@ func newFakeClientWithBridge(
 			MAC:    fakeUplinkMAC,
 			OFPort: uint32(4),
 		},
-	}
-	networkConfig := &config.NetworkConfig{
-		IPv4Enabled:      enableIPv4,
-		IPv6Enabled:      enableIPv6,
-		TrafficEncapMode: trafficEncapMode,
 	}
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: egressExceptCIDRs,
@@ -2708,7 +2720,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	expectedFlows := append(pipelineDefaultFlows(true /* egressTrafficShapingEnabled */, false /* externalNodeEnabled */, true /* isEncap */, true /* isIPv4 */), egressInitFlows(true)...)
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false, false)...)
-	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, true)...)
+	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
 
 	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {
