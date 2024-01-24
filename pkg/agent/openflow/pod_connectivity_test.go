@@ -23,7 +23,11 @@ import (
 	"antrea.io/antrea/pkg/util/runtime"
 )
 
-func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, connectUplinkToBridge, isIPv4, trafficControlEnabled, multicastEnabled bool) []string {
+func podConnectivityInitFlows(
+	trafficEncapMode config.TrafficEncapModeType,
+	trafficEncryptionMode config.TrafficEncryptionModeType,
+	connectUplinkToBridge, isIPv4, trafficControlEnabled, multicastEnabled bool,
+) []string {
 	var flows []string
 	switch trafficEncapMode {
 	case config.TrafficEncapModeEncap:
@@ -59,7 +63,6 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=ARPResponder, priority=190,arp actions=NORMAL",
 			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=2,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=2 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
-			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=1 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
 			"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520,nat)",
 			"cookie=0x1010000000000, table=ConntrackState, priority=200,ct_state=+inv+trk,ip actions=drop",
 			"cookie=0x1010000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x0/0x10,ip actions=goto_table:AntreaPolicyEgressRule",
@@ -72,6 +75,11 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 			"cookie=0x1010000000000, table=L3DecTTL, priority=200,ip actions=dec_ttl,goto_table:SNATMark",
 			"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0x0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
+		}
+		if trafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
+			flows = append(flows,
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=1 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
+			)
 		}
 		if !multicastEnabled {
 			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=2 actions=goto_table:UnSNAT")
@@ -94,16 +102,18 @@ func podConnectivityInitFlows(trafficEncapMode config.TrafficEncapModeType, conn
 		if trafficControlEnabled {
 			flows = append(flows,
 				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl",
 				"cookie=0x1010000000000, table=TrafficControl, priority=210,reg0=0x200006/0x60000f actions=goto_table:Output",
 				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x400000/0xc00000 actions=output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
 				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x800000/0xc00000 actions=output:NXM_NX_REG9[]",
 			)
+			if trafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
+				flows = append(flows, "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl")
+			}
 		} else {
-			flows = append(flows,
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
-			)
+			flows = append(flows, "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier")
+			if trafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
+				flows = append(flows, "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier")
+			}
 		}
 	case config.TrafficEncapModeNoEncap:
 		if !isIPv4 {
@@ -284,13 +294,13 @@ func Test_featurePodConnectivity_initFlows(t *testing.T) {
 			name:             "IPv4 Encap",
 			enableIPv4:       true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, false, false),
 		},
 		{
 			name:             "IPv4 NoEncap",
 			enableIPv4:       true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, false, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, config.TrafficEncryptionModeNone, false, true, false, false),
 		},
 		{
 			name:             "IPv4 NoEncap with Antrea IPAM",
@@ -298,35 +308,35 @@ func Test_featurePodConnectivity_initFlows(t *testing.T) {
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			clientOptions:    []clientOptionsFn{enableConnectUplinkToBridge},
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, true, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, config.TrafficEncryptionModeNone, true, true, false, false),
 		},
 		{
 			name:             "IPv4 NetworkPolicyOnly Linux",
 			enableIPv4:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, false, true, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, config.TrafficEncryptionModeNone, false, true, false, false),
 		},
 		{
 			name:             "IPv6 Encap",
 			enableIPv6:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, false, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, false, false, false),
 		},
 		{
 			name:             "IPv6 NoEncap",
 			enableIPv6:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, false, false, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNoEncap, config.TrafficEncryptionModeNone, false, false, false, false),
 		},
 		{
 			name:             "IPv6 NetworkPolicyOnly",
 			enableIPv6:       true,
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, false, false, false, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeNetworkPolicyOnly, config.TrafficEncryptionModeNone, false, false, false, false),
 		},
 		{
 			name:             "IPv4 Encap with TrafficControl",
@@ -334,7 +344,23 @@ func Test_featurePodConnectivity_initFlows(t *testing.T) {
 			skipWindows:      true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			clientOptions:    []clientOptionsFn{enableTrafficControl},
-			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, false, true, true, false),
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, false),
+		},
+		{
+			name:             "IPv4 Encap with WireGuard",
+			enableIPv4:       true,
+			skipWindows:      true,
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			clientOptions:    []clientOptionsFn{setTrafficEncryptionMode(config.TrafficEncryptionModeWireGuard)},
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeWireGuard, false, true, false, false),
+		},
+		{
+			name:             "IPv4 Encap with IPsec",
+			enableIPv4:       true,
+			skipWindows:      true,
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			clientOptions:    []clientOptionsFn{setTrafficEncryptionMode(config.TrafficEncryptionModeIPSec)},
+			expectedFlows:    podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeIPSec, false, true, false, false),
 		},
 	}
 	for _, tc := range testCases {

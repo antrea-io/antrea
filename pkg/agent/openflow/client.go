@@ -1625,10 +1625,6 @@ func (c *client) InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGatew
 		c.featurePodConnectivity.l2ForwardCalcFlow(GlobalVirtualMACForMulticluster, tunnelOFPort),
 	}
 
-	if c.networkConfig.TrafficEncapMode != config.TrafficEncapModeEncap {
-		flows = append(flows, c.featurePodConnectivity.tunnelClassifierFlow(tunnelOFPort))
-	}
-
 	if isGateway {
 		flows = append(flows,
 			c.featureMulticluster.tunnelClassifierFlow(tunnelOFPort),
