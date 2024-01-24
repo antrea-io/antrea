@@ -722,9 +722,9 @@ jobs:
           ./ci/kind/validate-metrics-doc.sh
 
   # Runs after all other jobs in the workflow succeed and deletes Antrea Docker images uploaded as temporary
-  # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
-  # exposes an API for deleting artifacts, they do not support an official delete-artifact action
-  # yet.
+  # artifacts. There is no simple way to delete an artifact from a worfklow triggered by a pull
+  # request, so instead we use the upload-artifact action again, and overwrite the previous artifact
+  # (which is very large) with an empty file.
   artifact-cleanup:
     name: Delete uploaded images
     needs:
@@ -744,14 +744,22 @@ jobs:
     - test-network-policy-conformance-encap
     runs-on: [ubuntu-latest]
     steps:
+    - name: Create empty file to overwrite artifacts
+      run: |
+        touch empty-artifact
     - name: Delete antrea-ubuntu-cov
       if: ${{ needs.build-antrea-coverage-image.result == 'success' }}
-      uses: geekyeggo/delete-artifact@v4
+      uses: actions/upload-artifact@v4
       with:
         name: antrea-ubuntu-cov
+        path: empty-artifact
+        retention-days: 1 # minimum value
+        overwrite: true
     - name: Delete flow-aggregator
       if: ${{ needs.build-flow-aggregator-coverage-image.result == 'success' }}
-      uses: geekyeggo/delete-artifact@v4
+      uses: actions/upload-artifact@v4
       with:
         name: flow-aggregator-cov
-        failOnError: false
+        path: empty-artifact
+        retention-days: 1 # minimum value
+        overwrite: true
