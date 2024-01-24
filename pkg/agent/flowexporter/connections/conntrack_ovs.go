@@ -32,13 +32,6 @@ import (
 
 // Following map is for converting protocol name (string) to protocol identifier
 var (
-	protocols = map[string]uint8{
-		"icmp":      1,
-		"igmp":      2,
-		"tcp":       6,
-		"udp":       17,
-		"ipv6-icmp": 58,
-	}
 	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
 	conntrackStatusMap = map[string]uint32{
 		"EXPECTED":      uint32(1),
@@ -140,7 +133,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 		switch {
 		case hasAnyProto(fs):
 			// Proto identifier
-			proto, err := lookupProtocolMap(fs)
+			proto, err := flowexporter.LookupProtocolMap(fs)
 			if err != nil {
 				return nil, err
 			}
@@ -299,23 +292,12 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 }
 
 func hasAnyProto(text string) bool {
-	for proto := range protocols {
+	for proto := range flowexporter.Protocols {
 		if strings.Contains(strings.ToLower(text), proto) {
 			return true
 		}
 	}
 	return false
-}
-
-// lookupProtocolMap returns protocol identifier given protocol name
-func lookupProtocolMap(name string) (uint8, error) {
-	name = strings.TrimSpace(name)
-	lowerCaseStr := strings.ToLower(name)
-	proto, found := protocols[lowerCaseStr]
-	if !found {
-		return 0, fmt.Errorf("unknown IP protocol specified: %s", name)
-	}
-	return proto, nil
 }
 
 func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {

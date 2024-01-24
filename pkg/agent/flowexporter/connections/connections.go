@@ -150,10 +150,13 @@ func (cs *connectionStore) ReleaseConnStoreLock() {
 // UpdateConnAndQueue deletes the inactive connection from keyToItem map,
 // without adding it back to the PQ. In this way, we can avoid to reset the
 // item's expire time every time we encounter it in the PQ. The method also
-// updates active connection's stats fields and adds it back to the PQ.
+// updates active connection's stats fields and adds it back to the PQ. Layer 7
+// fields should be set to default to prevent from re-exporting same values.
 func (cs *connectionStore) UpdateConnAndQueue(pqItem *flowexporter.ItemToExpire, currTime time.Time) {
 	conn := pqItem.Conn
 	conn.LastExportTime = currTime
+	conn.AppProtocolName = ""
+	conn.HttpVals = ""
 	if conn.ReadyToDelete || !conn.IsActive {
 		cs.expirePriorityQueue.RemoveItemFromMap(conn)
 	} else {

@@ -123,7 +123,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 
 	// test on conntrack connection store
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	conntrackConnStore.connections[connKey] = conn
 
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(1)

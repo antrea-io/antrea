@@ -480,6 +480,6 @@ func (i *Initializer) installVMInitialFlows() error {
 	return nil
 }
 
-func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
+func (i *Initializer) prepareL7EngineInterfaces() error {
 	return nil
 }

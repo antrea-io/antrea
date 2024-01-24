@@ -203,7 +203,7 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 			}
 		}
 	}
-	if f.enableTrafficControl {
+	if f.enableTrafficControl || f.enableL7FlowExporter {
 		tables = append(tables, TrafficControlTable)
 	}
 

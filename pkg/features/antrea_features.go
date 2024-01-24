@@ -154,6 +154,10 @@ const (
 	// alpha: v1.15
 	// Allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
 	NodeNetworkPolicy featuregate.Feature = "NodeNetworkPolicy"
+
+	// alpha: v1.15
+	// Enable layer 7 flow export on Pods and Namespaces
+	L7FlowExporter featuregate.Feature = "L7FlowExporter"
 )
 
 var (
@@ -194,6 +198,7 @@ var (
 		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:        {Default: false, PreRelease: featuregate.Alpha},
 		NodeNetworkPolicy:           {Default: false, PreRelease: featuregate.Alpha},
+		L7FlowExporter:              {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
@@ -223,6 +228,7 @@ var (
 		EgressTrafficShaping,
 		EgressSeparateSubnet,
 		NodeNetworkPolicy,
+		L7FlowExporter,
 	)
 
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
@@ -269,6 +275,7 @@ var (
 		EgressTrafficShaping:        {},
 		EgressSeparateSubnet:        {},
 		NodeNetworkPolicy:           {},
+		L7FlowExporter:              {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

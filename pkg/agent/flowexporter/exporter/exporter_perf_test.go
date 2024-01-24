@@ -169,8 +169,9 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	v4Enabled := !testWithIPv6
 	v6Enabled := testWithIPv6
 
+	l7Listener := connections.NewL7Listener(nil, nil)
 	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o)
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, o)
 
 	return &FlowExporter{
 		collectorAddr:          o.FlowCollectorAddr,
@@ -188,6 +189,7 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
+		l7Listener:             l7Listener,
 	}
 }
 

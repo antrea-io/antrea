@@ -119,6 +119,7 @@ type Initializer struct {
 	serviceConfig         *config.ServiceConfig
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	enableL7NetworkPolicy bool
+	enableL7FlowExporter  bool
 	connectUplinkToBridge bool
 	enableAntreaProxy     bool
 	// podNetworkWait should be decremented once the Node's network is ready.
@@ -151,6 +152,7 @@ func NewInitializer(
 	connectUplinkToBridge bool,
 	enableAntreaProxy bool,
 	enableL7NetworkPolicy bool,
+	enableL7FlowExporter bool,
 ) *Initializer {
 	return &Initializer{
 		ovsBridgeClient:       ovsBridgeClient,
@@ -175,6 +177,7 @@ func NewInitializer(
 		connectUplinkToBridge: connectUplinkToBridge,
 		enableAntreaProxy:     enableAntreaProxy,
 		enableL7NetworkPolicy: enableL7NetworkPolicy,
+		enableL7FlowExporter:  enableL7FlowExporter,
 	}
 }
 
@@ -423,9 +426,9 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if i.enableL7NetworkPolicy {
-		// prepareL7NetworkPolicyInterfaces must be executed after setupOVSBridge since it requires interfaceStore.
-		if err := i.prepareL7NetworkPolicyInterfaces(); err != nil {
+	if i.enableL7NetworkPolicy || i.enableL7FlowExporter {
+		// prepareL7EngineInterfaces must be executed after setupOVSBridge since it requires interfaceStore.
+		if err := i.prepareL7EngineInterfaces(); err != nil {
 			return err
 		}
 	}
