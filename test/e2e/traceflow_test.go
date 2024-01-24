@@ -764,7 +764,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 							Component:     v1beta1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressDefaultRule",
 							Action:        v1beta1.ActionDropped,
-							NetworkPolicy: fmt.Sprintf("K8sNetworkPolicy:%s/test-networkpolicy-allow-all-egress", data.testNamespace),
 						},
 					},
 				},
