@@ -38,7 +38,7 @@ const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 // IPTableRules provides a client to perform IPTABLES operations
 type iptablesRules struct {
 	name  string
-	table *iptables.Client
+	table iptables.Interface
 }
 
 // NewIPTableRules retruns a new instance of IPTableRules
