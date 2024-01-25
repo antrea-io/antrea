@@ -320,9 +320,12 @@ func (o *Options) validateFlowExporterConfig() error {
 	return nil
 }
 
-func (o *Options) validateMulticastConfig() error {
-	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+func (o *Options) validateMulticastConfig(encryptionMode config.TrafficEncryptionModeType) error {
+	if features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable {
 		var err error
+		if encryptionMode != config.TrafficEncryptionModeNone {
+			return fmt.Errorf("Multicast feature doesn't work with the current encryption mode '%s'", encryptionMode)
+		}
 		if o.config.Multicast.IGMPQueryInterval != "" {
 			o.igmpQueryInterval, err = time.ParseDuration(o.config.Multicast.IGMPQueryInterval)
 			if err != nil {
@@ -584,7 +587,7 @@ func (o *Options) validateK8sNodeOptions() error {
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
-	if err := o.validateMulticastConfig(); err != nil {
+	if err := o.validateMulticastConfig(encryptionMode); err != nil {
 		return fmt.Errorf("failed to validate multicast config: %v", err)
 	}
 	if err := o.validateEgressConfig(encapMode); err != nil {

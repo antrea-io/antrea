@@ -219,18 +219,42 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 	tests := []struct {
 		name              string
 		igmpQueryVersions []int
+		encryptionMode    config.TrafficEncryptionModeType
 		expectedErr       error
 		expectedVersions  []uint8
 	}{
 		{
 			name:              "wrong versions",
 			igmpQueryVersions: []int{1, 3, 4},
+			encryptionMode:    config.TrafficEncryptionModeNone,
 			expectedErr:       fmt.Errorf("igmpQueryVersions should be a subset of [1 2 3]"),
+			expectedVersions:  nil,
+		},
+		{
+			name:              "incorrect encryption mode with IPSec",
+			igmpQueryVersions: []int{1, 2},
+			encryptionMode:    config.TrafficEncryptionModeIPSec,
+			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the current encryption mode 'IPsec'"),
+			expectedVersions:  nil,
+		},
+		{
+			name:              "incorrect encryption mode with WireGuard",
+			igmpQueryVersions: []int{1, 2},
+			encryptionMode:    config.TrafficEncryptionModeWireGuard,
+			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the current encryption mode 'WireGuard'"),
+			expectedVersions:  nil,
+		},
+		{
+			name:              "incorrect encryption mode with invalid",
+			igmpQueryVersions: []int{1, 2},
+			encryptionMode:    config.TrafficEncryptionModeInvalid,
+			expectedErr:       fmt.Errorf("Multicast feature doesn't work with the current encryption mode 'invalid'"),
 			expectedVersions:  nil,
 		},
 		{
 			name:              "no error",
 			igmpQueryVersions: []int{1, 2},
+			encryptionMode:    config.TrafficEncryptionModeNone,
 			expectedErr:       nil,
 			expectedVersions:  []uint8{1, 2},
 		},
@@ -240,11 +264,14 @@ func TestOptionsValidateMulticastConfig(t *testing.T) {
 			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicast, true)()
 			o := &Options{config: &agentconfig.AgentConfig{
 				Multicast: agentconfig.MulticastConfig{
+					Enable:            true,
 					IGMPQueryVersions: tt.igmpQueryVersions},
 			}}
-			err := o.validateMulticastConfig()
-			assert.Equal(t, tt.expectedErr, err)
-			assert.Equal(t, tt.expectedVersions, o.igmpQueryVersions)
+			err := o.validateMulticastConfig(tt.encryptionMode)
+			require.Equal(t, tt.expectedErr, err)
+			if err != nil {
+				assert.Equal(t, tt.expectedVersions, o.igmpQueryVersions)
+			}
 		})
 	}
 }
