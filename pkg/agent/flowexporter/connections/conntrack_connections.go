@@ -106,7 +106,10 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
 	// DeepCopy the L7EventMap before polling the conntrack table to match corresponding L4 connection with L7 events
 	// and avoid missing the L7 events for corresponding L4 connection
-	l7EventMap := cs.l7EventMapGetter.ConsumeL7EventMap()
+	var l7EventMap map[flowexporter.ConnectionKey]L7ProtocolFields
+	if cs.l7EventMapGetter != nil {
+		l7EventMap = cs.l7EventMapGetter.ConsumeL7EventMap()
+	}
 
 	var zones []uint16
 	var connsLens []int
@@ -174,7 +177,10 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	for _, conn := range filteredConnsList {
 		cs.AddOrUpdateConn(conn)
 	}
-	cs.fillL7EventInfo(l7EventMap)
+	if len(l7EventMap) != 0 {
+		cs.fillL7EventInfo(l7EventMap)
+	}
+
 	cs.ReleaseConnStoreLock()
 
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
