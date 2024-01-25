@@ -261,7 +261,7 @@ spec:
       matchLabels:
         kubernetes.io/metadata.name: prod
   direction: Both
-  action: Mirror
+  action: Redirect
   targetPort:
     ovsInternal:
       name: tap0
