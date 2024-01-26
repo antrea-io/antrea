@@ -93,7 +93,9 @@ func waitForPodIPs(t *testing.T, data *TestData, podInfos []PodInfo) map[string]
 
 // runPingMesh runs a ping mesh between all the provided Pods after first retrieving their IP
 // addresses.
-func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname string) {
+// When dontFragment is true, it will specify the packet size to the maximum value the MTU allows and set DF flag to
+// validate the MTU is correct.
+func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname string, dontFragment bool) {
 	podIPs := waitForPodIPs(t, data, podInfos)
 
 	t.Logf("Ping mesh test between all Pods")
@@ -110,7 +112,7 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []PodInfo, ctrname stri
 			if pi2.Namespace != "" {
 				pod2Namespace = pi2.Namespace
 			}
-			if err := data.RunPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.Name], ctrname, pingCount, 0); err != nil {
+			if err := data.RunPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.Name], ctrname, pingCount, 0, dontFragment); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", k8s.NamespacedName(podNamespace, pi1.Name), k8s.NamespacedName(pod2Namespace, pi2.Name), err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", k8s.NamespacedName(podNamespace, pi1.Name), k8s.NamespacedName(pod2Namespace, pi2.Name))
@@ -131,16 +133,16 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 		workerNode = workerNodeName(clusterInfo.windowsNodes[0])
 	}
 
-	t.Logf("Creating %d agnhost Pods on '%s'", numPods, workerNode)
+	t.Logf("Creating %d toolbox Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].OS = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNode(podInfos[i].Name, data.testNamespace, workerNode, false); err != nil {
-			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
+		if err := data.createToolboxPodOnNode(podInfos[i].Name, data.testNamespace, workerNode, false); err != nil {
+			t.Fatalf("Error when creating toolbox test Pod '%s': %v", podInfos[i], err)
 		}
 		defer deletePodWrapper(t, data, data.testNamespace, podInfos[i].Name)
 	}
 
-	data.runPingMesh(t, podInfos, agnhostContainerName)
+	data.runPingMesh(t, podInfos, toolboxContainerName, true)
 }
 
 // testPodConnectivityOnSameNode checks that Pods running on the same Node can reach each other, by
@@ -185,13 +187,13 @@ func testHostPortPodConnectivity(t *testing.T, data *TestData) {
 	data.testHostPortPodConnectivity(t, data.testNamespace, data.testNamespace)
 }
 
-// createPodsOnDifferentNodes creates agnhost Pods through a DaemonSet. This function returns information of the created
+// createPodsOnDifferentNodes creates toolbox Pods through a DaemonSet. This function returns information of the created
 // Pods as well as a function which will delete the Pods when called. Since Pods can be on Nodes of different OSes, podInfo
 // slice instead of PodName slice is used to inform caller of correct commands and options. Linux and Windows Pods are
 // alternating in this podInfo slice so that the test can cover different connectivity cases between different OSes.
 func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag string) (podInfos []PodInfo, cleanup func() error) {
 	dsName := "connectivity-test" + tag
-	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
+	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, toolboxContainerName, toolboxImage, []string{"sleep", "3600"}, nil)
 	if err != nil {
 		t.Fatalf("Error when creating DaemonSet '%s': %v", dsName, err)
 	}
@@ -264,7 +266,7 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 	if len(podInfos) > maxPods {
 		podInfos = podInfos[:maxPods]
 	}
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, true)
 }
 
 // testPodConnectivityDifferentNodes checks that Pods running on different Nodes can reach each
@@ -315,11 +317,11 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespa
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "antrearestart")
 	defer deletePods()
 
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, true)
 
 	data.redeployAntrea(t, deployAntreaDefault)
 
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, true)
 }
 
 // testOVSRestartSameNode verifies that datapath flows are not removed when the Antrea Agent Pod is
@@ -396,16 +398,16 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	}
 	workerNode := workerNodeName(1)
 
-	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
+	t.Logf("Creating %d toolbox test Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].OS = clusterInfo.nodesOS[workerNode]
-		if err := data.createBusyboxPodOnNode(podInfos[i].Name, namespace, workerNode, false); err != nil {
-			t.Fatalf("Error when creating busybox test Pod '%s': %v", podInfos[i].Name, err)
+		if err := data.createToolboxPodOnNode(podInfos[i].Name, namespace, workerNode, false); err != nil {
+			t.Fatalf("Error when creating toolbox test Pod '%s': %v", podInfos[i].Name, err)
 		}
 		defer deletePodWrapper(t, data, namespace, podInfos[i].Name)
 	}
 
-	data.runPingMesh(t, podInfos, busyboxContainerName)
+	data.runPingMesh(t, podInfos, toolboxContainerName, true)
 
 	var antreaPodName string
 	var err error
@@ -487,7 +489,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	// This should give Antrea ~10s to restore flows, since we generate 10 "pings" with a 1s
 	// interval.
 	t.Logf("Running second ping mesh to check that flows have been restored")
-	data.runPingMesh(t, podInfos, busyboxContainerName)
+	data.runPingMesh(t, podInfos, toolboxContainerName, true)
 
 	flows2, groups2 := dumpFlows(), dumpGroups()
 	numFlows2, numGroups2 := len(flows2), len(groups2)
@@ -515,7 +517,7 @@ func testPingLargeMTU(t *testing.T, data *TestData) {
 
 	pingSize := 2000
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podInfos[0].Name, podInfos[1].Name)
-	if err := data.RunPingCommandFromTestPod(podInfos[0], data.testNamespace, podIPs[podInfos[1].Name], agnhostContainerName, pingCount, pingSize); err != nil {
+	if err := data.RunPingCommandFromTestPod(podInfos[0], data.testNamespace, podIPs[podInfos[1].Name], toolboxContainerName, pingCount, pingSize, false); err != nil {
 		t.Error(err)
 	}
 }

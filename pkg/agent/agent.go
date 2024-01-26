@@ -1094,7 +1094,7 @@ func (i *Initializer) waitForIPsecMonitorDaemon() error {
 
 // initializeWireguard checks if preconditions are met for using WireGuard and initializes WireGuard client or cleans up.
 func (i *Initializer) initializeWireGuard() error {
-	i.wireGuardConfig.MTU = i.nodeConfig.NodeTransportInterfaceMTU - config.WireGuardOverhead
+	i.wireGuardConfig.MTU = i.nodeConfig.NodeTransportInterfaceMTU - i.networkConfig.WireGuardMTUDeduction
 	wgClient, err := wireguard.New(i.nodeConfig, i.wireGuardConfig)
 	if err != nil {
 		return err
@@ -1197,10 +1197,6 @@ func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, e
 
 	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
 	mtu -= i.networkConfig.CalculateMTUDeduction(isIPv6)
-
-	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
-		mtu -= config.IPSecESPOverhead
-	}
 	return mtu, nil
 }
 

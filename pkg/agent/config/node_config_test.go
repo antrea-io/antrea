@@ -298,13 +298,59 @@ func TestCalculateMTUDeduction(t *testing.T) {
 		{
 			name:                 "GRE encap without IPv6",
 			nc:                   &NetworkConfig{TunnelType: ovsconfig.GRETunnel},
-			expectedMTUDeduction: 38,
+			expectedMTUDeduction: 42,
 		},
 		{
 			name:                 "Default encap with IPv6",
 			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel},
 			isIPv6:               true,
 			expectedMTUDeduction: 70,
+		},
+		{
+			name:                 "WireGuard enabled",
+			nc:                   &NetworkConfig{TrafficEncryptionMode: TrafficEncryptionModeWireGuard},
+			expectedMTUDeduction: 60,
+		},
+		{
+			name:                 "IPv6 with WireGuard enabled",
+			nc:                   &NetworkConfig{TrafficEncryptionMode: TrafficEncryptionModeWireGuard},
+			isIPv6:               true,
+			expectedMTUDeduction: 80,
+		},
+		{
+			name:                 "Multicluster enabled with Geneve encap",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, EnableMulticlusterGW: true},
+			expectedMTUDeduction: 50,
+		},
+		{
+			name: "Geneve encap with Multicluster WireGuard enabled",
+			nc: &NetworkConfig{
+				TunnelType:                 ovsconfig.GeneveTunnel,
+				EnableMulticlusterGW:       true,
+				MulticlusterEncryptionMode: TrafficEncryptionModeWireGuard,
+			},
+			expectedMTUDeduction: 110,
+		},
+		{
+			name:                 "Geneve encap with IPSec enabled",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
+			expectedMTUDeduction: 88,
+		},
+		{
+			name:                 "Geneve encap with IPSec enabled and IPv6",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
+			isIPv6:               true,
+			expectedMTUDeduction: 108,
+		},
+		{
+			name:                 "VXLan encap with IPSec enabled",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.VXLANTunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
+			expectedMTUDeduction: 88,
+		},
+		{
+			name:                 "GRE encap with IPSec enabled",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GRETunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
+			expectedMTUDeduction: 80,
 		},
 	}
 
