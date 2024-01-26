@@ -390,7 +390,8 @@ func Test_Init(t *testing.T) {
 	tests := []struct {
 		name          string
 		linkAddErr    error
-		lindSetupErr  error
+		linkSetUpErr  error
+		linkSetMTUErr error
 		utilConfigErr error
 		expectedErr   string
 		extraIPv4     net.IP
@@ -405,13 +406,23 @@ func Test_Init(t *testing.T) {
 			expectedErr: "WireGuard not supported by the Linux kernel (netlink: operation not supported), make sure the WireGuard kernel module is loaded",
 		},
 		{
+			name:       "init successfully with unix.EEXIST error",
+			linkAddErr: unix.EEXIST,
+		},
+		{
+			name:          "failed to init due to linkSetMTU error",
+			linkAddErr:    unix.EEXIST,
+			linkSetMTUErr: errors.New("link set mtu failed"),
+			expectedErr:   "failed to change WireGuard link MTU to 1420: link set mtu failed",
+		},
+		{
 			name:        "failed to init due to link add error",
 			linkAddErr:  errors.New("link add failed"),
 			expectedErr: "link add failed",
 		},
 		{
 			name:         "failed to init due to link setup error",
-			lindSetupErr: errors.New("link setup failed"),
+			linkSetUpErr: errors.New("link setup failed"),
 			expectedErr:  "link setup failed",
 		},
 		{
@@ -441,7 +452,10 @@ func Test_Init(t *testing.T) {
 				return tt.linkAddErr
 			}
 			linkSetUp = func(link netlink.Link) error {
-				return tt.lindSetupErr
+				return tt.linkSetUpErr
+			}
+			linkSetMTU = func(link netlink.Link, mtu int) error {
+				return tt.linkSetMTUErr
 			}
 			utilConfigureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
 				return tt.utilConfigErr
