@@ -162,7 +162,8 @@ gitamcleanup=true
 for pull in "${PULLS[@]}"; do
   echo "+++ Downloading patch to /tmp/${pull}.patch (in case you need to do this again)"
 
-  curl -o "/tmp/${pull}.patch" -sSL "https://github.com/${MAIN_REPO_ORG}/${MAIN_REPO_NAME}/pull/${pull}.patch"
+  merge_commit=$(gh pr view "$pull" --json mergeCommit -t '{{(printf "%s" $.mergeCommit.oid)}}')
+  curl -o "/tmp/${pull}.patch" -sSL "https://github.com/${MAIN_REPO_ORG}/${MAIN_REPO_NAME}/commit/${merge_commit}.patch"
   echo
   echo "+++ About to attempt cherry pick of PR. To reattempt:"
   echo "  $ git am -3 /tmp/${pull}.patch"
