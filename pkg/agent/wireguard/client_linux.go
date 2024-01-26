@@ -52,6 +52,7 @@ var _ Interface = (*client)(nil)
 var (
 	linkAdd                    = netlink.LinkAdd
 	linkSetUp                  = netlink.LinkSetUp
+	linkSetMTU                 = netlink.LinkSetMTU
 	utilConfigureLinkAddresses = util.ConfigureLinkAddresses
 )
 
@@ -85,12 +86,18 @@ func New(nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig)
 func (client *client) Init(ipv4 net.IP, ipv6 net.IP) (string, error) {
 	link := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: client.wireGuardConfig.Name, MTU: client.wireGuardConfig.MTU}}
 	err := linkAdd(link)
-	// Ignore existing link as it may have already been created or managed by userspace process.
-	if err != nil && !errors.Is(err, unix.EEXIST) {
-		if errors.Is(err, unix.EOPNOTSUPP) {
+	if err != nil {
+		// Ignore existing link as it may have already been created or managed by userspace process, just ensure the MTU
+		// is set correctly.
+		if errors.Is(err, unix.EEXIST) {
+			if err := linkSetMTU(link, client.wireGuardConfig.MTU); err != nil {
+				return "", fmt.Errorf("failed to change WireGuard link MTU to %d: %w", client.wireGuardConfig.MTU, err)
+			}
+		} else if errors.Is(err, unix.EOPNOTSUPP) {
 			return "", fmt.Errorf("WireGuard not supported by the Linux kernel (netlink: %w), make sure the WireGuard kernel module is loaded", err)
+		} else {
+			return "", err
 		}
-		return "", err
 	}
 	if err := linkSetUp(link); err != nil {
 		return "", err
