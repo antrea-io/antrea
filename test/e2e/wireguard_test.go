@@ -69,7 +69,7 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "differentnodes")
 	defer deletePods()
 	numPods := 2
-	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, true)
 
 	// Make sure that route to Pod on peer Node and route to peer gateway is targeting the WireGuard device.
 	srcPod, err := data.getAntreaPodOnNode(nodeName(0))
