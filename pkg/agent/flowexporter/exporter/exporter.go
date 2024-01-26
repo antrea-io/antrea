@@ -172,15 +172,16 @@ func NewFlowExporter(podStore podstore.Interface, proxier proxy.Proxier, k8sClie
 		return nil, err
 	}
 	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
-	var l7Listener *connections.L7Listener
-	if l7FlowExporterEnabled {
-		l7Listener = connections.NewL7Listener(podL7FlowExporterAttrGetter, podStore)
-	}
 
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
 	denyConnStore := connections.NewDenyConnectionStore(podStore, proxier, o)
-	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, l7Listener, o)
-
+	var l7Listener *connections.L7Listener
+	var eventMapGetter connections.L7EventMapGetter
+	if l7FlowExporterEnabled {
+		l7Listener = connections.NewL7Listener(podL7FlowExporterAttrGetter, podStore)
+		eventMapGetter = l7Listener
+	}
+	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, o)
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
