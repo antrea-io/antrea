@@ -45,9 +45,9 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --extra-helm-values-file      Optional extra helm values file to override the default config values
         --extra-helm-values           Optional extra helm values to override the default config values
 
-In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
+In 'release' mode, environment variables AGENT_IMG_NAME, CONTROLLER_IMG_NAME, and IMG_TAG must be set.
 
-In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
+In 'dev' mode, environment variables AGENT_IMG_NAME & CONTROLLER_IMG_NAME can be set to use a custom image.
 
 This tool uses Helm 3 (https://helm.sh/) to generate manifests for Antrea. You can set the HELM
 environment variable to the path of the helm binary you want us to use. Otherwise we will download
@@ -201,8 +201,8 @@ if [ "$TUN_TYPE" != "geneve" ] && [ "$TUN_TYPE" != "vxlan" ] && [ "$TUN_TYPE" !=
     exit 1
 fi
 
-if [ "$MODE" == "release" ] && [ -z "$IMG_NAME" ]; then
-    echoerr "In 'release' mode, environment variable IMG_NAME must be set"
+if ([ "$MODE" == "release" ] && ([ -z "$AGENT_IMG_NAME" ] || [ -z "$CONTROLLER_IMG_NAME" ])) then
+    echoerr "In 'release' mode, environment variables AGENT_IMG_NAME and CONTROLLER_IMG_NAME must be set"
     print_help
     exit 1
 fi
@@ -323,12 +323,23 @@ EOF
 fi
 
 if [ "$MODE" == "dev" ]; then
-    if [[ -z "$IMG_NAME" ]]; then
+    if [[ -z "$AGENT_IMG_NAME" ]]; then
         if $COVERAGE; then
-            HELM_VALUES+=("image.repository=antrea/antrea-ubuntu-coverage")
+            HELM_VALUES+=("agentImage.repository=antrea/antrea-agent-ubuntu-coverage")
+        else
+            HELM_VALUES+=("agentImage.repository=antrea/antrea-agent-ubuntu")
         fi
     else
-        HELM_VALUES+=("image.repository=$IMG_NAME")
+        HELM_VALUES+=("agentImage.repository=$AGENT_IMG_NAME")
+    fi
+    if [[ -z "$CONTROLLER_IMG_NAME" ]]; then
+        if $COVERAGE; then
+            HELM_VALUES+=("controllerImage.repository=antrea/antrea-controller-ubuntu-coverage")
+        else
+            HELM_VALUES+=("controllerImage.repository=antrea/antrea-controller-ubuntu")
+        fi
+    else
+        HELM_VALUES+=("controllerImage.repository=$CONTROLLER_IMG_NAME")
     fi
 
     if $VERBOSE_LOG; then
@@ -344,7 +355,7 @@ if [ "$MODE" == "dev" ]; then
 fi
 
 if [ "$MODE" == "release" ]; then
-    HELM_VALUES+=("image.repository=$IMG_NAME,image.tag=$IMG_TAG")
+    HELM_VALUES+=("agentImage.repository=$AGENT_IMG_NAME,agentImage.tag=$IMG_TAG,controllerImage.repository=$CONTROLLER_IMG_NAME,controllerImage.tag=$IMG_TAG")
 fi
 
 delim=""

@@ -41,7 +41,7 @@ jobs:
       run: |
         ./hack/build-antrea-linux-all.sh --pull --coverage
     - name: Save Antrea image to tarball
-      run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu-coverage:latest
+      run:  docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-controller-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs
       uses: actions/upload-artifact@v4
       with:
@@ -488,7 +488,8 @@ jobs:
     - name: Load Antrea image
       run: |
         docker load -i antrea-ubuntu.tar
-        docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+        docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+        docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
     - name: Install Kind
       run: |
         KIND_VERSION=$(head -n1 ./ci/kind/version)
@@ -533,7 +534,8 @@ jobs:
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
       - name: Install Kind
         run: |
           KIND_VERSION=$(head -n1 ./ci/kind/version)
@@ -578,7 +580,8 @@ jobs:
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
       - name: Install Kind
         run: |
           KIND_VERSION=$(head -n1 ./ci/kind/version)
@@ -623,7 +626,8 @@ jobs:
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
       - name: Install Kind
         run: |
           KIND_VERSION=$(head -n1 ./ci/kind/version)
@@ -668,7 +672,8 @@ jobs:
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
       - name: Install Kind
         run: |
           KIND_VERSION=$(head -n1 ./ci/kind/version)
@@ -710,7 +715,8 @@ jobs:
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
       - name: Install Kind
         run: |
           KIND_VERSION=$(head -n1 ./ci/kind/version)

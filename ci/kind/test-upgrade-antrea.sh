@@ -158,7 +158,8 @@ for img in "${DOCKER_IMAGES[@]}"; do
     done
 done
 
-DOCKER_IMAGES+=("antrea/antrea-ubuntu:latest")
+DOCKER_IMAGES+=("antrea/antrea-agent-ubuntu:latest" \
+                "antrea/antrea-controller-ubuntu:latest")
 
 echo "Creating Kind cluster"
 IMAGES="${DOCKER_IMAGES[@]}"

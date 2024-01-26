@@ -19,8 +19,8 @@
 # and docker bridge network connecting to worker Node.
 
 CLUSTER_NAME=""
-ANTREA_IMAGE="antrea/antrea-ubuntu:latest"
-IMAGES=$ANTREA_IMAGE
+ANTREA_IMAGES="antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest"
+IMAGES=$ANTREA_IMAGES
 ANTREA_CNI=false
 ACTION=""
 UNTIL_TIME_IN_MINS=""

@@ -71,8 +71,8 @@ spec:
       containers:
       {{- end }}
         - name: install-cni
-          image: {{ include "antreaImage" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "antreaAgentImage" . | quote }}
+          imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           resources: {{- .Values.agent.installCNI.resources | toYaml | nindent 12 }}
           {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
           command: ["install_cni_chaining"]
@@ -127,8 +127,8 @@ spec:
       containers:
       {{- end }}
         - name: antrea-agent
-          image: {{ include "antreaImage" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "antreaAgentImage" . | quote }}
+          imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           {{- if ((.Values.testing).coverage) }}
           command: ["/bin/sh"]
           args: ["-c", "sleep 2; antrea-agent-coverage -test.run=TestBincoverRunMain -test.coverprofile=antrea-agent.cov.out -args-file=/agent-arg-file; while true; do sleep 5 & wait $!; done"]
@@ -257,8 +257,8 @@ spec:
           {{- toYaml . | trim | nindent 10 }}
           {{- end }}
         - name: antrea-ovs
-          image: {{ include "antreaImage" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "antreaAgentImage" . | quote }}
+          imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           resources: {{- .Values.agent.antreaOVS.resources | toYaml | nindent 12 }}
           command: ["start_ovs"]
           args:
@@ -313,8 +313,8 @@ spec:
             subPath: openvswitch
         {{- if eq .Values.trafficEncryptionMode "ipsec" }}
         - name: antrea-ipsec
-          image: {{ include "antreaImage" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "antreaAgentImage" . | quote }}
+          imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           resources: {{- .Values.agent.antreaIPsec.resources | toYaml | nindent 12 }}
           command: ["start_ovs_ipsec"]
           livenessProbe:
