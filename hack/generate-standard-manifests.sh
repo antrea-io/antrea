@@ -26,9 +26,9 @@ Generate standard YAML manifests for Antrea using Helm and writes them to output
         --out <DIR>                   Output directory for generated manifests
         --help, -h                    Print this message and exit
 
-In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
+In 'release' mode, environment variables AGENT_IMG_NAME, CONTROLLER_IMG_NAME, and IMG_TAG must be set.
 
-In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
+In 'dev' mode, environment variables AGENT_IMG_NAME & CONTROLLER_IMG_NAME can be set to use a custom image.
 
 This tool uses Helm 3 (https://helm.sh/) to generate the \"standard\" manifests for Antrea. These
 are the manifests that are checked-in into the Antrea source tree, and that are uploaded as release
@@ -80,8 +80,8 @@ if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
     exit 1
 fi
 
-if [ "$MODE" == "release" ] && [ -z "$IMG_NAME" ]; then
-    echoerr "In 'release' mode, environment variable IMG_NAME must be set"
+if ([ "$MODE" == "release" ] && ([ -z "$AGENT_IMG_NAME" ] || [ -z "$CONTROLLER_IMG_NAME" ])); then
+    echoerr "In 'release' mode, environment variables AGENT_IMG_NAME and CONTROLLER_IMG_NAME must be set"
     print_help
     exit 1
 fi
@@ -112,7 +112,7 @@ fi
 
 EXTRA_VALUES=""
 if [ "$MODE" == "release" ]; then
-    EXTRA_VALUES="--set image.repository=$IMG_NAME,image.tag=$IMG_TAG"
+    EXTRA_VALUES="--set agentImage.repository=$AGENT_IMG_NAME,agentImage.tag=$IMG_TAG,controllerImage.repository=$CONTROLLER_IMG_NAME,controllerImage.tag=$IMG_TAG"
 fi
 
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"

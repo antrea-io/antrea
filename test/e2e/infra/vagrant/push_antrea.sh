@@ -62,7 +62,8 @@ esac
 done
 
 SAVED_ANTREA_IMG=/tmp/antrea-ubuntu.tar
-ANTREA_IMG_NAME=antrea/antrea-ubuntu:latest
+ANTREA_AGENT_IMG_NAME=antrea/antrea-agent-ubuntu:latest
+ANTREA_CONTROLLER_IMG_NAME=antrea/antrea-controller-ubuntu:latest
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -168,7 +169,8 @@ if [[ $FLOW_COLLECTOR != "" ]]; then
 fi
 
 # Push Antrea image and related manifest.
-pushImgToNodes "$ANTREA_IMG_NAME" "$SAVED_ANTREA_IMG"
+pushImgToNodes "$ANTREA_AGENT_IMG_NAME" "$SAVED_ANTREA_IMG"
+pushImgToNodes "$ANTREA_CONTROLLER_IMG_NAME" "$SAVED_ANTREA_IMG"
 copyManifestToNodes "$ANTREA_YML"
 copyManifestToNodes "$ANTREA_IPSEC_YML"
 

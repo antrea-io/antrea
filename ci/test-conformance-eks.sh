@@ -280,16 +280,17 @@ function deliver_antrea_to_eks() {
     fi
 
     echo "=== Loading the Antrea image to each Node ==="
-    antrea_image="antrea-ubuntu"
+    antrea_images_tar="antrea-ubuntu.tar"
     DOCKER_IMG_VERSION=${CLUSTER}
-    DOCKER_IMG_NAME="antrea/antrea-ubuntu"
-    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
+    DOCKER_AGENT_IMG_NAME="antrea/antrea-agent-ubuntu"
+    DOCKER_CONTROLLER_IMG_NAME="antrea/antrea-controller-ubuntu"
+    docker save -o ${antrea_images_tar} ${DOCKER_AGENT_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_CONTROLLER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $7}' | while read IP; do
-        scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar ec2-user@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_IMG_NAME}:latest --force"
+        scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_images_tar} ec2-user@${IP}:~
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_images_tar} ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_AGENT_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_AGENT_IMG_NAME}:latest --force ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_CONTROLLER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_CONTROLLER_IMG_NAME}:latest --force"
     done
-    rm ${antrea_image}.tar
+    rm ${antrea_images_tar}
 
     echo "=== Configuring Antrea for cluster ==="
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks-node-init.yml

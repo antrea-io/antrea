@@ -52,6 +52,7 @@ Kubernetes: `>= 1.16.0-0`
 | agent.priorityClassName | string | `"system-node-critical"` | Prority class to use for the antrea-agent Pods. |
 | agent.tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"}]` | Tolerations for the antrea-agent Pods. |
 | agent.updateStrategy | object | `{"type":"RollingUpdate"}` | Update strategy for the antrea-agent DaemonSet. |
+| agentImage | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/antrea-agent-ubuntu","tag":""}` | Container image to use for the antrea-agent component. |
 | antreaProxy.defaultLoadBalancerMode | string | `"nat"` | Determines how external traffic is processed when it's load balanced across Nodes by default. It must be one of "nat" or "dsr". |
 | antreaProxy.enable | bool | `true` | To disable AntreaProxy, set this to false. |
 | antreaProxy.nodePortAddresses | list | `[]` | String array of values which specifies the host IPv4/IPv6 addresses for NodePort. By default, all host addresses are used. |
@@ -82,6 +83,7 @@ Kubernetes: `>= 1.16.0-0`
 | controller.priorityClassName | string | `"system-cluster-critical"` | Prority class to use for the antrea-controller Pod. |
 | controller.selfSignedCert | bool | `true` | Indicates whether to use auto-generated self-signed TLS certificates. If false, a Secret named "antrea-controller-tls" must be provided with the following keys: ca.crt, tls.crt, tls.key. |
 | controller.tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/master"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/control-plane"},{"effect":"NoExecute","key":"node.kubernetes.io/unreachable","operator":"Exists","tolerationSeconds":0}]` | Tolerations for the antrea-controller Pod. |
+| controllerImage | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/antrea-controller-ubuntu","tag":""}` | Container image to use for the antrea-controller component. |
 | defaultMTU | int | `0` | Default MTU to use for the host gateway interface and the network interface of each Pod. By default, antrea-agent will discover the MTU of the Node's primary interface and adjust it to accommodate for tunnel encapsulation overhead if applicable. |
 | disableTXChecksumOffload | bool | `false` | Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum. It affects Pods running on Linux Nodes only. |
 | dnsServerOverride | string | `""` | Address of DNS server, to override the kube-dns Service. It's used to resolve hostnames in a FQDN policy. |
@@ -95,7 +97,7 @@ Kubernetes: `>= 1.16.0-0`
 | flowExporter.flowPollInterval | string | `"5s"` | Determines how often the flow exporter polls for new connections. |
 | flowExporter.idleFlowExportTimeout | string | `"15s"` | timeout after which a flow record is sent to the collector for idle flows. |
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |
-| image | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/antrea-ubuntu","tag":""}` | Container image to use for Antrea components. |
+| image | object | `{}` | Container image to use for Antrea components. DEPRECATED: use agentImage and controllerImage instead. |
 | ipsec.authenticationMode | string | `"psk"` | The authentication mode to use for IPsec. Must be one of "psk" or "cert". |
 | ipsec.csrSigner.autoApprove | bool | `true` | Enable auto approval of Antrea signer for IPsec certificates. |
 | ipsec.csrSigner.selfSignedCA | bool | `true` | Whether or not to use auto-generated self-signed CA. |

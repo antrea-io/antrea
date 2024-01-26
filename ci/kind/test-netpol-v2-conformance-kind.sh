@@ -106,7 +106,8 @@ if [ -n "$feature_gates" ]; then
 fi
 
 IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.43" \
-            "antrea/antrea-ubuntu:latest")
+            "antrea/antrea-agent-ubuntu:latest" \
+            "antrea/antrea-controller-ubuntu:latest")
 
 printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 

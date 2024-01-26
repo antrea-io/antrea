@@ -298,12 +298,13 @@ function deliver_antrea_multicluster {
 
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     echo "====== Delivering Antrea to all Nodes ======"
-    docker save -o ${WORKDIR}/antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o ${WORKDIR}/antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
 
 
     if [[ ${KIND} == "true" ]]; then
         for name in ${CLUSTER_NAMES[*]}; do
-            kind load docker-image antrea/antrea-ubuntu:latest --name ${name}
+            kind load docker-image antrea/antrea-agent-ubuntu:latest --name ${name}
+            kind load docker-image antrea/antrea-controller-ubuntu:latest --name ${name}
         done
     else
         for kubeconfig in "${multicluster_kubeconfigs[@]}"
