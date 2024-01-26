@@ -217,19 +217,44 @@
           #!/bin/bash
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          #  Delete all kind clusters created more than 135 mins ago. 135 minutes is the timeout 
+          KIND_TIMEOUT=135
+          FULL_CLUSTER_NAME='{kind_cluster_name}'-"${{BUILD_NUMBER}}"
+          #  Delete all Kind clusters created more than 135 mins ago. 135 minutes is the timeout 
           #  we have configured for running conformance and NetworkPolicy tests on Kind, 
           #  so clusters older than that can de deleted safely.
-          ./ci/kind/kind-setup.sh destroy --all --until 135
+          ./ci/kind/kind-setup.sh destroy --all --until ${{KIND_TIMEOUT}}
           ./ci/kind/kind-install.sh
-          ./ci/kind/kind-setup.sh --antrea-cni create "${{JOB_NAME}}-${{BUILD_NUMBER}}"
-          kind export kubeconfig -n "${{JOB_NAME}}-${{BUILD_NUMBER}}" --kubeconfig ${{PWD}}/.kube/config
-          set +ex
-          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+          ./ci/kind/kind-setup.sh --antrea-cni create "${{FULL_CLUSTER_NAME}}" --ip-family '{ip_version}'
+          kind export kubeconfig -n "${{FULL_CLUSTER_NAME}}" --kubeconfig ${{PWD}}/.kube/config
+          set +e
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}"
           return_code=$?
           set -ex
-          ./ci/kind/kind-setup.sh destroy "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+          ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"
           exit $return_code
+
+- builder:
+    name: builder-e2e-kind
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          KIND_TIMEOUT=135
+          FULL_CLUSTER_NAME='{kind_cluster_name}'-"${{BUILD_NUMBER}}"
+          #  Delete all Kind clusters created more than 135 mins ago. 135 minutes is the timeout 
+          #  we have configured for running conformance, NetworkPolicy and e2e tests on Kind, 
+          #  so clusters older than that can de deleted safely.
+          ./ci/kind/kind-setup.sh destroy --all --until ${{KIND_TIMEOUT}}
+          ./ci/kind/kind-install.sh 
+          ./ci/kind/kind-setup.sh --antrea-cni create "${{FULL_CLUSTER_NAME}}" --ip-family '{ip_version}'
+          kind export kubeconfig -n "${{FULL_CLUSTER_NAME}}" --kubeconfig ${{PWD}}/.kube/config
+          set +e
+          ./ci/jenkins/test.sh --testcase e2e --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}"
+          return_code=$?
+          set -ex
+          ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"
+          exit $return_code 
 
 - builder:
     name: builder-rancher-e2e
