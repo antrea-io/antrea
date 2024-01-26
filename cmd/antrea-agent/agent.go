@@ -140,6 +140,7 @@ func run(o *Options) error {
 	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
+	_, multiclusterEncryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.Multicluster.TrafficEncryptionMode)
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 	enableFLowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
 
@@ -199,7 +200,8 @@ func run(o *Options) error {
 		IPsecConfig: config.IPsecConfig{
 			AuthenticationMode: ipsecAuthenticationMode,
 		},
-		EnableMulticlusterGW: enableMulticlusterGW,
+		EnableMulticlusterGW:       enableMulticlusterGW,
+		MulticlusterEncryptionMode: multiclusterEncryptionMode,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{
