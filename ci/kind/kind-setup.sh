@@ -354,6 +354,9 @@ networking:
   serviceSubnet: $SERVICE_CIDR
   ipFamily: $IP_FAMILY
   kubeProxyMode: $KUBE_PROXY_MODE
+# it's to prevent inherit search domains from the host which slows down DNS resolution 
+# and cause problems to IPv6 only clusters running on IPv4 host.
+  dnsSearch: [] 
 nodes:
 - role: control-plane
 EOF
