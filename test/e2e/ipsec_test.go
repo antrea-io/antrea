@@ -137,7 +137,9 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, tag)
 	defer deletePods()
 	t.Logf("Executing ping tests across Nodes: '%s' <-> '%s'", podInfos[0].NodeName, podInfos[1].NodeName)
-	data.runPingMesh(t, podInfos[:2], agnhostContainerName)
+	// PMTU is wrong when using GRE+IPsec with some Linux kernel versions, do not set DF to work around.
+	// See https://github.com/antrea-io/antrea/issues/5922 for more details.
+	data.runPingMesh(t, podInfos[:2], toolboxContainerName, false)
 
 	// Check that there is at least one 'up' Security Association on the Node
 	nodeName := podInfos[0].NodeName
