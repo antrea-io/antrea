@@ -2399,6 +2399,11 @@ func (f *featureService) nodePortMarkFlows() []binding.Flow {
 		// This generates a flow for every NodePort IP. The flows are used to mark the first packet of NodePort connection
 		// from a local Pod.
 		for i := range nodePortAddresses {
+			// From the perspective of a local Pod, the traffic destined to loopback is not NodePort traffic, so we skip
+			// the loopback address.
+			if nodePortAddresses[i].IsLoopback() {
+				continue
+			}
 			flows = append(flows,
 				NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
 					Cookie(cookieID).
