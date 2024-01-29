@@ -211,10 +211,11 @@ function deliver_antrea_to_gke() {
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=2h" > /dev/null
     docker system df -v
+    check_and_cleanup_docker_build_cache
     set -e
 
     cd ${GIT_CHECKOUT_DIR}
-    VERSION="$CLUSTER" make -C ${GIT_CHECKOUT_DIR}
+    VERSION="$CLUSTER" ./hack/build-antrea-linux-all.sh --pull
     if [[ "$?" -ne "0" ]]; then
         echo "=== Antrea Image build failed ==="
         exit 1

@@ -165,6 +165,7 @@ cd build/images/base
 cd -
 
 export NO_PULL=1
+export DOCKER_BUILDKIT=1
 if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
         make build-controller-ubuntu-coverage
