@@ -183,11 +183,10 @@ func (pt *PortTable) syncRules() error {
 			protocols = append(protocols, protocol.Protocol)
 		}
 		nplPorts = append(nplPorts, rules.PodNodePort{
-			NodePort:  npData.NodePort,
-			PodPort:   npData.PodPort,
-			PodIP:     npData.PodIP,
-			Protocol:  protocols[0],
-			Protocols: protocols,
+			NodePort: npData.NodePort,
+			PodPort:  npData.PodPort,
+			PodIP:    npData.PodIP,
+			Protocol: protocols[0],
 		})
 	}
 	if err := pt.PodPortRules.AddAllRules(nplPorts); err != nil {

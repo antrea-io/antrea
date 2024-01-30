@@ -469,12 +469,7 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 
 	if o.config.NodePortLocal.Enable {
-		switch {
-		case o.config.NodePortLocal.PortRange != "":
-		case o.config.NPLPortRange != "":
-			klog.InfoS("The nplPortRange option is deprecated, please use nodePortLocal.portRange instead")
-			o.config.NodePortLocal.PortRange = o.config.NPLPortRange
-		default:
+		if o.config.NodePortLocal.PortRange == "" {
 			o.config.NodePortLocal.PortRange = defaultNPLPortRange
 		}
 	}

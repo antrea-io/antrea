@@ -114,6 +114,8 @@ func TestAddAndDeleteAllRules(t *testing.T) {
 				mockIPTables.AppendRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.OutputChain, []string{"-p", "all", "-m", "addrtype", "--dst-type", "LOCAL", "-j", NodePortLocalChain})
 				mockIPTables.Restore(`*nat
 :ANTREA-NODE-PORT-LOCAL - [0:0]
+-A ANTREA-NODE-PORT-LOCAL -p udp -m udp --dport 8227 -j DNAT --to-destination 10.10.10.11:7237
+-A ANTREA-NODE-PORT-LOCAL -p tcp -m tcp --dport 8247 -j DNAT --to-destination 10.11.10.12:7257
 COMMIT
 `, false, false)
 				// Set the expectation for ChainExists to return true
@@ -151,6 +153,9 @@ COMMIT
 				mockIPTables.AppendRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.OutputChain, []string{"-p", "all", "-m", "addrtype", "--dst-type", "LOCAL", "-j", NodePortLocalChain})
 				mockIPTables.Restore(`*nat
 :ANTREA-NODE-PORT-LOCAL - [0:0]
+-A ANTREA-NODE-PORT-LOCAL -p tcp -m tcp --dport 7 -j DNAT --to-destination 10.10.10.10:17
+-A ANTREA-NODE-PORT-LOCAL -p udp -m udp --dport 27 -j DNAT --to-destination 10.10.10.11:37
+-A ANTREA-NODE-PORT-LOCAL -p tcp -m tcp --dport 47 -j DNAT --to-destination 10.11.10.12:57
 COMMIT
 `, false, false)
 				// Set the expectation for ChainExists to return true
