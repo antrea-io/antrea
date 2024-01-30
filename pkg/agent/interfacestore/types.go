@@ -64,6 +64,8 @@ type ContainerInterfaceConfig struct {
 	ContainerID  string
 	PodName      string
 	PodNamespace string
+	// Interface name inside container.
+	IFDev string
 }
 
 type TunnelInterfaceConfig struct {
@@ -133,13 +135,15 @@ func NewContainerInterface(
 	containerID string,
 	podName string,
 	podNamespace string,
+	ifDev string,
 	mac net.HardwareAddr,
 	ips []net.IP,
 	vlanID uint16) *InterfaceConfig {
 	containerConfig := &ContainerInterfaceConfig{
 		ContainerID:  containerID,
 		PodName:      podName,
-		PodNamespace: podNamespace}
+		PodNamespace: podNamespace,
+		IFDev:        ifDev}
 	return &InterfaceConfig{
 		InterfaceName:            interfaceName,
 		Type:                     ContainerInterface,

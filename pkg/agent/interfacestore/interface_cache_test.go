@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -28,6 +29,7 @@ import (
 var (
 	podMAC, _     = net.ParseMAC("11:22:33:44:55:66")
 	podIP         = net.ParseIP("1.2.3.4")
+	podIPv6       = net.ParseIP("2001:db8::1")
 	gwIP          = net.ParseIP("1.2.3.1")
 	hostIP        = net.ParseIP("2.2.2.2")
 	ipsecTunnelIP = net.ParseIP("2.2.2.3")
@@ -37,6 +39,7 @@ var (
 
 func TestNewInterfaceStore(t *testing.T) {
 	t.Run("testContainerInterface", testContainerInterface)
+	t.Run("testSecondaryInterface", testSecondaryInterface)
 	t.Run("testGatewayInterface", testGatewayInterface)
 	t.Run("testTunnelInterface", testTunnelInterface)
 	t.Run("testUplinkInterface", testUplinkInterface)
@@ -45,17 +48,17 @@ func TestNewInterfaceStore(t *testing.T) {
 
 func testContainerInterface(t *testing.T) {
 	store := NewInterfaceStore()
-	containerInterface := NewContainerInterface("ns0p0c0", "c0", "p0", "ns0", podMAC, []net.IP{podIP}, 2)
+	containerInterface := NewContainerInterface("ns0p0c0", "c0", "p0", "ns0", "eth0", podMAC, []net.IP{podIP, podIPv6}, 2)
 	containerInterface.OVSPortConfig = &OVSPortConfig{
 		OFPort:   12,
 		PortUUID: "1234567890",
 	}
-	containerInterfaceKey := util.GenerateContainerInterfaceKey(containerInterface.ContainerID)
+	containerInterfaceKey := util.GenerateContainerInterfaceKey(containerInterface.ContainerID, containerInterface.IFDev)
 	store.Initialize([]*InterfaceConfig{containerInterface})
 	assert.Equal(t, 1, store.Len())
 	storedIface, exists := store.GetInterface(containerInterfaceKey)
 	assert.True(t, exists)
-	assert.True(t, reflect.DeepEqual(storedIface, containerInterface))
+	assert.Equal(t, containerInterface, storedIface)
 	// The name of Container InterfaceConfig is not the key in InterfaceStore
 	_, exists = store.GetInterface(containerInterface.InterfaceName)
 	assert.False(t, exists)
@@ -65,26 +68,73 @@ func testContainerInterface(t *testing.T) {
 	assert.True(t, exists)
 	_, exists = store.GetInterfaceByIP(podIP.String())
 	assert.True(t, exists)
+	_, exists = store.GetInterfaceByIP(podIPv6.String())
+	assert.True(t, exists)
 	_, exists = store.GetInterfaceByOFPort(uint32(containerInterface.OVSPortConfig.OFPort))
 	assert.True(t, exists)
 	ifaces := store.GetContainerInterfacesByPod(containerInterface.PodName, containerInterface.PodNamespace)
 	assert.Equal(t, 1, len(ifaces))
-	assert.True(t, reflect.DeepEqual(ifaces[0], containerInterface))
+	assert.Equal(t, containerInterface, ifaces[0])
 	ifaceNames := store.GetInterfaceKeysByType(ContainerInterface)
 	assert.Equal(t, 1, len(ifaceNames))
 	assert.Equal(t, containerInterfaceKey, ifaceNames[0])
 	assert.Equal(t, 1, store.GetContainerInterfaceNum())
+
 	store.DeleteInterface(containerInterface)
 	assert.Equal(t, 0, store.GetContainerInterfaceNum())
 	_, exists = store.GetContainerInterface(containerInterface.ContainerID)
 	assert.False(t, exists)
 	_, exists = store.GetInterfaceByIP(containerInterface.IPs[0].String())
 	assert.False(t, exists)
+	_, exists = store.GetInterfaceByIP(containerInterface.IPs[1].String())
+	assert.False(t, exists)
+
 	containerInterface.IPs = nil
 	store.AddInterface(containerInterface)
 	assert.Equal(t, 1, store.GetContainerInterfaceNum())
 	_, exists = store.GetInterfaceByIP(podIP.String())
 	assert.False(t, exists)
+}
+
+func testSecondaryInterface(t *testing.T) {
+	store := NewInterfaceStore()
+	// Seondary interface without an IP.
+	containerInterface1 := NewContainerInterface("c0-eth1", "c0", "p0", "ns0", "eth1", podMAC, nil, 2)
+	containerInterface2 := NewContainerInterface("c0-eth2", "c0", "p0", "ns0", "eth2", podMAC, []net.IP{podIP}, 0)
+	store.Initialize([]*InterfaceConfig{containerInterface1, containerInterface2})
+	assert.Equal(t, 2, store.Len())
+
+	for _, containerInterface := range []*InterfaceConfig{containerInterface1, containerInterface2} {
+		interfaceKey := util.GenerateContainerInterfaceKey(containerInterface.ContainerID, containerInterface.IFDev)
+		storedIface, exists := store.GetInterface(interfaceKey)
+		assert.True(t, exists)
+		assert.Equal(t, containerInterface, storedIface)
+		_, exists = store.GetInterface(containerInterface.InterfaceName)
+		assert.False(t, exists)
+		_, exists = store.GetInterfaceByName(containerInterface.InterfaceName)
+		assert.True(t, exists)
+		_, exists = store.GetContainerInterface(containerInterface.ContainerID)
+		assert.True(t, exists)
+		if containerInterface.IPs != nil {
+			storedIface, exists = store.GetInterfaceByIP(podIP.String())
+			require.True(t, exists)
+			assert.Equal(t, containerInterface, storedIface)
+		}
+		ifaces := store.GetContainerInterfacesByPod(containerInterface.PodName, containerInterface.PodNamespace)
+		assert.Equal(t, 2, len(ifaces))
+		ifaceNames := store.GetInterfaceKeysByType(ContainerInterface)
+		assert.Equal(t, 2, len(ifaceNames))
+		assert.Equal(t, 2, store.GetContainerInterfaceNum())
+
+		store.DeleteInterface(containerInterface)
+		assert.Equal(t, 1, store.GetContainerInterfaceNum())
+		if containerInterface.IPs != nil {
+			_, exists = store.GetInterfaceByIP(containerInterface.IPs[0].String())
+			assert.False(t, exists)
+		}
+		store.AddInterface(containerInterface)
+		assert.Equal(t, 2, store.GetContainerInterfaceNum())
+	}
 }
 
 func testGatewayInterface(t *testing.T) {

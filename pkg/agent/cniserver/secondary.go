@@ -20,11 +20,17 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
-func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient) (*podConfigurator, error) {
-	return newPodConfigurator(ovsBridgeClient, nil, nil, nil, nil, ovsconfig.OVSDatapathSystem, false, false, nil)
+func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient, interfaceStore interfacestore.InterfaceStore) (*podConfigurator, error) {
+	pc, err := newPodConfigurator(ovsBridgeClient, nil, nil, interfaceStore, nil, ovsconfig.OVSDatapathSystem, false, false, nil)
+	if err == nil {
+		pc.isSecondaryNetwork = true
+	}
+	return pc, err
 }
 
 // ConfigureSriovSecondaryInterface configures a SR-IOV secondary interface for a Pod.
@@ -42,9 +48,13 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	if err != nil {
 		return err
 	}
-	hostIface := result.Interfaces[0]
 	containerIface := result.Interfaces[1]
-	klog.InfoS("Configured SR-IOV interface", "Pod", klog.KRef(podNamespace, podName), "interface", containerInterfaceName, "hostInterface", hostIface)
+	klog.InfoS("Configured SR-IOV interface", "Pod", klog.KRef(podNamespace, podName), "interface", containerInterfaceName)
+
+	// Use podSriovVFDeviceID as the interface name in the interface store.
+	hostInterfaceName := podSriovVFDeviceID
+	containerConfig := buildContainerConfig(hostInterfaceName, containerID, podName, podNamespace, containerIface, result.IPs, 0)
+	pc.ifaceStore.AddInterface(containerConfig)
 
 	if result.IPs != nil {
 		if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
@@ -55,55 +65,35 @@ func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	return nil
 }
 
+// DeleteSriovSecondaryInterface deletes a SRIOV secondary interface.
+func (pc *podConfigurator) DeleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	pc.ifaceStore.DeleteInterface(interfaceConfig)
+	klog.InfoS("Deleted SR-IOV interface", "Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+		"interface", interfaceConfig.IFDev)
+	return nil
+
+}
+
 // ConfigureVLANSecondaryInterface configures a VLAN secondary interface on the secondary network
 // OVS bridge, and returns the OVS port UUID.
 func (pc *podConfigurator) ConfigureVLANSecondaryInterface(
 	podName, podNamespace string,
 	containerID, containerNetNS, containerInterfaceName string,
-	mtu int, vlanID uint16,
-	result *current.Result) (string, error) {
-	// TODO: revisit the possibility of reusing configureInterfaces(), connectInterfaceToOVS()
-	// removeInterfaces() code, and using InterfaceStore to store secondary interface info.
-	if err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerInterfaceName, mtu, "", "", result, nil); err != nil {
-		return "", err
-	}
-	hostIface := result.Interfaces[0]
-	containerIface := result.Interfaces[1]
-
-	success := false
-	defer func() {
-		if !success {
-			if err := pc.ifConfigurator.removeContainerLink(containerID, hostIface.Name); err != nil {
-				klog.ErrorS(err, "failed to roll back veth creation", "container", containerID, "interface", containerInterfaceName)
-			}
-		}
-	}()
-
-	// Use the outer veth interface name as the OVS port name.
-	ovsPortName := hostIface.Name
-	ovsPortUUID, err := pc.createOVSPort(ovsPortName, nil, vlanID)
-	if err != nil {
-		return "", fmt.Errorf("failed to add OVS port for container %s: %v", containerID, err)
-	}
-	klog.InfoS("Configured VLAN interface", "Pod", klog.KRef(podNamespace, podName), "interface", containerInterfaceName, "hostInterface", hostIface)
-
-	if result.IPs != nil {
-		if err := pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
-			klog.ErrorS(err, "Failed to advertise IP address for VLAN interface",
-				"container", containerID, "interface", containerInterfaceName)
-		}
-	}
-	success = true
-	return ovsPortUUID, nil
+	mtu int, ipamResult *ipam.IPAMResult) error {
+	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
+		containerInterfaceName, mtu, "", ipamResult, nil)
 }
 
 // DeleteVLANSecondaryInterface deletes a VLAN secondary interface.
-func (pc *podConfigurator) DeleteVLANSecondaryInterface(containerID, hostInterfaceName, ovsPortUUID string) error {
-	if err := pc.ovsBridgeClient.DeletePort(ovsPortUUID); err != nil {
-		return fmt.Errorf("failed to delete OVS port for container %s: %v", containerID, err)
-	}
-	if err := pc.ifConfigurator.removeContainerLink(containerID, hostInterfaceName); err != nil {
+func (pc *podConfigurator) DeleteVLANSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	if err := pc.disconnectInterfaceFromOVS(interfaceConfig); err != nil {
 		return err
+	}
+	if err := pc.ifConfigurator.removeContainerLink(interfaceConfig.ContainerID, interfaceConfig.InterfaceName); err != nil {
+		klog.ErrorS(err, "Failed to delete container interface link",
+			"Pod", klog.KRef(interfaceConfig.PodNamespace, interfaceConfig.PodName),
+			"interface", interfaceConfig.IFDev)
+		// No retry for interface deletion.
 	}
 	return nil
 }
