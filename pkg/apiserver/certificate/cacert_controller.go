@@ -129,7 +129,6 @@ func (c *CACertController) syncCACert() error {
 
 // syncMutatingWebhooks updates the CABundle of the MutatingWebhookConfiguration backed by antrea-controller.
 func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
-	klog.Info("Syncing CA certificate with MutatingWebhookConfigurations")
 	if c.caConfig.MutationWebhookSelector == nil {
 		return nil
 	}
@@ -150,7 +149,6 @@ func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 }
 
 func (c *CACertController) syncConversionWebhooks(caCert []byte) error {
-	klog.Info("Syncing CA certificate with CRDs that have conversion webhooks")
 	if c.caConfig.CRDConversionWebhookSelector == nil {
 		return nil
 	}
@@ -171,6 +169,7 @@ func (c *CACertController) syncConversionWebhooks(caCert []byte) error {
 			crdDef.Spec.Conversion.Webhook.ClientConfig.CABundle = caCert
 		}
 		if updated {
+			klog.InfoS("Syncing CA certificate with CRD that have conversion webhooks", "name", crdDef.Name)
 			if _, err := c.apiExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Update(context.TODO(), &crdDef, metav1.UpdateOptions{}); err != nil {
 				return fmt.Errorf("error updating Antrea CA cert of CustomResourceDefinition %s: %v", name, err)
 			}
@@ -190,6 +189,7 @@ func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhook
 		webhookCfg.Webhooks[idx] = webhook
 	}
 	if updated {
+		klog.InfoS("Syncing CA certificate with MutatingWebhookConfiguration", "name", webhookCfg.Name)
 		if _, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(context.TODO(), webhookCfg, metav1.UpdateOptions{}); err != nil {
 			return err
 		}
@@ -199,7 +199,6 @@ func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhook
 
 // syncValidatingWebhooks updates the CABundle of the ValidatingWebhookConfiguration backed by antrea-controller.
 func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
-	klog.Info("Syncing CA certificate with ValidatingWebhookConfigurations")
 	if c.caConfig.ValidatingWebhookSelector == nil {
 		return nil
 	}
@@ -223,6 +222,7 @@ func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
 			vWebhook.Webhooks[idx] = webhook
 		}
 		if updated {
+			klog.InfoS("Syncing CA certificate with ValidatingWebhookConfiguration", "name", vWebhook.Name)
 			if _, err := c.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(context.TODO(), &vWebhook, metav1.UpdateOptions{}); err != nil {
 				return fmt.Errorf("error updating Antrea CA cert of ValidatingWebhookConfiguration %s: %v", name, err)
 			}
@@ -233,7 +233,6 @@ func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
 
 // syncAPIServices updates the CABundle of the APIServices backed by antrea-controller.
 func (c *CACertController) syncAPIServices(caCert []byte) error {
-	klog.Info("Syncing CA certificate with APIServices")
 	if c.caConfig.APIServiceSelector == nil {
 		return nil
 	}
@@ -250,6 +249,7 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 		if bytes.Equal(apiService.Spec.CABundle, caCert) {
 			continue
 		}
+		klog.InfoS("Syncing CA certificate with APIService", "name", apiService.Name)
 		apiService.Spec.CABundle = caCert
 		if _, err := c.aggregatorClient.ApiregistrationV1().APIServices().Update(context.TODO(), &apiService, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("error updating Antrea CA cert of APIService %s: %v", name, err)
@@ -260,7 +260,6 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 
 // syncConfigMap updates the ConfigMap that holds the CA bundle, which will be read by API clients, e.g. antrea-agent.
 func (c *CACertController) syncConfigMap(caCert []byte) error {
-	klog.Info("Syncing CA certificate with ConfigMap")
 	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
 	caConfigMapNamespace := GetCAConfigMapNamespace()
 	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), c.caConfig.CAConfigMapName, metav1.GetOptions{})
@@ -283,6 +282,7 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	if caConfigMap.Data != nil && caConfigMap.Data[CAConfigMapKey] == string(caCert) {
 		return nil
 	}
+	klog.InfoS("Syncing CA certificate with ConfigMap", "name", klog.KObj(caConfigMap))
 	caConfigMap.Data = map[string]string{
 		CAConfigMapKey: string(caCert),
 	}
@@ -329,6 +329,9 @@ func (c *CACertController) Run(ctx context.Context, workers int) {
 
 	// doesn't matter what workers say, only start one.
 	go wait.Until(c.runWorker, time.Second, ctx.Done())
+	// Periodically sync the CA cert to improve the robustness.
+	// In some cases the CA cert may be overridden by a stale instance or other deployment tools.
+	go wait.Until(c.Enqueue, 2*time.Minute, ctx.Done())
 
 	<-ctx.Done()
 }
