@@ -194,29 +194,19 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 	return interfaceConfig
 }
 
-func (pc *podConfigurator) configureInterfaces(
-	podName string,
-	podNamespace string,
-	containerID string,
-	containerNetNS string,
-	containerIFDev string,
-	mtu int,
-	sriovVFDeviceID string,
-	result *ipam.IPAMResult,
-	createOVSPort bool,
-	containerAccess *containerAccessArbitrator,
-) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNamespace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess)
+func (pc *podConfigurator) configureInterfacesCommon(
+	podName, podNamespace, containerID, containerNetNS string,
+	containerIFDev string, mtu int, sriovVFDeviceID string,
+	result *ipam.IPAMResult, containerAccess *containerAccessArbitrator) error {
+	err := pc.ifConfigurator.configureContainerLink(
+		podName, podNamespace, containerID, containerNetNS,
+		containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess)
 	if err != nil {
 		return err
 	}
+
 	hostIface := result.Interfaces[0]
 	containerIface := result.Interfaces[1]
-
-	if !createOVSPort {
-		return nil
-	}
-
 	// Delete veth pair if any failure occurs in later manipulation.
 	success := false
 	defer func() {
@@ -224,19 +214,6 @@ func (pc *podConfigurator) configureInterfaces(
 			_ = pc.ifConfigurator.removeContainerLink(containerID, hostIface.Name)
 		}
 	}()
-
-	// Check if the OVS configurations for the container exists or not. If yes, return immediately. This check is
-	// used on Windows, as kubelet on Windows will call CNI Add for infrastructure container for multiple times
-	// to query IP of Pod. But there should be only one OVS port created for the same Pod (identified by its sandbox
-	// container ID). And if the OVS port is added more than once, OVS will return an error.
-	// See https://github.com/kubernetes/kubernetes/issues/57253#issuecomment-358897721.
-	_, found := pc.ifaceStore.GetContainerInterface(containerID)
-	if found {
-		klog.V(2).Infof("Found an existing OVS port for container %s, returning", containerID)
-		// Mark the operation as successful, otherwise the container link might be removed by mistake.
-		success = true
-		return nil
-	}
 
 	var containerConfig *interfacestore.InterfaceConfig
 	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNamespace, containerID, containerNetNS,
@@ -255,7 +232,7 @@ func (pc *podConfigurator) configureInterfaces(
 
 	// Note that the IP address should be advertised after Pod OpenFlow entries are installed, otherwise the packet might
 	// be dropped by OVS.
-	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, &result.Result); err != nil {
+	if err := pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, &result.Result); err != nil {
 		// Do not return an error and fail the interface creation.
 		klog.ErrorS(err, "Failed to advertise IP address for container", "container", containerID)
 	}
