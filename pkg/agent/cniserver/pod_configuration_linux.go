@@ -21,6 +21,7 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 )
 
@@ -40,6 +41,14 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNamespace, containerIface, ips, vlanID)
 	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, netNS, containerConfig)
+}
+
+func (pc *podConfigurator) configureInterfaces(
+	podName, podNamespace, containerID, containerNetNS string,
+	containerIFDev string, mtu int, sriovVFDeviceID string,
+	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator) error {
+	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
+		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
 }
 
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
