@@ -23,6 +23,7 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
@@ -100,6 +101,44 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// Add containerConfig into local cache
 	pc.ifaceStore.AddInterface(containerConfig)
 	return containerConfig, pc.connectInterfaceToOVSAsync(containerConfig, containerAccess)
+}
+
+func (pc *podConfigurator) configureInterfaces(
+	podName, podNamespace, containerID, containerNetNS string,
+	containerIFDev string, mtu int, sriovVFDeviceID string,
+	result *ipam.IPAMResult, createOVSPort bool, containerAccess *containerAccessArbitrator) error {
+	if !createOVSPort {
+		return pc.ifConfigurator.configureContainerLink(
+			podName, podNamespace, containerID, containerNetNS,
+			containerIFDev, mtu, sriovVFDeviceID, "",
+			&result.Result, containerAccess)
+	}
+	// Check if the OVS configurations for the container exists or not. If yes, return
+	// immediately. This check is used on Windows, as kubelet on Windows will call CNI ADD
+	// multiple times for the infrastructure container to query IP of the Pod. But there should
+	// be only one OVS port created for the same Pod (identified by its sandbox container ID),
+	// and if the OVS port is added more than once, OVS will return an error.
+	// See: https://github.com/kubernetes/kubernetes/issues/57253#issuecomment-358897721.
+	interfaceConfig, found := pc.ifaceStore.GetContainerInterface(containerID)
+	if found {
+		klog.V(2).Infof("Found an existing OVS port for container %s, returning", containerID)
+		mac := interfaceConfig.MAC.String()
+		hostIface := &current.Interface{
+			Name:    interfaceConfig.InterfaceName,
+			Mac:     mac,
+			Sandbox: "",
+		}
+		containerIface := &current.Interface{
+			Name:    containerIFDev,
+			Mac:     mac,
+			Sandbox: containerNetNS,
+		}
+		result.Interfaces = []*current.Interface{hostIface, containerIface}
+		return nil
+	}
+
+	return pc.configureInterfacesCommon(podName, podNamespace, containerID, containerNetNS,
+		containerIFDev, mtu, sriovVFDeviceID, result, containerAccess)
 }
 
 func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
