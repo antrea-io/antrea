@@ -62,7 +62,7 @@ type ControllerNetworkPolicyInfoQuerier interface {
 
 type EgressQuerier interface {
 	GetEgressIPByMark(mark uint32) (string, error)
-	GetEgress(podNamespace, podName string) (string, string, error)
+	GetEgress(podNamespace, podName string) (string, string, string, error)
 }
 
 // GetSelfPod gets current pod.

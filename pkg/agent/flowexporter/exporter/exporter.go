@@ -641,7 +641,7 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 }
 
 func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
-	egressName, egressIP, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
+	egressName, egressIP, _, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
 	if err != nil {
 		// Egress is not enabled or no Egress is applied to this Pod
 		return

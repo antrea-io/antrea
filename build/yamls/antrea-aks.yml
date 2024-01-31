@@ -5110,6 +5110,8 @@ spec:
                               type: string
                             egress:
                               type: string
+                            egressNode:
+                              type: string
                 capturedPacket:
                   properties:
                     srcIP:
