@@ -88,9 +88,9 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
   on your infrastructure and use case.
 * **Comprehensive policy model**: Antrea provides a comprehensive network policy
   model, which builds upon Kubernetes Network Policies with new features such as
-  policy tiering, rule priorities and cluster-level policies. Refer to the
-  [Antrea Network Policy documentation](docs/antrea-network-policy.md) for a
-  full list of features.
+  policy tiering, rule priorities, cluster-level policies, and Node policies.
+  Refer to the [Antrea Network Policy documentation](docs/antrea-network-policy.md)
+  for a full list of features.
 * **Windows Node support**: Thanks to the portability of Open vSwitch, Antrea
   can use the same data plane implementation on both Linux and Windows
   Kubernetes Nodes.
