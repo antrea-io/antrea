@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"sort"
 
 	utilnet "k8s.io/utils/net"
@@ -276,4 +277,29 @@ func AppendPortIfMissing(addr, port string) string {
 	}
 
 	return net.JoinHostPort(addr, port)
+}
+
+// GetStartAndEndOfPrefix retrieves the start and end addresses of a netip.Prefix.
+// For example:  10.10.40.0/24 -> 10.10.40.0, 10.10.40.255
+func GetStartAndEndOfPrefix(prefix netip.Prefix) (netip.Addr, netip.Addr) {
+	var start, end netip.Addr
+	var mask net.IPMask
+
+	if prefix.Addr().Is4() {
+		mask = net.CIDRMask(prefix.Bits(), 32)
+	} else {
+		mask = net.CIDRMask(prefix.Bits(), 128)
+	}
+
+	// use gateway address, of canonical form of prefix, as start address.
+	start = prefix.Masked().Addr()
+
+	// calculate the end address by performing bitwise OR with the complement of the mask.
+	slice := start.AsSlice()
+	for i := 0; i < len(slice); i++ {
+		slice[i] |= ^mask[i]
+	}
+
+	end, _ = netip.AddrFromSlice(slice)
+	return start, end
 }

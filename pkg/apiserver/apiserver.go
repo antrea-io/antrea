@@ -161,6 +161,7 @@ func NewConfig(
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController,
 	egressController *egress.EgressController,
+	externalIPPoolController *externalippool.ExternalIPPoolController,
 	bundleCollectionController *controllerbundlecollection.Controller,
 	traceflowController *traceflow.Controller) *Config {
 	return &Config{
@@ -181,6 +182,7 @@ func NewConfig(
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
 			egressController:              egressController,
+			externalIPPoolController:      externalIPPoolController,
 			bundleCollectionController:    bundleCollectionController,
 			traceflowController:           traceflowController,
 		},
