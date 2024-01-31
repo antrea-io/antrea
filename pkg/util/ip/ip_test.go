@@ -16,6 +16,7 @@ package ip
 
 import (
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -326,6 +327,88 @@ func TestIPNetContains(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, IPNetContains(tt.ipNet1, tt.ipNet2))
+		})
+	}
+}
+
+func TestGetStartAndEndOfPrefix(t *testing.T) {
+	testCases := []struct {
+		prefix string
+		start  string
+		end    string
+	}{
+		{
+			prefix: "10.20.30.0/26",
+			start:  "10.20.30.0",
+			end:    "10.20.30.63",
+		},
+		{
+			prefix: "10.10.40.0/24",
+			start:  "10.10.40.0",
+			end:    "10.10.40.255",
+		},
+		{
+			prefix: "10.20.30.0/20",
+			start:  "10.20.16.0",
+			end:    "10.20.31.255",
+		},
+		{
+			prefix: "10.30.20.0/16",
+			start:  "10.30.0.0",
+			end:    "10.30.255.255",
+		},
+		{
+			prefix: "10.10.10.10/12",
+			start:  "10.0.0.0",
+			end:    "10.15.255.255",
+		},
+		{
+			prefix: "10.10.10.10/6",
+			start:  "8.0.0.0",
+			end:    "11.255.255.255",
+		},
+		{
+			prefix: "2001:0db8::/42",
+			start:  "2001:db8::",
+			end:    "2001:db8:3f:ffff:ffff:ffff:ffff:ffff",
+		},
+		{
+			prefix: "2001:4860:4860::8888/56",
+			start:  "2001:4860:4860::",
+			end:    "2001:4860:4860:ff:ffff:ffff:ffff:ffff",
+		},
+		{
+			prefix: "2001:0db8::/64",
+			start:  "2001:db8::",
+			end:    "2001:db8::ffff:ffff:ffff:ffff",
+		},
+		{
+			prefix: "2001:0db8::/84",
+			start:  "2001:db8::",
+			end:    "2001:db8::fff:ffff:ffff",
+		},
+		{
+			prefix: "fd00:10:96::/100",
+			start:  "fd00:10:96::",
+			end:    "fd00:10:96::fff:ffff",
+		},
+		{
+			prefix: "fd00:10:96::/112",
+			start:  "fd00:10:96::",
+			end:    "fd00:10:96::ffff",
+		},
+		{
+			prefix: "2001:4860:4860::8888/124",
+			start:  "2001:4860:4860::8880",
+			end:    "2001:4860:4860::888f",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.prefix, func(t *testing.T) {
+			start, end := GetStartAndEndOfPrefix(netip.MustParsePrefix(tc.prefix))
+			assert.Equal(t, 0, netip.MustParseAddr(tc.start).Compare(start))
+			assert.Equal(t, 0, netip.MustParseAddr(tc.end).Compare(end))
 		})
 	}
 }
