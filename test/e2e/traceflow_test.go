@@ -2513,7 +2513,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 
 	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
 	if err != nil {
-		t.Fatalf("Error: Get Traceflow failed: %v", err)
+		t.Fatalf("Error: Get Traceflow %s failed: %v", tc.tf.Name, err)
 	}
 	if tc.expectedPhase == v1beta1.Failed {
 		isReasonMatch := false
