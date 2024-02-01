@@ -26,17 +26,17 @@ jobs:
       with:
         show-progress: false
 
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
         config-file: ./.github/codeql-config.yml
-
-    - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
 
     - name: "Build Application"
       run: |
@@ -68,16 +68,16 @@ jobs:
       with:
         show-progress: false
 
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
         languages: ${{ matrix.language }}
         config-file: ./.github/codeql-config.yml
-
-    - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
 
     - name: Build Antrea windows binaries
       run: make windows-bin
