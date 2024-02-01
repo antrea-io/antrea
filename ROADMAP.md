@@ -17,12 +17,6 @@ Antrea [version 2](https://github.com/antrea-io/antrea/issues/4832) is coming in
 legacy APIs, dropping support for old K8s versions (< 1.19) to improve support
 for newer ones, and more! This is a big milestone for the project, stay tuned!
 
-### K8s Node security
-
-So far Antrea has focused on K8s Pod networking and security, but we would like
-to extend Antrea-native NetworkPolicies to cover protection of K8s Nodes
-too. There is ongoing work for this, so expect this feature very soon!
-
 ### Quality of life improvements for installation and upgrade
 
 We have a few things planned to improve basic usability:
@@ -37,9 +31,9 @@ We have a few things planned to improve basic usability:
 
 ### Core networking features
 
-We are currently working on supporting VLAN tagging for Egress traffic. In the
-long term, we plan to add BGP support to the Antrea Agent, as it is a much
-requested feature.
+We are working on adding BGP support to the Antrea Agent, as it has been a much
+requested feature. Take a look at [#5948](https://github.com/antrea-io/antrea/issues/5948)
+if this is something you are interested in.
 
 ### Windows support improvements
 
