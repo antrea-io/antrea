@@ -138,6 +138,7 @@ function deliver_antrea {
     git show --numstat
     make clean
     ${CLEAN_STALE_IMAGES}
+    check_and_upgrade_golang
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull

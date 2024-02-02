@@ -14,6 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+function check_and_cleanup_docker_build_cache() {
+    free_space=$(df -h -B 1G / | awk 'NR==2 {print $4}')
+    free_space_threshold=40
+    if [[ $free_space -lt $free_space_threshold ]]; then
+        # If cleaning up unused dangling images doesn't free up sufficient disk space,
+        # we will have to reduce the builder cache to 10GB to release enough disk space.
+        docker builder prune -af --keep-storage=10gb > /dev/null
+        free_space=$(df -h -B 1G / | awk 'NR==2 {print $4}')
+        if [[ $free_space -lt $free_space_threshold ]]; then
+            # If the first round cleanup doesn't free up sufficient disk space,
+            # we will have to clean up all builder cache to release enough disk space.
+            docker builder prune -af > /dev/null
+        fi
+    fi
+    docker system df -v
+}
+
 function check_and_upgrade_golang() {
     if [ -z "${GOLANG_RELEASE_DIR}" ]; then
         GOLANG_RELEASE_DIR="/var/lib/jenkins/golang-releases"
