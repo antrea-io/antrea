@@ -137,6 +137,7 @@ function clean_images() {
     docker images | grep -E 'mc-controller|antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     # Clean up dangling images generated in previous builds.
     docker image prune -f --filter "until=24h" || true > /dev/null
+    check_and_cleanup_docker_build_cache
 }
 
 function cleanup_multicluster_ns {
