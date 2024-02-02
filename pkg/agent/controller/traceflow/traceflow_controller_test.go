@@ -670,7 +670,8 @@ func TestSyncTraceflow(t *testing.T) {
 	tcs := []struct {
 		name          string
 		tf            *crdv1beta1.Traceflow
-		tfState       *traceflowState
+		existingState *traceflowState
+		newState      *traceflowState
 		expectedCalls func(mockOFClient *openflowtest.MockClient)
 	}{
 		{
@@ -692,9 +693,81 @@ func TestSyncTraceflow(t *testing.T) {
 					DataplaneTag: 1,
 				},
 			},
-			tfState: &traceflowState{
+			existingState: &traceflowState{
 				name: "tf1",
+				uid:  "uid1",
 				tag:  1,
+			},
+			newState: &traceflowState{
+				name: "tf1",
+				uid:  "uid1",
+				tag:  1,
+			},
+		},
+		{
+			name: "traceflow in running phase with empty state",
+			tf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1beta1.Destination{
+						Namespace: pod2.Namespace,
+						Pod:       pod2.Name,
+					},
+				},
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			newState: &traceflowState{
+				name:     "tf1",
+				uid:      "uid1",
+				tag:      1,
+				isSender: true,
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, uint32(1), uint16(20))
+				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), gomock.Any(), ofPortPod1, int32(-1))
+			},
+		},
+		{
+			name: "traceflow in running phase with conflict state",
+			tf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1beta1.Destination{
+						Namespace: pod2.Namespace,
+						Pod:       pod2.Name,
+					},
+				},
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			existingState: &traceflowState{
+				name: "tf1",
+				uid:  "uid2",
+				tag:  1,
+			},
+			newState: &traceflowState{
+				name:     "tf1",
+				uid:      "uid1",
+				tag:      1,
+				isSender: true,
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient) {
+				mockOFClient.EXPECT().UninstallTraceflowFlows(uint8(1))
+				mockOFClient.EXPECT().InstallTraceflowFlows(uint8(1), false, false, false, nil, uint32(1), uint16(20))
+				mockOFClient.EXPECT().SendTraceflowPacket(uint8(1), gomock.Any(), ofPortPod1, int32(-1))
 			},
 		},
 		{
@@ -716,7 +789,7 @@ func TestSyncTraceflow(t *testing.T) {
 					DataplaneTag: 1,
 				},
 			},
-			tfState: &traceflowState{
+			existingState: &traceflowState{
 				name: "tf1",
 				tag:  1,
 			},
@@ -734,13 +807,17 @@ func TestSyncTraceflow(t *testing.T) {
 			tfc.crdInformerFactory.Start(stopCh)
 			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 
-			tfc.runningTraceflows[tt.tf.Status.DataplaneTag] = tt.tfState
+			if tt.existingState != nil {
+				tfc.runningTraceflows[tt.tf.Status.DataplaneTag] = tt.existingState
+			}
+
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(tfc.mockOFClient)
 			}
 
 			err := tfc.syncTraceflow(tt.tf.Name)
 			require.NoError(t, err)
+			assert.Equal(t, tt.newState, tfc.runningTraceflows[tt.tf.Status.DataplaneTag])
 		})
 	}
 }
