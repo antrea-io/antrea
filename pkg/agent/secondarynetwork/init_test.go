@@ -82,6 +82,8 @@ func TestCreateOVSBridge(t *testing.T) {
 				m.EXPECT().Create().Return(nil)
 				m.EXPECT().GetOFPort("eth1", false).Return(int32(0), ovsconfig.InvalidArgumentsError("port not found"))
 				m.EXPECT().CreateUplinkPort("eth1", int32(0), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth2", false).Return(int32(1), ovsconfig.InvalidArgumentsError("port not found"))
+				m.EXPECT().CreateUplinkPort("eth2", int32(1), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
 			},
 		},
 		{

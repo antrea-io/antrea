@@ -319,8 +319,8 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			name:               "two interfaces",
 			featureGateValue:   true,
 			ovsBridges:         []string{"br1"},
-			physicalInterfaces: []string{"eth1", "eth2"},
-			expectedErr:        "at most one physical interface can be specified for the secondary network OVS bridge",
+			physicalInterfaces: []string{"eth1", "eth2", "eth3", "eth4", "eth5", "eth6", "eth7", "eth8", "eth9"},
+			expectedErr:        "at most eight physical interfaces can be specified for the secondary network OVS bridge",
 		},
 	}
 	for _, tc := range tests {
