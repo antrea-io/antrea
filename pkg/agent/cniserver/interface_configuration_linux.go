@@ -250,8 +250,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 	result *current.Result,
 ) error {
 	// Include the container veth interface name in the name generation, as one Pod can have more
-	// than one interfaces inc. secondary interfaces, while the host interface name must be
-	// be unique.
+	// than one interfaces inc. secondary interfaces, while the host interface name must be unique.
 	hostIfaceName := util.GenerateContainerHostVethName(podName, podNamespace, containerID, containerIfaceName)
 
 	hostIface := &current.Interface{Name: hostIfaceName}
