@@ -155,7 +155,7 @@ func getContainerIPsString(ips []net.IP) string {
 
 // ParseOVSPortInterfaceConfig reads the Pod properties saved in the OVS port
 // external_ids, initializes and returns an InterfaceConfig struct.
-// nill will be returned, if the OVS port does not have external IDs or it is
+// nil will be returned, if the OVS port does not have external IDs or it is
 // not created for a Pod interface.
 func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
 	if portData.ExternalIDs == nil {

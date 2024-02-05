@@ -58,7 +58,7 @@ const (
 	networkReadyTimeout = 30 * time.Second
 )
 
-// containerAccessArbitrator is used to ensure that concurrent goroutines cannot perfom operations
+// containerAccessArbitrator is used to ensure that concurrent goroutines cannot perform operations
 // on the same containerID. Other parts of the code make this assumption (in particular the
 // InstallPodFlows / UninstallPodFlows methods of the OpenFlow client, which are invoked
 // respectively by CmdAdd and CmdDel). The idea is to simply the locking requirements for the rest
@@ -112,7 +112,7 @@ type CNIServer struct {
 	routeClient        route.Interface
 	isChaining         bool
 	enableBridgingMode bool
-	// Enable AntreaIPAM for secondary networks implementd by other CNIs.
+	// Enable AntreaIPAM for secondary networks implemented by other CNIs.
 	enableSecondaryNetworkIPAM bool
 	disableTXChecksumOffload   bool
 	networkConfig              *config.NetworkConfig
