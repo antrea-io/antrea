@@ -177,6 +177,7 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - bgppolicies
       - externalippools
       - ippools
       - trafficcontrols
@@ -234,3 +235,12 @@ rules:
       - create
       - patch
       - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    resourceNames:
+      - {{ .Values.bgpPolicy.secretName }}
+    verbs:
+      - get
+      - watch
