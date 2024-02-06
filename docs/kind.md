@@ -58,9 +58,14 @@ If you want to pre-load the Antrea image in each Node (to avoid having each Node
 pull from the registry), you can use:
 
 ```bash
-docker pull projects.registry.vmware.com/antrea/antrea-ubuntu:<TAG>
-./ci/kind/kind-setup.sh --images projects.registry.vmware.com/antrea/antrea-ubuntu:<TAG> create <CLUSTER_NAME>
-kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
+tag=<TAG>
+cluster=<CLUSTER_NAME>
+docker pull projects.registry.vmware.com/antrea/antrea-controller-ubuntu:$tag
+docker pull projects.registry.vmware.com/antrea/antrea-agent-ubuntu:$tag
+./ci/kind/kind-setup.sh \
+  --images "projects.registry.vmware.com/antrea/antrea-controller-ubuntu:$tag projects.registry.vmware.com/antrea/antrea-agent-ubuntu:$tag" \
+  create $cluster
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$tag/antrea.yml
 ```
 
 The `kind-setup.sh` is a convenience script typically used by developers for
@@ -117,11 +122,6 @@ kind create cluster --config kind-config.yml
 ### Deploy Antrea to your Kind cluster
 
 ```bash
-# pull the Antrea Docker image
-docker pull projects.registry.vmware.com/antrea/antrea-ubuntu:<TAG>
-# load the Antrea Docker image in the Nodes
-kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:<TAG>
-# deploy Antrea
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
 ```
 
@@ -131,8 +131,8 @@ These instructions assume that you have built the Antrea Docker image locally
 (e.g. by running `make` from the root of the repository).
 
 ```bash
-# load the Antrea Docker image in the Nodes
-kind load docker-image antrea/antrea-ubuntu:latest
+# load the Antrea Docker images in the Nodes
+kind load docker-image antrea/antrea-controller-ubuntu:latest antrea/antrea-agent-ubuntu:latest
 # deploy Antrea
 kubectl apply -f build/yamls/antrea.yml
 ```

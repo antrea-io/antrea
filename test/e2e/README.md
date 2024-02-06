@@ -231,7 +231,7 @@ then make the code changes on the local repo and
 You can load the new image into the kind cluster using the command below:
 
 ```bash
-kind load docker-image antrea/antrea-ubuntu:latest --name <kind_cluster_name>
+kind load docker-image antrea/antrea-controller-ubuntu:latest antrea/antrea-agent-ubuntu:latest --name <kind_cluster_name>
 ```
 
 By default, if a test case fails, we write some useful debug information to a

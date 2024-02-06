@@ -347,20 +347,20 @@ please refer to the [getting-started guide](getting-started.md#open-vswitch).
 
    1. From Source
 
-      Build `antrea-ubuntu` Docker image in the root of the Antrea code tree.
+      Build `antrea-agent-ubuntu` Docker image in the root of the Antrea code tree.
 
       ```bash
-      make
+      make build-agent-ubuntu
       ```
 
-      Note: The image repository name should be `antrea/antrea-ubuntu` and tag should be `latest`.
+      Note: The image repository name should be `antrea/antrea-agent-ubuntu` and tag should be `latest`.
 
-      Copy the `antrea/antrea-ubuntu:latest` image to the target VM. Please follow
+      Copy the `antrea/antrea-agent-ubuntu:latest` image to the target VM. Please follow
       the below steps.
 
       ```bash
       # Save it in a tar file
-      docker save -o <tar file path in source host machine> antrea/antrea-ubuntu:latest
+      docker save -o <tar file path in source host machine> antrea/antrea-agent-ubuntu:latest
 
       # Copy this tar file to the target VM.
       # Then load that image on the target VM.
@@ -369,18 +369,18 @@ please refer to the [getting-started guide](getting-started.md#open-vswitch).
 
    2. Docker Repository
 
-      The released version of `antrea-ubuntu` Docker image can be downloaded from Antrea `Dockerhub`
+      The released version of `antrea-agent-ubuntu` Docker image can be downloaded from Antrea `Dockerhub`
       repository. Pick a version from the [list of releases](https://github.com/antrea-io/antrea/releases). For any given
-      release `<TAG>` (e.g. `v1.9.0`), download `antrea-ubuntu` Docker image as follows:
+      release `<TAG>` (e.g. `v1.15.0`), download `antrea-agent-ubuntu` Docker image as follows:
 
       ```bash
-      docker pull antrea/antrea-ubuntu:<TAG>
+      docker pull antrea/antrea-agent-ubuntu:<TAG>
       ```
 
       The [installation script](../hack/externalnode/install-vm.sh) automatically downloads the specific released
-      version of `antrea-ubuntu` Docker image on VM by specifying the installation argument `--antrea-version`.
-      Also, the script automatically loads that image into Docker. For any given release `<TAG>` (e.g. `v1.9.0`), specify
-      it in the --antrea-version argument as follows.
+      version of `antrea-agent-ubuntu` Docker image on VM by specifying the installation argument `--antrea-version`.
+      Also, the script automatically loads that image into Docker. For any given release `<TAG>` (e.g. `v1.15.0`),
+      specify it in the --antrea-version argument as follows.
 
       ```bash
          --antrea-version <TAG>
