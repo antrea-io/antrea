@@ -154,7 +154,8 @@ test-integration:
 endif
 
 .PHONY: build
-build: build-ubuntu
+build: build-agent-ubuntu
+build: build-controller-ubuntu
 
 .PHONY: test
 test: golangci
