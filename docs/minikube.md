@@ -29,8 +29,9 @@ These instructions assume that you have built the Antrea Docker image locally
 `./hack/build-antrea-linux-all.sh --platform linux/arm64`).
 
 ```bash
-# load the Antrea Docker image in the minikube nodes
-minikube image load antrea/antrea-ubuntu:latest
+# load the Antrea Docker images in the minikube nodes
+minikube image load antrea/antrea-controller-ubuntu:latest
+minikube image load antrea/antrea-agent-ubuntu:latest
 # deploy Antrea
 kubectl apply -f antrea/build/yamls/antrea.yml
 ```
