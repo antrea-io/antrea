@@ -28,8 +28,7 @@ all Dockerfiles.
         --push-base-images      Push built images to the registry. Only base images will be pushed.
         --coverage              Build the image with support for code coverage.
         --platform <PLATFORM>   Target platform for the images if server is multi-platform capable.
-        --distro <distro>       Target Linux distribution.
-        --skip-unified-image    Skips building the Antrea unified image."
+        --distro <distro>       Target Linux distribution."
 
 function print_usage {
     echoerr "$_usage"
@@ -40,7 +39,6 @@ PUSH=false
 COVERAGE=false
 PLATFORM=""
 DISTRO="ubuntu"
-UNIFIED=true
 
 while [[ $# -gt 0 ]]
 do
@@ -65,10 +63,6 @@ case $key in
     ;;
     --distro)
     DISTRO="$2"
-    shift 2
-    ;;
-    --skip-unified-image)
-    UNIFIED=false
     shift 2
     ;;
     -h|--help)
@@ -170,22 +164,16 @@ if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
         make build-controller-ubuntu-coverage
         make build-agent-ubuntu-coverage
-        if $UNIFIED; then
-            make build-ubuntu-coverage
-        fi
+        make build-ubuntu-coverage
     else
         make build-controller-ubuntu
         make build-agent-ubuntu
-        if $UNIFIED; then
-            make
-        fi
+        make build-ubuntu
     fi
 elif [ "$DISTRO" == "ubi" ]; then
     make build-controller-ubi
     make build-agent-ubi
-    if $UNIFIED; then
-        make build-ubi
-    fi
+    make build-ubi
 fi
 
 popd > /dev/null
