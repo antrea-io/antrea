@@ -227,3 +227,12 @@ rules:
       - create
       - patch
       - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    resourceNames:
+      - {{ .Values.bgpPolicy.secretName }}
+    verbs:
+      - get
+      - watch

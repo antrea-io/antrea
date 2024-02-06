@@ -54,6 +54,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IPPoolList{},
 		&TrafficControl{},
 		&TrafficControlList{},
+		&BGPPolicy{},
+		&BGPPolicyList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

@@ -16,6 +16,8 @@
 
 package v1alpha2
 
+type BGPPolicyExpansion interface{}
+
 type EgressExpansion interface{}
 
 type ExternalEntityExpansion interface{}
