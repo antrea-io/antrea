@@ -15,11 +15,9 @@
 package certificate
 
 import (
-	"context"
 	"fmt"
-	"net"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -27,8 +25,6 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes"
-	certutil "k8s.io/client-go/util/cert"
-	"k8s.io/client-go/util/keyutil"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
@@ -61,14 +57,14 @@ func ApplyServerCert(selfSignedCert bool,
 	var err error
 	var caContentProvider dynamiccertificates.CAContentProvider
 	if selfSignedCert {
-		caContentProvider, err = generateSelfSignedCertificate(secureServing, caConfig)
+		caContentProvider, err = newSelfSignedCertProvider(client, secureServing, caConfig)
 		if err != nil {
-			return nil, fmt.Errorf("error creating self-signed CA certificate: %v", err)
+			return nil, fmt.Errorf("failed to initialize self-signed certificate: %w", err)
 		}
 	} else {
-		caCertPath := path.Join(caConfig.CertDir, CACertFile)
-		tlsCertPath := path.Join(caConfig.CertDir, TLSCertFile)
-		tlsKeyPath := path.Join(caConfig.CertDir, TLSKeyFile)
+		caCertPath := filepath.Join(caConfig.CertDir, CACertFile)
+		tlsCertPath := filepath.Join(caConfig.CertDir, TLSCertFile)
+		tlsKeyPath := filepath.Join(caConfig.CertDir, TLSKeyFile)
 		// The secret may be created after the Pod is created, for example, when cert-manager is used the secret
 		// is created asynchronously. It waits for a while before it's considered to be failed.
 		if err = wait.PollImmediate(2*time.Second, caConfig.CertReadyTimeout, func() (bool, error) {
@@ -96,97 +92,5 @@ func ApplyServerCert(selfSignedCert bool,
 	}
 
 	caCertController := newCACertController(caContentProvider, client, aggregatorClient, apiExtensionClient, caConfig)
-
-	if selfSignedCert {
-		go rotateSelfSignedCertificates(caCertController, secureServing, caConfig.MaxRotateDuration)
-	}
-
 	return caCertController, nil
-}
-
-// generateSelfSignedCertificate generates a new self signed certificate.
-func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWithLoopback, caConfig *CAConfig) (dynamiccertificates.CAContentProvider, error) {
-	var err error
-	var caContentProvider dynamiccertificates.CAContentProvider
-
-	// Set the PairName and CertDirectory to generate the certificate files.
-	secureServing.ServerCert.CertDirectory = caConfig.SelfSignedCertDir
-	secureServing.ServerCert.PairName = caConfig.PairName
-
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts(caConfig.ServiceName, GetAntreaServerNames(caConfig.ServiceName), []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
-		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
-	}
-
-	caContentProvider, err = dynamiccertificates.NewDynamicCAContentFromFile("self-signed cert", secureServing.ServerCert.CertKey.CertFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading self-signed CA certificate: %v", err)
-	}
-
-	return caContentProvider, nil
-}
-
-// Used to determine which is sooner, the provided maxRotateDuration or the expiration date
-// of the cert. Used to allow for unit testing with a far shorter rotation period.
-// Also can be used to pass a user provided rotation window.
-func nextRotationDuration(secureServing *options.SecureServingOptionsWithLoopback,
-	maxRotateDuration time.Duration) (time.Duration, error) {
-
-	x509Cert, err := certutil.CertsFromFile(secureServing.ServerCert.CertKey.CertFile)
-	if err != nil {
-		return time.Duration(0), fmt.Errorf("error parsing generated certificate: %v", err)
-	}
-
-	// Attempt to rotate the certificate at the half-way point of expiration.
-	// Unless the halfway point is longer than maxRotateDuration
-	duration := x509Cert[0].NotAfter.Sub(time.Now()) / 2
-
-	waitDuration := duration
-	if maxRotateDuration < waitDuration {
-		waitDuration = maxRotateDuration
-	}
-
-	return waitDuration, nil
-}
-
-// rotateSelfSignedCertificates calculates the rotation duration for the current certificate.
-// Then once the duration is complete, generates a new self-signed certificate and repeats the process.
-func rotateSelfSignedCertificates(c *CACertController, secureServing *options.SecureServingOptionsWithLoopback,
-	maxRotateDuration time.Duration) {
-	for {
-		rotationDuration, err := nextRotationDuration(secureServing, maxRotateDuration)
-		if err != nil {
-			klog.Errorf("error reading expiration date of cert: %v", err)
-			return
-		}
-
-		klog.Infof("Certificate will be rotated at %v", time.Now().Add(rotationDuration))
-
-		time.Sleep(rotationDuration)
-
-		klog.Infof("Rotating self signed certificate")
-
-		err = generateNewServingCertificate(secureServing, c.caConfig)
-		if err != nil {
-			klog.Errorf("error generating new cert: %v", err)
-			return
-		}
-		c.UpdateCertificate(context.TODO())
-	}
-}
-
-func generateNewServingCertificate(secureServing *options.SecureServingOptionsWithLoopback, caConfig *CAConfig) error {
-	cert, key, err := certutil.GenerateSelfSignedCertKeyWithFixtures(caConfig.ServiceName, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}, GetAntreaServerNames(caConfig.ServiceName), secureServing.ServerCert.FixtureDirectory)
-	if err != nil {
-		return fmt.Errorf("unable to generate self signed cert: %v", err)
-	}
-
-	if err := certutil.WriteCert(secureServing.ServerCert.CertKey.CertFile, cert); err != nil {
-		return err
-	}
-	if err := keyutil.WriteKey(secureServing.ServerCert.CertKey.KeyFile, key); err != nil {
-		return err
-	}
-	klog.Infof("Generated self-signed cert (%s, %s)", secureServing.ServerCert.CertKey.CertFile, secureServing.ServerCert.CertKey.KeyFile)
-
-	return nil
 }
