@@ -551,3 +551,13 @@ markdownlint-fix:
 spelling-fix:
 	@echo "===> Updating incorrect spellings <==="
 	$(CURDIR)/hack/update-spelling.sh
+
+.PHONY: vm-bin
+vm-bin:
+	@mkdir -p $(BINDIR)
+	@CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent antrea.io/antrea/cmd/antctl
+
+.PHONY: docker-vm-bin
+docker-vm-bin: $(DOCKER_CACHE)
+	$(DOCKER_ENV) make vm-bin
+	@chmod -R 0755 $<

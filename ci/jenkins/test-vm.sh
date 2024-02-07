@@ -309,7 +309,7 @@ function build_antrea_binary {
     export GOCACHE=${WORKSPACE}/../gocache
     export PATH=${GOROOT}/bin:$PATH
 
-    make docker-bin
+    make docker-vm-bin
     make docker-windows-bin
 
     cp ./build/yamls/externalnode/conf/antrea-agent.conf ${WORKDIR}/antrea-agent.conf
