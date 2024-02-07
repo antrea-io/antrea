@@ -68,6 +68,11 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 	if err := data.mutateAntreaConfigMap(cc, nil, false, false); err != nil {
 		t.Fatalf("Failed to update ConfigMap: %v", err)
 	}
+	t.Cleanup(func() {
+		data.mutateAntreaConfigMap(func(config *controllerconfig.ControllerConfig) {
+			config.SelfSignedCert = nil
+		}, nil, true, false)
+	})
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
 		certPem, keyPem, _ := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames(certificate.AntreaServiceName))
@@ -111,6 +116,9 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 	// Create/update the secret and restart antrea-controller, then verify apiserver and its clients are using the
 	// provided certificate.
 	certPem, _ := genCertKeyAndUpdateSecret()
+	t.Cleanup(func() {
+		data.clientset.CoreV1().Secrets(tlsSecretNamespace).Delete(context.TODO(), tlsSecretName, metav1.DeleteOptions{})
+	})
 	testCert(t, data, string(certPem), true)
 
 	// Update the secret and do not restart antrea-controller, then verify apiserver and its clients are using the
@@ -121,7 +129,14 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 
 // testSelfSignedCert tests the selfSignedCert=true case.
 func testSelfSignedCert(t *testing.T, data *TestData) {
-	testCert(t, data, "", true)
+	secretBeforeRestart, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	testCert(t, data, string(secretBeforeRestart.Data[certificate.TLSCertFile]), true)
+
+	secretAfterRestart, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Equal(t, secretBeforeRestart, secretAfterRestart)
 }
 
 // testCert optionally restarts antrea-controller, then checks:
