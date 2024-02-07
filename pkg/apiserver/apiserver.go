@@ -83,10 +83,12 @@ var (
 	// #nosec G101: false positive triggered by variable name which includes "token"
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 
-	// antreaServedLabel includes the labels used to select resources served by antrea-controller
-	antreaServedLabel = map[string]string{
-		"app":       "antrea",
-		"served-by": "antrea-controller",
+	// antreaServedLabelSelector selects resources served by antrea-controller.
+	antreaServedLabelSelector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"app":       "antrea",
+			"served-by": "antrea-controller",
+		},
 	}
 )
 
@@ -349,24 +351,17 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 func DefaultCAConfig() *certificate.CAConfig {
 	return &certificate.CAConfig{
-		CAConfigMapName: certificate.AntreaCAConfigMapName,
-		APIServiceSelector: &metav1.LabelSelector{
-			MatchLabels: antreaServedLabel,
-		},
-		ValidatingWebhookSelector: &metav1.LabelSelector{
-			MatchLabels: antreaServedLabel,
-		},
-		MutationWebhookSelector: &metav1.LabelSelector{
-			MatchLabels: antreaServedLabel,
-		},
-		CRDConversionWebhookSelector: &metav1.LabelSelector{
-			MatchLabels: antreaServedLabel,
-		},
-		CertDir:           "/var/run/antrea/antrea-controller-tls",
-		SelfSignedCertDir: "/var/run/antrea/antrea-controller-self-signed",
-		CertReadyTimeout:  2 * time.Minute,
-		MaxRotateDuration: time.Hour * (24 * 365),
-		ServiceName:       certificate.AntreaServiceName,
-		PairName:          "antrea-controller",
+		CAConfigMapName:              certificate.AntreaCAConfigMapName,
+		TLSSecretName:                certificate.AntreaControllerTLSSecretName,
+		APIServiceSelector:           antreaServedLabelSelector,
+		ValidatingWebhookSelector:    antreaServedLabelSelector,
+		MutationWebhookSelector:      antreaServedLabelSelector,
+		CRDConversionWebhookSelector: antreaServedLabelSelector,
+		CertDir:                      "/var/run/antrea/antrea-controller-tls",
+		SelfSignedCertDir:            "/var/run/antrea/antrea-controller-self-signed",
+		CertReadyTimeout:             2 * time.Minute,
+		MinValidDuration:             time.Hour * 24 * 90, // Rotate the certificate 90 days in advance.
+		ServiceName:                  certificate.AntreaServiceName,
+		PairName:                     "antrea-controller",
 	}
 }
