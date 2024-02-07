@@ -70,7 +70,7 @@ func TestGetCAConfig(t *testing.T) {
 				MutationWebhookSelector:   getWebhookLabel(false, ""),
 				ValidatingWebhookSelector: getWebhookLabel(false, ""),
 				CertReadyTimeout:          2 * time.Minute,
-				MaxRotateDuration:         time.Hour * (24 * 365),
+				MinValidDuration:          time.Hour * (24 * 90),
 			},
 		},
 		{
@@ -86,7 +86,7 @@ func TestGetCAConfig(t *testing.T) {
 				MutationWebhookSelector:   getWebhookLabel(true, "testNS"),
 				ValidatingWebhookSelector: getWebhookLabel(true, "testNS"),
 				CertReadyTimeout:          2 * time.Minute,
-				MaxRotateDuration:         time.Hour * (24 * 365),
+				MinValidDuration:          time.Hour * (24 * 90),
 			},
 		},
 	}

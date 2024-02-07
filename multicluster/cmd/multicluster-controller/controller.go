@@ -113,7 +113,7 @@ func getCaConfig(isLeader bool, controllerNs string) *certificate.CAConfig {
 		MutationWebhookSelector:   getWebhookLabel(isLeader, controllerNs),
 		ValidatingWebhookSelector: getWebhookLabel(isLeader, controllerNs),
 		CertReadyTimeout:          2 * time.Minute,
-		MaxRotateDuration:         time.Hour * (24 * 365),
+		MinValidDuration:          time.Hour * 24 * 90, // Rotate the certificate 90 days in advance.
 	}
 }
 
