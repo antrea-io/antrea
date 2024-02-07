@@ -6407,11 +6407,13 @@ rules:
     resources:
       - secrets
     resourceNames:
+      - antrea-controller-tls
       - antrea-ipsec-ca
     verbs:
       - get
       - update
       - watch
+      - list
   - apiGroups:
       - ""
     resources:
