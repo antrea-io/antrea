@@ -175,6 +175,7 @@ Here are the trigger phrases for individual checks:
 * `/test-ipv6-only-conformance`: Linux IPv6 only conformance tests
 * `/test-ipv6-only-networkpolicy`: Linux IPv6 only networkpolicy tests
 * `/test-flexible-ipam-e2e`: Flexible IPAM e2e tests
+* `/test-kind-flexible-ipam-e2e`: Flexible IPAM e2e tests on Kind clusters.
 * `/test-multicast-e2e`: Multicast e2e tests
 * `/test-multicluster-e2e`: Multicluster e2e tests
 * `/test-vm-e2e`: ExternalNode e2e tests

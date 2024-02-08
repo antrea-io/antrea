@@ -191,9 +191,26 @@ function clean_antrea {
     for antrea_yml in ${WORKDIR}/*.yml; do
         kubectl delete -f $antrea_yml --ignore-not-found=true || true
     done
-    docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea'| xargs -r docker rmi || true
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea'| xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     check_and_cleanup_docker_build_cache
+ 
+  # Delete the routes from the kind testbed.
+    if [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
+        cidrs=$(kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}')
+         echo -e "$cidrs" | tr ' ' '\n'| while read cidr; do
+                echo "$cidr value of cidrs"
+                del_routes=$(ip route | awk -v cidr="$cidr" '$0 ~ cidr {print$1}')
+                echo $del_routes
+                if [[ -z $del_routes ]]; then
+                    echo "Test pods routes not available on testbed"
+                else
+                    echo "====debug====="
+                    sudo ip route del $del_routes || true
+                fi 
+
+            done
+    fi
 }
 
 function clean_for_windows_install_cni {
@@ -510,7 +527,6 @@ function deliver_antrea {
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         redeploy_k8s_if_ip_mode_changes
     fi
-
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
@@ -582,17 +598,22 @@ function deliver_antrea {
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true | awk '{print $6}'kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
-    elif [[ $TESTBED_TYPE == "kind" ]]; then
+    elif [[ $TESTBED_TYPE == "kind" || $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
             kind load docker-image antrea/antrea-agent-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/antrea-controller-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
-            kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
+            kind load docker-image antrea/flow-aggregator:$BUILD_TAG --name ${KIND_CLUSTER}
             kubectl config use-context kind-${KIND_CLUSTER}
-            docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml 
+            docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml
+            if [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
+                 kubectl get nodes -o wide --no-headers=true |  awk '{print $1}' | while read nodes; do
+                   configure_kind_ipam_routes "${nodes}"
+                 done
+            fi 
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
@@ -645,7 +666,7 @@ function run_e2e {
 
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
-    if [[ $TESTBED_TYPE != "kind" ]]; then 
+    if [[ $TESTBED_TYPE != "kind" && $TESTBED_TYPE != "kind-flexible-ipam" ]]; then 
         cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
     fi
     generate_ssh_config
@@ -658,6 +679,8 @@ function run_e2e {
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
     elif [[ $TESTBED_TYPE == "kind" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind -timeout=100m --prometheus
+    elif [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
+        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind -timeout=100m --prometheus --antrea-ipam
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi
@@ -979,6 +1002,15 @@ EOF
     done
 }
 
+# configure_kind_ipam_routes configure routes for non ipam test pods.
+function configure_kind_ipam_routes {
+    local kind_node="$1"
+
+    local pod_cidr=$(kubectl get nodes "${kind_node}" -o yaml | grep podCIDR | awk 'FNR == 1 {print$2}')
+    local node_ip=$(kubectl get nodes "${kind_node}" -o wide | awk 'FNR == 2 {print$6}')
+    sudo ip route add "$pod_cidr" via "$node_ip"
+}
+
 export KUBECONFIG=${KUBECONFIG_PATH}
 if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
     MANIFEST_ARGS="$MANIFEST_ARGS --flexible-ipam --multicast --verbose-log"
@@ -988,6 +1020,10 @@ if [[ $TESTCASE =~ "multicast" ]]; then
     MANIFEST_ARGS="$MANIFEST_ARGS --encap-mode noEncap --multicast --multicast-interfaces ens224 --verbose-log"
 fi
 echo $MANIFEST_ARGS
+
+if [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
+    MANIFEST_ARGS="$MANIFEST_ARGS --flexible-ipam --multicast --verbose-log"
+fi
 
 source $WORKSPACE/ci/jenkins/utils.sh
 check_and_upgrade_golang
