@@ -42,14 +42,14 @@ helm install antrea antrea/antrea --namespace kube-system --set featureGates.Nod
 Node NetworkPolicy is an extension of Antrea ClusterNetworkPolicy (ACNP). By specifying a `nodeSelector` in the
 policy-level `appliedTo` without other selectors, an ACNP is applied to the selected Kubernetes Nodes.
 
-An example Node NetworkPolicy that blocks ingress traffic from Pods with label `app=client` to Nodes with label
-`kubernetes.io/hostname: k8s-node-control-plane`:
+An example Node NetworkPolicy applied to Nodes with label `kubernetes.io/hostname: k8s-node-control-plane`, selectively
+blocking all incoming traffic to port 80 on the Nodes, except for traffic originating from CIDR `10.10.0.0/16`.
 
 ```yaml
 apiVersion: crd.antrea.io/v1beta1
 kind: ClusterNetworkPolicy
 metadata:
-  name: ingress-drop-pod-to-node
+  name: restrict-http-to-node
 spec:
   priority: 5
   tier: application
@@ -58,19 +58,23 @@ spec:
         matchLabels:
           kubernetes.io/hostname: k8s-node-control-plane
   ingress:
-    - name: drop-80
-      action: Drop
+    - name: allow-cidr
+      action: Allow
       from:
-        - podSelector:
-            matchLabels:
-              app: client
+        - ipBlock:
+            cidr: 10.10.0.0/16
+      ports:
+        - protocol: TCP
+          port: 80
+    - name: drop-other
+      action: Drop
       ports:
         - protocol: TCP
           port: 80
 ```
 
-An example Node NetworkPolicy that blocks egress traffic from Nodes with the label
-`kubernetes.io/hostname: k8s-node-control-plane` to Nodes with the label `kubernetes.io/hostname: k8s-node-worker-1`
+An example Node NetworkPolicy that blocks egress traffic from Nodes with label
+`kubernetes.io/hostname: k8s-node-control-plane` to Nodes with label `kubernetes.io/hostname: k8s-node-worker-1`
 and some IP blocks:
 
 ```yaml
