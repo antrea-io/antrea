@@ -1360,13 +1360,13 @@ func (c *EgressController) GetEgressIPByMark(mark uint32) (string, error) {
 	return "", fmt.Errorf("no EgressIP associated with mark %v", mark)
 }
 
-// GetEgress returns effective Egress and Egress IP applied on a Pod.
-func (c *EgressController) GetEgress(ns, podName string) (string, string, error) {
+// GetEgress returns effective EgressName, EgressIP and EgressNode name of Egress applied on a Pod.
+func (c *EgressController) GetEgress(ns, podName string) (string, string, string, error) {
 	if c == nil {
-		return "", "", fmt.Errorf("Egress is not enabled")
+		return "", "", "", fmt.Errorf("Egress is not enabled")
 	}
 	pod := k8s.NamespacedName(ns, podName)
-	egress, exists := func() (string, bool) {
+	egressName, exists := func() (string, bool) {
 		c.egressBindingsMutex.RLock()
 		defer c.egressBindingsMutex.RUnlock()
 		binding, exists := c.egressBindings[pod]
@@ -1376,13 +1376,15 @@ func (c *EgressController) GetEgress(ns, podName string) (string, string, error)
 		return binding.effectiveEgress, true
 	}()
 	if !exists {
-		return "", "", fmt.Errorf("no Egress applied to Pod %v", pod)
+		return "", "", "", fmt.Errorf("no Egress applied to Pod %v", pod)
 	}
-	state, exists := c.getEgressState(egress)
-	if !exists {
-		return "", "", fmt.Errorf("no Egress State associated with name %s", egress)
+	egress, err := c.egressLister.Get(egressName)
+	if err != nil {
+		return "", "", "", err
 	}
-	return egress, state.egressIP, nil
+	egressNode := egress.Status.EgressNode
+	egressIP := egress.Status.EgressIP
+	return egressName, egressIP, egressNode, nil
 }
 
 // An Egress is schedulable if its Egress IP is allocated from ExternalIPPool.

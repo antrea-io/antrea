@@ -841,9 +841,9 @@ func TestFlowExporter_fillEgressInfo(t *testing.T) {
 				SourcePodName:      tc.sourcePodName,
 			}
 			if tc.expectedEgressName != "" {
-				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(tc.expectedEgressName, tc.expectedEgressIP, nil)
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(tc.expectedEgressName, tc.expectedEgressIP, "", nil)
 			} else {
-				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return("", "", fmt.Errorf("no Egress applied to Pod %s", conn.SourcePodName))
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return("", "", "", fmt.Errorf("no Egress applied to Pod %s", conn.SourcePodName))
 			}
 			exp.fillEgressInfo(&conn)
 			assert.Equal(t, tc.expectedEgressName, conn.EgressName)
