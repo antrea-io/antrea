@@ -1616,6 +1616,10 @@ func TestGetEgress(t *testing.T) {
 	egress := &crdv1b1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 		Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
+		Status: crdv1b1.EgressStatus{
+			EgressNode: fakeNode,
+			EgressIP:   fakeLocalEgressIP1,
+		},
 	}
 	egressGroup := &cpv1b2.EgressGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -1648,6 +1652,7 @@ func TestGetEgress(t *testing.T) {
 		args               args
 		expectedEgressName string
 		expectedEgressIP   string
+		expectedEgressNode string
 		expectedErr        string
 	}{
 		{
@@ -1658,6 +1663,7 @@ func TestGetEgress(t *testing.T) {
 			},
 			expectedEgressName: "egressA",
 			expectedEgressIP:   fakeLocalEgressIP1,
+			expectedEgressNode: fakeNode,
 		},
 		{
 			name: "no local egress applied on a pod",
@@ -1670,7 +1676,7 @@ func TestGetEgress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotEgressName, gotEgressIP, err := c.GetEgress(tt.args.ns, tt.args.podName)
+			gotEgressName, gotEgressIP, gotEgressNode, err := c.GetEgress(tt.args.ns, tt.args.podName)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -1678,6 +1684,7 @@ func TestGetEgress(t *testing.T) {
 			}
 			assert.Equal(t, tt.expectedEgressName, gotEgressName)
 			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
+			assert.Equal(t, tt.expectedEgressNode, gotEgressNode)
 		})
 	}
 }

@@ -41,6 +41,7 @@ import (
 var (
 	egressName = "dummyEgress"
 	egressIP   = "192.168.100.100"
+	egressNode = "fakeEgressNode"
 )
 
 func prepareMockTables() {
@@ -303,8 +304,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, nil)
-				egressQuerier.EXPECT().GetEgressIPByMark(uint32(1)).Return(egressIP, nil)
+				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNode, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -331,10 +331,11 @@ func TestParsePacketIn(t *testing.T) {
 						Action:    crdv1beta1.ActionForwarded,
 					},
 					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionMarkedForSNAT,
-						Egress:    egressName,
-						EgressIP:  egressIP,
+						Component:  crdv1beta1.ComponentEgress,
+						Action:     crdv1beta1.ActionMarkedForSNAT,
+						Egress:     egressName,
+						EgressIP:   egressIP,
+						EgressNode: egressNode,
 					},
 					{
 						Component:     crdv1beta1.ComponentForwarding,
@@ -370,7 +371,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, nil)
+				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNode, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -397,10 +398,11 @@ func TestParsePacketIn(t *testing.T) {
 						Action:    crdv1beta1.ActionForwarded,
 					},
 					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionForwardedToEgressNode,
-						Egress:    egressName,
-						EgressIP:  egressIP,
+						Component:  crdv1beta1.ComponentEgress,
+						Action:     crdv1beta1.ActionForwardedToEgressNode,
+						Egress:     egressName,
+						EgressIP:   egressIP,
+						EgressNode: egressNode,
 					},
 					{
 						Component:     crdv1beta1.ComponentForwarding,

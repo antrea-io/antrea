@@ -1165,6 +1165,8 @@ type Observation struct {
 	// TunnelDstIP is the tunnel destination IP.
 	TunnelDstIP string `json:"tunnelDstIP,omitempty" yaml:"tunnelDstIP,omitempty"`
 	EgressIP    string `json:"egressIP,omitempty" yaml:"egressIP,omitempty"`
+	// EgressNode is the name of the Egress Node.
+	EgressNode string `json:"egressNode,omitempty" yaml:"egressNode,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
