@@ -18,6 +18,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,6 +104,8 @@ func TestSelfSignedCertProviderShouldRotateCertificate(t *testing.T) {
 
 func TestSelfSignedCertProviderRotate(t *testing.T) {
 	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	var wg sync.WaitGroup
+	defer wg.Wait()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	client := fakeclientset.NewSimpleClientset()
@@ -124,7 +127,11 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		},
 	}, gotSecret, "Secret doesn't match")
 
-	go p.Run(ctx, 1)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.Run(ctx, 1)
+	}()
 
 	// Update the Secret, it should update the serving one.
 	gotSecret.Data[corev1.TLSCertKey] = testOneYearCert
@@ -161,7 +168,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		assert.NotEqual(c, map[string][]byte{
 			corev1.TLSCertKey:       testOneYearCert,
 			corev1.TLSPrivateKeyKey: testOneYearKey,
-		}, gotSecret.Data, "Secret doesn't match")
+		}, gotSecret.Data, "Secret should not match")
 	}, 2*time.Second, 50*time.Millisecond)
 }
 
@@ -264,6 +271,8 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var wg sync.WaitGroup
+			defer wg.Wait()
 			defer mockGenerateSelfSignedCertKey(testOneYearCert2, testOneYearKey2)()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -273,7 +282,11 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 			}
 			client := fakeclientset.NewSimpleClientset(objs...)
 			p := newTestSelfSignedCertProvider(t, client, tt.tlsSecretName, tt.minValidDuration)
-			go p.Run(ctx, 1)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				p.Run(ctx, 1)
+			}()
 			if tt.updatedSecret != nil {
 				client.CoreV1().Secrets(tt.updatedSecret.Namespace).Update(ctx, tt.updatedSecret, metav1.UpdateOptions{})
 			}

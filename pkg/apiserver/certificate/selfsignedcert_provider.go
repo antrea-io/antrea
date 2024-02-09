@@ -119,6 +119,9 @@ func (p *selfSignedCertProvider) RunOnce(ctx context.Context) error {
 }
 
 func (p *selfSignedCertProvider) Run(ctx context.Context, workers int) {
+	var wg sync.WaitGroup
+	// ensure goroutines have exited before returning, to simplify unit tests.
+	defer wg.Wait()
 	defer p.queue.ShutDown()
 
 	klog.Infof("Starting selfSignedCertProvider")
@@ -129,9 +132,17 @@ func (p *selfSignedCertProvider) Run(ctx context.Context, workers int) {
 	}
 
 	// doesn't matter what workers say, only start one.
-	go wait.Until(p.runWorker, time.Second, ctx.Done())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		wait.Until(p.runWorker, time.Second, ctx.Done())
+	}()
 	// check if the certificate should be regenerated periodically.
-	go wait.Until(p.enqueue, time.Hour, ctx.Done())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		wait.Until(p.enqueue, time.Hour, ctx.Done())
+	}()
 
 	<-ctx.Done()
 }
