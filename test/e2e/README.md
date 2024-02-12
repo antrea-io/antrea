@@ -214,7 +214,7 @@ Antrea manifest to the control-plane Docker container:
 
 ```bash
 ./hack/generate-manifest.sh | docker exec -i kind-control-plane dd of=/root/antrea.yml
-go test -timeout=75 -v antrea.io/antrea/test/e2e -provider=kind
+go test -timeout=75m -v antrea.io/antrea/test/e2e -provider=kind
 ```
 
 The default timeout of `go test` is [10 minutes](https://pkg.go.dev/cmd/go#hdr-Testing_flags).
