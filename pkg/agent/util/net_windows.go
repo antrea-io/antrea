@@ -805,7 +805,7 @@ func NewNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 		}
 	} else {
 		if strings.Contains(internalNet, subnetCIDR.String()) {
-			klog.V(4).InfoS("The existing netnat matched the subnet CIDR", "name", internalNet, "subnetCIDR", subnetCIDR.String())
+			klog.V(4).Infof("The existing netnat matched the subnet CIDR name %s subnetCIDR %s", internalNet, subnetCIDR.String())
 			return nil
 		}
 		klog.InfoS("Removing the existing NetNat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
