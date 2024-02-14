@@ -24,11 +24,7 @@ RUN go mod download
 
 COPY . /antrea
 
-# Disable CGO for antctl in case it is copied outside of the container image. It
-# also reduces the size of the binary and aligns with how we distribute antctl
-# in release assets.
-RUN CGO_ENABLED=0 make antctl-linux antctl-instr-binary
-RUN mv bin/antctl-linux bin/antctl
+RUN make antctl-linux antctl-instr-binary && mv bin/antctl-linux bin/antctl
 
 RUN make antrea-controller antrea-controller-instr-binary
 

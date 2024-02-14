@@ -3,6 +3,10 @@ SHELL              := /bin/bash
 GO                 ?= go
 LDFLAGS            :=
 GOFLAGS            :=
+# By default, disable cgo for all Go binaries.
+# For binaries meant to be published as release assets or copied to a different host, cgo should
+# always be disabled.
+CGO_ENABLED        ?= 0
 BINDIR             ?= $(CURDIR)/bin
 GO_FILES           := $(shell find . -type d -name '.cache' -prune -o -type f -name '*.go' -print)
 GOPATH             ?= $$($(GO) env GOPATH)
@@ -32,6 +36,8 @@ WIN_BUILD_ARGS += --build-arg CNI_BINARIES_VERSION=$(CNI_BINARIES_VERSION)
 WIN_BUILD_ARGS += --build-arg NANOSERVER_VERSION=$(NANOSERVER_VERSION)
 WIN_BUILD_ARGS += --build-arg WIN_BUILD_TAG=$(WIN_BUILD_TAG)
 WIN_BUILD_ARGS += --build-arg WIN_BUILD_OVS_TAG=$(WIN_BUILD_OVS_TAG)
+
+export CGO_ENABLED
 
 .PHONY: all
 all: build
@@ -78,7 +84,7 @@ antrea-agent:
 .PHONY: antrea-agent-release
 antrea-agent-release:
 	@mkdir -p $(BINDIR)
-	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/$(ANTREA_AGENT_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
+	$(GO) build -o $(BINDIR)/$(ANTREA_AGENT_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
 
 .PHONY: antrea-agent-simulator
 antrea-agent-simulator:
@@ -104,29 +110,25 @@ antrea-controller-instr-binary:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
 
-# diable cgo for antrea-cni since it can be installed on some systems with
-# incompatible or missing system libraries.
 .PHONY: antrea-cni
 antrea-cni:
 	@mkdir -p $(BINDIR)
-	GOOS=linux CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
 
 .PHONY: antrea-cni
 antrea-cni-release:
 	@mkdir -p $(BINDIR)
-	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/$(ANTREA_CNI_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
+	$(GO) build -o $(BINDIR)/$(ANTREA_CNI_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
 
 .PHONY: antctl-instr-binary
 antctl-instr-binary:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
-# diable cgo for antrea-cni and antrea-agent: antrea-cni is meant to be
-# installed on the host and the antrea-agent is run as a process on Windows.
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
-	GOOS=windows CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent antrea.io/antrea/cmd/antctl
+	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent antrea.io/antrea/cmd/antctl
 
 .PHONY: flow-aggregator
 flow-aggregator:
@@ -235,7 +237,7 @@ antctl: $(ANTCTL_BINARIES)
 
 .PHONY: antctl-release
 antctl-release:
-	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
+	$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 .PHONY: check-copyright
 check-copyright: 
@@ -245,11 +247,13 @@ check-copyright:
 add-copyright: 
 	@GO=$(GO) $(CURDIR)/hack/add-license.sh --add
 
+# Cgo is required to run the race detector.
+
 .PHONY: .linux-test-unit
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/...,antrea.io/antrea/multicluster/cmd/...,antrea.io/antrea/multicluster/controllers/... \
+	CGO_ENABLED=1 $(GO) test -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/...,antrea.io/antrea/multicluster/cmd/...,antrea.io/antrea/multicluster/controllers/... \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
 	  antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... antrea.io/antrea/multicluster/cmd/... antrea.io/antrea/multicluster/controllers/...
 
@@ -257,7 +261,7 @@ add-copyright:
 .windows-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/... \
+	CGO_ENABLED=1 $(GO) test -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/... \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
 	  antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
 
