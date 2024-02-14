@@ -17,7 +17,7 @@ FROM registry.access.redhat.com/ubi8 as antrea-build
 
 ADD https://go.dev/dl/?mode=json&include=all go-versions.json
 
-RUN yum install ca-certificates gcc git jq make wget -y
+RUN yum install ca-certificates gcc jq make wget -y
 
 ARG GO_VERSION
 
