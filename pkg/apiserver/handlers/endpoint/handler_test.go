@@ -22,11 +22,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	v1 "k8s.io/api/admission/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 
-	"antrea.io/antrea/pkg/controller/networkpolicy"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 type TestCase struct {
@@ -34,53 +34,12 @@ type TestCase struct {
 	handlerRequest string
 	expectedStatus int
 	// expected result written by handler function
-	expectedContent response
+	expectedResponse *EndpointQueryResponse
 
 	// arguments of call to mock
 	argsMock []string
 	// results of call to mock
-	mockQueryResponse response
-}
-
-type response struct {
-	response *networkpolicy.EndpointQueryResponse
-	error    error
-}
-
-var responses = []response{
-	{
-		response: &networkpolicy.EndpointQueryResponse{Endpoints: nil},
-		error:    errors.NewNotFound(v1.Resource("pod"), "pod"),
-	},
-	{
-		response: &networkpolicy.EndpointQueryResponse{Endpoints: []networkpolicy.Endpoint{
-			{
-				Policies: []networkpolicy.Policy{
-					{
-						PolicyRef: networkpolicy.PolicyRef{Name: "policy1"},
-					},
-				},
-			},
-		},
-		},
-		error: nil,
-	},
-	{
-		response: &networkpolicy.EndpointQueryResponse{Endpoints: []networkpolicy.Endpoint{
-			{
-				Policies: []networkpolicy.Policy{
-					{
-						PolicyRef: networkpolicy.PolicyRef{Name: "policy1"},
-					},
-					{
-						PolicyRef: networkpolicy.PolicyRef{Name: "policy2"},
-					},
-				},
-			},
-		},
-		},
-		error: nil,
-	},
+	mockQueryResponse *antreatypes.EndpointNetworkPolicyRules
 }
 
 // TestIncompleteArguments tests how the handler function responds when the user passes in a query command
@@ -116,13 +75,10 @@ func TestInvalidArguments(t *testing.T) {
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with error given no invalid selection": {
-			handlerRequest: "?namespace=namespace&pod=pod",
-			expectedStatus: http.StatusNotFound,
-			argsMock:       []string{namespace, pod},
-			mockQueryResponse: response{
-				response: nil,
-				error:    nil,
-			},
+			handlerRequest:    "?namespace=namespace&pod=pod",
+			expectedStatus:    http.StatusNotFound,
+			argsMock:          []string{namespace, pod},
+			mockQueryResponse: nil,
 		},
 	}
 
@@ -130,7 +86,7 @@ func TestInvalidArguments(t *testing.T) {
 
 }
 
-// TestSinglePolicyResponse tests how the handler function responds when the user passes in a endpoint with a
+// TestSinglePolicyResponse tests how the handler function responds when the user passes in an endpoint with a
 // single policy response
 func TestSinglePolicyResponse(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -139,22 +95,35 @@ func TestSinglePolicyResponse(t *testing.T) {
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with list of single element": {
-			handlerRequest:  "?namespace=namespace&pod=pod",
-			expectedStatus:  http.StatusOK,
-			expectedContent: responses[1],
-			argsMock:        []string{namespace, pod},
-			mockQueryResponse: response{
-				response: &networkpolicy.EndpointQueryResponse{Endpoints: []networkpolicy.Endpoint{
+			handlerRequest: "?namespace=namespace&pod=pod",
+			expectedStatus: http.StatusOK,
+			expectedResponse: &EndpointQueryResponse{Endpoints: []Endpoint{
+				{
+					AppliedPolicies: []v1beta2.NetworkPolicyReference{
+						{Name: "policy1"},
+					},
+					IngressSrcRules: []Rule{
+						{PolicyRef: v1beta2.NetworkPolicyReference{Name: "policy2"}},
+					},
+				},
+			},
+			},
+			argsMock: []string{namespace, pod},
+			mockQueryResponse: &antreatypes.EndpointNetworkPolicyRules{
+				AppliedPolicies: []*antreatypes.NetworkPolicy{
+					{SourceRef: &controlplane.NetworkPolicyReference{Name: "policy1"}},
+				},
+				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
 					{
-						Policies: []networkpolicy.Policy{
-							{
-								PolicyRef: networkpolicy.PolicyRef{Name: "policy1"},
-							},
+						Policy: &antreatypes.NetworkPolicy{
+							SourceRef: &controlplane.NetworkPolicyReference{Name: "policy2"},
+						},
+						Index: 0,
+						Rule: &controlplane.NetworkPolicyRule{
+							Direction: controlplane.DirectionIn,
 						},
 					},
 				},
-				},
-				error: nil,
 			},
 		},
 	}
@@ -163,7 +132,7 @@ func TestSinglePolicyResponse(t *testing.T) {
 
 }
 
-// TestMultiPolicyResponse tests how the handler function responds when the user passes in a endpoint with
+// TestMultiPolicyResponse tests how the handler function responds when the user passes in an endpoint with
 // multiple policy responses
 func TestMultiPolicyResponse(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -172,25 +141,22 @@ func TestMultiPolicyResponse(t *testing.T) {
 	// outline test cases with expected behavior
 	testCases := map[string]TestCase{
 		"Responds with list of single element": {
-			handlerRequest:  "?namespace=namespace&pod=pod",
-			expectedStatus:  http.StatusOK,
-			expectedContent: responses[2],
-			argsMock:        []string{namespace, pod},
-			mockQueryResponse: response{
-				response: &networkpolicy.EndpointQueryResponse{Endpoints: []networkpolicy.Endpoint{
-					{
-						Policies: []networkpolicy.Policy{
-							{
-								PolicyRef: networkpolicy.PolicyRef{Name: "policy1"},
-							},
-							{
-								PolicyRef: networkpolicy.PolicyRef{Name: "policy2"},
-							},
-						},
+			handlerRequest: "?namespace=namespace&pod=pod",
+			expectedStatus: http.StatusOK,
+			expectedResponse: &EndpointQueryResponse{Endpoints: []Endpoint{
+				{
+					AppliedPolicies: []v1beta2.NetworkPolicyReference{
+						{Name: "policy1"}, {Name: "policy2"},
 					},
 				},
+			},
+			},
+			argsMock: []string{namespace, pod},
+			mockQueryResponse: &antreatypes.EndpointNetworkPolicyRules{
+				AppliedPolicies: []*antreatypes.NetworkPolicy{
+					{SourceRef: &controlplane.NetworkPolicyReference{Name: "policy1"}},
+					{SourceRef: &controlplane.NetworkPolicyReference{Name: "policy2"}},
 				},
-				error: nil,
 			},
 		},
 	}
@@ -204,7 +170,7 @@ func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controlle
 		// create mock querier with expected behavior outlined in testCase
 		mockQuerier := queriermock.NewMockEndpointQuerier(mockCtrl)
 		if tc.expectedStatus != http.StatusBadRequest {
-			mockQuerier.EXPECT().QueryNetworkPolicies(tc.argsMock[0], tc.argsMock[1]).Return(tc.mockQueryResponse.response, tc.mockQueryResponse.error)
+			mockQuerier.EXPECT().QueryNetworkPolicyRules(tc.argsMock[0], tc.argsMock[1]).Return(tc.mockQueryResponse, nil)
 		}
 		// initialize handler with mockQuerier
 		handler := HandleFunc(mockQuerier)
@@ -218,11 +184,17 @@ func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controlle
 			return
 		}
 		// check response is expected
-		var received networkpolicy.EndpointQueryResponse
+		var received EndpointQueryResponse
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)
 		assert.Nil(t, err)
-		for i, policy := range tc.expectedContent.response.Endpoints[0].Policies {
-			assert.Equal(t, policy.Name, received.Endpoints[0].Policies[i].Name)
+		for i, policy := range tc.expectedResponse.Endpoints[0].AppliedPolicies {
+			assert.Equal(t, policy.Name, received.Endpoints[0].AppliedPolicies[i].Name)
+		}
+		for i, rule := range tc.expectedResponse.Endpoints[0].IngressSrcRules {
+			assert.Equal(t, rule.PolicyRef.Name, received.Endpoints[0].IngressSrcRules[i].PolicyRef.Name)
+		}
+		for i, rule := range tc.expectedResponse.Endpoints[0].EgressDstRules {
+			assert.Equal(t, rule.PolicyRef.Name, received.Endpoints[0].EgressDstRules[i].PolicyRef.Name)
 		}
 	}
 }

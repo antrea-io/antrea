@@ -18,8 +18,29 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
+
+// EndpointQueryResponse is the reply struct for anctl endpoint queries
+type EndpointQueryResponse struct {
+	Endpoints []Endpoint `json:"endpoints,omitempty"`
+}
+
+type Rule struct {
+	PolicyRef v1beta2.NetworkPolicyReference `json:"policyref,omitempty"`
+	Direction v1beta2.Direction              `json:"direction,omitempty"`
+	RuleIndex int                            `json:"ruleindex,omitempty"`
+}
+
+type Endpoint struct {
+	Namespace       string                           `json:"namespace,omitempty"`
+	Name            string                           `json:"name,omitempty"`
+	AppliedPolicies []v1beta2.NetworkPolicyReference `json:"policies,omitempty"`
+	IngressSrcRules []Rule                           `json:"ingresssrcrules,omitempty"`
+	EgressDstRules  []Rule                           `json:"egressdstrules,omitempty"`
+}
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
@@ -27,24 +48,61 @@ func HandleFunc(eq networkpolicy.EndpointQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		podName := r.URL.Query().Get("pod")
 		namespace := r.URL.Query().Get("namespace")
-		if namespace == "" {
-			namespace = "default"
-		}
 		// check for incomplete arguments
 		if podName == "" {
 			http.Error(w, "pod must be provided", http.StatusBadRequest)
 			return
 		}
 		// query endpoint and handle response errors
-		endpointQueryResponse, err := eq.QueryNetworkPolicies(namespace, podName)
+		endpointNetworkPolicyRules, err := eq.QueryNetworkPolicyRules(namespace, podName)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if endpointQueryResponse == nil {
+		if endpointNetworkPolicyRules == nil {
 			http.Error(w, "could not find any endpoints matching your selection", http.StatusNotFound)
 			return
 		}
+
+		// make response policies
+		responsePolicies := make([]v1beta2.NetworkPolicyReference, 0)
+		for _, internalPolicy := range endpointNetworkPolicyRules.AppliedPolicies {
+			responsePolicy := v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.NetworkPolicyType(internalPolicy.SourceRef.Type),
+				Namespace: internalPolicy.SourceRef.Namespace,
+				Name:      internalPolicy.SourceRef.Name,
+				UID:       internalPolicy.SourceRef.UID,
+			}
+			responsePolicies = append(responsePolicies, responsePolicy)
+		}
+		// create rules based on effective rules on this endpoint
+		extractRules := func(effectiveRules []*antreatypes.RuleInfo) []Rule {
+			responseRules := make([]Rule, 0)
+			for _, rule := range effectiveRules {
+				newRule := Rule{
+					PolicyRef: v1beta2.NetworkPolicyReference{
+						Type:      v1beta2.NetworkPolicyType(rule.Policy.SourceRef.Type),
+						Namespace: rule.Policy.SourceRef.Namespace,
+						Name:      rule.Policy.SourceRef.Name,
+						UID:       rule.Policy.SourceRef.UID,
+					},
+					Direction: v1beta2.Direction(rule.Rule.Direction),
+					RuleIndex: rule.Index,
+				}
+				responseRules = append(responseRules, newRule)
+			}
+			return responseRules
+		}
+		// for now, selector only selects a single endpoint (pod, namespace)
+		endpoint := Endpoint{
+			Namespace:       namespace,
+			Name:            podName,
+			AppliedPolicies: responsePolicies,
+			IngressSrcRules: extractRules(endpointNetworkPolicyRules.EndpointAsIngressSrcRules),
+			EgressDstRules:  extractRules(endpointNetworkPolicyRules.EndpointAsEgressDstRules),
+		}
+		endpointQueryResponse := &EndpointQueryResponse{[]Endpoint{endpoint}}
+
 		if err := json.NewEncoder(w).Encode(*endpointQueryResponse); err != nil {
 			http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}

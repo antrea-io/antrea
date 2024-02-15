@@ -121,3 +121,21 @@ func (p *NetworkPolicy) GetAddressGroups() sets.Set[string] {
 func (p *NetworkPolicy) GetAppliedToGroups() sets.Set[string] {
 	return sets.New[string](p.AppliedToGroups...)
 }
+
+// RuleInfo stores the original NetworkPolicy info, index of this rule in the NetworkPolicy
+// corresponding ingress/egress rules, and the original rule info.
+type RuleInfo struct {
+	Policy *NetworkPolicy
+	Index  int
+	Rule   *controlplane.NetworkPolicyRule
+}
+
+// EndpointNetworkPolicyRules records policies applied to this endpoint, and rules
+// that refer this endpoint in their address groups.
+type EndpointNetworkPolicyRules struct {
+	Namespace                 string
+	Name                      string
+	AppliedPolicies           []*NetworkPolicy
+	EndpointAsIngressSrcRules []*RuleInfo
+	EndpointAsEgressDstRules  []*RuleInfo
+}

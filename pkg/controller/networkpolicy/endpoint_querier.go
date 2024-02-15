@@ -18,53 +18,21 @@
 package networkpolicy
 
 import (
-	"k8s.io/apimachinery/pkg/types"
-
 	"antrea.io/antrea/pkg/apis/controlplane"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
-// EndpointQuerier handles requests for antctl query
+// EndpointQuerier handles requests for querying NetworkPolicies of the endpoint.
 type EndpointQuerier interface {
-	// QueryNetworkPolicies returns the list of NetworkPolicies which apply to the provided Pod,
-	// along with the list NetworkPolicies which select the provided Pod in one of their policy
-	// rules (ingress or egress).
-	QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error)
+	// QueryNetworkPolicyRules returns the list of NetworkPolicies which apply to the provided Pod,
+	// along with the list of NetworkPolicy ingress/egress rules which select the provided Pod.
+	QueryNetworkPolicyRules(namespace, podName string) (*antreatypes.EndpointNetworkPolicyRules, error)
 }
 
 // endpointQuerier implements the EndpointQuerier interface
 type endpointQuerier struct {
 	networkPolicyController *NetworkPolicyController
-}
-
-// EndpointQueryResponse is the reply struct for anctl endpoint queries
-type EndpointQueryResponse struct {
-	Endpoints []Endpoint `json:"endpoints,omitempty"`
-}
-
-type Endpoint struct {
-	Namespace string   `json:"namespace,omitempty"`
-	Name      string   `json:"name,omitempty"`
-	Policies  []Policy `json:"policies,omitempty"`
-	Rules     []Rule   `json:"rules,omitempty"`
-}
-
-type PolicyRef struct {
-	Namespace string    `json:"namespace,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	UID       types.UID `json:"uid,omitempty"`
-}
-
-type Policy struct {
-	PolicyRef
-}
-
-type Rule struct {
-	PolicyRef
-	Direction cpv1beta.Direction `json:"direction,omitempty"`
-	RuleIndex int                `json:"ruleindex,omitempty"`
 }
 
 // NewEndpointQuerier returns a new *endpointQuerier.
@@ -75,24 +43,22 @@ func NewEndpointQuerier(networkPolicyController *NetworkPolicyController) *endpo
 	return n
 }
 
-// QueryNetworkPolicies returns kubernetes network policy references relevant to the selected
-// network endpoint. Relevant policies fall into three categories: applied policies (Policies in
-// Endpoint type) are policies which directly apply to an endpoint, egress and ingress rules (Rules
-// in Endpoint type) are policies which reference the endpoint in an ingress/egress rule
-// respectively.
-func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error) {
+// QueryNetworkPolicyRules returns network policies and rules relevant to the selected
+// network endpoint. Relevant network policies fall into three categories: applied policies
+// are policies which directly apply to an endpoint, egress/ingress rules are rules which
+// reference the endpoint respectively.
+func (eq *endpointQuerier) QueryNetworkPolicyRules(namespace, podName string) (*antreatypes.EndpointNetworkPolicyRules, error) {
+	if namespace == "" {
+		namespace = "default"
+	}
 	groups, exists := eq.networkPolicyController.groupingInterface.GetGroupsForPod(namespace, podName)
 	if !exists {
 		return nil, nil
 	}
-	type ruleTemp struct {
-		policy *antreatypes.NetworkPolicy
-		index  int
-	}
+
 	// create network policies categories
 	applied := make([]*antreatypes.NetworkPolicy, 0)
-	ingress := make([]*ruleTemp, 0)
-	egress := make([]*ruleTemp, 0)
+	ingress, egress := make([]*antreatypes.RuleInfo, 0), make([]*antreatypes.RuleInfo, 0)
 	// get all appliedToGroups using filter, then get applied policies using appliedToGroup
 	appliedToGroupKeys := groups[appliedToGroupType]
 	// We iterate over all AppliedToGroups (same for AddressGroups below). This is acceptable
@@ -132,14 +98,16 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 			for _, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
 				for _, addressGroupTrial := range rule.To.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
-						egress = append(egress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: egressIndex})
+						egress = append(egress, &antreatypes.RuleInfo{Policy: policy.(*antreatypes.NetworkPolicy), Index: egressIndex,
+							Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
 						// an AddressGroup can only be referenced in a rule once
 						break
 					}
 				}
 				for _, addressGroupTrial := range rule.From.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
-						ingress = append(ingress, &ruleTemp{policy: policy.(*antreatypes.NetworkPolicy), index: ingressIndex})
+						ingress = append(ingress, &antreatypes.RuleInfo{Policy: policy.(*antreatypes.NetworkPolicy), Index: ingressIndex,
+							Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
 						// an AddressGroup can only be referenced in a rule once
 						break
 					}
@@ -155,50 +123,5 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 			}
 		}
 	}
-	// make response policies
-	responsePolicies := make([]Policy, 0)
-	for _, internalPolicy := range applied {
-		responsePolicy := Policy{
-			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.SourceRef.Namespace,
-				Name:      internalPolicy.SourceRef.Name,
-				UID:       internalPolicy.SourceRef.UID,
-			},
-		}
-		responsePolicies = append(responsePolicies, responsePolicy)
-	}
-	responseRules := make([]Rule, 0)
-	// create rules based on egress and ingress policies
-	for _, internalPolicy := range egress {
-		newRule := Rule{
-			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.policy.SourceRef.Namespace,
-				Name:      internalPolicy.policy.SourceRef.Name,
-				UID:       internalPolicy.policy.SourceRef.UID,
-			},
-			Direction: cpv1beta.DirectionOut,
-			RuleIndex: internalPolicy.index,
-		}
-		responseRules = append(responseRules, newRule)
-	}
-	for _, internalPolicy := range ingress {
-		newRule := Rule{
-			PolicyRef: PolicyRef{
-				Namespace: internalPolicy.policy.SourceRef.Namespace,
-				Name:      internalPolicy.policy.SourceRef.Name,
-				UID:       internalPolicy.policy.SourceRef.UID,
-			},
-			Direction: cpv1beta.DirectionIn,
-			RuleIndex: internalPolicy.index,
-		}
-		responseRules = append(responseRules, newRule)
-	}
-	// for now, selector only selects a single endpoint (pod, namespace)
-	endpoint := Endpoint{
-		Namespace: namespace,
-		Name:      podName,
-		Policies:  responsePolicies,
-		Rules:     responseRules,
-	}
-	return &EndpointQueryResponse{[]Endpoint{endpoint}}, nil
+	return &antreatypes.EndpointNetworkPolicyRules{Namespace: namespace, Name: podName, AppliedPolicies: applied, EndpointAsIngressSrcRules: ingress, EndpointAsEgressDstRules: egress}, nil
 }
