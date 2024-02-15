@@ -562,8 +562,8 @@ type NetworkPolicyPeer struct {
 	// by name or by wildcard match patterns. This field can only be set for
 	// NetworkPolicyPeer of egress rules.
 	// Supported formats are:
-	//  Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-	//  Wildcard expressions, i.e. "*wayfair.com".
+	//  Exact FQDNs such as "google.com".
+	//  Wildcard expressions such as "*wayfair.com".
 	FQDN string `json:"fqdn,omitempty"`
 	// Select all Pods with the ServiceAccount matched by this field, as
 	// workloads in To/From fields.

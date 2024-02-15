@@ -4570,7 +4570,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					},
 					"fqdn": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Restrict egress access to the Fully Qualified Domain Names prescribed by name or by wildcard match patterns. This field can only be set for NetworkPolicyPeer of egress rules. Supported formats are:\n Exact FQDNs, i.e. \"google.com\", \"db-svc.default.svc.cluster.local\"\n Wildcard expressions, i.e. \"*wayfair.com\".",
+							Description: "Restrict egress access to the Fully Qualified Domain Names prescribed by name or by wildcard match patterns. This field can only be set for NetworkPolicyPeer of egress rules. Supported formats are:\n Exact FQDNs such as \"google.com\".\n Wildcard expressions such as \"*wayfair.com\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},

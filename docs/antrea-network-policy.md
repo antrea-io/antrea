@@ -1398,6 +1398,10 @@ spec:
       - fqdn: "svcA.default.svc.cluster.local"
 ```
 
+More generally speaking, it is not recommended to use the FQDN selector for DNS
+names created by Kubernetes, as label-based selectors are more appropriate for
+Kubernetes workloads.
+
 ### Node Selector
 
 NodeSelector selects certain Nodes which match the label selector.
