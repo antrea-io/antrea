@@ -190,7 +190,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs)
 	}
 
 	b.Logf("Creating a toolbox test Pod")
-	perfPod := createPerfTestPodDefinition(toolboxPodName, toolboxContainerName, toolboxImage)
+	perfPod := createPerfTestPodDefinition(toolboxPodName, toolboxContainerName, ToolboxImage)
 	_, err = data.clientset.CoreV1().Pods(data.testNamespace).Create(context.TODO(), perfPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating toolbox test Pod: %v", err)

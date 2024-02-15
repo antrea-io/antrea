@@ -1,0 +1,147 @@
+---
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: secnet-ipv4-1
+spec:
+  ipVersion: 4
+  ipRanges:
+  - cidr: "148.14.24.0/24"
+    gateway: "148.14.24.1"
+    prefixLength: 24
+
+---
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: secnet-ipv4-2
+spec:
+  ipVersion: 4
+  ipRanges:
+  - start: "148.14.25.111"
+    end: "148.14.25.123"
+    gateway: "148.14.25.1"
+    prefixLength: 24
+
+---
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: secnet-ipv4-3
+spec:
+  ipVersion: 4
+  ipRanges:
+  - cidr: "148.14.26.0/24"
+    gateway: "148.14.26.1"
+    prefixLength: 24
+    vlan: 300
+
+---
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: secnet-ipv6-3
+spec:
+  ipVersion: 6
+  ipRanges:
+  - cidr: "10:2400::0/96"
+    gateway: "10:2400::1"
+    prefixLength: 64
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: sriov-net1
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "sriov",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-1"]
+      }
+    }'
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: sriov-net2
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "sriov",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-2"]
+      }
+    }'
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: sriov-net3
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "sriov",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-3"]
+      }
+    }'
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-net1
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "mtu": 1200,
+      "vlan": 100,
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-1"]
+      }
+    }'
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-net2
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-2"]
+      }
+    }'
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-net3
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-3", "secnet-ipv6-3"]
+      }
+    }'

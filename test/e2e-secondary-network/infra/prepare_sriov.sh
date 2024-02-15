@@ -22,8 +22,8 @@ _usage="Usage: $0 [--setup] [--cleanup]
 Configure/cleanup SR-IOV VFs and deploy the SR-IOV device plugin at the remote single node cluster.
 
         --setup                                 Configures the SR-IOV VFs and deploy the SR-IOV device plugin at the remote cluster (single node cluster).
-	--cleanup                               cleanup SR-IOV device plugin and VFs at the remote cluster (single node cluster).
-	--sriov-interface <interface name>      Base network interface (remote node scope) to create VFs.
+        --cleanup                               cleanup SR-IOV device plugin and VFs at the remote cluster (single node cluster).
+        --sriov-interface <interface name>      Base network interface (remote node scope) to create VFs.
         --sriov-vf-count <count>                Number of virtual functions to be created on the base network interface.
         --host-name <k8s control node name/IP>  K8s cluster's host name or IP address."
 
@@ -63,7 +63,6 @@ function print_help {
 
 
 SRIOV_PLUGIN_REL_TAG=v3.5.1
-WHEREABOUTS_CNI_REL_TAG=v0.6.1
 export URL_SRIOV_DP_CONFIG_MAP="https://raw.githubusercontent.com/k8snetworkplumbingwg/sriov-network-device-plugin/$SRIOV_PLUGIN_REL_TAG/deployments/configMap.yaml"
 export URL_SRIOV_DP_DAEMONSET="https://raw.githubusercontent.com/k8snetworkplumbingwg/sriov-network-device-plugin/$SRIOV_PLUGIN_REL_TAG/deployments/k8s-v1.16/sriovdp-daemonset.yaml"
 export YAML_ANTREA='antrea.yml'
@@ -171,7 +170,7 @@ function updateKubeConfigForTargetCluster() {
                 echoerr "Failed to copy the downloaded configuration files!"
                 exit 1
         fi
-	export KUBECONFIG=/tmp/kubernetes/$hostName/admin.conf
+        export KUBECONFIG=/tmp/kubernetes/$hostName/admin.conf
 }
 
 
@@ -191,11 +190,11 @@ EOF
                 fi
                 SriovDevicePlugin
         fi
-	if [[ $configure == "true" ]]; then
+        if [[ $configure == "true" ]]; then
         echo "SR-IOV successfully configured at the remote server."
-	else
-	echo "SR-IOV successfully deconfigured at the remote server."
-	fi
+        else
+        echo "SR-IOV successfully deconfigured at the remote server."
+        fi
 }
 
 if [[ $# -eq 0 ]]; then

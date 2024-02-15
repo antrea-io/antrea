@@ -233,7 +233,7 @@ function configure_extra_networks {
     i=$((i+1))
   done
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
+  nodes="$(kind get nodes --name $CLUSTER_NAME)"
   for node in $nodes; do
     for network in $networks; do
       docker network connect $network $node >/dev/null 2>&1
