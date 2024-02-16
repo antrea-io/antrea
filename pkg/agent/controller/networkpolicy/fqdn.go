@@ -180,7 +180,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 	} else {
 		host, port := os.Getenv(kubeDNSServiceHost), os.Getenv(kubeDNSServicePort)
 		if host == "" || port == "" {
-			klog.InfoS("Unable to derive DNS server from the kube-dns Service, will fall back to local resolver")
+			klog.InfoS("Unable to derive DNS server from the kube-dns Service, will fall back to local resolver and DNS names matching the configured cluster domain suffix are not supported")
 			controller.dnsServerAddr = ""
 		} else {
 			controller.dnsServerAddr = net.JoinHostPort(host, port)
