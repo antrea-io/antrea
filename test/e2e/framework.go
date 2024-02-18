@@ -90,7 +90,6 @@ const (
 	testAntreaIPAMNamespace     = "antrea-ipam-test"
 	testAntreaIPAMNamespace11   = "antrea-ipam-test-11"
 	testAntreaIPAMNamespace12   = "antrea-ipam-test-12"
-	busyboxContainerName        = "busybox"
 	mcjoinContainerName         = "mcjoin"
 	agnhostContainerName        = "agnhost"
 	toolboxContainerName        = "toolbox"
@@ -127,7 +126,6 @@ const (
 	flowAggregatorConfName   = "flow-aggregator.conf"
 
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.29"
-	busyboxImage        = "projects.registry.vmware.com/antrea/busybox"
 	ToolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.3-0"
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
@@ -1501,12 +1499,6 @@ func (data *TestData) UpdatePod(namespace, name string, mutateFunc func(*corev1.
 	return nil
 }
 
-// createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
-// Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	return NewPodBuilder(name, ns, busyboxImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
-}
-
 // createMcJoinPodOnNode creates a Pod in the test namespace with a single mcjoin container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
@@ -2266,7 +2258,7 @@ func (data *TestData) RunPingCommandFromTestPod(podInfo PodInfo, ns string, targ
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, server string, port int32) error {
-	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, busyboxContainerName, server, port, "tcp")
+	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, toolboxContainerName, server, port, "tcp")
 }
 
 func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns string, containerName string, server string, port int32, protocol string) error {
@@ -2290,8 +2282,8 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
 }
 
-func (data *TestData) runWgetCommandOnBusyboxWithRetry(podName string, ns string, url string, maxAttempts int) (string, string, error) {
-	return data.runWgetCommandFromTestPodWithRetry(podName, ns, busyboxContainerName, url, maxAttempts)
+func (data *TestData) runWgetCommandOnToolboxWithRetry(podName string, ns string, url string, maxAttempts int) (string, string, error) {
+	return data.runWgetCommandFromTestPodWithRetry(podName, ns, toolboxContainerName, url, maxAttempts)
 }
 
 func (data *TestData) runWgetCommandFromTestPodWithRetry(podName string, ns string, containerName string, url string, maxAttempts int) (string, string, error) {

@@ -60,7 +60,7 @@ func TestBatchCreatePods(t *testing.T) {
 
 	oldFDs := getFDs()
 
-	_, _, cleanupFn := createTestBusyboxPods(t, data, batchNum, data.testNamespace, node1)
+	_, _, cleanupFn := createTestToolboxPods(t, data, batchNum, data.testNamespace, node1)
 	defer cleanupFn()
 
 	// It is possible for new FDs to be allocated temporarily by the process, for different

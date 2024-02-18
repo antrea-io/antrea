@@ -760,7 +760,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
 		// Deploy the client Pod on the control-plane node
-		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
+		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
 		defer clientCleanupFunc()
 		label := "ToExternalEgressOnSourceNode"
 		addLabelToTestPods(t, data, label, []string{clientName})
@@ -772,7 +772,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		} else {
 			egressNodeIP = nodeIPv6(0)
 		}
-		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP, nil)
+		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "toolbox"}, "", egressNodeIP, nil)
 		egress, err := data.waitForEgressRealized(egress)
 		if err != nil {
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
@@ -801,7 +801,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
 		// Deploy the client Pod on the control-plane node
-		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
+		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
 		defer clientCleanupFunc()
 		label := "ToExternalEgressOnOtherNode"
 		addLabelToTestPods(t, data, label, []string{clientName})
@@ -813,7 +813,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		} else {
 			egressNodeIP = nodeIPv6(1)
 		}
-		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "busybox"}, "", egressNodeIP, nil)
+		egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "toolbox"}, "", egressNodeIP, nil)
 		egress, err := data.waitForEgressRealized(egress)
 		if err != nil {
 			t.Fatalf("Error when waiting for Egress to be realized: %v", err)
@@ -835,7 +835,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	// sends traffic to an external IP
 	t.Run("ToExternalFlows", func(t *testing.T) {
 		// Deploy the client Pod on the control-plane node
-		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
+		clientName, clientIPs, clientCleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", nodeName(0), data.testNamespace, false)
 		defer clientCleanupFunc()
 		label := "ToExternalFlows"
 		addLabelToTestPods(t, data, label, []string{clientName})
@@ -1152,7 +1152,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	} else {
 		cmd = fmt.Sprintf("wget -O- [%s]:%d", dstIP, dstPort)
 	}
-	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, srcPodName, busyboxContainerName, strings.Fields(cmd))
+	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, srcPodName, toolboxContainerName, strings.Fields(cmd))
 	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
 	_, recordSlices := getCollectorOutput(t, srcIP, dstIP, "", false, false, isIPv6, data, labelFilter)
 	for _, record := range recordSlices {
@@ -1357,7 +1357,7 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 		assert.Contains(record, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"iperf\"", srcPod), "Record does not have correct label for source Pod")
 		assert.Contains(record, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"iperf\"", dstPod), "Record does not have correct label for destination Pod")
 	} else {
-		assert.Contains(record, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"busybox\"", srcPod), "Record does not have correct label for source Pod")
+		assert.Contains(record, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"toolbox\"", srcPod), "Record does not have correct label for source Pod")
 	}
 }
 
@@ -1376,7 +1376,7 @@ func checkPodAndNodeDataClickHouse(data *TestData, t *testing.T, record *ClickHo
 		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"iperf\"", srcPod), "Record does not have correct label for source Pod")
 		assert.Contains(record.DestinationPodLabels, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"iperf\"", dstPod), "Record does not have correct label for destination Pod")
 	} else {
-		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"busybox\"", srcPod), "Record does not have correct label for source Pod")
+		assert.Contains(record.SourcePodLabels, fmt.Sprintf("\"antrea-e2e\":\"%s\",\"app\":\"toolbox\"", srcPod), "Record does not have correct label for source Pod")
 	}
 }
 
