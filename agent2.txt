@@ -1,0 +1,11 @@
+I0216 13:07:21.616301       1 log_file.go:93] Set log file max size to 104857600
+I0216 13:07:21.642886       1 agent.go:104] "Starting Antrea agent" version="v2.0.0-dev-a5e2792"
+I0216 13:07:21.653744       1 client.go:89] No kubeconfig file was specified. Falling back to in-cluster config
+I0216 13:07:21.716160       1 prometheus.go:189] Initializing prometheus metrics
+I0216 13:07:21.720415       1 ovs_client.go:71] Connecting to OVSDB at address /var/run/openvswitch/db.sock
+I0216 13:07:21.738691       1 agent.go:412] Setting up node network
+I0216 13:07:21.741971       1 discoverer.go:82] Starting ServiceCIDRDiscoverer
+F0216 13:07:21.753648       1 main.go:53] Error running agent: error initializing agent: failed to get Node with name antrea-cluster-1-control-plane from K8s: Get "https://10.96.0.1:443/api/v1/nodes/antrea-cluster-1-control-plane": dial tcp 10.96.0.1:443: connect: connection refused
+goroutine 1 [running]:
+k8s.io/klog/v2/internal/dbg.Stacks(0x0)
+

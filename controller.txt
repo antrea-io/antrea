@@ -1,0 +1,10 @@
+I0216 13:08:48.183953       1 log_file.go:93] Set log file max size to 104857600
+I0216 13:08:48.186696       1 controller.go:124] Starting Antrea Controller (version v2.0.0-dev-a5e2792)
+I0216 13:08:48.187134       1 client.go:89] No kubeconfig file was specified. Falling back to in-cluster config
+I0216 13:08:48.239995       1 selfsignedcert_provider.go:251] "Writing certificate and key to the cert directory"
+I0216 13:08:48.756927       1 log_file.go:121] Starting log file monitoring. Maximum log file number is 4
+I0216 13:08:48.757066       1 prometheus.go:124] Initializing prometheus metrics
+I0216 13:08:48.757626       1 controller.go:152] "Starting" controller="EgressController"
+I0216 13:08:48.757625       1 controller.go:166] Starting GroupEntityController
+I0216 13:08:48.757704       1 shared_informer.go:270] Waiting for caches to sync for GroupEntityController
+I0216 13:08:48.757704       1 shared_informer.go:270] Waiting for caches to sync for EgressController
