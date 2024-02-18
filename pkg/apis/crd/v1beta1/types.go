@@ -562,8 +562,8 @@ type NetworkPolicyPeer struct {
 	// by name or by wildcard match patterns. This field can only be set for
 	// NetworkPolicyPeer of egress rules.
 	// Supported formats are:
-	//  Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-	//  Wildcard expressions, i.e. "*wayfair.com".
+	//  Exact FQDNs such as "google.com".
+	//  Wildcard expressions such as "*wayfair.com".
 	FQDN string `json:"fqdn,omitempty"`
 	// Select all Pods with the ServiceAccount matched by this field, as
 	// workloads in To/From fields.
@@ -1165,6 +1165,8 @@ type Observation struct {
 	// TunnelDstIP is the tunnel destination IP.
 	TunnelDstIP string `json:"tunnelDstIP,omitempty" yaml:"tunnelDstIP,omitempty"`
 	EgressIP    string `json:"egressIP,omitempty" yaml:"egressIP,omitempty"`
+	// EgressNode is the name of the Egress Node.
+	EgressNode string `json:"egressNode,omitempty" yaml:"egressNode,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

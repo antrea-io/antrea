@@ -20,30 +20,32 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--ipsec] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode (mode)] [--ipsec] [--tun (geneve|vxlan|gre|stt)] [--verbose-log]
 Generate a YAML manifest for Antrea using Helm and print it to stdout.
-        --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
-        --encap-mode                  Traffic encapsulation mode. (default is 'encap')
-        --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
-        --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled
+        --mode (dev|release)          Choose the configuration variant that you need (default is 'dev').
+        --encap-mode (mode)           Traffic encapsulation mode (default is 'encap').
+        --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud.
+        --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. TrafficControl=true,Egress=false.
-        --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
-        --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
-        --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
-                                      This option will work only in 'dev' mode.
+        --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled.
+        --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve).
         --on-delete                   Generate a manifest with antrea-agent's update strategy set to OnDelete.
                                       This option will work only in 'dev' mode.
-        --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
-        --simulator                   Generates a manifest with antrea-agent simulator included
-        --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
-        --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
-        --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
-        --flexible-ipam               Generates a manifest with flexible IPAM enabled.
-        --help, -h                    Print this message and exit
-        --multicast                   Generates a manifest for multicast.
-        --multicast-interfaces        Multicast interface names (default is empty)
-        --extra-helm-values-file      Optional extra helm values file to override the default config values
-        --extra-helm-values           Optional extra helm values to override the default config values
+        --coverage                    Generate a manifest which supports measuring code coverage of Antrea binaries.
+        --simulator                   Generate a manifest with antrea-agent simulator included.
+        --custom-adm-controller       Generate a manifest with custom Antrea admission controller to validate/mutate resources.
+        --flexible-ipam               Generate a manifest with flexible IPAM enabled.
+        --hw-offload                  Generate a manifest with hw-offload enabled in the antrea-ovs container.
+        --sriov                       Generate a manifest which enables use of kubelet API for SR-IOV device info.
+        --secondary-bridge (bridge)   Generate a manifest which enables secondary network and creates a secondary OVS bridge.
+        --physical-interface (device) Specify the physical interface of the secondary OVS bridge.
+        --multicast                   Generate a manifest for multicast.
+        --multicast-interfaces        Multicast interface names (default is empty).
+        --extra-helm-values-file      Optional extra helm values file to override the default config values.
+        --extra-helm-values           Optional extra helm values to override the default config values.
+        --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
+                                      This option will work only in 'dev' mode.
+        --help, -h                    Print this message and exit.
 
 In 'release' mode, environment variables AGENT_IMG_NAME, CONTROLLER_IMG_NAME, and IMG_TAG must be set.
 
@@ -75,9 +77,11 @@ COVERAGE=false
 K8S_115=false
 SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
+FLEXIBLE_IPAM=false
 HW_OFFLOAD=false
 SRIOV=false
-FLEXIBLE_IPAM=false
+SECONDARY_BRIDGE=""
+PHYSICAL_INTERFACE=""
 MULTICAST=false
 MULTICAST_INTERFACES=""
 HELM_VALUES_FILES=()
@@ -126,10 +130,6 @@ case $key in
     TUN_TYPE="$2"
     shift 2
     ;;
-    --verbose-log)
-    VERBOSE_LOG=true
-    shift
-    ;;
     --on-delete)
     ON_DELETE=true
     shift
@@ -146,6 +146,10 @@ case $key in
     CUSTOM_ADM_CONTROLLER=true
     shift
     ;;
+    --flexible-ipam)
+    FLEXIBLE_IPAM=true
+    shift
+    ;;
     --hw-offload)
     HW_OFFLOAD=true
     shift
@@ -154,9 +158,13 @@ case $key in
     SRIOV=true
     shift
     ;;
-    --flexible-ipam)
-    FLEXIBLE_IPAM=true
-    shift
+    --secondary-bridge)
+    SECONDARY_BRIDGE="$2"
+    shift 2
+    ;;
+    --physical-interface)
+    PHYSICAL_INTERFACE="$2"
+    shift 2
     ;;
     --multicast)
     MULTICAST=true
@@ -177,6 +185,10 @@ case $key in
     --extra-helm-values)
     HELM_VALUES+=("$2")
     shift 2
+    ;;
+    --verbose-log)
+    VERBOSE_LOG=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -320,6 +332,20 @@ agent:
     name: host-kubelet
 EOF
     HELM_VALUES_FILES+=("$TMP_DIR/sriov.yml")
+fi
+
+if [[ $SECONDARY_BRIDGE != "" ]]; then
+    if [[ $PHYSICAL_INTERFACE != "" ]]; then
+        ovs_bridges="[{bridgeName: $SECONDARY_BRIDGE, physicalInterfaces: [$PHYSICAL_INTERFACE]}]"
+    else
+        ovs_bridges="[{bridgeName: \"$SECONDARY_BRIDGE\"}]"
+    fi
+    cat << EOF > $TMP_DIR/secondary-network.yml
+secondaryNetwork:
+  ovsBridges: $ovs_bridges
+EOF
+    HELM_VALUES+=("featureGates.SecondaryNetwork=true" "featureGates.AntreaIPAM=true")
+    HELM_VALUES_FILES+=("$TMP_DIR/secondary-network.yml")
 fi
 
 if [ "$MODE" == "dev" ]; then

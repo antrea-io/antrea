@@ -313,7 +313,7 @@ func testAntctlProxy(t *testing.T, data *TestData, antctlServiceAccountName stri
 	const proxyContainerName = "proxy"
 	const proxyPort = 8001
 
-	require.NoError(t, NewPodBuilder(testPodName, data.testNamespace, toolboxImage).WithContainerName(testContainerName).OnNode(controlPlaneNodeName()).InHostNetwork().Create(data))
+	require.NoError(t, NewPodBuilder(testPodName, data.testNamespace, ToolboxImage).WithContainerName(testContainerName).OnNode(controlPlaneNodeName()).InHostNetwork().Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, testPodName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, testPodName, data.testNamespace), "test Pod not in the Running state")
 

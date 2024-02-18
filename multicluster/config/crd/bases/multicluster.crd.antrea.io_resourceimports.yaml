@@ -646,8 +646,8 @@ spec:
                                   Qualified Domain Names prescribed by name or by
                                   wildcard match patterns. This field can only be
                                   set for NetworkPolicyPeer of egress rules. Supported
-                                  formats are: Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-                                  Wildcard expressions, i.e. "*wayfair.com".'
+                                  formats are: Exact FQDNs such as "google.com". Wildcard
+                                  expressions such as "*wayfair.com".'
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
@@ -1053,8 +1053,8 @@ spec:
                                   Qualified Domain Names prescribed by name or by
                                   wildcard match patterns. This field can only be
                                   set for NetworkPolicyPeer of egress rules. Supported
-                                  formats are: Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-                                  Wildcard expressions, i.e. "*wayfair.com".'
+                                  formats are: Exact FQDNs such as "google.com". Wildcard
+                                  expressions such as "*wayfair.com".'
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
@@ -1610,8 +1610,8 @@ spec:
                                   Qualified Domain Names prescribed by name or by
                                   wildcard match patterns. This field can only be
                                   set for NetworkPolicyPeer of egress rules. Supported
-                                  formats are: Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-                                  Wildcard expressions, i.e. "*wayfair.com".'
+                                  formats are: Exact FQDNs such as "google.com". Wildcard
+                                  expressions such as "*wayfair.com".'
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
@@ -2017,8 +2017,8 @@ spec:
                                   Qualified Domain Names prescribed by name or by
                                   wildcard match patterns. This field can only be
                                   set for NetworkPolicyPeer of egress rules. Supported
-                                  formats are: Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-                                  Wildcard expressions, i.e. "*wayfair.com".'
+                                  formats are: Exact FQDNs such as "google.com". Wildcard
+                                  expressions such as "*wayfair.com".'
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup

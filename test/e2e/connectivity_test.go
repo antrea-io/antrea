@@ -193,7 +193,7 @@ func testHostPortPodConnectivity(t *testing.T, data *TestData) {
 // alternating in this podInfo slice so that the test can cover different connectivity cases between different OSes.
 func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag string) (podInfos []PodInfo, cleanup func() error) {
 	dsName := "connectivity-test" + tag
-	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, toolboxContainerName, toolboxImage, []string{"sleep", "3600"}, nil)
+	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, toolboxContainerName, ToolboxImage, []string{"sleep", "3600"}, nil)
 	if err != nil {
 		t.Fatalf("Error when creating DaemonSet '%s': %v", dsName, err)
 	}

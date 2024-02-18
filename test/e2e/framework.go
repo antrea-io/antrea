@@ -126,32 +126,30 @@ const (
 	antreaControllerConfName = "antrea-controller.conf"
 	flowAggregatorConfName   = "flow-aggregator.conf"
 
-	nameSuffixLength = 8
-
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.29"
 	busyboxImage        = "projects.registry.vmware.com/antrea/busybox"
+	ToolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.3-0"
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	toolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.2-1"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.8.2"
-	ipfixCollectorPort  = "4739"
-	clickHouseHTTPPort  = "8123"
 
 	nginxLBService = "nginx-loadbalancer"
 
+	ipfixCollectorPort                  = "4739"
 	exporterFlowPollInterval            = 1 * time.Second
 	exporterActiveFlowExportTimeout     = 2 * time.Second
 	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
 	aggregatorClickHouseCommitInterval  = 1 * time.Second
+	clickHouseHTTPPort                  = "8123"
+	defaultCHDatabaseURL                = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
 
-	defaultCHDatabaseURL = "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
-	iperfPort            = 5201
-	iperfSvcPort         = 9999
+	iperfPort    = 5201
+	iperfSvcPort = 9999
 )
 
 type ClusterNode struct {
@@ -1518,7 +1516,7 @@ func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName str
 // createToolboxPodOnNode creates a Pod in the test namespace with a single toolbox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createToolboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	return NewPodBuilder(name, ns, toolboxImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
+	return NewPodBuilder(name, ns, ToolboxImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
@@ -2123,10 +2121,6 @@ func (data *TestData) deleteNetworkpolicy(policy *networkingv1.NetworkPolicy) er
 	return nil
 }
 
-func RandName(prefix string) string {
-	return prefix + randSeq(nameSuffixLength)
-}
-
 // A DNS-1123 subdomain must consist of lower case alphanumeric characters
 var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
@@ -2142,6 +2136,7 @@ func randSeq(n int) string {
 
 // randName generates a DNS-1123 subdomain name
 func randName(prefix string) string {
+	nameSuffixLength := 8
 	return prefix + randSeq(nameSuffixLength)
 }
 

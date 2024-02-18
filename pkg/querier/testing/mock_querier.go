@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -302,13 +302,14 @@ func (m *MockEgressQuerier) EXPECT() *MockEgressQuerierMockRecorder {
 }
 
 // GetEgress mocks base method.
-func (m *MockEgressQuerier) GetEgress(arg0, arg1 string) (string, string, error) {
+func (m *MockEgressQuerier) GetEgress(arg0, arg1 string) (string, string, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetEgress", arg0, arg1)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret2, _ := ret[2].(string)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // GetEgress indicates an expected call of GetEgress.
