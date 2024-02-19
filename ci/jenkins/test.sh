@@ -55,6 +55,8 @@ CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 PRINT_DOCKER_STATUS="docker system df -v"
 PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
+BUILD_TAG="latest"
+MANIFEST_ARGS=""
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|windows-e2e|e2e|conformance|networkpolicy|multicast-e2e>]
@@ -69,7 +71,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
         --win-image-node         Name of the windows image node in cluster. Images are built by docker on this node.
         --kind-cluster-name      Name of the kind Cluster.
-        --proxyall               Enable proxyAll to test AntreaProxy."
+        --proxyall               Enable proxyAll to test AntreaProxy.
+        --build-tag              Custom build tag for images."
 
 function print_usage {
     echoerr "$_usage"
@@ -118,6 +121,10 @@ case $key in
     ;;
     --win-image-node)
     WIN_IMAGE_NODE="$2"
+    shift 2
+    ;;
+    --build-tag)
+    BUILD_TAG="$2"
     shift 2
     ;;
     -h|--help)
@@ -521,7 +528,13 @@ function deliver_antrea {
     fi
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+    if [[ "$BUILD_TAG" != "latest" ]]; then
+        DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --build-tag ${BUILD_TAG} --pull
+        IMG_TAG="${BUILD_TAG}" ./hack/generate-manifest.sh $MANIFEST_ARGS
+    else
+        DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+        ./hack/generate-manifest.sh $MANIFEST_ARGS
+    fi
     make flow-aggregator-image
 
     # Enable verbose log for troubleshooting.
@@ -575,8 +588,8 @@ function deliver_antrea {
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
-            kind load docker-image antrea/antrea-agent-ubuntu:latest --name ${KIND_CLUSTER}
-            kind load docker-image antrea/antrea-controller-ubuntu:latest --name ${KIND_CLUSTER}
+            kind load docker-image antrea/antrea-agent-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
+            kind load docker-image antrea/antrea-controller-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
             kubectl config use-context kind-${KIND_CLUSTER}
             docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml 
@@ -968,12 +981,13 @@ EOF
 
 export KUBECONFIG=${KUBECONFIG_PATH}
 if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-    ./hack/generate-manifest.sh --flexible-ipam --multicast --verbose-log > build/yamls/antrea.yml
+    MANIFEST_ARGS="$MANIFEST_ARGS --flexible-ipam --multicast --verbose-log"
 fi
 
 if [[ $TESTCASE =~ "multicast" ]]; then
-    ./hack/generate-manifest.sh --encap-mode noEncap --multicast --multicast-interfaces "ens224" --verbose-log > build/yamls/antrea.yml
+    MANIFEST_ARGS="$MANIFEST_ARGS --encap-mode noEncap --multicast --multicast-interfaces ens224 --verbose-log"
 fi
+echo $MANIFEST_ARGS
 
 source $WORKSPACE/ci/jenkins/utils.sh
 check_and_upgrade_golang
