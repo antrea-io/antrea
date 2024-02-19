@@ -350,7 +350,7 @@ function deliver_antrea {
 
     # The cleanup and stats are best-effort.
     set +e
-    docker images | grep "${JOB_NAME}" | awk '{print $3}' | uniq | xargs -r docker rmi -f > /dev/null
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep "${JOB_NAME}" | xargs -r docker rmi -f > /dev/null
     # Clean up dangling and unused images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
     docker image prune -af --filter "until=1h" > /dev/null

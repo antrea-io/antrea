@@ -187,7 +187,7 @@ function deliver_antrea_to_aks() {
     # The cleanup and stats are best-effort.
     set +e
     if [[ -n ${JOB_NAME+x} ]]; then
-        docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f > /dev/null
+       docker images --format "{{.Repository}}:{{.Tag}}" | grep "${JOB_NAME}" | xargs -r docker rmi -f > /dev/null
     fi
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
