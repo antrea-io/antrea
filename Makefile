@@ -20,7 +20,6 @@ OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
 GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
 CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version)
 NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
-BUILD_TAG          := $(shell build/images/build-tag.sh)
 WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
 WIN_OVS_VERSION	   := $(shell head -n 1 build/images/deps/ovs-version-windows)
 WIN_BUILD_OVS_TAG  := $(NANOSERVER_VERSION)-$(WIN_OVS_VERSION)
@@ -42,7 +41,6 @@ endif
 WIN_BUILD_ARGS := DOCKER_BUILD_ARGS
 DOCKER_BUILD_ARGS += --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
-DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 WIN_BUILD_ARGS := --build-arg GO_VERSION=$(GO_VERSION)
 WIN_BUILD_ARGS += --build-arg CNI_BINARIES_VERSION=$(CNI_BINARIES_VERSION)
 WIN_BUILD_ARGS += --build-arg NANOSERVER_VERSION=$(NANOSERVER_VERSION)
@@ -57,6 +55,8 @@ all: build
 include versioning.mk
 
 LDFLAGS += $(VERSION_LDFLAGS)
+BUILD_TAG = $(BUILD_TAGS)
+DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 
 UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)

@@ -55,6 +55,7 @@ CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 PRINT_DOCKER_STATUS="docker system df -v"
 PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
+CUSTOM_BUILD_TAG=""
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-containerd-conformance|windows-conformance|windows-containerd-networkpolicy|windows-networkpolicy|windows-containerd-e2e|windows-e2e|e2e|conformance|networkpolicy|multicast-e2e>]
@@ -69,7 +70,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
         --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
         --win-image-node         Name of the windows image node in containerd cluster. Images are built by docker on this node.
-        --kind-cluster-name      Name of the kind Cluster." 
+        --kind-cluster-name      Name of the kind Cluster.
+        --build-tag              Custom build tag for images." 
 
 function print_usage {
     echoerr "$_usage"
@@ -118,6 +120,10 @@ case $key in
     ;;
     --win-image-node)
     WIN_IMAGE_NODE="$2"
+    shift 2
+    ;;
+    --build-tag)
+    CUSTOM_BUILD_TAG="$2"
     shift 2
     ;;
     -h|--help)
@@ -705,7 +711,11 @@ function deliver_antrea {
     fi
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+    if [[ $TESTBED_TYPE == "kind" ]]; then
+        DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --build-tag CUSTOM_BUILD_TAG --pull
+    else
+        DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+    fi
     make flow-aggregator-image
 
     # Enable verbose log for troubleshooting.
@@ -751,10 +761,12 @@ function deliver_antrea {
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "kind" ]]; then
-            kind load docker-image antrea/antrea-agent-ubuntu:latest --name ${KIND_CLUSTER}
-            kind load docker-image antrea/antrea-controller-ubuntu:latest --name ${KIND_CLUSTER}
+            kind load docker-image antrea/antrea-agent-ubuntu:$CUSTOM_BUILD_TAG --name ${KIND_CLUSTER}
+            kind load docker-image antrea/antrea-controller-ubuntu:$CUSTOM_BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
             kubectl config use-context kind-${KIND_CLUSTER}
+            sed -i s|"antrea/antrea/agent-ubuntu:latest"|"antrea/antrea-agent-ubuntu:$CUSTOM_BUILD_TAG"|g ./build/yamls/antrea.yml
+            sed -i s|"antrea/antrea/agent-controller:latest"|"antrea/antrea-controller-ubuntu:$CUSTOM_BUILD_TAG"|g ./build/yamls/antrea.yml
             docker cp ./build/yamls/antrea.yml ${KIND_CLUSTER}-control-plane:/root/antrea.yml 
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
