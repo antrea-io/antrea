@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
@@ -40,7 +39,8 @@ const (
 )
 
 type ipsecCSRApprover struct {
-	client clientset.Interface
+	client                        clientset.Interface
+	antreaAgentServiceAccountName string
 }
 
 var ipsecTunnelUsages = sets.New[string](
@@ -49,20 +49,12 @@ var ipsecTunnelUsages = sets.New[string](
 
 var _ approver = (*ipsecCSRApprover)(nil)
 
-func getAntreaAgentServiceAccount() string {
-	antreaAgentServiceAccountNameWithoutNS := strings.Join([]string{
-		"system", "serviceaccount", "antrea-agent",
-	}, ":")
-
-	antreaAgentServiceAccountNameWithNS := strings.Join([]string{
+func (ic *ipsecCSRApprover) getAntreaAgentServiceAccount() string {
+	ic.antreaAgentServiceAccountName = strings.Join([]string{
 		"system", "serviceaccount", env.GetAntreaNamespace(), "antrea-agent",
 	}, ":")
 
-	if os.Getenv("POD_NAMESPACE") == "" {
-		return antreaAgentServiceAccountNameWithoutNS
-	} else {
-		return antreaAgentServiceAccountNameWithNS
-	}
+	return ic.antreaAgentServiceAccountName
 }
 
 func (ic *ipsecCSRApprover) recognize(csr *certificatesv1.CertificateSigningRequest) bool {
@@ -134,7 +126,7 @@ func (ic *ipsecCSRApprover) verifyCertificateRequest(req *x509.CertificateReques
 }
 
 func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.CertificateSigningRequest) error {
-	if csr.Spec.Username != getAntreaAgentServiceAccount() {
+	if csr.Spec.Username != ic.getAntreaAgentServiceAccount() {
 		return errUserUnauthorized
 	}
 	podNameValues, podUIDValues := csr.Spec.Extra[sautil.PodNameKey], csr.Spec.Extra[sautil.PodUIDKey]
