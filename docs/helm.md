@@ -29,8 +29,6 @@ We provide the following Helm charts:
 Note that these charts are the same charts that we use to generate the YAML
 manifests for the `kubectl apply` installation method.
 
-Helm installation is currently considered Alpha.
-
 ## Prerequisites
 
 * Ensure that the necessary
