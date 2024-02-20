@@ -68,6 +68,14 @@ const (
 	roundNumKey             = "roundNum" // round number key in externalIDs.
 	initialRoundNum         = 1
 	maxRetryForRoundNumSave = 5
+	// On Linux, OVS configures the MTU for tunnel interfaces to 65000.
+	// See https://github.com/openvswitch/ovs/blame/3e666ba000b5eff58da8abb4e8c694ac3f7b08d6/lib/dpif-netlink-rtnl.c#L348-L360
+	// There are some edge cases (e.g., Kind clusters) where the transport Node's MTU may be
+	// larger than that (e.g., 65535), and packets may be dropped. To account for this, we use
+	// 65000 as an upper bound for the MTU calculated in getInterfaceMTU, when encap is
+	// supported. For simplicity's sake, we also use this upper bound for Windows, even if it
+	// does not apply.
+	ovsTunnelMaxMTU = 65000
 )
 
 var (
@@ -1197,6 +1205,11 @@ func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, e
 
 	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
 	mtu -= i.networkConfig.CalculateMTUDeduction(isIPv6)
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+		// See comment for ovsTunnelMaxMTU constant above.
+		mtu = min(mtu, ovsTunnelMaxMTU)
+	}
+
 	return mtu, nil
 }
 
