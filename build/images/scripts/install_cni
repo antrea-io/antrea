@@ -16,6 +16,8 @@
 
 set -euo pipefail
 
+source module_utils
+
 # Fetching the list of the binaries that user wants to skip installing.
 IFS=',' read -r -a binaries <<< "${SKIP_CNI_BINARIES:-}"
 # Todo: check version and continue installation only for a newer version
@@ -55,12 +57,21 @@ install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.con
 rm -f /host/etc/cni/net.d/10-antrea.conf
 
 if [[ -z "${SKIP_LOADING_KERNEL_MODULES:-}" ]]; then
-    # Load the OVS kernel module
-    modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
+    # Load the OVS kernel module if not built-in
+    if ! is_module_builtin "openvswitch"; then
+        modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
+    else
+        echo "Module openvswitch is built-in"
+    fi
 
-    # Load the WireGuard kernel module. This is only required when WireGuard encryption is enabled.
-    # We could parse the antrea config file in the init-container to dynamically load this kernel module in the future.
-    modprobe wireguard || (echo "Failed to load the WireGuard kernel module, WireGuard encryption will not be available")
+    # Load the WireGuard kernel module if not built-in. This is only required when WireGuard
+    # encryption is enabled. We could parse the antrea config file in the init-container to
+    # dynamically load this kernel module in the future.
+    if ! is_module_builtin "wireguard"; then
+        modprobe wireguard || (echo "Failed to load the WireGuard kernel module, WireGuard encryption will not be available")
+    else
+        echo "Module wireguard is built-in"
+    fi
 fi
 
 # Change the default permissions of the run directory.

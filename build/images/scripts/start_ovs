@@ -24,7 +24,6 @@ OVS_DB_FILE="${OVS_RUN_DIR}/conf.db"
 OVS_LOGROTATE_CONF="/etc/logrotate.d/openvswitch-switch"
 
 hw_offload="false"
-skip_kmod="false"
 log_file_max_num=0
 log_file_max_size=0
 
@@ -32,7 +31,6 @@ function usage {
     echo "start_ovs"
     echo -e "  -h|--help\t\t \tPrint help message"
     echo -e "  --hw-offload\t\t \tEnable OVS hardware offload"
-    echo -e "  --skip-kmod\t\t \tForce skip Kernel module loading in OVS start script"
     echo -e "  --log_file_max_num=<uint> \tMaximum number of log files to be kept for an OVS daemon. Value 0 means keeping the current value"
     echo -e "  --log_file_max_size=<uint> \tMaximum size (in megabytes) of an OVS log file. Value 0 means keeping the current value"
 }
@@ -47,7 +45,7 @@ while (( "$#" )); do
       hw_offload="true"
       ;;
     --skip-kmod)
-      skip_kmod="true"
+      echo "--skip-kmod is deprecated and will be removed in the future; it is now the default behavior" >&2
       ;;
     --log_file_max_num=*)
       log_file_max_num=$1
@@ -149,15 +147,15 @@ set -euo pipefail
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
 
-if [ "$skip_kmod" == "true" ]; then
-    # ovs-ctl start will invoke ovs-kmod-ctl to load the openvswitch Kernel module if necessary
-    # (using modprobe). In some cases, this can fail unexpectedly, for example, with Talos Linux
-    # (see https://github.com/antrea-io/antrea/issues/5707). This is why this script offers the
-    # skip-kmod flag, which prevents the ovs-ctl script from trying to load any Kernel module. In
-    # order for this to work, we need to turn ovs-kmod-ctl into a "no-op".
-    cp /usr/share/openvswitch/scripts/ovs-kmod-ctl /usr/share/openvswitch/scripts/ovs-kmod-ctl.bak
-    echo ":" > /usr/share/openvswitch/scripts/ovs-kmod-ctl
-fi
+# ovs-ctl start will invoke ovs-kmod-ctl to load the openvswitch Kernel module
+# if necessary (using modprobe).
+# We want to avoid this behavior for the following reasons:
+#  * the initContainer is already in charge of loading the module if necessary
+#  * we do not mount the host's /lib/module directory into the antrea-ovs container
+#  * in some cases, modprobe will fail if the module is built-in
+# Therefore, we turn ovs-kmod-ctl into a "no-op".
+cp /usr/share/openvswitch/scripts/ovs-kmod-ctl /usr/share/openvswitch/scripts/ovs-kmod-ctl.bak
+echo ":" > /usr/share/openvswitch/scripts/ovs-kmod-ctl
 
 update_logrotate_config_file
 
