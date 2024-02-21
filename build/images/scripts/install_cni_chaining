@@ -15,6 +15,7 @@
 # limitations under the License.
 
 source logging
+source module_utils
 
 HOST_CNI_NET_DIR="/host/etc/cni/net.d"
 
@@ -124,8 +125,15 @@ update_cni_conf
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
 id
-# Load the OVS kernel module
-modprobe openvswitch || { echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1;}
+
+if [[ -z "${SKIP_LOADING_KERNEL_MODULES:-}" ]]; then
+    # Load the OVS kernel module if not built-in
+    if ! is_module_builtin "openvswitch"; then
+        modprobe openvswitch || { echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1;}
+    else
+        log_info "install_cni_chaining" "Module openvswitch is built-in"
+    fi
+fi
 
 if [[ "$run_monitor" == "false" ]]; then
     exit 0
