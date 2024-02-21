@@ -267,9 +267,6 @@ spec:
             {{- if .Values.ovs.hwOffload }}
             - "--hw-offload"
             {{- end }}
-            {{- if .Values.agent.dontLoadKernelModules }}
-            - "--skip-kmod"
-            {{- end }}
             {{- with .Values.agent.antreaOVS.extraArgs }}
             {{- toYaml . | trim | nindent 12 }}
             {{- end }}
