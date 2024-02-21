@@ -15,13 +15,20 @@
 package openflow
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/golang/mock/gomock"
+	"antrea.io/libOpenflow/openflow15"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
+	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/third_party/proxy"
 )
 
 func pipelineDefaultFlows(externalNodeEnabled, isEncap, isIPv4 bool) []string {
@@ -208,4 +215,70 @@ func Test_client_defaultFlows(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.defaultFlows()))
 		})
 	}
+}
+
+// If any test case fails, please consider setting binding.MaxBucketsPerMessage to a smaller value.
+func TestServiceEndpointGroupMaxBuckets(t *testing.T) {
+	fs := &featureService{
+		bridge:        binding.NewOFBridge(bridgeName, ""),
+		nodeIPChecker: nodeiptest.NewFakeNodeIPChecker(),
+	}
+
+	// Test the Endpoint associated with a bucket containing all available actions.
+	testCases := []struct {
+		name           string
+		sampleEndpoint proxy.Endpoint
+	}{
+		{
+			name:           "IPv6, remote, non-hostNetwork",
+			sampleEndpoint: proxy.NewBaseEndpointInfo("2001::1", "node1", "", 80, false, true, false, false, nil),
+		},
+		{
+			name:           "IPv4, remote, non-hostNetwork",
+			sampleEndpoint: proxy.NewBaseEndpointInfo("192.168.1.1", "node1", "", 80, false, true, false, false, nil),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			fakeOfTable := openflowtest.NewMockTable(ctrl)
+			ServiceLBTable.ofTable = fakeOfTable
+			defer func() {
+				ServiceLBTable.ofTable = nil
+			}()
+
+			var endpoints []proxy.Endpoint
+			for i := 0; i < binding.MaxBucketsPerMessage; i++ {
+				endpoints = append(endpoints, tc.sampleEndpoint)
+			}
+
+			fakeOfTable.EXPECT().GetID().Return(uint8(1)).Times(1)
+			group := fs.serviceEndpointGroup(binding.GroupIDType(100), true, endpoints...)
+			messages, err := group.GetBundleMessages(binding.AddMessage)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(messages))
+			groupMod := messages[0].GetMessage().(*openflow15.GroupMod)
+			errorMsg := fmt.Sprintf("The GroupMod size with %d buckets exceeds the OpenFlow message's maximum allowable size, please consider setting binding.MaxBucketsPerMessage to a smaller value.", binding.MaxBucketsPerMessage)
+			require.LessOrEqual(t, getGroupModLen(groupMod), uint32(openflow15.MSG_MAX_LEN), errorMsg)
+		})
+	}
+}
+
+// For openflow15.GroupMod, it provides a built-in method for calculating the message length. However,considering that
+// the GroupMod size we test might exceed the maximum uint16 value, we use uint32 as the return value type.
+func getGroupModLen(g *openflow15.GroupMod) uint32 {
+	n := uint32(0)
+
+	n = uint32(g.Header.Len())
+	n += 16
+
+	for _, b := range g.Buckets {
+		n += uint32(b.Len())
+	}
+
+	for _, p := range g.Properties {
+		n += uint32(p.Len())
+	}
+	return n
 }

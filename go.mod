@@ -1,9 +1,11 @@
 module antrea.io/antrea
 
-go 1.19
+go 1.21
+
+toolchain go1.21.5
 
 require (
-	antrea.io/libOpenflow v0.12.1
+	antrea.io/libOpenflow v0.14.0
 	antrea.io/ofnet v0.9.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.6.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -53,6 +55,7 @@ require (
 	github.com/ti-mo/conntrack v0.4.0
 	github.com/vishvananda/netlink v1.1.1-0.20211101163509-b10eb8fe5cf6
 	github.com/vmware/go-ipfix v0.6.2
+	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.11.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/mod v0.12.0

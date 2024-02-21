@@ -2622,6 +2622,7 @@ func (f *featureService) dsrServiceNoDNATFlows() []binding.Flow {
 // serviceEndpointGroup creates/modifies the group/buckets of Endpoints. If the withSessionAffinity is true, then buckets
 // will resubmit packets back to ServiceLBTable to trigger the learn flow, the learn flow will then send packets to
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
+// IMPORTANT: Ensure any changes to this function are tested in TestServiceEndpointGroupMaxBuckets.
 func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
 	group := f.bridge.NewGroup(groupID)
 
