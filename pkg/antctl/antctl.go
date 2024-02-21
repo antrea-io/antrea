@@ -15,7 +15,6 @@
 package antctl
 
 import (
-	"fmt"
 	"reflect"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
@@ -24,7 +23,6 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
-	"antrea.io/antrea/pkg/agent/openflow"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
@@ -370,6 +368,8 @@ $ antctl get podmulticaststats pod -n namespace`,
 			long:    "Dump all the OVS flows or the flows installed for the specified entity.",
 			example: `  Dump all OVS flows
   $ antctl get ovsflows
+  Dump OVS table names only
+  $ antctl get ovsflows --table-names-only
   Dump OVS flows of a local Pod
   $ antctl get ovsflows -p pod1 -n ns1
   Dump OVS flows of a Service
@@ -381,9 +381,7 @@ $ antctl get podmulticaststats pod -n namespace`,
   Dump OVS groups
   $ antctl get ovsflows -G 10,20
   Dump all OVS groups
-  $ antctl get ovsflows -G all
-
-  Antrea OVS Flow Tables:` + generateFlowTableHelpMsg(),
+  $ antctl get ovsflows -G all`,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/ovsflows",
@@ -412,6 +410,11 @@ $ antctl get podmulticaststats pod -n namespace`,
 							name:      "table",
 							usage:     "Comma separated Antrea OVS flow table names or numbers",
 							shorthand: "T",
+						},
+						{
+							name:   "table-names-only",
+							usage:  "Print all Antrea OVS flow table names only, and nothing else",
+							isBool: true,
 						},
 						{
 							name:      "groups",
@@ -688,12 +691,4 @@ $ antctl get podmulticaststats pod -n namespace`,
 		},
 	},
 	codec: scheme.Codecs,
-}
-
-func generateFlowTableHelpMsg() string {
-	msg := ""
-	for _, t := range openflow.GetTableList() {
-		msg += fmt.Sprintf("\n  %d\t%s", uint32(t.GetID()), t.GetName())
-	}
-	return msg
 }
