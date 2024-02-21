@@ -25,12 +25,9 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 
 COPY . /antrea
 
-# Disable CGO for antctl in case it is copied outside of the container image. It
-# also reduces the size of the binary and aligns with how we distribute antctl
-# in release assets.
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
-    CGO_ENABLED=0 make antctl-linux && mv bin/antctl-linux bin/antctl
+    make antctl-linux && mv bin/antctl-linux bin/antctl
 
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
