@@ -97,6 +97,7 @@ func (f *featureMulticast) replayFlows() []*openflow15.FlowMod {
 	return getCachedFlowMessages(f.cachedFlows)
 }
 
+// IMPORTANT: Ensure any changes to this function are tested in TestMulticastReceiversGroupMaxBuckets.
 func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) binding.Group {
 	group := f.bridge.NewGroupTypeAll(groupID)
 	for i := range ports {
