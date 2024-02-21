@@ -76,6 +76,11 @@ outputs:
       types:
         - alert:
             tagged-packets: yes
+        - http:
+            extended: yes
+            tagged-packets: yes
+        - tls:
+            extended: yes
   - eve-log:
       enabled: yes
       filetype: unix_stream
