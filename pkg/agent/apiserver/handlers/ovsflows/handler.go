@@ -17,6 +17,7 @@ package ovsflows
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,7 @@ var (
 	// Use function variables for tests.
 	getFlowTableName = openflow.GetFlowTableName
 	getFlowTableID   = openflow.GetFlowTableID
+	getFlowTableList = openflow.GetTableList
 )
 
 // Response is the response struct of ovsflows command.
@@ -183,6 +185,19 @@ func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace strin
 	return dumpMatchedFlows(aq, flowKeys)
 }
 
+func getTableNames(aq agentquerier.AgentQuerier) []Response {
+	resps := []Response{}
+	names := []string{}
+	for _, t := range getFlowTableList() {
+		names = append(names, t.GetName())
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		resps = append(resps, Response{name})
+	}
+	return resps
+}
+
 // HandleFunc returns the function which can handle API requests to "/ovsflows".
 func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +209,20 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		namespace := r.URL.Query().Get("namespace")
 		table := r.URL.Query().Get("table")
 		groups := r.URL.Query().Get("groups")
+		tableNamesOnly := r.URL.Query().Has("table-names-only")
+
+		encodeResp := func() {
+			err = json.NewEncoder(w).Encode(resps)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}
+
+		if tableNamesOnly {
+			resps = getTableNames(aq)
+			encodeResp()
+			return
+		}
 
 		if (pod != "" || service != "" || networkPolicy != "") && namespace == "" {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
@@ -240,17 +269,14 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(resps)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		encodeResp()
 	}
 }
 
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"FLOW"}
+	return []string{""}
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {

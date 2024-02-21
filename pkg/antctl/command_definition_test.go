@@ -1056,6 +1056,11 @@ func TestCollectFlags(t *testing.T) {
 								shorthand:    "T",
 							},
 							{
+								name:   "table-names-only",
+								usage:  "Print all Antrea OVS flow table names only, and nothing else",
+								isBool: true,
+							},
+							{
 								name:         "groups",
 								defaultValue: "Groups",
 								usage:        "Comma separated OVS group IDs. Use 'all' to dump all groups",
