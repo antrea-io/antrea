@@ -25,14 +25,13 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 
 COPY . /antrea
 
-# Disable CGO for antctl in case it is copied outside of the container image. It
-# also reduces the size of the binary and aligns with how we distribute antctl
-# in release assets.
+# Build antctl first in order to share an extra layer with
+# build/images/Dockerfile.build.agent.ubuntu and build/images/Dockerfile.build.controller.ubuntu.
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
-    CGO_ENABLED=0 make antctl-linux && mv bin/antctl-linux bin/antctl
+    make antctl-linux && mv bin/antctl-linux bin/antctl
 
-# Build antrea-agent and antrea-cni first in order to share an extra layer with
+# Then build antrea-agent and antrea-cni, in order to share an extra layer with
 # build/images/Dockerfile.build.agent.ubuntu.
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
