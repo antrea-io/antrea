@@ -2201,20 +2201,20 @@ func (data *TestData) forAllMatchingPodsInNamespace(
 }
 
 func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, err error) {
-	re := regexp.MustCompile(`Sent\s+(\d+)\s+probe.*\nReceived\s+(\d+)\s+response`)
+	re := regexp.MustCompile(`(\d+)\s+packets\s+transmitted,\s+(\d+)\s+packets\s+received,\s+(\d+)%\s+unanswered`)
 	matches := re.FindStringSubmatch(out)
 	if len(matches) == 0 {
 		return 0, 0, 0.0, fmt.Errorf("Unexpected arping output")
 	}
 	v, err := strconv.ParseUint(matches[1], 10, 32)
 	if err != nil {
-		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'sent probes' from arpping output: %v", err)
+		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'packets transmitted' from arpping output: %v", err)
 	}
 	sent = uint32(v)
 
 	v, err = strconv.ParseUint(matches[2], 10, 32)
 	if err != nil {
-		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'received responses' from arpping output: %v", err)
+		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'packets received' from arpping output: %v", err)
 	}
 	received = uint32(v)
 	loss = 100. * float32(sent-received) / float32(sent)
