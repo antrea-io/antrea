@@ -1002,7 +1002,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			if !exist {
 				return nil
 			}
-			if err := c.uninstallEgress(egressName, eState); err != nil {
+			if err := c.uninstallEgress(egressName, eState, egress); err != nil {
 				return err
 			}
 			return nil
@@ -1030,7 +1030,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	eState, exist := c.getEgressState(egressName)
 	// If the EgressIP changes, uninstalls this Egress first.
 	if exist && eState.egressIP != desiredEgressIP {
-		if err := c.uninstallEgress(egressName, eState); err != nil {
+		if err := c.uninstallEgress(egressName, eState, egress); err != nil {
 			return err
 		}
 		exist = false
@@ -1153,7 +1153,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	return nil
 }
 
-func (c *EgressController) uninstallEgress(egressName string, eState *egressState) error {
+func (c *EgressController) uninstallEgress(egressName string, eState *egressState, egress *crdv1b1.Egress) error {
 	// Uninstall all of its Pod flows.
 	if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
 		return err
@@ -1169,8 +1169,12 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 		}
 	}
 	// Unassign the Egress IP from the local Node if it was assigned by the agent.
-	if _, err := c.ipAssigner.UnassignIP(eState.egressIP); err != nil {
+	unassigned, err := c.ipAssigner.UnassignIP(eState.egressIP)
+	if err != nil {
 		return err
+	}
+	if unassigned && egress != nil {
+		c.record.Eventf(egress, corev1.EventTypeNormal, "IPUnassigned", "Unassigned Egress %s with IP %s from Node %s", egressName, eState.egressIP, c.nodeName)
 	}
 	// Remove the Egress's state.
 	c.deleteEgressState(egressName)
