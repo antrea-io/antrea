@@ -27,13 +27,11 @@ COPY . /antrea
 
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
-    make antrea-controller
-# Disable CGO for antctl in case it is copied outside of the container image. It
-# also reduces the size of the binary and aligns with how we distribute antctl
-# in release assets.
+    make antctl-linux && mv bin/antctl-linux bin/antctl
+
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
-    CGO_ENABLED=0 make antctl-linux && mv bin/antctl-linux bin/antctl
+    make antrea-controller
 
 FROM ubuntu:22.04
 
