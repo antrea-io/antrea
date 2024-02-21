@@ -49,12 +49,18 @@ var ipsecTunnelUsages = sets.New[string](
 
 var _ approver = (*ipsecCSRApprover)(nil)
 
-func (ic *ipsecCSRApprover) getAntreaAgentServiceAccount() string {
-	ic.antreaAgentServiceAccountName = strings.Join([]string{
+func getAntreaAgentServiceAccount() string {
+	agentServiceAccountName := strings.Join([]string{
 		"system", "serviceaccount", env.GetAntreaNamespace(), "antrea-agent",
 	}, ":")
 
-	return ic.antreaAgentServiceAccountName
+	return agentServiceAccountName
+}
+
+func newIPsecCSRApprover() *ipsecCSRApprover {
+	return &ipsecCSRApprover{
+		antreaAgentServiceAccountName: getAntreaAgentServiceAccount(),
+	}
 }
 
 func (ic *ipsecCSRApprover) recognize(csr *certificatesv1.CertificateSigningRequest) bool {
@@ -126,7 +132,8 @@ func (ic *ipsecCSRApprover) verifyCertificateRequest(req *x509.CertificateReques
 }
 
 func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.CertificateSigningRequest) error {
-	if csr.Spec.Username != ic.getAntreaAgentServiceAccount() {
+	c := newIPsecCSRApprover()
+	if csr.Spec.Username != c.antreaAgentServiceAccountName {
 		return errUserUnauthorized
 	}
 	podNameValues, podUIDValues := csr.Spec.Extra[sautil.PodNameKey], csr.Spec.Extra[sautil.PodUIDKey]
