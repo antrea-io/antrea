@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	MaxBucketsPerMessage = 800
+	MaxBucketsPerMessage = 700
 )
 
 type ofGroup struct {
