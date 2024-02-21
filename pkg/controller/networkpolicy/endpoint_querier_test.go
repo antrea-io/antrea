@@ -251,16 +251,14 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			podNamespace: ns,
 			podName:      podA,
 			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
-				Namespace: ns,
-				Name:      podA,
-				AppliedPolicies: []*antreatypes.NetworkPolicy{
-					{SourceRef: &policyRef},
-				},
+				Namespace:       ns,
+				Name:            podA,
+				AppliedPolicies: []*controlplane.NetworkPolicyReference{&policyRef},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
 				},
 				EndpointAsEgressDstRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
 				},
 			},
 		},
@@ -270,17 +268,14 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			podNamespace: ns,
 			podName:      podA,
 			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
-				Namespace: ns,
-				Name:      podA,
-				AppliedPolicies: []*antreatypes.NetworkPolicy{
-					{SourceRef: &policyRef},
-					{SourceRef: &policyRef1},
-				},
+				Namespace:       ns,
+				Name:            podA,
+				AppliedPolicies: []*controlplane.NetworkPolicyReference{&policyRef, &policyRef1},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
 				},
 				EndpointAsEgressDstRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
 				},
 			},
 		},
@@ -290,13 +285,11 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 			podNamespace: ns,
 			podName:      podA,
 			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
-				Namespace: ns,
-				Name:      podA,
-				AppliedPolicies: []*antreatypes.NetworkPolicy{
-					{SourceRef: &policyRef2},
-				},
+				Namespace:       ns,
+				Name:            podA,
+				AppliedPolicies: []*controlplane.NetworkPolicyReference{&policyRef2},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef2}, Index: 1, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+					{Policy: &policyRef2, Index: 1, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
 				},
 			},
 		},
@@ -307,7 +300,7 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 		for idx := range expectedRules {
 			assert.EqualValues(t, expectedRules[idx].Rule.Direction, responseRules[idx].Rule.Direction)
 			assert.Equal(t, expectedRules[idx].Index, responseRules[idx].Index)
-			assert.Equal(t, expectedRules[idx].Policy.SourceRef, responseRules[idx].Policy.SourceRef)
+			assert.Equal(t, expectedRules[idx].Policy, responseRules[idx].Policy)
 		}
 		return
 	}
@@ -327,8 +320,8 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 				assert.Equal(t, len(tc.expectedResponse.AppliedPolicies), len(response.AppliedPolicies))
 				var expectedPolicies, responsePolicies []*controlplane.NetworkPolicyReference
 				for idx, expected := range tc.expectedResponse.AppliedPolicies {
-					expectedPolicies = append(expectedPolicies, expected.SourceRef)
-					responsePolicies = append(responsePolicies, response.AppliedPolicies[idx].SourceRef)
+					expectedPolicies = append(expectedPolicies, expected)
+					responsePolicies = append(responsePolicies, response.AppliedPolicies[idx])
 				}
 				assert.ElementsMatch(t, expectedPolicies, responsePolicies)
 				evaluateResponse(tc.expectedResponse.EndpointAsIngressSrcRules, response.EndpointAsIngressSrcRules)

@@ -57,8 +57,8 @@ func (eq *endpointQuerier) QueryNetworkPolicyRules(namespace, podName string) (*
 	}
 
 	// create network policies categories
-	applied := make([]*antreatypes.NetworkPolicy, 0)
-	ingress, egress := make([]*antreatypes.RuleInfo, 0), make([]*antreatypes.RuleInfo, 0)
+	var applied []*controlplane.NetworkPolicyReference
+	var ingress, egress []*antreatypes.RuleInfo
 	// get all appliedToGroups using filter, then get applied policies using appliedToGroup
 	appliedToGroupKeys := groups[appliedToGroupType]
 	// We iterate over all AppliedToGroups (same for AddressGroups below). This is acceptable
@@ -76,7 +76,7 @@ func (eq *endpointQuerier) QueryNetworkPolicyRules(namespace, podName string) (*
 			return nil, err
 		}
 		for _, policy := range policies {
-			applied = append(applied, policy.(*antreatypes.NetworkPolicy))
+			applied = append(applied, policy.(*antreatypes.NetworkPolicy).SourceRef)
 		}
 	}
 	// get all addressGroups using filter, then get ingress and egress policies using addressGroup
@@ -98,7 +98,7 @@ func (eq *endpointQuerier) QueryNetworkPolicyRules(namespace, podName string) (*
 			for _, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
 				for _, addressGroupTrial := range rule.To.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
-						egress = append(egress, &antreatypes.RuleInfo{Policy: policy.(*antreatypes.NetworkPolicy), Index: egressIndex,
+						egress = append(egress, &antreatypes.RuleInfo{Policy: policy.(*antreatypes.NetworkPolicy).SourceRef, Index: egressIndex,
 							Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
 						// an AddressGroup can only be referenced in a rule once
 						break
@@ -106,7 +106,7 @@ func (eq *endpointQuerier) QueryNetworkPolicyRules(namespace, podName string) (*
 				}
 				for _, addressGroupTrial := range rule.From.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
-						ingress = append(ingress, &antreatypes.RuleInfo{Policy: policy.(*antreatypes.NetworkPolicy), Index: ingressIndex,
+						ingress = append(ingress, &antreatypes.RuleInfo{Policy: policy.(*antreatypes.NetworkPolicy).SourceRef, Index: ingressIndex,
 							Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
 						// an AddressGroup can only be referenced in a rule once
 						break
