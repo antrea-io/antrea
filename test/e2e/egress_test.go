@@ -600,6 +600,23 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 				return err
 			})
 			require.NoError(t, err, "Failed to update Egress")
+			expectedMessages := []string{
+				fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.originalEgressIP, tt.originalNode),
+				fmt.Sprintf("Unassigned Egress %s with IP %s from Node %v", egress.Name, tt.originalEgressIP, tt.originalNode),
+				fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.newEgressIP, tt.newNode),
+			}
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
+				if assert.NoError(c, err) && assert.Len(c, events.Items, len(expectedMessages)) {
+					recordedMessages := []string{}
+					for _, items := range events.Items {
+						recordedMessages = append(recordedMessages, items.Message)
+					}
+					assert.Equal(c, expectedMessages[0], recordedMessages[0])
+					// The order of unassigning from original Node and assigning on new Node is random.
+					assert.ElementsMatch(c, expectedMessages[1:], recordedMessages[1:])
+				}
+			}, 2*time.Second, 200*time.Millisecond)
 
 			_, err = data.checkEgressState(egress.Name, tt.newEgressIP, tt.newNode, "", time.Second)
 			require.NoError(t, err)
