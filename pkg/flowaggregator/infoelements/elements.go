@@ -61,6 +61,7 @@ var (
 		"egressIP",
 		"appProtocolName",
 		"httpVals",
+		"egressNodeName",
 	}
 	AntreaInfoElementsIPv4 = append(AntreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(AntreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)

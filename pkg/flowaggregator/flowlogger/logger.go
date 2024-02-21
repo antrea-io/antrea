@@ -118,6 +118,7 @@ func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) er
 		r.EgressIP,
 		r.AppProtocolName,
 		r.HttpVals,
+		r.EgressNodeName,
 	}
 
 	str := strings.Join(fields, ",")

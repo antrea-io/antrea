@@ -72,6 +72,7 @@ type FlowRecord struct {
 	EgressIP                             string
 	AppProtocolName                      string
 	HttpVals                             string
+	EgressNodeName                       string
 }
 
 // GetFlowRecord converts ipfixentities.Record to FlowRecord
@@ -235,6 +236,9 @@ func GetFlowRecord(record ipfixentities.Record) *FlowRecord {
 	}
 	if httpVals, _, ok := record.GetInfoElementWithValue("httpVals"); ok {
 		r.HttpVals = httpVals.GetStringValue()
+	}
+	if egressNodeName, _, ok := record.GetInfoElementWithValue("egressNodeName"); ok {
+		r.EgressNodeName = egressNodeName.GetStringValue()
 	}
 	return r
 }

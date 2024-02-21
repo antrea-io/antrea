@@ -132,7 +132,7 @@ const (
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.8.2"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.9.0"
 
 	nginxLBService = "nginx-loadbalancer"
 

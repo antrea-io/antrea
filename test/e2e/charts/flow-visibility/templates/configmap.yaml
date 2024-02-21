@@ -78,7 +78,8 @@ data:
             egressName String,
             egressIP String,
             appProtocolName String,
-            httpVals String
+            httpVals String,
+            egressNodeName String
         ) engine=MergeTree
         ORDER BY (timeInserted, flowEndSeconds)
         TTL timeInserted + INTERVAL 1 HOUR

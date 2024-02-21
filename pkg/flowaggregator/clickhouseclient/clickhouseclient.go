@@ -89,10 +89,11 @@ const (
                    egressName,
                    egressIP,
                    appProtocolName,
-                   httpVals)
+                   httpVals,
+				   egressNodeName)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?)`
+                           ?, ?, ?, ?, ?)`
 )
 
 // PrepareClickHouseConnection is used for unit testing
@@ -334,6 +335,7 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 			record.EgressIP,
 			record.AppProtocolName,
 			record.HttpVals,
+			record.EgressNodeName,
 		)
 
 		if err != nil {
