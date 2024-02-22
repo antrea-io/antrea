@@ -1508,7 +1508,7 @@ func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName str
 // createToolboxPodOnNode creates a Pod in the test namespace with a single toolbox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createToolboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	return NewPodBuilder(name, ns, ToolboxImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
+	return NewPodBuilder(name, ns, ToolboxImage).OnNode(nodeName).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
@@ -3086,7 +3086,11 @@ func getPingCommand(count int, size int, os string, ip *net.IP, dontFragment boo
 		cmd = append(cmd, sizeOption, strconv.Itoa(size))
 	}
 	if dontFragment {
-		cmd = append(cmd, "-M", "do")
+		if os == "windows" {
+			cmd = append(cmd, "-f")
+		} else {
+			cmd = append(cmd, "-M", "do")
+		}
 	}
 
 	if ip.To4() != nil {
