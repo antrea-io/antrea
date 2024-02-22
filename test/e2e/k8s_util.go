@@ -28,9 +28,11 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/test/e2e/utils"
@@ -736,35 +738,21 @@ func (data *TestData) DeleteNetworkPolicy(ns, name string) error {
 // CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
 func (data *TestData) CleanNetworkPolicies(namespaces map[string]string) error {
 	for _, ns := range namespaces {
-		l, err := data.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return fmt.Errorf("unable to list NetworkPolicy in Namespace '%s': %w", ns, err)
-		}
-		for _, np := range l.Items {
-			if err = data.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
-				return err
-			}
+		if err := data.clientset.NetworkingV1().NetworkPolicies(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+			return fmt.Errorf("unable to delete NetworkPolicies in Namespace '%s': %w", ns, err)
 		}
 	}
 	return nil
 }
 
 // CreateTier is a convenience function for creating an Antrea Policy Tier by name and priority.
-func (data *TestData) CreateNewTier(name string, tierPriority int32) (*crdv1beta1.Tier, error) {
+func (data *TestData) CreateTier(name string, tierPriority int32) (*crdv1beta1.Tier, error) {
 	log.Infof("Creating tier %s", name)
-	_, err := data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		tr := &crdv1beta1.Tier{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Spec:       crdv1beta1.TierSpec{Priority: tierPriority},
-		}
-		tr, err = data.crdClient.CrdV1beta1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
-		if err != nil {
-			log.Debugf("Unable to create tier %s: %s", name, err)
-		}
-		return tr, err
+	tr := &crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       crdv1beta1.TierSpec{Priority: tierPriority},
 	}
-	return nil, fmt.Errorf("tier with name %s already exists", name)
+	return data.crdClient.CrdV1beta1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
 }
 
 // GetTier is a convenience function for getting Tier.
@@ -775,18 +763,25 @@ func (data *TestData) GetTier(name string) (*crdv1beta1.Tier, error) {
 // UpdateTier is a convenience function for updating an Antrea Policy Tier.
 func (data *TestData) UpdateTier(tier *crdv1beta1.Tier) (*crdv1beta1.Tier, error) {
 	log.Infof("Updating tier %s", tier.Name)
-	updatedTier, err := data.crdClient.CrdV1beta1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
-	return updatedTier, err
+	return data.crdClient.CrdV1beta1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
+}
+
+func isReferencedError(err error) bool {
+	if status, ok := err.(apierrors.APIStatus); ok || errors.As(err, &status) {
+		// The message is set by deleteValidate of tierValidator when deleting a Tier that is referenced by any policies.
+		return strings.Contains(status.Status().Message, "is referenced by")
+	}
+	return false
 }
 
 // DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
+// To avoid flakes caused by antrea-controller not in sync with kube-apiserver, it retries a few times if the failure is
+// because the Tier is still referenced.
 func (data *TestData) DeleteTier(name string) error {
-	_, err := data.crdClient.CrdV1beta1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to get tier %s: %w", name, err)
-	}
 	log.Infof("Deleting tier %s", name)
-	if err = data.crdClient.CrdV1beta1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+	if err := retry.OnError(retry.DefaultRetry, isReferencedError, func() error {
+		return data.crdClient.CrdV1beta1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	}); err != nil {
 		return fmt.Errorf("unable to delete tier %s: %w", name, err)
 	}
 	return nil
@@ -834,68 +829,34 @@ func (k *KubernetesUtils) CreateOrUpdateGroup(g *crdv1beta1.Group) (*crdv1beta1.
 
 // GetCG is a convenience function for getting ClusterGroups
 func (k *KubernetesUtils) GetCG(name string) (*crdv1beta1.ClusterGroup, error) {
-	res, err := k.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return k.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // GetGroup is a convenience function for getting Groups
 func (k *KubernetesUtils) GetGroup(namespace, name string) (*crdv1beta1.Group, error) {
-	res, err := k.crdClient.CrdV1beta1().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return k.crdClient.CrdV1beta1().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteCG is a convenience function for deleting core/v1beta1 ClusterGroup by name.
 func (data *TestData) DeleteCG(name string) error {
-	log.Infof("deleting ClusterGroup %s", name)
-	err := data.crdClient.CrdV1beta1().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to delete ClusterGroup %s: %w", name, err)
-	}
-	return nil
+	log.Infof("Deleting ClusterGroup %s", name)
+	return data.crdClient.CrdV1beta1().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // DeleteGroup is a convenience function for deleting core/v1beta1 Group by namespace and name.
 func (k *KubernetesUtils) DeleteGroup(namespace, name string) error {
-	log.Infof("deleting Group %s/%s", namespace, name)
-	err := k.crdClient.CrdV1beta1().Groups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to delete Group %s/%s: %w", namespace, name, err)
-	}
-	return nil
+	log.Infof("Deleting Group %s/%s", namespace, name)
+	return k.crdClient.CrdV1beta1().Groups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CleanCGs is a convenience function for deleting all ClusterGroups in the cluster.
 func (data *TestData) CleanCGs() error {
-	l, err := data.crdClient.CrdV1beta1().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to list ClusterGroups in v1beta1: %w", err)
-	}
-	for _, cg := range l.Items {
-		if err := data.DeleteCG(cg.Name); err != nil {
-			return err
-		}
-	}
-	return nil
+	return data.crdClient.CrdV1beta1().ClusterGroups().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // CleanGroups is a convenience function for deleting all Groups in the namespace.
 func (k *KubernetesUtils) CleanGroups(namespace string) error {
-	l, err := k.crdClient.CrdV1beta1().Groups(namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to list Groups in v1beta1: %w", err)
-	}
-	for _, g := range l.Items {
-		if err := k.DeleteGroup(namespace, g.Name); err != nil {
-			return err
-		}
-	}
-	return nil
+	return k.crdClient.CrdV1beta1().Groups(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
@@ -920,35 +881,18 @@ func (data *TestData) CreateOrUpdateACNP(cnp *crdv1beta1.ClusterNetworkPolicy) (
 
 // GetACNP is a convenience function for getting AntreaClusterNetworkPolicies.
 func (data *TestData) GetACNP(name string) (*crdv1beta1.ClusterNetworkPolicy, error) {
-	res, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteACNP is a convenience function for deleting ACNP by name.
 func (data *TestData) DeleteACNP(name string) error {
 	log.Infof("Deleting AntreaClusterNetworkPolicies %s", name)
-	err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to delete ClusterNetworkPolicy %s: %w", name, err)
-	}
-	return nil
+	return data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CleanACNPs is a convenience function for deleting all Antrea ClusterNetworkPolicies in the cluster.
 func (data *TestData) CleanACNPs() error {
-	l, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to list AntreaClusterNetworkPolicies: %w", err)
-	}
-	for _, cnp := range l.Items {
-		if err = data.DeleteACNP(cnp.Name); err != nil {
-			return err
-		}
-	}
-	return nil
+	return data.crdClient.CrdV1beta1().ClusterNetworkPolicies().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // CreateOrUpdateANNP is a convenience function for updating/creating Antrea NetworkPolicies.
@@ -979,24 +923,14 @@ func (data *TestData) GetANNP(namespace, name string) (*crdv1beta1.NetworkPolicy
 // DeleteANNP is a convenience function for deleting ANNP by name and Namespace.
 func (data *TestData) DeleteANNP(ns, name string) error {
 	log.Infof("Deleting Antrea NetworkPolicy '%s/%s'", ns, name)
-	err := data.crdClient.CrdV1beta1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to delete Antrea NetworkPolicy %s: %w", name, err)
-	}
-	return nil
+	return data.crdClient.CrdV1beta1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CleanANNPs is a convenience function for deleting all Antrea NetworkPolicies in provided namespaces.
 func (data *TestData) CleanANNPs(namespaces []string) error {
 	for _, ns := range namespaces {
-		l, err := data.crdClient.CrdV1beta1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return fmt.Errorf("unable to list Antrea NetworkPolicies in ns %s: %w", ns, err)
-		}
-		for _, annp := range l.Items {
-			if err = data.DeleteANNP(annp.Namespace, annp.Name); err != nil {
-				return err
-			}
+		if err := data.crdClient.CrdV1beta1().NetworkPolicies(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+			return fmt.Errorf("unable to delete Antrea NetworkPolicies in ns %s: %w", ns, err)
 		}
 	}
 	return nil
