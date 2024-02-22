@@ -169,7 +169,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace,
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, clientNamespace, "", false); err != nil {
+	if err := data.createToolboxPodOnNode(clientName, clientNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientNamespace, clientName)
@@ -334,8 +334,8 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespa
 // br-int bridge is to implement normal L2 forwarding.
 func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 	workerNode := workerNodeName(1)
-	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
-	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, namespace, workerNode)
+	t.Logf("Creating two toolbox test Pods on '%s'", workerNode)
+	podNames, podIPs, cleanupFn := createTestToolboxPods(t, data, 2, namespace, workerNode)
 	defer cleanupFn()
 
 	resCh := make(chan error, 1)
@@ -343,10 +343,10 @@ func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 	runArping := func() error {
 		// we send arp pings for 25 seconds; this duration is a bit arbitrary and we assume
 		// that restarting Antrea takes less than that time. Unfortunately, the arping
-		// utility in busybox does not let us choose a smaller interval than 1 second.
+		// utility in toolbox does not let us choose a smaller interval than 1 second.
 		count := 25
 		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1].IPv4.String())
-		stdout, stderr, err := data.RunCommandFromPod(namespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
+		stdout, stderr, err := data.RunCommandFromPod(namespace, podNames[0], toolboxContainerName, strings.Fields(cmd))
 		if err != nil {
 			return fmt.Errorf("error when running arping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}

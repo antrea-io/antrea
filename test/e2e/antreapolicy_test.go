@@ -4717,7 +4717,7 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", data.testNamespace, false)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", data.testNamespace, false)
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
 	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
@@ -4736,11 +4736,11 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	// So we need to  "warm-up" the tunnel.
 	if clusterInfo.podV4NetworkCIDR != "" {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv4.String())}
-		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
+		data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
-		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
+		data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
 	}
 	var annp = &crdv1beta1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: "np1", Labels: map[string]string{"antrea-e2e": "np1"}},
@@ -4798,14 +4798,14 @@ func testANNPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 			if clusterInfo.podV4NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.IPv4.String())}
 				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.IPv4.String())}
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd2)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.IPv6.String())}
 				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.IPv6.String())}
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd2)
 			}
 			wg.Done()
 		}()
@@ -4852,7 +4852,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", data.testNamespace, false)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", data.testNamespace, false)
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "test-client-", "", data.testNamespace, false)
 	defer cleanupFunc()
 	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
@@ -4871,11 +4871,11 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	// So we need to  "warm-up" the tunnel.
 	if clusterInfo.podV4NetworkCIDR != "" {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv4.String())}
-		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
+		data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.IPv6.String())}
-		data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
+		data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
 	}
 	var acnp = &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: "cnp1", Labels: map[string]string{"antrea-e2e": "cnp1"}},
@@ -4933,14 +4933,14 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 			if clusterInfo.podV4NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.IPv4.String())}
 				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.IPv4.String())}
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd2)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.IPv6.String())}
 				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.IPv6.String())}
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd)
-				data.RunCommandFromPod(data.testNamespace, clientName, busyboxContainerName, cmd2)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd)
+				data.RunCommandFromPod(data.testNamespace, clientName, toolboxContainerName, cmd2)
 			}
 			wg.Done()
 		}()

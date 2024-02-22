@@ -157,8 +157,8 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 	// Unlike upstream Kubernetes Conformance, here the client is on a Linux Node (nodeName(0)).
 	// It doesn't need to be the control-plane for e2e test and other Linux workers will work as well. However, in this
 	// e2e framework, nodeName(0)/Control-plane Node is guaranteed to be a Linux one.
-	clientName := "busybox-client"
-	require.NoError(t, data.createBusyboxPodOnNode(clientName, clientNamespace, nodeName(0), false))
+	clientName := "toolbox-client"
+	require.NoError(t, data.createToolboxPodOnNode(clientName, clientNamespace, nodeName(0), false))
 	defer data.DeletePodAndWait(defaultTimeout, clientName, clientNamespace)
 	podIPs, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 	nodePort := int(svc.Spec.Ports[0].NodePort)
 	url := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
 
-	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(clientName, clientNamespace, url, 5)
+	stdout, stderr, err := data.runWgetCommandOnToolboxWithRetry(clientName, clientNamespace, url, 5)
 	if err != nil {
 		t.Errorf("Error when running 'wget -O - %s' from Pod '%s', stdout: %s, stderr: %s, error: %v",
 			url, clientName, stdout, stderr, err)
