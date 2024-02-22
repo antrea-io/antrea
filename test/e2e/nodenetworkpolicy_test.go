@@ -594,9 +594,9 @@ func testNodeACNPCustomTiers(t *testing.T) {
 	k8sUtils.DeleteTier("high-priority")
 	k8sUtils.DeleteTier("low-priority")
 	// Create two custom tiers with tier priority immediately next to each other.
-	_, err := k8sUtils.CreateNewTier("high-priority", 245)
+	_, err := k8sUtils.CreateTier("high-priority", 245)
 	failOnError(err, t)
-	_, err = k8sUtils.CreateNewTier("low-priority", 246)
+	_, err = k8sUtils.CreateTier("low-priority", 246)
 	failOnError(err, t)
 
 	builder1 := &ClusterNetworkPolicySpecBuilder{}

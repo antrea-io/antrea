@@ -306,7 +306,7 @@ func testDeleteValidationReferencedTier(t *testing.T) {
 
 func testUpdateValidationInvalidTier(t *testing.T) {
 	invalidErr := fmt.Errorf("Tier priority updated")
-	oldTier, err := k8sUtils.CreateNewTier("prio-updated-tier", 21)
+	oldTier, err := k8sUtils.CreateTier("prio-updated-tier", 21)
 	if err != nil {
 		failOnError(fmt.Errorf("create Tier failed for tier prio-updated-tier: %v", err), t)
 	}
@@ -326,12 +326,12 @@ func testUpdateValidationInvalidTier(t *testing.T) {
 
 func testCreateValidationInvalidTier(t *testing.T) {
 	invalidErr := fmt.Errorf("Tiers created with overlapping priorities")
-	tr, err := k8sUtils.CreateNewTier("tier-prio-20", 20)
+	tr, err := k8sUtils.CreateTier("tier-prio-20", 20)
 	if err != nil {
 		failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
 	}
 	// Attempt to create Tier with same priority.
-	if _, err = k8sUtils.CreateNewTier("another-tier-prio-20", 20); err == nil {
+	if _, err = k8sUtils.CreateTier("another-tier-prio-20", 20); err == nil {
 		// Above creation of Tier must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -1918,9 +1918,9 @@ func testACNPCustomTiers(t *testing.T) {
 	k8sUtils.DeleteTier("high-priority")
 	k8sUtils.DeleteTier("low-priority")
 	// Create two custom tiers with tier priority immediately next to each other.
-	_, err := k8sUtils.CreateNewTier("high-priority", 245)
+	_, err := k8sUtils.CreateTier("high-priority", 245)
 	failOnError(err, t)
-	_, err = k8sUtils.CreateNewTier("low-priority", 246)
+	_, err = k8sUtils.CreateTier("low-priority", 246)
 	failOnError(err, t)
 
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
@@ -1967,7 +1967,6 @@ func testACNPCustomTiers(t *testing.T) {
 	failOnError(k8sUtils.CleanACNPs(), t)
 	failOnError(k8sUtils.DeleteTier("high-priority"), t)
 	failOnError(k8sUtils.DeleteTier("low-priority"), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 // testACNPPriorityConflictingRule tests that if there are two Policies in the cluster with rules that conflicts with
