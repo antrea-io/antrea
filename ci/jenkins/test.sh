@@ -184,7 +184,7 @@ function clean_antrea {
     for antrea_yml in ${WORKDIR}/*.yml; do
         kubectl delete -f $antrea_yml --ignore-not-found=true || true
     done
-    docker images | grep 'antrea' | awk '{print $3}' | xargs -r docker rmi || true
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep 'antrea'| xargs -r docker rmi || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     check_and_cleanup_docker_build_cache
 }
