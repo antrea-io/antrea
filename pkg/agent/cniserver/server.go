@@ -442,6 +442,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 
 	result := &ipam.IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}}
 	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if err := validateRuntime(netNS); err != nil {
+		return nil, fmt.Errorf("failed to validate container runtime for CmdAdd request: %w", err)
+	}
 	isInfraContainer := isInfraContainer(netNS)
 
 	success := false
@@ -563,6 +566,11 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return response, nil
 	}
 
+	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if err := validateRuntime(netNS); err != nil {
+		return nil, fmt.Errorf("failed to validate container runtime for CmdDel request: %w", err)
+	}
+
 	return s.cmdDel(ctx, cniConfig)
 }
 
@@ -573,6 +581,11 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	cniConfig, response := s.validateRequestMessage(request)
 	if response != nil {
 		return response, nil
+	}
+
+	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if err := validateRuntime(netNS); err != nil {
+		return nil, fmt.Errorf("failed to validate container runtime for CmdCheck request: %w", err)
 	}
 
 	infraContainer := cniConfig.getInfraContainer()

@@ -26,7 +26,6 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -72,20 +71,10 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNamespace, containerIface, ips, vlanID)
-	hostIfAlias := util.VirtualAdapterName(ovsPortName)
-	// - For containerd runtime, the container interface is created after CNI replying the network setup result.
-	//   So for such case we need to use asynchronous way to wait for interface to be created: we create the OVS port
-	//   and set the OVS Interface type "" first, and change the OVS Interface type to "internal" to connect to the
-	//   container interface after it is created. After OVS connects to the container interface, an OFPort is allocated.
-	// - For Docker runtime, the container interface is created after antrea-agent attaches the HNSEndpoint to the
-	//   sandbox container, so we create OVS port synchronously.
-	// - Here antrea-agent determines the way of OVS port creation by checking if container interface is yet created.
-	//   If one day containerd runtime changes the behavior and container interface can be created when attaching
-	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
-	//   way to create OVS port.
-	if hostInterfaceExistsFunc(hostIfAlias) {
-		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, netNS, containerConfig)
-	}
+	// The container interface is created after the CNI returns the network setup result.
+	// Because of this, we need to wait asynchronously for the interface to be created: we create the OVS port
+	// and set the OVS Interface type "" first, and change the OVS Interface type to "internal" to connect to the
+	// container interface after it is created. After OVS connects to the container interface, an OFPort is allocated.
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
 	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
 	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo, containerConfig.VLANID)

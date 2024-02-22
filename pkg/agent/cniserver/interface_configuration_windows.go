@@ -48,10 +48,7 @@ var (
 	hostInterfaceExistsFunc         = util.HostInterfaceExists
 	getNetInterfaceAddrsFunc        = getNetInterfaceAddrs
 	createHnsEndpointFunc           = createHnsEndpoint
-	getNamespaceEndpointIDsFunc     = hcn.GetNamespaceEndpointIds
-	hotAttachEndpointFunc           = hcsshim.HotAttachEndpoint
 	attachEndpointInNamespaceFunc   = attachEndpointInNamespace
-	isContainerAttachOnEndpointFunc = isContainerAttachOnEndpoint
 	getHcnEndpointByIDFunc          = hcn.GetEndpointByID
 	deleteHnsEndpointFunc           = deleteHnsEndpoint
 	removeEndpointFromNamespaceFunc = hcn.RemoveNamespaceEndpoint
@@ -221,49 +218,17 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 // attachContainerLink takes the result of the IPAM plugin, and adds the appropriate IP
 // addresses and routes to the interface.
 // For different CRI runtimes we need to use the appropriate Windows container API:
-//   - Docker runtime: HNS API
 //   - containerd runtime: HCS API
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
-	var attached bool
 	var err error
 	var hcnEp *hcn.HostComputeEndpoint
-	if isDockerContainer(sandbox) {
-		// Docker runtime
-		attached, err = isContainerAttachOnEndpointFunc(ep, containerID)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// containerd runtime
-		if hcnEp, err = getHcnEndpointByIDFunc(ep.Id); err != nil {
-			return nil, err
-		}
-		attachedEpIds, err := getNamespaceEndpointIDsFunc(sandbox)
-		if err != nil {
-			return nil, err
-		}
-		for _, existingEP := range attachedEpIds {
-			if existingEP == hcnEp.Id {
-				attached = true
-				break
-			}
-		}
+
+	if hcnEp, err = getHcnEndpointByIDFunc(ep.Id); err != nil {
+		return nil, err
 	}
 
-	if attached {
-		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
-	} else {
-		if hcnEp == nil {
-			// Docker runtime
-			if err := hotAttachEndpointFunc(containerID, ep.Id); err != nil {
-				return nil, err
-			}
-		} else {
-			// containerd runtime
-			if err := attachEndpointInNamespaceFunc(hcnEp, sandbox); err != nil {
-				return nil, err
-			}
-		}
+	if err := attachEndpointInNamespaceFunc(hcnEp, sandbox); err != nil {
+		return nil, err
 	}
 	containerIface := &current.Interface{
 		Name:    containerIFDev,
@@ -271,10 +236,6 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		Sandbox: sandbox,
 	}
 	return containerIface, nil
-}
-
-func isContainerAttachOnEndpoint(endpoint *hcsshim.HNSEndpoint, containerID string) (bool, error) {
-	return endpoint.IsAttached(containerID)
 }
 
 func attachEndpointInNamespace(hcnEp *hcn.HostComputeEndpoint, sandbox string) error {
@@ -483,15 +444,6 @@ func (ic *ifConfigurator) getInterceptedInterfaces(
 	containerIFDev string,
 ) (*current.Interface, *current.Interface, error) {
 	return nil, nil, errors.New("getInterceptedInterfaces is unsupported on Windows")
-}
-
-// getOVSInterfaceType returns "internal". Windows uses internal OVS interface for container vNIC.
-func getOVSInterfaceType(ovsPortName string) int {
-	ifaceName := fmt.Sprintf("vEthernet (%s)", ovsPortName)
-	if !hostInterfaceExistsFunc(ifaceName) {
-		return defaultOVSInterfaceType
-	}
-	return internalOVSInterfaceType
 }
 
 func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName string, containerAccess *containerAccessArbitrator, hook postInterfaceCreateHook) error {

@@ -419,9 +419,8 @@ build-migrator:
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
 	$(CURDIR)/hack/generate-standard-manifests.sh --mode dev --out build/yamls
-	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
-	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev --containerd > build/yamls/antrea-windows-containerd.yml
-	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev --containerd --include-ovs > build/yamls/antrea-windows-containerd-with-ovs.yml
+	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows-containerd.yml
+	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev --include-ovs > build/yamls/antrea-windows-containerd-with-ovs.yml
 	$(CURDIR)/hack/update-checksum-windows.sh
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
 
