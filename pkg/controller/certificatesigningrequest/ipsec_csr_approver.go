@@ -50,16 +50,14 @@ var ipsecTunnelUsages = sets.New[string](
 var _ approver = (*ipsecCSRApprover)(nil)
 
 func getAntreaAgentServiceAccount() string {
-	agentServiceAccountName := strings.Join([]string{
+	return strings.Join([]string{
 		"system", "serviceaccount", env.GetAntreaNamespace(), "antrea-agent",
 	}, ":")
-
-	return agentServiceAccountName
 }
 
 func newIPsecCSRApprover(client clientset.Interface) *ipsecCSRApprover {
 	return &ipsecCSRApprover{
-		client: client,
+		client:                        client,
 		antreaAgentServiceAccountName: getAntreaAgentServiceAccount(),
 	}
 }
