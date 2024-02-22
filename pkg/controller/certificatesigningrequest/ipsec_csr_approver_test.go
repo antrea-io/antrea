@@ -201,9 +201,7 @@ func Test_validIPSecCSR(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := fake.NewSimpleClientset(tt.objects...)
-			ic := &ipsecCSRApprover{
-				client: client,
-			}
+			ic := newIPsecCSRApprover(client)
 			err := ic.verifyCertificateRequest(tt.cr, tt.keyUsages)
 			if tt.expectedErr == nil {
 				assert.NoError(t, err, "validIPSecCSR should not return an error")
@@ -373,9 +371,7 @@ func Test_verifyIdentity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := fake.NewSimpleClientset(tt.objects...)
-			ic := &ipsecCSRApprover{
-				client: client,
-			}
+			ic := newIPsecCSRApprover(client)
 			err := ic.verifyIdentity(tt.nodeName, tt.csr)
 			if tt.expectedErr == nil {
 				assert.NoError(t, err, "verifyPodOnNode should not return an error")
@@ -435,9 +431,7 @@ func Test_ipsecCertificateApprover_recognize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := fake.NewSimpleClientset(tt.objects...)
-			ic := &ipsecCSRApprover{
-				client: client,
-			}
+			ic := newIPsecCSRApprover(client)
 			recognized := ic.recognize(tt.csr)
 			assert.Equal(t, tt.expectedResult, recognized)
 		})
@@ -590,9 +584,7 @@ func Test_ipsecCertificateApprover_verify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := append(tt.objects, tt.csr)
 			client := fake.NewSimpleClientset(objs...)
-			ic := &ipsecCSRApprover{
-				client: client,
-			}
+			ic := newIPsecCSRApprover(client)
 			approved, err := ic.verify(tt.csr)
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
