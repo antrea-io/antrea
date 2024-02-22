@@ -514,17 +514,17 @@ func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 	}
 }
 
-// createTestBusyboxPods creates the desired number of busybox Pods and wait for their IP address to
+// createTestToolboxPods creates the desired number of toolbox Pods and wait for their IP address to
 // become available. This is a common patter in our tests, so having this helper function makes
 // sense. It calls Fatalf in case of error, so it must be called from the goroutine running the test
 // or benchmark function. You can create all the Pods on the same Node by setting nodeName. If
 // nodeName is the empty string, each Pod will be created on an arbitrary
-// Node. createTestBusyboxPods returns the cleanupFn function which can be used to delete the
+// Node. createTestToolboxPods returns the cleanupFn function which can be used to delete the
 // created Pods. Pods are created in parallel to reduce the time required to run the tests.
-func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
+func createTestToolboxPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
-	return createTestPods(tb, data, num, ns, nodeName, false, data.createBusyboxPodOnNode)
+	return createTestPods(tb, data, num, ns, nodeName, false, data.createToolboxPodOnNode)
 }
 
 func createTestAgnhostPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (

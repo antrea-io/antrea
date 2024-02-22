@@ -8,8 +8,6 @@
 
 - import_tasks: containerd.yml
 
-- import_tasks: busybox.yml
-
 - import_tasks: openvswitch.yml
 
 # Kubelet will not start if the system has swap enabled

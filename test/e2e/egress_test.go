@@ -134,14 +134,14 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 
 			localPod := fmt.Sprintf("localpod%s", tt.name)
 			remotePod := fmt.Sprintf("remotepod%s", tt.name)
-			if err := data.createBusyboxPodOnNode(localPod, data.testNamespace, egressNode, false); err != nil {
+			if err := data.createToolboxPodOnNode(localPod, data.testNamespace, egressNode, false); err != nil {
 				t.Fatalf("Failed to create local Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, data.testNamespace, localPod)
 			if err := data.podWaitForRunning(defaultTimeout, localPod, data.testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", localPod)
 			}
-			if err := data.createBusyboxPodOnNode(remotePod, data.testNamespace, workerNodeName(1), false); err != nil {
+			if err := data.createToolboxPodOnNode(remotePod, data.testNamespace, workerNodeName(1), false); err != nil {
 				t.Fatalf("Failed to create remote Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, data.testNamespace, remotePod)
@@ -156,8 +156,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 
 			// As the fake server runs in a netns of the Egress Node, only egress Node can reach the server, Pods running on
 			// other Nodes cannot reach it before Egress is added.
-			assertClientIP(data, t, localPod, busyboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
-			assertConnError(data, t, remotePod, busyboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
+			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
 
 			t.Logf("Creating an Egress applying to all e2e Pods")
 			matchExpressions := []metav1.LabelSelectorRequirement{
@@ -168,8 +168,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			}
 			egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressNodeIP, nil)
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			assertClientIP(data, t, localPod, busyboxContainerName, serverIPStr, egressNodeIP)
-			assertClientIP(data, t, remotePod, busyboxContainerName, serverIPStr, egressNodeIP)
+			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, egressNodeIP)
+			assertClientIP(data, t, remotePod, toolboxContainerName, serverIPStr, egressNodeIP)
 
 			var err error
 			err = wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
@@ -210,8 +210,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, busyboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
-			assertClientIP(data, t, remotePod, busyboxContainerName, serverIPStr, egressNodeIP)
+			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
+			assertClientIP(data, t, remotePod, toolboxContainerName, serverIPStr, egressNodeIP)
 
 			t.Log("Updating the Egress's AppliedTo to localPod only")
 			egress.Spec.AppliedTo = v1beta1.AppliedTo{
@@ -223,8 +223,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, busyboxContainerName, serverIPStr, egressNodeIP)
-			assertConnError(data, t, remotePod, busyboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, egressNodeIP)
+			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
 
 			t.Logf("Updating the Egress's EgressIP to %s", tt.localIP1)
 			egress.Spec.EgressIP = tt.localIP1
@@ -232,16 +232,16 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, busyboxContainerName, serverIPStr, tt.localIP1)
-			assertConnError(data, t, remotePod, busyboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP1)
+			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
 
 			t.Log("Deleting the Egress")
 			err = data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			if err != nil {
 				t.Fatalf("Failed to delete Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, busyboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
-			assertConnError(data, t, remotePod, busyboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
+			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
 		})
 	}
 }
