@@ -60,14 +60,14 @@ func TestBasic(t *testing.T) {
 }
 
 // testPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
-// deploying a busybox Pod, then waiting for the K8s apiserver to report the new IP address for that
+// deploying a toolbox Pod, then waiting for the K8s apiserver to report the new IP address for that
 // Pod, and finally verifying that the IP address is in the Pod Network CIDR for the cluster.
 func testPodAssignIP(t *testing.T, data *TestData, namespace string, podV4NetworkCIDR, podV6NetworkCIDR string) {
 	podName := randName("test-pod-")
 
-	t.Logf("Creating a busybox test Pod")
-	if err := data.createBusyboxPodOnNode(podName, namespace, "", false); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	t.Logf("Creating a toolbox test Pod")
+	if err := data.createToolboxPodOnNode(podName, namespace, "", false); err != nil {
+		t.Fatalf("Error when creating toolbox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, namespace, podName)
 
@@ -296,9 +296,9 @@ func testIPAMRestart(t *testing.T, data *TestData, namespace string) {
 	}()
 
 	createPodAndGetIP := func(podName string) (*PodIPs, error) {
-		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, namespace, nodeName, false); err != nil {
-			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
+		t.Logf("Creating a toolbox test Pod '%s' and waiting for IP", podName)
+		if err := data.createToolboxPodOnNode(podName, namespace, nodeName, false); err != nil {
+			t.Fatalf("Error when creating toolbox test Pod '%s': %v", podName, err)
 			return nil, err
 		}
 		pods = append(pods, podName)
@@ -831,7 +831,7 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	nodeName := workerNodeName(1)
 
 	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
-	if err := data.createBusyboxPodOnNode(podName, namespace, nodeName, false); err != nil {
+	if err := data.createToolboxPodOnNode(podName, namespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
 	defer deletePodWrapper(t, data, namespace, podName)
