@@ -60,9 +60,7 @@ func NewCSRApprovingController(client clientset.Interface, csrInformer cache.Sha
 		csrListerSynced: csrInformer.HasSynced,
 		queue:           workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "certificateSigningRequest"),
 		approvers: []approver{
-			&ipsecCSRApprover{
-				client: client,
-			},
+			newIPsecCSRApprover(client),
 		},
 	}
 	csrInformer.AddEventHandlerWithResyncPeriod(

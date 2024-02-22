@@ -57,8 +57,9 @@ func getAntreaAgentServiceAccount() string {
 	return agentServiceAccountName
 }
 
-func newIPsecCSRApprover() *ipsecCSRApprover {
+func newIPsecCSRApprover(client clientset.Interface) *ipsecCSRApprover {
 	return &ipsecCSRApprover{
+		client: client,
 		antreaAgentServiceAccountName: getAntreaAgentServiceAccount(),
 	}
 }
@@ -132,8 +133,7 @@ func (ic *ipsecCSRApprover) verifyCertificateRequest(req *x509.CertificateReques
 }
 
 func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.CertificateSigningRequest) error {
-	c := newIPsecCSRApprover()
-	if csr.Spec.Username != c.antreaAgentServiceAccountName {
+	if csr.Spec.Username != ic.antreaAgentServiceAccountName {
 		return errUserUnauthorized
 	}
 	podNameValues, podUIDValues := csr.Spec.Extra[sautil.PodNameKey], csr.Spec.Extra[sautil.PodUIDKey]
