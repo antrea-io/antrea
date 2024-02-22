@@ -1150,7 +1150,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	if !isIPv6 {
 		cmd = fmt.Sprintf("wget -O- %s:%d", dstIP, dstPort)
 	} else {
-		cmd = fmt.Sprintf("wget -O- [%s]:%d", dstIP, dstPort)
+		cmd = fmt.Sprintf("wget -O- http://[%s]:%d", dstIP, dstPort)
 	}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, srcPodName, toolboxContainerName, strings.Fields(cmd))
 	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
