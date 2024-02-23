@@ -29,7 +29,7 @@ import (
 	ipam "antrea.io/antrea/pkg/agent/cniserver/ipam"
 	types "antrea.io/antrea/pkg/agent/cniserver/types"
 	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
-	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -137,7 +137,7 @@ func (m *MockIPAMAllocator) EXPECT() *MockIPAMAllocatorMockRecorder {
 }
 
 // SecondaryNetworkAllocate mocks base method.
-func (m *MockIPAMAllocator) SecondaryNetworkAllocate(arg0 *v1alpha2.PodOwner, arg1 *types.NetworkConfig) (*ipam.IPAMResult, error) {
+func (m *MockIPAMAllocator) SecondaryNetworkAllocate(arg0 *v1beta1.PodOwner, arg1 *types.NetworkConfig) (*ipam.IPAMResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SecondaryNetworkAllocate", arg0, arg1)
 	ret0, _ := ret[0].(*ipam.IPAMResult)
@@ -152,7 +152,7 @@ func (mr *MockIPAMAllocatorMockRecorder) SecondaryNetworkAllocate(arg0, arg1 any
 }
 
 // SecondaryNetworkRelease mocks base method.
-func (m *MockIPAMAllocator) SecondaryNetworkRelease(arg0 *v1alpha2.PodOwner) error {
+func (m *MockIPAMAllocator) SecondaryNetworkRelease(arg0 *v1beta1.PodOwner) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SecondaryNetworkRelease", arg0)
 	ret0, _ := ret[0].(error)

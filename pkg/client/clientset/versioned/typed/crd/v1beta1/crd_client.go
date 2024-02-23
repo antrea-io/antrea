@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ type CrdV1beta1Interface interface {
 	EgressesGetter
 	ExternalIPPoolsGetter
 	GroupsGetter
+	IPPoolsGetter
 	NetworkPoliciesGetter
 	TiersGetter
 	TraceflowsGetter
@@ -69,6 +70,10 @@ func (c *CrdV1beta1Client) ExternalIPPools() ExternalIPPoolInterface {
 
 func (c *CrdV1beta1Client) Groups(namespace string) GroupInterface {
 	return newGroups(c, namespace)
+}
+
+func (c *CrdV1beta1Client) IPPools() IPPoolInterface {
+	return newIPPools(c)
 }
 
 func (c *CrdV1beta1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {

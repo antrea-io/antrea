@@ -110,7 +110,7 @@ func TestOVSBridge(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	assert.Equal(t, expectedDatapathID, datapathID)
-	vlanID := uint16(100)
+	vlanID := int32(100)
 
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
@@ -366,7 +366,7 @@ func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 
 var ofPortRequest int32 = 1
 
-func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType string, vlanID uint16) string {
+func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType string, vlanID int32) string {
 	var err error
 	var uuid string
 	var externalIDs map[string]interface{}

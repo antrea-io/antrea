@@ -121,7 +121,7 @@ func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig,
-	vlanID uint16) *interfacestore.InterfaceConfig {
+	vlanID int32) *interfacestore.InterfaceConfig {
 	// A secondary interface can be created without IPs. Ignore the IP parsing error here.
 	containerIPs, _ := parseContainerIPs(ips)
 	// containerIface.Mac should be a valid MAC string, otherwise it should throw error before
@@ -262,7 +262,7 @@ func (pc *podConfigurator) configureInterfacesCommon(
 	return nil
 }
 
-func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}, vlanID uint16) (string, error) {
+func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}, vlanID int32) (string, error) {
 	var portUUID string
 	var err error
 	switch getOVSInterfaceType(ovsPortName) {
@@ -465,7 +465,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 					containerConfig.IPs,
 					containerConfig.MAC,
 					uint32(containerConfig.OFPort),
-					containerConfig.VLANID,
+					uint16(containerConfig.VLANID),
 					nil,
 				); err != nil {
 					klog.ErrorS(err, "Error when re-installing flows for Pod", "Pod", klog.KRef(namespace, name))
@@ -518,7 +518,7 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName, netNS string
 			return fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
 		}
 		klog.V(2).InfoS("Setting up Openflow entries for Pod interface", "container", containerID, "port", ovsPortName)
-		if err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), containerConfig.VLANID, nil); err != nil {
+		if err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), uint16(containerConfig.VLANID), nil); err != nil {
 			return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 		}
 	}

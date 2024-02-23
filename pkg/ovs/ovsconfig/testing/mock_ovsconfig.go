@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,7 +112,7 @@ func (mr *MockOVSBridgeClientMockRecorder) Create() *gomock.Call {
 }
 
 // CreateAccessPort mocks base method.
-func (m *MockOVSBridgeClient) CreateAccessPort(arg0, arg1 string, arg2 map[string]any, arg3 uint16) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateAccessPort(arg0, arg1 string, arg2 map[string]any, arg3 int32) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateAccessPort", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(string)

@@ -160,15 +160,15 @@ enableBridgingMode=true,featureGates.AntreaIPAM=true,trafficEncapMode=noEncap,no
 The following example YAML manifest creates an IPPool CR.
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: pool1
 spec:
-  ipVersion: 4
   ipRanges:
   - start: "10.2.0.12"
     end: "10.2.0.20"
+  subnetInfo:
     gateway: "10.2.0.1"
     prefixLength: 24
     vlan: 2              # Default is 0 (untagged). Valid value is 0~4095.
@@ -442,28 +442,28 @@ Antrea IP pools are defined with the `IPPool` CRD. The following two examples
 define an IPv4 and an IPv6 IP pool respectively.
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: ipv4-pool-1
 spec:
-  ipVersion: 4
   ipRanges:
   - cidr: "10.10.1.0/26"
+  subnetInfo:
     gateway: "10.10.1.1"
     prefixLength: 24
 ```
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: ipv6-pool-1
 spec:
-  ipVersion: 6
   ipRanges:
   - start: "3ffe:ffff:1:01ff::0100"
     end: "3ffe:ffff:1:01ff::0200"
+  subnetInfo:
     gateway: "3ffe:ffff:1:01ff::1"
     prefixLength: 64
 ```
@@ -477,7 +477,6 @@ kind: IPPool
 metadata:
   name: ipv4-pool-1
 spec:
-  ipVersion: 4
   ipRanges:
   - cidr: "10.10.1.0/26"
     gateway: "10.10.1.1"

@@ -218,7 +218,7 @@ func (s *StretchedNetworkPolicyController) syncPodClassifierFlow(podRef types.Na
 		containerConfigs[0].IPs,
 		containerConfigs[0].MAC,
 		uint32(containerConfigs[0].OFPort),
-		containerConfigs[0].VLANID,
+		uint16(containerConfigs[0].VLANID),
 		&labelID,
 	)
 }

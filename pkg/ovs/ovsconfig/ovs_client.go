@@ -41,7 +41,7 @@ type OVSBridge struct {
 type OVSPortData struct {
 	UUID   string
 	Name   string
-	VLANID uint16
+	VLANID int32
 	// Interface type.
 	IFType      string
 	IFName      string
@@ -549,11 +549,11 @@ func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]inter
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 // vlanID=0 will perform same behavior as CreatePort.
-func (br *OVSBridge) CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error) {
+func (br *OVSBridge) CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID int32) (string, Error) {
 	return br.createPort(name, ifDev, "", 0, vlanID, "", externalIDs, nil)
 }
 
-func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID uint16, mac string, externalIDs, options map[string]interface{}) (string, Error) {
+func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID int32, mac string, externalIDs, options map[string]interface{}) (string, Error) {
 	var externalIDMap []interface{}
 	var optionMap []interface{}
 
@@ -686,7 +686,7 @@ func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortDat
 	portData.Name = port["name"].(string)
 	portData.ExternalIDs = buildMapFromOVSDBMap(port["external_ids"].([]interface{}))
 	if tag, ok := port["tag"].(float64); ok {
-		portData.VLANID = uint16(tag)
+		portData.VLANID = int32(tag)
 	}
 	portData.Options = buildMapFromOVSDBMap(intf["options"].([]interface{}))
 	portData.IFType = intf["type"].(string)

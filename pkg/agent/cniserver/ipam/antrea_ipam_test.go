@@ -40,7 +40,7 @@ import (
 
 	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
 	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	annotations "antrea.io/antrea/pkg/ipam"
 	fakepoolclient "antrea.io/antrea/pkg/ipam/poolallocator/testing"
@@ -58,92 +58,86 @@ var (
 
 func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 
-	ipRangeApple := crdv1a2.IPRange{
+	ipRangeApple := crdv1b1.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.200",
 	}
 
-	subnetInfoApple := crdv1a2.SubnetInfo{
+	subnetInfoApple := &crdv1b1.SubnetInfo{
 		Gateway:      "10.2.2.1",
 		PrefixLength: 24,
 	}
 
-	subnetRangeApple := crdv1a2.SubnetIPRange{IPRange: ipRangeApple,
-		SubnetInfo: subnetInfoApple}
-
-	crdClient.InitPool(&crdv1a2.IPPool{
+	crdClient.InitPool(&crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testApple,
 			UID: k8suuid.NewUUID()},
-		Spec: crdv1a2.IPPoolSpec{
-			IPRanges: []crdv1a2.SubnetIPRange{subnetRangeApple},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{ipRangeApple},
+			SubnetInfo: subnetInfoApple,
 		},
 	})
 
-	ipRangeOrange := crdv1a2.IPRange{
+	ipRangeOrange := crdv1b1.IPRange{
 		Start: "20::2",
 		End:   "20::20",
 	}
 
-	subnetInfoOrange := crdv1a2.SubnetInfo{
+	subnetInfoOrange := &crdv1b1.SubnetInfo{
 		Gateway:      "20::1",
 		PrefixLength: 64,
 	}
 
-	subnetRangeOrange := crdv1a2.SubnetIPRange{IPRange: ipRangeOrange,
-		SubnetInfo: subnetInfoOrange}
-
-	crdClient.InitPool(&crdv1a2.IPPool{
+	crdClient.InitPool(&crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testOrange,
 			UID: k8suuid.NewUUID()},
-		Spec: crdv1a2.IPPoolSpec{
-			IPRanges: []crdv1a2.SubnetIPRange{subnetRangeOrange},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{ipRangeOrange},
+			SubnetInfo: subnetInfoOrange,
 		},
 	})
 
-	ipRangePear := crdv1a2.IPRange{
+	ipRangePear := crdv1b1.IPRange{
 		Start: "10.2.3.100",
 		End:   "10.2.3.200",
 	}
-	subnetInfoPear := crdv1a2.SubnetInfo{
+	subnetInfoPear := crdv1b1.SubnetInfo{
 		Gateway:      "10.2.3.1",
 		PrefixLength: 24,
 		VLAN:         100,
 	}
-	subnetRangePear := crdv1a2.SubnetIPRange{IPRange: ipRangePear,
-		SubnetInfo: subnetInfoPear}
-	crdClient.InitPool(&crdv1a2.IPPool{
+	crdClient.InitPool(&crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testPear},
-		Spec: crdv1a2.IPPoolSpec{
-			IPRanges:  []crdv1a2.SubnetIPRange{subnetRangePear},
-			IPVersion: crdv1a2.IPv4,
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges:   []crdv1b1.IPRange{ipRangePear},
+			SubnetInfo: &subnetInfoPear,
 		},
-		Status: crdv1a2.IPPoolStatus{IPAddresses: []crdv1a2.IPAddressState{{
+		Status: crdv1b1.IPPoolStatus{IPAddresses: []crdv1b1.IPAddressState{{
 			IPAddress: "10.2.3.198",
-			Phase:     crdv1a2.IPAddressPhaseReserved,
-			Owner: crdv1a2.IPAddressOwner{StatefulSet: &crdv1a2.StatefulSetOwner{
+			Phase:     crdv1b1.IPAddressPhaseReserved,
+			Owner: crdv1b1.IPAddressOwner{StatefulSet: &crdv1b1.StatefulSetOwner{
 				Name:      "pear-sts",
 				Namespace: testPear,
 				Index:     8,
 			}},
 		}, {
 			IPAddress: "10.2.3.197",
-			Phase:     crdv1a2.IPAddressPhaseReserved,
-			Owner: crdv1a2.IPAddressOwner{
-				Pod: &crdv1a2.PodOwner{
+			Phase:     crdv1b1.IPAddressPhaseReserved,
+			Owner: crdv1b1.IPAddressOwner{
+				Pod: &crdv1b1.PodOwner{
 					Name:        "pear-sts-9",
 					Namespace:   testPear,
 					ContainerID: "pear-sts-9-container",
 				},
-				StatefulSet: &crdv1a2.StatefulSetOwner{
+				StatefulSet: &crdv1b1.StatefulSetOwner{
 					Name:      "pear-sts",
 					Namespace: testPear,
 					Index:     9,
 				}},
 		}, {
 			IPAddress: "10.2.3.196",
-			Phase:     crdv1a2.IPAddressPhaseReserved,
-			Owner: crdv1a2.IPAddressOwner{
-				Pod: &crdv1a2.PodOwner{
+			Phase:     crdv1b1.IPAddressPhaseReserved,
+			Owner: crdv1b1.IPAddressOwner{
+				Pod: &crdv1b1.PodOwner{
 					Name:        "pear10",
 					Namespace:   testPear,
 					ContainerID: "pear10-container",
@@ -327,7 +321,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		listOptions,
 	)
 
-	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().IPPools(), localPodInformer, true)
+	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1beta1().IPPools(), localPodInformer, true)
 	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 	informerFactory.Start(stopCh)
 	go localPodInformer.Run(stopCh)
@@ -347,7 +341,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
-	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
+	vlanArgsMap := map[string]int32{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
 	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10"} {
 		// extract Namespace by removing numerals
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
@@ -372,7 +366,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		if vlanID, ok := vlanArgsMap[test]; ok {
 			assert.Equal(t, vlanID, result.VLANID)
 		} else {
-			assert.Equal(t, uint16(0), result.VLANID)
+			assert.Equal(t, int32(0), result.VLANID)
 		}
 
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
@@ -608,7 +602,7 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 
 				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
 					informerFactory.Core().V1().Namespaces(),
-					crdInformerFactory.Crd().V1alpha2().IPPools(),
+					crdInformerFactory.Crd().V1beta1().IPPools(),
 					localPodInformer,
 					true,
 				)
