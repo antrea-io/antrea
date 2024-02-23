@@ -117,6 +117,7 @@ var allowedPaths = []string{
 	"/validate/supportbundlecollection",
 	"/validate/traceflow",
 	"/convert/clustergroup",
+	"/convert/ippool",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
@@ -149,7 +150,7 @@ func run(o *Options) error {
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
-	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
 

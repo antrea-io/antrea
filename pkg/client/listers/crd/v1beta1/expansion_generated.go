@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,6 +47,10 @@ type GroupListerExpansion interface{}
 // GroupNamespaceListerExpansion allows custom methods to be added to
 // GroupNamespaceLister.
 type GroupNamespaceListerExpansion interface{}
+
+// IPPoolListerExpansion allows custom methods to be added to
+// IPPoolLister.
+type IPPoolListerExpansion interface{}
 
 // NetworkPolicyListerExpansion allows custom methods to be added to
 // NetworkPolicyLister.

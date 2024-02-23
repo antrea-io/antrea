@@ -23,47 +23,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
-var testIPPool = &crdv1alpha2.IPPool{
+var testIPPool = &crdv1beta1.IPPool{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "test-ip-pool",
 	},
-	Spec: crdv1alpha2.IPPoolSpec{
-		IPVersion: crdv1alpha2.IPv4,
-		IPRanges: []crdv1alpha2.SubnetIPRange{
+	Spec: crdv1beta1.IPPoolSpec{
+		IPRanges: []crdv1beta1.IPRange{
 			{
-				IPRange: crdv1alpha2.IPRange{
-					CIDR: "192.168.0.0/24",
-				},
-				SubnetInfo: crdv1alpha2.SubnetInfo{
-					Gateway:      "192.168.0.1",
-					PrefixLength: 24,
-				},
-			},
-			{
-				IPRange: crdv1alpha2.IPRange{
-					CIDR: "192.168.1.0/24",
-				},
-				SubnetInfo: crdv1alpha2.SubnetInfo{
-					Gateway:      "192.168.1.1",
-					PrefixLength: 24,
-				},
-			},
-			{
-				IPRange: crdv1alpha2.IPRange{
-					Start: "192.168.3.10",
-					End:   "192.168.3.20",
-				},
-				SubnetInfo: crdv1alpha2.SubnetInfo{
-					Gateway:      "192.168.3.1",
-					PrefixLength: 24,
-				},
+				CIDR: "192.168.0.0/26",
 			},
 		},
+		SubnetInfo: crdv1beta1.SubnetInfo{
+			Gateway:      "192.168.0.1",
+			PrefixLength: 24,
+		},
 	},
-	Status: crdv1alpha2.IPPoolStatus{},
+	Status: crdv1beta1.IPPoolStatus{},
 }
 
 func marshal(object runtime.Object) []byte {
@@ -71,7 +49,7 @@ func marshal(object runtime.Object) []byte {
 	return raw
 }
 
-func copyAndMutateIPPool(in *crdv1alpha2.IPPool, mutateFunc func(*crdv1alpha2.IPPool)) *crdv1alpha2.IPPool {
+func copyAndMutateIPPool(in *crdv1beta1.IPPool, mutateFunc func(*crdv1beta1.IPPool)) *crdv1beta1.IPPool {
 	out := in.DeepCopy()
 	mutateFunc(out)
 	return out
@@ -97,16 +75,16 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{
+						{
 							CIDR: "192.168.3.0/26",
 						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "192.168.3.1",
-							PrefixLength: 32,
-						},
-					})
+					}
+					pool.Spec.SubnetInfo = crdv1beta1.SubnetInfo{
+						Gateway:      "192.168.3.1",
+						PrefixLength: 32,
+					}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
@@ -121,22 +99,26 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{
+						{
 							CIDR: "192.168.3.0/26",
 						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "192.168.3.1",
-							PrefixLength: 24,
+						{
+							Start: "192.168.3.10",
+							End:   "192.168.3.20",
 						},
-					})
+					}
+					pool.Spec.SubnetInfo = crdv1beta1.SubnetInfo{
+						Gateway:      "192.168.3.1",
+						PrefixLength: 24,
+					}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "IPRanges [192.168.3.10-192.168.3.20,192.168.3.0/26] overlap",
+					Message: "IPRanges [192.168.3.0/26,192.168.3.10-192.168.3.20] overlap",
 				},
 			},
 		},
@@ -145,22 +127,26 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{
+						{
 							CIDR: "192.168.3.12/30",
 						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "192.168.3.13",
-							PrefixLength: 24,
+						{
+							Start: "192.168.3.10",
+							End:   "192.168.3.20",
 						},
-					})
+					}
+					pool.Spec.SubnetInfo = crdv1beta1.SubnetInfo{
+						Gateway:      "192.168.3.1",
+						PrefixLength: 24,
+					}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "IPRanges [192.168.3.10-192.168.3.20,192.168.3.12/30] overlap",
+					Message: "IPRanges [192.168.3.12/30,192.168.3.10-192.168.3.20] overlap",
 				},
 			},
 		},
@@ -169,22 +155,22 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{
+						{
 							CIDR: "10:2400::0/96",
 						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "10:2400::01",
-							PrefixLength: 24,
-						},
-					})
+					}
+					pool.Spec.SubnetInfo = crdv1beta1.SubnetInfo{
+						Gateway:      "192.168.3.1",
+						PrefixLength: 24,
+					}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "Range is invalid. IP version of range 10:2400::0/96 differs from Pool IP version",
+					Message: "Range is invalid. IP version of range 10:2400::0/96 differs from gateway IP version",
 				},
 			},
 		},
@@ -193,16 +179,16 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{
+						{
 							CIDR: "192.168.10.0/26",
 						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "192.168.1.1",
-							PrefixLength: 24,
-						},
-					})
+					}
+					pool.Spec.SubnetInfo = crdv1beta1.SubnetInfo{
+						Gateway:      "192.168.1.1",
+						PrefixLength: 24,
+					}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
@@ -218,14 +204,14 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 				Name:      "foo",
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(testIPPool)},
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = pool.Spec.IPRanges[:1]
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = []crdv1beta1.IPRange{}
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "existing IPRanges [192.168.1.0/24,192.168.3.10-192.168.3.20] cannot be updated or deleted",
+					Message: "existing IPRanges [192.168.0.0/26] cannot be updated or deleted",
 				},
 			},
 		},
@@ -235,14 +221,14 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 				Name:      "foo",
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(testIPPool)},
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges[0].Gateway = "192.168.0.2"
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges[0].CIDR = "192.168.1.0/24"
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "existing IPRanges [192.168.0.0/24] cannot be updated or deleted",
+					Message: "existing IPRanges [192.168.0.0/26] cannot be updated or deleted",
 				},
 			},
 		},
@@ -252,15 +238,10 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 				Name:      "foo",
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(testIPPool)},
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
-							CIDR: "192.168.100.0/24",
-						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "192.168.100.1",
-							PrefixLength: 24,
-						},
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta1.IPRange{
+						Start: "192.168.0.128",
+						End:   "192.168.0.132",
 					})
 				}))},
 			},
@@ -272,23 +253,17 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 				Name:      "foo",
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(testIPPool)},
-				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
-						IPRange: crdv1alpha2.IPRange{
-							Start: "192.168.3.10",
-							End:   "192.168.3.30",
-						},
-						SubnetInfo: crdv1alpha2.SubnetInfo{
-							Gateway:      "192.168.3.1",
-							PrefixLength: 24,
-						},
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta1.IPRange{
+						Start: "192.168.0.5",
+						End:   "192.168.0.10",
 					})
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "IPRanges [192.168.3.10-192.168.3.30,192.168.3.10-192.168.3.20] overlap",
+					Message: "IPRanges [192.168.0.5-192.168.0.10,192.168.0.0/26] overlap",
 				},
 			},
 		},
@@ -297,8 +272,8 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "DELETE",
-				OldObject: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
-					pool.Status.IPAddresses = []crdv1alpha2.IPAddressState{
+				OldObject: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1beta1.IPPool) {
+					pool.Status.IPAddresses = []crdv1beta1.IPAddressState{
 						{
 							IPAddress: "192.168.0.10",
 						},

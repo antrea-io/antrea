@@ -21,41 +21,43 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/agent/config"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 )
 
 var (
-	testIPPoolv4 = &crdv1alpha2.IPPool{
+	testIPPoolv4 = &crdv1beta1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-ippool-ipv4",
 		},
-		Spec: crdv1alpha2.IPPoolSpec{
-			IPVersion: crdv1alpha2.IPv4,
-			IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-				CIDR: "10.123.1.0/24",
+		Spec: crdv1beta1.IPPoolSpec{
+			IPRanges: []crdv1beta1.IPRange{
+				{
+					CIDR: "10.123.1.0/24",
+				},
 			},
-				SubnetInfo: crdv1alpha2.SubnetInfo{
-					Gateway:      "10.123.1.254",
-					PrefixLength: 24,
-				}}},
+			SubnetInfo: crdv1beta1.SubnetInfo{
+				Gateway:      "10.123.1.254",
+				PrefixLength: 24,
+			},
 		},
 	}
 
-	testIPPoolv6 = &crdv1alpha2.IPPool{
+	testIPPoolv6 = &crdv1beta1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-ippool-ipv6",
 		},
-		Spec: crdv1alpha2.IPPoolSpec{
-			IPVersion: crdv1alpha2.IPv6,
-			IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-				Start: "3ffe:ffff:1:01ff::0101",
-				End:   "3ffe:ffff:1:01ff::0200",
+		Spec: crdv1beta1.IPPoolSpec{
+			IPRanges: []crdv1beta1.IPRange{
+				{
+					Start: "3ffe:ffff:1:01ff::0101",
+					End:   "3ffe:ffff:1:01ff::0200",
+				},
 			},
-				SubnetInfo: crdv1alpha2.SubnetInfo{
-					Gateway:      "3ffe:ffff:1:01ff::1",
-					PrefixLength: 64,
-				}}},
+			SubnetInfo: crdv1beta1.SubnetInfo{
+				Gateway:      "3ffe:ffff:1:01ff::1",
+				PrefixLength: 64,
+			},
 		},
 	}
 
@@ -252,12 +254,12 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfProxyDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
-	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
+	_, err = data.crdClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv4.Name)
 	if err != nil {
 		t.Fatalf("Failed to create v4 IPPool CR: %v", err)
 	}
-	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv6, metav1.CreateOptions{})
+	_, err = data.crdClient.CrdV1beta1().IPPools().Create(context.TODO(), testIPPoolv6, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv6.Name)
 	if err != nil {
 		t.Fatalf("Failed to create v6 IPPool CR: %v", err)
