@@ -104,6 +104,7 @@ var (
 		"egressIP",
 		"appProtocolName",
 		"httpVals",
+		"egressNodeName",
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
@@ -595,6 +596,8 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 			ie.SetStringValue(conn.AppProtocolName)
 		case "httpVals":
 			ie.SetStringValue(conn.HttpVals)
+		case "egressNodeName":
+			ie.SetStringValue(conn.EgressNodeName)
 		}
 	}
 	err := exp.ipfixSet.AddRecord(eL, templateID)
@@ -641,14 +644,15 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 }
 
 func (exp *FlowExporter) fillEgressInfo(conn *flowexporter.Connection) {
-	egressName, egressIP, _, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
+	egressName, egressIP, egressNodeName, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
 	if err != nil {
 		// Egress is not enabled or no Egress is applied to this Pod
 		return
 	}
 	conn.EgressName = egressName
 	conn.EgressIP = egressIP
-	klog.V(4).InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "SourcePodNamespace", conn.SourcePodNamespace, "SourcePodName", conn.SourcePodName)
+	conn.EgressNodeName = egressNodeName
+	klog.V(4).InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))
 }
 
 func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {

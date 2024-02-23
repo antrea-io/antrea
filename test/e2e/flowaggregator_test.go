@@ -92,6 +92,7 @@ DATA SET:
     egressIP: 172.18.0.2
     appProtocolName: http
     httpVals: mockHttpString
+    egressNodeName: k8s-node-worker
     destinationClusterIPv4: 0.0.0.0
     octetDeltaCountFromSourceNode: 8982624938
     octetDeltaCountFromDestinationNode: 8982624938
@@ -766,7 +767,8 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		addLabelToTestPods(t, data, label, []string{clientName})
 
 		// Create an Egress and the Egress IP is assigned to the Node running the client Pods
-		var egressNodeIP string
+		var egressNodeIP, egressNodeName string
+		egressNodeName = nodeName(0)
 		if !isIPv6 {
 			egressNodeIP = nodeIPv4(0)
 		} else {
@@ -781,11 +783,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 		if !isIPv6 {
 			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, label)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, egressNodeName, label)
 			}
 		} else {
 			if clientIPs.IPv6 != nil && serverIPs.IPv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, label)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, egressNodeName, label)
 			}
 		}
 	})
@@ -807,7 +809,8 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		addLabelToTestPods(t, data, label, []string{clientName})
 
 		// Create an Egress and the Egress IP is assigned to the Node not running the client Pods
-		var egressNodeIP string
+		var egressNodeIP, egressNodeName string
+		egressNodeName = nodeName(1)
 		if !isIPv6 {
 			egressNodeIP = nodeIPv4(1)
 		} else {
@@ -822,11 +825,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 		if !isIPv6 {
 			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, label)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, egressNodeName, label)
 			}
 		} else {
 			if clientIPs.IPv6 != nil && serverIPs.IPv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, label)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, egress.Name, egressNodeIP, egressNodeName, label)
 			}
 		}
 	})
@@ -841,11 +844,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		addLabelToTestPods(t, data, label, []string{clientName})
 		if !isIPv6 {
 			if clientIPs.IPv4 != nil && serverIPs.IPv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, "", "", label)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv4.String(), serverIPs.IPv4.String(), serverPodPort, isIPv6, "", "", "", label)
 			}
 		} else {
 			if clientIPs.IPv6 != nil && serverIPs.IPv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, "", "", label)
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.IPv6.String(), serverIPs.IPv6.String(), serverPodPort, isIPv6, "", "", "", label)
 			}
 		}
 	})
@@ -1145,7 +1148,7 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 	assert.GreaterOrEqualf(t, len(clickHouseRecords), expectedNumDataRecords, "ClickHouse should receive expected number of flow records. Considered records: %s", clickHouseRecords)
 }
 
-func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool, egressName, egressIP, labelFilter string) {
+func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool, egressName, egressIP, egressNodeName, labelFilter string) {
 	var cmd string
 	if !isIPv6 {
 		cmd = fmt.Sprintf("wget -O- %s:%d", dstIP, dstPort)
@@ -1159,7 +1162,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "", data.testNamespace)
 		checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
 		if egressName != "" {
-			checkEgressInfo(t, record, egressName, egressIP)
+			checkEgressInfo(t, record, egressName, egressIP, egressNodeName)
 		}
 	}
 
@@ -1168,7 +1171,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		checkPodAndNodeDataClickHouse(data, t, record, srcPodName, srcNodeName, "", "")
 		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeToExternal)
 		if egressName != "" {
-			checkEgressInfoClickHouse(t, record, egressName, egressIP)
+			checkEgressInfoClickHouse(t, record, egressName, egressIP, egressNodeName)
 		}
 	}
 }
@@ -1388,14 +1391,16 @@ func checkFlowTypeClickHouse(t *testing.T, record *ClickHouseFullRow, flowType u
 	assert.Equal(t, record.FlowType, flowType, "Record does not have correct flowType")
 }
 
-func checkEgressInfo(t *testing.T, record, egressName, egressIP string) {
+func checkEgressInfo(t *testing.T, record, egressName, egressIP, egressNodeName string) {
 	assert.Containsf(t, record, fmt.Sprintf("egressName: %s", egressName), "Record does not have correct egressName")
 	assert.Containsf(t, record, fmt.Sprintf("egressIP: %s", egressIP), "Record does not have correct egressIP")
+	assert.Containsf(t, record, fmt.Sprintf("egressNodeName: %s", egressNodeName), "Record does not have correct egressNodeName")
 }
 
-func checkEgressInfoClickHouse(t *testing.T, record *ClickHouseFullRow, egressName, egressIP string) {
+func checkEgressInfoClickHouse(t *testing.T, record *ClickHouseFullRow, egressName, egressIP, egressNodeName string) {
 	assert.Equal(t, egressName, record.EgressName, "Record does not have correct egressName")
 	assert.Equal(t, egressIP, record.EgressIP, "Record does not have correct egressIP")
+	assert.Equal(t, egressNodeName, record.EgressNodeName, "Record does not have correct egressNodeName")
 }
 
 func checkL7FlowExporterData(t *testing.T, record, appProtocolName string) {
@@ -1997,4 +2002,5 @@ type ClickHouseFullRow struct {
 	EgressIP                             string    `json:"egressIP"`
 	AppProtocolName                      string    `json:"appProtocolName"`
 	HttpVals                             string    `json:"httpVals"`
+	EgressNodeName                       string    `json:"egressNodeName"`
 }
