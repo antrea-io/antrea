@@ -78,6 +78,10 @@ case $key in
 esac
 done
 
+# To support Docker versions where buildx is not the default build client (i.e.,
+# versions prior to Docker Engine 23.0 and Docker Desktop 4.19).
+export DOCKER_CLI_EXPERIMENTAL=enabled
+
 if ! check_for_buildx; then
     echoerr "Buildx is required to execute this script"
     exit 1
@@ -149,7 +153,9 @@ fi
 export NO_PULL=1
 # To support Docker versions where buildx is not the default build client (i.e.,
 # versions prior to Docker Engine 23.0 and Docker Desktop 4.19).
-# This can be removed when the Makefile is updated to use "docker buildx" explicitly.
+# This can be removed when the Makefile is updated to use "docker buildx"
+# explicitly (note that we already set DOCKER_CLI_EXPERIMENTAL=enabled at the
+# beginning of the script).
 export DOCKER_BUILDKIT=1
 if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
