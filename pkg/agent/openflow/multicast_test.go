@@ -15,11 +15,18 @@
 package openflow
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
+	"antrea.io/libOpenflow/openflow15"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
 )
 
 func multicastInitFlows(isEncap bool) []string {
@@ -77,6 +84,66 @@ func Test_featureMulticast_initFlows(t *testing.T) {
 
 			flows := getFlowStrings(fc.featureMulticast.initFlows())
 			assert.ElementsMatch(t, tc.expectedFlows, flows)
+		})
+	}
+}
+
+// If any test case fails, please consider setting binding.MaxBucketsPerMessage to a smaller value.
+func TestMulticastReceiversGroupMaxBuckets(t *testing.T) {
+	fm := &featureMulticast{
+		bridge: binding.NewOFBridge(bridgeName, ""),
+	}
+
+	testCases := []struct {
+		name         string
+		ports        []uint32
+		remoteIPs    []net.IP
+		expectedCall func(*openflowtest.MockTable)
+	}{
+		{
+			name: "Only ports",
+			ports: func() []uint32 {
+				var ports []uint32
+				for i := 0; i < binding.MaxBucketsPerMessage; i++ {
+					ports = append(ports, uint32(i))
+				}
+				return ports
+			}(),
+			expectedCall: func(table *openflowtest.MockTable) {},
+		},
+		{
+			name: "Only remote IPs",
+			remoteIPs: func() []net.IP {
+				var remoteIPs []net.IP
+				sampleIP := net.ParseIP("192.168.1.1")
+				for i := 0; i < binding.MaxBucketsPerMessage; i++ {
+					remoteIPs = append(remoteIPs, sampleIP)
+				}
+				return remoteIPs
+			}(),
+			expectedCall: func(table *openflowtest.MockTable) {
+				table.EXPECT().GetID().Return(uint8(1)).Times(binding.MaxBucketsPerMessage)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			fakeOfTable := openflowtest.NewMockTable(ctrl)
+			MulticastOutputTable.ofTable = fakeOfTable
+			defer func() {
+				MulticastOutputTable.ofTable = nil
+			}()
+
+			tc.expectedCall(fakeOfTable)
+			group := fm.multicastReceiversGroup(binding.GroupIDType(100), 0, tc.ports, tc.remoteIPs)
+			messages, err := group.GetBundleMessages(binding.AddMessage)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(messages))
+			groupMod := messages[0].GetMessage().(*openflow15.GroupMod)
+			errorMsg := fmt.Sprintf("The GroupMod size with %d buckets exceeds the OpenFlow message's maximum allowable size, please consider setting binding.MaxBucketsPerMessage to a smaller value.", binding.MaxBucketsPerMessage)
+			require.LessOrEqual(t, getGroupModLen(groupMod), uint32(openflow15.MSG_MAX_LEN), errorMsg)
 		})
 	}
 }
