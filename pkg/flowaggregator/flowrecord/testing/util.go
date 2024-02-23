@@ -74,5 +74,6 @@ func PrepareTestFlowRecord() *flowrecord.FlowRecord {
 		EgressIP:                             "172.18.0.1",
 		AppProtocolName:                      "http",
 		HttpVals:                             "mockHttpString",
+		EgressNodeName:                       "test-egress-node",
 	}
 }
