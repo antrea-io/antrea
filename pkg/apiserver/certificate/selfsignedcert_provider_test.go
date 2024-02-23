@@ -48,7 +48,7 @@ var (
 	testOneYearCert3, testOneYearKey3, _ = certutil.GenerateSelfSignedCertKeyWithFixtures("localhost", loopbackAddresses, nil, "")
 )
 
-func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset, tlsSecretName string, minValidDuration time.Duration) *selfSignedCertProvider {
+func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset, tlsSecretName string, minValidDuration time.Duration, options ...providerOption) *selfSignedCertProvider {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	caConfig := &CAConfig{
 		TLSSecretName:     tlsSecretName,
@@ -57,7 +57,7 @@ func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset
 		ServiceName:       testServiceName,
 		PairName:          testPairName,
 	}
-	p, err := newSelfSignedCertProvider(client, secureServing, caConfig)
+	p, err := newSelfSignedCertProvider(client, secureServing, caConfig, options...)
 	require.NoError(t, err)
 	return p
 }
@@ -107,8 +107,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 	defer cancel()
 	client := fakeclientset.NewSimpleClientset()
 	fakeClock := clocktesting.NewFakeClock(time.Now())
-	p := newTestSelfSignedCertProvider(t, client, testSecretName, time.Hour*24*90)
-	p.clock = fakeClock
+	p := newTestSelfSignedCertProvider(t, client, testSecretName, time.Hour*24*90, withClock(fakeClock))
 	certInFile, err := os.ReadFile(p.secureServing.ServerCert.CertKey.CertFile)
 	require.NoError(t, err)
 	keyInFile, _ := os.ReadFile(p.secureServing.ServerCert.CertKey.KeyFile)
@@ -161,7 +160,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		assert.NotEqual(c, map[string][]byte{
 			corev1.TLSCertKey:       testOneYearCert,
 			corev1.TLSPrivateKeyKey: testOneYearKey,
-		}, gotSecret.Data, "Secret doesn't match")
+		}, gotSecret.Data, "Secret should not match")
 	}, 2*time.Second, 50*time.Millisecond)
 }
 
@@ -264,7 +263,6 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer mockGenerateSelfSignedCertKey(testOneYearCert2, testOneYearKey2)()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var objs []runtime.Object
@@ -272,7 +270,11 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 				objs = append(objs, tt.existingSecret)
 			}
 			client := fakeclientset.NewSimpleClientset(objs...)
-			p := newTestSelfSignedCertProvider(t, client, tt.tlsSecretName, tt.minValidDuration)
+			// mock the generateSelfSignedCertKey fuction
+			generateSelfSignedCertKey := func(_ string, _ []net.IP, _ []string) ([]byte, []byte, error) {
+				return testOneYearCert2, testOneYearKey2, nil
+			}
+			p := newTestSelfSignedCertProvider(t, client, tt.tlsSecretName, tt.minValidDuration, withGenerateSelfSignedCertKeyFn(generateSelfSignedCertKey))
 			go p.Run(ctx, 1)
 			if tt.updatedSecret != nil {
 				client.CoreV1().Secrets(tt.updatedSecret.Namespace).Update(ctx, tt.updatedSecret, metav1.UpdateOptions{})
@@ -289,15 +291,5 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 				assert.Equal(c, tt.expectedKey, keyInFile)
 			}, 2*time.Second, 50*time.Millisecond)
 		})
-	}
-}
-
-func mockGenerateSelfSignedCertKey(cert, key []byte) func() {
-	originalFn := generateSelfSignedCertKey
-	generateSelfSignedCertKey = func(_ string, _ []net.IP, _ []string) ([]byte, []byte, error) {
-		return cert, key, nil
-	}
-	return func() {
-		generateSelfSignedCertKey = originalFn
 	}
 }
