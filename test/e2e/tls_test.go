@@ -59,7 +59,7 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 	require.NotNil(t, node, "failed to get the Node")
 	nodeIPv4 := node.ipv4Addr
 	nodeIPv6 := node.ipv6Addr
-	clientPodName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "client", controllerPodNode, antreaNamespace, true)
+	clientPodName, _, cleanupFunc := createAndWaitForPod(t, data, data.createToolboxPodOnNode, "client", controllerPodNode, data.testNamespace, true)
 	defer cleanupFunc()
 
 	tests := []struct {
@@ -73,7 +73,6 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			data.checkTLS(t, clientPodName, toolboxContainerName, tc.apiserver, tc.apiserverStr, nodeIPv4, nodeIPv6)
 		})
 	}
@@ -134,7 +133,7 @@ func (data *TestData) curlTestTLS(t *testing.T, pod string, container string, tl
 		if tls12 {
 			cmd = append(cmd, "--tls-max", "1.2", "--tlsv1.2")
 		}
-		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, pod, container, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, pod, container, cmd)
 		assert.NoError(t, err, "failed to run curl command on Pod '%s'\nstdout: %s", pod, stdout)
 		t.Logf("Ran '%s' on Pod %s", strings.Join(cmd, " "), pod)
 		// Collect stderr as all TLS-related details such as the cipher suite are present in stderr.
