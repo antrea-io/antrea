@@ -44,11 +44,11 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 )
 
-var (
-	loopbackAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}
-	// Declared for unit testing.
-	generateSelfSignedCertKey = certutil.GenerateSelfSignedCertKey
-)
+var loopbackAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}
+
+// generateSelfSignedCertKeyFn represents a function which can create a self-signed certificate and
+// key for the given host.
+type generateSelfSignedCertKeyFn func(host string, alternateIPs []net.IP, alternateDNS []string) ([]byte, []byte, error)
 
 type selfSignedCertProvider struct {
 	client          kubernetes.Interface
@@ -69,23 +69,46 @@ type selfSignedCertProvider struct {
 	cert          []byte
 	key           []byte
 	verifyOptions *x509.VerifyOptions
+
+	// generateSelfSignedCertKey is the function used to generate self-signed certificates and keys.
+	// We use a struct member for unit testing.
+	generateSelfSignedCertKey generateSelfSignedCertKeyFn
 }
 
 var _ dynamiccertificates.CAContentProvider = &selfSignedCertProvider{}
 var _ dynamiccertificates.ControllerRunner = &selfSignedCertProvider{}
 
-func newSelfSignedCertProvider(client kubernetes.Interface, secureServing *options.SecureServingOptionsWithLoopback, caConfig *CAConfig) (*selfSignedCertProvider, error) {
+type providerOption func(p *selfSignedCertProvider)
+
+func withGenerateSelfSignedCertKeyFn(fn generateSelfSignedCertKeyFn) providerOption {
+	return func(p *selfSignedCertProvider) {
+		p.generateSelfSignedCertKey = fn
+	}
+}
+
+func withClock(clock clockutils.Clock) providerOption {
+	return func(p *selfSignedCertProvider) {
+		p.clock = clock
+	}
+}
+
+func newSelfSignedCertProvider(client kubernetes.Interface, secureServing *options.SecureServingOptionsWithLoopback, caConfig *CAConfig, options ...providerOption) (*selfSignedCertProvider, error) {
 	// Set the CertKey and CertDirectory to generate the certificate files.
 	secureServing.ServerCert.CertDirectory = caConfig.SelfSignedCertDir
 	secureServing.ServerCert.CertKey.CertFile = filepath.Join(caConfig.SelfSignedCertDir, caConfig.PairName+".crt")
 	secureServing.ServerCert.CertKey.KeyFile = filepath.Join(caConfig.SelfSignedCertDir, caConfig.PairName+".key")
 
 	provider := &selfSignedCertProvider{
-		client:        client,
-		secureServing: secureServing,
-		caConfig:      caConfig,
-		queue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "selfSignedCertProvider"),
-		clock:         clockutils.RealClock{},
+		client:                    client,
+		secureServing:             secureServing,
+		caConfig:                  caConfig,
+		queue:                     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "selfSignedCertProvider"),
+		clock:                     clockutils.RealClock{},
+		generateSelfSignedCertKey: certutil.GenerateSelfSignedCertKey,
+	}
+
+	for _, option := range options {
+		option(provider)
 	}
 
 	if caConfig.TLSSecretName != "" {
@@ -233,7 +256,7 @@ func (p *selfSignedCertProvider) rotateSelfSignedCertificate() error {
 	}
 	if p.shouldRotateCertificate(cert) {
 		klog.InfoS("Generating self-signed cert")
-		if cert, key, err = generateSelfSignedCertKey(p.caConfig.ServiceName, loopbackAddresses, GetAntreaServerNames(p.caConfig.ServiceName)); err != nil {
+		if cert, key, err = p.generateSelfSignedCertKey(p.caConfig.ServiceName, loopbackAddresses, GetAntreaServerNames(p.caConfig.ServiceName)); err != nil {
 			return fmt.Errorf("unable to generate self-signed cert: %v", err)
 		}
 		// If Secret is specified, we should save the new certificate and key to it.
