@@ -1,5 +1,5 @@
-antrea.io/libOpenflow v0.12.1 h1:5l+/SHEfJuuDbjkqF+YuZmk3oGjsQ1QS21K50EfqqOA=
-antrea.io/libOpenflow v0.12.1/go.mod h1:WNcqu1927fBdc4G9wocmi58+bfxaLmZOTaTGROEcM8I=
+antrea.io/libOpenflow v0.14.0 h1:6MS1E52nGQyz/AJ8j3OrotgAc/1ubef5vc5i8ytIxFE=
+antrea.io/libOpenflow v0.14.0/go.mod h1:U8YR0ithWrjwLdUUhyeCsYnlKg/mEFjG5CbPNt1V+j0=
 antrea.io/ofnet v0.9.0 h1:Fcpi32GXcp4XCV/KQYDUtQ8b3HNqYxOCjTlcL0GIJ44=
 antrea.io/ofnet v0.9.0/go.mod h1:0HhW28bemQec5xzwvdJIboqEs+884fU2cWDahQskVjs=
 bazil.org/fuse v0.0.0-20160811212531-371fbbdaa898/go.mod h1:Xbm+BRKSBEpa4q4hTSxohYNQpsxXPbPry4JJWOB3LB8=
