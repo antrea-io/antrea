@@ -37,6 +37,8 @@ function docker_run() {
   ANTREA_PATH="/go/src/antrea.io/antrea"
   docker run --rm \
 		-e GOPROXY=${GOPROXY} \
+		-e HTTP_PROXY=${HTTP_PROXY} \
+		-e HTTPS_PROXY=${HTTPS_PROXY} \
 		-w ${ANTREA_PATH} \
 		-v ${ANTREA_ROOT}:${ANTREA_PATH} \
 		"${IMAGE_NAME}" bash -c "git config --global --add safe.directory ${ANTREA_PATH} && $@"
