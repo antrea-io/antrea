@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ package testing
 import (
 	reflect "reflect"
 
-	networkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
+	types "antrea.io/antrea/pkg/controller/types"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -53,17 +53,17 @@ func (m *MockEndpointQuerier) EXPECT() *MockEndpointQuerierMockRecorder {
 	return m.recorder
 }
 
-// QueryNetworkPolicies mocks base method.
-func (m *MockEndpointQuerier) QueryNetworkPolicies(arg0, arg1 string) (*networkpolicy.EndpointQueryResponse, error) {
+// QueryNetworkPolicyRules mocks base method.
+func (m *MockEndpointQuerier) QueryNetworkPolicyRules(arg0, arg1 string) (*types.EndpointNetworkPolicyRules, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryNetworkPolicies", arg0, arg1)
-	ret0, _ := ret[0].(*networkpolicy.EndpointQueryResponse)
+	ret := m.ctrl.Call(m, "QueryNetworkPolicyRules", arg0, arg1)
+	ret0, _ := ret[0].(*types.EndpointNetworkPolicyRules)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// QueryNetworkPolicies indicates an expected call of QueryNetworkPolicies.
-func (mr *MockEndpointQuerierMockRecorder) QueryNetworkPolicies(arg0, arg1 any) *gomock.Call {
+// QueryNetworkPolicyRules indicates an expected call of QueryNetworkPolicyRules.
+func (mr *MockEndpointQuerierMockRecorder) QueryNetworkPolicyRules(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicies", reflect.TypeOf((*MockEndpointQuerier)(nil).QueryNetworkPolicies), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryNetworkPolicyRules", reflect.TypeOf((*MockEndpointQuerier)(nil).QueryNetworkPolicyRules), arg0, arg1)
 }

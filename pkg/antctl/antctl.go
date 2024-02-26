@@ -39,9 +39,9 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/version"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	endpointserver "antrea.io/antrea/pkg/apiserver/handlers/endpoint"
 	controllerinforest "antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
-	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 )
@@ -220,7 +220,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 						},
 						{
 							name:      "type",
-							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANNP",
+							usage:     "Get NetworkPolicies with specific type. Type means the type of its source NetworkPolicy: K8sNP, ACNP, ANNP",
 							shorthand: "T",
 						},
 					}, getSortByFlag()),
@@ -510,7 +510,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 					outputType: single,
 				},
 			},
-			transformedResponse: reflect.TypeOf(controllernetworkpolicy.EndpointQueryResponse{}),
+			transformedResponse: reflect.TypeOf(endpointserver.EndpointQueryResponse{}),
 		},
 		{
 			use:   "flowrecords",

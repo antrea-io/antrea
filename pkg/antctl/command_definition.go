@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,8 +29,6 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/output"
 	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
 )
 
 type formatterType string
@@ -393,111 +389,6 @@ func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, erro
 	return reflect.Indirect(ref).Interface(), nil
 }
 
-// tableOutputForQueryEndpoint implements printing sub tables (list of tables) for each response, utilizing constructTable
-// with multiplicity.
-func (cd *commandDefinition) tableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
-	// intermittent new line buffer
-	var buffer bytes.Buffer
-	newLine := func() error {
-		buffer.WriteString("\n")
-		if _, err := io.Copy(writer, &buffer); err != nil {
-			return fmt.Errorf("error when copy output into writer: %w", err)
-		}
-		buffer.Reset()
-		return nil
-	}
-	// sort rows of sub table
-	sortRows := func(rows [][]string) {
-		body := rows[1:]
-		sort.Slice(body, func(i, j int) bool {
-			for k := range body[i] {
-				if body[i][k] != body[j][k] {
-					return body[i][k] < body[j][k]
-				}
-			}
-			return true
-		})
-	}
-	// constructs sub tables for responses
-	constructSubTable := func(header [][]string, body [][]string) error {
-		rows := append(header, body...)
-		sortRows(rows)
-		numRows, numCol := len(rows), len(rows[0])
-		widths := output.GetColumnWidths(numRows, numCol, rows)
-		if err := output.ConstructTable(numRows, numCol, widths, rows, writer); err != nil {
-			return err
-		}
-		return nil
-	}
-	// construct sections of sub tables for responses (applied, ingress, egress)
-	constructSection := func(label [][]string, header [][]string, body [][]string, nonEmpty bool) error {
-		if err := constructSubTable(label, [][]string{}); err != nil {
-			return err
-		}
-		if nonEmpty {
-			if err := constructSubTable(header, body); err != nil {
-				return err
-			}
-		}
-		if err := newLine(); err != nil {
-			return err
-		}
-		return nil
-	}
-	// iterate through each endpoint and construct response
-	endpointQueryResponse := obj.(*networkpolicy.EndpointQueryResponse)
-	for _, endpoint := range endpointQueryResponse.Endpoints {
-		// transform applied policies to string representation
-		policies := make([][]string, 0)
-		for _, policy := range endpoint.Policies {
-			policyStr := []string{policy.Name, policy.Namespace, string(policy.UID)}
-			policies = append(policies, policyStr)
-		}
-		// transform egress and ingress rules to string representation
-		egress, ingress := make([][]string, 0), make([][]string, 0)
-		for _, rule := range endpoint.Rules {
-			ruleStr := []string{rule.Name, rule.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.UID)}
-			if rule.Direction == v1beta2.DirectionIn {
-				ingress = append(ingress, ruleStr)
-			} else if rule.Direction == v1beta2.DirectionOut {
-				egress = append(egress, ruleStr)
-			}
-		}
-		// table label
-		if err := constructSubTable([][]string{{"Endpoint " + endpoint.Namespace + "/" + endpoint.Name}}, [][]string{}); err != nil {
-			return err
-		}
-		// applied policies
-		nonEmpty := len(policies) > 0
-		policyLabel := []string{"Applied Policies: None"}
-		if nonEmpty {
-			policyLabel = []string{"Applied Policies:"}
-		}
-		if err := constructSection([][]string{policyLabel}, [][]string{{"Name", "Namespace", "UID"}}, policies, nonEmpty); err != nil {
-			return err
-		}
-		// egress rules
-		nonEmpty = len(egress) > 0
-		egressLabel := []string{"Egress Rules: None"}
-		if nonEmpty {
-			egressLabel = []string{"Egress Rules:"}
-		}
-		if err := constructSection([][]string{egressLabel}, [][]string{{"Name", "Namespace", "Index", "UID"}}, egress, nonEmpty); err != nil {
-			return err
-		}
-		// ingress rules
-		nonEmpty = len(ingress) > 0
-		ingressLabel := []string{"Ingress Rules: None"}
-		if nonEmpty {
-			ingressLabel = []string{"Ingress Rules:"}
-		}
-		if err := constructSection([][]string{ingressLabel}, [][]string{{"Name", "Namespace", "Index", "UID"}}, ingress, nonEmpty); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // output reads bytes from the resp and outputs the data to the writer in desired
 // format. If the AddonTransform is set, it will use the function to transform
 // the data first. It will try to output the resp in the format ft specified after
@@ -540,8 +431,8 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		if cd.commandGroup == get {
 			return output.TableOutputForGetCommands(obj, writer)
 		} else if cd.commandGroup == query {
-			if cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
-				return cd.tableOutputForQueryEndpoint(obj, writer)
+			if cd.controllerEndpoint.nonResourceEndpoint != nil && cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
+				return output.TableOutputForQueryEndpoint(obj, writer)
 			}
 		} else {
 			return output.TableOutput(obj, writer)

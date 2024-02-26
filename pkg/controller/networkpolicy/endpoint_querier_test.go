@@ -26,7 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 // pods represent kubernetes pods for testing proper query results
@@ -79,15 +80,16 @@ var pods = []*corev1.Pod{
 
 // polices represent kubernetes policies for testing proper query results
 //
-// policy 0: select all pods and deny default ingress
-// policy 1: select all pods and deny default egress
+// policy 0: select all matching pods and allow ingress and egress from matching pods
+// policy 1: select all matching pods and deny default egress
+// policy 2: select all matching pods and allow ingress from multiple matching pods
 
 var policies = []*networkingv1.NetworkPolicy{
 	{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-ingress-egress",
 			Namespace: "testNamespace",
-			UID:       types.UID("uid-1"),
+			UID:       types.UID("uid-0"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
@@ -125,7 +127,7 @@ var policies = []*networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default-deny-egress",
 			Namespace: "testNamespace",
-			UID:       types.UID("uid-2"),
+			UID:       types.UID("uid-1"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
@@ -140,7 +142,7 @@ var policies = []*networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-multiple-ingress-rules",
 			Namespace: "testNamespace",
-			UID:       types.UID("uid-3"),
+			UID:       types.UID("uid-2"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
@@ -212,117 +214,118 @@ func makeControllerAndEndpointQuerier(objects ...runtime.Object) *endpointQuerie
 	return querier
 }
 
-func TestEndpointQuery(t *testing.T) {
-	policyRef0 := PolicyRef{policies[0].Namespace, policies[0].Name, policies[0].UID}
-	policyRef1 := PolicyRef{policies[1].Namespace, policies[1].Name, policies[1].UID}
-	policyRef2 := PolicyRef{policies[2].Namespace, policies[2].Name, policies[2].UID}
+func TestQueryNetworkPolicyRules(t *testing.T) {
+	policyRef := controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: policies[0].Namespace, Name: policies[0].Name, UID: policies[0].UID}
+	policyRef1 := controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: policies[1].Namespace, Name: policies[1].Name, UID: policies[1].UID}
+	policyRef2 := controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: policies[2].Namespace, Name: policies[2].Name, UID: policies[2].UID}
+	ns, podA := "testNamespace", "podA"
 
 	testCases := []struct {
 		name             string
 		objs             []runtime.Object
 		podNamespace     string
 		podName          string
-		expectedResponse *EndpointQueryResponse
+		expectedResponse *antreatypes.EndpointNetworkPolicyRules
 	}{
 		{
-			"InvalidSelector", // provided Namespace / Name does not match any Pod
-			[]runtime.Object{},
-			"non-existing-namespace",
-			"non-existing-pod",
-			nil,
+			name:         "No matching pod",
+			objs:         []runtime.Object{},
+			podNamespace: "non-existing-namespace",
+			podName:      "non-existing-pod",
 		},
 		{
-			"NoPolicy", // Pod is not selected by any policy
-			[]runtime.Object{namespaces[0], pods[0]},
-			"testNamespace",
-			"podA",
-			&EndpointQueryResponse{
-				[]Endpoint{
-					{Namespace: "testNamespace", Name: "podA", Policies: []Policy{}, Rules: []Rule{}},
+			name:             "Empty response",
+			objs:             []runtime.Object{namespaces[0], pods[0]},
+			podNamespace:     ns,
+			podName:          podA,
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{Namespace: ns, Name: podA},
+		},
+		{
+			name:    "Default namespace",
+			objs:    []runtime.Object{namespaces[0], pods[0]},
+			podName: podA,
+		},
+		{
+			name:         "Single KNP applied with ingress and egress rules",
+			objs:         []runtime.Object{namespaces[0], pods[0], policies[0]},
+			podNamespace: ns,
+			podName:      podA,
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
+				Namespace:       ns,
+				Name:            podA,
+				AppliedPolicies: []*controlplane.NetworkPolicyReference{&policyRef},
+				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+				},
+				EndpointAsEgressDstRules: []*antreatypes.RuleInfo{
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
 				},
 			},
 		},
 		{
-			"SingleAppliedIngressEgressPolicy", // Pod is selected by a single policy
-			[]runtime.Object{namespaces[0], pods[0], policies[0]},
-			"testNamespace",
-			"podA",
-			&EndpointQueryResponse{
-				[]Endpoint{
-					{
-						Namespace: "testNamespace",
-						Name:      "podA",
-						Policies:  []Policy{{policyRef0}},
-						Rules: []Rule{
-							{policyRef0, v1beta2.DirectionOut, 0},
-							{policyRef0, v1beta2.DirectionIn, 0},
-						},
-					},
+			name:         "Multiple KNP applied", // Pod is selected by different policies
+			objs:         []runtime.Object{namespaces[0], pods[0], policies[0], policies[1]},
+			podNamespace: ns,
+			podName:      podA,
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
+				Namespace:       ns,
+				Name:            podA,
+				AppliedPolicies: []*controlplane.NetworkPolicyReference{&policyRef, &policyRef1},
+				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+				},
+				EndpointAsEgressDstRules: []*antreatypes.RuleInfo{
+					{Policy: &policyRef, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
 				},
 			},
 		},
 		{
-			"MultiplePolicy", // Pod is selected by different policies
-			[]runtime.Object{namespaces[0], pods[0], policies[0], policies[1]},
-			"testNamespace",
-			"podA",
-			&EndpointQueryResponse{
-				[]Endpoint{
-					{
-						Namespace: "testNamespace",
-						Name:      "podA",
-						Policies: []Policy{
-							{policyRef0},
-							{policyRef1},
-						},
-						Rules: []Rule{
-							{policyRef0, v1beta2.DirectionOut, 0},
-							{policyRef0, v1beta2.DirectionIn, 0},
-						},
-					},
+			name:         "Single KNP applied with multiple ingress rules", // Pod is selected by policy with multiple rules
+			objs:         []runtime.Object{namespaces[0], pods[0], policies[2]},
+			podNamespace: ns,
+			podName:      podA,
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
+				Namespace:       ns,
+				Name:            podA,
+				AppliedPolicies: []*controlplane.NetworkPolicyReference{&policyRef2},
+				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
+					{Policy: &policyRef2, Index: 1, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
 				},
 			},
 		},
-		{
-			"MultipleRule", // Pod is selected by policy with multiple rules
-			[]runtime.Object{namespaces[0], pods[0], policies[2]},
-			"testNamespace",
-			"podA",
-			&EndpointQueryResponse{
-				[]Endpoint{
-					{
-						Namespace: "testNamespace",
-						Name:      "podA",
-						Policies: []Policy{
-							{policyRef2},
-						},
-						Rules: []Rule{
-							{policyRef2, v1beta2.DirectionIn, 1},
-						},
-					},
-				},
-			},
-		},
+	}
+
+	evaluateResponse := func(expectedRules, responseRules []*antreatypes.RuleInfo) {
+		assert.Equal(t, len(expectedRules), len(responseRules))
+		for idx := range expectedRules {
+			assert.EqualValues(t, expectedRules[idx].Rule.Direction, responseRules[idx].Rule.Direction)
+			assert.Equal(t, expectedRules[idx].Index, responseRules[idx].Index)
+			assert.Equal(t, expectedRules[idx].Policy, responseRules[idx].Policy)
+		}
+		return
 	}
 
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
 			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
-			response, err := endpointQuerier.QueryNetworkPolicies(tc.podNamespace, tc.podName)
+			response, err := endpointQuerier.QueryNetworkPolicyRules(tc.podNamespace, tc.podName)
 			require.NoErrorf(t, err, "Expected QueryNetworkPolicies to succeed")
 			if tc.expectedResponse == nil {
-				assert.Nil(t, response, "Expected nil response from QueryNetworkPolicies")
+				assert.Nil(t, response, "Expected nil response from QueryNetworkPolicyRules")
 			} else {
-				assert.Len(t, response.Endpoints, 1, "QueryNetworkPolicies should only return responses with a single endpoint")
-				expectedEndpoint := &tc.expectedResponse.Endpoints[0]
-				endpoint := &response.Endpoints[0]
-				assert.Equal(t, expectedEndpoint.Namespace, endpoint.Namespace)
-				assert.Equal(t, expectedEndpoint.Name, endpoint.Name)
-				assert.ElementsMatch(t, expectedEndpoint.Rules, endpoint.Rules)
-				assert.ElementsMatch(t, expectedEndpoint.Policies, endpoint.Policies)
+				assert.Equal(t, tc.expectedResponse.Namespace, response.Namespace)
+				assert.Equal(t, tc.expectedResponse.Name, response.Name)
+				assert.Equal(t, len(tc.expectedResponse.AppliedPolicies), len(response.AppliedPolicies))
+				var expectedPolicies, responsePolicies []*controlplane.NetworkPolicyReference
+				for idx, expected := range tc.expectedResponse.AppliedPolicies {
+					expectedPolicies = append(expectedPolicies, expected)
+					responsePolicies = append(responsePolicies, response.AppliedPolicies[idx])
+				}
+				assert.ElementsMatch(t, expectedPolicies, responsePolicies)
+				evaluateResponse(tc.expectedResponse.EndpointAsIngressSrcRules, response.EndpointAsIngressSrcRules)
+				evaluateResponse(tc.expectedResponse.EndpointAsEgressDstRules, response.EndpointAsEgressDstRules)
 			}
 		})
 	}

@@ -75,9 +75,9 @@ func testQueryEndpoint(t *testing.T, maxExecutionTime time.Duration, namespaces 
 	// track execution time by calling query endpoint 1000 times on random pods
 	for i := 0; i < 1000; i++ {
 		pod, namespace := pods[i].(*v1.Pod).Name, pods[i].(*v1.Pod).Namespace
-		response, err := querier.QueryNetworkPolicies(namespace, pod)
+		response, err := querier.QueryNetworkPolicyRules(namespace, pod)
 		require.Equal(t, err, nil)
-		require.Equal(t, len(response.Endpoints[0].Policies), responseLength)
+		require.Equal(t, len(response.AppliedPolicies), responseLength)
 	}
 	// Stop tracking go routines
 	stopCh <- struct{}{}
