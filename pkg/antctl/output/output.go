@@ -21,12 +21,14 @@ import (
 	"io"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
 	"gopkg.in/yaml.v2"
 
 	"antrea.io/antrea/pkg/antctl/transform/common"
+	endpointserver "antrea.io/antrea/pkg/apiserver/handlers/endpoint"
 )
 
 const (
@@ -158,18 +160,13 @@ func RawOutput(obj interface{}, writer io.Writer) error {
 	return nil
 }
 
-// tableOutputForGetCommands formats the table output for "get" commands.
+// TableOutputForGetCommands formats the table output for "get" commands.
 func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
 	var list []common.TableOutput
 	if reflect.TypeOf(obj).Kind() == reflect.Slice {
 		s := reflect.ValueOf(obj)
 		if s.Len() == 0 || s.Index(0).Interface() == nil {
-			var buffer bytes.Buffer
-			buffer.WriteString("\n")
-			if _, err := io.Copy(writer, &buffer); err != nil {
-				return fmt.Errorf("error when copy output into writer: %w", err)
-			}
-			return nil
+			return writeSingleLine("", writer)
 		}
 		if _, ok := s.Index(0).Interface().(common.TableOutput); !ok {
 			return TableOutput(obj, writer)
@@ -187,29 +184,13 @@ func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
 	}
 
 	// Get the elements and headers of table.
-	args := list[0].GetTableHeader()
 	rows := make([][]string, len(list)+1)
 	rows[0] = list[0].GetTableHeader()
 	for i, element := range list {
 		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
 	}
 
-	if list[0].SortRows() {
-		// Sort the table rows according to columns in order.
-		body := rows[1:]
-		sort.Slice(body, func(i, j int) bool {
-			for k := range body[i] {
-				if body[i][k] != body[j][k] {
-					return body[i][k] < body[j][k]
-				}
-			}
-			return true
-		})
-	}
-	// Construct the table.
-	numRows, numCols := len(list)+1, len(args)
-	widths := GetColumnWidths(numRows, numCols, rows)
-	return ConstructTable(numRows, numCols, widths, rows, writer)
+	return ConstructFormattedTable(rows, list[0].SortRows(), writer)
 }
 
 func GetColumnWidths(numRows int, numCols int, rows [][]string) []int {
@@ -263,6 +244,34 @@ func ConstructTable(numRows int, numCols int, widths []int, rows [][]string, wri
 	return nil
 }
 
+// ConstructFormattedTable constructs a table with aligned column widths that displays
+// all the contents. rows always includes both header and body, and is never empty.
+func ConstructFormattedTable(rows [][]string, sortRows bool, writer io.Writer) error {
+	numRows, numCols := len(rows), len(rows[0])
+	if sortRows {
+		body := rows[1:]
+		sort.Slice(body, func(i, j int) bool {
+			for k := range body[i] {
+				if body[i][k] != body[j][k] {
+					return body[i][k] < body[j][k]
+				}
+			}
+			return true
+		})
+	}
+	widths := GetColumnWidths(numRows, numCols, rows)
+	return ConstructTable(numRows, numCols, widths, rows, writer)
+}
+
+func writeSingleLine(body string, writer io.Writer) error {
+	var buffer bytes.Buffer
+	buffer.WriteString(body + "\n")
+	if _, err := io.Copy(writer, &buffer); err != nil {
+		return fmt.Errorf("error when copy output into writer: %w", err)
+	}
+	return nil
+}
+
 func jsonEncode(obj interface{}, output *bytes.Buffer) error {
 	if err := json.NewEncoder(output).Encode(obj); err != nil {
 		return fmt.Errorf("error when encoding data in json: %w", err)
@@ -287,4 +296,62 @@ func respTransformer(obj interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("error when unmarshalling data in json: %w", err)
 	}
 	return target, nil
+}
+
+// TableOutputForQueryEndpoint formats the table output for "query endpoint"
+// command, utilizing constructTable to implement printing sub tables.
+func TableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
+	// construct sections of sub tables for responses (applied, ingressSrc, egressDst)
+	constructSection := func(label string, header [][]string, body [][]string) error {
+		if len(body) == 0 {
+			label += " None"
+		}
+		if err := writeSingleLine(label, writer); err != nil {
+			return err
+		}
+		if len(body) > 0 {
+			rows := append(header, body...)
+			if err := ConstructFormattedTable(rows, true, writer); err != nil {
+				return err
+			}
+		}
+		return writeSingleLine("", writer)
+	}
+
+	// transform egress and ingress rules to string representation
+	toStringRep := func(effectiveRules []endpointserver.Rule) [][]string {
+		ruleStrings := make([][]string, 0)
+		for _, rule := range effectiveRules {
+			ruleStrings = append(ruleStrings, []string{rule.PolicyRef.Name, rule.PolicyRef.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.PolicyRef.UID)})
+		}
+		return ruleStrings
+	}
+	// iterate through each endpoint and construct response
+	endpointQueryResponse := obj.(*endpointserver.EndpointQueryResponse)
+	for _, endpoint := range endpointQueryResponse.Endpoints {
+		// indicate each endpoint Namespace/Name
+		if err := writeSingleLine("Endpoint "+endpoint.Namespace+"/"+endpoint.Name, writer); err != nil {
+			return err
+		}
+		// output applied policies to section
+		policies := make([][]string, 0)
+		for _, policy := range endpoint.AppliedPolicies {
+			policyStr := []string{policy.Name, policy.Namespace, string(policy.UID)}
+			policies = append(policies, policyStr)
+		}
+		if err := constructSection("Applied Policies on Endpoint:", [][]string{{"Name", "Namespace", "UID"}}, policies); err != nil {
+			return err
+		}
+		// output rules referencing endpoint as egress destination section
+		egressDst := toStringRep(endpoint.EgressDstRules)
+		if err := constructSection("Egress Rules Referencing Endpoint as Destination:", [][]string{{"Name", "Namespace", "Index", "UID"}}, egressDst); err != nil {
+			return err
+		}
+		// output rules referencing endpoint as ingress source section
+		ingressSrc := toStringRep(endpoint.IngressSrcRules)
+		if err := constructSection("Ingress Rules Referencing Endpoint as Source:", [][]string{{"Name", "Namespace", "Index", "UID"}}, ingressSrc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
