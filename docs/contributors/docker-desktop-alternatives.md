@@ -34,12 +34,26 @@ To install and run Colima, follow these steps:
   configuration. Check the Colima documentation for configuration options. By
   default, Colima will use the Docker runtime. This means that you can keep
   using the `docker` CLI and that no changes are required to build Antrea.
+  - we recommend increasing the CPU and memory resources allocated to the VM as
+    by default it only has 2 vCPUs and 2GiB of memory. For example, you can use:
+    `colima start --cpu 4 --memory 8`. Otherwise, building Antrea container
+    images may be slow, and your Kind clusters may run out of memory.
 * `docker context list` and check that the `colima` context is selected. You can
   use `docker context use desktop-linux` to go back to Docker Desktop.
 * `make` to build Antrea locally. Check that the `antrea-ubuntu` image is
   available by listing all images with `docker images`.
 
-TODO: validate that Kind can be used with Colima without any issue.
+We have validated that Kind clusters with Antrea can run inside Colima without
+any issue (confirmed for IPv4, IPv6 single-stack clusters, as well as for
+dual-stack clusters).
+
+At any time, you can stop the VM with `colima stop` and restart it with `colima
+start` (you do not need to specify configuration flags again, unless you want to
+change the current values). You can also check the status of the VM with `colima
+ls`.
+
+While it should be possible to have multiple Colima instances simultaneously,
+this is not something that we have tested.
 
 ## Rancher Desktop (macOS and Windows)
 
