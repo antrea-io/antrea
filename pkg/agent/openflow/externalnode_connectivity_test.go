@@ -23,13 +23,13 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 func Test_client_InstallVMUplinkFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, true, config.ExternalNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
@@ -85,7 +85,7 @@ func Test_client_InstallPolicyBypassFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.ExternalNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()

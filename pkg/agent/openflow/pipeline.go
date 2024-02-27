@@ -31,9 +31,9 @@ import (
 	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/nodeip"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/openflow/operations"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -227,27 +227,6 @@ var (
 	tableNameIndex = "tableNameIndex"
 )
 
-type ofAction int32
-
-const (
-	add ofAction = iota
-	mod
-	del
-)
-
-func (a ofAction) String() string {
-	switch a {
-	case add:
-		return "add"
-	case mod:
-		return "modify"
-	case del:
-		return "delete"
-	default:
-		return "unknown"
-	}
-}
-
 // tableCache caches the OpenFlow tables used in pipelines, and it supports using the table ID and name as the index to query the OpenFlow table.
 var tableCache = cache.NewIndexer(tableIDKeyFunc, cache.Indexers{tableNameIndex: tableNameIndexFunc})
 
@@ -382,16 +361,6 @@ var (
 	GlobalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 )
 
-type OFEntryOperations interface {
-	AddAll(flows []*openflow15.FlowMod) error
-	ModifyAll(flows []*openflow15.FlowMod) error
-	BundleOps(adds, mods, dels []*openflow15.FlowMod) error
-	DeleteAll(flows []*openflow15.FlowMod) error
-	AddOFEntries(ofEntries []binding.OFEntry) error
-	ModifyOFEntries(ofEntries []binding.OFEntry) error
-	DeleteOFEntries(ofEntries []binding.OFEntry) error
-}
-
 func copyFlowWithNewPriority(flowMod *openflow15.FlowMod, priority uint16) *openflow15.FlowMod {
 	newFlow := *flowMod
 	newFlow.Priority = priority
@@ -456,7 +425,7 @@ type client struct {
 
 	// ofEntryOperations is a wrapper interface for operating multiple OpenFlow entries with action AddAll / ModifyAll / DeleteAll.
 	// It enables convenient mocking in unit tests.
-	ofEntryOperations OFEntryOperations
+	ofEntryOperations operations.OFEntryOperations
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
 	replayMutex           sync.RWMutex
 	nodeConfig            *config.NodeConfig
@@ -497,92 +466,6 @@ func (c *client) Run(stopCh <-chan struct{}) {
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
 	return GlobalVirtualMAC
-}
-
-func (c *client) changeAll(flowsMap map[ofAction][]*openflow15.FlowMod) error {
-	if len(flowsMap) == 0 {
-		return nil
-	}
-
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		for k, v := range flowsMap {
-			if len(v) != 0 {
-				metrics.OVSFlowOpsLatency.WithLabelValues(k.String()).Observe(float64(d.Milliseconds()))
-			}
-		}
-	}()
-
-	if err := c.bridge.AddFlowsInBundle(flowsMap[add], flowsMap[mod], flowsMap[del]); err != nil {
-		for k, v := range flowsMap {
-			if len(v) != 0 {
-				metrics.OVSFlowOpsErrorCount.WithLabelValues(k.String()).Inc()
-			}
-		}
-		return err
-	}
-	for k, v := range flowsMap {
-		if len(v) != 0 {
-			metrics.OVSFlowOpsCount.WithLabelValues(k.String()).Inc()
-		}
-	}
-	return nil
-}
-
-func (c *client) AddAll(flowMessages []*openflow15.FlowMod) error {
-	return c.changeAll(map[ofAction][]*openflow15.FlowMod{add: flowMessages})
-}
-
-func (c *client) ModifyAll(flowMessages []*openflow15.FlowMod) error {
-	return c.changeAll(map[ofAction][]*openflow15.FlowMod{mod: flowMessages})
-}
-
-func (c *client) DeleteAll(flowMessages []*openflow15.FlowMod) error {
-	return c.changeAll(map[ofAction][]*openflow15.FlowMod{del: flowMessages})
-}
-
-func (c *client) BundleOps(adds, mods, dels []*openflow15.FlowMod) error {
-	return c.changeAll(map[ofAction][]*openflow15.FlowMod{add: adds, mod: mods, del: dels})
-}
-
-func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) error {
-	if len(ofEntries) == 0 {
-		return nil
-	}
-	var adds, mods, dels []binding.OFEntry
-	if action == add {
-		adds = ofEntries
-	} else if action == mod {
-		mods = ofEntries
-	} else if action == del {
-		dels = ofEntries
-	} else {
-		return fmt.Errorf("OF Entries Action not exists: %s", action)
-	}
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues(action.String()).Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddOFEntriesInBundle(adds, mods, dels); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues(action.String()).Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues(action.String()).Inc()
-	return nil
-}
-
-func (c *client) AddOFEntries(ofEntries []binding.OFEntry) error {
-	return c.changeOFEntries(ofEntries, add)
-}
-
-func (c *client) ModifyOFEntries(ofEntries []binding.OFEntry) error {
-	return c.changeOFEntries(ofEntries, mod)
-}
-
-func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
-	return c.changeOFEntries(ofEntries, del)
 }
 
 func (c *client) defaultFlows() []*openflow15.FlowMod {
@@ -2978,7 +2861,7 @@ func NewClient(bridgeName string,
 		packetInRate:               packetInRate,
 		groupIDAllocator:           groupIDAllocator,
 	}
-	c.ofEntryOperations = c
+	c.ofEntryOperations = operations.NewOFEntryOperations(bridge)
 	return c
 }
 

@@ -244,7 +244,7 @@ type Client interface {
 
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handler.
-	RegisterPacketInHandler(packetHandlerReason uint8, packetInHandler interface{})
+	RegisterPacketInHandler(packetHandlerReason uint8, packetInHandler PacketInHandler)
 
 	StartPacketInHandler(stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.

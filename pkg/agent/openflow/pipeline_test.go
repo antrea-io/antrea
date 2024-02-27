@@ -25,7 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/third_party/proxy"
@@ -226,7 +226,7 @@ func Test_client_defaultFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			options := append(tc.clientOptions, setEnableOVSMeters(tc.requireMeterSupport))
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, tc.nodeType, tc.trafficEncapMode, options...)
 			defer resetPipelines()
