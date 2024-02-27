@@ -54,7 +54,7 @@ require (
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/vmware/go-ipfix v0.9.0
 	go.uber.org/mock v0.4.0
-	golang.org/x/crypto v0.19.0
+	golang.org/x/crypto v0.20.0
 	golang.org/x/mod v0.15.0
 	golang.org/x/net v0.21.0
 	golang.org/x/sync v0.6.0
