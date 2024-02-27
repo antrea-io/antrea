@@ -34,7 +34,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -236,7 +236,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
 
@@ -260,7 +260,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
 
@@ -296,7 +296,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
 
@@ -326,7 +326,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
 
@@ -372,7 +372,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 }
 
 func newFakeClient(
-	mockOFEntryOperations *oftest.MockOFEntryOperations,
+	mockOFEntryOperations *opstest.MockOFEntryOperations,
 	enableIPv4,
 	enableIPv6 bool,
 	nodeType config.NodeType,
@@ -383,7 +383,7 @@ func newFakeClient(
 }
 
 func newFakeClientWithBridge(
-	mockOFEntryOperations *oftest.MockOFEntryOperations,
+	mockOFEntryOperations *opstest.MockOFEntryOperations,
 	enableIPv4,
 	enableIPv6 bool,
 	nodeType config.NodeType,
@@ -689,7 +689,7 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 			skipTest(t, tc.skipLinux, tc.skipWindows)
 
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
@@ -864,7 +864,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
@@ -962,7 +962,7 @@ func Test_client_UpdatePodFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, tc.enableIPv4, tc.enableIPv6, config.K8sNode, tc.trafficEncapMode, tc.clientOptions...)
 			defer resetPipelines()
@@ -1000,7 +1000,7 @@ func Test_client_UpdatePodFlows(t *testing.T) {
 
 func Test_client_GetPodFlowKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
@@ -1097,7 +1097,7 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
@@ -1216,7 +1216,7 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
@@ -1453,7 +1453,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			var options []clientOptionsFn
 			if tc.isDSR {
@@ -1496,7 +1496,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 
 func Test_client_GetServiceFlowKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 	defer resetPipelines()
@@ -1597,7 +1597,7 @@ func Test_client_InstallSNATBypassServiceFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
@@ -1662,7 +1662,7 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(tc.trafficShapingEnabled))
 			defer resetPipelines()
 
@@ -1720,7 +1720,7 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, setEnableEgressTrafficShaping(tc.trafficShapingEnabled))
 			defer resetPipelines()
 
@@ -1747,7 +1747,7 @@ func Test_client_InstallEgressQoS(t *testing.T) {
 	expectedFlows := []string{"cookie=0x1040000000000, table=EgressQoS, priority=200,pkt_mark=0x64/0xff actions=meter:100,goto_table:L2ForwardingCalc"}
 
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 	bridge := ovsoftest.NewMockBridge(ctrl)
 	fc := newFakeClientWithBridge(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, bridge, enableEgressTrafficShaping)
 	defer resetPipelines()
@@ -1919,7 +1919,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 }
 
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, ovsoftest.NewMockBridge(ctrl))
 	defer resetPipelines()
 
@@ -2270,7 +2270,7 @@ func Test_client_InstallMulticastFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
 			defer resetPipelines()
@@ -2293,7 +2293,7 @@ func Test_client_InstallMulticastFlows(t *testing.T) {
 
 func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
 	defer resetPipelines()
@@ -2318,7 +2318,7 @@ func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 func Test_client_InstallMulticasFlexibleIPAMFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeNoEncap, enableMulticast, enableConnectUplinkToBridge, disableEgress)
 	defer resetPipelines()
 
@@ -2451,7 +2451,7 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableTrafficControl)
 			defer resetPipelines()
@@ -2475,7 +2475,7 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 
 func Test_client_InstallTrafficControlReturnPortFlow(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableTrafficControl)
 	defer resetPipelines()
@@ -2547,7 +2547,7 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
 			defer resetPipelines()
@@ -2600,7 +2600,7 @@ func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticluster)
 			defer resetPipelines()
@@ -2653,7 +2653,7 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			m := oftest.NewMockOFEntryOperations(ctrl)
+			m := opstest.NewMockOFEntryOperations(ctrl)
 
 			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticluster)
 			defer resetPipelines()
@@ -2677,7 +2677,7 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 
 func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 
 	fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, enableMulticluster)
 	defer resetPipelines()
@@ -2711,7 +2711,7 @@ func Test_client_RegisterPacketInHandler(t *testing.T) {
 func Test_client_ReplayFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := oftest.NewMockOFEntryOperations(ctrl)
+	m := opstest.NewMockOFEntryOperations(ctrl)
 	bridge := ovsoftest.NewMockBridge(ctrl)
 	clientOptions := []clientOptionsFn{enableTrafficControl, enableMulticast, enableMulticluster, enableEgressTrafficShaping}
 	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, bridge, clientOptions...)

@@ -87,13 +87,8 @@ const (
 )
 
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
-func (c *client) RegisterPacketInHandler(packetHandlerCategory uint8, packetInHandler interface{}) {
-	handler, ok := packetInHandler.(PacketInHandler)
-	if !ok {
-		klog.Errorf("Invalid controller to handle packetIn.")
-		return
-	}
-	c.packetInHandlers[packetHandlerCategory] = handler
+func (c *client) RegisterPacketInHandler(packetHandlerCategory uint8, packetInHandler PacketInHandler) {
+	c.packetInHandlers[packetHandlerCategory] = packetInHandler
 }
 
 // featureStartPacketIn contains packetIn resources specifically for each feature that uses packetIn.
