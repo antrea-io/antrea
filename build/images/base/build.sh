@@ -19,23 +19,21 @@
 
 set -eo pipefail
 
-function echoerr {
-    >&2 echo "$@"
-}
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+source $THIS_DIR/../build-utils.sh
 
 _usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
 Build the antrea base image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
-        --distro <distro>       Target Linux distribution"
-
-function print_usage {
-    echoerr "$_usage"
-}
+        --distro <distro>       Target Linux distribution
+        --no-cache              Do not use the local build cache nor the cached image from the registry"
 
 PULL=false
 PUSH=false
+NO_CACHE=false
 PLATFORM=""
 DISTRO="ubuntu"
 
@@ -60,6 +58,10 @@ case $key in
     DISTRO="$2"
     shift 2
     ;;
+    --no-cache)
+    NO_CACHE=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -70,6 +72,15 @@ case $key in
     ;;
 esac
 done
+
+# When --push is provided, we assume that we want to use --cache-to, which will
+# push the "cache image" to the registry. This functionality is not supported
+# with the default docker driver.
+# See https://docs.docker.com/build/cache/backends/registry/
+if $PUSH && ! check_docker_build_driver "docker-container"; then
+    echoerr "--push requires the docker-container build driver"
+    exit 1
+fi
 
 if [ "$PLATFORM" != "" ] && $PUSH; then
     echoerr "Cannot use --platform with --push"
@@ -86,8 +97,6 @@ if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ]; then
     exit 1
 fi
 
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-
 pushd $THIS_DIR > /dev/null
 
 CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
@@ -96,6 +105,7 @@ SURICATA_VERSION=$(head -n 1 ../deps/suricata-version)
 BUILD_TAG=$(../build-tag.sh)
 
 if $PULL; then
+    # The ubuntu image is also used for the UBI build (for the cni-binaries intermediate image).
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
         docker pull $PLATFORM_ARG ubuntu:22.04
     else
@@ -106,14 +116,10 @@ if $PULL; then
     if [ "$DISTRO" == "ubuntu" ]; then
         IMAGES_LIST=(
             "antrea/openvswitch:$BUILD_TAG"
-            "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubuntu:$BUILD_TAG"
         )
     elif [ "$DISTRO" == "ubi" ]; then
         IMAGES_LIST=(
             "antrea/openvswitch-ubi:$BUILD_TAG"
-            "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubi:$BUILD_TAG"
         )
     fi
     for image in "${IMAGES_LIST[@]}"; do
@@ -129,34 +135,31 @@ if $PULL; then
     done
 fi
 
-docker build $PLATFORM_ARG --target cni-binaries \
-       --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-       -t antrea/cni-binaries:$CNI_BINARIES_VERSION \
-       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-       --build-arg BUILD_TAG=$BUILD_TAG .
+function docker_build_and_push() {
+    local image="$1"
+    local dockerfile="$2"
+    local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION --build-arg BUILD_TAG=$BUILD_TAG"
+    local cache_args=""
+    if $PUSH; then
+        cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_TAG,mode=max"
+    fi
+    if $NO_CACHE; then
+        cache_args="$cache_args --no-cache"
+    else
+        cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_TAG,mode=max"
+    fi
+    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args -f $dockerfile .
+
+    if $PUSH; then
+        docker push $image:$BUILD_TAG
+    fi
+}
+
 
 if [ "$DISTRO" == "ubuntu" ]; then
-    docker build $PLATFORM_ARG \
-           --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-           --cache-from antrea/base-ubuntu:$BUILD_TAG \
-           -t antrea/base-ubuntu:$BUILD_TAG \
-           --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-           --build-arg SURICATA_VERSION=$SURICATA_VERSION \
-           --build-arg BUILD_TAG=$BUILD_TAG .
+    docker_build_and_push "antrea/base-ubuntu" Dockerfile
 elif [ "$DISTRO" == "ubi" ]; then
-    docker build $PLATFORM_ARG \
-           --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-           --cache-from antrea/base-ubi:$BUILD_TAG \
-           -t antrea/base-ubi:$BUILD_TAG \
-           -f Dockerfile.ubi \
-           --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-           --build-arg SURICATA_VERSION=$SURICATA_VERSION \
-           --build-arg BUILD_TAG=$BUILD_TAG .
-fi
-
-if $PUSH; then
-    docker push antrea/cni-binaries:$CNI_BINARIES_VERSION
-    docker push antrea/base-$DISTRO:$BUILD_TAG
+    docker_build_and_push "antrea/base-ubi" Dockerfile.ubi
 fi
 
 popd > /dev/null
