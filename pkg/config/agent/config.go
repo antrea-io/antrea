@@ -141,8 +141,6 @@ type AgentConfig struct {
 	ActiveFlowExportTimeout string `yaml:"activeFlowExportTimeout,omitempty"`
 	// Deprecated. Use the FlowExporter config options instead.
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
-	// Deprecated. Use the NodePortLocal config options instead.
-	NPLPortRange string `yaml:"nplPortRange,omitempty"`
 	// NodePortLocal (NPL) configuration options.
 	NodePortLocal NodePortLocalConfig `yaml:"nodePortLocal,omitempty"`
 	// FlowExporter configuration options.

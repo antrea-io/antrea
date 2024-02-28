@@ -512,11 +512,10 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 		if _, ok := nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)]; !ok {
 			nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)] = types.NPLAnnotation{
-				PodPort:   port,
-				NodeIP:    pod.Status.HostIP,
-				NodePort:  nodePort,
-				Protocol:  protocol,
-				Protocols: []string{protocol},
+				PodPort:  port,
+				NodeIP:   pod.Status.HostIP,
+				NodePort: nodePort,
+				Protocol: protocol,
 			}
 		}
 	}
@@ -598,11 +597,10 @@ func (c *NPLController) waitForRulesInitialization() {
 				continue
 			}
 			allNPLPorts = append(allNPLPorts, rules.PodNodePort{
-				NodePort:  npl.NodePort,
-				PodPort:   npl.PodPort,
-				PodIP:     pod.Status.PodIP,
-				Protocol:  npl.Protocol,
-				Protocols: npl.Protocols,
+				NodePort: npl.NodePort,
+				PodPort:  npl.PodPort,
+				PodIP:    pod.Status.PodIP,
+				Protocol: npl.Protocol,
 			})
 		}
 	}

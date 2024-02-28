@@ -47,8 +47,7 @@ func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *types.NPLAn
 }
 
 func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocol string) *ExpectedNPLAnnotations {
-	protocols := []string{protocol}
-	annotation := types.NPLAnnotation{PodPort: podPort, Protocol: protocol, Protocols: protocols}
+	annotation := types.NPLAnnotation{PodPort: podPort, Protocol: protocol}
 	if nodePort != nil {
 		annotation.NodePort = *nodePort
 	}
@@ -66,7 +65,6 @@ func (a *ExpectedNPLAnnotations) Check(t *testing.T, nplValue []types.NPLAnnotat
 		if !assert.NotNilf(t, expectedAnnotation, "Unexpected annotation with PodPort %d", nplAnnotation.PodPort) {
 			continue
 		}
-		assert.ElementsMatch(t, expectedAnnotation.Protocols, nplAnnotation.Protocols, "Protocols mismatch in annotation")
 		if expectedAnnotation.NodeIP != "" {
 			assert.Equal(t, expectedAnnotation.NodeIP, nplAnnotation.NodeIP, "NodeIP mismatch in annotation")
 		}
