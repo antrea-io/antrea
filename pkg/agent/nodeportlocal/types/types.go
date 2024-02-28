@@ -21,9 +21,8 @@ const (
 
 // NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
 type NPLAnnotation struct {
-	PodPort   int      `json:"podPort"`
-	NodeIP    string   `json:"nodeIP"`
-	NodePort  int      `json:"nodePort"`
-	Protocol  string   `json:"protocol"`
-	Protocols []string `json:"protocols"` // deprecated, array with a single member which is equal to the Protocol field
+	PodPort  int    `json:"podPort"`
+	NodeIP   string `json:"nodeIP"`
+	NodePort int    `json:"nodePort"`
+	Protocol string `json:"protocol"`
 }

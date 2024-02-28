@@ -35,25 +35,22 @@ func TestRestoreRules(t *testing.T) {
 	portTable := newPortTable(mockIPTables, mockPortOpener)
 	allNPLPorts := []rules.PodNodePort{
 		{
-			NodePort:  nodePort1,
-			PodPort:   1001,
-			PodIP:     podIP,
-			Protocol:  "tcp",
-			Protocols: []string{"tcp"},
+			NodePort: nodePort1,
+			PodPort:  1001,
+			PodIP:    podIP,
+			Protocol: "tcp",
 		},
 		{
-			NodePort:  nodePort1,
-			PodPort:   1001,
-			PodIP:     podIP,
-			Protocol:  "udp",
-			Protocols: []string{"udp"},
+			NodePort: nodePort1,
+			PodPort:  1001,
+			PodIP:    podIP,
+			Protocol: "udp",
 		},
 		{
-			NodePort:  nodePort2,
-			PodPort:   1002,
-			PodIP:     podIP,
-			Protocol:  "udp",
-			Protocols: []string{"udp"},
+			NodePort: nodePort2,
+			PodPort:  1002,
+			PodIP:    podIP,
+			Protocol: "udp",
 		},
 	}
 
