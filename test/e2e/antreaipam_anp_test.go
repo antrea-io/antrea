@@ -25,7 +25,6 @@ import (
 	annotation "antrea.io/antrea/pkg/ipam"
 	e2eutils "antrea.io/antrea/test/e2e/utils"
 )
-
 // initializeAntreaIPAM must be called after Namespace in antreaIPAMNamespaces created
 func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	p80 = 80
@@ -75,7 +74,7 @@ func TestAntreaIPAMAntreaPolicy(t *testing.T) {
 
 	data, err := setupTest(t)
 	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
+		t.Fatalf("Errors when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 

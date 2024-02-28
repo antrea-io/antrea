@@ -79,7 +79,7 @@ func TestAntreaPolicyStats(t *testing.T) {
 
 	data, err := setupTest(t)
 	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
+		t.Fatalf("Errors when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
