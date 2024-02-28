@@ -148,7 +148,7 @@ fi
 
 echo "Running upgrade test for tag $FROM_TAG"
 
-DOCKER_IMAGES=("busybox" "projects.registry.vmware.com/antrea/antrea-ubuntu:$FROM_TAG")
+DOCKER_IMAGES=("registry.k8s.io/e2e-test-images/agnhost:2.29" "projects.registry.vmware.com/antrea/antrea-ubuntu:$FROM_TAG")
 
 for img in "${DOCKER_IMAGES[@]}"; do
     echo "Pulling $img"
