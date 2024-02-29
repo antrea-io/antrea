@@ -230,11 +230,6 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 	return listener, nil
 }
 
-// DialLocalSocket connects to a Unix domain socket.
-func DialLocalSocket(address string) (net.Conn, error) {
-	return dialUnix(address)
-}
-
 // SetAdapterMACAddress set specified MAC address on interface.
 func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
 	link, err := netlinkUtil.LinkByName(adapterName)
