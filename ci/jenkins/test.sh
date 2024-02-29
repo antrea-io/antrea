@@ -700,8 +700,8 @@ function deliver_antrea {
     ${CLEAN_STALE_IMAGES}
     ${PRINT_DOCKER_STATUS}
     if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
-        docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
-        docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
+        docker pull "${DOCKER_REGISTRY}/antrea/systemd-logs:v0.4"
+        docker tag "${DOCKER_REGISTRY}/antrea/systemd-logs:v0.4" "antrea/systemd-logs:v0.4"
     fi
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
@@ -768,7 +768,7 @@ function deliver_antrea {
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
             if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
-                ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
+                ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/systemd-logs:v0.4 ; docker tag ${DOCKER_REGISTRY}/antrea/systemd-logs:v0.4 antrea/systemd-logs:v0.4"
             fi
         done
     fi
