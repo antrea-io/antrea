@@ -135,10 +135,6 @@ func listenUnix(address string) (net.Listener, error) {
 	return net.Listen("unix", address)
 }
 
-func dialUnix(address string) (net.Conn, error) {
-	return net.Dial("unix", address)
-}
-
 // GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP, and ignores the interfaces which have
 // names in the ignoredInterfaces.
 func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.Set[string]) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {

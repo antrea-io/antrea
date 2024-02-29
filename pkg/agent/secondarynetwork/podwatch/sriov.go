@@ -33,7 +33,6 @@ import (
 	podresourcesv1alpha1 "k8s.io/kubelet/pkg/apis/podresources/v1alpha1"
 
 	cnipodcache "antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
-	"antrea.io/antrea/pkg/agent/util"
 )
 
 const (
@@ -68,7 +67,7 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 		path.Join(kubeletPodResourcesPath, kubeletSocket),
 		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
-			return util.DialLocalSocket(addr)
+			return net.Dial("unix", addr)
 		}),
 	)
 	if err != nil {
