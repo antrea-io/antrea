@@ -94,6 +94,11 @@ type AntreaAgentInfoList struct {
 	Items []AntreaAgentInfo `json:"items"`
 }
 
+const (
+	// AntreaControllerInfoResourceName is the name of the sole AntreaControllerInfo resource.
+	AntreaControllerInfoResourceName = "antrea-controller"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -155,6 +160,15 @@ type ControllerCondition struct {
 	// Human readable message indicating details
 	Message string `json:"message,omitempty"`
 }
+
+const (
+	// DefaultTierPriority maintains the priority for the system generated default Tier.
+	// This is the lowest priority for tiers that will be enforced before K8s NetworkPolicies.
+	DefaultTierPriority = int32(250)
+	// BaselineTierPriority maintains the priority for the system generated baseline Tier.
+	// This is the tier that will be enforced after K8s NetworkPolicies.
+	BaselineTierPriority = int32(253)
+)
 
 // +genclient
 // +genclient:nonNamespaced

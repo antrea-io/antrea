@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ovstracing
+package apis
 
-import (
-	"encoding/json"
-	"io"
-
-	"antrea.io/antrea/pkg/agent/apis"
+const (
+	// #nosec G101: false positive triggered by variable name which includes "token"
+	APIServerLoopbackTokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
-
-func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
-	b, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	resp := new(apis.OVSTracingResponse)
-	err = json.Unmarshal(b, resp)
-	if err != nil {
-		return nil, err
-	}
-	// Output the raw bytes of the OVS trace command outputs.
-	return []byte(resp.Result), nil
-}

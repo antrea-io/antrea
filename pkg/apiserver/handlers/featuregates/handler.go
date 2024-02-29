@@ -27,23 +27,15 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/apiserver/apis"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
 )
 
-type (
-	Config struct {
-		// FeatureGates is a map of feature names to bools that enable or disable experimental features.
-		FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
-	}
-
-	Response struct {
-		Component string `json:"component,omitempty"`
-		Name      string `json:"name,omitempty"`
-		Status    string `json:"status,omitempty"`
-		Version   string `json:"version,omitempty"`
-	}
-)
+type Config struct {
+	// FeatureGates is a map of feature names to bools that enable or disable experimental features.
+	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
+}
 
 const (
 	AgentMode            = "agent"
@@ -126,8 +118,8 @@ func HandleFunc(k8sclient clientset.Interface) http.HandlerFunc {
 	}
 }
 
-func getFeatureGatesResponse(cfg *Config, component string) []Response {
-	gatesResp := []Response{}
+func getFeatureGatesResponse(cfg *Config, component string) []apis.FeatureGateResponse {
+	gatesResp := []apis.FeatureGateResponse{}
 	for df := range features.DefaultAntreaFeatureGates {
 		if component == AgentMode && features.AgentGates.Has(df) ||
 			component == AgentWindowsMode && features.AgentGates.Has(df) && features.SupportedOnWindows(df) ||
@@ -138,7 +130,7 @@ func getFeatureGatesResponse(cfg *Config, component string) []Response {
 				status = features.DefaultFeatureGate.Enabled(df)
 			}
 			featureStatus := features.GetStatus(status)
-			gatesResp = append(gatesResp, Response{
+			gatesResp = append(gatesResp, apis.FeatureGateResponse{
 				Component: component,
 				Name:      string(df),
 				Status:    featureStatus,

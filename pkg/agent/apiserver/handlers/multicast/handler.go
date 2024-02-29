@@ -20,20 +20,13 @@ import (
 	"reflect"
 	"strconv"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/multicast"
-	"antrea.io/antrea/pkg/antctl/transform/common"
 	"antrea.io/antrea/pkg/querier"
 )
 
-type Response struct {
-	PodName      string `json:"name,omitempty" antctl:"name,Name of the Pod"`
-	PodNamespace string `json:"podNamespace,omitempty"`
-	Inbound      string `json:"inbound,omitempty"`
-	Outbound     string `json:"outbound,omitempty"`
-}
-
-func generateResponse(podName string, podNamespace string, trafficStats *multicast.PodTrafficStats) Response {
-	return Response{
+func generateResponse(podName string, podNamespace string, trafficStats *multicast.PodTrafficStats) apis.MulticastResponse {
+	return apis.MulticastResponse{
 		PodName:      podName,
 		PodNamespace: podNamespace,
 		Inbound:      strconv.FormatUint(trafficStats.Inbound, 10),
@@ -52,7 +45,7 @@ func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")
 
-		responses := []Response{}
+		responses := []apis.MulticastResponse{}
 		if name != "" && ns != "" {
 			podStats := mq.GetPodStats(name, ns)
 			if podStats == nil {
@@ -77,18 +70,4 @@ func HandleFunc(mq querier.AgentMulticastInfoQuerier) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
-}
-
-var _ common.TableOutput = new(Response)
-
-func (r Response) GetTableHeader() []string {
-	return []string{"NAMESPACE", "NAME", "INBOUND", "OUTBOUND"}
-}
-
-func (r Response) GetTableRow(_ int) []string {
-	return []string{r.PodNamespace, r.PodName, r.Inbound, r.Outbound}
-}
-
-func (r Response) SortRows() bool {
-	return true
 }

@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	memberlisttest "antrea.io/antrea/pkg/agent/memberlist/testing"
 	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
@@ -75,7 +76,7 @@ func TestMemberlistQuery(t *testing.T) {
 		memberlistInterface func(*gomock.Controller) memberlist.Interface
 		nodeLister          corelisters.NodeLister
 		expectedStatus      int
-		expectedResponse    []Response
+		expectedResponse    []apis.MemberlistResponse
 	}{
 		{
 			name: "memberlist not running",
@@ -95,7 +96,7 @@ func TestMemberlistQuery(t *testing.T) {
 			},
 			nodeLister:     nodeLister,
 			expectedStatus: http.StatusOK,
-			expectedResponse: []Response{
+			expectedResponse: []apis.MemberlistResponse{
 				{
 					NodeName: "node1",
 					IP:       "172.16.0.11",
@@ -128,7 +129,7 @@ func TestMemberlistQuery(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var received []Response
+				var received []apis.MemberlistResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)
 				require.NoError(t, err)
 				assert.ElementsMatch(t, tt.expectedResponse, received)

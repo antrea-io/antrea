@@ -30,10 +30,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/querier"
 )
 
 const (
@@ -707,19 +707,19 @@ func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 	tests := []struct {
 		name                          string
 		externalIPStates              map[apimachinerytypes.NamespacedName]externalIPState
-		expectedServiceExternalIPInfo []querier.ServiceExternalIPInfo
+		expectedServiceExternalIPInfo []apis.ServiceExternalIPInfo
 	}{
 		{
 			name:                          "no Service available should return empty slice",
 			externalIPStates:              map[apimachinerytypes.NamespacedName]externalIPState{},
-			expectedServiceExternalIPInfo: []querier.ServiceExternalIPInfo{},
+			expectedServiceExternalIPInfo: []apis.ServiceExternalIPInfo{},
 		},
 		{
 			name: "one Service processed",
 			externalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyCluster): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
 			},
-			expectedServiceExternalIPInfo: []querier.ServiceExternalIPInfo{
+			expectedServiceExternalIPInfo: []apis.ServiceExternalIPInfo{
 				{
 
 					ServiceName:    servicePolicyCluster.Name,
@@ -736,7 +736,7 @@ func TestServiceExternalIPController_GetServiceExternalIPStatus(t *testing.T) {
 				keyFor(servicePolicyCluster): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
 				keyFor(servicePolicyLocal):   {fakeServiceExternalIP2, fakeExternalIPPoolName, fakeNode2},
 			},
-			expectedServiceExternalIPInfo: []querier.ServiceExternalIPInfo{
+			expectedServiceExternalIPInfo: []apis.ServiceExternalIPInfo{
 				{
 
 					ServiceName:    servicePolicyCluster.Name,

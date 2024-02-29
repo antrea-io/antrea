@@ -18,27 +18,14 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"strings"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/antctl/transform/common"
 )
 
-// Response describes the response struct of pod-interface command.
-type Response struct {
-	PodName       string   `json:"name,omitempty" antctl:"name,Name of the Pod"`
-	PodNamespace  string   `json:"podNamespace,omitempty"`
-	InterfaceName string   `json:"interfaceName,omitempty"`
-	IPs           []string `json:"ips,omitempty"`
-	MAC           string   `json:"mac,omitempty"`
-	PortUUID      string   `json:"portUUID,omitempty"`
-	OFPort        int32    `json:"ofPort,omitempty"`
-	ContainerID   string   `json:"containerID,omitempty"`
-}
-
-func generateResponse(i *interfacestore.InterfaceConfig) Response {
-	return Response{
+func generateResponse(i *interfacestore.InterfaceConfig) apis.PodInterfaceResponse {
+	return apis.PodInterfaceResponse{
 		PodName:       i.ContainerInterfaceConfig.PodName,
 		PodNamespace:  i.ContainerInterfaceConfig.PodNamespace,
 		InterfaceName: i.InterfaceName,
@@ -64,7 +51,7 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 		name := r.URL.Query().Get("name")
 		ns := r.URL.Query().Get("namespace")
 
-		var pods []Response
+		var pods []apis.PodInterfaceResponse
 		for _, v := range aq.GetInterfaceStore().GetInterfacesByType(interfacestore.ContainerInterface) {
 			podName := (*v.ContainerInterfaceConfig).PodName
 			podNS := (*v.ContainerInterfaceConfig).PodNamespace
@@ -82,25 +69,4 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
-}
-
-var _ common.TableOutput = new(Response)
-
-func (r Response) GetTableHeader() []string {
-	return []string{"NAMESPACE", "NAME", "INTERFACE-NAME", "IP", "MAC", "PORT-UUID", "OF-PORT", "CONTAINER-ID"}
-}
-
-func (r Response) GetContainerIDStr() string {
-	if len(r.ContainerID) > 12 {
-		return r.ContainerID[0:11]
-	}
-	return r.ContainerID
-}
-
-func (r Response) GetTableRow(_ int) []string {
-	return []string{r.PodNamespace, r.PodName, r.InterfaceName, strings.Join(r.IPs, ", "), r.MAC, r.PortUUID, common.Int32ToString(r.OFPort), r.GetContainerIDStr()}
-}
-
-func (r Response) SortRows() bool {
-	return true
 }

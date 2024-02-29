@@ -486,6 +486,7 @@ func TestDeleteStaleAgentCRD(t *testing.T) {
 
 func TestSyncControllerCRD(t *testing.T) {
 	ctx := context.Background()
+	crdName := v1beta1.AntreaControllerInfoResourceName
 	existingCRD := &v1beta1.AntreaControllerInfo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crdName,

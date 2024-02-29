@@ -28,8 +28,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
-
-	"antrea.io/antrea/pkg/util/env"
 )
 
 const (
@@ -38,16 +36,6 @@ const (
 	TLSCertFile = "tls.crt"
 	TLSKeyFile  = "tls.key"
 )
-
-// GetAntreaServerNames returns the DNS names that the TLS certificate will be signed with.
-func GetAntreaServerNames(serviceName string) []string {
-	namespace := env.GetAntreaNamespace()
-	antreaServerName := serviceName + "." + namespace + ".svc"
-	// TODO: Although antrea-agent and kube-aggregator only verify the server name "antrea.<Namespace>.svc",
-	// We should add the whole FQDN "antrea.<Namespace>.svc.<Cluster Domain>" as an alternate DNS name when
-	// other clients need to access it directly with that name.
-	return []string{antreaServerName}
-}
 
 func ApplyServerCert(selfSignedCert bool,
 	client kubernetes.Interface,

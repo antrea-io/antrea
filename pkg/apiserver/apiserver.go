@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	cpinstall "antrea.io/antrea/pkg/apis/controlplane/install"
 	apistats "antrea.io/antrea/pkg/apis/stats"
@@ -81,8 +82,6 @@ var (
 	// ParameterCodec defines methods for serializing and deserializing url values
 	// to versioned API objects and back.
 	parameterCodec = runtime.NewParameterCodec(Scheme)
-	// #nosec G101: false positive triggered by variable name which includes "token"
-	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 
 	// antreaServedLabelSelector selects resources served by antrea-controller.
 	antreaServedLabelSelector = &metav1.LabelSelector{
@@ -347,8 +346,8 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 func DefaultCAConfig() *certificate.CAConfig {
 	return &certificate.CAConfig{
-		CAConfigMapName:              certificate.AntreaCAConfigMapName,
-		TLSSecretName:                certificate.AntreaControllerTLSSecretName,
+		CAConfigMapName:              apis.AntreaCAConfigMapName,
+		TLSSecretName:                apis.AntreaControllerTLSSecretName,
 		APIServiceSelector:           antreaServedLabelSelector,
 		ValidatingWebhookSelector:    antreaServedLabelSelector,
 		MutationWebhookSelector:      antreaServedLabelSelector,
@@ -357,7 +356,7 @@ func DefaultCAConfig() *certificate.CAConfig {
 		SelfSignedCertDir:            "/var/run/antrea/antrea-controller-self-signed",
 		CertReadyTimeout:             2 * time.Minute,
 		MinValidDuration:             time.Hour * 24 * 90, // Rotate the certificate 90 days in advance.
-		ServiceName:                  certificate.AntreaServiceName,
+		ServiceName:                  apis.AntreaServiceName,
 		PairName:                     "antrea-controller",
 	}
 }

@@ -52,10 +52,10 @@ func TestRESTGet(t *testing.T) {
 	}{
 		{
 			name:    "name matches",
-			objName: ControllerInfoResourceName,
+			objName: v1beta1.AntreaControllerInfoResourceName,
 			expectedObj: &v1beta1.AntreaControllerInfo{
 				ObjectMeta: v1.ObjectMeta{
-					Name: ControllerInfoResourceName,
+					Name: v1beta1.AntreaControllerInfoResourceName,
 				},
 			},
 		},
@@ -93,7 +93,7 @@ func TestRESTList(t *testing.T) {
 				Items: []v1beta1.AntreaControllerInfo{
 					{
 						ObjectMeta: v1.ObjectMeta{
-							Name: ControllerInfoResourceName,
+							Name: v1beta1.AntreaControllerInfoResourceName,
 						},
 					},
 				},

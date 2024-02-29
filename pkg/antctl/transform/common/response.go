@@ -15,10 +15,7 @@
 package common
 
 import (
-	"fmt"
 	"net"
-	"sort"
-	"strconv"
 
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
@@ -47,51 +44,4 @@ type TableOutput interface {
 	GetTableHeader() []string
 	GetTableRow(maxColumnLength int) []string
 	SortRows() bool
-}
-
-func Int32ToString(val int32) string {
-	return strconv.Itoa(int(val))
-}
-
-func Int64ToString(val int64) string {
-	return strconv.Itoa(int(val))
-}
-
-func BoolToString(val bool) string {
-	return strconv.FormatBool(val)
-}
-
-func GenerateTableElementWithSummary(list []string, maxColumnLength int) string {
-	element := ""
-	sort.Strings(list)
-	for i, ele := range list {
-		val := ele
-		if i != 0 {
-			val = "," + val
-		}
-
-		// If we can't show the information in one line, generate a summary.
-		summary := fmt.Sprintf(" + %d more...", len(list)-i)
-		if len(element)+len(val) > maxColumnLength {
-			element += summary
-			if len(element) > maxColumnLength {
-				newEle := ""
-				for i, ele := range list {
-					val := ele
-					if i != 0 {
-						val = "," + val
-					}
-					if i != 0 && len(newEle)+len(val)+len(summary) > maxColumnLength {
-						break
-					}
-					newEle += val
-				}
-				newEle += summary
-				return newEle
-			}
-			break
-		}
-		element += val
-	}
-	return element
 }

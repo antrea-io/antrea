@@ -19,28 +19,10 @@ import (
 	"net/http"
 
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apiserver/apis"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
-
-// EndpointQueryResponse is the reply struct for anctl endpoint queries
-type EndpointQueryResponse struct {
-	Endpoints []Endpoint `json:"endpoints,omitempty"`
-}
-
-type Rule struct {
-	PolicyRef v1beta2.NetworkPolicyReference `json:"policyref,omitempty"`
-	Direction v1beta2.Direction              `json:"direction,omitempty"`
-	RuleIndex int                            `json:"ruleindex,omitempty"`
-}
-
-type Endpoint struct {
-	Namespace       string                           `json:"namespace,omitempty"`
-	Name            string                           `json:"name,omitempty"`
-	AppliedPolicies []v1beta2.NetworkPolicyReference `json:"policies,omitempty"`
-	IngressSrcRules []Rule                           `json:"ingresssrcrules,omitempty"`
-	EgressDstRules  []Rule                           `json:"egressdstrules,omitempty"`
-}
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
@@ -72,11 +54,11 @@ func HandleFunc(eq networkpolicy.EndpointQuerier) http.HandlerFunc {
 			responsePolicies = append(responsePolicies, responsePolicy)
 		}
 		// create rules based on effective rules on this endpoint
-		extractRules := func(effectiveRules []*antreatypes.RuleInfo) []Rule {
-			var responseRules []Rule
+		extractRules := func(effectiveRules []*antreatypes.RuleInfo) []apis.Rule {
+			var responseRules []apis.Rule
 			for _, rule := range effectiveRules {
 				v1beta2.Convert_controlplane_NetworkPolicyReference_To_v1beta2_NetworkPolicyReference(rule.Policy.SourceRef, &responsePolicy, nil)
-				newRule := Rule{
+				newRule := apis.Rule{
 					PolicyRef: responsePolicy,
 					Direction: v1beta2.Direction(rule.Rule.Direction),
 					RuleIndex: rule.Index,
@@ -86,14 +68,14 @@ func HandleFunc(eq networkpolicy.EndpointQuerier) http.HandlerFunc {
 			return responseRules
 		}
 		// for now, selector only selects a single endpoint (pod, namespace)
-		endpoint := Endpoint{
+		endpoint := apis.Endpoint{
 			Namespace:       namespace,
 			Name:            podName,
 			AppliedPolicies: responsePolicies,
 			IngressSrcRules: extractRules(endpointNetworkPolicyRules.EndpointAsIngressSrcRules),
 			EgressDstRules:  extractRules(endpointNetworkPolicyRules.EndpointAsEgressDstRules),
 		}
-		endpointQueryResponse := &EndpointQueryResponse{[]Endpoint{endpoint}}
+		endpointQueryResponse := &apis.EndpointQueryResponse{Endpoints: []apis.Endpoint{endpoint}}
 
 		if err := json.NewEncoder(w).Encode(*endpointQueryResponse); err != nil {
 			http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
