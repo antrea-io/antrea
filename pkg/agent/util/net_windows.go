@@ -654,16 +654,6 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 	return listenUnix(address)
 }
 
-// DialLocalSocket connects to a Unix domain socket or a Windows named pipe.
-// - If the specified address starts with "\\.\pipe\",  connect to a Windows named pipe path.
-// - Else connect to a Unix domain socket.
-func DialLocalSocket(address string) (net.Conn, error) {
-	if strings.HasPrefix(address, namedPipePrefix) {
-		return winio.DialPipe(address, nil)
-	}
-	return dialUnix(address)
-}
-
 func HostInterfaceExists(ifaceName string) bool {
 	_, err := getAdapterInAllCompartmentsByName(ifaceName)
 	if err != nil {

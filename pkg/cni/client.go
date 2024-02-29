@@ -17,7 +17,6 @@ package cni
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -27,7 +26,6 @@ import (
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
@@ -91,9 +89,7 @@ func rpcClient(f func(client cnipb.CniClient) error) error {
 	conn, err := grpc.Dial(
 		AntreaCNISocketAddr,
 		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
-		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
-			return util.DialLocalSocket(addr)
-		}),
+		grpc.WithContextDialer(dial),
 	)
 	if err != nil {
 		return err
