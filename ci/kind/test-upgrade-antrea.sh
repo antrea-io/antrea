@@ -148,8 +148,18 @@ fi
 
 echo "Running upgrade test for tag $FROM_TAG"
 
-DOCKER_IMAGES=("busybox" "projects.registry.vmware.com/antrea/antrea-ubuntu:$FROM_TAG")
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
 
+DOCKER_IMAGES=()
+if version_lt "$FROM_TAG" v1.15; then
+    DOCKER_IMAGES+=("projects.registry.vmware.com/antrea/antrea-ubuntu:$FROM_TAG")
+else
+    DOCKER_IMAGES+=("projects.registry.vmware.com/antrea/antrea-agent-ubuntu:$FROM_TAG" \
+                    "projects.registry.vmware.com/antrea/antrea-controller-ubuntu:$FROM_TAG")
+fi
+
+# Silence CLI suggestions.
+export DOCKER_CLI_HINTS=false
 for img in "${DOCKER_IMAGES[@]}"; do
     echo "Pulling $img"
     for i in `seq 3`; do
