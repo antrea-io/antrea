@@ -1,8 +1,12 @@
 SHELL              := /bin/bash
 # go options
 GO                 ?= go
-LDFLAGS            :=
-GOFLAGS            :=
+# By default, disable debugging information (see https://pkg.go.dev/cmd/link) and trim embedded
+# paths.
+# To build binaries (standalone or embedded inside container images) with debugging information,
+# edit LDFLAGS and GOFLAGS.
+LDFLAGS            := -s -w
+GOFLAGS            := -trimpath
 # By default, disable cgo for all Go binaries.
 # For binaries meant to be published as release assets or copied to a different host, cgo should
 # always be disabled.
@@ -241,7 +245,7 @@ antctl: $(ANTCTL_BINARIES)
 
 .PHONY: antctl-release
 antctl-release:
-	$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
+	$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 .PHONY: check-copyright
 check-copyright: 
