@@ -112,6 +112,8 @@ function run_test {
 
   # Wait for antrea-controller start to make sure the IPPool validation webhook is ready.
   kubectl rollout status --timeout=1m deployment.apps/antrea-controller -n kube-system
+  # An extra small delay to reduce the possibility of failure in CI.
+  sleep 5
   kubectl apply -f $ATTACHMENT_DEFINITION_YAML
   kubectl apply -f $SECONDARY_NETWORKS_YAML
 

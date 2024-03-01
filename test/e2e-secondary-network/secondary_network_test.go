@@ -105,29 +105,24 @@ func (data *testData) createPodForSecondaryNetwork(ns string, pod *testPodInfo) 
 	return podBuilder.Create(data.e2eTestData)
 }
 
-// getSecondaryInterface checks the secondary interfaces created for the specific Pod and returns its IPv4 address.
-func (data *testData) getSecondaryInterface(targetPod *testPodInfo, interfaceName string) (string, error) {
+// getSecondaryInterface checks the secondary interfaces created for the specific Pod and returns
+// its IPv4 address if it is found.
+func (data *testData) getSecondaryInterface(targetPod *testPodInfo, interfaceName string) (net.IP, error) {
 	cmd := []string{"/bin/sh", "-c", fmt.Sprintf("ip addr show %s | grep 'inet ' | awk '{print $2}' | cut -d/ -f1", interfaceName)}
 	stdout, _, err := data.e2eTestData.RunCommandFromPod(data.e2eTestData.GetTestNamespace(), targetPod.podName, containerName, cmd)
 	stdout = strings.TrimSuffix(stdout, "\n")
-	if err != nil || stdout == "" {
-		return "", fmt.Errorf("interface %s not found on %s. err: %v", interfaceName, targetPod.podName, err)
+	if err != nil {
+		return nil, fmt.Errorf("error when looking for interface %s on %s: %w", interfaceName, targetPod.podName, err)
 	}
-	return stdout, nil
-}
-
-// checkSubnet checks if the IP address to be pinged has the same subnet as the Pod from which the IP Address is pinged.
-func (data *testData) checkSubnet(t *testing.T, sourcePod, targetPod *testPodInfo, targetNetwork string) (bool, error) {
-	for i, n := range sourcePod.interfaceNetworks {
-		if n == targetNetwork {
-			_, err := data.getSecondaryInterface(sourcePod, i)
-			if err != nil {
-				return false, err
-			}
-			return true, nil
-		}
+	if stdout == "" {
+		// interface not found
+		return nil, nil
 	}
-	return false, nil
+	ip := net.ParseIP(stdout)
+	if ip == nil {
+		return nil, fmt.Errorf("failed to parse IP (%s) for interface %s of Pod %s", stdout, interfaceName, targetPod.podName)
+	}
+	return ip, nil
 }
 
 // pingBetweenInterfaces parses through all the created Pods and pings the other Pod if the two Pods
@@ -135,44 +130,82 @@ func (data *testData) checkSubnet(t *testing.T, sourcePod, targetPod *testPodInf
 func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 	e2eTestData := data.e2eTestData
 	namespace := e2eTestData.GetTestNamespace()
-	for _, sourcePod := range data.pods {
-		for _, targetPod := range data.pods {
-			if targetPod.podName == sourcePod.podName {
-				continue
-			}
-			for i, n := range targetPod.interfaceNetworks {
-				_, err := e2eTestData.PodWaitFor(defaultTimeout, targetPod.podName, namespace, func(pod *corev1.Pod) (bool, error) {
-					return pod.Status.Phase == corev1.PodRunning, nil
-				})
-				if err != nil {
-					return fmt.Errorf("error when waiting for Pod %s: %v", targetPod.podName, err)
-				}
 
-				matched, _ := data.checkSubnet(t, sourcePod, targetPod, n)
-				if matched {
-					secondaryIPAddress, err := data.getSecondaryInterface(targetPod, i)
-					if err != nil {
-						return err
-					}
-					ip := net.ParseIP(secondaryIPAddress)
-					if ip == nil {
-						return fmt.Errorf("failed to parse IP (%s) for interface %s of Pod %s", secondaryIPAddress, i, targetPod.podName)
-					}
+	type attachment struct {
+		network string
+		iface   string
+		ip      net.IP
+	}
+	type network struct {
+		// maps each Pod to its attachments in this network (typically just one)
+		podAttachments map[*testPodInfo][]*attachment
+	}
+	networks := make(map[string]*network)
+	addPodNetworkAttachments := func(pod *testPodInfo, podAttachments []*attachment) {
+		for _, pa := range podAttachments {
+			if _, ok := networks[pa.network]; !ok {
+				networks[pa.network] = &network{
+					podAttachments: make(map[*testPodInfo][]*attachment),
+				}
+			}
+			networks[pa.network].podAttachments[pod] = append(networks[pa.network].podAttachments[pod], pa)
+		}
+	}
+
+	// Collect all secondary network IPs when they are available.
+	for _, testPod := range data.pods {
+		_, err := e2eTestData.PodWaitFor(defaultTimeout, testPod.podName, namespace, func(pod *corev1.Pod) (bool, error) {
+			if pod.Status.Phase != corev1.PodRunning {
+				return false, nil
+			}
+			var podNetworkAttachments []*attachment
+			for iface, net := range testPod.interfaceNetworks {
+				ip, err := data.getSecondaryInterface(testPod, iface)
+				if err != nil {
+					return false, err
+				}
+				if ip == nil {
+					return false, nil
+				}
+				podNetworkAttachments = append(podNetworkAttachments, &attachment{
+					network: net,
+					iface:   iface,
+					ip:      ip,
+				})
+			}
+			// we found all the expected secondary network interfaces / attachments
+			addPodNetworkAttachments(testPod, podNetworkAttachments)
+			return true, nil
+		})
+		if err != nil {
+			return fmt.Errorf("error when waiting for secondary IPs for Pod %+v: %v", testPod, err)
+		}
+	}
+
+	// Run ping-mesh test for each secondary network.
+	for _, network := range networks {
+		for sourcePod, _ := range network.podAttachments {
+			for targetPod, targetPodAttachments := range network.podAttachments {
+				if sourcePod == targetPod {
+					continue
+				}
+				for _, targetAttachment := range targetPodAttachments {
 					var IPToPing antreae2e.PodIPs
-					if ip.To4() != nil {
-						IPToPing = antreae2e.PodIPs{IPv4: &ip}
+					if targetAttachment.ip.To4() != nil {
+						IPToPing = antreae2e.PodIPs{IPv4: &targetAttachment.ip}
 					} else {
-						IPToPing = antreae2e.PodIPs{IPv6: &ip}
+						IPToPing = antreae2e.PodIPs{IPv6: &targetAttachment.ip}
 					}
 					if err := e2eTestData.RunPingCommandFromTestPod(antreae2e.PodInfo{Name: sourcePod.podName, OS: osType, NodeName: sourcePod.nodeName, Namespace: namespace},
 						namespace, &IPToPing, containerName, pingCount, pingSize, false); err != nil {
-						return fmt.Errorf("ping '%s' -> '%s'(Interface: %s, IP Address: %s) failed: %v", sourcePod.podName, targetPod.podName, i, secondaryIPAddress, err)
+						return fmt.Errorf("ping '%s' -> '%s'(Interface: %s, IP Address: %s) failed: %v", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip, err)
 					}
-					logs.Infof("ping '%s' -> '%s'( Interface: %s, IP Address: %s): OK", sourcePod.podName, targetPod.podName, i, secondaryIPAddress)
+					logs.Infof("ping '%s' -> '%s'( Interface: %s, IP Address: %s): OK", sourcePod.podName, targetPod.podName, targetAttachment.iface, targetAttachment.ip)
 				}
 			}
 		}
 	}
+
 	return nil
 }
 
