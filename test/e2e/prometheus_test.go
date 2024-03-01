@@ -281,8 +281,7 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	// Target metadata API(/api/v1/targets/metadata) has been available since Prometheus v2.4.0.
 	// This API is still experimental in Prometheus v2.46.0.
 	path := url.PathEscape("match_target={job=\"" + prometheusJob + "\"}")
-	address := net.JoinHostPort(hostIP, fmt.Sprint(nodePort))
-	queryURL := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
+	queryURL := getHTTPURLFromIPPort(hostIP, nodePort, "api/v1/targets/metadata?", path)
 
 	client := &http.Client{}
 	var output prometheusServerOutput
