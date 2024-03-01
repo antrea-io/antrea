@@ -15,19 +15,19 @@ jobs:
       run: |
         ./hack/build-antrea-linux-all.sh --pull
     - name: Run Trivy vulnerability scanner on Antrea unified Docker image
-      uses: aquasecurity/trivy-action@0.17.0
+      uses: aquasecurity/trivy-action@0.18.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-ubuntu:latest'
         trivy-config: '.trivy.yml'
     - name: Run Trivy vulnerability scanner on the antrea-agent Docker image
-      uses: aquasecurity/trivy-action@0.17.0
+      uses: aquasecurity/trivy-action@0.18.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-agent-ubuntu:latest'
         trivy-config: '.trivy.yml'
     - name: Run Trivy vulnerability scanner on the antrea-controller Docker image
-      uses: aquasecurity/trivy-action@0.17.0
+      uses: aquasecurity/trivy-action@0.18.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-controller-ubuntu:latest'
