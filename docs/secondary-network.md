@@ -165,3 +165,8 @@ spec:
  - name: toolbox
    image: antrea/toolbox:latest
 ```
+
+**At the moment, we do NOT support annotation update / removal: when the
+  annotation is added to the Pod for the first time (e.g., when creating the
+  Pod), we will configure the secondary network interfaces accordingly, and no
+  change is possible after that, until the Pod is deleted.**
