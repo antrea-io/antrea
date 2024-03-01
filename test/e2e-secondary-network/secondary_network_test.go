@@ -105,24 +105,34 @@ func (data *testData) createPodForSecondaryNetwork(ns string, pod *testPodInfo) 
 	return podBuilder.Create(data.e2eTestData)
 }
 
-// getSecondaryInterface checks the secondary interfaces created for the specific Pod and returns
-// its IPv4 address if it is found.
-func (data *testData) getSecondaryInterface(targetPod *testPodInfo, interfaceName string) (net.IP, error) {
-	cmd := []string{"/bin/sh", "-c", fmt.Sprintf("ip addr show %s | grep 'inet ' | awk '{print $2}' | cut -d/ -f1", interfaceName)}
+// listPodIPs returns a map of Pod IPs, indexed by the interface name. All interfaces are included
+// and only IPv4 addresses are considered. If an interface is not assigned an IPv4 address, it will
+// be included in the map, with a nil value.
+func (data *testData) listPodIPs(targetPod *testPodInfo) (map[string]net.IP, error) {
+	cmd := []string{"ip", "addr", "show"}
 	stdout, _, err := data.e2eTestData.RunCommandFromPod(data.e2eTestData.GetTestNamespace(), targetPod.podName, containerName, cmd)
-	stdout = strings.TrimSuffix(stdout, "\n")
 	if err != nil {
-		return nil, fmt.Errorf("error when looking for interface %s on %s: %w", interfaceName, targetPod.podName, err)
+		return nil, fmt.Errorf("error when listing interfaces for %s: %w", targetPod.podName, err)
 	}
-	if stdout == "" {
-		// interface not found
-		return nil, nil
+	result := make(map[string]net.IP)
+	var currentInterface string
+	lines := strings.Split(stdout, "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.HasSuffix(fields[0], ":") {
+			// first field is ifindex, second field is interface name
+			currentInterface = strings.Split(strings.TrimSuffix(fields[1], ":"), "@")[0]
+			result[currentInterface] = nil
+		} else if len(fields) >= 2 && fields[0] == "inet" {
+			ipStr := strings.Split(fields[1], "/")[0]
+			ip := net.ParseIP(ipStr)
+			if ip == nil {
+				return nil, fmt.Errorf("failed to parse IP (%s) for interface %s of Pod %s", ipStr, currentInterface, targetPod.podName)
+			}
+			result[currentInterface] = ip
+		}
 	}
-	ip := net.ParseIP(stdout)
-	if ip == nil {
-		return nil, fmt.Errorf("failed to parse IP (%s) for interface %s of Pod %s", stdout, interfaceName, targetPod.podName)
-	}
-	return ip, nil
+	return result, nil
 }
 
 // pingBetweenInterfaces parses through all the created Pods and pings the other Pod if the two Pods
@@ -159,18 +169,18 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 				return false, nil
 			}
 			var podNetworkAttachments []*attachment
+			podIPs, err := data.listPodIPs(testPod)
+			if err != nil {
+				return false, err
+			}
 			for iface, net := range testPod.interfaceNetworks {
-				ip, err := data.getSecondaryInterface(testPod, iface)
-				if err != nil {
-					return false, err
-				}
-				if ip == nil {
+				if podIPs[iface] == nil {
 					return false, nil
 				}
 				podNetworkAttachments = append(podNetworkAttachments, &attachment{
 					network: net,
 					iface:   iface,
-					ip:      ip,
+					ip:      podIPs[iface],
 				})
 			}
 			// we found all the expected secondary network interfaces / attachments
@@ -184,7 +194,7 @@ func (data *testData) pingBetweenInterfaces(t *testing.T) error {
 
 	// Run ping-mesh test for each secondary network.
 	for _, network := range networks {
-		for sourcePod, _ := range network.podAttachments {
+		for sourcePod := range network.podAttachments {
 			for targetPod, targetPodAttachments := range network.podAttachments {
 				if sourcePod == targetPod {
 					continue
