@@ -9,6 +9,9 @@ updates:
       golang.org/x:
         patterns:
         - "golang.org/x/*"
+      prometheus:
+        patterns:
+        - "github.com/prometheus/*"
     ignore:
     - dependency-name: "k8s.io/*"
     - dependency-name: "sigs.k8s.io/*"
