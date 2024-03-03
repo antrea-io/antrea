@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -221,7 +222,13 @@ func (c *Cluster) handleCreateNode(obj interface{}) {
 	if member, err := c.newClusterMember(node); err == nil {
 		_, err := c.mList.Join([]string{member})
 		if err != nil {
-			klog.ErrorS(err, "Processing Node CREATE event error, join cluster failed", "member", member)
+			// Formatting the error message.
+			errorMessage := err.Error()
+			prefixToRemove := "1 error occurred:"
+			errorMessage = strings.TrimPrefix(errorMessage, prefixToRemove)
+			errorMessage = strings.Replace(errorMessage, "\n\t* ", "", -1)
+			errorMessage = strings.TrimSpace(errorMessage)
+			klog.InfoS("Processing Node CREATE event error, join cluster failed, will retry later", "error", errorMessage, "member", member)
 		}
 	} else {
 		klog.ErrorS(err, "Processing Node CREATE event error", "nodeName", node.Name)
