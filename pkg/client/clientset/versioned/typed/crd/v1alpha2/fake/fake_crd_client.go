@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,6 @@ import (
 
 type FakeCrdV1alpha2 struct {
 	*testing.Fake
-}
-
-func (c *FakeCrdV1alpha2) ClusterGroups() v1alpha2.ClusterGroupInterface {
-	return &FakeClusterGroups{c}
 }
 
 func (c *FakeCrdV1alpha2) Egresses() v1alpha2.EgressInterface {
