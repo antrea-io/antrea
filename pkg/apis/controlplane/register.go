@@ -54,6 +54,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
 		&NetworkPolicyStatus{},
+		&NetworkPolicyEvaluation{},
 		&NodeStatsSummary{},
 		&ClusterGroupMembers{},
 		&GroupMembers{},

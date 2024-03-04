@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,6 +56,10 @@ func (c *FakeControlplaneV1beta2) IPGroupAssociations() v1beta2.IPGroupAssociati
 
 func (c *FakeControlplaneV1beta2) NetworkPolicies() v1beta2.NetworkPolicyInterface {
 	return &FakeNetworkPolicies{c}
+}
+
+func (c *FakeControlplaneV1beta2) NetworkPolicyEvaluations() v1beta2.NetworkPolicyEvaluationInterface {
+	return &FakeNetworkPolicyEvaluations{c}
 }
 
 func (c *FakeControlplaneV1beta2) NodeStatsSummaries() v1beta2.NodeStatsSummaryInterface {

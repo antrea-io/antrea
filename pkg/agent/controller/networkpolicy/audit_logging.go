@@ -281,7 +281,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, packet *binding.Packet, c *Con
 	ob.ofPriority = ofPriority
 	ob.ruleName = ruleName
 	ob.logLabel = logLabel
-	// Fill in placeholders for Antrea native policies without log labels,
+	// Fill in placeholders for Antrea-native policies without log labels,
 	// K8s NetworkPolicies without rule names or log labels.
 	fillLogInfoPlaceholders([]*string{&ob.ruleName, &ob.logLabel, &ob.ofPriority})
 	return nil

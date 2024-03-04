@@ -43,6 +43,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup":                       schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroupList":                   schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroupPatch":                  schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity":                            schema_pkg_apis_controlplane_v1beta2_Entity(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
@@ -56,6 +57,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo":                schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluation":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest":    schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse":   schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
@@ -67,6 +71,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PaginationGetOptions":              schema_pkg_apis_controlplane_v1beta2_PaginationGetOptions(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference":                      schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef":                           schema_pkg_apis_controlplane_v1beta2_RuleRef(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service":                           schema_pkg_apis_controlplane_v1beta2_Service(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference":                  schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection":           schema_pkg_apis_controlplane_v1beta2_SupportBundleCollection(ref),
@@ -1052,6 +1057,26 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 	}
 }
 
+func schema_pkg_apis_controlplane_v1beta2_Entity(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Entity contains Namespace and Pod name as a request parameter.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+	}
+}
+
 func schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1633,6 +1658,107 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"request": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest"),
+						},
+					},
+					"response": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyEvaluationRequest is the request body of NetworkPolicy evaluation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"),
+						},
+					},
+					"destination": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyEvaluationResponse is the response of NetworkPolicy evaluation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"networkPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The reference of the effective NetworkPolicy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+						},
+					},
+					"ruleIndex": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"rule": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The content of the effective rule.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef"},
 	}
 }
 
@@ -2235,6 +2361,37 @@ func schema_pkg_apis_controlplane_v1beta2_PodReference(ref common.ReferenceCallb
 							Description: "The Namespace of this Pod.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_RuleRef(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RuleRef contains basic information for the rule.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"direction": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},

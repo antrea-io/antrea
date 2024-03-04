@@ -6340,6 +6340,12 @@ rules:
       - get
       - list
   - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - networkpolicyevaluation
+    verbs:
+      - create
+  - apiGroups:
       - stats.antrea.io
     resources:
       - networkpolicystats

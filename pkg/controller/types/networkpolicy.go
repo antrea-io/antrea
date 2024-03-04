@@ -125,7 +125,7 @@ func (p *NetworkPolicy) GetAppliedToGroups() sets.Set[string] {
 // RuleInfo stores the original NetworkPolicy info, index of this rule in the NetworkPolicy
 // corresponding ingress/egress rules, and the original rule info.
 type RuleInfo struct {
-	Policy *controlplane.NetworkPolicyReference
+	Policy *NetworkPolicy
 	Index  int
 	Rule   *controlplane.NetworkPolicyRule
 }
@@ -135,7 +135,7 @@ type RuleInfo struct {
 type EndpointNetworkPolicyRules struct {
 	Namespace                 string
 	Name                      string
-	AppliedPolicies           []*controlplane.NetworkPolicyReference
+	AppliedPolicies           []*NetworkPolicy
 	EndpointAsIngressSrcRules []*RuleInfo
 	EndpointAsEgressDstRules  []*RuleInfo
 }

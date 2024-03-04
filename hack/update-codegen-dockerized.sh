@@ -60,7 +60,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/util/netlink Interface testing mock_netlink_linux.go"
   "pkg/agent/wireguard Interface testing mock_wireguard.go"
   "pkg/antctl AntctlClient ."
-  "pkg/controller/networkpolicy EndpointQuerier testing"
+  "pkg/controller/networkpolicy EndpointQuerier,PolicyRuleQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
   "pkg/flowaggregator/exporter Interface testing"
   "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
