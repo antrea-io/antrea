@@ -68,8 +68,8 @@ data:
 ```
 
 At the moment, Antrea supports only a single OVS bridge for secondary networks,
-and supports only a single physical interface on the bridge. The physical
-interface cannot be the Node's management interface, otherwise the Node's
+and supports upto eight physical interfaces on the bridge. The physical
+interfaces cannot be the Node's management interface, otherwise the Node's
 management network connectivity can be broken after `antrea-agent` creates the
 OVS bridge and moves the management interface to the bridge.
 
