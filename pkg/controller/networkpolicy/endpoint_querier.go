@@ -57,13 +57,15 @@ type PolicyRuleQuerier interface {
 
 // policyRuleQuerier implements the PolicyRuleQuerier interface
 type policyRuleQuerier struct {
-	endpointQuerier EndpointQuerier
+	endpointQuerier         EndpointQuerier
+	networkPolicyController *NetworkPolicyController
 }
 
 // NewPolicyRuleQuerier returns a new *policyRuleQuerier
-func NewPolicyRuleQuerier(endpointQuerier EndpointQuerier) *policyRuleQuerier {
+func NewPolicyRuleQuerier(endpointQuerier EndpointQuerier, networkPolicyController *NetworkPolicyController) *policyRuleQuerier {
 	return &policyRuleQuerier{
-		endpointQuerier: endpointQuerier,
+		endpointQuerier:         endpointQuerier,
+		networkPolicyController: networkPolicyController,
 	}
 }
 
@@ -295,6 +297,12 @@ func predictEndpointsRules(srcEndpointRules, dstEndpointRules *antreatypes.Endpo
 // QueryNetworkPolicyEvaluation returns the effective NetworkPolicy rule on given
 // source and destination entities.
 func (eq *policyRuleQuerier) QueryNetworkPolicyEvaluation(entities *controlplane.NetworkPolicyEvaluationRequest) (*controlplane.NetworkPolicyEvaluationResponse, error) {
+	if policyProcessed, err := eq.networkPolicyController.verifyPoliciesProcessed(); !policyProcessed || err != nil {
+		if !policyProcessed {
+			return nil, errors.New("policies in the cluster have not been fully processed by Antrea, please retry later")
+		}
+		return nil, err
+	}
 	if entities.Source.Pod == nil || entities.Destination.Pod == nil || entities.Source.Pod.Name == "" || entities.Destination.Pod.Name == "" {
 		return nil, errors.New("invalid NetworkPolicyEvaluation request entities")
 	}

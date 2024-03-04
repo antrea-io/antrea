@@ -241,7 +241,7 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 	}
 
 	k8sObjs = append(k8sObjs, toRunTimeObjects(namespaces)...)
-	_, c := newController(k8sObjs, crdObjs)
+	_, c := newController(k8sObjs, crdObjs, nil)
 	c.heartbeatCh = make(chan heartbeat, 1000)
 
 	stopCh := make(chan struct{})
@@ -533,7 +533,7 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 	objs = append(objs, pods...)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	_, c := newController(objs, nil)
+	_, c := newController(objs, nil, nil)
 	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	go c.groupingController.Run(stopCh)

@@ -1777,7 +1777,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			c.addClusterGroup(&cgA)
 			c.cgStore.Add(&cgA)
 			c.namespaceStore.Add(&nsA)
@@ -1800,7 +1800,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 }
 
 func TestAddCNP(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	cnp := getCNP()
 	npc.addCNP(cnp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -1811,7 +1811,7 @@ func TestAddCNP(t *testing.T) {
 }
 
 func TestUpdateCNP(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	cnp := getCNP()
 	newCNP := cnp.DeepCopy()
 	// Make a change to the CNP.
@@ -1825,7 +1825,7 @@ func TestUpdateCNP(t *testing.T) {
 }
 
 func TestDeleteCNP(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	cnp := getCNP()
 	npc.deleteCNP(cnp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -1861,7 +1861,7 @@ func TestGetTierPriority(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			name := ""
 			if tt.inputTier != nil {
 				npc.tierStore.Add(tt.inputTier)
@@ -1932,7 +1932,7 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			},
 		},
 	}
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	npc.addClusterGroup(&cgA)
 	npc.addClusterGroup(&cgB)
 	npc.addClusterGroup(&cgNested1)
@@ -2193,7 +2193,7 @@ func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			c.acnpStore.Add(cnpWithSpecAppliedTo)
 			c.acnpStore.Add(cnpWithRuleAppliedTo)
 			c.acnpStore.Add(cnpMatchAllNamespaces)

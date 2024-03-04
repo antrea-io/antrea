@@ -201,7 +201,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
-	networkPolicyEvaluationStorage := networkpolicyevaluation.NewREST(controllernetworkpolicy.NewPolicyRuleQuerier(c.extraConfig.endpointQuerier))
+	networkPolicyEvaluationStorage := networkpolicyevaluation.NewREST(controllernetworkpolicy.NewPolicyRuleQuerier(c.extraConfig.endpointQuerier, c.extraConfig.networkPolicyController))
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupMembershipStorage := groupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)

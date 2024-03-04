@@ -70,7 +70,7 @@ func TestInitTier(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			if tc.reactor != nil {
 				c.crdClient.(*fake.Clientset).PrependReactor("create", "tiers", tc.reactor)
 			}

@@ -739,7 +739,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			c.serviceStore.Add(&svcA)
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processAntreaNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy, actualPolicy)
@@ -750,7 +750,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 }
 
 func TestAddANNP(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	annp := getANNP()
 	npc.addANNP(annp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -761,7 +761,7 @@ func TestAddANNP(t *testing.T) {
 }
 
 func TestUpdateANNP(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	annp := getANNP()
 	newANNP := annp.DeepCopy()
 	// Make a change to the ANNP.
@@ -775,7 +775,7 @@ func TestUpdateANNP(t *testing.T) {
 }
 
 func TestDeleteANNP(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	annp := getANNP()
 	npc.deleteANNP(annp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())

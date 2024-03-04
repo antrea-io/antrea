@@ -188,7 +188,7 @@ var namespaces = []*corev1.Namespace{
 
 func makeControllerAndEndpointQuerier(objects ...runtime.Object) *EndpointQuerierImpl {
 	// create controller
-	_, c := newController(objects, nil)
+	_, c := newController(objects, nil, nil)
 	c.heartbeatCh = make(chan heartbeat, 1000)
 	stopCh := make(chan struct{})
 	// create querier with stores inside controller
@@ -574,6 +574,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 
 	for _, tc := range testCases {
 		tc := tc
+		_, c := newController(nil, nil, nil)
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			mockQuerier := queriermock.NewMockEndpointQuerier(mockCtrl)
@@ -585,7 +586,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 					}
 				}
 			}
-			policyRuleQuerier := NewPolicyRuleQuerier(mockQuerier)
+			policyRuleQuerier := NewPolicyRuleQuerier(mockQuerier, c.NetworkPolicyController)
 			response, err := policyRuleQuerier.QueryNetworkPolicyEvaluation(tc.request)
 			if tc.expectedErr == "" {
 				assert.Nil(t, err)
