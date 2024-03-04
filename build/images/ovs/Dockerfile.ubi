@@ -32,7 +32,10 @@ RUN cd /tmp/openvswitch* && \
     sed -e "s/@VERSION@/$OVS_VERSION/" rhel/openvswitch-fedora.spec.in > /tmp/ovs.spec && \
     yum-builddep -y /tmp/ovs.spec && ./boot.sh && \
     ./configure --prefix=/usr --localstatedir=/var --sysconfdir=/etc && \
-    make rpm-fedora && mkdir -p /tmp/ovs-rpms && \
+    # logrotate needs to run as the same user as OVS to get the proper permissions of log files.
+    # As Antrea runs OVS as root, we disable libcapng to make logrotate also run as root. 
+    # See https://github.com/openvswitch/ovs/blob/v2.17.7/rhel/openvswitch-fedora.spec.in#L26-L27.
+    RPMBUILD_OPT="--without libcapng" make rpm-fedora && mkdir -p /tmp/ovs-rpms && \
     mv /tmp/openvswitch-$OVS_VERSION/rpm/rpmbuild/RPMS/*/*.rpm  /tmp/ovs-rpms && \
     rm -rf /tmp/openvswitch*
 
