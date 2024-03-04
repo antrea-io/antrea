@@ -398,7 +398,6 @@ type SecondaryNetworkConfig struct {
 
 type OVSBridgeConfig struct {
 	BridgeName string `yaml:"bridgeName"`
-	// Names of physical interfaces to be connected to the bridge. At the moment,
-	// only a single physical interface is supported.
+	// Names of physical interfaces to be connected to the bridge.
 	PhysicalInterfaces []string `yaml:"physicalInterfaces,omitempty"`
 }

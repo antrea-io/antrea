@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	// Funcs which will be orridden with mock funcs in tests.
+	// Funcs which will be overridden with mock funcs in tests.
 	interfaceByNameFn = net.InterfaceByName
 	newOVSBridgeFn    = ovsconfig.NewOVSBridge
 )
@@ -82,9 +82,7 @@ func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) 
 	// Only one OVS bridge is supported.
 	bridgeConfig := bridges[0]
 
-	phyInterface := ""
-	if len(bridgeConfig.PhysicalInterfaces) > 0 {
-		phyInterface = bridgeConfig.PhysicalInterfaces[0]
+	for _, phyInterface := range bridgeConfig.PhysicalInterfaces {
 		if _, err := interfaceByNameFn(phyInterface); err != nil {
 			return nil, fmt.Errorf("failed to get interface %s: %v", phyInterface, err)
 		}
@@ -96,21 +94,17 @@ func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) 
 	}
 	klog.InfoS("OVS bridge created", "bridge", bridgeConfig.BridgeName)
 
-	if phyInterface == "" {
-		return ovsBridgeClient, nil
-	}
+	for i, phyInterface := range bridgeConfig.PhysicalInterfaces {
+		if _, err := ovsBridgeClient.GetOFPort(phyInterface, false); err == nil {
+			klog.V(2).InfoS("Physical interface already connected to OVS bridge, skip the configuration", "device", phyInterface, "bridge", bridgeConfig.BridgeName)
+			continue
+		}
 
-	if _, err := ovsBridgeClient.GetOFPort(phyInterface, false); err == nil {
-		klog.V(2).InfoS("Physical interface already connected to OVS bridge, skip the configuration", "device", phyInterface, "bridge", bridgeConfig.BridgeName)
-		return ovsBridgeClient, nil
+		if _, err := ovsBridgeClient.CreateUplinkPort(phyInterface, int32(i), map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink}); err != nil {
+			return nil, fmt.Errorf("failed to create OVS uplink port %s: %v", phyInterface, err)
+		}
+		klog.InfoS("Physical interface added to OVS bridge", "device", phyInterface, "bridge", bridgeConfig.BridgeName)
 	}
-
-	_, err := ovsBridgeClient.CreateUplinkPort(phyInterface, 0, map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OVS uplink port %s: %v", phyInterface, err)
-	}
-	klog.InfoS("Physical interface added to OVS bridge", "device", phyInterface, "bridge", bridgeConfig.BridgeName)
-
 	return ovsBridgeClient, nil
 }
 
