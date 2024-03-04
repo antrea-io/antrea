@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ type ControlplaneV1beta2Interface interface {
 	GroupMembersGetter
 	IPGroupAssociationsGetter
 	NetworkPoliciesGetter
+	NetworkPolicyEvaluationsGetter
 	NodeStatsSummariesGetter
 	SupportBundleCollectionsGetter
 }
@@ -73,6 +74,10 @@ func (c *ControlplaneV1beta2Client) IPGroupAssociations() IPGroupAssociationInte
 
 func (c *ControlplaneV1beta2Client) NetworkPolicies() NetworkPolicyInterface {
 	return newNetworkPolicies(c)
+}
+
+func (c *ControlplaneV1beta2Client) NetworkPolicyEvaluations() NetworkPolicyEvaluationInterface {
+	return newNetworkPolicyEvaluations(c)
 }
 
 func (c *ControlplaneV1beta2Client) NodeStatsSummaries() NodeStatsSummaryInterface {

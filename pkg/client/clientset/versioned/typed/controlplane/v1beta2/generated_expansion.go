@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,5 +25,7 @@ type EgressGroupExpansion interface{}
 type GroupAssociationExpansion interface{}
 
 type IPGroupAssociationExpansion interface{}
+
+type NetworkPolicyEvaluationExpansion interface{}
 
 type NodeStatsSummaryExpansion interface{}

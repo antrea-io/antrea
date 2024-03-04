@@ -68,14 +68,14 @@ func HandleFunc(eq networkpolicy.EndpointQuerier) http.HandlerFunc {
 		var responsePolicies []v1beta2.NetworkPolicyReference
 		var responsePolicy v1beta2.NetworkPolicyReference
 		for _, internalPolicy := range endpointNetworkPolicyRules.AppliedPolicies {
-			v1beta2.Convert_controlplane_NetworkPolicyReference_To_v1beta2_NetworkPolicyReference(internalPolicy, &responsePolicy, nil)
+			v1beta2.Convert_controlplane_NetworkPolicyReference_To_v1beta2_NetworkPolicyReference(internalPolicy.SourceRef, &responsePolicy, nil)
 			responsePolicies = append(responsePolicies, responsePolicy)
 		}
 		// create rules based on effective rules on this endpoint
 		extractRules := func(effectiveRules []*antreatypes.RuleInfo) []Rule {
 			var responseRules []Rule
 			for _, rule := range effectiveRules {
-				v1beta2.Convert_controlplane_NetworkPolicyReference_To_v1beta2_NetworkPolicyReference(rule.Policy, &responsePolicy, nil)
+				v1beta2.Convert_controlplane_NetworkPolicyReference_To_v1beta2_NetworkPolicyReference(rule.Policy.SourceRef, &responsePolicy, nil)
 				newRule := Rule{
 					PolicyRef: responsePolicy,
 					Direction: v1beta2.Direction(rule.Rule.Direction),

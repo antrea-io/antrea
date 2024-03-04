@@ -106,10 +106,10 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
   enable fine-grained visibility into the communication among Kubernetes
   workloads. Theia provides visualization for Antrea network flows in Grafana
   dashboards, and recommends Network Policies to secure the workloads.
-* **Network Policies for virtual machines**: Antrea native policies can be
+* **Network Policies for virtual machines**: Antrea-native policies can be
   enforced on non-Kubernetes Nodes including VMs and baremetal servers. Project
   [Nephe](https://github.com/antrea-io/nephe) implements security policies for
-  VMs across clouds, leveraging Antrea native policies.
+  VMs across clouds, leveraging Antrea-native policies.
 * **Encryption**: Encryption of inter-Node Pod traffic with IPsec or WireGuard
   tunnels.
 * **Easy deployment**: Antrea is deployed by applying a single YAML manifest

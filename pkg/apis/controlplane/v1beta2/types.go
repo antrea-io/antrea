@@ -450,6 +450,45 @@ type NetworkPolicyNodeStatus struct {
 	Message string `json:"message,omitempty" protobuf:"bytes,4,opt,name=message"`
 }
 
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=create
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkPolicyEvaluation contains the request and response for a NetworkPolicy evaluation.
+type NetworkPolicyEvaluation struct {
+	metav1.TypeMeta `json:",inline"`
+	Request         *NetworkPolicyEvaluationRequest  `json:"request,omitempty" protobuf:"bytes,1,opt,name=request"`
+	Response        *NetworkPolicyEvaluationResponse `json:"response,omitempty" protobuf:"bytes,2,opt,name=response"`
+}
+
+// Entity contains Namespace and Pod name as a request parameter.
+type Entity struct {
+	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
+}
+
+// NetworkPolicyEvaluationRequest is the request body of NetworkPolicy evaluation.
+type NetworkPolicyEvaluationRequest struct {
+	Source      Entity `json:"source,omitempty" protobuf:"bytes,1,opt,name=source"`
+	Destination Entity `json:"destination,omitempty" protobuf:"bytes,2,opt,name=destination"`
+}
+
+// RuleRef contains basic information for the rule.
+type RuleRef struct {
+	Direction Direction              `json:"direction,omitempty" protobuf:"bytes,1,opt,name=direction"`
+	Name      string                 `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+	Action    *crdv1beta1.RuleAction `json:"action,omitempty" protobuf:"bytes,3,opt,name=action,casttype=antrea.io/antrea/pkg/apis/security/v1beta1.RuleAction"`
+}
+
+// NetworkPolicyEvaluationResponse is the response of NetworkPolicy evaluation.
+type NetworkPolicyEvaluationResponse struct {
+	// The reference of the effective NetworkPolicy.
+	NetworkPolicy NetworkPolicyReference `json:"networkPolicy,omitempty" protobuf:"bytes,1,opt,name=networkPolicy"`
+	RuleIndex     int32                  `json:"ruleIndex,omitempty" protobuf:"varint,2,opt,name=ruleIndex"`
+	// The content of the effective rule.
+	Rule RuleRef `json:"rule,omitempty" protobuf:"bytes,3,opt,name=rule"`
+}
+
 type GroupReference struct {
 	// Namespace of the Group. Empty for ClusterGroup.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,1,opt,name=namespace"`

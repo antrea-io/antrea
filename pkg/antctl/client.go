@@ -161,22 +161,38 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	// If timeout is zero, there will be no timeout.
 	restClient.Client.Timeout = opt.timeout
 
-	resGetter := restClient.Get().
+	var restRequest *rest.Request
+	if e.restMethod == restGet {
+		restRequest = restClient.Get()
+	} else if e.restMethod == restPost {
+		restRequest = restClient.Post()
+	}
+
+	restRequest = restRequest.
 		NamespaceIfScoped(opt.args["namespace"], e.namespaced).
 		Resource(e.groupVersionResource.Resource)
 
 	if len(e.resourceName) != 0 {
-		resGetter = resGetter.Name(e.resourceName)
+		restRequest = restRequest.Name(e.resourceName)
 	} else if name, ok := opt.args["name"]; ok {
-		resGetter = resGetter.Name(name)
+		restRequest = restRequest.Name(name)
 	}
 
 	for arg, val := range opt.args {
 		if arg != "name" && arg != "namespace" {
-			resGetter = resGetter.Param(arg, val)
+			restRequest = restRequest.Param(arg, val)
 		}
 	}
-	result := resGetter.Do(context.TODO())
+
+	if e.parameterTransform != nil {
+		obj, err := e.parameterTransform(opt.args)
+		if err != nil {
+			return nil, err
+		}
+		restRequest = restRequest.Body(obj)
+	}
+
+	result := restRequest.Do(context.TODO())
 	if result.Error() != nil {
 		return nil, generateMessage(opt.commandDefinition, opt.args, true /* isResourceRequest */, result.Error())
 	}

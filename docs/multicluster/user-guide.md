@@ -31,7 +31,7 @@
 
 Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api),
 which allows users to create multi-cluster Services that can be accessed cross
-clusters in a ClusterSet. Antrea Multi-cluster also extends Antrea native
+clusters in a ClusterSet. Antrea Multi-cluster also extends Antrea-native
 NetworkPolicy to support Multi-cluster NetworkPolicy rules that apply to
 cross-cluster traffic, and ClusterNetworkPolicy replication that allows a
 ClusterSet admin to create ClusterNetworkPolicies which are replicated across
