@@ -25,18 +25,13 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 )
 
-// connectInterfaceToOVS connects an existing interface to ovs br-int.
+// connectInterfaceToOVS connects an existing interface to the OVS bridge.
 func (pc *podConfigurator) connectInterfaceToOVS(
-	podName string,
-	podNamespace string,
-	containerID string,
-	netNS string,
-	hostIface *current.Interface,
-	containerIface *current.Interface,
+	podName, podNamespace, containerID, netNS string,
+	hostIface, containerIface *current.Interface,
 	ips []*current.IPConfig,
 	vlanID uint16,
-	containerAccess *containerAccessArbitrator,
-) (*interfacestore.InterfaceConfig, error) {
+	containerAccess *containerAccessArbitrator) (*interfacestore.InterfaceConfig, error) {
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNamespace, containerIface, ips, vlanID)

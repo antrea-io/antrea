@@ -85,7 +85,7 @@ func getInterfaceKey(obj interface{}) (string, error) {
 	interfaceConfig := obj.(*InterfaceConfig)
 	var key string
 	if interfaceConfig.Type == ContainerInterface {
-		key = util.GenerateContainerInterfaceKey(interfaceConfig.ContainerID)
+		key = util.GenerateContainerInterfaceKey(interfaceConfig.ContainerID, interfaceConfig.IFDev)
 	} else if interfaceConfig.Type == IPSecTunnelInterface {
 		// IPsec tunnel interface for a Node.
 		key = util.GenerateNodeTunnelInterfaceKey(interfaceConfig.NodeName)
@@ -266,7 +266,8 @@ func interfaceIPIndexFunc(obj interface{}) ([]string, error) {
 
 func interfaceOFPortIndexFunc(obj interface{}) ([]string, error) {
 	interfaceConfig := obj.(*InterfaceConfig)
-	if interfaceConfig.OFPort < 0 {
+	// OVSPortConfig can be nil for a secondary SR-IOV interface.
+	if interfaceConfig.OVSPortConfig == nil || interfaceConfig.OFPort < 0 {
 		// If interfaceConfig OFport is not valid, we return empty key.
 		return []string{}, nil
 	}
