@@ -62,15 +62,39 @@ func TestListTransform(t *testing.T) {
 		TierPriority: pointer.Int32(200),
 		Priority:     pointer.Float64(8),
 	}
+	var npD = cpv1beta.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "d",
+			UID:               "aab",
+			CreationTimestamp: metav1.Time{Time: metav1.Now().Add(3)},
+		},
+		SourceRef: &cpv1beta.NetworkPolicyReference{
+			Name: "d",
+		},
+	}
+	var npE = cpv1beta.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "e",
+			UID:               "bbb",
+			CreationTimestamp: metav1.Time{Time: metav1.Now().Add(4)},
+		},
+		SourceRef: &cpv1beta.NetworkPolicyReference{
+			Name: "e",
+		},
+	}
 
-	var npList = &cpv1beta.NetworkPolicyList{
+	var npList1 = &cpv1beta.NetworkPolicyList{
 		Items: []cpv1beta.NetworkPolicy{npA, npC, npB},
+	}
+	var npList2 = &cpv1beta.NetworkPolicyList{
+		Items: []cpv1beta.NetworkPolicy{npA, npE, npD, npC},
 	}
 
 	tests := []struct {
 		name             string
 		opts             map[string]string
-		expectedResponse []Response
+		npList           *cpv1beta.NetworkPolicyList
+		expectedResponse interface{}
 		expectedError    string
 	}{
 		{
@@ -78,6 +102,7 @@ func TestListTransform(t *testing.T) {
 			opts: map[string]string{
 				"sort-by": ".sourceRef.name",
 			},
+			npList:           npList1,
 			expectedResponse: []Response{{&npA}, {&npB}, {&npC}},
 		},
 		{
@@ -85,6 +110,7 @@ func TestListTransform(t *testing.T) {
 			opts: map[string]string{
 				"sort-by": ".metadata.uid",
 			},
+			npList:           npList1,
 			expectedResponse: []Response{{&npB}, {&npC}, {&npA}},
 		},
 		{
@@ -92,6 +118,7 @@ func TestListTransform(t *testing.T) {
 			opts: map[string]string{
 				"sort-by": ".metadata.creationTimestamp",
 			},
+			npList:           npList1,
 			expectedResponse: []Response{{&npA}, {&npB}, {&npC}},
 		},
 		{
@@ -99,6 +126,7 @@ func TestListTransform(t *testing.T) {
 			opts: map[string]string{
 				"sort-by": "effectivePriority",
 			},
+			npList:           npList1,
 			expectedResponse: []Response{{&npC}, {&npA}, {&npB}},
 		},
 		{
@@ -106,21 +134,36 @@ func TestListTransform(t *testing.T) {
 			opts: map[string]string{
 				"sort-by": "",
 			},
+			npList:           npList1,
 			expectedResponse: []Response{{&npA}, {&npB}, {&npC}},
+		},
+		{
+			name: "sort by effectivePriority including K8s np",
+			opts: map[string]string{
+				"sort-by": "effectivePriority",
+			},
+			npList:           npList2,
+			expectedResponse: []Response{{&npC}, {&npD}, {&npE}, {&npA}},
 		},
 		{
 			name: "invalid case",
 			opts: map[string]string{
 				"sort-by": "effective",
 			},
+			npList:           npList1,
 			expectedResponse: []Response{{&npA}, {&npB}, {&npC}},
 			expectedError:    "couldn't find any field with path \"{.effective}\" in the list of objects",
+		},
+		{
+			name:             "empty case",
+			npList:           &cpv1beta.NetworkPolicyList{Items: []cpv1beta.NetworkPolicy{}},
+			expectedResponse: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := listTransform(npList, tt.opts)
+			result, err := listTransform(tt.npList, tt.opts)
 			if tt.expectedError == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedResponse, result)

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parameter
+package networkpolicy
 
 import (
 	"fmt"
@@ -37,6 +37,8 @@ func parsePeer(str string) (string, string) {
 	return ns, pod
 }
 
+// NewNetworkPolicyEvaluation creates a new NetworkPolicyEvaluation resource
+// request from the command-line arguments provided to antctl.
 func NewNetworkPolicyEvaluation(args map[string]string) (runtime.Object, error) {
 	var ns1, pod1, ns2, pod2 string
 	if val, ok := args["source"]; ok {

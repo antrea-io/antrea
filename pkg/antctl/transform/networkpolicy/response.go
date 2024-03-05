@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -163,6 +163,8 @@ func (r Response) SortRows() bool {
 	return false
 }
 
+// EvaluationResponse stores the response from NetworkPolicyEvaluation command,
+// and implements TableOutput.
 type EvaluationResponse struct {
 	*cpv1beta.NetworkPolicyEvaluation
 }
