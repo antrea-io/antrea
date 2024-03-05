@@ -1904,23 +1904,14 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	testFlow1 := testFlow{
 		srcPodName: clientPodName,
 	}
-	var cmd []string
 	if !isIPv6 {
 		testFlow1.srcIP = clientPodIPs.IPv4.String()
 		testFlow1.dstIP = serverIPs.IPv4.String()
-		cmd = []string{
-			"curl",
-			fmt.Sprintf("http://%s:%d", serverIPs.IPv4.String(), serverPodPort),
-		}
 	} else {
 		testFlow1.srcIP = clientPodIPs.IPv6.String()
 		testFlow1.dstIP = serverIPs.IPv6.String()
-		cmd = []string{
-			"curl",
-			"-6",
-			fmt.Sprintf("http://[%s]:%d", serverIPs.IPv6.String(), serverPodPort),
-		}
 	}
+	cmd := []string{"curl", getHTTPURLFromIPPort(testFlow1.dstIP, serverPodPort)}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, testFlow1.srcPodName, "l7flowexporter", cmd)
 	require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
 	_, recordSlices := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "")

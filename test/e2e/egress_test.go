@@ -149,15 +149,10 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", remotePod)
 			}
 
-			serverIPStr := tt.serverIP
-			if utilnet.IsIPv6String(tt.localIP0) {
-				serverIPStr = fmt.Sprintf("[%s]", tt.serverIP)
-			}
-
 			// As the fake server runs in a netns of the Egress Node, only egress Node can reach the server, Pods running on
 			// other Nodes cannot reach it before Egress is added.
-			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
-			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP0, tt.localIP1)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
 
 			t.Logf("Creating an Egress applying to all e2e Pods")
 			matchExpressions := []metav1.LabelSelectorRequirement{
@@ -168,8 +163,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			}
 			egress := data.createEgress(t, "egress-", matchExpressions, nil, "", egressNodeIP, nil)
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, egressNodeIP)
-			assertClientIP(data, t, remotePod, toolboxContainerName, serverIPStr, egressNodeIP)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, egressNodeIP)
+			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIP, egressNodeIP)
 
 			var err error
 			err = wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
@@ -187,7 +182,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if utilnet.IsIPv6String(clientIPStr) {
 				clientIPStr = fmt.Sprintf("[%s]", clientIPStr)
 			}
-			cmd = fmt.Sprintf("wget -T 3 -O - %s:8080/clientip | grep %s:", serverIPStr, clientIPStr)
+			url := getHTTPURLFromIPPort(tt.serverIP, 8080, "clientip")
+			cmd = fmt.Sprintf("wget -T 3 -O - %s | grep %s:", url, clientIPStr)
 			if err := NewPodBuilder(initialIPChecker, data.testNamespace, agnhostImage).OnNode(egressNode).WithCommand([]string{"sh", "-c", cmd}).Create(data); err != nil {
 				t.Fatalf("Failed to create Pod initial-ip-checker: %v", err)
 			}
@@ -210,8 +206,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
-			assertClientIP(data, t, remotePod, toolboxContainerName, serverIPStr, egressNodeIP)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP0, tt.localIP1)
+			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIP, egressNodeIP)
 
 			t.Log("Updating the Egress's AppliedTo to localPod only")
 			egress.Spec.AppliedTo = v1beta1.AppliedTo{
@@ -223,8 +219,8 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, egressNodeIP)
-			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, egressNodeIP)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
 
 			t.Logf("Updating the Egress's EgressIP to %s", tt.localIP1)
 			egress.Spec.EgressIP = tt.localIP1
@@ -232,16 +228,16 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			if err != nil {
 				t.Fatalf("Failed to update Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP1)
-			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP1)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
 
 			t.Log("Deleting the Egress")
 			err = data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			if err != nil {
 				t.Fatalf("Failed to delete Egress %v: %v", egress, err)
 			}
-			assertClientIP(data, t, localPod, toolboxContainerName, serverIPStr, tt.localIP0, tt.localIP1)
-			assertConnError(data, t, remotePod, toolboxContainerName, serverIPStr)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIP, tt.localIP0, tt.localIP1)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIP)
 		})
 	}
 }
@@ -933,7 +929,7 @@ func setupIPNeighborChecker(data *TestData, t *testing.T, observerNode, node1, n
 		// Before the Node actually connects to the Egress IP, we expect that the lladdr either matches the Egress Node's MAC address or is empty.
 		check(true)
 		// The protocol must be present when using wget with IPv6 address.
-		cmd := []string{"wget", fmt.Sprintf("http://%s", net.JoinHostPort(ip, "80")), "-T", "1", "-t", "1"}
+		cmd := []string{"wget", getHTTPURLFromIPPort(ip, 80), "-T", "1", "-t", "1"}
 		// We don't care whether it succeeds, just make it connect to the Egress IP to learn its MAC address.
 		data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 		// After the Node tries to connect to the Egress IP, we expect that the lladdr matches the Egress Node's MAC address.
@@ -997,11 +993,11 @@ func (data *TestData) waitForEgressRealized(egress *v1beta1.Egress) (*v1beta1.Eg
 }
 
 // assertClientIP asserts the Pod is translated to the provided client IP.
-func assertClientIP(data *TestData, t *testing.T, pod, container, server string, clientIPs ...string) {
+func assertClientIP(data *TestData, t *testing.T, pod, container, serverIP string, clientIPs ...string) {
 	var exeErr error
 	var stdout, stderr string
 	err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (done bool, err error) {
-		url := fmt.Sprintf("%s:8080/clientip", server)
+		url := getHTTPURLFromIPPort(serverIP, 8080, "clientip")
 		stdout, stderr, exeErr = data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
 		if exeErr != nil {
 			return false, nil
@@ -1023,11 +1019,11 @@ func assertClientIP(data *TestData, t *testing.T, pod, container, server string,
 }
 
 // assertConnError asserts the Pod is not able to access the API that replies the request's client IP.
-func assertConnError(data *TestData, t *testing.T, pod, container, server string) {
+func assertConnError(data *TestData, t *testing.T, pod, container, serverIP string) {
 	var exeErr error
 	var stdout, stderr string
 	err := wait.Poll(100*time.Millisecond, 2*time.Second, func() (done bool, err error) {
-		url := fmt.Sprintf("%s:8080/clientip", server)
+		url := getHTTPURLFromIPPort(serverIP, 8080, "clientip")
 		stdout, stderr, exeErr = data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, url, container, 5)
 		if exeErr != nil {
 			return true, nil

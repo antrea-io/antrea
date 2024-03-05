@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -633,14 +632,14 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					// Create a pod in a different netns with the same subnet of the external IP to mock as another Node in the same subnet.
 					cmd, netns := getCommandInFakeExternalNetwork("sleep 3600", tt.clientIPMaskLen, tt.clientIP, tt.localIP)
 
-					baseUrl := net.JoinHostPort(externalIP, strconv.FormatInt(int64(port), 10))
+					baseURL := getHTTPURLFromIPPort(externalIP, port)
 
 					require.NoError(t, NewPodBuilder(tt.clientName, data.testNamespace, agnhostImage).OnNode(host).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().WithMutateFunc(func(pod *v1.Pod) {
 						delete(pod.Labels, "app")
 						// curl will exit immediately if the destination IP is unreachable and will NOT retry despite having retry flags set.
 						// Use an exec readiness probe to ensure the route is configured to the interface.
 						// Refer to https://github.com/curl/curl/issues/1603.
-						probeCmd := strings.Split(fmt.Sprintf("ip netns exec %s curl -s %s", netns, baseUrl), " ")
+						probeCmd := strings.Split(fmt.Sprintf("ip netns exec %s curl -s %s", netns, baseURL), " ")
 						pod.Spec.Containers[0].ReadinessProbe = &v1.Probe{
 							ProbeHandler: v1.ProbeHandler{
 								Exec: &v1.ExecAction{
@@ -663,8 +662,8 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					require.NoError(t, err)
 					defer data.DeletePodAndWait(defaultTimeout, tt.clientName, data.testNamespace)
 
-					hostNameUrl := fmt.Sprintf("%s/%s", baseUrl, "hostname")
-					probeCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", netns, hostNameUrl)
+					hostNameURL := fmt.Sprintf("%s/hostname", baseURL)
+					probeCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", netns, hostNameURL)
 					hostname, stderr, err := data.RunCommandFromPod(data.testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
 					assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 
@@ -674,8 +673,8 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 								assert.Equal(t, agnhosts[idx], hostname, "Hostname should match when ExternalTrafficPolicy setting to Local")
 							}
 						}
-						clientIPUrl := fmt.Sprintf("%s/clientip", baseUrl)
-						probeClientIPCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", netns, clientIPUrl)
+						clientIPURL := fmt.Sprintf("%s/clientip", baseURL)
+						probeClientIPCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", netns, clientIPURL)
 						clientIPPort, stderr, err := data.RunCommandFromPod(data.testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
 						assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 						clientIP, _, err := net.SplitHostPort(clientIPPort)
