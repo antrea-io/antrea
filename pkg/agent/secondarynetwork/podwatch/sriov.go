@@ -32,7 +32,7 @@ import (
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	podresourcesv1alpha1 "k8s.io/kubelet/pkg/apis/podresources/v1alpha1"
 
-	cnipodcache "antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
+	"antrea.io/antrea/pkg/agent/interfacestore"
 )
 
 const (
@@ -47,7 +47,7 @@ var (
 	getPodContainerDeviceIDsFn = getPodContainerDeviceIDs
 )
 
-type KubeletPodResources struct {
+type kubeletPodResources struct {
 	resources []*podresourcesv1alpha1.PodResources
 }
 
@@ -73,7 +73,6 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 	if err != nil {
 		return []string{}, fmt.Errorf("error getting the gRPC client for Pod resources: %v", err)
 	}
-
 	defer conn.Close()
 
 	client := podresourcesv1alpha1.NewPodResourcesListerClient(conn)
@@ -87,7 +86,7 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 	}
 
 	var podDeviceIDs []string
-	var kpr KubeletPodResources
+	var kpr kubeletPodResources
 	kpr.resources = podResources.GetPodResources()
 	for _, pr := range kpr.resources {
 		if pr.Name == podName && pr.Namespace == podNamespace {
@@ -109,8 +108,8 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 // which is still not associated with a network device name.
 // NOTE: buildVFDeviceIDListPerPod is called only if a Pod specific VF to Interface mapping cache
 // was not build earlier. Sample initial entry per Pod: "{18:01.1,""},{18:01.2,""},{18:01.3,""}"
-func (pc *PodController) buildVFDeviceIDListPerPod(podName, podNamespace string) ([]podSriovVFDeviceIDInfo, error) {
-	podKey := podNamespace + "/" + podName
+func (pc *podController) buildVFDeviceIDListPerPod(podName, podNamespace string) ([]podSriovVFDeviceIDInfo, error) {
+	podKey := podKeyGet(podName, podNamespace)
 	deviceCache, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
 	if cacheFound {
 		return deviceCache.([]podSriovVFDeviceIDInfo), nil
@@ -129,8 +128,8 @@ func (pc *PodController) buildVFDeviceIDListPerPod(podName, podNamespace string)
 	return vfDeviceIDInfoCache, nil
 }
 
-func (pc *PodController) deleteVFDeviceIDListPerPod(podName, podNamespace string) {
-	podKey := podNamespace + "/" + podName
+func (pc *podController) deleteVFDeviceIDListPerPod(podName, podNamespace string) {
+	podKey := podKeyGet(podName, podNamespace)
 	_, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
 	if cacheFound {
 		pc.vfDeviceIDUsageMap.Delete(podKey)
@@ -139,7 +138,21 @@ func (pc *PodController) deleteVFDeviceIDListPerPod(podName, podNamespace string
 	return
 }
 
-func (pc *PodController) assignUnusedSriovVFDeviceIDPerPod(podName, podNamespace, interfaceName string) (string, error) {
+func (pc *podController) releaseSriovVFDeviceID(podName, podNamespace, interfaceName string) {
+	podKey := podKeyGet(podName, podNamespace)
+	obj, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
+	if !cacheFound {
+		return
+	}
+	cache := obj.([]podSriovVFDeviceIDInfo)
+	for idx := 0; idx < len(cache); idx++ {
+		if cache[idx].ifName == interfaceName {
+			cache[idx].ifName = ""
+		}
+	}
+}
+
+func (pc *podController) assignUnusedSriovVFDeviceID(podName, podNamespace, interfaceName string) (string, error) {
 	var cache []podSriovVFDeviceIDInfo
 	cache, err := pc.buildVFDeviceIDListPerPod(podName, podNamespace)
 	if err != nil {
@@ -156,17 +169,25 @@ func (pc *PodController) assignUnusedSriovVFDeviceIDPerPod(podName, podNamespace
 }
 
 // Configure SRIOV VF as a Secondary Network Interface.
-func (pc *PodController) configureSriovAsSecondaryInterface(pod *corev1.Pod, network *netdefv1.NetworkSelectionElement, containerInfo *cnipodcache.CNIConfigInfo, mtu int, result *current.Result) error {
-	podSriovVFDeviceID, err := pc.assignUnusedSriovVFDeviceIDPerPod(pod.Name, pod.Namespace, network.InterfaceRequest)
+func (pc *podController) configureSriovAsSecondaryInterface(pod *corev1.Pod, network *netdefv1.NetworkSelectionElement, podCNIInfo *podCNIInfo, mtu int, result *current.Result) error {
+	podSriovVFDeviceID, err := pc.assignUnusedSriovVFDeviceID(pod.Name, pod.Namespace, network.InterfaceRequest)
 	if err != nil {
 		return err
 	}
-
 	if err = pc.interfaceConfigurator.ConfigureSriovSecondaryInterface(
-		containerInfo.PodName, containerInfo.PodNamespace, containerInfo.ContainerID,
-		containerInfo.ContainerNetNS, network.InterfaceRequest,
-		mtu, podSriovVFDeviceID, result); err != nil {
+		pod.Name, pod.Namespace, podCNIInfo.containerID, podCNIInfo.netNS,
+		network.InterfaceRequest, mtu, podSriovVFDeviceID, result); err != nil {
 		return fmt.Errorf("SRIOV Interface creation failed: %v", err)
 	}
+	return nil
+}
+
+func (pc *podController) deleteSriovSecondaryInterface(interfaceConfig *interfacestore.InterfaceConfig) error {
+	// NOTE: SR-IOV VF interface clean-up will be handled by SR-IOV device plugin. The interface
+	// is not deleted here.
+	if err := pc.interfaceConfigurator.DeleteSriovSecondaryInterface(interfaceConfig); err != nil {
+		return err
+	}
+	pc.releaseSriovVFDeviceID(interfaceConfig.PodName, interfaceConfig.PodNamespace, interfaceConfig.IFDev)
 	return nil
 }

@@ -72,15 +72,15 @@ func generateInterfaceName(key string, name string, useHead bool) string {
 }
 
 // GenerateContainerInterfaceKey generates a unique string for a Pod's
-// interface as: container/<Container-ID>.
+// interface as: "c/<Container-ID>/<IFDev-Name>".
 // We must use ContainerID instead of PodNamespace + PodName because there could
 // be more than one container associated with the same Pod at some point.
 // For example, when deleting a StatefulSet Pod with 0 second grace period, the
 // Pod will be removed from the Kubernetes API very quickly and a new Pod will
 // be created immediately, and kubelet may process the deletion of the previous
 // Pod and the addition of the new Pod simultaneously.
-func GenerateContainerInterfaceKey(containerID string) string {
-	return fmt.Sprintf("container/%s", containerID)
+func GenerateContainerInterfaceKey(containerID, ifDev string) string {
+	return fmt.Sprintf("c/%s/%s", containerID, ifDev)
 }
 
 // GenerateNodeTunnelInterfaceKey generates a unique string for a Node's

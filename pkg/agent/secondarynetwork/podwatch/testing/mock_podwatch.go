@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 
 	ipam "antrea.io/antrea/pkg/agent/cniserver/ipam"
 	types "antrea.io/antrea/pkg/agent/cniserver/types"
+	interfacestore "antrea.io/antrea/pkg/agent/interfacestore"
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "go.uber.org/mock/gomock"
@@ -71,32 +72,45 @@ func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureSriovSecondaryInterfac
 }
 
 // ConfigureVLANSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(arg0, arg1, arg2, arg3, arg4 string, arg5 int, arg6 uint16, arg7 *types100.Result) (string, error) {
+func (m *MockInterfaceConfigurator) ConfigureVLANSecondaryInterface(arg0, arg1, arg2, arg3, arg4 string, arg5 int, arg6 *ipam.IPAMResult) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "ConfigureVLANSecondaryInterface", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // ConfigureVLANSecondaryInterface indicates an expected call of ConfigureVLANSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureVLANSecondaryInterface(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) ConfigureVLANSecondaryInterface(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureVLANSecondaryInterface), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).ConfigureVLANSecondaryInterface), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+}
+
+// DeleteSriovSecondaryInterface mocks base method.
+func (m *MockInterfaceConfigurator) DeleteSriovSecondaryInterface(arg0 *interfacestore.InterfaceConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSriovSecondaryInterface", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSriovSecondaryInterface indicates an expected call of DeleteSriovSecondaryInterface.
+func (mr *MockInterfaceConfiguratorMockRecorder) DeleteSriovSecondaryInterface(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSriovSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteSriovSecondaryInterface), arg0)
 }
 
 // DeleteVLANSecondaryInterface mocks base method.
-func (m *MockInterfaceConfigurator) DeleteVLANSecondaryInterface(arg0, arg1, arg2 string) error {
+func (m *MockInterfaceConfigurator) DeleteVLANSecondaryInterface(arg0 *interfacestore.InterfaceConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteVLANSecondaryInterface", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteVLANSecondaryInterface", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteVLANSecondaryInterface indicates an expected call of DeleteVLANSecondaryInterface.
-func (mr *MockInterfaceConfiguratorMockRecorder) DeleteVLANSecondaryInterface(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockInterfaceConfiguratorMockRecorder) DeleteVLANSecondaryInterface(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteVLANSecondaryInterface), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteVLANSecondaryInterface), arg0)
 }
 
 // MockIPAMAllocator is a mock of IPAMAllocator interface.
