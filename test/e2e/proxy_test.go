@@ -625,10 +625,10 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	require.NoError(t, data.createToolboxPodOnNode(toolboxPod, data.testNamespace, nodeName, false))
 	defer data.DeletePodAndWait(defaultTimeout, toolboxPod, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, toolboxPod, data.testNamespace))
-	stdout, stderr, err := data.runWgetCommandOnToolboxWithRetry(toolboxPod, data.testNamespace, svc.Spec.ClusterIP, 5)
+	stdout, stderr, err := data.runWgetCommandOnToolboxWithRetry(toolboxPod, data.testNamespace, getHTTPURLFromIPPort(svc.Spec.ClusterIP, 80), 5)
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	for _, ingressIP := range ingressIPs {
-		stdout, stderr, err := data.runWgetCommandOnToolboxWithRetry(toolboxPod, data.testNamespace, ingressIP, 5)
+		stdout, stderr, err := data.runWgetCommandOnToolboxWithRetry(toolboxPod, data.testNamespace, getHTTPURLFromIPPort(ingressIP, 80), 5)
 		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
@@ -1175,7 +1175,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			defer data.deleteServiceAndWait(defaultTimeout, serviceName, data.testNamespace)
 
 			curlServiceWithPath := func(clientPod, clientNetns, path string) string {
-				testURL := fmt.Sprintf("http://%s:%d/%s", lbIP, service.Spec.Ports[0].Port, path)
+				testURL := getHTTPURLFromIPPort(lbIP, service.Spec.Ports[0].Port, path)
 				cmd = fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", testURL)
 				if clientNetns != "" {
 					cmd = fmt.Sprintf("ip netns exec %s %s", clientNetns, cmd)

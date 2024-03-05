@@ -15,9 +15,11 @@
 package e2e
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -55,4 +57,18 @@ func IPFamily(ip string) string {
 	default:
 		return ""
 	}
+}
+
+// getHTTPURLFromIPPort returns a HTTP url based on the IP, port and the additional paths if provided.
+// Examples:
+// getHTTPURLFromIPPort("1.2.3.4", 80) == "http://1.2.3.4:80"
+// getHTTPURLFromIPPort("1.2.3.4", 8080, "clientip") == "http://1.2.3.4:8080/clientip"
+// getHTTPURLFromIPPort("1.2.3.4", 8080, "api/v1/metadata?", "foo=bar") == "http://1.2.3.4:8080/api/v1/metadata?foo=bar"
+// getHTTPURLFromIPPort("fd74:ca9b:172::b4e", 8080) == "http://[fd74:ca9b:172::b4e]:8080"
+func getHTTPURLFromIPPort(ip string, port int32, paths ...string) string {
+	url := "http://" + net.JoinHostPort(ip, fmt.Sprint(port))
+	if len(paths) > 0 {
+		url += "/" + strings.Join(paths, "")
+	}
+	return url
 }

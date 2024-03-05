@@ -164,9 +164,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 	require.NoError(t, err)
 	t.Logf("Created client Pod IPs %v", podIPs.IPStrings)
 
-	nodeIP := clusterInfo.nodes[0].ip()
-	nodePort := int(svc.Spec.Ports[0].NodePort)
-	url := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
+	url := getHTTPURLFromIPPort(clusterInfo.nodes[0].ip(), svc.Spec.Ports[0].NodePort)
 
 	stdout, stderr, err := data.runWgetCommandOnToolboxWithRetry(clientName, clientNamespace, url, 5)
 	if err != nil {
