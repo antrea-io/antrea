@@ -5019,7 +5019,7 @@ spec:
                             flags:
                               type: integer
                               minimum: 0
-                              maximum: 7
+                              maximum: 255
                 liveTraffic:
                   type: boolean
                 droppedOnly:
@@ -5134,7 +5134,7 @@ spec:
                             flags:
                               type: integer
                               minimum: 0
-                              maximum: 7
+                              maximum: 255
                           type: object
                         udp:
                           properties:
