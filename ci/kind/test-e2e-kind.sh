@@ -209,7 +209,6 @@ if $flow_visibility; then
 fi
 
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.29" \
-                    "projects.registry.vmware.com/antrea/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
                     "projects.registry.vmware.com/antrea/toolbox:1.3-0")
 
