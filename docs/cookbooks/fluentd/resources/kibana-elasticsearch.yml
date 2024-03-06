@@ -74,7 +74,7 @@ spec:
     spec:
       initContainers:
         - name: init-sysctl
-          image: busybox:1.27.2
+          image: busybox:latest
           command:
             - sysctl
             - -w
