@@ -184,7 +184,7 @@ func TestMutateAntreaClusterNetworkPolicy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			mutator := NewNetworkPolicyMutator(controller.NetworkPolicyController)
 			_, _, patch := mutator.mutateAntreaPolicy(tt.operation, tt.policy.Spec.Ingress, tt.policy.Spec.Egress, tt.policy.Spec.Tier)
 			marshalExpPatch, _ := json.Marshal(tt.expectPatch)
@@ -353,7 +353,7 @@ func TestMutateAntreaNetworkPolicy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			mutator := NewNetworkPolicyMutator(controller.NetworkPolicyController)
 			_, _, patch := mutator.mutateAntreaPolicy(tt.operation, tt.policy.Spec.Ingress, tt.policy.Spec.Egress, tt.policy.Spec.Tier)
 			marshalExpPatch, _ := json.Marshal(tt.expectPatch)

@@ -1686,6 +1686,58 @@ func (n *NetworkPolicyController) cleanupOrphanGroups(internalNetworkPolicy *ant
 	}
 }
 
+// verifyPoliciesProcessed checks that all the policy objects in the cluster supported by Antrea
+// are already processed by the Antrea controller. It serves as a sanity check/prerequisite for
+// the networkpolicyevaluation command, since it uses controller cache as computation source.
+// Note that:
+//  1. This function blocks internal NP processing until it returns, which is acceptable given
+//     the rarity of invocation.
+//  2. Verification does not guarantee the latest versions of policies are processed.
+//     On the K8s side policies could be concurrently updated, and those events will be processed
+//     after the function returns.
+//  3. Verification is based on the fact that, as of now, processed internal NPs and original
+//     policy has a one-to-one mapping.
+func (n *NetworkPolicyController) verifyPoliciesProcessed() (bool, error) {
+	n.internalNetworkPolicyMutex.Lock()
+	defer n.internalNetworkPolicyMutex.Unlock()
+
+	numInternalNP := n.GetNetworkPolicyNum()
+	policyObjNum := 0
+	if npList, err := n.networkPolicyLister.List(labels.Everything()); err != nil {
+		return false, err
+	} else {
+		policyObjNum += len(npList)
+	}
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		if acnpList, err := n.acnpLister.List(labels.Everything()); err != nil {
+			return false, err
+		} else {
+			policyObjNum += len(acnpList)
+		}
+		if annpList, err := n.annpLister.List(labels.Everything()); err != nil {
+			return false, err
+		} else {
+			policyObjNum += len(annpList)
+		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
+		if anpList, err := n.adminNetworkPolicyLister.List(labels.Everything()); err != nil {
+			return false, err
+		} else {
+			policyObjNum += len(anpList)
+		}
+		if banpList, err := n.banpLister.List(labels.Everything()); err != nil {
+			return false, err
+		} else {
+			policyObjNum += len(banpList)
+		}
+	}
+	if numInternalNP != policyObjNum {
+		return false, fmt.Errorf("policy events have not been fully processed by the Antrea controller")
+	}
+	return true, nil
+}
+
 // ipStrToIPAddress converts an IP string to a controlplane.IPAddress.
 // nil will returned if the IP string is not valid.
 func ipStrToIPAddress(ip string) controlplane.IPAddress {

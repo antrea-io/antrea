@@ -170,7 +170,7 @@ func TestProcessGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			actualGroup := c.processGroup(tt.inputGroup)
 			assert.Equal(t, tt.expectedGroup, actualGroup)
 		})
@@ -276,7 +276,7 @@ func TestAddGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			npc.addGroup(tt.inputGroup)
 			key := fmt.Sprintf("%s/%s", tt.inputGroup.Namespace, tt.inputGroup.Name)
 			actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
@@ -431,7 +431,7 @@ func TestUpdateGroup(t *testing.T) {
 			},
 		},
 	}
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	npc.addGroup(&testG)
 	key := fmt.Sprintf("%s/%s", testG.Namespace, testG.Name)
 	for _, tt := range tests {
@@ -453,7 +453,7 @@ func TestDeleteG(t *testing.T) {
 		},
 	}
 	key := fmt.Sprintf("%s/%s", testG.Namespace, testG.Name)
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	npc.addGroup(&testG)
 	npc.deleteGroup(&testG)
 	_, found, _ := npc.internalGroupStore.Get(key)
@@ -570,7 +570,7 @@ func TestGetGroupMembers(t *testing.T) {
 			controlplane.GroupMemberSet{},
 		},
 	}
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	for i := range testPods {
 		npc.groupingInterface.AddPod(testPods[i])
 	}

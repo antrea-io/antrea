@@ -416,7 +416,7 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processAdminNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy.UID, actualPolicy.UID)
 			assert.Equal(t, tt.expectedPolicy.Name, actualPolicy.Name)
@@ -712,7 +712,7 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
+			_, c := newController(nil, nil, nil)
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processBaselineAdminNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy.UID, actualPolicy.UID)
 			assert.Equal(t, tt.expectedPolicy.Name, actualPolicy.Name)

@@ -41,6 +41,8 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
 	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
@@ -56,6 +58,7 @@ import (
 	"antrea.io/antrea/pkg/controller/labelidentity"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/externalnode"
 )
 
@@ -100,16 +103,17 @@ type networkPolicyController struct {
 	internalNetworkPolicyStore storage.Interface
 	informerFactory            informers.SharedInformerFactory
 	crdInformerFactory         crdinformers.SharedInformerFactory
+	policyInformerFactory      policyv1a1informers.SharedInformerFactory
 	groupingController         *grouping.GroupEntityController
 	labelIdentityController    *labelidentity.Controller
 }
 
 // objects is an initial set of K8s objects that is exposed through the client.
-func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *networkPolicyController) {
+func newController(k8sObjects, crdObjects, adminPolicyObjects []runtime.Object) (*fake.Clientset, *networkPolicyController) {
 	client := newClientset(k8sObjects...)
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	mcsClient := fakemcsversioned.NewSimpleClientset()
-	policyClient := fakepolicyversioned.NewSimpleClientset()
+	policyClient := fakepolicyversioned.NewSimpleClientset(adminPolicyObjects...)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	mcsInformerFactory := mcsinformers.NewSharedInformerFactory(mcsClient, informerDefaultResync)
@@ -177,6 +181,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		internalNetworkPolicyStore,
 		informerFactory,
 		crdInformerFactory,
+		policyInformerFactory,
 		groupingController,
 		labelIdentityController,
 	}
@@ -255,6 +260,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		internalNetworkPolicyStore,
 		informerFactory,
 		crdInformerFactory,
+		policyInformerFactory,
 		nil,
 		nil,
 	}
@@ -278,7 +284,7 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 }
 
 func TestAddNetworkPolicy(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	np := getK8sNetworkPolicyObj()
 	npc.addNetworkPolicy(np)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -289,7 +295,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 }
 
 func TestDeleteNetworkPolicy(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	np := getK8sNetworkPolicyObj()
 	npc.addNetworkPolicy(np)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
@@ -300,7 +306,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 }
 
 func TestUpdateNetworkPolicy(t *testing.T) {
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	np := getK8sNetworkPolicyObj()
 	newNP := np.DeepCopy()
 	newNP.Spec.Ingress = nil
@@ -736,7 +742,7 @@ func TestAddPod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			npc.networkPolicyStore.Add(testNPObj)
 			npc.syncInternalNetworkPolicy(getKNPReference(testNPObj))
 			groupKey := testCG.Name
@@ -827,7 +833,7 @@ func TestDeletePod(t *testing.T) {
 	p2 := getPod("p2", ns, "", p2IP, false)
 	// Ensure Pod p2 matches AddressGroup.
 	p2.Labels = ruleLabels
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	npc.networkPolicyStore.Add(matchNPObj)
 	npc.syncInternalNetworkPolicy(getKNPReference(matchNPObj))
 	npc.addClusterGroup(testCG)
@@ -980,7 +986,7 @@ func TestAddNamespace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			npc.networkPolicyStore.Add(testNPObj)
 			npc.syncInternalNetworkPolicy(getKNPReference(testNPObj))
 			npc.addClusterGroup(testCG)
@@ -1139,7 +1145,7 @@ func TestDeleteNamespace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			npc.networkPolicyStore.Add(testNPObj)
 			npc.syncInternalNetworkPolicy(getKNPReference(testNPObj))
 			npc.addClusterGroup(testCG)
@@ -1270,7 +1276,7 @@ func TestAddAndUpdateService(t *testing.T) {
 			Selector: map[string]string{"app": "test-2"},
 		},
 	}
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	npc.cgStore.Add(testCG1)
 	npc.cgStore.Add(testCG2)
 	npc.addClusterGroup(testCG1)
@@ -1349,7 +1355,7 @@ func TestDeleteService(t *testing.T) {
 			Selector: map[string]string{"app": "test"},
 		},
 	}
-	_, npc := newController(nil, nil)
+	_, npc := newController(nil, nil, nil)
 	npc.cgStore.Add(testCG)
 	npc.addClusterGroup(testCG)
 	npc.groupingInterface.AddPod(testPod)
@@ -1786,7 +1792,7 @@ func TestToAntreaPeer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			actualPeer, _ := npc.toAntreaPeer(tt.inPeers, testNPObj, tt.direction, tt.namedPortExist)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, (*actualPeer).AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, (*actualPeer).AddressGroups)
@@ -2202,7 +2208,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(tt.existingObjects, nil)
+			_, c := newController(tt.existingObjects, nil, nil)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
@@ -2475,7 +2481,7 @@ func TestIPStrToIPAddress(t *testing.T) {
 }
 
 func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
-	_, c := newController(nil, nil)
+	_, c := newController(nil, nil, nil)
 	c.heartbeatCh = make(chan heartbeat, 2)
 	np := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
@@ -2659,7 +2665,7 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			expNodes: []*corev1.Node{nodeA},
 		},
 	}
-	_, c := newController([]runtime.Object{nodeA, nodeB}, nil)
+	_, c := newController([]runtime.Object{nodeA, nodeB}, nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -2785,7 +2791,7 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 			expMemberSet: podABMemberSet,
 		},
 	}
-	_, c := newController(nil, nil)
+	_, c := newController(nil, nil, nil)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
 	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
@@ -2808,7 +2814,7 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 func TestAddressGroupWithNodeSelector(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	_, c := newController(nil, nil)
+	_, c := newController(nil, nil, nil)
 	c.informerFactory.Start(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	go c.groupingController.Run(stopCh)
@@ -3085,7 +3091,7 @@ func TestMultipleNetworkPoliciesWithSameAppliedTo(t *testing.T) {
 		},
 		AppliedToGroups: []string{selectorAGroupUID},
 	}
-	_, c := newController([]runtime.Object{podA, podB, podC}, nil)
+	_, c := newController([]runtime.Object{podA, podB, podC}, nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	c.informerFactory.Start(stopCh)
@@ -3226,7 +3232,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	}
 
 	// Add a new policy, it should create an internal NetworkPolicy, AddressGroups and AppliedToGroups used by it.
-	_, c := newController(nil, nil)
+	_, c := newController(nil, nil, nil)
 	c.acnpStore.Add(inputPolicy)
 	networkPolicyRef := getACNPReference(inputPolicy)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRef))
@@ -3334,7 +3340,7 @@ func TestSyncInternalNetworkPolicyWithSameName(t *testing.T) {
 	}
 
 	// Add and sync policyA first, it should create an AppliedToGroup.
-	_, c := newController(nil, nil)
+	_, c := newController(nil, nil, nil)
 	c.networkPolicyStore.Add(policyA)
 	networkPolicyRefA := getKNPReference(policyA)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefA))
@@ -3446,7 +3452,7 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 	}
 
 	// Add and sync policyA first, it should create an AddressGroup and AppliedToGroups.
-	_, c := newController(nil, nil)
+	_, c := newController(nil, nil, nil)
 	c.networkPolicyStore.Add(policyA)
 	networkPolicyRefA := getKNPReference(policyA)
 	assert.NoError(t, c.syncInternalNetworkPolicy(networkPolicyRefA))
@@ -3694,7 +3700,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController([]runtime.Object{podA, podB}, nil)
+			_, c := newController([]runtime.Object{podA, podB}, nil, nil)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			c.informerFactory.Start(stopCh)
@@ -3801,7 +3807,7 @@ func TestSyncAppliedToGroupWithExternalEntity(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
+			_, npc := newController(nil, nil, nil)
 			npc.groupingInterface.AddExternalEntity(tt.addedExternalEntity)
 			groupSelector := antreatypes.NewGroupSelector("nsA", nil, nil, &selectorSpec, nil)
 			appGroupID := getNormalizedUID(groupSelector.NormalizedName)
@@ -3848,7 +3854,7 @@ func TestSyncAppliedToGroupWithNode(t *testing.T) {
 		},
 	}
 
-	_, npc := newController([]runtime.Object{nodeA, nodeB, nodeC}, nil)
+	_, npc := newController([]runtime.Object{nodeA, nodeB, nodeC}, nil, nil)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	npc.informerFactory.Start(stopCh)
@@ -3975,6 +3981,128 @@ func TestNodeToGroupMember(t *testing.T) {
 			gotMember := nodeToGroupMember(tt.node, tt.includeIP)
 			assert.Equal(t, tt.expectedGroupMember.Node, gotMember.Node)
 			assert.ElementsMatch(t, tt.expectedGroupMember.IPs, gotMember.IPs)
+		})
+	}
+}
+
+func TestVerifyPoliciesProcessed(t *testing.T) {
+	np1 := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "np1",
+			Namespace: "ns1",
+			UID:       "uid1",
+		},
+	}
+	np2 := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "np2",
+			Namespace: "ns2",
+			UID:       "uid2",
+		},
+	}
+	acnp := &v1beta1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "acnp1",
+			UID:  "uid3",
+		},
+	}
+	annp := &v1beta1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns1",
+			Name:      "annp1",
+			UID:       "uid4",
+		},
+	}
+	anp := &v1alpha1.AdminNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "anp1",
+			UID:  "uid5",
+		},
+	}
+	banp := &v1alpha1.BaselineAdminNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			UID:  "uid6",
+		},
+	}
+	tests := []struct {
+		name                    string
+		existingKNPObjects      []runtime.Object
+		existingAntreaNPObjects []runtime.Object
+		existingANPObjects      []runtime.Object
+	}{
+		{
+			name: "no-policies-in-cluster",
+		},
+		{
+			name:               "k8s-policy",
+			existingKNPObjects: []runtime.Object{np1},
+		},
+		{
+			name:               "multiple-k8s-policy",
+			existingKNPObjects: []runtime.Object{np1, np2},
+		},
+		{
+			name:                    "mixed-k8s-antrea-native-policy",
+			existingKNPObjects:      []runtime.Object{np1},
+			existingAntreaNPObjects: []runtime.Object{acnp, annp},
+		},
+		{
+			name:               "mixed-k8s-admin-network-policy",
+			existingKNPObjects: []runtime.Object{np1},
+			existingANPObjects: []runtime.Object{anp, banp},
+		},
+	}
+	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController(tt.existingKNPObjects, tt.existingAntreaNPObjects, tt.existingANPObjects)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.policyInformerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			c.policyInformerFactory.WaitForCacheSync(stopCh)
+
+			testSynced := func(numTotal, numSynced int) {
+				processed, err := c.verifyPoliciesProcessed()
+				if numSynced < numTotal {
+					assert.Falsef(t, processed, "controller reports policies processed before they are synced")
+				} else {
+					assert.NoError(t, err)
+					assert.Truef(t, processed, "controller reports policies not processed after they are all synced")
+				}
+			}
+			numPolicy := len(tt.existingKNPObjects) + len(tt.existingAntreaNPObjects) + len(tt.existingANPObjects)
+			numSynced := 0
+			for _, policyObj := range tt.existingKNPObjects {
+				np := policyObj.(*networkingv1.NetworkPolicy)
+				c.syncInternalNetworkPolicy(getKNPReference(np))
+				numSynced += 1
+				testSynced(numPolicy, numSynced)
+			}
+			for _, obj := range tt.existingAntreaNPObjects {
+				if acnp, ok := obj.(*v1beta1.ClusterNetworkPolicy); ok {
+					c.syncInternalNetworkPolicy(getACNPReference(acnp))
+				} else {
+					annp := obj.(*v1beta1.NetworkPolicy)
+					c.syncInternalNetworkPolicy(getANNPReference(annp))
+				}
+				numSynced += 1
+				testSynced(numPolicy, numSynced)
+			}
+			for _, obj := range tt.existingANPObjects {
+				if anp, ok := obj.(*v1alpha1.AdminNetworkPolicy); ok {
+					c.syncInternalNetworkPolicy(getAdminNPReference(anp))
+				} else {
+					banp := obj.(*v1alpha1.BaselineAdminNetworkPolicy)
+					c.syncInternalNetworkPolicy(getBANPReference(banp))
+				}
+				numSynced += 1
+				testSynced(numPolicy, numSynced)
+			}
 		})
 	}
 }

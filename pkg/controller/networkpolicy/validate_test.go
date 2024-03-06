@@ -1668,7 +1668,7 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			for feature, value := range tt.featureGates {
 				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
 			}
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
@@ -1740,7 +1740,7 @@ func TestValidateAntreaNetworkPolicy(t *testing.T) {
 			for feature, value := range tt.featureGates {
 				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
 			}
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAntreaPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
@@ -2023,7 +2023,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			if tt.existGroup != nil {
 				controller.cgStore.Add(tt.existGroup)
 				controller.addClusterGroup(tt.existGroup)
@@ -2280,7 +2280,7 @@ func TestValidateAntreaGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			if tt.existGroup != nil {
 				controller.gStore.Add(tt.existGroup)
 				controller.addGroup(tt.existGroup)
@@ -2488,7 +2488,7 @@ func TestValidateTier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			for i := 1; i <= tt.existTierNum; i++ {
 				controller.tierStore.Add(&crdv1beta1.Tier{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2710,7 +2710,7 @@ func TestValidateAdminNetworkPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, controller := newController(nil, nil)
+			_, controller := newController(nil, nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			actualReason, allowed := validator.validateAdminNetworkPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
