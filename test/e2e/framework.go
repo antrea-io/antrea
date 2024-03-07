@@ -126,11 +126,11 @@ const (
 	flowAggregatorConfName   = "flow-aggregator.conf"
 
 	agnhostImage        = "registry.k8s.io/e2e-test-images/agnhost:2.29"
-	ToolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.3-0"
-	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
-	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
+	ToolboxImage        = "antrea/toolbox:1.3-0"
+	mcjoinImage         = "antrea/mcjoin:v2.9"
+	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.9.0"
+	ipfixCollectorImage = "antrea/ipfix-collector:v0.9.0"
 
 	nginxLBService = "nginx-loadbalancer"
 

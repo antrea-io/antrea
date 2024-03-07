@@ -65,7 +65,7 @@ spec:
         spec:
           containers:
             - name: clickhouse
-              image: projects.registry.vmware.com/antrea/clickhouse-server:23.4
+              image: antrea/clickhouse-server:23.4
               imagePullPolicy: IfNotPresent
               volumeMounts:
                 - name: clickhouse-configmap-volume
