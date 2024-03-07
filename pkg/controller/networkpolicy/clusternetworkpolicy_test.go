@@ -17,8 +17,6 @@ package networkpolicy
 import (
 	"fmt"
 	"net"
-	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,48 +33,6 @@ import (
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
-
-// ruleSemanticallyEqual compares two NetworkPolicyRule objects. It disregards
-// the appliedToGroup slice element order as long as two rules' appliedToGroups
-// have same elements.
-func ruleSemanticallyEqual(a, b controlplane.NetworkPolicyRule) bool {
-	sort.Strings(a.AppliedToGroups)
-	sort.Strings(b.AppliedToGroups)
-	return reflect.DeepEqual(a, b)
-}
-
-// diffNetworkPolicyRuleList checks if elements in two controlplane.NetworkPolicyRule
-// slices are equal. If not, it returns the unmatched NetworkPolicyRules.
-func diffNetworkPolicyRuleList(a, b []controlplane.NetworkPolicyRule) (extraA, extraB []controlplane.NetworkPolicyRule) {
-	if len(a) != len(b) {
-		return nil, nil
-	}
-	// Mark indexes in b that has already matched
-	visited := make([]bool, len(b))
-	for i := 0; i < len(a); i++ {
-		found := false
-		for j := 0; j < len(b); j++ {
-			if visited[j] {
-				continue
-			}
-			if ruleSemanticallyEqual(a[i], b[j]) {
-				visited[j] = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			extraA = append(extraA, a[i])
-		}
-	}
-	for j := 0; j < len(b); j++ {
-		if visited[j] {
-			continue
-		}
-		extraB = append(extraB, b[j])
-	}
-	return
-}
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
@@ -1052,8 +1008,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						AppliedToGroups: []string{
-							getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
 							getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+							getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
 						},
 						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{
@@ -1947,10 +1903,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			assert.Equal(t, tt.expectedPolicy.Priority, actualPolicy.Priority)
 			assert.Equal(t, tt.expectedPolicy.TierPriority, actualPolicy.TierPriority)
 			assert.Equal(t, tt.expectedPolicy.AppliedToPerRule, actualPolicy.AppliedToPerRule)
-			missingExpectedRules, extraActualRules := diffNetworkPolicyRuleList(tt.expectedPolicy.Rules, actualPolicy.Rules)
-			if len(missingExpectedRules) > 0 || len(extraActualRules) > 0 {
-				t.Errorf("Unexpected rules in processed policy. Missing expected rules: %v. Extra actual rules: %v", missingExpectedRules, extraActualRules)
-			}
+			assert.ElementsMatch(t, tt.expectedPolicy.Rules, actualPolicy.Rules)
 			assert.ElementsMatch(t, tt.expectedPolicy.AppliedToGroups, actualPolicy.AppliedToGroups)
 			assert.Equal(t, tt.expectedAppliedToGroups, len(actualAppliedToGroups))
 			assert.Equal(t, tt.expectedAddressGroups, len(actualAddressGroups))

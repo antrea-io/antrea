@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"reflect"
+	"sort"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -631,7 +632,9 @@ func groupNamespacesByLabelValue(affectedNSAndLabels map[string]labels.Set, labe
 func getLabelValues(labels map[string]string, labelKeys []string) string {
 	key := ""
 	for _, k := range labelKeys {
-		if v, ok := labels[k]; ok {
+		if v, ok := labels[k]; !ok {
+			return ""
+		} else {
 			key += v + labelValueSeparator
 		}
 	}
@@ -682,6 +685,7 @@ func (n *NetworkPolicyController) toAntreaPeerForSameLabelNamespaces(peer crdv1b
 		LabelIdentities: labelIdentities,
 	}
 	var atgs []*antreatypes.AppliedToGroup
+	sort.Strings(namespacesByLabelValues)
 	for _, ns := range namespacesByLabelValues {
 		atgForNamespace, _ := atgPerAffectedNS[ns]
 		atgs = append(atgs, atgForNamespace)

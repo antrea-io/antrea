@@ -28,13 +28,7 @@ import (
 
 // initializeAntreaIPAM must be called after Namespace in antreaIPAMNamespaces created
 func initializeAntreaIPAM(t *testing.T, data *TestData) {
-	p80 = 80
-	p81 = 81
-	p8080 = 8080
-	p8081 = 8081
-	p8082 = 8082
-	p8085 = 8085
-	pods = []string{"a", "b", "c"}
+	podsPerNamespace = []string{"a", "b", "c"}
 	namespaces = make(map[string]TestNamespaceMeta)
 	regularNamespaces := make(map[string]TestNamespaceMeta)
 	suffix := randName("")
@@ -50,7 +44,7 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	for _, ns := range antreaIPAMNamespaces {
 		namespaces[ns] = TestNamespaceMeta{Name: ns}
 	}
-	for _, podName := range pods {
+	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
 			allPods = append(allPods, NewPod(ns.Name, podName))
 			podsByNamespace[ns.Name] = append(podsByNamespace[ns.Name], NewPod(ns.Name, podName))
@@ -61,9 +55,9 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	_, err = k8sUtils.Bootstrap(regularNamespaces, pods, true, nil, nil)
+	_, err = k8sUtils.Bootstrap(regularNamespaces, podsPerNamespace, true, nil, nil)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods, false, nil, nil)
+	ips, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, false, nil, nil)
 	failOnError(err, t)
 	podIPs = ips
 }

@@ -36,8 +36,14 @@ func initializeAntreaNodeNetworkPolicy(t *testing.T, data *TestData, toHostNetwo
 	p8081 = 8081
 	p8082 = 8082
 	p8085 = 8085
-	pods = []string{"a"}
-	namespaces = initNamespaceMeta(formFactorNormal)
+	podsPerNamespace = []string{"a"}
+	suffix := randName("")
+	namespaces = make(map[string]TestNamespaceMeta)
+	for _, ns := range []string{"x", "y", "z"} {
+		namespaces[ns] = TestNamespaceMeta{
+			Name: ns + "-" + suffix,
+		}
+	}
 	nodes = make(map[string]string)
 	nodes["x"] = controlPlaneNodeName()
 	nodes["y"] = workerNodeName(1)
@@ -52,7 +58,7 @@ func initializeAntreaNodeNetworkPolicy(t *testing.T, data *TestData, toHostNetwo
 	}
 	allPods = []Pod{}
 
-	for _, podName := range pods {
+	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
 			allPods = append(allPods, NewPod(ns.Name, podName))
 		}
@@ -62,7 +68,7 @@ func initializeAntreaNodeNetworkPolicy(t *testing.T, data *TestData, toHostNetwo
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods, true, nodes, hostNetworks)
+	ips, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, true, nodes, hostNetworks)
 	failOnError(err, t)
 	podIPs = ips
 }

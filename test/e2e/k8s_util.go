@@ -840,35 +840,6 @@ func (k *KubernetesUtils) GetCG(name string) (*crdv1beta1.ClusterGroup, error) {
 	return k.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
-// CreateGroup is a convenience function for creating an Antrea Group by namespace, name and selector.
-func (k *KubernetesUtils) CreateGroup(namespace, name string, pSelector, nSelector *metav1.LabelSelector, ipBlocks []crdv1beta1.IPBlock) (*crdv1beta1.Group, error) {
-	log.Infof("Creating group %s/%s", namespace, name)
-	_, err := k.crdClient.CrdV1alpha3().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		g := &crdv1beta1.Group{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      name,
-			},
-		}
-		if pSelector != nil {
-			g.Spec.PodSelector = pSelector
-		}
-		if nSelector != nil {
-			g.Spec.NamespaceSelector = nSelector
-		}
-		if len(ipBlocks) > 0 {
-			g.Spec.IPBlocks = ipBlocks
-		}
-		g, err = k.crdClient.CrdV1beta1().Groups(namespace).Create(context.TODO(), g, metav1.CreateOptions{})
-		if err != nil {
-			log.Debugf("Unable to create group %s/%s: %s", namespace, name, err)
-		}
-		return g, err
-	}
-	return nil, fmt.Errorf("group with name %s/%s already exists", namespace, name)
-}
-
 // GetGroup is a convenience function for getting Groups
 func (k *KubernetesUtils) GetGroup(namespace, name string) (*crdv1beta1.Group, error) {
 	return k.crdClient.CrdV1beta1().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
@@ -1138,7 +1109,7 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pods []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, podsPerNamespace []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
 	for key, ns := range namespaces {
 		if createNamespaces {
 			if ns.Labels == nil {
@@ -1146,8 +1117,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 			}
 			// convenience label for testing
 			ns.Labels["ns"] = ns.Name
-			_, err := k.CreateOrUpdateNamespace(ns.Name, ns.Labels)
-			if err != nil {
+			if _, err := k.CreateOrUpdateNamespace(ns.Name, ns.Labels); err != nil {
 				return nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
 			}
 		}
@@ -1159,7 +1129,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 		if hostNetworks != nil {
 			hostNetwork = hostNetworks[key]
 		}
-		for _, pod := range pods {
+		for _, pod := range podsPerNamespace {
 			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)
 			deployment := ns.Name + pod
 			_, err := k.CreateOrUpdateDeployment(ns.Name, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
@@ -1169,8 +1139,8 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 		}
 	}
 	var allPods []Pod
-	podIPs := make(map[string][]string, len(pods)*len(namespaces))
-	for _, podName := range pods {
+	podIPs := make(map[string][]string, len(podsPerNamespace)*len(namespaces))
+	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
 			allPods = append(allPods, NewPod(ns.Name, podName))
 		}

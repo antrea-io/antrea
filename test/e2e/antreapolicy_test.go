@@ -45,16 +45,22 @@ import (
 
 // common for all tests.
 var (
-	allPods                                     []Pod
-	podsByNamespace                             map[string][]Pod
-	k8sUtils                                    *KubernetesUtils
-	allTestList                                 []*TestCase
-	pods                                        []string
-	namespaces                                  map[string]TestNamespaceMeta
-	podIPs                                      map[string][]string
-	p80, p81, p8080, p8081, p8082, p8085, p6443 int32
-	nodes                                       map[string]string
-	selfNamespace                               *crdv1beta1.PeerNamespaces
+	p80              int32 = 80
+	p81              int32 = 81
+	p6443            int32 = 6443
+	p8080            int32 = 8080
+	p8081            int32 = 8081
+	p8082            int32 = 8082
+	p8085            int32 = 8085
+	allPods          []Pod
+	podsByNamespace  map[string][]Pod
+	k8sUtils         *KubernetesUtils
+	allTestList      []*TestCase
+	podsPerNamespace []string
+	namespaces       map[string]TestNamespaceMeta
+	podIPs           map[string][]string
+	nodes            map[string]string
+	selfNamespace    *crdv1beta1.PeerNamespaces
 )
 
 const (
@@ -66,11 +72,9 @@ const (
 	// Verification of deleting/creating resources timed out.
 	timeout = 10 * time.Second
 	// audit log directory on Antrea Agent
-	logDir           = "/var/log/antrea/networkpolicy/"
-	logfileName      = "np.log"
-	defaultTierName  = "application"
-	formFactorNormal = "3by3PodWorkloads"
-	formFactorLarge  = "extraNamespaces"
+	logDir          = "/var/log/antrea/networkpolicy/"
+	logfileName     = "np.log"
+	defaultTierName = "application"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -105,74 +109,28 @@ func getPodName(ns, po string) string {
 	return namespaces[ns].Name + "/" + po
 }
 
-// initNamespaceMeta populates the test Namespaces metadata.
-// There are two form factors for test workload Namespaces:
-//
-//	Normal: three Namespaces x, y, z.
-//	Large: two "prod" Namespaces labeled purpose=test and tier=prod.
-//	       two "dev" Namespaces labeled purpose=test and tier=dev.
-//	       one "no-tier-label" Namespace labeled purpose=test.
-//
-// The large form factor workloads are used for testcases where advanced
-// Namespace matching in policies are required.
-func initNamespaceMeta(formFactor string) map[string]TestNamespaceMeta {
-	allNamespaceMeta := make(map[string]TestNamespaceMeta)
-	suffix := randName("")
-	if formFactor == formFactorLarge {
-		for i := 1; i < 3; i++ {
-			prodNS := TestNamespaceMeta{
-				Name: "prod" + strconv.Itoa(i) + "-" + suffix,
-				Labels: map[string]string{
-					"purpose": "test",
-					"tier":    "prod",
-				},
-			}
-			allNamespaceMeta["prod"+strconv.Itoa(i)] = prodNS
-			devNS := TestNamespaceMeta{
-				Name: "dev" + strconv.Itoa(i) + "-" + suffix,
-				Labels: map[string]string{
-					"purpose": "test",
-					"tier":    "dev",
-				},
-			}
-			allNamespaceMeta["dev"+strconv.Itoa(i)] = devNS
-		}
-		allNamespaceMeta["no-tier"] = TestNamespaceMeta{
-			Name: "no-tier-" + suffix,
-			Labels: map[string]string{
-				"purpose": "test-exclusion",
-			},
-		}
-	} else if formFactor == formFactorNormal {
-		nss := []string{"x", "y", "z"}
-		for _, ns := range nss {
-			allNamespaceMeta[ns] = TestNamespaceMeta{
+func initialize(t *testing.T, data *TestData, customNamespaces map[string]TestNamespaceMeta) {
+	selfNamespace = &crdv1beta1.PeerNamespaces{
+		Match: crdv1beta1.NamespaceMatchSelf,
+	}
+	namespaces = make(map[string]TestNamespaceMeta)
+	if customNamespaces != nil {
+		namespaces = customNamespaces
+	} else {
+		suffix := randName("")
+		for _, ns := range []string{"x", "y", "z"} {
+			namespaces[ns] = TestNamespaceMeta{
 				Name: ns + "-" + suffix,
 			}
 		}
 	}
-	return allNamespaceMeta
-}
-
-func initialize(t *testing.T, data *TestData, formFactor string) {
-	p80 = 80
-	p81 = 81
-	p8080 = 8080
-	p8081 = 8081
-	p8082 = 8082
-	p8085 = 8085
-	selfNamespace = &crdv1beta1.PeerNamespaces{
-		Match: crdv1beta1.NamespaceMatchSelf,
-	}
-	pods = []string{"a", "b", "c"}
-	namespaces = initNamespaceMeta(formFactor)
 	// This function "initialize" will be used more than once, and variable "allPods" is global.
 	// It should be empty every time when "initialize" is performed, otherwise there will be unexpected
 	// results.
 	allPods = []Pod{}
 	podsByNamespace = make(map[string][]Pod)
-
-	for _, podName := range pods {
+	podsPerNamespace = []string{"a", "b", "c"}
+	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
 			allPods = append(allPods, NewPod(ns.Name, podName))
 			podsByNamespace[ns.Name] = append(podsByNamespace[ns.Name], NewPod(ns.Name, podName))
@@ -184,7 +142,7 @@ func initialize(t *testing.T, data *TestData, formFactor string) {
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods, true, nil, nil)
+	ips, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, true, nil, nil)
 	failOnError(err, t)
 	podIPs = ips
 }
@@ -4373,7 +4331,7 @@ func TestAntreaPolicy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	initialize(t, data, formFactorNormal)
+	initialize(t, data, nil)
 
 	// This test group only provides one case for each CR, including ACNP, ANNP, Tier,
 	// ClusterGroup and Group to make sure the corresponding validation webhooks is
@@ -4514,7 +4472,36 @@ func TestAntreaPolicyExtendedNamespaces(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	initialize(t, data, formFactorLarge)
+	extendedNamespaces := make(map[string]TestNamespaceMeta)
+	suffix := randName("")
+	// two "prod" Namespaces labeled purpose=test and tier=prod.
+	// two "dev" Namespaces labeled purpose=test and tier=dev.
+	// one "no-tier-label" Namespace labeled purpose=test.
+	for i := 1; i <= 2; i++ {
+		prodNS := TestNamespaceMeta{
+			Name: "prod" + strconv.Itoa(i) + "-" + suffix,
+			Labels: map[string]string{
+				"purpose": "test",
+				"tier":    "prod",
+			},
+		}
+		extendedNamespaces["prod"+strconv.Itoa(i)] = prodNS
+		devNS := TestNamespaceMeta{
+			Name: "dev" + strconv.Itoa(i) + "-" + suffix,
+			Labels: map[string]string{
+				"purpose": "test",
+				"tier":    "dev",
+			},
+		}
+		extendedNamespaces["dev"+strconv.Itoa(i)] = devNS
+	}
+	extendedNamespaces["no-tier"] = TestNamespaceMeta{
+		Name: "no-tier-" + suffix,
+		Labels: map[string]string{
+			"purpose": "test-exclusion",
+		},
+	}
+	initialize(t, data, extendedNamespaces)
 
 	t.Run("TestGroupACNPNamespaceLabelSelections", func(t *testing.T) {
 		t.Run("Case=ACNPStrictNamespacesIsolationByLabels", func(t *testing.T) { testACNPStrictNamespacesIsolationByLabels(t) })
@@ -4658,7 +4645,7 @@ func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	initialize(t, data, formFactorNormal)
+	initialize(t, data, nil)
 
 	testNamespace := getNS("x")
 	// Build a Group with namespaceSelector selecting namespaces outside testNamespace.

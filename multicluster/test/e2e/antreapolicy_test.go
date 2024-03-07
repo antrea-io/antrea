@@ -54,8 +54,7 @@ func failOnError(err error, t *testing.T) {
 func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 	perNamespacePods = []string{"a", "b", "c"}
 	perClusterNamespaces = make(map[string]antreae2e.TestNamespaceMeta)
-	nss := []string{"x", "y", "z"}
-	for _, ns := range nss {
+	for _, ns := range []string{"x", "y", "z"} {
 		perClusterNamespaces[ns] = antreae2e.TestNamespaceMeta{Name: ns}
 	}
 
