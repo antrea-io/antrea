@@ -615,7 +615,7 @@ func (n *NetworkPolicyController) processRefGroupOrClusterGroup(g, namespace str
 	// up if the Group/ClusterGroup becomes ipBlocks-only.
 	createAddrGroup, ipb := n.processInternalGroupForRule(intGrp)
 	if createAddrGroup {
-		ag := &antreatypes.AddressGroup{UID: intGrp.UID, Name: key}
+		ag := &antreatypes.AddressGroup{UID: intGrp.UID, Name: key, SourceGroup: key}
 		return ag, ipb
 	}
 	return nil, ipb
