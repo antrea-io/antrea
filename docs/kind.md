@@ -60,10 +60,10 @@ pull from the registry), you can use:
 ```bash
 tag=<TAG>
 cluster=<CLUSTER_NAME>
-docker pull projects.registry.vmware.com/antrea/antrea-controller-ubuntu:$tag
-docker pull projects.registry.vmware.com/antrea/antrea-agent-ubuntu:$tag
+docker pull antrea/antrea-controller-ubuntu:$tag
+docker pull antrea/antrea-agent-ubuntu:$tag
 ./ci/kind/kind-setup.sh \
-  --images "projects.registry.vmware.com/antrea/antrea-controller-ubuntu:$tag projects.registry.vmware.com/antrea/antrea-agent-ubuntu:$tag" \
+  --images "antrea/antrea-controller-ubuntu:$tag antrea/antrea-agent-ubuntu:$tag" \
   create $cluster
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$tag/antrea.yml
 ```
