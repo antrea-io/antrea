@@ -104,19 +104,19 @@ cp ./hack/externalnode/install-vm.ps1 "$OUTPUT_DIR/"
 
 export IMG_TAG=$VERSION
 
-export IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu
+export IMG_NAME=antrea/antrea-ubuntu
 ./hack/generate-standard-manifests.sh --mode release --out "$OUTPUT_DIR"
 
-export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
+export IMG_NAME=antrea/antrea-windows
 ./hack/generate-manifest-windows.sh --mode release > "$OUTPUT_DIR"/antrea-windows.yml
 ./hack/generate-manifest-windows.sh --mode release --containerd > "$OUTPUT_DIR"/antrea-windows-containerd.yml
 ./hack/generate-manifest-windows.sh --mode release --containerd --include-ovs > "$OUTPUT_DIR"/antrea-windows-containerd-with-ovs.yml
 
-export IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator
+export IMG_NAME=antrea/flow-aggregator
 ./hack/generate-manifest-flow-aggregator.sh --mode release > "$OUTPUT_DIR"/flow-aggregator.yml
 
 # Generate multicluster manifests
-export IMG_NAME=projects.registry.vmware.com/antrea/antrea-mc-controller
+export IMG_NAME=antrea/antrea-mc-controller
 cd multicluster
 ./hack/generate-manifest.sh -g > "$OUTPUT_DIR"/antrea-multicluster-leader-global.yml
 ./hack/generate-manifest.sh -r -l antrea-multicluster > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
