@@ -173,14 +173,6 @@ func AppliedToGroupKeyFunc(obj interface{}) (string, error) {
 // NewAppliedToGroupStore creates a store of AppliedToGroup.
 func NewAppliedToGroupStore() storage.Interface {
 	indexers := cache.Indexers{
-		cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
-			atg, ok := obj.(*types.AppliedToGroup)
-			if !ok || atg.Selector == nil {
-				return []string{}, nil
-			}
-
-			return []string{atg.Selector.Namespace}, nil
-		},
 		IsAppliedToServiceIndex: func(obj interface{}) ([]string, error) {
 			atg, ok := obj.(*types.AppliedToGroup)
 			if !ok || atg.Service == nil {
