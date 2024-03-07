@@ -58,8 +58,8 @@ If you want to pre-load the Antrea image in each Node (to avoid having each Node
 pull from the registry), you can use:
 
 ```bash
-docker pull projects.registry.vmware.com/antrea/antrea-ubuntu:<TAG>
-./ci/kind/kind-setup.sh --images projects.registry.vmware.com/antrea/antrea-ubuntu:<TAG> create <CLUSTER_NAME>
+docker pull antrea/antrea-ubuntu:<TAG>
+./ci/kind/kind-setup.sh --images antrea/antrea-ubuntu:<TAG> create <CLUSTER_NAME>
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
 ```
 
