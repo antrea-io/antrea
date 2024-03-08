@@ -322,7 +322,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForGroup(namespace, group 
 		klog.V(2).InfoS("Group with IPBlocks can not be used as AppliedTo", "Group", key)
 		return nil
 	}
-	return &antreatypes.AppliedToGroup{UID: intGrp.UID, Name: key}
+	return &antreatypes.AppliedToGroup{UID: intGrp.UID, Name: key, SourceGroup: key}
 }
 
 // getTierPriority retrieves the priority associated with the input Tier name.
