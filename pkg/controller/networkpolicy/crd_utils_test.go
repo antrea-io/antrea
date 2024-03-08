@@ -550,9 +550,13 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 			expectedATG: nil,
 		},
 		{
-			name:        "cluster group with selectors",
-			inputGroup:  clusterGroupWithSelector.Name,
-			expectedATG: &antreatypes.AppliedToGroup{UID: clusterGroupWithSelector.UID, Name: clusterGroupWithSelector.Name},
+			name:       "cluster group with selectors",
+			inputGroup: clusterGroupWithSelector.Name,
+			expectedATG: &antreatypes.AppliedToGroup{
+				UID:         clusterGroupWithSelector.UID,
+				Name:        clusterGroupWithSelector.Name,
+				SourceGroup: clusterGroupWithSelector.Name,
+			},
 		},
 		{
 			name:           "empty group name",
@@ -576,7 +580,11 @@ func TestCreateAppliedToGroupsForGroup(t *testing.T) {
 			name:           "group with selectors",
 			inputNamespace: groupWithSelector.Namespace,
 			inputGroup:     groupWithSelector.Name,
-			expectedATG:    &antreatypes.AppliedToGroup{UID: groupWithSelector.UID, Name: fmt.Sprintf("%s/%s", groupWithSelector.Namespace, groupWithSelector.Name)},
+			expectedATG: &antreatypes.AppliedToGroup{
+				UID:         groupWithSelector.UID,
+				Name:        fmt.Sprintf("%s/%s", groupWithSelector.Namespace, groupWithSelector.Name),
+				SourceGroup: fmt.Sprintf("%s/%s", groupWithSelector.Namespace, groupWithSelector.Name),
+			},
 		},
 	}
 	for _, tt := range tests {
