@@ -10,6 +10,8 @@ spec:
     - name: v1alpha3
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha3 ClusterGroup is deprecated; use crd.antrea.io/v1beta1 ClusterGroup"
       schema:
         openAPIV3Schema:
           type: object

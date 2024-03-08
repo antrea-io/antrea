@@ -44,6 +44,9 @@ spec:
                 externalNode:
                   type: string
     - name: v1alpha1
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 ExternalEntity is deprecated; use crd.antrea.io/v1alpha2
+      ExternalEntity"
       served: false
       storage: false
       schema:
