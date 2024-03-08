@@ -313,6 +313,12 @@ function setup_cluster {
 
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind $args"
+
+  echo "dumping iptables-legacy"
+  docker exec -i kind-control-plane "sh" "-c" "iptables-legacy-save || true; ip6tables-legacy-save || true"
+
+  echo "dumping iptables-nft"
+  docker exec -i kind-control-plane "timeout" "5" "sh" "-c" "iptables-nft-save; ip6tables-nft-save || true"
 }
 
 function run_test {
