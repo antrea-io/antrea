@@ -24,7 +24,6 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
-	"antrea.io/antrea/pkg/antctl/parameter"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
@@ -537,7 +536,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 							shorthand: "D",
 						},
 					},
-					parameterTransform: parameter.NewNetworkPolicyEvaluation,
+					parameterTransform: networkpolicy.NewNetworkPolicyEvaluation,
 					restMethod:         restPost,
 				},
 				addonTransform: networkpolicy.EvaluationTransform,
