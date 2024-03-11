@@ -221,7 +221,7 @@ func (c *Cluster) handleCreateNode(obj interface{}) {
 	if member, err := c.newClusterMember(node); err == nil {
 		_, err := c.mList.Join([]string{member})
 		if err != nil {
-			klog.ErrorS(err, "Processing Node CREATE event error, join cluster failed", "member", member)
+			klog.InfoS("Processing Node CREATE event error, join cluster failed, will retry later", "error", errors.Unwrap(err), "member", member)
 		}
 	} else {
 		klog.ErrorS(err, "Processing Node CREATE event error", "nodeName", node.Name)
