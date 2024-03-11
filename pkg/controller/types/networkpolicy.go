@@ -41,18 +41,24 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 type AppliedToGroup struct {
 	SpanMeta
 	// If the AppliedToGroup is created from GroupSelector, UID is generated from the hash value of GroupSelector.NormalizedName.
-	// If the AppliedToGroup is created for a ClusterGroup, the UID is that of the corresponding ClusterGroup.
+	// If the AppliedToGroup is created for a ClusterGroup/Group, the UID is that of the corresponding ClusterGroup/Group.
 	// If the AppliedToGroup is created for a Service, the UID is generated from the hash value of NamespacedName of the Service.
 	UID types.UID
-	// Name of this group, currently it's same as UID.
+	// In case the AddressGroup is created for a ClusterGroup, it's the Name of the corresponding ClusterGroup.
+	// In case the AddressGroup is created for a Group, it's the Namespace/Name of the corresponding Group.
+	// Otherwise, it's same as UID.
 	Name string
-	// Selector describes how the group selects pods.
-	// Selector can't be used with Service.
+
+	// Selector, Service, and SourceGroup are mutually exclusive ways of selecting GroupMembers for the AppliedToGroup.
+	// For any AppliedToGroup, only one must be set.
+	// Selector describes how the group selects pods using selector.
 	Selector *GroupSelector
 	// Service refers to the Service this group selects. Only a NodePort type Service
 	// can be referred by this field.
-	// Service can't be used with Selector.
 	Service *controlplane.ServiceReference
+	// SourceGroup refers to the ClusterGroup or Group the AppliedToGroup is derived from.
+	SourceGroup string
+
 	// GroupMemberByNode is a mapping from nodeName to a set of GroupMembers on the Node,
 	// either GroupMembers or ExternalEntity on the external node.
 	// It will be converted to a slice of GroupMember for transferring according
@@ -65,14 +71,21 @@ type AppliedToGroup struct {
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
 type AddressGroup struct {
 	SpanMeta
-	// UID is generated from the hash value of GroupSelector.NormalizedName.
-	// In case the AddressGroup is created for a ClusterGroup, the UID is
-	// that of the corresponding ClusterGroup.
+	// If the AddressGroup is created from GroupSelector, UID is generated from the hash value of GroupSelector.NormalizedName.
+	// If the AddressGroup is created for a ClusterGroup/Group, the UID is that of the corresponding ClusterGroup/Group.
 	UID types.UID
-	// Name of this group, currently it's same as UID.
+	// In case the AddressGroup is created for a ClusterGroup, it's the Name of the corresponding ClusterGroup.
+	// In case the AddressGroup is created for a Group, it's the Namespace/Name of the corresponding ClusterGroup.
+	// Otherwise, it's same as UID.
 	Name string
+
+	// Selector and SourceGroup are mutually exclusive ways of selecting GroupMembers for the AddressGroup.
+	// For any AddressGroup, only one must be set.
 	// Selector describes how the group selects pods to get their addresses.
-	Selector GroupSelector
+	Selector *GroupSelector
+	// SourceGroup refers to the ClusterGroup or Group the AddressGroup is derived from.
+	SourceGroup string
+
 	// GroupMembers is a set of GroupMembers selected by this group.
 	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
