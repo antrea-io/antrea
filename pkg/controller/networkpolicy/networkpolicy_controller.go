@@ -623,7 +623,7 @@ func (n *NetworkPolicyController) createAddressGroup(namespace string, podSelect
 	addressGroup := &antreatypes.AddressGroup{
 		UID:      types.UID(normalizedUID),
 		Name:     normalizedUID,
-		Selector: *groupSelector,
+		Selector: groupSelector,
 	}
 	return addressGroup
 }
@@ -1104,6 +1104,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		Name:         addressGroup.Name,
 		UID:          addressGroup.UID,
 		Selector:     addressGroup.Selector,
+		SourceGroup:  addressGroup.SourceGroup,
 		GroupMembers: memberSet,
 		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
 	}
@@ -1123,17 +1124,23 @@ func (c *NetworkPolicyController) getNodeMemberSet(selector labels.Selector) con
 // getAddressGroupMemberSet knows how to construct a GroupMemberSet that contains
 // all the entities selected by an AddressGroup.
 func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.AddressGroup) controlplane.GroupMemberSet {
-	// Check if an internal Group object exists corresponding to this AddressGroup.
-	groupObj, found, _ := n.internalGroupStore.Get(g.Name)
-	if found {
-		// This AddressGroup is derived from a ClusterGroup.
-		// In case the ClusterGroup is defined by a mix of childGroup with selectors and
-		// childGroup with ipBlocks, this function only returns the aggregated GroupMemberSet
-		// computed from childGroup with selectors, as ipBlocks will be processed differently.
-		group := groupObj.(*antreatypes.Group)
-		members, _ := n.getInternalGroupMembers(group)
-		return members
+	// This AddressGroup is derived from a ClusterGroup/Group.
+	if g.SourceGroup != "" {
+		// Check if an internal Group object exists corresponding to this AddressGroup.
+		groupObj, found, _ := n.internalGroupStore.Get(g.SourceGroup)
+		if found {
+			// In case the ClusterGroup/Group is defined by a mix of childGroup with selectors and
+			// childGroup with ipBlocks, this function only returns the aggregated GroupMemberSet
+			// computed from childGroup with selectors, as ipBlocks will be processed differently.
+			group := groupObj.(*antreatypes.Group)
+			members, _ := n.getInternalGroupMembers(group)
+			return members
+		}
+		// The internal Group doesn't exist yet or has been deleted. The AddressGroup selects nothing at the moment.
+		// Once the internalGroup is created, the AddressGroup will be resynced.
+		return nil
 	}
+	// Selector can't be nil when it reaches here.
 	if g.Selector.NodeSelector != nil {
 		return n.getNodeMemberSet(g.Selector.NodeSelector)
 	}
@@ -1304,10 +1311,11 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		if err != nil {
 			klog.ErrorS(err, "Error when getting AppliedTo workloads for AppliedToGroup", "AppliedToGroup", appliedToGroup.Name)
 			updatedAppliedToGroup = &antreatypes.AppliedToGroup{
-				UID:       appliedToGroup.UID,
-				Name:      appliedToGroup.Name,
-				Selector:  appliedToGroup.Selector,
-				SyncError: err,
+				UID:         appliedToGroup.UID,
+				Name:        appliedToGroup.Name,
+				Selector:    appliedToGroup.Selector,
+				SourceGroup: appliedToGroup.SourceGroup,
+				SyncError:   err,
 			}
 		} else {
 			scheduledPodNum, scheduledExtEntityNum := 0, 0
@@ -1346,6 +1354,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 				UID:               appliedToGroup.UID,
 				Name:              appliedToGroup.Name,
 				Selector:          appliedToGroup.Selector,
+				SourceGroup:       appliedToGroup.SourceGroup,
 				GroupMemberByNode: memberSetByNode,
 				SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 			}
@@ -1362,12 +1371,18 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 // getAppliedToWorkloads returns a list of workloads (Pods and ExternalEntities) selected by an AppliedToGroup
 // for standalone selectors or corresponding to a ClusterGroup.
 func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity, error) {
-	// Check if an internal Group object exists corresponding to this AppliedToGroup
-	group, found, _ := n.internalGroupStore.Get(g.Name)
-	if found {
-		// This AppliedToGroup is derived from a ClusterGroup.
-		grp := group.(*antreatypes.Group)
-		return n.getInternalGroupWorkloads(grp)
+	// This AppliedToGroup is derived from a ClusterGroup/Group.
+	if g.SourceGroup != "" {
+		// Check if an internal Group object exists corresponding to this AppliedToGroup
+		group, found, _ := n.internalGroupStore.Get(g.Name)
+		if found {
+			// This AppliedToGroup is derived from a ClusterGroup.
+			grp := group.(*antreatypes.Group)
+			return n.getInternalGroupWorkloads(grp)
+		}
+		// The internal Group doesn't exist yet or has been deleted. The AppliedToGroup selects nothing at the moment.
+		// Once the internalGroup is created, the AppliedToGroup will be resynced.
+		return nil, nil, nil
 	}
 	pods, ees := n.groupingInterface.GetEntities(appliedToGroupType, g.Name)
 	return pods, ees, nil
@@ -1579,8 +1594,8 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			n.addressGroupStore.Create(addressGroup)
 			// For an AddressGroup that selects Nodes via nodeSelector, we calculate its members via NodeLister
 			// directly, instead of groupingInterface which handles Pod and ExternalEntity currently.
-			if addressGroup.Selector.NodeSelector == nil {
-				n.groupingInterface.AddGroup(addressGroupType, addressGroup.Name, &addressGroup.Selector)
+			if addressGroup.Selector != nil && addressGroup.Selector.NodeSelector == nil {
+				n.groupingInterface.AddGroup(addressGroupType, addressGroup.Name, addressGroup.Selector)
 			}
 		}
 
