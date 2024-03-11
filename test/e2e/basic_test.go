@@ -56,6 +56,7 @@ func TestBasic(t *testing.T) {
 	t.Run("testDeletePreviousRoundFlowsOnStartup", func(t *testing.T) { testDeletePreviousRoundFlowsOnStartup(t, data) })
 	t.Run("testGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data, data.testNamespace) })
 	t.Run("testClusterIdentity", func(t *testing.T) { testClusterIdentity(t, data) })
+	t.Run("testLogRotate", func(t *testing.T) { testLogRotate(t, data) })
 }
 
 // testPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
@@ -891,4 +892,15 @@ func testClusterIdentity(t *testing.T, data *TestData) {
 
 	assert.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)
 	assert.NotEqual(t, uuid.Nil, clusterUUID)
+}
+
+func testLogRotate(t *testing.T, data *TestData) {
+	nodeName := nodeName(0)
+	podName := getAntreaPodName(t, data, nodeName)
+	cmd := []string{"logrotate", "-vf", "/etc/logrotate.d/openvswitch-switch"}
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
+	if err != nil {
+		t.Fatalf("Error when running logrotate command in Pod '%s': %v, stdout: %s, stderr: %s", podName, err, stdout, stderr)
+	}
+	t.Logf("Successfully ran logrotate command in Pod '%s': stdout: %s, stderr: %s", podName, stdout, stderr)
 }
