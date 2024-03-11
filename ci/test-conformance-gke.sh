@@ -29,6 +29,7 @@ MODE="report"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
+SKIP_IAM_POLICY_BINDING=false
 TEST_SCRIPT_RC=0
 KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
@@ -88,6 +89,10 @@ case $key in
     --user)
     USER_EMAIL="$2"
     shift 2
+    ;;
+    --skip-iam-policy-binding)
+    SKIP_IAM_POLICY_BINDING=true
+    shift
     ;;
     --gke-zone)
     GKE_ZONE="$2"
@@ -244,6 +249,8 @@ function deliver_antrea_to_gke() {
     elif [[ -n ${USER_EMAIL+x} ]]; then
         gcloud projects add-iam-policy-binding ${GKE_PROJECT} --member user:${USER_EMAIL} --role roles/container.admin
         kubectl create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin --user ${USER_EMAIL}
+    elif [[ "$SKIP_IAM_POLICY_BINDING" == true ]]; then
+        echo "Skipping the IAM Policy Binding for Cluster Management."
     else
         echo "Neither service account or user email info is set, cannot create cluster-admin-binding!"
         echo "Please refer to --help for more information."
