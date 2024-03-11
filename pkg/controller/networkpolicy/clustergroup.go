@@ -281,17 +281,17 @@ func (c *NetworkPolicyController) triggerParentGroupUpdates(grp string) {
 
 // triggerDerivedGroupUpdates triggers processing of AppliedToGroup and AddressGroup derived from the provided group.
 func (c *NetworkPolicyController) triggerDerivedGroupUpdates(grp string) {
-	_, exists, _ := c.appliedToGroupStore.Get(grp)
-	if exists {
+	groups, _ := c.appliedToGroupStore.GetByIndex(store.SourceGroupIndex, grp)
+	for _, group := range groups {
 		// It's fine if the group is deleted after checking its existence as syncAppliedToGroup will do nothing when it
 		// doesn't find the group.
-		c.enqueueAppliedToGroup(grp)
+		c.enqueueAppliedToGroup(group.(*antreatypes.AppliedToGroup).Name)
 	}
-	_, exists, _ = c.addressGroupStore.Get(grp)
-	if exists {
+	groups, _ = c.addressGroupStore.GetByIndex(store.SourceGroupIndex, grp)
+	for _, group := range groups {
 		// It's fine if the group is deleted after checking its existence as syncAddressGroup will do nothing when it
 		// doesn't find the group.
-		c.enqueueAddressGroup(grp)
+		c.enqueueAddressGroup(group.(*antreatypes.AddressGroup).Name)
 	}
 }
 

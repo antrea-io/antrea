@@ -1873,8 +1873,12 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 		{
 			name:           "cg-with-selector",
 			inputGroupName: cgA.Name,
-			expectedAG:     &antreatypes.AddressGroup{UID: cgA.UID, Name: cgA.Name},
-			expectedIPB:    nil,
+			expectedAG: &antreatypes.AddressGroup{
+				UID:         cgA.UID,
+				Name:        cgA.Name,
+				SourceGroup: cgA.Name,
+			},
+			expectedIPB: nil,
 		},
 		{
 			name:           "cg-with-selector-not-found",
@@ -1907,7 +1911,11 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 		{
 			name:           "nested-cg-with-ipblock-and-selector",
 			inputGroupName: cgNested2.Name,
-			expectedAG:     &antreatypes.AddressGroup{UID: cgNested2.UID, Name: cgNested2.Name},
+			expectedAG: &antreatypes.AddressGroup{
+				UID:         cgNested2.UID,
+				Name:        cgNested2.Name,
+				SourceGroup: cgNested2.Name,
+			},
 			expectedIPB: []controlplane.IPBlock{
 				{
 					CIDR:   *cidrIPNet,
@@ -1926,8 +1934,12 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 			name:           "g-with-selector",
 			inputNamespace: gA.Namespace,
 			inputGroupName: gA.Name,
-			expectedAG:     &antreatypes.AddressGroup{UID: gA.UID, Name: fmt.Sprintf("%s/%s", gA.Namespace, gA.Name)},
-			expectedIPB:    nil,
+			expectedAG: &antreatypes.AddressGroup{
+				UID:         gA.UID,
+				Name:        fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
+				SourceGroup: fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
+			},
+			expectedIPB: nil,
 		},
 		{
 			name:           "non-existing-group",
