@@ -4448,7 +4448,7 @@ spec:
       storage: true
       additionalPrinterColumns:
         - jsonPath: .status.phase
-          description: The phase of the Traceflow.
+          description: The phase of the PacketSampling.
           name: Phase
           type: string
         - jsonPath: .spec.source.pod
@@ -4522,10 +4522,16 @@ spec:
                             - format: ipv6
                         protocol:
                           type: integer
+                          minimum: 0
+                          maximum: 255
                         ttl:
                           type: integer
+                          minimum: 0
+                          maximum: 255
                         flags:
                           type: integer
+                          minimum: 0
+                          maximum: 7
                     ipv6Header:
                       type: object
                       properties:
@@ -5770,7 +5776,7 @@ data:
     #  Traceflow: true
 
     # Enable PacketSampling feature which provides packets sampling(capture) feature to diagnose network issue.
-      PacketSampling: true
+    #  PacketSampling: false
 
     # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
     #  NodePortLocal: true
@@ -6180,8 +6186,8 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
-    # Enable PacketSampling feature which provides packets sampling(capture) feature to diagnose network issue.
-      PacketSampling: true
+    # Enable PacketSampling feature which provides packets sampling (capture) feature to diagnose network issue.
+    #  PacketSampling: false
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -6464,10 +6470,8 @@ rules:
       - get
       - watch
       - list
-      - update
       - patch
-      - create
-      - delete
+      - update
   - apiGroups:
       - crd.antrea.io
     resources:
@@ -6885,10 +6889,8 @@ rules:
       - get
       - watch
       - list
-      - update
       - patch
-      - create
-      - delete
+      - update
   - apiGroups:
       - crd.antrea.io
     resources:
@@ -7162,7 +7164,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 378721b5cc4fb1c310e64497b9d308ca53f374212f4ecc17553d7254e0f987d4
+        checksum/config: 3777e1d9dcbf573bc9a97d323d0e2842f33ee99a3f862a4589f98b4d4522e76d
       labels:
         app: antrea
         component: antrea-agent
@@ -7400,7 +7402,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 378721b5cc4fb1c310e64497b9d308ca53f374212f4ecc17553d7254e0f987d4
+        checksum/config: 3777e1d9dcbf573bc9a97d323d0e2842f33ee99a3f862a4589f98b4d4522e76d
       labels:
         app: antrea
         component: antrea-controller

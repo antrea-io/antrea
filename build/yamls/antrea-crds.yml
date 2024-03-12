@@ -4425,7 +4425,7 @@ spec:
       storage: true
       additionalPrinterColumns:
         - jsonPath: .status.phase
-          description: The phase of the Traceflow.
+          description: The phase of the PacketSampling.
           name: Phase
           type: string
         - jsonPath: .spec.source.pod
@@ -4499,10 +4499,16 @@ spec:
                             - format: ipv6
                         protocol:
                           type: integer
+                          minimum: 0
+                          maximum: 255
                         ttl:
                           type: integer
+                          minimum: 0
+                          maximum: 255
                         flags:
                           type: integer
+                          minimum: 0
+                          maximum: 7
                     ipv6Header:
                       type: object
                       properties:
