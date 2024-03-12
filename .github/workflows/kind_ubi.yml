@@ -1,0 +1,76 @@
+name: Kind for UBI
+on:
+  pull_request:
+    branches:
+    - main
+    - release-*
+    - feature/*
+  push:
+    branches:
+    - main
+    - release-*
+    - feature/*
+
+jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        show-progress: false
+    - uses: antrea-io/has-changes@v2
+      id: check_diff
+      with:
+        paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents plugins/*
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
+  build-and-test-ubi:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Free disk space
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
+    - uses: actions/checkout@v4
+      with:
+        show-progress: false
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+    - name: Build Antrea UBI8 Docker image
+      run: |
+        ./hack/build-antrea-linux-all.sh --pull --distro ubi
+    - name: Clean up docker build cache
+      run: |
+        docker builder prune -f
+    - name: Install Kind
+      run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
+        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+        chmod +x ./kind
+        sudo mv kind /usr/local/bin
+    - name: Run basic e2e tests
+      run: |
+        mkdir log
+        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-e2e-kind.sh --encap-mode encap \
+        --antrea-controller-image antrea/antrea-controller-ubi \
+        --antrea-agent-image antrea/antrea-agent-ubi \
+        --run '^TestBasic$'
+    - name: Tar log files
+      if: ${{ failure() }}
+      run: tar -czf log.tar.gz log
+    - name: Upload test log
+      uses: actions/upload-artifact@v4
+      if: ${{ failure() }}
+      with:
+        name: e2e-kind-ubi-basic.tar.gz
+        path: log.tar.gz
+        retention-days: 30
