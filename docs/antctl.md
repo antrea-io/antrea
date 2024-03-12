@@ -308,7 +308,7 @@ antctl get ovsflows -G GROUP_ID1,GROUP_ID2
 ```
 
 OVS flow tables can be specified using table names, or the table numbers.
-`antctl get ovsflow --help` lists all Antrea flow tables. For more information
+`antctl get ovsflows --table-names-only` lists all Antrea flow tables. For more information
 about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](design/ovs-pipeline.md).
 
 Example outputs of dumping Pod and NetworkPolicy OVS flows:
