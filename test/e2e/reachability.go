@@ -381,3 +381,51 @@ func (r *Reachability) PrintSummary(printExpected bool, printObserved bool, prin
 		fmt.Printf("comparison:\n\n%s\n\n\n", comparison.PrettyPrint(""))
 	}
 }
+
+type NPEvalActionType string
+
+const (
+	NPEvalNone    NPEvalActionType = "<NONE>"
+	NPEvalAllow   NPEvalActionType = "Allow"
+	NPEvalDrop    NPEvalActionType = "Drop"
+	NPEvalIsolate NPEvalActionType = "Isolate"
+	NPEvalReject  NPEvalActionType = "Reject"
+)
+
+type NPEvaluationSpec struct {
+	Source      Pod
+	Destination Pod
+	NPName      string
+	Action      NPEvalActionType
+}
+
+type NPEvaluation struct {
+	itemSet    map[string]bool
+	Assertions []*NPEvaluationSpec
+}
+
+func NewNPEvaluation(pods []Pod) *NPEvaluation {
+	itemSet := map[string]bool{}
+	for _, pod := range pods {
+		itemSet[pod.String()] = true
+	}
+	return &NPEvaluation{
+		itemSet:    itemSet,
+		Assertions: []*NPEvaluationSpec{},
+	}
+}
+
+func (e *NPEvaluation) Expect(from, to Pod, npName string, action NPEvalActionType) *NPEvaluation {
+	if _, ok := e.itemSet[from.String()]; !ok {
+		panic(fmt.Errorf("key %s not allowed", from))
+	}
+	if _, ok := e.itemSet[to.String()]; !ok {
+		panic(fmt.Errorf("key %s not allowed", to))
+	}
+	e.Assertions = append(e.Assertions, &NPEvaluationSpec{from, to, npName, action})
+	return e
+}
+
+func (e *NPEvaluation) ExpectNone(from Pod, to Pod) *NPEvaluation {
+	return e.Expect(from, to, string(NPEvalNone), NPEvalNone)
+}
