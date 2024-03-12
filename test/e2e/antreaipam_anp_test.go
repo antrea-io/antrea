@@ -55,9 +55,9 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	_, err = k8sUtils.Bootstrap(regularNamespaces, podsPerNamespace, true, nil, nil)
+	_, _, err = k8sUtils.Bootstrap(regularNamespaces, podsPerNamespace, true, nil, nil)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, false, nil, nil)
+	ips, _, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, false, nil, nil)
 	failOnError(err, t)
 	podIPs = ips
 }

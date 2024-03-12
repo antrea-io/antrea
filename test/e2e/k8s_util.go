@@ -64,6 +64,7 @@ type TestCase struct {
 type TestStep struct {
 	Name           string
 	Reachability   *Reachability
+	NPEvaluation   *NPEvaluation
 	TestResources  []metav1.Object
 	Ports          []int32
 	Protocol       utils.AntreaPolicyProtocol
@@ -972,17 +973,17 @@ func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name strin
 	return nil
 }
 
-func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string, error) {
+func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string, string, error) {
 	log.Infof("Waiting for Pod '%s/%s'", ns, pod)
 	for {
 		k8sPod, err := k.GetPodByLabel(ns, pod)
 		if err != nil && err != ErrPodNotFound {
-			return nil, fmt.Errorf("unable to get Pod '%s/%s': %w", ns, pod, err)
+			return nil, "", fmt.Errorf("unable to get Pod '%s/%s': %w", ns, pod, err)
 		}
 
 		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
 			if k8sPod.Status.PodIP == "" {
-				return nil, fmt.Errorf("unable to get IP of Pod '%s/%s': %w", ns, pod, err)
+				return nil, "", fmt.Errorf("unable to get IP of Pod '%s/%s': %w", ns, pod, err)
 			}
 			var podIPs []string
 			for _, podIP := range k8sPod.Status.PodIPs {
@@ -990,7 +991,7 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 			}
 			log.Debugf("IPs of Pod '%s/%s': %s", ns, pod, podIPs)
 			log.Debugf("Pod running: %s/%s", ns, pod)
-			return podIPs, nil
+			return podIPs, fmt.Sprintf("%s/%s", k8sPod.Namespace, k8sPod.Name), nil
 		}
 		log.Infof("Pod '%s/%s' not ready, waiting ...", ns, pod)
 		time.Sleep(2 * time.Second)
@@ -1109,7 +1110,7 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, podsPerNamespace []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, podsPerNamespace []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, map[string]string, error) {
 	for key, ns := range namespaces {
 		if createNamespaces {
 			if ns.Labels == nil {
@@ -1118,7 +1119,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 			// convenience label for testing
 			ns.Labels["ns"] = ns.Name
 			if _, err := k.CreateOrUpdateNamespace(ns.Name, ns.Labels); err != nil {
-				return nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
+				return nil, nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
 			}
 		}
 		var nodeName string
@@ -1134,32 +1135,34 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 			deployment := ns.Name + pod
 			_, err := k.CreateOrUpdateDeployment(ns.Name, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
 			if err != nil {
-				return nil, fmt.Errorf("unable to create/update Deployment '%s/%s': %w", ns, pod, err)
+				return nil, nil, fmt.Errorf("unable to create/update Deployment '%s/%s': %w", ns, pod, err)
 			}
 		}
 	}
 	var allPods []Pod
 	podIPs := make(map[string][]string, len(podsPerNamespace)*len(namespaces))
+	podRealizedName := make(map[string]string, len(podsPerNamespace)*len(namespaces))
 	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
 			allPods = append(allPods, NewPod(ns.Name, podName))
 		}
 	}
 	for _, pod := range allPods {
-		ips, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
+		ips, realizedName, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
 		if ips == nil || err != nil {
-			return nil, fmt.Errorf("unable to wait for Pod '%s/%s': %w", pod.Namespace(), pod.PodName(), err)
+			return nil, nil, fmt.Errorf("unable to wait for Pod '%s/%s': %w", pod.Namespace(), pod.PodName(), err)
 		}
 		podIPs[pod.String()] = ips
+		podRealizedName[pod.String()] = realizedName
 	}
 
 	// Ensure that all the HTTP servers have time to start properly.
 	// See https://github.com/antrea-io/antrea/issues/472.
 	if err := k.waitForHTTPServers(allPods); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return podIPs, nil
+	return podIPs, podRealizedName, nil
 }
 
 func (k *KubernetesUtils) Cleanup(namespaces map[string]TestNamespaceMeta) {

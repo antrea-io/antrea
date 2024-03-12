@@ -59,6 +59,7 @@ var (
 	podsPerNamespace []string
 	namespaces       map[string]TestNamespaceMeta
 	podIPs           map[string][]string
+	podRealizedNames map[string]string
 	nodes            map[string]string
 	selfNamespace    *crdv1beta1.PeerNamespaces
 )
@@ -72,9 +73,10 @@ const (
 	// Verification of deleting/creating resources timed out.
 	timeout = 10 * time.Second
 	// audit log directory on Antrea Agent
-	logDir          = "/var/log/antrea/networkpolicy/"
-	logfileName     = "np.log"
-	defaultTierName = "application"
+	logDir              = "/var/log/antrea/networkpolicy/"
+	logfileName         = "np.log"
+	defaultTierName     = "application"
+	npEvaluationPodName = "antctl"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -142,9 +144,20 @@ func initialize(t *testing.T, data *TestData, customNamespaces map[string]TestNa
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, true, nil, nil)
+	ips, realizedName, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, true, nil, nil)
 	failOnError(err, t)
 	podIPs = ips
+	podRealizedNames = realizedName
+}
+
+func initializeAntctlRemoteAccess(t *testing.T, data *TestData) {
+	ds, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
+	require.NoError(t, err, "Error when getting antrea DaemonSet")
+	antctlImage := ds.Spec.Template.Spec.Containers[0].Image
+	antctlServiceAccountName := randName("antctl-antrea-e2e-")
+	createAntctlServiceAccount(t, data, antctlServiceAccountName)
+	runAntctlPod(t, data, npEvaluationPodName, antctlServiceAccountName, antctlImage, "/coverage")
+	require.NoError(t, data.podWaitForRunning(30*time.Second, npEvaluationPodName, data.testNamespace), "antctl Pod not in the Running state")
 }
 
 func skipIfAntreaPolicyDisabled(tb testing.TB) {
@@ -469,37 +482,25 @@ func testACNPSourcePort(t *testing.T) {
 
 	testSteps := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
-			nil,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port 81",
-			updatedReachability,
-			[]metav1.Object{builder2.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
-			nil,
-			nil,
+			Name:          "Port 81",
+			Reachability:  updatedReachability,
+			TestResources: []metav1.Object{builder2.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port range 80-81",
-			reachability,
-			[]metav1.Object{builder3.Get()},
-			[]int32{80, 81},
-			ProtocolTCP,
-			0,
-			nil,
-			nil,
-			nil,
+			Name:          "Port range 80-81",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder3.Get()},
+			Ports:         []int32{80, 81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1700,7 +1701,7 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 
 // testACNPPriorityOverride tests priority overriding in three ACNPs. Those three ACNPs are applied in a specific order to
 // test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
-func testACNPPriorityOverride(t *testing.T) {
+func testACNPPriorityOverride(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("acnp-priority1").
 		SetPriority(1.001).
@@ -1742,10 +1743,14 @@ func testACNPPriorityOverride(t *testing.T) {
 	reachabilityAllACNPs.Expect(getPod("z", "c"), getPod("x", "b"), Dropped)
 	reachabilityAllACNPs.Expect(getPod("z", "c"), getPod("x", "c"), Dropped)
 
+	evaluationTwoACNPs := NewNPEvaluation(allPods)
+	evaluationTwoACNPs.Expect(getPod("z", "b"), getPod("x", "a"), NPEvaluationSpec{NPName: "acnp-priority2", Level: BasicEval})
+
 	testStepTwoACNP := []*TestStep{
 		{
 			Name:          "Two Policies with different priorities",
 			Reachability:  reachabilityTwoACNPs,
+			NPEvaluation:  evaluationTwoACNPs,
 			TestResources: []metav1.Object{builder3.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1765,7 +1770,7 @@ func testACNPPriorityOverride(t *testing.T) {
 		{"ACNP PriorityOverride Intermediate", testStepTwoACNP},
 		{"ACNP PriorityOverride All", testStepAll},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testACNPTierOverride tests tier priority overriding in three ACNPs. Each ACNP controls a smaller set of traffic patterns
@@ -4147,6 +4152,13 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			if step.CustomTeardown != nil {
 				step.CustomTeardown()
 			}
+			if !toNPEvaluationLevel[testOptions.npEvaluation].skipEvaluation() && step.NPEvaluation != nil {
+				if data == nil {
+					t.Errorf("test case %s with networkpolicyevaluation must set test data", testCase.Name)
+				}
+				log.Debugf("running networkpolicyevaluation tests for %s/%s", testCase.Name, step.Name)
+				doEvaluation(t, data, step.NPEvaluation)
+			}
 		}
 		log.Debug("Cleaning-up all policies and groups created by this Testcase")
 		cleanupTestCaseResources(t, testCase)
@@ -4168,6 +4180,20 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol AntreaPolicy
 	if connectivity != p.ExpectConnectivity {
 		t.Errorf("Failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v",
 			p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connectivity, p.ExpectConnectivity)
+	}
+}
+
+func doEvaluation(t *testing.T, data *TestData, npEvaluation *NPEvaluation) {
+	antctlArgs := []string{"antctl", "query", "networkpolicyevaluation"}
+	for _, from := range npEvaluation.Items {
+		for _, to := range npEvaluation.Items {
+			if npEvaluation.Truth[from][to].Level.matchLevel(testOptions.npEvaluation) {
+				cmds := append(antctlArgs, "-S", podRealizedNames[from], "-D", podRealizedNames[to])
+				stdout, stderr, err := runAntctlCommandFromPod(data, npEvaluationPodName, cmds)
+				assert.NoError(t, err, "Command was not successful:\n%s", antctlOutput(stdout, stderr))
+				assert.Contains(t, stdout, npEvaluation.Truth[from][to].NPName)
+			}
+		}
 	}
 }
 
@@ -4332,6 +4358,9 @@ func TestAntreaPolicy(t *testing.T) {
 	defer teardownTest(t, data)
 
 	initialize(t, data, nil)
+	if !toNPEvaluationLevel[testOptions.npEvaluation].skipEvaluation() {
+		initializeAntctlRemoteAccess(t, data)
+	}
 
 	// This test group only provides one case for each CR, including ACNP, ANNP, Tier,
 	// ClusterGroup and Group to make sure the corresponding validation webhooks is
@@ -4392,7 +4421,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=RejectNoInfiniteLoop", func(t *testing.T) { testRejectNoInfiniteLoop(t, data, data.testNamespace, data.testNamespace) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
-		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
+		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t, data) })
 		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })
 		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t) })
 		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t) })
