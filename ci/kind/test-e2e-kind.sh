@@ -55,6 +55,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 TESTBED_CMD="$THIS_DIR/kind-setup.sh"
 YML_CMD="$THIS_DIR/../../hack/generate-manifest.sh"
 FLOWAGGREGATOR_YML_CMD="$THIS_DIR/../../hack/generate-manifest-flow-aggregator.sh"
+SFTP_DEPLOYMENT_YML="$THIS_DIR/../../hack/externalnode/sftp-deployment.yml"
 FLOW_VISIBILITY_HELM_VALUES="$THIS_DIR/values-flow-exporter.yml"
 CH_OPERATOR_YML="$THIS_DIR/../../build/yamls/clickhouse-operator-install-bundle.yml"
 FLOW_VISIBILITY_CHART="$THIS_DIR/../../test/e2e/charts/flow-visibility"
@@ -319,6 +320,9 @@ function run_test {
   current_mode=$1
   coverage_args=""
   flow_visibility_args=""
+
+  # used for PacketSampling tests.
+  cat "$SFTP_DEPLOYMENT_YML" | docker exec -i kind-control-plane dd of=/root/sftp-deployment.yml
 
   if $coverage; then
       $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml

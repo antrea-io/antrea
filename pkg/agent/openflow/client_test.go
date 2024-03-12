@@ -1778,6 +1778,130 @@ func Test_client_InstallEgressQoS(t *testing.T) {
 	require.False(t, ok)
 }
 
+func Test_client_InstallPacketSamplingFlows(t *testing.T) {
+	type fields struct {
+	}
+	type args struct {
+		dataplaneTag    uint8
+		senderOnly      bool
+		receiverOnly    bool
+		packet          *binding.Packet
+		endpointsPacket []binding.Packet
+	}
+	srcMAC, _ := net.ParseMAC("11:22:33:44:55:66")
+	dstMAC, _ := net.ParseMAC("11:22:33:44:55:77")
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		wantErr     bool
+		prepareFunc func(*gomock.Controller) *client
+	}{
+		{
+			name:   "packetsampling flow",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+			wantErr: false,
+			// reuse prepare function for traceflow case.
+			prepareFunc: prepareTraceflowFlow,
+		},
+		{
+			name:   "packetsampling flow with receiver only",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				receiverOnly: true,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+			wantErr: false,
+			// reuse prepare function for traceflow case.
+			prepareFunc: prepareTraceflowFlow,
+		},
+		{
+			name:   "packetsampling flow with sender only",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				senderOnly:   true,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+			wantErr: false,
+			// reuse prepare function for traceflow case.
+			prepareFunc: prepareTraceflowFlow,
+		},
+		{
+			name:   "packetsampling flow with endpoints packets",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				senderOnly:   true,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+				endpointsPacket: []binding.Packet{
+					{
+						SourceMAC:      srcMAC,
+						DestinationMAC: dstMAC,
+						SourceIP:       net.ParseIP("1.2.3.4"),
+						DestinationIP:  net.ParseIP("1.2.3.6"),
+						IPProto:        1,
+						TTL:            64,
+					},
+					{
+						SourceMAC:      srcMAC,
+						DestinationMAC: dstMAC,
+						SourceIP:       net.ParseIP("1.2.3.4"),
+						DestinationIP:  net.ParseIP("1.2.3.7"),
+						IPProto:        1,
+						TTL:            64,
+					},
+				},
+			},
+			wantErr: false,
+			// reuse prepare function for traceflow case.
+			prepareFunc: prepareTraceflowFlow,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c := tt.prepareFunc(ctrl)
+			if err := c.InstallPacketSamplingFlows(tt.args.dataplaneTag, tt.args.senderOnly, tt.args.receiverOnly, tt.args.packet, nil, 0, 300); (err != nil) != tt.wantErr {
+				t.Errorf("InstallPacketSamplingFlows() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func Test_client_InstallTraceflowFlows(t *testing.T) {
 	type fields struct {
 	}

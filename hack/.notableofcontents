@@ -38,6 +38,7 @@ docs/noencap-hybrid-modes.md
 docs/octant-plugin-installation.md
 docs/os-issues.md
 docs/ovs-offload.md
+docs/packetsampling-guide.md
 docs/prometheus-integration.md
 docs/secondary-network.md
 docs/security.md

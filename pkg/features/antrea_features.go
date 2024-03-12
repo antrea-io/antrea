@@ -67,6 +67,10 @@ const (
 	// Allows to trace path from a generated packet.
 	Traceflow featuregate.Feature = "Traceflow"
 
+	// alpha: v1.16
+	// Allows to capture sampling packets for a flow.
+	PacketSampling featuregate.Feature = "PacketSampling"
+
 	// alpha: v0.9
 	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
 	FlowExporter featuregate.Feature = "FlowExporter"
@@ -179,6 +183,7 @@ var (
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
 		CleanupStaleUDPSvcConntrack: {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
+		PacketSampling:              {Default: false, PreRelease: featuregate.Alpha},
 		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
@@ -224,6 +229,7 @@ var (
 		SupportBundleCollection,
 		TopologyAwareHints,
 		Traceflow,
+		PacketSampling,
 		TrafficControl,
 		EgressTrafficShaping,
 		EgressSeparateSubnet,
@@ -247,6 +253,7 @@ var (
 		ServiceExternalIP,
 		SupportBundleCollection,
 		Traceflow,
+		PacketSampling,
 	)
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -276,6 +283,7 @@ var (
 		EgressSeparateSubnet:        {},
 		NodeNetworkPolicy:           {},
 		L7FlowExporter:              {},
+		PacketSampling:              {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

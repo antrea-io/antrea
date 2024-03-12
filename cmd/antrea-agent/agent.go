@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/controller/packetsampling"
 	"antrea.io/antrea/pkg/agent/controller/serviceexternalip"
 	"antrea.io/antrea/pkg/agent/controller/traceflow"
 	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
@@ -113,6 +114,7 @@ func run(o *Options) error {
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
+	packetSamplingInformer := crdInformerFactory.Crd().V1alpha1().PacketSamplings()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	trafficControlInformer := crdInformerFactory.Crd().V1alpha2().TrafficControls()
@@ -629,6 +631,23 @@ func run(o *Options) error {
 			o.enableAntreaProxy)
 	}
 
+	var packetSamplingController *packetsampling.Controller
+	if features.DefaultFeatureGate.Enabled(features.PacketSampling) {
+		packetSamplingController = packetsampling.NewPacketSamplingController(
+			k8sClient,
+			crdClient,
+			serviceInformer,
+			endpointsInformer,
+			packetSamplingInformer,
+			ofClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig,
+			serviceCIDRNet,
+			o.enableAntreaProxy,
+		)
+	}
+
 	// TODO: we should call this after installing flows for initial node routes
 	//  and initial NetworkPolicies so that no packets will be mishandled.
 	if err := agentInitializer.FlowRestoreComplete(); err != nil {
@@ -768,6 +787,10 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.PacketSampling) {
+		go packetSamplingController.Run(stopCh)
 	}
 
 	if o.enableAntreaProxy {

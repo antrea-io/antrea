@@ -309,6 +309,10 @@ func (f *featureTraceflow) getRequiredTables() []*Table {
 	return nil
 }
 
+func (f *featurePacketSampling) getRequiredTables() []*Table {
+	return nil
+}
+
 func (f *featureExternalNodeConnectivity) getRequiredTables() []*Table {
 	return []*Table{
 		ConntrackTable,
@@ -333,6 +337,17 @@ type traceableFeature interface {
 		droppedOnly,
 		receiverOnly bool,
 		packet *binding.Packet,
+		ofPort uint32,
+		timeoutSeconds uint16) []binding.Flow
+}
+
+type sampleFeature interface {
+	flowsToSample(dataplaneTag uint8,
+		ovsMetersAreSupported,
+		senderOnly bool,
+		receiverOnly bool,
+		packet *binding.Packet,
+		endpointPackets []binding.Packet,
 		ofPort uint32,
 		timeoutSeconds uint16) []binding.Flow
 }

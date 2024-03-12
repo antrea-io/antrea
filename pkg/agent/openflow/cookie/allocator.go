@@ -39,6 +39,7 @@ const (
 	Multicluster
 	Traceflow
 	ExternalNodeConnectivity
+	PacketSampling
 )
 
 func (c Category) String() string {
@@ -61,6 +62,8 @@ func (c Category) String() string {
 		return "Traceflow"
 	case ExternalNodeConnectivity:
 		return "ExternalNodeConnectivity"
+	case PacketSampling:
+		return "PacketSampling"
 	default:
 		return "Invalid"
 	}
