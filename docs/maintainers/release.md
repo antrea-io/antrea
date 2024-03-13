@@ -35,7 +35,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
    - Github worfklows are run automatically whenever the head branch is updated.
    - Jenkins tests need to be [triggered manually](../../CONTRIBUTING.md#getting-your-pr-verified-by-ci).
    - Cloud tests need to be triggered manually through the
-     [Jenkins web UI](https://jenkins.antrea-ci.rocks/). Admin access is
+     [Jenkins web UI](https://jenkins.antrea.io/). Admin access is
      required. For each job (AKS, EKS, GKE), click on `Build with Parameters`,
      and enter the name of your fork as `ANTREA_REPO` and the name of your
      branch as `ANTREA_GIT_REVISION`. Test starting times need to be staggered:

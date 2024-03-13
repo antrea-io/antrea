@@ -1141,7 +1141,7 @@
           only_trigger_phrase: true
           trigger_permit_all: true
           status_context: jenkins-multicluster
-          status_url: https://jenkins.antrea-ci.rocks/job/antrea-multicluster-for-pull-request
+          status_url: null
           branches:
               - ${{sha1}}
           builders:
