@@ -9,7 +9,7 @@ multiple nodes and offers better environment setup options.
 
 At the moment these Jenkins jobs are running on VMC (VMware on AWS). As a
 result, all jobs' results and details are available publicly
-[here](https://jenkins.antrea-ci.rocks/). We are using Cluster API for vSphere
+[here](https://jenkins.antrea.io/). We are using Cluster API for vSphere
 ([CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)) for
 creating and managing workload clusters. The management cluster is a kind cluster
 on Jenkins node. For each job build, a completely new workload cluster will be created
@@ -18,17 +18,17 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
 ## List of Jenkins jobs
 
-[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/) [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy&subject=AKS%20Conformance/NetworkPolicy%20)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
+[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](https://jenkins.antrea.io/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-gke-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy&subject=AKS%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-aks-conformance-net-policy/)
 
-* [e2e [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-e2e-for-pull-request/):
+* [e2e [gated check-in]](https://jenkins.antrea.io/job/antrea-e2e-for-pull-request/):
   [end-to-end tests](../../test/e2e) for Antrea.
 
-* [conformance [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-conformance-for-pull-request/):
+* [conformance [gated check-in]](https://jenkins.antrea.io/job/antrea-conformance-for-pull-request/):
   community tests using sonobuoy, focusing on "Conformance", and skipping "Slow",
   "Serial", "Disruptive", "Flaky", "Feature", "sig-cli",
   "sig-storage", "sig-auth", "sig-api-machinery", "sig-apps" and "sig-node".
 
-* [network policy [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
+* [network policy [gated check-in]](https://jenkins.antrea.io/job/antrea-networkpolicy-for-pull-request/):
   community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
 
 * ipv6-ds-e2e: e2e tests in a dual-stack setup.
@@ -186,7 +186,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ```
 
 * "/stop-all-jobs": Trigger '/stop-all-jobs' to stop stale running or waiting jobs related to a PR,
-and for now this feature is enabled only for [capv-related jobs](http://jenkins.antrea-ci.rocks/label/antrea-test-node/).
+and for now this feature is enabled only for [capv-related jobs](https://jenkins.antrea.io/label/antrea-test-node/).
 
 ```shell
 #!/bin/bash
@@ -194,10 +194,10 @@ set -e
 ./ci/jenkins/stop-stale-jobs.sh --pull-request "${{ghprbPullId}}" --jenkins "${{JENKINS_URL}}"
 ```
 
-* [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
+* [whole-conformance [daily]](https://jenkins.antrea.io/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 
-* [daily-whole-conformance](https://jenkins.antrea-ci.rocks/job/antrea-daily-whole-conformance-for-period/):
+* [daily-whole-conformance](https://jenkins.antrea.io/job/antrea-daily-whole-conformance-for-period/):
   daily community tests using sonobuoy, with certified-conformance mode. If build fails, Jenkins will
   send an email to <projectantrea-dev@googlegroups.com> for notification.
 
@@ -242,38 +242,38 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test-rancher.sh --cluster-name rancher-test --testcase networkpolicy --registry ${DOCKER_REGISTRY}
 ```
 
-* [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
+* [EKS conformance/network policy [bi-daily]](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
   community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/antrea-io/antrea/issues/690)).\
   Current test environment matrix:
 
   |  K8s Version |    Node Type    |  Node AMI Family |  Status  |
   | :----------: | :-------------: | :--------------: | :------: |
-  |     1.24     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
+  |     1.24     |  EC2 t3.medium  |   AmazonLinux2   |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy)](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)|
 
-* [GKE conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)
+* [GKE conformance/network policy [bi-daily]](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)
   community tests on GKE cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
   Current test environment matrix:
 
   |  K8s Version   |     Node OS     | VPC Native Mode (on by default) |  Status  |
   | :------------: | :-------------: | :-----------------------------: |:-------: |
-  |    1.25.5      |     Ubuntu      |  On                             |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
+  |    1.25.5      |     Ubuntu      |  On                             |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy)](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-gke-conformance-net-policy/)|
 
-* [AKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
+* [AKS conformance/network policy [bi-daily]](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
   community tests on AKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above.\
   Current test environment matrix:
 
   |  K8s Version   |  Node Type          |  Node OS        |  Status  |
   | :------------: | :-----------------: | :-------------: | :------: |
-  |    1.24.9      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
+  |    1.24.9      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](https://jenkins.antrea.io/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
-* [matrix-test [weekly]](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/):
+* [matrix-test [weekly]](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/):
   runs Antrea e2e, K8s Conformance and NetworkPolicy tests, using different combinations of various operating systems and K8s releases.
   |  K8s Version   |  Node OS        |  Status  |
   | :------------: | :-------------: | :------: |
-  |    1.17.5      |  CentOS 7       |[![Build Status](https://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.17.5%2CTEST_OS%3Dcentos-7%2Clabels%3Dantrea-test-node)](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.17.5,TEST_OS=centos-7,labels=antrea-test-node/)|
-  |    1.17.5      |  Photon 3.0     |[![Build Status](https://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.17.5%2CTEST_OS%3Dphoton-3%2Clabels%3Dantrea-test-node)](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.17.5,TEST_OS=photon-3,labels=antrea-test-node/)|
-  |    1.18.2      |  CentOS 7       |[![Build Status](https://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.18.2%2CTEST_OS%3Dcentos-7%2Clabels%3Dantrea-test-node)](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.18.2,TEST_OS=centos-7,labels=antrea-test-node/)|
-  |    1.18.2      |  Photon 3.0     |[![Build Status](https://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.18.2%2CTEST_OS%3Dphoton-3%2Clabels%3Dantrea-test-node)](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.18.2,TEST_OS=photon-3,labels=antrea-test-node/)|
+  |    1.17.5      |  CentOS 7       |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.17.5%2CTEST_OS%3Dcentos-7%2Clabels%3Dantrea-test-node)](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.17.5,TEST_OS=centos-7,labels=antrea-test-node/)|
+  |    1.17.5      |  Photon 3.0     |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.17.5%2CTEST_OS%3Dphoton-3%2Clabels%3Dantrea-test-node)](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.17.5,TEST_OS=photon-3,labels=antrea-test-node/)|
+  |    1.18.2      |  CentOS 7       |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.18.2%2CTEST_OS%3Dcentos-7%2Clabels%3Dantrea-test-node)](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.18.2,TEST_OS=centos-7,labels=antrea-test-node/)|
+  |    1.18.2      |  Photon 3.0     |[![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.18.2%2CTEST_OS%3Dphoton-3%2Clabels%3Dantrea-test-node)](https://jenkins.antrea.io/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.18.2,TEST_OS=photon-3,labels=antrea-test-node/)|
 
 If you need to run the K8s community tests locally, you may use the
 [ci/run-k8s-e2e-tests.sh](../run-k8s-e2e-tests.sh) script. It takes care of
