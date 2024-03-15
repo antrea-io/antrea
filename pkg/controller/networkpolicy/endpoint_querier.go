@@ -146,7 +146,7 @@ func (eq *EndpointQuerierImpl) QueryNetworkPolicyRules(namespace, podName string
 			return nil, err
 		}
 		for _, policy := range policies {
-			egressIndex, ingressIndex := 0, 0
+			egressIndex, ingressIndex := int32(0), int32(0)
 			for _, rule := range policy.(*antreatypes.NetworkPolicy).Rules {
 				for _, addressGroupTrial := range rule.To.AddressGroups {
 					if addressGroupTrial == string(addressGroup.(*antreatypes.AddressGroup).UID) {
@@ -191,10 +191,10 @@ func processEndpointAppliedRules(appliedPolicies []*antreatypes.NetworkPolicy, i
 			// check if the Kubernetes NetworkPolicy creates ingress or egress isolationRules
 			for _, rule := range internalPolicy.Rules {
 				if rule.Direction == controlplane.DirectionIn && !isSourceEndpoint {
-					isolationRules = append(isolationRules, &antreatypes.RuleInfo{Policy: internalPolicy, Index: math.MaxInt,
+					isolationRules = append(isolationRules, &antreatypes.RuleInfo{Policy: internalPolicy, Index: math.MaxInt32,
 						Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
 				} else if rule.Direction == controlplane.DirectionOut && isSourceEndpoint {
-					isolationRules = append(isolationRules, &antreatypes.RuleInfo{Policy: internalPolicy, Index: math.MaxInt,
+					isolationRules = append(isolationRules, &antreatypes.RuleInfo{Policy: internalPolicy, Index: math.MaxInt32,
 						Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
 				}
 			}
@@ -313,7 +313,7 @@ func (eq *policyRuleQuerier) QueryNetworkPolicyEvaluation(entities *controlplane
 	}
 	return &controlplane.NetworkPolicyEvaluationResponse{
 		NetworkPolicy: *endpointAnalysisRule.Policy.SourceRef,
-		RuleIndex:     int32(endpointAnalysisRule.Index),
+		RuleIndex:     endpointAnalysisRule.Index,
 		Rule: controlplane.RuleRef{
 			Direction: endpointAnalysisRule.Rule.Direction,
 			Name:      endpointAnalysisRule.Rule.Name,

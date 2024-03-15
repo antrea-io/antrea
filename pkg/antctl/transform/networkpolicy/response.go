@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/json"
 	"io"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -180,20 +181,27 @@ func EvaluationTransform(reader io.Reader, _ bool, _ map[string]string) (interfa
 var _ common.TableOutput = new(EvaluationResponse)
 
 func (r EvaluationResponse) GetTableHeader() []string {
-	return []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION"}
+	return []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION", "ACTION"}
 }
 
 func (r EvaluationResponse) GetTableRow(_ int) []string {
 	if r.NetworkPolicyEvaluation != nil && r.Response != nil {
+		action := ""
+		if r.Response.Rule.Action != nil {
+			action = string(*r.Response.Rule.Action)
+		} else if r.Response.RuleIndex == math.MaxInt32 {
+			action = "Isolation"
+		}
 		return []string{
 			r.Response.NetworkPolicy.Name,
 			r.Response.NetworkPolicy.Namespace,
 			string(r.Response.NetworkPolicy.Type),
 			common.Int32ToString(r.Response.RuleIndex),
 			string(r.Response.Rule.Direction),
+			action,
 		}
 	}
-	return make([]string, 5)
+	return make([]string, len(r.GetTableHeader()))
 }
 
 func (r EvaluationResponse) SortRows() bool {
