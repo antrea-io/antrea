@@ -15,6 +15,8 @@
 package networkpolicy
 
 import (
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +25,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 func TestListTransform(t *testing.T) {
@@ -176,17 +179,61 @@ func TestListTransform(t *testing.T) {
 
 func TestEvaluationResponseTransform(t *testing.T) {
 	test := EvaluationResponse{&cpv1beta.NetworkPolicyEvaluation{}}
-	assert.Equal(t, []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION"}, test.GetTableHeader())
+	assert.Equal(t, []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION", "ACTION"}, test.GetTableHeader())
 	assert.False(t, test.SortRows())
-	assert.Equal(t, []string{"", "", "", "", ""}, test.GetTableRow(32))
-	test.Response = &cpv1beta.NetworkPolicyEvaluationResponse{
-		NetworkPolicy: cpv1beta.NetworkPolicyReference{
-			Type:      cpv1beta.K8sNetworkPolicy,
-			Namespace: "ns",
-			Name:      "testName",
+	assert.Equal(t, []string{"", "", "", "", "", ""}, test.GetTableRow(32))
+	testDropAction := crdv1beta1.RuleActionDrop
+
+	tests := []struct {
+		name           string
+		testResponse   *cpv1beta.NetworkPolicyEvaluationResponse
+		expectedOutput []string
+	}{
+		{
+			name: "k8s rule",
+			testResponse: &cpv1beta.NetworkPolicyEvaluationResponse{
+				NetworkPolicy: cpv1beta.NetworkPolicyReference{
+					Type:      cpv1beta.K8sNetworkPolicy,
+					Namespace: "ns",
+					Name:      "testK8s",
+				},
+				RuleIndex: 10,
+				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
+			},
+			expectedOutput: []string{"testK8s", "ns", "K8sNetworkPolicy", "10", "In", "Allow"},
 		},
-		RuleIndex: 10,
-		Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
+		{
+			name: "anp rule",
+			testResponse: &cpv1beta.NetworkPolicyEvaluationResponse{
+				NetworkPolicy: cpv1beta.NetworkPolicyReference{
+					Type:      cpv1beta.AntreaNetworkPolicy,
+					Namespace: "ns",
+					Name:      "testANP",
+				},
+				RuleIndex: 10,
+				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn, Action: &testDropAction},
+			},
+			expectedOutput: []string{"testANP", "ns", "AntreaNetworkPolicy", "10", "In", "Drop"},
+		},
+		{
+			name: "k8s default isolation",
+			testResponse: &cpv1beta.NetworkPolicyEvaluationResponse{
+				NetworkPolicy: cpv1beta.NetworkPolicyReference{
+					Type:      cpv1beta.K8sNetworkPolicy,
+					Namespace: "ns",
+					Name:      "testK8s",
+				},
+				RuleIndex: math.MaxInt32,
+				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
+			},
+			expectedOutput: []string{"testK8s", "ns", "K8sNetworkPolicy", fmt.Sprint(math.MaxInt32), "In", "Isolate"},
+		},
 	}
-	assert.Equal(t, []string{"testName", "ns", "K8sNetworkPolicy", "10", "In"}, test.GetTableRow(32))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test.Response = tt.testResponse
+			assert.Equal(t, tt.expectedOutput, test.GetTableRow(32))
+		})
+	}
 }

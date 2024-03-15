@@ -24,7 +24,7 @@ type EndpointQueryResponse struct {
 type Rule struct {
 	PolicyRef v1beta2.NetworkPolicyReference `json:"policyref,omitempty"`
 	Direction v1beta2.Direction              `json:"direction,omitempty"`
-	RuleIndex int                            `json:"ruleindex,omitempty"`
+	RuleIndex int32                          `json:"ruleindex,omitempty"`
 }
 
 type Endpoint struct {
