@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
 	"antrea.io/antrea/pkg/antctl/raw/set"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
+	"antrea.io/antrea/pkg/antctl/raw/test"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
 	"antrea.io/antrea/pkg/antctl/raw/upgrade/apistorage"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
@@ -639,6 +640,11 @@ $ antctl get podmulticaststats pod -n namespace`,
 		},
 	},
 	rawCommands: []rawCommand{
+		{
+			cobraCommand:      test.Command,
+			supportAgent:      true,
+			supportController: true,
+		},
 		{
 			cobraCommand:      supportbundle.Command,
 			supportAgent:      true,
