@@ -364,7 +364,9 @@ function run_test {
     RUN_OPT="-run $run"
   fi
 
-  EXTRA_ARGS="$vlan_args --external-server-ips $(docker inspect external-server -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')"
+  external_server_cid=$(docker ps -f name="^antrea-external-server" --format '{{.ID}}')
+  external_server_ips=$(docker inspect $external_server_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
+  EXTRA_ARGS="$vlan_args --external-server-ips $external_server_ips"
 
   go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 }
