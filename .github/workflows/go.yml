@@ -202,6 +202,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
+    - name: Show git version
+      run: git --version
     - name: Set up Go using version from go.mod
       uses: actions/setup-go@v5
       with:
