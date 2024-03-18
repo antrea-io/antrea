@@ -1,5 +1,22 @@
 # Changelog 1.14
 
+## 1.14.3 - 2024-03-29
+
+### Changed
+
+- Stop using `projects.registry.vmware.com` for user-facing images. ([#6073](https://github.com/antrea-io/antrea/pull/6073), [@antoninbas])
+- Persist TLS certificate and key of antrea-controller and periodically sync the CA cert to improve robustness. ([#5955](https://github.com/antrea-io/antrea/pull/5955), [@tnqn])
+- Disable cgo for all Antrea binaries. ([#5988](https://github.com/antrea-io/antrea/pull/5988), [@antoninbas])
+
+### Fixed
+
+- Disable `libcapng` to make logrotate run as root in UBI images to fix an OVS crash issue. ([#6052](https://github.com/antrea-io/antrea/pull/6052), [@xliuxu])
+- Fix nil pointer dereference when ClusterGroup/Group is used in NetworkPolicy controller. ([#6077](https://github.com/antrea-io/antrea/pull/6077), [@tnqn])
+- Fix race condition in agent Traceflow controller when a tag is associated again with a new Traceflow before the old Traceflow deletion event is processed. ([#5954](https://github.com/antrea-io/antrea/pull/5954), [@tnqn])
+- Change the maximum flags from 7 to 255 to fix the wrong TCP flags validation issue in Traceflow CRD. ([#6050](https://github.com/antrea-io/antrea/pull/6050), [@gran-vmv])
+- Update maximum number of buckets to 700 in OVS group add/insert_bucket message. ([#5942](https://github.com/antrea-io/antrea/pull/5942), [@hongliangl])
+- Use 65000 MTU upper bound for interfaces in encap mode in case of large packets being dropped unexpectedly. ([#5997](https://github.com/antrea-io/antrea/pull/5997), [@antoninbas])
+
 ## 1.14.2 - 2024-01-26
 
 ### Changed
@@ -90,6 +107,7 @@
 [@AJPL88]: https://github.com/AJPL88
 [@Atish-iaf]: https://github.com/Atish-iaf
 [@Dyanngg]: https://github.com/Dyanngg
+[@gran-vmv]: https://github.com/gran-vmv
 [@GraysonWu]: https://github.com/GraysonWu
 [@NamanAg30]: https://github.com/NamanAg30
 [@XinShuYang]: https://github.com/XinShuYang
