@@ -18,6 +18,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,7 @@ import (
 )
 
 func main() {
+	fmt.Println("hello")
 	command := newAgentCommand()
 	if err := command.Execute(); err != nil {
 		os.Exit(1)
