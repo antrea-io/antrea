@@ -24,6 +24,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -52,6 +53,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	nsB := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "nsB",
+			Labels: map[string]string{"foo2": "bar2"},
+		},
+	}
+	nsC := v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nsC",
 			Labels: map[string]string{"foo2": "bar2"},
 		},
 	}
@@ -798,6 +805,21 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					},
 					{
 						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction:       controlplane.DirectionIn,
 						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil).NormalizedName)},
 						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil).NormalizedName)},
@@ -815,12 +837,13 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				AppliedToGroups: []string{
 					getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName),
 					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
 					getNormalizedUID(antreatypes.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil).NormalizedName),
 				},
 				AppliedToPerRule: true,
 			},
-			expectedAppliedToGroups: 3,
-			expectedAddressGroups:   3,
+			expectedAppliedToGroups: 4,
+			expectedAddressGroups:   4,
 		},
 		{
 			name: "with-per-namespace-rule-applied-to-per-rule",
@@ -915,15 +938,103 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Priority: 1,
 						Action:   &dropAction,
 					},
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+						Priority: 1,
+						Action:   &dropAction,
+					},
 				},
 				AppliedToGroups: []string{
 					getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName),
 					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
 				},
 				AppliedToPerRule: true,
 			},
-			expectedAppliedToGroups: 2,
-			expectedAddressGroups:   2,
+			expectedAppliedToGroups: 3,
+			expectedAddressGroups:   3,
+		},
+		{
+			name: "with-same-labels-namespace-rule",
+			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpS", UID: "uidS"},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Priority: p10,
+					Ingress: []crdv1beta1.Rule{
+						{
+							Ports: []crdv1beta1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1beta1.PeerNamespaces{
+										SameLabels: []string{"foo2"},
+									},
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidS",
+				Name: "uidS",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpS",
+					UID:  "uidS",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						AppliedToGroups: []string{
+							getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+							getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
+						},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{
+								getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorB, nil, nil).NormalizedName),
+							},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
+				},
+				AppliedToPerRule: true,
+			},
+			expectedAppliedToGroups: 3,
+			expectedAddressGroups:   1,
 		},
 		{
 			name: "rule-with-to-service",
@@ -1782,6 +1893,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			c.cgStore.Add(&cgA)
 			c.namespaceStore.Add(&nsA)
 			c.namespaceStore.Add(&nsB)
+			c.namespaceStore.Add(&nsC)
 			c.serviceStore.Add(&svcA)
 			c.tierStore.Add(&tierA)
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processClusterNetworkPolicy(tt.inputPolicy)
@@ -1799,9 +1911,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	}
 }
 
-func TestAddCNP(t *testing.T) {
+func TestAddACNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	cnp := getCNP()
+	cnp := getACNP()
 	npc.addCNP(cnp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
@@ -1810,9 +1922,9 @@ func TestAddCNP(t *testing.T) {
 	assert.False(t, done)
 }
 
-func TestUpdateCNP(t *testing.T) {
+func TestUpdateACNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	cnp := getCNP()
+	cnp := getACNP()
 	newCNP := cnp.DeepCopy()
 	// Make a change to the CNP.
 	newCNP.Annotations = map[string]string{"foo": "bar"}
@@ -1824,9 +1936,9 @@ func TestUpdateCNP(t *testing.T) {
 	assert.False(t, done)
 }
 
-func TestDeleteCNP(t *testing.T) {
+func TestDeleteACNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	cnp := getCNP()
+	cnp := getACNP()
 	npc.deleteCNP(cnp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
@@ -2060,7 +2172,7 @@ func TestProcessRefGroupOrClusterGroup(t *testing.T) {
 
 // util functions for testing.
 
-func getCNP() *crdv1beta1.ClusterNetworkPolicy {
+func getACNP() *crdv1beta1.ClusterNetworkPolicy {
 	p10 := float64(10)
 	allowAction := crdv1beta1.RuleActionAllow
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -2211,6 +2323,101 @@ func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
 			c.acnpStore.Add(cnpMatchAllNamespaces)
 			c.cgStore.Add(group)
 			assert.Equal(t, tt.want, c.filterPerNamespaceRuleACNPsByNSLabels(tt.nsLabels))
+		})
+	}
+}
+
+func TestGetACNPsWithRulesMatchingLabelKeysAcrossNSUpdate(t *testing.T) {
+	acnp1 := &crdv1beta1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "acnp-with-tier-label-rule"},
+		Spec: crdv1beta1.ClusterNetworkPolicySpec{
+			AppliedTo: []crdv1beta1.AppliedTo{
+				{
+					NamespaceSelector: &metav1.LabelSelector{},
+				},
+			},
+			Ingress: []crdv1beta1.Rule{
+				{
+					From: []crdv1beta1.NetworkPolicyPeer{
+						{
+							Namespaces: &crdv1beta1.PeerNamespaces{
+								SameLabels: []string{"tier"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	acnp2 := &crdv1beta1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "acnp-with-tier-and-purpose-label-rule"},
+		Spec: crdv1beta1.ClusterNetworkPolicySpec{
+			AppliedTo: []crdv1beta1.AppliedTo{
+				{
+					NamespaceSelector: &metav1.LabelSelector{},
+				},
+			},
+			Ingress: []crdv1beta1.Rule{
+				{
+					From: []crdv1beta1.NetworkPolicyPeer{
+						{
+							Namespaces: &crdv1beta1.PeerNamespaces{
+								SameLabels: []string{"tier", "purpose"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name        string
+		oldNSLabels labels.Set
+		newNSLabels labels.Set
+		want        sets.Set[string]
+	}{
+		{
+			name: "Namespace updated to have tier label",
+			oldNSLabels: map[string]string{
+				"kubernetes.io/metadata.name": "ns1",
+			},
+			newNSLabels: map[string]string{
+				"kubernetes.io/metadata.name": "ns1",
+				"tier":                        "production",
+			},
+			want: sets.New[string](acnp1.Name, acnp2.Name),
+		},
+		{
+			name: "Namespace updated to have purpose label",
+			oldNSLabels: map[string]string{
+				"kubernetes.io/metadata.name": "ns2",
+			},
+			newNSLabels: map[string]string{
+				"kubernetes.io/metadata.name": "ns2",
+				"purpose":                     "test",
+			},
+			want: sets.New[string](acnp2.Name),
+		},
+		{
+			name: "Namespace updated for irrelevant label",
+			oldNSLabels: map[string]string{
+				"kubernetes.io/metadata.name": "ns3",
+				"tier":                        "production",
+			},
+			newNSLabels: map[string]string{
+				"kubernetes.io/metadata.name": "ns2",
+				"tier":                        "production",
+				"owned-by":                    "dev-team",
+			},
+			want: sets.New[string](),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController(nil, []runtime.Object{acnp1, acnp2})
+			c.acnpStore.Add(acnp1)
+			c.acnpStore.Add(acnp2)
+			assert.Equal(t, tt.want, c.getACNPsWithRulesMatchingAnyUpdatedLabels(tt.oldNSLabels, tt.newNSLabels))
 		})
 	}
 }

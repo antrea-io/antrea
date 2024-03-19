@@ -1642,11 +1642,17 @@ spec:
                                   type: object
                             namespaces:
                               type: object
+                              maxProperties: 1
+                              minProperties: 1
                               properties:
                                 match:
+                                  type: string
                                   enum:
                                     - Self
-                                  type: string
+                                sameLabels:
+                                  type: array
+                                  items:
+                                    type: string
                             ipBlock:
                               type: object
                               properties:
@@ -1918,11 +1924,17 @@ spec:
                                   type: object
                             namespaces:
                               type: object
+                              maxProperties: 1
+                              minProperties: 1
                               properties:
                                 match:
+                                  type: string
                                   enum:
                                     - Self
-                                  type: string
+                                sameLabels:
+                                  type: array
+                                  items:
+                                    type: string
                             ipBlock:
                               type: object
                               properties:

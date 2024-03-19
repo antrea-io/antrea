@@ -35,7 +35,7 @@ const (
 var (
 	allPodsPerCluster    []antreae2e.Pod
 	perNamespacePods     []string
-	perClusterNamespaces map[string]string
+	perClusterNamespaces map[string]antreae2e.TestNamespaceMeta
 	podsByNamespace      map[string][]antreae2e.Pod
 	clusterK8sUtilsMap   map[string]*antreae2e.KubernetesUtils
 )
@@ -53,10 +53,10 @@ func failOnError(err error, t *testing.T) {
 // initializeForPolicyTest creates three Pods in three test Namespaces for each test cluster.
 func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 	perNamespacePods = []string{"a", "b", "c"}
-	perClusterNamespaces = make(map[string]string)
-	perClusterNamespaces["x"] = "x"
-	perClusterNamespaces["y"] = "y"
-	perClusterNamespaces["z"] = "z"
+	perClusterNamespaces = make(map[string]antreae2e.TestNamespaceMeta)
+	for _, ns := range []string{"x", "y", "z"} {
+		perClusterNamespaces[ns] = antreae2e.TestNamespaceMeta{Name: ns}
+	}
 
 	allPodsPerCluster = []antreae2e.Pod{}
 	podsByNamespace = make(map[string][]antreae2e.Pod)
@@ -64,8 +64,8 @@ func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 
 	for _, podName := range perNamespacePods {
 		for _, ns := range perClusterNamespaces {
-			allPodsPerCluster = append(allPodsPerCluster, antreae2e.NewPod(ns, podName))
-			podsByNamespace[ns] = append(podsByNamespace[ns], antreae2e.NewPod(ns, podName))
+			allPodsPerCluster = append(allPodsPerCluster, antreae2e.NewPod(ns.Name, podName))
+			podsByNamespace[ns.Name] = append(podsByNamespace[ns.Name], antreae2e.NewPod(ns.Name, podName))
 		}
 	}
 	for clusterName := range data.clusterTestDataMap {

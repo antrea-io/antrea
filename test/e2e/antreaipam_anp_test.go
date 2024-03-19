@@ -28,32 +28,26 @@ import (
 
 // initializeAntreaIPAM must be called after Namespace in antreaIPAMNamespaces created
 func initializeAntreaIPAM(t *testing.T, data *TestData) {
-	p80 = 80
-	p81 = 81
-	p8080 = 8080
-	p8081 = 8081
-	p8082 = 8082
-	p8085 = 8085
-	pods = []string{"a", "b", "c"}
-	namespaces = make(map[string]string)
-	regularNamespaces := make(map[string]string)
+	podsPerNamespace = []string{"a", "b", "c"}
+	namespaces = make(map[string]TestNamespaceMeta)
+	regularNamespaces := make(map[string]TestNamespaceMeta)
 	suffix := randName("")
-	namespaces["x"] = "antrea-x-" + suffix
+	namespaces["x"] = TestNamespaceMeta{
+		Name: "antrea-x-" + suffix,
+	}
 	regularNamespaces["x"] = namespaces["x"]
 	// This function "initializeAntreaIPAM" will be used more than once, and variable "allPods" is global.
 	// It should be empty every time when "initializeAntreaIPAM" is performed, otherwise there will be unexpected
 	// results.
 	allPods = []Pod{}
 	podsByNamespace = make(map[string][]Pod)
-
 	for _, ns := range antreaIPAMNamespaces {
-		namespaces[ns] = ns
+		namespaces[ns] = TestNamespaceMeta{Name: ns}
 	}
-
-	for _, podName := range pods {
+	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
-			allPods = append(allPods, NewPod(ns, podName))
-			podsByNamespace[ns] = append(podsByNamespace[ns], NewPod(ns, podName))
+			allPods = append(allPods, NewPod(ns.Name, podName))
+			podsByNamespace[ns.Name] = append(podsByNamespace[ns.Name], NewPod(ns.Name, podName))
 		}
 	}
 
@@ -61,9 +55,9 @@ func initializeAntreaIPAM(t *testing.T, data *TestData) {
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	_, err = k8sUtils.Bootstrap(regularNamespaces, pods, true, nil, nil)
+	_, err = k8sUtils.Bootstrap(regularNamespaces, podsPerNamespace, true, nil, nil)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods, false, nil, nil)
+	ips, err := k8sUtils.Bootstrap(namespaces, podsPerNamespace, false, nil, nil)
 	failOnError(err, t)
 	podIPs = ips
 }
@@ -195,35 +189,29 @@ func testAntreaIPAMACNP(t *testing.T, protocol e2eutils.AntreaPolicyProtocol, ac
 		SetAppliedToGroup([]e2eutils.ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "c"}}})
 	if isIngress {
 		builder.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, false, nil, ruleAction, "", "", nil)
+			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
 		builder2.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, false, nil, ruleAction, "", "", nil)
+			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
 		builder3.AddIngress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, false, nil, ruleAction, "", "", nil)
+			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
 	} else {
 		builder.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, false, nil, ruleAction, "", "", nil)
+			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
 		builder2.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, false, nil, ruleAction, "", "", nil)
+			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
 		builder3.AddEgress(protocol, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil,
-			nil, nil, nil, nil, false, nil, ruleAction, "", "", nil)
+			nil, nil, nil, nil, nil, nil, ruleAction, "", "", nil)
 	}
 
 	reachability := NewReachability(allPods, action)
-	for _, ns := range namespaces {
-		for _, pod := range []string{"/a", "/b", "/c"} {
-			reachability.Expect(Pod(ns+pod), Pod(ns+pod), Connected)
-		}
-	}
+	reachability.ExpectSelf(allPods, Connected)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get(), builder2.Get(), builder3.Get()},
-			[]int32{80},
-			protocol,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get(), builder2.Get(), builder3.Get()},
+			Ports:         []int32{80},
+			Protocol:      protocol,
 		},
 	}
 	testCase := []*TestCase{
