@@ -5221,12 +5221,29 @@ func schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref common.ReferenceCallback) co
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "PeerNamespaces describes criteria for selecting Pod/ExternalEntity from matched Namespaces. Only one of the criteria can be set.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"match": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Selects from the same Namespace of the appliedTo workloads.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sameLabels": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Selects Namespaces that share the same values for the given set of label keys with the appliedTo Namespace. Namespaces must have all the label keys.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
 				},
