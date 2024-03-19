@@ -52,6 +52,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/monitortool"
 	"antrea.io/antrea/pkg/agent/multicast"
 	mcroute "antrea.io/antrea/pkg/agent/multicluster"
 	"antrea.io/antrea/pkg/agent/nodeip"
@@ -928,6 +929,11 @@ func run(o *Options) error {
 	if enableFlowExporter {
 		go flowExporter.Run(stopCh)
 	}
+
+	// Start the node latency monitor.
+	// TODO: Set interval and timeout in config.
+	nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(nodeInformer, time.Second*10, time.Second*5)
+	go nodeLatencyMonitor.Run(stopCh)
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent")
