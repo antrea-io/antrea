@@ -15,6 +15,7 @@
 package externalnode
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -126,13 +127,13 @@ func (c *ExternalNodeController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting controller", "name", controllerName)
 	defer klog.InfoS("Shutting down controller", "name", controllerName)
 
-	if err := wait.PollImmediateUntil(5*time.Second, func() (done bool, err error) {
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		if err = c.reconcile(); err != nil {
 			klog.ErrorS(err, "ExternalNodeController failed during reconciliation")
 			return false, nil
 		}
 		return true, nil
-	}, stopCh); err != nil {
+	}); err != nil {
 		klog.Info("Stopped ExternalNodeController reconciliation")
 		return
 	}
@@ -600,7 +601,7 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 	}()
 
 	// Wait until the host interface created by OVS is removed.
-	if err = wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (bool, error) {
+	if err = wait.PollUntilContextTimeout(context.TODO(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
 		return !hostInterfaceExists(hostIFName), nil
 	}); err != nil {
 		return fmt.Errorf("failed to wait for host interface %s deletion in 2s, err %v", hostIFName, err)

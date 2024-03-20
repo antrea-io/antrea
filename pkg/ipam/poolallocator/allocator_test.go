@@ -15,6 +15,7 @@
 package poolallocator
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -60,7 +61,7 @@ func newTestIPPoolAllocator(pool *crdv1a2.IPPool, stopCh <-chan struct{}) *IPPoo
 
 	var allocator *IPPoolAllocator
 	var err error
-	wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
+	wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true, func(ctx context.Context) (bool, error) {
 		allocator, err = NewIPPoolAllocator(pool.Name, crdClient, pools.Lister())
 		if err != nil {
 			return false, nil
@@ -377,11 +378,10 @@ func TestHas(t *testing.T) {
 
 	_, _, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
 	require.NoError(t, err)
-	err = wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
+	require.Eventually(t, func() bool {
 		has, _ := allocator.hasPod(testNamespace, "fakePod")
-		return has, nil
-	})
-	require.NoError(t, err)
+		return has
+	}, 1*time.Second, 100*time.Millisecond)
 
 	has, err := allocator.hasPod(testNamespace, "realPod")
 	require.NoError(t, err)

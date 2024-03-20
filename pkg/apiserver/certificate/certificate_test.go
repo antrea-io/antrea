@@ -203,7 +203,7 @@ func TestApplyServerCert(t *testing.T) {
 			if tt.selfSignedCert && tt.testRotate {
 				oldCertKeyContent := got.getCertificate()
 				go got.Run(ctx, 1)
-				err := wait.Poll(time.Second, 8*time.Second, func() (bool, error) {
+				err := wait.PollUntilContextTimeout(context.Background(), time.Second, 8*time.Second, false, func(ctx context.Context) (bool, error) {
 					newCertKeyContent := got.getCertificate()
 					equal := bytes.Equal(oldCertKeyContent, newCertKeyContent)
 					return !equal, nil

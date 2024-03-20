@@ -81,7 +81,7 @@ var (
 
 func createMockClients(t *testing.T, objects ...client.Object) (client.Client, *MockMemberClusterStatusManager) {
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
-		WithObjects(objects...).Build()
+		WithObjects(objects...).WithStatusSubresource(objects...).Build()
 
 	mockCtrl := gomock.NewController(t)
 	mockStatusManager := NewMockMemberClusterStatusManager(mockCtrl)

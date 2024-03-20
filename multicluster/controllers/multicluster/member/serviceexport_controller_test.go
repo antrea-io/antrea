@@ -17,6 +17,7 @@ limitations under the License.
 package member
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -271,7 +272,9 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	}
 
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP,
-		nginx2Svc, existSvcExport, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).Build()
+		nginx2Svc, existSvcExport, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
+		WithStatusSubresource(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
+		Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
@@ -335,13 +338,15 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 		fakeClient           client.WithWatch
 	}{
 		{
-			name:           "with Endpoint API",
-			fakeClient:     fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, common.EPNginx, existSvcExport).Build(),
+			name: "with Endpoint API",
+			fakeClient: fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, common.EPNginx, existSvcExport).
+				WithStatusSubresource(common.SvcNginx, common.EPNginx, existSvcExport).Build(),
 			endpointIPType: "ClusterIP",
 		},
 		{
-			name:                 "with EndpointSlice API",
-			fakeClient:           fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, epsNginx, existSvcExport).Build(),
+			name: "with EndpointSlice API",
+			fakeClient: fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, epsNginx, existSvcExport).
+				WithStatusSubresource(common.SvcNginx, epsNginx, existSvcExport).Build(),
 			endpointIPType:       "PodIP",
 			endpointSliceEnabled: true,
 		},
@@ -568,6 +573,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 }
 
 func Test_objectMapFunc(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		name string
 		obj  client.Object
@@ -593,7 +599,7 @@ func Test_objectMapFunc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := objectMapFunc(tt.obj); !reflect.DeepEqual(got, tt.want) {
+			if got := objectMapFunc(ctx, tt.obj); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Test_objectMapFunc() = %v, want %v", got, tt.want)
 			}
 		})
@@ -601,6 +607,7 @@ func Test_objectMapFunc(t *testing.T) {
 }
 
 func Test_endpointSliceMapFunc(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		name string
 		obj  client.Object
@@ -637,7 +644,7 @@ func Test_endpointSliceMapFunc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := endpointSliceMapFunc(tt.obj); !reflect.DeepEqual(got, tt.want) {
+			if got := endpointSliceMapFunc(ctx, tt.obj); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Test_endpointSliceMapFunc() = %v, want %v", got, tt.want)
 			}
 		})
@@ -696,20 +703,21 @@ func TestClusterSetMapFunc_ServiceExport(t *testing.T) {
 			},
 		},
 	}
+	ctx := context.Background()
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(serviceExports).Build()
 	r := NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, clusterSet.Namespace)
-	requests := r.clusterSetMapFunc(clusterSet)
+	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
 
 	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "mismatch_ns")
-	requests = r.clusterSetMapFunc(clusterSet)
+	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 
 	// non-existing ClusterSet
 	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "default")
 	r.installedSvcs.Add(&svcInfo{name: "nginx-stale", namespace: "default"})
 	r.installedEps.Add(&epInfo{name: "nginx-stale", namespace: "default"})
-	requests = r.clusterSetMapFunc(clusterSet2)
+	requests = r.clusterSetMapFunc(ctx, clusterSet2)
 	assert.Equal(t, []reconcile.Request{}, requests)
 	assert.Equal(t, 0, len(r.installedSvcs.List()))
 	assert.Equal(t, 0, len(r.installedEps.List()))

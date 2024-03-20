@@ -167,13 +167,14 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIP, egressNodeIP)
 
 			var err error
-			err = wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
-				egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-				if err != nil {
-					return false, err
-				}
-				return egress.Status.EgressNode == egressNode, nil
-			})
+			err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second, false,
+				func(ctx context.Context) (bool, error) {
+					egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+					if err != nil {
+						return false, err
+					}
+					return egress.Status.EgressNode == egressNode, nil
+				})
 			assert.NoError(t, err, "Egress failed to reach expected status")
 
 			t.Log("Checking the client IP of a Pod whose Egress has been created in advance")
@@ -313,7 +314,7 @@ func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 
 			egress := data.createEgress(t, "egress-vlan", nil, map[string]string{"antrea-e2e": clientPod1}, pool.Name, "", nil)
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-			err := wait.PollImmediate(500*time.Millisecond, 3*time.Second, func() (done bool, err error) {
+			err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 3*time.Second, true, func(ctx context.Context) (done bool, err error) {
 				egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
@@ -456,7 +457,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			defer data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			// Use Poll to wait the interval before the first run to detect the case that the IP is assigned to any Node
 			// when it's not supposed to.
-			err := wait.Poll(500*time.Millisecond, 3*time.Second, func() (done bool, err error) {
+			err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 3*time.Second, false, func(ctx context.Context) (done bool, err error) {
 				egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
@@ -495,20 +496,21 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 
 			checkEIPStatus := func(expectedUsed int) {
 				var gotUsed, gotTotal int
-				err := wait.PollImmediate(200*time.Millisecond, 2*time.Second, func() (done bool, err error) {
-					pool, err := data.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), pool.Name, metav1.GetOptions{})
-					if err != nil {
-						return false, fmt.Errorf("failed to get ExternalIPPool: %v", err)
-					}
-					gotUsed, gotTotal = pool.Status.Usage.Used, pool.Status.Usage.Total
-					if expectedUsed != pool.Status.Usage.Used {
-						return false, nil
-					}
-					if tt.expectedTotal != pool.Status.Usage.Total {
-						return false, nil
-					}
-					return true, nil
-				})
+				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 2*time.Second, true,
+					func(ctx context.Context) (done bool, err error) {
+						pool, err := data.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), pool.Name, metav1.GetOptions{})
+						if err != nil {
+							return false, fmt.Errorf("failed to get ExternalIPPool: %v", err)
+						}
+						gotUsed, gotTotal = pool.Status.Usage.Used, pool.Status.Usage.Total
+						if expectedUsed != pool.Status.Usage.Used {
+							return false, nil
+						}
+						if tt.expectedTotal != pool.Status.Usage.Total {
+							return false, nil
+						}
+						return true, nil
+					})
 				require.NoError(t, err, "ExternalIPPool status not match: expectedTotal=%d, got=%d, expectedUsed=%d, got=%d", tt.expectedTotal, gotTotal, expectedUsed, gotUsed)
 			}
 			checkEIPStatus(1)
@@ -516,13 +518,14 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			err = data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			require.NoError(t, err, "Failed to delete Egress")
 			if egress.Status.EgressNode != "" {
-				err := wait.PollImmediate(200*time.Millisecond, timeout, func() (done bool, err error) {
-					exists, err := hasIP(data, egress.Status.EgressNode, egress.Spec.EgressIP)
-					if err != nil {
-						return false, fmt.Errorf("check ip error: %v", err)
-					}
-					return !exists, nil
-				})
+				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
+					func(ctx context.Context) (done bool, err error) {
+						exists, err := hasIP(data, egress.Status.EgressNode, egress.Spec.EgressIP)
+						if err != nil {
+							return false, fmt.Errorf("check ip error: %v", err)
+						}
+						return !exists, nil
+					})
 				require.NoError(t, err, "Found stale IP (%s) exists on Node (%s)", egress.Spec.EgressIP, egress.Status.EgressNode)
 			}
 			checkEIPStatus(0)
@@ -600,13 +603,14 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 
 			_, err = data.checkEgressState(egress.Name, tt.newEgressIP, tt.newNode, "", time.Second)
 			require.NoError(t, err)
-			err = wait.PollImmediate(200*time.Millisecond, timeout, func() (done bool, err error) {
-				exists, err := hasIP(data, tt.originalNode, tt.originalEgressIP)
-				if err != nil {
-					return false, fmt.Errorf("check ip error: %v", err)
-				}
-				return !exists, nil
-			})
+			err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
+				func(ctx context.Context) (done bool, err error) {
+					exists, err := hasIP(data, tt.originalNode, tt.originalEgressIP)
+					if err != nil {
+						return false, fmt.Errorf("check ip error: %v", err)
+					}
+					return !exists, nil
+				})
 			require.NoError(t, err, "Found stale IP (%s) exists on Node (%s)", tt.originalEgressIP, tt.originalNode)
 		})
 	}
@@ -831,7 +835,7 @@ func testEgressUpdateBandwidth(t *testing.T, data *TestData) {
 func (data *TestData) checkEgressState(egressName, expectedIP, expectedNode, otherNode string, timeout time.Duration) (*v1beta1.Egress, error) {
 	var egress *v1beta1.Egress
 	var expectedNodeHasIP, otherNodeHasIP bool
-	pollErr := wait.PollImmediate(200*time.Millisecond, timeout, func() (bool, error) {
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
 		var err error
 		egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egressName, metav1.GetOptions{})
 		if err != nil {
@@ -976,16 +980,17 @@ func (data *TestData) createEgress(t *testing.T, generateName string, matchExpre
 }
 
 func (data *TestData) waitForEgressRealized(egress *v1beta1.Egress) (*v1beta1.Egress, error) {
-	err := wait.PollImmediate(200*time.Millisecond, waitEgressRealizedTimeout, func() (done bool, err error) {
-		egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		if egress.Spec.EgressIP == "" || egress.Status.EgressNode == "" {
-			return false, nil
-		}
-		return true, nil
-	})
+	err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, waitEgressRealizedTimeout, true,
+		func(ctx context.Context) (done bool, err error) {
+			egress, err = data.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			if egress.Spec.EgressIP == "" || egress.Status.EgressNode == "" {
+				return false, nil
+			}
+			return true, nil
+		})
 	if err != nil {
 		return nil, fmt.Errorf("wait for Egress %#v realized failed: %v", egress, err)
 	}
@@ -996,7 +1001,7 @@ func (data *TestData) waitForEgressRealized(egress *v1beta1.Egress) (*v1beta1.Eg
 func assertClientIP(data *TestData, t *testing.T, pod, container, serverIP string, clientIPs ...string) {
 	var exeErr error
 	var stdout, stderr string
-	err := wait.Poll(100*time.Millisecond, 5*time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 5*time.Second, false, func(ctx context.Context) (done bool, err error) {
 		url := getHTTPURLFromIPPort(serverIP, 8080, "clientip")
 		stdout, stderr, exeErr = data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
 		if exeErr != nil {
@@ -1022,14 +1027,15 @@ func assertClientIP(data *TestData, t *testing.T, pod, container, serverIP strin
 func assertConnError(data *TestData, t *testing.T, pod, container, serverIP string) {
 	var exeErr error
 	var stdout, stderr string
-	err := wait.Poll(100*time.Millisecond, 2*time.Second, func() (done bool, err error) {
-		url := getHTTPURLFromIPPort(serverIP, 8080, "clientip")
-		stdout, stderr, exeErr = data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, url, container, 5)
-		if exeErr != nil {
-			return true, nil
-		}
-		return false, nil
-	})
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, false,
+		func(ctx context.Context) (done bool, err error) {
+			url := getHTTPURLFromIPPort(serverIP, 8080, "clientip")
+			stdout, stderr, exeErr = data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, url, container, 5)
+			if exeErr != nil {
+				return true, nil
+			}
+			return false, nil
+		})
 	require.NoError(t, err, "Failed to get expected error, stdout: %v, stderr: %v, err: %v", stdout, stderr, exeErr)
 
 }

@@ -32,9 +32,10 @@ type REST struct {
 }
 
 var (
-	_ rest.Storage = &REST{}
-	_ rest.Scoper  = &REST{}
-	_ rest.Getter  = &REST{}
+	_ rest.Storage              = &REST{}
+	_ rest.Scoper               = &REST{}
+	_ rest.Getter               = &REST{}
+	_ rest.SingularNameProvider = &REST{}
 )
 
 // NewREST returns a REST object that will work against API services.
@@ -75,4 +76,8 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 
 func (r *REST) NamespaceScoped() bool {
 	return true
+}
+
+func (r *REST) GetSingularName() string {
+	return "groupassociation"
 }

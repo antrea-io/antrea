@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -30,9 +29,9 @@ type FakeClusterGroupMembers struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var clustergroupmembersResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "clustergroupmembers"}
+var clustergroupmembersResource = v1beta2.SchemeGroupVersion.WithResource("clustergroupmembers")
 
-var clustergroupmembersKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "ClusterGroupMembers"}
+var clustergroupmembersKind = v1beta2.SchemeGroupVersion.WithKind("ClusterGroupMembers")
 
 // Get takes name of the clusterGroupMembers, and returns the corresponding clusterGroupMembers object, and an error if there is any.
 func (c *FakeClusterGroupMembers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.ClusterGroupMembers, err error) {

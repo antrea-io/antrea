@@ -108,7 +108,7 @@ type ServicePort interface {
 	InternalPolicyLocal() bool
 	// InternalTrafficPolicy returns service InternalTrafficPolicy
 	InternalTrafficPolicy() *v1.ServiceInternalTrafficPolicyType
-	// HintsAnnotation returns the value of the v1.AnnotationTopologyAwareHints annotation or
+	// HintsAnnotation returns the value of the v1.DeprecatedAnnotationTopologyAwareHints annotation or
 	// service.kubernetes.io/topology-mode annotation.
 	HintsAnnotation() string
 	// ExternallyAccessible returns true if the service port is reachable via something

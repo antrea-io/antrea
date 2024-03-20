@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -34,9 +33,9 @@ type FakeClusterSets struct {
 	ns   string
 }
 
-var clustersetsResource = schema.GroupVersionResource{Group: "multicluster.crd.antrea.io", Version: "v1alpha1", Resource: "clustersets"}
+var clustersetsResource = v1alpha1.SchemeGroupVersion.WithResource("clustersets")
 
-var clustersetsKind = schema.GroupVersionKind{Group: "multicluster.crd.antrea.io", Version: "v1alpha1", Kind: "ClusterSet"}
+var clustersetsKind = v1alpha1.SchemeGroupVersion.WithKind("ClusterSet")
 
 // Get takes name of the clusterSet, and returns the corresponding clusterSet object, and an error if there is any.
 func (c *FakeClusterSets) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterSet, err error) {

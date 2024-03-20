@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -33,9 +32,9 @@ type FakeSupportBundleCollections struct {
 	Fake *FakeCrdV1alpha1
 }
 
-var supportbundlecollectionsResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1alpha1", Resource: "supportbundlecollections"}
+var supportbundlecollectionsResource = v1alpha1.SchemeGroupVersion.WithResource("supportbundlecollections")
 
-var supportbundlecollectionsKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1alpha1", Kind: "SupportBundleCollection"}
+var supportbundlecollectionsKind = v1alpha1.SchemeGroupVersion.WithKind("SupportBundleCollection")
 
 // Get takes name of the supportBundleCollection, and returns the corresponding supportBundleCollection object, and an error if there is any.
 func (c *FakeSupportBundleCollections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SupportBundleCollection, err error) {

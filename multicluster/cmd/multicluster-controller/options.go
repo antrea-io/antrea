@@ -17,10 +17,15 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/spf13/pflag"
+	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -31,6 +36,7 @@ type Options struct {
 	configFile     string
 	SelfSignedCert bool
 	options        ctrl.Options
+	Namespace      string
 	// The Service ClusterIP range used in the member cluster.
 	ServiceCIDR string
 	// PodCIDRs is the Pod IP address CIDRs of the member cluster.
@@ -49,6 +55,8 @@ type Options struct {
 	// ClusterCalimCRDAvailable indicates if the ClusterClaim CRD is available or not
 	// in the cluster.
 	ClusterCalimCRDAvailable bool
+	// WebhookConfig contains the controllers webhook configuration
+	WebhookConfig mcsv1alpha1.ControllerWebhook
 }
 
 func newOptions() *Options {
@@ -64,10 +72,8 @@ func (o *Options) complete(args []string) error {
 	ctrlConfig := &mcsv1alpha1.MultiClusterConfig{}
 	if len(o.configFile) > 0 {
 		klog.InfoS("Loading config", "file", o.configFile)
-		options, err = options.AndFrom(ctrl.ConfigFile().AtPath(o.configFile).OfKind(ctrlConfig))
-		if err != nil {
-			klog.ErrorS(err, "Failed to load options")
-			return fmt.Errorf("failed to load options from configuration file %s", o.configFile)
+		if err = o.loadConfigFromFile(ctrlConfig); err != nil {
+			return err
 		}
 		o.options = options
 		if ctrlConfig.ServiceCIDR != "" {
@@ -87,6 +93,7 @@ func (o *Options) complete(args []string) error {
 		o.ServiceCIDR = ctrlConfig.ServiceCIDR
 		o.PodCIDRs = cidrs
 		o.GatewayIPPrecedence = ctrlConfig.GatewayIPPrecedence
+		o.WebhookConfig = ctrlConfig.Webhook
 		if ctrlConfig.EndpointIPType == "" {
 			o.EndpointIPType = common.EndpointIPTypeClusterIP
 		} else {
@@ -110,10 +117,33 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 
 func (o *Options) setDefaults() {
 	o.options = ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     "0",
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
 		HealthProbeBindAddress: ":8080",
-		LeaderElection:         false,
 	}
+}
+
+func (o *Options) loadConfigFromFile(multiclusterConfig *mcsv1alpha1.MultiClusterConfig) error {
+	data, err := os.ReadFile(o.configFile)
+	if err != nil {
+		return err
+	}
+	codecs := serializer.NewCodecFactory(scheme)
+	if err := yaml.Unmarshal(data, multiclusterConfig); err != nil {
+		return err
+	}
+	if err = runtime.DecodeInto(codecs.UniversalDecoder(), data, multiclusterConfig); err != nil {
+		return err
+	}
+
+	if multiclusterConfig.Metrics.BindAddress != "" {
+		o.options.Metrics.BindAddress = multiclusterConfig.Metrics.BindAddress
+	}
+	if multiclusterConfig.Health.HealthProbeBindAddress != "" {
+		o.options.HealthProbeBindAddress = multiclusterConfig.Health.HealthProbeBindAddress
+	}
+
+	return nil
 }

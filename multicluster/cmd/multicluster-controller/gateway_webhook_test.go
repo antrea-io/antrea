@@ -26,7 +26,6 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -173,10 +172,7 @@ func TestWebhookGatewayEvents(t *testing.T) {
 		},
 	}
 
-	decoder, err := admission.NewDecoder(common.TestScheme)
-	if err != nil {
-		klog.ErrorS(err, "Error constructing a decoder")
-	}
+	decoder := admission.NewDecoder(common.TestScheme)
 	for _, tt := range tests {
 		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
 		if tt.existingGateway != nil {

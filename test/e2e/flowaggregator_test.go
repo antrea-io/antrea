@@ -1437,7 +1437,7 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 	var recordSlices []string
 	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
 	// We set the timeout to 9s (5.5s plus one more aggregatorActiveFlowRecordTimeout) to make the ToExternalFlows test more stable
-	err := wait.PollImmediate(500*time.Millisecond, exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout*2, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout*2, true, func(ctx context.Context) (bool, error) {
 		var rc int
 		var err error
 		var cmd string
@@ -1499,7 +1499,7 @@ func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort str
 	}
 	// ClickHouse output expected to be checked after IPFIX collector.
 	// Waiting additional 4x commit interval to be adequate for 3 commit attempts.
-	err := wait.PollImmediate(500*time.Millisecond, aggregatorClickHouseCommitInterval*4, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, aggregatorClickHouseCommitInterval*4, true, func(ctx context.Context) (bool, error) {
 		queryOutput, _, err := data.RunCommandFromPod(flowVisibilityNamespace, clickHousePodName, "clickhouse", cmd)
 		if err != nil {
 			return false, err
@@ -1791,7 +1791,7 @@ func addLabelToTestPods(t *testing.T, data *TestData, label string, podNames []s
 		testPod.Labels["targetLabel"] = label
 		_, err = data.clientset.CoreV1().Pods(data.testNamespace).Update(context.TODO(), testPod, metav1.UpdateOptions{})
 		require.NoErrorf(t, err, "Error when adding label to %s", testPod.Name)
-		err = wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 			pod, err := data.clientset.CoreV1().Pods(data.testNamespace).Get(context.TODO(), testPod.Name, metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
@@ -1863,7 +1863,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData) error {
 	}
 	podName := flowAggPod.Name
 	command := []string{"antctl", "get", "recordmetrics", "-o", "json"}
-	if err := wait.Poll(defaultInterval, 2*defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, 2*defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		stdout, _, err := runAntctl(podName, command, data)
 		if err != nil {
 			t.Logf("Error when requesting recordmetrics, %v", err)

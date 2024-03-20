@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
@@ -100,9 +99,9 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			go c.groupEntityIndex.Run(stopCh)
 			go c.Run(stopCh)
 
-			assert.NoError(t, wait.Poll(10*time.Millisecond, time.Second, func() (done bool, err error) {
-				return index.HasSynced(), nil
-			}), "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
+			assert.Eventually(t, func() bool {
+				return index.HasSynced()
+			}, time.Second, 10*time.Millisecond, "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
 		})
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
@@ -32,9 +31,9 @@ type FakeAddressGroups struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var addressgroupsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "addressgroups"}
+var addressgroupsResource = v1beta2.SchemeGroupVersion.WithResource("addressgroups")
 
-var addressgroupsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "AddressGroup"}
+var addressgroupsKind = v1beta2.SchemeGroupVersion.WithKind("AddressGroup")
 
 // Get takes name of the addressGroup, and returns the corresponding addressGroup object, and an error if there is any.
 func (c *FakeAddressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AddressGroup, err error) {

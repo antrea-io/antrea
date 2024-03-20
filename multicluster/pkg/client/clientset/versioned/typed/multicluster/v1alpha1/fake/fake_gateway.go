@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -34,9 +33,9 @@ type FakeGateways struct {
 	ns   string
 }
 
-var gatewaysResource = schema.GroupVersionResource{Group: "multicluster.crd.antrea.io", Version: "v1alpha1", Resource: "gateways"}
+var gatewaysResource = v1alpha1.SchemeGroupVersion.WithResource("gateways")
 
-var gatewaysKind = schema.GroupVersionKind{Group: "multicluster.crd.antrea.io", Version: "v1alpha1", Kind: "Gateway"}
+var gatewaysKind = v1alpha1.SchemeGroupVersion.WithKind("Gateway")
 
 // Get takes name of the gateway, and returns the corresponding gateway object, and an error if there is any.
 func (c *FakeGateways) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Gateway, err error) {

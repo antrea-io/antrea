@@ -111,7 +111,7 @@ func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, tok
 	require.Equal(t, systemv1beta1.SupportBundleStatusCollecting, bundle.Status)
 	// Waiting for the generation to be completed.
 	ddl := time.After(defaultTimeout)
-	err = wait.PollImmediateUntil(200*time.Millisecond, func() (done bool, err error) {
+	err = wait.PollUntilContextCancel(context.TODO(), 200*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
 		select {
 		case <-ddl:
 			return false, fmt.Errorf("collecting timeout")
@@ -120,7 +120,7 @@ func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, tok
 		bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return bundle.Status == systemv1beta1.SupportBundleStatusCollected, nil
-	}, nil)
+	})
 	require.NoError(t, err)
 	// Checking the complete status.
 	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})

@@ -35,8 +35,10 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	controllerruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -148,7 +150,7 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient,
-		secureServing, getCaConfig(isLeader, o.options.Namespace))
+		secureServing, getCaConfig(isLeader, o.Namespace))
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}
@@ -157,25 +159,31 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	}
 
 	if o.SelfSignedCert {
-		o.options.CertDir = selfSignedCertDir
+		o.options.Metrics.CertDir = selfSignedCertDir
+		o.WebhookConfig.CertDir = selfSignedCertDir
 	} else {
-		o.options.CertDir = certDir
+		o.options.Metrics.CertDir = certDir
+		o.WebhookConfig.CertDir = certDir
 	}
+	o.options.WebhookServer = webhook.NewServer(webhook.Options{
+		Port:    *o.WebhookConfig.Port,
+		Host:    o.WebhookConfig.Host,
+		CertDir: o.WebhookConfig.CertDir,
+	})
 
 	namespaceFieldSelector := fields.SelectorFromSet(fields.Set{"metadata.namespace": env.GetPodNamespace()})
-	o.options.NewCache = cache.BuilderWithOptions(cache.Options{
-		SelectorsByObject: cache.SelectorsByObject{
-			&mcv1alpha1.Gateway{}: {
-				Field: namespaceFieldSelector,
-			},
-			&mcv1alpha2.ClusterSet{}: {
-				Field: namespaceFieldSelector,
-			},
-			&mcv1alpha1.MemberClusterAnnounce{}: {
-				Field: namespaceFieldSelector,
-			},
+	o.options.Cache.DefaultFieldSelector = namespaceFieldSelector
+	o.options.Cache.ByObject = map[controllerruntimeclient.Object]cache.ByObject{
+		&mcv1alpha1.Gateway{}: {
+			Field: namespaceFieldSelector,
 		},
-	})
+		&mcv1alpha2.ClusterSet{}: {
+			Field: namespaceFieldSelector,
+		},
+		&mcv1alpha1.MemberClusterAnnounce{}: {
+			Field: namespaceFieldSelector,
+		},
+	}
 
 	// EndpointSlice is enabled in AntreaProxy by default since v1.11, so Antrea MC
 	// will use EndpointSlice API by default to keep consistent with AntreaProxy.
@@ -198,9 +206,13 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	}
 	o.ClusterCalimCRDAvailable = clusterClaimCRDAvailable
 
-	mgr, err := ctrl.NewManager(k8sConfig, o.options)
+	mgr, err := ctrl.NewManager(k8sConfig, manager.Options{
+		Scheme:                 o.options.Scheme,
+		Metrics:                o.options.Metrics,
+		HealthProbeBindAddress: o.options.HealthProbeBindAddress,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("error starting manager: %v", err)
+		return nil, fmt.Errorf("error creating manager: %v", err)
 	}
 
 	//+kubebuilder:scaffold:builder

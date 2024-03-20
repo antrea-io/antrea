@@ -594,7 +594,7 @@ func (c *Controller) SetDenyConnStore(denyConnStore *connections.DenyConnectionS
 // Run will not return until stopCh is closed.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	attempts := 0
-	if err := wait.PollImmediateUntil(200*time.Millisecond, func() (bool, error) {
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 200*time.Millisecond, true, func(ctx context.Context) (bool, error) {
 		if attempts%10 == 0 {
 			klog.Info("Waiting for Antrea client to be ready")
 		}
@@ -603,7 +603,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 			return false, nil
 		}
 		return true, nil
-	}, stopCh); err != nil {
+	}); err != nil {
 		klog.Info("Stopped waiting for Antrea client")
 		return
 	}

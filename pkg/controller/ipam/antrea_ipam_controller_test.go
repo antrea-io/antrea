@@ -125,17 +125,18 @@ func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas 
 
 func verifyPoolAllocatedSize(t *testing.T, poolName string, poolLister listers.IPPoolLister, size int) {
 
-	err := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		pool, err := poolLister.Get(poolName)
-		if err != nil {
-			return false, nil
-		}
-		if len(pool.Status.IPAddresses) == size {
-			return true, nil
-		}
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			pool, err := poolLister.Get(poolName)
+			if err != nil {
+				return false, nil
+			}
+			if len(pool.Status.IPAddresses) == size {
+				return true, nil
+			}
 
-		return false, nil
-	})
+			return false, nil
+		})
 
 	require.NoError(t, err)
 }
@@ -189,13 +190,14 @@ func TestStatefulSetLifecycle(t *testing.T) {
 			var allocator *poolallocator.IPPoolAllocator
 			var err error
 			// Wait until pool propagates to the informer
-			pollErr := wait.PollImmediate(100*time.Millisecond, 3*time.Second, func() (bool, error) {
-				allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, controller.crdClient, controller.poolLister)
-				if err != nil {
-					return false, nil
-				}
-				return true, nil
-			})
+			pollErr := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 3*time.Second, true,
+				func(ctx context.Context) (bool, error) {
+					allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, controller.crdClient, controller.poolLister)
+					if err != nil {
+						return false, nil
+					}
+					return true, nil
+				})
 			require.NoError(t, pollErr)
 			defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
 
@@ -262,7 +264,7 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	go controller.Run(stopCh)
 
 	// verify two stale entries were deleted, one updated to Reserved status
-	err := wait.PollImmediate(100*time.Millisecond, 2*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
 		pool, err := controller.poolLister.Get(pool.Name)
 		if err != nil {
 			return false, nil

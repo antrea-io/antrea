@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -180,9 +181,9 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	}
 
 	t.Logf("Checking that tunnel port has been created")
-	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (found bool, err error) {
 		return doesOVSPortExist(), nil
-	}); err == wait.ErrWaitTimeout {
+	}); wait.Interrupted(err) {
 		t.Fatalf("Timed out while waiting for OVS tunnel port to be created")
 	} else if err != nil {
 		t.Fatalf("Error while waiting for OVS tunnel port to be created")
@@ -192,9 +193,9 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	data.redeployAntrea(t, deployAntreaDefault)
 
 	t.Logf("Checking that tunnel port has been deleted")
-	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (found bool, err error) {
 		return !doesOVSPortExist(), nil
-	}); err == wait.ErrWaitTimeout {
+	}); wait.Interrupted(err) {
 		t.Fatalf("Timed out while waiting for OVS tunnel port to be deleted")
 	} else if err != nil {
 		t.Fatalf("Error while waiting for OVS tunnel port to be	deleted")

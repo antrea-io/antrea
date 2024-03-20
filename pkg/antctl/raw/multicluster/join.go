@@ -276,10 +276,11 @@ func waitForMemberClusterReady(cmd *cobra.Command, k8sClient client.Client) erro
 }
 
 func waitForClusterSetReady(client client.Client, name string, namespace string, clusterID string) error {
-	return wait.PollImmediate(
+	return wait.PollUntilContextTimeout(context.TODO(),
 		1*time.Second,
 		1*time.Minute,
-		func() (bool, error) {
+		true,
+		func(ctx context.Context) (bool, error) {
 			clusterSet := &mcv1alpha2.ClusterSet{}
 			if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, clusterSet); err != nil {
 				if apierrors.IsNotFound(err) {

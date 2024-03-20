@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -34,9 +33,9 @@ type FakeClusterClaims struct {
 	ns   string
 }
 
-var clusterclaimsResource = schema.GroupVersionResource{Group: "multicluster.crd.antrea.io", Version: "v1alpha2", Resource: "clusterclaims"}
+var clusterclaimsResource = v1alpha2.SchemeGroupVersion.WithResource("clusterclaims")
 
-var clusterclaimsKind = schema.GroupVersionKind{Group: "multicluster.crd.antrea.io", Version: "v1alpha2", Kind: "ClusterClaim"}
+var clusterclaimsKind = v1alpha2.SchemeGroupVersion.WithKind("ClusterClaim")
 
 // Get takes name of the clusterClaim, and returns the corresponding clusterClaim object, and an error if there is any.
 func (c *FakeClusterClaims) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.ClusterClaim, err error) {

@@ -97,7 +97,7 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
-	ctx, _ := wait.ContextForChannel(stopCh)
+	ctx := wait.ContextForChannel(stopCh)
 	go wait.UntilWithContext(ctx, c.cleanUpExpiredMemberClusterAnnounces, memberClusterAnnounceStaleTime/2)
 	<-stopCh
 }

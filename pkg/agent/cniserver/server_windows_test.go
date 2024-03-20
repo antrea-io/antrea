@@ -540,13 +540,14 @@ func TestCmdAdd(t *testing.T) {
 				waiter.wait()
 				// Wait for the completion of async function "setInterfaceMTUFunc", otherwise it may lead to the
 				// race condition failure.
-				wait.PollImmediate(time.Millisecond*10, time.Second, func() (done bool, err error) {
-					mtuSet, exist := hostIfaces.Load(ovsPortName)
-					if !exist {
-						return false, nil
-					}
-					return mtuSet.(bool), nil
-				})
+				wait.PollUntilContextTimeout(context.Background(), time.Millisecond*10, time.Second, true,
+					func(ctx context.Context) (done bool, err error) {
+						mtuSet, exist := hostIfaces.Load(ovsPortName)
+						if !exist {
+							return false, nil
+						}
+						return mtuSet.(bool), nil
+					})
 			}
 			waiter.close()
 		})

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -33,9 +32,9 @@ type FakeEgresses struct {
 	Fake *FakeCrdV1alpha2
 }
 
-var egressesResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1alpha2", Resource: "egresses"}
+var egressesResource = v1alpha2.SchemeGroupVersion.WithResource("egresses")
 
-var egressesKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1alpha2", Kind: "Egress"}
+var egressesKind = v1alpha2.SchemeGroupVersion.WithKind("Egress")
 
 // Get takes name of the egress, and returns the corresponding egress object, and an error if there is any.
 func (c *FakeEgresses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.Egress, err error) {
