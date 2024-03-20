@@ -2752,7 +2752,10 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 	// copy antctl coverage files from node to the coverage directory
 	var cmd string
 	if testOptions.providerName == "kind" {
-		cmd = fmt.Sprintf("/bin/sh -c find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
+		// Do not use single quotes here, as they will be interpreted literally.
+		// RunDockerExecCommand does not invoke a shell by default and it will split this
+		// string into a list of args.
+		cmd = fmt.Sprintf("find %s -maxdepth 1 -name antctl*.out", cpNodeCoverageDir)
 	} else {
 		cmd = fmt.Sprintf("find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
 	}
