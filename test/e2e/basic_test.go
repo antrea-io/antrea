@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -380,7 +381,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
-	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (found bool, err error) {
 		var llRoute *Route
 		routes, _, llRoute, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
@@ -397,7 +398,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 			return false, fmt.Errorf("IPv6 link-local route not found")
 		}
 		return true, nil
-	}); err == wait.ErrWaitTimeout {
+	}); wait.Interrupted(err) {
 		t.Fatalf("Not enough gateway routes after %v", defaultTimeout)
 	} else if err != nil {
 		t.Fatalf("Error while waiting for gateway routes: %v", err)
@@ -478,7 +479,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 
 	// We expect the agent to delete the extra route we added and add back the route we deleted
 	t.Logf("Waiting for gateway routes to converge")
-	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		var llRoute *Route
 		newRoutes, _, llRoute, err := getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
@@ -509,7 +510,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		}
 		// We haven't found the deleted route, keep trying
 		return false, nil
-	}); err == wait.ErrWaitTimeout {
+	}); wait.Interrupted(err) {
 		t.Errorf("Gateway routes did not converge after %v", defaultTimeout)
 	} else if err != nil {
 		t.Fatalf("Error while waiting for gateway routes to converge: %v", err)
@@ -567,7 +568,7 @@ func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
 	}
 	var routes []Route
-	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		_, routes, _, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
 			t.Logf("Failed to get Service gateway routes: %v", err)
@@ -739,7 +740,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 
 	waitForNextRoundNum := func(roundNum uint64) uint64 {
 		var nextRoundNum uint64
-		if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
+		if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 			nextRoundNum = roundNumber(podName)
 			if nextRoundNum != roundNum {
 				return true, nil
@@ -814,7 +815,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 	// In theory there should be no need to poll here because the agent only persists the new
 	// round number after stale flows have been deleted, but it is probably better not to make
 	// this assumption in an e2e test.
-	if err := wait.PollImmediate(defaultInterval, smallTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, smallTimeout, true, func(ctx context.Context) (bool, error) {
 		return !checkFlow(), nil
 
 	}); err != nil {
@@ -880,7 +881,7 @@ func testClusterIdentity(t *testing.T, data *TestData) {
 	const retryInterval = time.Second
 	const timeout = 10 * time.Second
 	var clusterUUID uuid.UUID
-	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		clusterIdentity, _, err := clusterIdentityProvider.Get()
 		if err != nil {
 			return false, nil

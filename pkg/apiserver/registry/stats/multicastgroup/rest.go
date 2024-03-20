@@ -49,10 +49,11 @@ func NewREST(p statsProvider) *REST {
 }
 
 var (
-	_ rest.Storage = &REST{}
-	_ rest.Scoper  = &REST{}
-	_ rest.Getter  = &REST{}
-	_ rest.Lister  = &REST{}
+	_ rest.Storage              = &REST{}
+	_ rest.Scoper               = &REST{}
+	_ rest.Getter               = &REST{}
+	_ rest.Lister               = &REST{}
+	_ rest.SingularNameProvider = &REST{}
 )
 
 type statsProvider interface {
@@ -138,4 +139,8 @@ func formatPodReferenceList(pods []statsv1alpha1.PodReference, max int) string {
 
 func (r *REST) NamespaceScoped() bool {
 	return false
+}
+
+func (r *REST) GetSingularName() string {
+	return "multicastgroup"
 }

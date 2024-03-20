@@ -36,7 +36,7 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/metrics/testutil"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	mccommon "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	agentconfig "antrea.io/antrea/pkg/agent/config"
@@ -1080,9 +1080,9 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 					endpoint1Address,
 				},
 				Conditions: discovery.EndpointConditions{
-					Ready:       pointer.Bool(true),
-					Serving:     pointer.Bool(true),
-					Terminating: pointer.Bool(false),
+					Ready:       ptr.To(true),
+					Serving:     ptr.To(true),
+					Terminating: ptr.To(false),
 				},
 				NodeName: &endpoint1NodeName,
 			},
@@ -1091,9 +1091,9 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 					endpoint2Address,
 				},
 				Conditions: discovery.EndpointConditions{
-					Ready:       pointer.Bool(true),
-					Serving:     pointer.Bool(true),
-					Terminating: pointer.Bool(false),
+					Ready:       ptr.To(true),
+					Serving:     ptr.To(true),
+					Terminating: ptr.To(false),
 				},
 				NodeName: &endpoint2NodeName,
 			},

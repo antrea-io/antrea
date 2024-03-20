@@ -278,7 +278,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 }
 
 func WaitNetworkPolicyRealize(nodeName string, table *openflow.Table, policyRules int, data *TestData) error {
-	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, *realizeTimeout, true, func(ctx context.Context) (bool, error) {
 		return checkRealize(nodeName, table, policyRules, data)
 	})
 }

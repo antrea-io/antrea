@@ -831,7 +831,7 @@ func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
 			mockController.addOrUpdateGroupEvent(tc.e)
 
 			if tc.groupChanged {
-				err := wait.PollImmediate(time.Millisecond*100, time.Second*3, func() (done bool, err error) {
+				err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second*3, true, func(ctx context.Context) (done bool, err error) {
 					if tc.e.eType == groupJoin {
 						return mockController.localGroupHasInstalled(groupKey) && mockController.groupHasInstalled(groupKey), nil
 					} else {

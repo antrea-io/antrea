@@ -18,6 +18,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -472,7 +473,7 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 
 	listCmd := fmt.Sprintf("ip route show table 0 exact %s", podCIDR)
 
-	err = wait.PollImmediate(100*time.Millisecond, 2*time.Second, func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		if err != nil {
 			return false, err
@@ -490,7 +491,7 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 	route.SyncInterval = 2 * time.Second
 	go routeClient.Run(stopCh)
 
-	err = wait.Poll(1*time.Second, 2*route.SyncInterval, func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 2*route.SyncInterval, false, func(ctx context.Context) (done bool, err error) {
 		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
 		if err != nil {
 			return false, err

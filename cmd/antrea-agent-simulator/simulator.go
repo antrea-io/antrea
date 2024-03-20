@@ -67,7 +67,7 @@ func run() error {
 
 	// Add loop to check whether client is ready
 	attempts := 0
-	if err := wait.PollImmediateUntil(200*time.Millisecond, func() (bool, error) {
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 200*time.Millisecond, true, func(ctx context.Context) (bool, error) {
 		if attempts%10 == 0 {
 			klog.Info("Waiting for Antrea client to be ready")
 		}
@@ -76,7 +76,7 @@ func run() error {
 			return false, nil
 		}
 		return true, nil
-	}, stopCh); err != nil {
+	}); err != nil {
 		klog.Info("Stopped waiting for Antrea client")
 		return err
 	}

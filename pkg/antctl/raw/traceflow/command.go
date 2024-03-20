@@ -184,7 +184,7 @@ func runE(cmd *cobra.Command, _ []string) error {
 	}
 
 	var res *v1beta1.Traceflow
-	err = wait.Poll(1*time.Second, option.timeout, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, option.timeout, false, func(ctx context.Context) (bool, error) {
 		res, err = client.CrdV1beta1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -194,7 +194,7 @@ func runE(cmd *cobra.Command, _ []string) error {
 		}
 		return true, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		err = errors.New("timeout waiting for Traceflow done")
 		// Still output the Traceflow results if any.
 		if res == nil {

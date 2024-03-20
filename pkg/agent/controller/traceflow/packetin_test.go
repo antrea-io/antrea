@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -145,7 +145,7 @@ func TestParseCapturedPacket(t *testing.T) {
 		SrcIP: tcpPktIn.NWSrc.String(), DstIP: tcpPktIn.NWDst.String(), Length: int32(tcpPktIn.Length),
 		IPHeader: &crdv1beta1.IPHeader{Protocol: int32(tcpPktIn.Protocol), TTL: int32(tcpPktIn.TTL), Flags: int32(tcpPktIn.Flags)},
 		TransportHeader: crdv1beta1.TransportHeader{
-			TCP: &crdv1beta1.TCPHeader{SrcPort: int32(tcp.PortSrc), DstPort: int32(tcp.PortDst), Flags: pointer.Int32(int32(tcp.Code))},
+			TCP: &crdv1beta1.TCPHeader{SrcPort: int32(tcp.PortSrc), DstPort: int32(tcp.PortDst), Flags: ptr.To(int32(tcp.Code))},
 		},
 	}
 

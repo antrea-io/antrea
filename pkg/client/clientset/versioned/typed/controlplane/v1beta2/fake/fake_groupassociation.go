@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -31,9 +30,9 @@ type FakeGroupAssociations struct {
 	ns   string
 }
 
-var groupassociationsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "groupassociations"}
+var groupassociationsResource = v1beta2.SchemeGroupVersion.WithResource("groupassociations")
 
-var groupassociationsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "GroupAssociation"}
+var groupassociationsKind = v1beta2.SchemeGroupVersion.WithKind("GroupAssociation")
 
 // Get takes name of the groupAssociation, and returns the corresponding groupAssociation object, and an error if there is any.
 func (c *FakeGroupAssociations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.GroupAssociation, err error) {

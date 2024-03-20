@@ -17,6 +17,7 @@ limitations under the License.
 package member
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -373,16 +374,18 @@ func TestClusterSetMapFunc(t *testing.T) {
 			},
 		},
 	}
+	ctx := context.Background()
+
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, node1).Build()
 	r := NewNodeReconciler(fakeClient, common.TestScheme, "default", "10.200.1.1/16", "", nil)
-	requests := r.clusterSetMapFunc(clusterSet)
+	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
 
-	requests = r.clusterSetMapFunc(deletedClusterSet)
+	requests = r.clusterSetMapFunc(ctx, deletedClusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 
 	r = NewNodeReconciler(fakeClient, common.TestScheme, "mismatch_ns", "10.200.1.1/16", "", nil)
-	requests = r.clusterSetMapFunc(clusterSet)
+	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 }
 

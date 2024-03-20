@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
@@ -32,9 +31,9 @@ type FakeAppliedToGroups struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var appliedtogroupsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "appliedtogroups"}
+var appliedtogroupsResource = v1beta2.SchemeGroupVersion.WithResource("appliedtogroups")
 
-var appliedtogroupsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "AppliedToGroup"}
+var appliedtogroupsKind = v1beta2.SchemeGroupVersion.WithKind("AppliedToGroup")
 
 // Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
 func (c *FakeAppliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AppliedToGroup, err error) {

@@ -193,7 +193,7 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		totalSessions += sessionsPerAddressFamily
 	}
 
-	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		var ingressStats *v1alpha1.NetworkPolicyStats
 		for _, np := range []string{"test-networkpolicy-ingress", "test-networkpolicy-egress"} {
 			stats, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(data.testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
@@ -1133,7 +1133,7 @@ func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func
 }
 
 func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditionType v1beta1.AgentConditionType, expectedStatus corev1.ConditionStatus) {
-	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		cmds := []string{"antctl", "get", "agentinfo", "-o", "json"}
 		t.Logf("cmds: %s", cmds)
 

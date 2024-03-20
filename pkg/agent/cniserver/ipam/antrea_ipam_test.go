@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sync"
@@ -376,7 +377,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
-		err = wait.Poll(time.Millisecond*200, time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
 			ipPool, _ := antreaIPAMController.ipPoolLister.Get(podNamespace)
 			found := false
 			for _, ipAddress := range ipPool.Status.IPAddresses {
@@ -410,7 +411,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
-		err = wait.Poll(time.Millisecond*200, time.Second, func() (bool, error) {
+		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
 			ipPool, _ := antreaIPAMController.ipPoolLister.Get(podNamespace)
 			found := false
 			for _, ipAddress := range ipPool.Status.IPAddresses {
@@ -492,14 +493,15 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testDel("pear10", false)
 
 	// Verify last update was propagated to informer
-	err = wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		owns, err := testDriver.Check(cniArgsMap["orange2"], k8sArgsMap["orange2"], networkConfig)
-		if err != nil {
-			// container already relelased
-			return true, nil
-		}
-		return !owns, nil
-	})
+	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			owns, err := testDriver.Check(cniArgsMap["orange2"], k8sArgsMap["orange2"], networkConfig)
+			if err != nil {
+				// container already relelased
+				return true, nil
+			}
+			return !owns, nil
+		})
 
 	require.NoError(t, err, "orange2 pod was not released")
 
@@ -575,7 +577,7 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 					},
 				},
 			},
-			expectedRes: fmt.Errorf("Antrea IPAM driver not ready: timed out waiting for the condition"),
+			expectedRes: fmt.Errorf("Antrea IPAM driver not ready: context deadline exceeded"),
 		},
 		{
 			name: "Add secondary network successfully",

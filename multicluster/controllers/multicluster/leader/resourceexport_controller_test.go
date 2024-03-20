@@ -167,7 +167,8 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 	}
 	expectedSubsets := common.EPNginxSubset2
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existResImport).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existResImport).
+		WithStatusSubresource(existingResExport1, existingResExport2, existResImport).Build()
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	if _, err := r.Reconcile(common.TestCtx, epResReq); err != nil {
 		t.Errorf("ResourceExport Reconciler should handle Endpoints ResourceExport delete event successfully but got error = %v", err)
@@ -383,7 +384,7 @@ func TestResourceExportReconciler_handleSingleServiceUpdateEvent(t *testing.T) {
 	}
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-service"}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
-		WithObjects(newResExport, existResImport).Build()
+		WithObjects(newResExport, existResImport).WithStatusSubresource(newResExport, existResImport).Build()
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	if _, err := r.Reconcile(common.TestCtx, svcResReq); err != nil {
 		t.Errorf("ResourceExport Reconciler should handle Service ResourceExport update event successfully but got error = %v", err)
@@ -419,7 +420,7 @@ func TestResourceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 	}
 
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
-		WithObjects(newResExport, existingResExport2, existResImport).Build()
+		WithObjects(newResExport, existingResExport2, existResImport).WithStatusSubresource(newResExport, existingResExport2, existResImport).Build()
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	if _, err := r.Reconcile(common.TestCtx, svcResReq); err != nil {
 		if !assert.Contains(t, err.Error(), "don't match existing") {

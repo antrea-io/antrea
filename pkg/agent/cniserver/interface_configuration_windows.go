@@ -18,6 +18,7 @@
 package cniserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -505,27 +506,28 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 	go func() {
 		ifaceName := fmt.Sprintf("vEthernet (%s)", endpointName)
 		var err error
-		pollErr := wait.PollImmediate(100*time.Millisecond, 60*time.Second, func() (bool, error) {
-			containerAccess.lockContainer(containerID)
-			defer containerAccess.unlockContainer(containerID)
-			currentEP, ok := ic.getEndpoint(endpointName)
-			if !ok {
-				klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint", endpointName)
+		pollErr := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 60*time.Second, true,
+			func(ctx context.Context) (bool, error) {
+				containerAccess.lockContainer(containerID)
+				defer containerAccess.unlockContainer(containerID)
+				currentEP, ok := ic.getEndpoint(endpointName)
+				if !ok {
+					klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint", endpointName)
+					return true, nil
+				}
+				if currentEP.Id != expectedEP.Id {
+					klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint", endpointName)
+					return true, nil
+				}
+				if !hostInterfaceExistsFunc(ifaceName) {
+					klog.V(2).InfoS("Waiting for interface to be created", "interface", ifaceName)
+					return false, nil
+				}
+				if err = hook(); err != nil {
+					return false, err
+				}
 				return true, nil
-			}
-			if currentEP.Id != expectedEP.Id {
-				klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint", endpointName)
-				return true, nil
-			}
-			if !hostInterfaceExistsFunc(ifaceName) {
-				klog.V(2).InfoS("Waiting for interface to be created", "interface", ifaceName)
-				return false, nil
-			}
-			if err = hook(); err != nil {
-				return false, err
-			}
-			return true, nil
-		})
+			})
 
 		if pollErr != nil {
 			if err != nil {

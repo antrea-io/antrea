@@ -31,9 +31,10 @@ type REST struct {
 }
 
 var (
-	_ rest.Storage           = &REST{}
-	_ rest.Scoper            = &REST{}
-	_ rest.GetterWithOptions = &REST{}
+	_ rest.Storage              = &REST{}
+	_ rest.Scoper               = &REST{}
+	_ rest.GetterWithOptions    = &REST{}
+	_ rest.SingularNameProvider = &REST{}
 )
 
 // NewREST returns a REST object that will work against API services.
@@ -67,6 +68,10 @@ func (r *REST) NewGetOptions() (runtime.Object, bool, string) {
 
 func (r *REST) NamespaceScoped() bool {
 	return false
+}
+
+func (r *REST) GetSingularName() string {
+	return "clustergroupmembers"
 }
 
 func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options runtime.Object) (members []controlplane.GroupMember, ipNets []controlplane.IPNet, totalMembers, totalPages, currentPage int64, err error) {

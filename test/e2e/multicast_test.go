@@ -465,7 +465,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, testNa
 	}
 	wg.Wait()
 
-	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		for _, senderConfig := range mc.senderConfigs {
 			stats := mc.antctlResults[senderConfig.name]
 			t.Logf("Checking antctl get podmulticaststats result for %s", senderConfig.name)
@@ -571,7 +571,7 @@ func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, send
 		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
-	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		// Check whether multicast interfaces can receive multicast traffic in the server side.
 		// The check is needed for verifying external interfaces acting as multicast interfaces are able to forward multicast traffic.
 		// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
@@ -644,7 +644,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 
 	readyReceivers := sets.New[int]()
 	senderReady := false
-	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, defaultTimeout, false, func(ctx context.Context) (bool, error) {
 		if checkSenderRoute && !senderReady {
 			// Sender pods should add an outbound multicast route except when running as HostNetwork.
 			mRoutesResult, err := getMroutes(nodeName(mc.senderConfig.nodeIdx), gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " "))

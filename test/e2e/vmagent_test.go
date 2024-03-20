@@ -84,14 +84,14 @@ func TestVMAgent(t *testing.T) {
 
 func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for Deployment '%s/%s' to be ready", namespace, name)
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		dp, err := data.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
 		return dp.Status.ObservedGeneration == dp.Generation && dp.Status.ReadyReplicas == *dp.Spec.Replicas, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod -l app=sftp", namespace))
 		return fmt.Errorf("some replicas for Deployment '%s/%s' are not ready after %v:\n%v", namespace, name, timeout, stdout)
 	} else if err != nil {
@@ -103,7 +103,7 @@ func (data *TestData) waitForDeploymentReady(t *testing.T, namespace string, nam
 func (data *TestData) waitForSupportBundleCollectionRealized(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for SupportBundleCollection '%s' to be realized", name)
 	var sbc *crdv1alpha1.SupportBundleCollection
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		var getErr error
 		sbc, getErr = data.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), name, metav1.GetOptions{})
 		if getErr != nil {
@@ -265,7 +265,7 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 // and verifies uplink configuration is restored.
 func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyUpLinkAfterCleanup := func(vm vmInfo) {
-		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 1*time.Minute, true, func(ctx context.Context) (done bool, err error) {
 			var tempVM vmInfo
 			if vm.osType == linuxOS {
 				tempVM = getVMInfo(t, data, vm.nodeName)
@@ -294,7 +294,7 @@ func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 }
 
 func verifyExternalEntityExistence(t *testing.T, data *TestData, eeName string, vmNodeName string, expectExists bool) {
-	if err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 1*time.Minute, true, func(ctx context.Context) (done bool, err error) {
 		t.Logf("Verifying ExternalEntity %s, expectExists %t", eeName, expectExists)
 		_, err = data.crdClient.CrdV1alpha2().ExternalEntities(namespace).Get(context.TODO(), eeName, metav1.GetOptions{})
 		if err != nil && !errors.IsNotFound(err) {
@@ -325,7 +325,7 @@ func verifyExternalEntityExistence(t *testing.T, data *TestData, eeName string, 
 
 func testExternalNode(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyExternalNodeRealization := func(vm vmInfo) {
-		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 1*time.Minute, true, func(ctx context.Context) (done bool, err error) {
 			t.Logf("Verify host interface configuration for VM: %s", vm.nodeName)
 			exists, err := verifyInterfaceIsInOVS(t, data, vm)
 			return exists, err
@@ -665,7 +665,7 @@ func runPingCommandOnVM(data *TestData, dstVM vmInfo, connected bool) error {
 	expOutput := fmt.Sprintf("%d packets transmitted, %d received", pingCount, expCount)
 	// Use master Node to run ping command.
 	pingClient := nodeName(0)
-	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second*5, time.Second*20, true, func(ctx context.Context) (done bool, err error) {
 		if err := runCommandAndCheckResult(data, pingClient, cmdStr, expOutput, ""); err != nil {
 			return false, nil
 		}
@@ -676,7 +676,7 @@ func runPingCommandOnVM(data *TestData, dstVM vmInfo, connected bool) error {
 
 func runIperfCommandOnVMs(t *testing.T, data *TestData, srcVM vmInfo, dstVM vmInfo, connected bool, isUDP bool, ruleAction crdv1beta1.RuleAction) error {
 	svrIP := net.ParseIP(dstVM.ip)
-	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second*5, time.Second*20, true, func(ctx context.Context) (done bool, err error) {
 		if err := runIperfClient(t, data, srcVM, svrIP, iperfPort, isUDP, connected, ruleAction); err != nil {
 			return false, nil
 		}
@@ -769,7 +769,7 @@ func runCurlCommandOnVM(data *TestData, targetVM vmInfo, url string, action crdv
 	case crdv1beta1.RuleActionReject:
 		expectedErr = "Connection refused"
 	}
-	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second*5, time.Second*20, true, func(ctx context.Context) (done bool, err error) {
 		if err := runCommandAndCheckResult(data, targetVM.nodeName, cmdStr, expectedOutput, expectedErr); err != nil {
 			return false, nil
 		}

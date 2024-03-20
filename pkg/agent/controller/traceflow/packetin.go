@@ -28,7 +28,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/openflow"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -477,7 +477,7 @@ func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1beta1.Packet {
 		capturedPacket.IPHeader = &crdv1beta1.IPHeader{Protocol: int32(pkt.IPProto), TTL: int32(pkt.TTL), Flags: int32(pkt.IPFlags)}
 	}
 	if pkt.IPProto == protocol.Type_TCP {
-		capturedPacket.TransportHeader.TCP = &crdv1beta1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: pointer.Int32(int32(pkt.TCPFlags))}
+		capturedPacket.TransportHeader.TCP = &crdv1beta1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: ptr.To(int32(pkt.TCPFlags))}
 	} else if pkt.IPProto == protocol.Type_UDP {
 		capturedPacket.TransportHeader.UDP = &crdv1beta1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
 	} else if pkt.IPProto == protocol.Type_ICMP || pkt.IPProto == protocol.Type_IPv6ICMP {

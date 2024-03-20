@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -34,9 +33,9 @@ type FakeGroups struct {
 	ns   string
 }
 
-var groupsResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "groups"}
+var groupsResource = v1beta1.SchemeGroupVersion.WithResource("groups")
 
-var groupsKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "Group"}
+var groupsKind = v1beta1.SchemeGroupVersion.WithKind("Group")
 
 // Get takes name of the group, and returns the corresponding group object, and an error if there is any.
 func (c *FakeGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.Group, err error) {

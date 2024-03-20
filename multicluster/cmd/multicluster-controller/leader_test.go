@@ -29,7 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -39,13 +39,13 @@ import (
 func initMockManager(mockManager *mocks.MockManager) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 
-	mockManager.EXPECT().GetWebhookServer().Return(&webhook.Server{}).AnyTimes()
-	mockManager.EXPECT().GetWebhookServer().Return(&webhook.Server{}).AnyTimes()
+	mockManager.EXPECT().GetWebhookServer().Return(&webhook.DefaultServer{}).AnyTimes()
+	mockManager.EXPECT().GetWebhookServer().Return(&webhook.DefaultServer{}).AnyTimes()
 	mockManager.EXPECT().GetClient().Return(fakeClient).AnyTimes()
 	mockManager.EXPECT().GetScheme().Return(common.TestScheme).AnyTimes()
-	mockManager.EXPECT().GetControllerOptions().Return(v1alpha1.ControllerConfigurationSpec{}).AnyTimes()
+	mockManager.EXPECT().GetControllerOptions().Return(config.Controller{}).AnyTimes()
+	mockManager.EXPECT().GetCache().Return(&informertest.FakeInformers{}).AnyTimes()
 	mockManager.EXPECT().GetLogger().Return(klog.NewKlogr()).AnyTimes()
-	mockManager.EXPECT().SetFields(gomock.Any()).Return(nil).AnyTimes()
 	mockManager.EXPECT().Add(gomock.Any()).Return(nil).AnyTimes()
 	mockManager.EXPECT().Start(gomock.Any()).Return(nil).AnyTimes()
 	mockManager.EXPECT().GetConfig().Return(&rest.Config{}).AnyTimes()

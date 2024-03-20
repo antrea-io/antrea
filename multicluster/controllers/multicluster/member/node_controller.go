@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
@@ -373,7 +372,7 @@ func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
-		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}},
+		Watches(&mcv1alpha2.ClusterSet{},
 			handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
 			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
@@ -382,13 +381,12 @@ func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *NodeReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+func (r *NodeReconciler) clusterSetMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	requests := []reconcile.Request{}
 	if a.GetNamespace() != r.namespace {
 		return requests
 	}
-	ctx := context.TODO()
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {

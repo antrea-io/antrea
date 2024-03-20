@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -33,9 +32,9 @@ type FakeIPPools struct {
 	Fake *FakeCrdV1alpha2
 }
 
-var ippoolsResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1alpha2", Resource: "ippools"}
+var ippoolsResource = v1alpha2.SchemeGroupVersion.WithResource("ippools")
 
-var ippoolsKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1alpha2", Kind: "IPPool"}
+var ippoolsKind = v1alpha2.SchemeGroupVersion.WithKind("IPPool")
 
 // Get takes name of the iPPool, and returns the corresponding iPPool object, and an error if there is any.
 func (c *FakeIPPools) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.IPPool, err error) {

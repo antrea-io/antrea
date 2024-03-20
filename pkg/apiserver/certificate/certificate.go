@@ -15,6 +15,7 @@
 package certificate
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -67,17 +68,18 @@ func ApplyServerCert(selfSignedCert bool,
 		tlsKeyPath := filepath.Join(caConfig.CertDir, TLSKeyFile)
 		// The secret may be created after the Pod is created, for example, when cert-manager is used the secret
 		// is created asynchronously. It waits for a while before it's considered to be failed.
-		if err = wait.PollImmediate(2*time.Second, caConfig.CertReadyTimeout, func() (bool, error) {
-			for _, path := range []string{caCertPath, tlsCertPath, tlsKeyPath} {
-				f, err := os.Open(path)
-				if err != nil {
-					klog.Warningf("Couldn't read %s when applying server certificate, retrying", path)
-					return false, nil
+		if err = wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, caConfig.CertReadyTimeout, true,
+			func(ctx context.Context) (bool, error) {
+				for _, path := range []string{caCertPath, tlsCertPath, tlsKeyPath} {
+					f, err := os.Open(path)
+					if err != nil {
+						klog.Warningf("Couldn't read %s when applying server certificate, retrying", path)
+						return false, nil
+					}
+					f.Close()
 				}
-				f.Close()
-			}
-			return true, nil
-		}); err != nil {
+				return true, nil
+			}); err != nil {
 			return nil, fmt.Errorf("error reading TLS certificate and/or key. Please make sure the TLS CA (%s), cert (%s), and key (%s) files are present in \"%s\", when selfSignedCert is set to false", CACertFile, TLSCertFile, TLSKeyFile, caConfig.CertDir)
 		}
 		// Since 1.17.0 (https://github.com/kubernetes/kubernetes/commit/3f5fbfbfac281f40c11de2f57d58cc332affc37b),

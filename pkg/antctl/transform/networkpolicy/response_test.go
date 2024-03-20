@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
@@ -35,8 +35,8 @@ func TestListTransform(t *testing.T) {
 		SourceRef: &cpv1beta.NetworkPolicyReference{
 			Name: "a",
 		},
-		TierPriority: pointer.Int32(260),
-		Priority:     pointer.Float64(5.7),
+		TierPriority: ptr.To[int32](260),
+		Priority:     ptr.To(5.7),
 	}
 	var npB = cpv1beta.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -47,8 +47,8 @@ func TestListTransform(t *testing.T) {
 		SourceRef: &cpv1beta.NetworkPolicyReference{
 			Name: "b",
 		},
-		TierPriority: pointer.Int32(260),
-		Priority:     pointer.Float64(7.8),
+		TierPriority: ptr.To[int32](260),
+		Priority:     ptr.To(7.8),
 	}
 	var npC = cpv1beta.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -59,8 +59,8 @@ func TestListTransform(t *testing.T) {
 		SourceRef: &cpv1beta.NetworkPolicyReference{
 			Name: "c",
 		},
-		TierPriority: pointer.Int32(200),
-		Priority:     pointer.Float64(8),
+		TierPriority: ptr.To[int32](200),
+		Priority:     ptr.To[float64](8),
 	}
 	var npD = cpv1beta.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{

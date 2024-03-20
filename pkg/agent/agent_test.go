@@ -951,7 +951,7 @@ func TestInitVMLocalConfig(t *testing.T) {
 			name:        "provided external Node unavailable",
 			nodeName:    "testNode",
 			crdClient:   fakeversioned.NewSimpleClientset(),
-			expectedErr: "timed out waiting for the condition",
+			expectedErr: "context canceled",
 		},
 	}
 

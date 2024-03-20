@@ -166,7 +166,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 
 	var caBundle string
 	var configMap *v1.ConfigMap
-	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		var err error
 		configMap, err = data.clientset.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), certificate.AntreaCAConfigMapName, metav1.GetOptions{})
 		if err != nil {
@@ -214,7 +214,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	require.NoError(t, NewPodBuilder(clientName, data.testNamespace, agnhostImage).WithContainerName(getImageName(agnhostImage)).MountConfigMap(configMapCopy.Name, "/etc/config/", "config-volume").WithHostNetwork(false).Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace))
-	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, cmd)
 		if err != nil {
 			t.Logf("error when running cmd: %v , stdout: <%v>, stderr: <%v>", err, stdout, stderr)
@@ -241,7 +241,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	}
 
 	// antrea-agents reconnect every 5 seconds, we expect their connections are restored in a few seconds.
-	if err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		cmds := []string{"antctl", "get", "controllerinfo", "-o", "json"}
 		stdout, _, err := runAntctl(antreaController.Name, cmds, data)
 		if err != nil {

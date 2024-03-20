@@ -21,7 +21,6 @@ import (
 
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -30,9 +29,9 @@ type FakeNetworkPolicyEvaluations struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var networkpolicyevaluationsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "networkpolicyevaluations"}
+var networkpolicyevaluationsResource = v1beta2.SchemeGroupVersion.WithResource("networkpolicyevaluations")
 
-var networkpolicyevaluationsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "NetworkPolicyEvaluation"}
+var networkpolicyevaluationsKind = v1beta2.SchemeGroupVersion.WithKind("NetworkPolicyEvaluation")
 
 // Create takes the representation of a networkPolicyEvaluation and creates it.  Returns the server's representation of the networkPolicyEvaluation, and an error, if there is any.
 func (c *FakeNetworkPolicyEvaluations) Create(ctx context.Context, networkPolicyEvaluation *v1beta2.NetworkPolicyEvaluation, opts v1.CreateOptions) (result *v1beta2.NetworkPolicyEvaluation, err error) {

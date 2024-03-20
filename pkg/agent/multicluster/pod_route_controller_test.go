@@ -319,7 +319,7 @@ func TestPodEvent(t *testing.T) {
 }
 
 func waitForGatewayRealized(gwLister mclisters.GatewayLister, gateway *mcv1alpha1.Gateway) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		_, err := gwLister.Gateways(gateway.Namespace).Get(gateway.Name)
 		if err != nil {
 			return false, nil
@@ -329,7 +329,7 @@ func waitForGatewayRealized(gwLister mclisters.GatewayLister, gateway *mcv1alpha
 }
 
 func waitForPodIPUpdate(podLister v1.PodLister, pod *corev1.Pod) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(ctx context.Context) (bool, error) {
 		getPod, err := podLister.Pods(pod.Namespace).Get(pod.Name)
 		if err != nil || pod.Status.PodIP != getPod.Status.PodIP || pod.Status.HostIP != getPod.Status.HostIP {
 			return false, nil

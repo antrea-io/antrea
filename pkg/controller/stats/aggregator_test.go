@@ -68,7 +68,7 @@ var (
 func runWrapper(t *testing.T, a *Aggregator, policyCount int, summaries []*controlplane.NodeStatsSummary) {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
-	err := wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, time.Second, true, func(ctx context.Context) (done bool, err error) {
 		count := len(a.ListNetworkPolicyStats("")) + len(a.ListAntreaNetworkPolicyStats("")) + len(a.ListAntreaClusterNetworkPolicyStats())
 		return (count >= policyCount), nil
 	})
@@ -81,7 +81,7 @@ func runWrapper(t *testing.T, a *Aggregator, policyCount int, summaries []*contr
 		a.Collect(summary)
 	}
 	// Wait for all summaries to be consumed.
-	err = wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, time.Second, true, func(ctx context.Context) (done bool, err error) {
 		return len(a.dataCh) == 0, nil
 	})
 	require.NoError(t, err, "Timeout while waiting for summaries to be consummed by Aggregator")
@@ -622,7 +622,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp1.Name, metav1.DeleteOptions{})
 	crdClient.CrdV1beta1().NetworkPolicies(annp1.Namespace).Delete(context.TODO(), annp1.Name, metav1.DeleteOptions{})
 	// Event handlers are asynchronous, it's supposed to finish very soon.
-	err := wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, time.Second, true, func(ctx context.Context) (done bool, err error) {
 		return len(a.ListNetworkPolicyStats("")) == 0 && len(a.ListAntreaClusterNetworkPolicyStats()) == 0 && len(a.ListAntreaNetworkPolicyStats("")) == 0, nil
 	})
 	assert.NoError(t, err)

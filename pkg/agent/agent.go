@@ -606,12 +606,13 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
 			// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
 			// to ensure the flag can be removed successfully.
-			err = wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (done bool, err error) {
-				if err := i.FlowRestoreComplete(); err != nil {
-					return false, nil
-				}
-				return true, nil
-			})
+			err = wait.PollUntilContextTimeout(context.TODO(), 200*time.Millisecond, 10*time.Second, true,
+				func(ctx context.Context) (done bool, err error) {
+					if err := i.FlowRestoreComplete(); err != nil {
+						return false, nil
+					}
+					return true, nil
+				})
 			// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, we will try
 			// to clean up the config again so an error log should be fine.
 			if err != nil {
@@ -639,21 +640,22 @@ func (i *Initializer) FlowRestoreComplete() error {
 	}
 
 	// "flow-restore-wait" is supposed to be true here.
-	err := wait.PollImmediate(200*time.Millisecond, 2*time.Second, func() (done bool, err error) {
-		flowRestoreWait, err := getFlowRestoreWait()
-		if err != nil {
-			return false, err
-		}
-		if !flowRestoreWait {
-			// If the log is seen and the config becomes true later, we should look at why "ovs-vsctl set --no-wait"
-			// doesn't take effect on ovsdb immediately.
-			klog.Warning("flow-restore-wait was not true before the delete call was made, will retry")
-			return false, nil
-		}
-		return true, nil
-	})
+	err := wait.PollUntilContextTimeout(context.TODO(), 200*time.Millisecond, 2*time.Second, true,
+		func(ctx context.Context) (done bool, err error) {
+			flowRestoreWait, err := getFlowRestoreWait()
+			if err != nil {
+				return false, err
+			}
+			if !flowRestoreWait {
+				// If the log is seen and the config becomes true later, we should look at why "ovs-vsctl set --no-wait"
+				// doesn't take effect on ovsdb immediately.
+				klog.Warning("flow-restore-wait was not true before the delete call was made, will retry")
+				return false, nil
+			}
+			return true, nil
+		})
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
+		if wait.Interrupted(err) {
 			// This could happen if the method is triggered by OVS disconnection event, in which OVS doesn't restart.
 			klog.Info("flow-restore-wait was not true, skip cleaning it up")
 			return nil
@@ -913,24 +915,25 @@ func (i *Initializer) setTunnelCsum(tunnelPortName string, enable bool) error {
 // host gateway interface.
 func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 	var node *v1.Node
-	if err := wait.PollImmediate(5*time.Second, getNodeTimeout, func() (bool, error) {
-		var err error
-		node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-		if err != nil {
-			return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
-		}
-
-		// Except in networkPolicyOnly mode, we need a PodCIDR for the Node.
-		if !i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-			// Validate that PodCIDR has been configured.
-			if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
-				klog.InfoS("Waiting for Node PodCIDR configuration to complete", "nodeName", nodeName)
-				return false, nil
+	if err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, getNodeTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			var err error
+			node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+			if err != nil {
+				return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
 			}
-		}
-		return true, nil
-	}); err != nil {
-		if err == wait.ErrWaitTimeout {
+
+			// Except in networkPolicyOnly mode, we need a PodCIDR for the Node.
+			if !i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+				// Validate that PodCIDR has been configured.
+				if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
+					klog.InfoS("Waiting for Node PodCIDR configuration to complete", "nodeName", nodeName)
+					return false, nil
+				}
+			}
+			return true, nil
+		}); err != nil {
+		if wait.Interrupted(err) {
 			klog.ErrorS(err, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
 				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range, or nodeIPAM is "+
 				"enabled for antrea-controller", "nodeName", nodeName)
@@ -1313,13 +1316,13 @@ func (i *Initializer) initNodeLocalConfig() error {
 func (i *Initializer) initVMLocalConfig(nodeName string) error {
 	var en *v1alpha1.ExternalNode
 	klog.InfoS("Initializing VM config", "ExternalNode", nodeName)
-	if err := wait.PollImmediateUntil(10*time.Second, func() (done bool, err error) {
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(i.stopCh), 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		en, err = i.crdClient.CrdV1alpha1().ExternalNodes(i.externalNodeNamespace).Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
 		return true, nil
-	}, i.stopCh); err != nil {
+	}); err != nil {
 		klog.Info("Stopped waiting for ExternalNode")
 		return err
 	}

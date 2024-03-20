@@ -53,7 +53,7 @@ func ovsVSwitchdUDS(ctx context.Context) (string, error) {
 	var readErr error
 	startTime := time.Now()
 	hasFailure := false
-	err := wait.PollImmediateWithContext(ctx, 50*time.Millisecond, 5*time.Second, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 		pid, readErr = readOVSVSwitchdPID()
 		if readErr != nil {
 			hasFailure = true

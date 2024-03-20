@@ -38,9 +38,10 @@ type REST struct {
 const ControllerInfoResourceName = "antrea-controller"
 
 var (
-	_ rest.Scoper = &REST{}
-	_ rest.Getter = &REST{}
-	_ rest.Lister = &REST{}
+	_ rest.Scoper               = &REST{}
+	_ rest.Getter               = &REST{}
+	_ rest.Lister               = &REST{}
+	_ rest.SingularNameProvider = &REST{}
 )
 
 // NewREST returns a REST object that will work against API services.
@@ -95,4 +96,8 @@ func (r *REST) NamespaceScoped() bool {
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	return rest.NewDefaultTableConvertor(system.Resource("controllerinfos")).ConvertToTable(ctx, obj, tableOptions)
+}
+
+func (r *REST) GetSingularName() string {
+	return "controllerinfo"
 }

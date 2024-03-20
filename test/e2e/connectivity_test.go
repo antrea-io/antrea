@@ -236,7 +236,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag str
 			return fmt.Errorf("error deleting DaemonSet")
 		}
 		// Wait for all Pods managed by DaemonSet to be deleted to avoid affecting following tests.
-		err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 			pods, err := getDaemonSetPods()
 			if err != nil {
 				return false, fmt.Errorf("error getting Pods managed by DaemonSet")
