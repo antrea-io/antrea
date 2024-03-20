@@ -128,7 +128,8 @@ type Client struct {
 	nodePortsIPv6 sync.Map
 	// clusterNodeIPs stores the IPv4 of all other Nodes in the cluster
 	clusterNodeIPs sync.Map
-	// clusterNodeIP6s stores the IPv6 of all other Nodes in the cluster
+	// clusterNodeIP6s stores the IPv6 address of all other Nodes in the cluster. It is maintained but not consumed
+	// until Multicast supports IPv6.
 	clusterNodeIP6s sync.Map
 	// egressRoutes caches ip routes about Egresses.
 	egressRoutes sync.Map
@@ -709,7 +710,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			}...)
 		}
 
-		if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		// Note: Multicast can only work with IPv4 for now. Remove condition "!isIPv6" in the future after
+		// IPv6 is supported.
+		if c.multicastEnabled && !isIPv6 && c.networkConfig.TrafficEncapMode.SupportsEncap() {
 			// Drop the multicast packets forwarded from other Nodes in the cluster. This is because
 			// the packet sent out from the sender Pod is already received via tunnel port with encap mode,
 			// and the one forwarded via the underlay network is to send to external receivers
@@ -832,7 +835,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
 	// The masqueraded multicast traffic will become unicast so we
 	// stop traversing this antreaPostRoutingChain for multicast traffic.
-	if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+	// Note: Multicast can only work with IPv4 for now. Remove condition "!isIPv6" in the future after
+	// IPv6 is supported.
+	if c.multicastEnabled && !isIPv6 && c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: skip masquerade for multicast traffic"`,
