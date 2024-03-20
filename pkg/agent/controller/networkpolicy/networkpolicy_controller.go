@@ -211,6 +211,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		podNetworkWait:           podNetworkWait.Increment(),
 	}
 
+	fmt.Println("new NetworkPolicyController created")
 	if l7NetworkPolicyEnabled {
 		c.l7RuleReconciler = l7Reconciler
 		c.l7VlanIDAllocator = newL7VlanIDAllocator()
