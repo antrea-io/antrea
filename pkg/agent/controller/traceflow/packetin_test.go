@@ -39,9 +39,10 @@ import (
 )
 
 var (
-	egressName = "dummyEgress"
-	egressIP   = "192.168.100.100"
-	egressNode = "fakeEgressNode"
+	egressName     = "dummyEgress"
+	egressIP       = "192.168.100.100"
+	egressNodeName = "fakeEgressNode"
+	egressNodeIP   = "192.168.100.101"
 )
 
 func prepareMockTables() {
@@ -209,8 +210,8 @@ func getTestPacketBytes(dstIP string) []byte {
 		Protocol: uint8(8),
 		DSCP:     1,
 		Length:   20,
-		NWSrc:    net.IP(pod1IPv4),
-		NWDst:    net.IP(dstIP),
+		NWSrc:    net.ParseIP(pod1IPv4),
+		NWDst:    net.ParseIP(dstIP),
 	}
 	ethernetPkt := protocol.NewEthernet()
 	ethernetPkt.HWSrc = pod1MAC
@@ -288,6 +289,9 @@ func TestParsePacketIn(t *testing.T) {
 				GatewayConfig: &config.GatewayConfig{
 					OFPort: 2,
 				},
+				NodeIPv4Addr: &net.IPNet{
+					IP: net.ParseIP(egressNodeIP),
+				},
 			},
 			tfState: &traceflowState{
 				name:     "traceflow-pod-to-ipv4",
@@ -304,7 +308,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNode, nil)
+				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNodeName, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -331,11 +335,12 @@ func TestParsePacketIn(t *testing.T) {
 						Action:    crdv1beta1.ActionForwarded,
 					},
 					{
-						Component:  crdv1beta1.ComponentEgress,
-						Action:     crdv1beta1.ActionMarkedForSNAT,
-						Egress:     egressName,
-						EgressIP:   egressIP,
-						EgressNode: egressNode,
+						Component:    crdv1beta1.ComponentEgress,
+						Action:       crdv1beta1.ActionMarkedForSNAT,
+						Egress:       egressName,
+						EgressIP:     egressIP,
+						EgressNode:   egressNodeName,
+						EgressNodeIP: egressNodeIP,
 					},
 					{
 						Component:     crdv1beta1.ComponentForwarding,
@@ -371,7 +376,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNode, nil)
+				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressName, egressIP, egressNodeName, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -402,7 +407,7 @@ func TestParsePacketIn(t *testing.T) {
 						Action:     crdv1beta1.ActionForwardedToEgressNode,
 						Egress:     egressName,
 						EgressIP:   egressIP,
-						EgressNode: egressNode,
+						EgressNode: egressNodeName,
 					},
 					{
 						Component:     crdv1beta1.ComponentForwarding,
@@ -423,6 +428,10 @@ func TestParsePacketIn(t *testing.T) {
 				GatewayConfig: &config.GatewayConfig{
 					OFPort: 2,
 				},
+				NodeIPv4Addr: &net.IPNet{
+					IP: net.ParseIP(egressNodeIP),
+				},
+				Name: egressNodeName,
 			},
 			tfState: &traceflowState{
 				name: "traceflow-pod-to-ipv4",
@@ -465,9 +474,11 @@ func TestParsePacketIn(t *testing.T) {
 						Action:    crdv1beta1.ActionReceived,
 					},
 					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionMarkedForSNAT,
-						EgressIP:  egressIP,
+						Component:    crdv1beta1.ComponentEgress,
+						Action:       crdv1beta1.ActionMarkedForSNAT,
+						EgressIP:     egressIP,
+						EgressNode:   egressNodeName,
+						EgressNodeIP: egressNodeIP,
 					},
 					{
 						Component:     crdv1beta1.ComponentForwarding,
