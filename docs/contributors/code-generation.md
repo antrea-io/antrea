@@ -2,8 +2,8 @@
 
 ## CNI
 
-Antrea uses [protoc](https://github.com/protocolbuffers/protobuf) and [protoc-gen-go](
-https://github.com/golang/protobuf) to generate CNI gRPC service code.
+Antrea uses [protoc](https://github.com/protocolbuffers/protobuf), [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
+and [protoc-gen-go-grpc](https://github.com/grpc/grpc-go) to generate CNI gRPC service code.
 
 If you make any change to [cni.proto](../../pkg/apis/cni/v1beta1/cni.proto), you can
 re-generate the code by invoking `make codegen`.
