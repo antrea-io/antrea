@@ -1527,6 +1527,15 @@ func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName stri
 	}).WithHostNetwork(hostNetwork).Create(data)
 }
 
+func (data *TestData) createUDPServerPod(name string, ns string, portNum int32, serverNode string) error {
+	cmd := []string{"/bin/bash", "-c"}
+	args := []string{
+		fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port %v", portNum),
+	}
+	port := corev1.ContainerPort{Name: fmt.Sprintf("port-%d", portNum), ContainerPort: portNum}
+	return NewPodBuilder(name, ns, agnhostImage).OnNode(serverNode).WithContainerName("agnhost").WithCommand(cmd).WithArgs(args).WithPorts([]corev1.ContainerPort{port}).Create(testData)
+}
+
 // createServerPod creates a Pod that can listen to specified port and have named port set.
 func (data *TestData) createServerPod(name string, ns string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.

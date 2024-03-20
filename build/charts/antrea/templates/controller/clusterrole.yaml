@@ -209,6 +209,17 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - packetsamplings
+      - packetsamplings/status
+    verbs:
+      - get
+      - watch
+      - list
+      - patch
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - externalentities
       - clustergroups
       - groups

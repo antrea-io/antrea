@@ -20,6 +20,7 @@ set -o pipefail
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
 IMAGE_NAME="antrea/codegen:kubernetes-1.26.4-build.1"
 
+
 # Recent versions of Git will not access .git directories which are owned by
 # another user (as a security measure), unless the directories are explicitly
 # added to a "safe" list in the Git config. When we run the Docker container,

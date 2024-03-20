@@ -28,6 +28,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.3
 	github.com/google/btree v1.1.2
+	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/memberlist v0.5.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.3.0

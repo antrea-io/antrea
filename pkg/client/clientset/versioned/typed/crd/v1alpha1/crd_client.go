@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ type CrdV1alpha1Interface interface {
 	ClusterNetworkPoliciesGetter
 	ExternalNodesGetter
 	NetworkPoliciesGetter
+	PacketSamplingsGetter
 	SupportBundleCollectionsGetter
 	TiersGetter
 	TraceflowsGetter
@@ -49,6 +50,10 @@ func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterfac
 
 func (c *CrdV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
 	return newNetworkPolicies(c, namespace)
+}
+
+func (c *CrdV1alpha1Client) PacketSamplings() PacketSamplingInterface {
+	return newPacketSamplings(c)
 }
 
 func (c *CrdV1alpha1Client) SupportBundleCollections() SupportBundleCollectionInterface {

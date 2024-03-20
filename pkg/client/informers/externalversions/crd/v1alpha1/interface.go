@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ type Interface interface {
 	ExternalNodes() ExternalNodeInformer
 	// NetworkPolicies returns a NetworkPolicyInformer.
 	NetworkPolicies() NetworkPolicyInformer
+	// PacketSamplings returns a PacketSamplingInformer.
+	PacketSamplings() PacketSamplingInformer
 	// SupportBundleCollections returns a SupportBundleCollectionInformer.
 	SupportBundleCollections() SupportBundleCollectionInformer
 	// Tiers returns a TierInformer.
@@ -60,6 +62,11 @@ func (v *version) ExternalNodes() ExternalNodeInformer {
 // NetworkPolicies returns a NetworkPolicyInformer.
 func (v *version) NetworkPolicies() NetworkPolicyInformer {
 	return &networkPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// PacketSamplings returns a PacketSamplingInformer.
+func (v *version) PacketSamplings() PacketSamplingInformer {
+	return &packetSamplingInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // SupportBundleCollections returns a SupportBundleCollectionInformer.

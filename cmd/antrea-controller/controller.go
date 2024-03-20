@@ -59,6 +59,7 @@ import (
 	"antrea.io/antrea/pkg/controller/metrics"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/controller/packetsampling"
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/serviceexternalip"
 	"antrea.io/antrea/pkg/controller/stats"
@@ -144,6 +145,7 @@ func run(o *Options) error {
 	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
 	tfInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
+	psInformer := crdInformerFactory.Crd().V1alpha1().PacketSamplings()
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	grpInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
@@ -261,6 +263,11 @@ func run(o *Options) error {
 		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, tfInformer)
 	}
 
+	var packetSamplingController *packetsampling.Controller
+	if features.DefaultFeatureGate.Enabled(features.PacketSampling) {
+		packetSamplingController = packetsampling.NewPacketSamplingController(crdClient, podInformer, psInformer)
+	}
+
 	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the
 	// aggregated data. For now it's only used for NetworkPolicy stats.
 	var statsAggregator *stats.Aggregator
@@ -305,6 +312,7 @@ func run(o *Options) error {
 		statsAggregator,
 		bundleCollectionController,
 		traceflowController,
+		packetSamplingController,
 		*o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])
@@ -377,6 +385,10 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.PacketSampling) {
+		go packetSamplingController.Run(stopCh)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
@@ -499,6 +511,7 @@ func createAPIServerConfig(kubeconfig string,
 	statsAggregator *stats.Aggregator,
 	bundleCollectionStore *supportbundlecollection.Controller,
 	traceflowController *traceflow.Controller,
+	packetSamplingController *packetsampling.Controller,
 	enableMetrics bool,
 	cipherSuites []uint16,
 	tlsMinVersion uint16) (*apiserver.Config, error) {
@@ -567,5 +580,6 @@ func createAPIServerConfig(kubeconfig string,
 		egressController,
 		externalIPPoolController,
 		bundleCollectionStore,
-		traceflowController), nil
+		traceflowController,
+		packetSamplingController), nil
 }
