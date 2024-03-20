@@ -270,7 +270,7 @@ function delete_vlan_subnets {
   bridge_interface="br-${bridge_id:0:12}"
   vlan_interface_prefix="br-${bridge_id:0:7}."
 
-  found_vlan_interfaces=$(ip -br link show type vlan | cut -d " " -f 1)
+  found_vlan_interfaces=$(docker_run_with_host_net ip -br link show type vlan | cut -d " " -f 1)
   for interface in $found_vlan_interfaces ; do
     if [[ $interface =~ ${vlan_interface_prefix}[0-9]+@${bridge_interface} ]]; then
       interface_name=${interface%@*}
@@ -441,9 +441,9 @@ function destroy {
   else
       kind delete cluster --name $CLUSTER_NAME
   fi
+  destroy_external_server
   delete_networks
   delete_vlan_subnets
-  destroy_external_server
 }
 
 function printUnixTimestamp {
@@ -457,13 +457,14 @@ function printUnixTimestamp {
 
 function setup_external_server {
   if [[ $DEPLOY_EXTERNAL_SERVER == true ]]; then
-    docker run -d --name external-server --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.29 netexec &> /dev/null
+    docker run -d --name antrea-external-server-$RANDOM --network kind -it --rm registry.k8s.io/e2e-test-images/agnhost:2.29 netexec &> /dev/null
   fi
 }
 
 function destroy_external_server {
   echo "Deleting external server"
-  docker rm -f external-server &> /dev/null || true
+  cid=$(docker ps -f name="^antrea-external-server" --format '{{.ID}}')
+  docker rm -f $cid &> /dev/null || true
 }
 
 function clean_kind {
@@ -643,7 +644,7 @@ fi
 
 if [[ $ACTION == "destroy" ]]; then
       destroy
-      exit 0
+      exit
 fi
 
 if [[ -n "$VLAN_SUBNETS" || -n "$VLAN_ID" ]]; then
