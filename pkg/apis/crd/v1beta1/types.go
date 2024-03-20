@@ -1187,6 +1187,8 @@ type Observation struct {
 	EgressIP    string `json:"egressIP,omitempty" yaml:"egressIP,omitempty"`
 	// EgressNode is the name of the Egress Node.
 	EgressNode string `json:"egressNode,omitempty" yaml:"egressNode,omitempty"`
+	// EgressNodeIP is the IP of Egress Node.
+	EgressNodeIP string `json:"egressNodeIP,omitempty" yaml:"egressNodeIP,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

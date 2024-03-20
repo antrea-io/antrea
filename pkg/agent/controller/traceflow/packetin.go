@@ -292,11 +292,11 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 				}
 			}
 			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
-				egressName, egressIP, egressNode, err := c.egressQuerier.GetEgress(ns, srcPod)
+				egressName, egressIP, egressNodeName, err := c.egressQuerier.GetEgress(ns, srcPod)
 				if err != nil {
 					return nil, nil, nil, err
 				}
-				obEgress := getEgressObservation(false, egressIP, egressName, egressNode)
+				obEgress := getEgressObservation(false, egressIP, egressName, egressNodeName, "")
 				obs = append(obs, *obEgress)
 			}
 			ob.TunnelDstIP = tunnelDstIP
@@ -312,9 +312,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 				}
 			}
 			if pktMark != 0 { // Egress packet on Egress Node
-				egressName, egressIP, egressNode := "", "", ""
+				egressName, egressIP, egressNodeName, egressNodeIP := "", "", "", ""
 				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
-					egressName, egressIP, egressNode, err = c.egressQuerier.GetEgress(ns, srcPod)
+					egressName, egressIP, egressNodeName, err = c.egressQuerier.GetEgress(ns, srcPod)
 					if err != nil {
 						return nil, nil, nil, err
 					}
@@ -323,8 +323,14 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 					if err != nil {
 						return nil, nil, nil, err
 					}
+					egressNodeName = c.nodeConfig.Name
 				}
-				obEgress := getEgressObservation(true, egressIP, egressName, egressNode)
+				if c.nodeConfig.NodeIPv4Addr != nil {
+					egressNodeIP = c.nodeConfig.NodeIPv4Addr.IP.String()
+				} else {
+					egressNodeIP = c.nodeConfig.NodeIPv6Addr.IP.String()
+				}
+				obEgress := getEgressObservation(true, egressIP, egressName, egressNodeName, egressNodeIP)
 				obs = append(obs, *obEgress)
 			}
 			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
@@ -486,12 +492,13 @@ func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1beta1.Packet {
 	return &capturedPacket
 }
 
-func getEgressObservation(isEgressNode bool, egressIP, egressName, egressNode string) *crdv1beta1.Observation {
+func getEgressObservation(isEgressNode bool, egressIP, egressName, egressNodeName, egressNodeIP string) *crdv1beta1.Observation {
 	ob := new(crdv1beta1.Observation)
 	ob.Component = crdv1beta1.ComponentEgress
 	ob.EgressIP = egressIP
 	ob.Egress = egressName
-	ob.EgressNode = egressNode
+	ob.EgressNode = egressNodeName
+	ob.EgressNodeIP = egressNodeIP
 	if isEgressNode {
 		ob.Action = crdv1beta1.ActionMarkedForSNAT
 	} else {

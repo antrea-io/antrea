@@ -5163,6 +5163,13 @@ func schema_pkg_apis_crd_v1beta1_Observation(ref common.ReferenceCallback) commo
 							Format:      "",
 						},
 					},
+					"egressNodeIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EgressNodeIP is the IP of Egress Node.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

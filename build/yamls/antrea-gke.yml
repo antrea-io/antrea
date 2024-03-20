@@ -4987,6 +4987,8 @@ spec:
                               type: string
                             egressNode:
                               type: string
+                            egressNodeIP:
+                              type: string
                 capturedPacket:
                   properties:
                     srcIP:

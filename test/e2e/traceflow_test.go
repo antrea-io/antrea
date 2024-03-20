@@ -2118,11 +2118,12 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 						Action:    v1beta1.ActionForwarded,
 					},
 					{
-						Component:  v1beta1.ComponentEgress,
-						Action:     v1beta1.ActionMarkedForSNAT,
-						Egress:     egress.Name,
-						EgressIP:   egressIP,
-						EgressNode: egressNode,
+						Component:    v1beta1.ComponentEgress,
+						Action:       v1beta1.ActionMarkedForSNAT,
+						Egress:       egress.Name,
+						EgressIP:     egressIP,
+						EgressNode:   egressNode,
+						EgressNodeIP: egressIP,
 					},
 					{
 						Component:     v1beta1.ComponentForwarding,
@@ -2211,9 +2212,11 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 						Action:    v1beta1.ActionReceived,
 					},
 					{
-						Component: v1beta1.ComponentEgress,
-						Action:    v1beta1.ActionMarkedForSNAT,
-						EgressIP:  egressIP,
+						Component:    v1beta1.ComponentEgress,
+						Action:       v1beta1.ActionMarkedForSNAT,
+						EgressIP:     egressIP,
+						EgressNode:   egressNode,
+						EgressNodeIP: egressIP,
 					},
 					{
 						Component:     v1beta1.ComponentForwarding,
@@ -2348,6 +2351,7 @@ func compareObservations(expected v1beta1.NodeResult, actual v1beta1.NodeResult)
 			exObs[i].EgressIP != acObs[i].EgressIP ||
 			exObs[i].Egress != acObs[i].Egress ||
 			exObs[i].EgressNode != acObs[i].EgressNode ||
+			exObs[i].EgressNodeIP != acObs[i].EgressNodeIP ||
 			exObs[i].Action != acObs[i].Action ||
 			exObs[i].NetworkPolicy != acObs[i].NetworkPolicy ||
 			exObs[i].NetworkPolicyRule != acObs[i].NetworkPolicyRule {
