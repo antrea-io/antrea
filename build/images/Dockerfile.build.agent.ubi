@@ -12,30 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BUILD_TAG
-FROM registry.access.redhat.com/ubi8 as antrea-build
-
-ADD https://go.dev/dl/?mode=json&include=all go-versions.json
-
-RUN yum install ca-certificates gcc git jq make wget -y
-
 ARG GO_VERSION
-
-# GO_VERSION is a Go minor version, we use the downloaded go-versions.json file
-# to identify and install the latest patch release for this minor version.
-RUN set -eux; \
-    arch="$(uname -m)"; \
-    case "${arch##*-}" in \
-         x86_64) goArch='amd64' ;; \
-         arm) goArch='armv6l' ;; \
-         aarch64) goArch='arm64' ;; \
-         *) goArch=''; echo >&2; echo >&2 "unsupported architecture '$arch'"; echo >&2 ; exit 1 ;; \
-    esac; \
-    GO_ARCHIVE=$(jq --arg version_prefix "go${GO_VERSION}." --arg arch "$goArch" -r '. | map(select(. | .version | startswith($version_prefix))) | first | .files[] | select(.os == "linux" and .arch == $arch and .kind == "archive").filename' go-versions.json); \
-    wget -q -O - https://go.dev/dl/${GO_ARCHIVE} | tar xz -C /usr/local/
-
-# Using ENV makes the change persistent, but this is just a builder image.
-ENV PATH /usr/local/go/bin:$PATH
+ARG BUILD_TAG
+FROM golang:${GO_VERSION} as antrea-build
 
 WORKDIR /antrea
 
