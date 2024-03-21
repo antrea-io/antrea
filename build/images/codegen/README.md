@@ -16,10 +16,13 @@ docker push antrea/codegen:<TAG>
 The `docker push` command will fail if you do not have permission to push to the
 `antrea` Dockerhub repository.
 
+The image can only be built on an x86_64 machine (no arm support).
+
 Here is the table of codegen images that have been uploaded:
 
 | Tag                            | Change                                               |
 | :----------------------------- | ---------------------------------------------------- |
+| kubernetes-1.29.2-build.0      | Upgraded protoc (v26.0), protoc-gen-go (v1.33.0), protoc-gen-go-grpc (v1.3.0) |
 | kubernetes-1.29.2              | Upgraded K8s libraries to v1.29.2                    |
 | kubernetes-1.26.4-build.1      | Replace github.com/golang/mock with go.uber.org/mock |
 | kubernetes-1.26.4-build.0      | Upgraded Go to v1.21                                 |

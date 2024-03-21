@@ -26,7 +26,6 @@ require (
 	github.com/gammazero/deque v0.1.2
 	github.com/go-logr/logr v1.4.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.3
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/memberlist v0.5.1
@@ -139,6 +138,7 @@ require (
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/cel-go v0.17.7 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
