@@ -130,15 +130,13 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
 	groupAddress, cidr *string, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, namespaces *crdv1beta1.PeerNamespaces,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
 	var podSel *metav1.LabelSelector
 	var nodeSel *metav1.LabelSelector
 	var nsSel *metav1.LabelSelector
-	var ns *crdv1beta1.PeerNamespaces
 	var appliedTos []crdv1beta1.AppliedTo
-	matchSelf := crdv1beta1.NamespaceMatchSelf
 
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1beta1.Rule{}
@@ -162,11 +160,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol
 			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
-	if selfNS == true {
-		ns = &crdv1beta1.PeerNamespaces{
-			Match: matchSelf,
-		}
-	}
 	var ipBlock *crdv1beta1.IPBlock
 	if cidr != nil {
 		ipBlock = &crdv1beta1.IPBlock{
@@ -185,12 +178,12 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol
 	}
 	// An empty From/To in ACNP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1beta1.NetworkPolicyPeer, 0)
-	if podSel != nil || nodeSel != nil || nsSel != nil || ns != nil || ipBlock != nil || ruleClusterGroup != "" || serviceAccount != nil {
+	if podSel != nil || nodeSel != nil || nsSel != nil || namespaces != nil || ipBlock != nil || ruleClusterGroup != "" || serviceAccount != nil {
 		policyPeer = []crdv1beta1.NetworkPolicyPeer{{
 			PodSelector:       podSel,
 			NodeSelector:      nodeSel,
 			NamespaceSelector: nsSel,
-			Namespaces:        ns,
+			Namespaces:        namespaces,
 			IPBlock:           ipBlock,
 			Group:             ruleClusterGroup,
 			ServiceAccount:    serviceAccount,
@@ -297,14 +290,14 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngressForSrcPort(protoc AntreaPoli
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
 	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
 	groupAddress, cidr *string, podSelector map[string]string, nodeSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nodeSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, namespaces *crdv1beta1.PeerNamespaces,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1beta1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1beta1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &ClusterNetworkPolicySpecBuilder{}
 	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress, cidr, podSelector, nodeSelector, nsSelector,
-		podSelectorMatchExp, nodeSelectorMatchExp, nsSelectorMatchExp, selfNS, ruleAppliedToSpecs, action, ruleClusterGroup, name, serviceAccount)
+		podSelectorMatchExp, nodeSelectorMatchExp, nsSelectorMatchExp, namespaces, ruleAppliedToSpecs, action, ruleClusterGroup, name, serviceAccount)
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, crdv1beta1.Rule{

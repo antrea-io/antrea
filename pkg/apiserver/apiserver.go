@@ -317,9 +317,6 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/group", webhook.HandlerForValidateFunc(v.Validate))
 
-		// Install handlers for CRD conversion between versions
-		s.Handler.NonGoRestfulMux.HandleFunc("/convert/clustergroup", webhook.HandleCRDConversion(controllernetworkpolicy.ConvertClusterGroupCRD))
-
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go c.networkPolicyController.InitializeTiers()

@@ -542,6 +542,9 @@ func createAPIServerConfig(kubeconfig string,
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
 		openapi.GetOpenAPIDefinitions,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
+	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(
+		openapi.GetOpenAPIDefinitions,
+		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 	serverConfig.EnableMetrics = enableMetrics
 	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())

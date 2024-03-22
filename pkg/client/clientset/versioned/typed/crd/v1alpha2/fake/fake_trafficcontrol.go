@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -33,9 +32,9 @@ type FakeTrafficControls struct {
 	Fake *FakeCrdV1alpha2
 }
 
-var trafficcontrolsResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1alpha2", Resource: "trafficcontrols"}
+var trafficcontrolsResource = v1alpha2.SchemeGroupVersion.WithResource("trafficcontrols")
 
-var trafficcontrolsKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1alpha2", Kind: "TrafficControl"}
+var trafficcontrolsKind = v1alpha2.SchemeGroupVersion.WithKind("TrafficControl")
 
 // Get takes name of the trafficControl, and returns the corresponding trafficControl object, and an error if there is any.
 func (c *FakeTrafficControls) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.TrafficControl, err error) {

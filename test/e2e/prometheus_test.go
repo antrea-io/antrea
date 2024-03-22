@@ -143,7 +143,7 @@ func getMetricsFromAPIServer(t *testing.T, url string, token string) string {
 	}
 
 	var body []byte
-	err = wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		// Query metrics via HTTPS from Pod
 		resp, err := client.Do(req)
 		if err != nil {
@@ -285,7 +285,7 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 
 	client := &http.Client{}
 	var output prometheusServerOutput
-	err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		resp, err := client.Get(queryURL)
 		if err != nil {
 			// Retry when accessing prometheus failed for flexible-ipam

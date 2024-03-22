@@ -219,6 +219,11 @@ updates received by AntreaProxy
 
 ### Common Metrics Provided by Infrastructure
 
+#### Aggregator Metrics
+
+- **aggregator_discovery_aggregation_count_total:** Counter of number of
+times discovery was aggregated
+
 #### Apiserver Metrics
 
 - **apiserver_audit_event_total:** Counter of audit events generated and
@@ -253,11 +258,13 @@ scope and component.
 - **apiserver_request_filter_duration_seconds:** Request filter latency
 distribution in seconds, for each filter type
 - **apiserver_request_sli_duration_seconds:** Response latency distribution
-(not counting webhook duration) in seconds for each verb, group, version,
-resource, subresource, scope and component.
+(not counting webhook duration and priority & fairness queue wait times)
+in seconds for each verb, group, version, resource, subresource, scope
+and component.
 - **apiserver_request_slo_duration_seconds:** Response latency distribution
-(not counting webhook duration) in seconds for each verb, group, version,
-resource, subresource, scope and component.
+(not counting webhook duration and priority & fairness queue wait times)
+in seconds for each verb, group, version, resource, subresource, scope
+and component.
 - **apiserver_request_total:** Counter of apiserver requests broken out
 for each verb, dry run value, group, version, resource, scope, component,
 and HTTP response code.
@@ -297,15 +304,26 @@ broken out by result.
 - **authentication_token_cache_request_duration_seconds:**
 - **authentication_token_cache_request_total:**
 
+#### Authorization Metrics
+
+- **authorization_attempts_total:** Counter of authorization attempts broken
+down by result. It can be either 'allowed', 'denied', 'no-opinion' or 'error'.
+- **authorization_duration_seconds:** Authorization duration in seconds
+broken out by result.
+
+#### Cardinality Metrics
+
+- **cardinality_enforcement_unexpected_categorizations_total:** The count
+of unexpected categorizations during cardinality enforcement.
+
 #### Disabled Metrics
 
-- **disabled_metric_total:** The count of disabled metrics.
+- **disabled_metrics_total:** The count of disabled metrics.
 
 #### Field Metrics
 
 - **field_validation_request_duration_seconds:** Response latency distribution
-in seconds for each field validation value and whether field validation is
-enabled or not
+in seconds for each field validation value
 
 #### Go Metrics
 
@@ -576,7 +594,7 @@ contention data.
 
 #### Hidden Metrics
 
-- **hidden_metric_total:** The count of hidden metrics.
+- **hidden_metrics_total:** The count of hidden metrics.
 
 #### Process Metrics
 
@@ -593,7 +611,7 @@ available in bytes.
 
 #### Registered Metrics
 
-- **registered_metric_total:** The count of registered metrics broken by
+- **registered_metrics_total:** The count of registered metrics broken by
 stability level and deprecation version.
 
 #### Workqueue Metrics

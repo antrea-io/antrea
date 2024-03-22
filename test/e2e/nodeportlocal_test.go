@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -207,7 +208,7 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 	cmd := []string{"iptables", "-t", "nat", "-S"}
 	t.Logf("Verifying iptables rules %v, present: %v", rules, present)
 	const timeout = 60 * time.Second
-	err := wait.Poll(time.Second, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 		if err != nil {
 			t.Logf("Error while checking rules in iptables: %v", err)
@@ -251,7 +252,7 @@ func checkForNPLRuleInNetNat(t *testing.T, data *TestData, r *require.Assertions
 	defaultnodeIP := "0.0.0.0"
 	t.Logf("Verifying NetNat rules %v, present: %v", rules, present)
 	const timeout = 60 * time.Second
-	err := wait.Poll(time.Second, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		_, _, _, err := data.RunCommandOnNode(nodeName, "Get-NetNatStaticMapping")
 		if err != nil {
 			t.Logf("Error while checking NPL rules on Windows Node: %v", err)
@@ -294,7 +295,7 @@ func checkForNPLRuleInNetNat(t *testing.T, data *TestData, r *require.Assertions
 func checkForNPLListeningSockets(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
 	t.Logf("Verifying NPL listening sockets")
 	const timeout = 30 * time.Second
-	err := wait.Poll(time.Second, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		for _, rule := range rules {
 			protocolOption := "--" + rule.protocol
 			cmd := []string{"ss", "--listening", protocolOption, "-H", "-n"}

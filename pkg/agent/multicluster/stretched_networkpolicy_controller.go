@@ -184,7 +184,7 @@ func (s *StretchedNetworkPolicyController) processNextWorkItem() bool {
 
 	if podRef, ok := obj.(types.NamespacedName); !ok {
 		s.queue.Forget(obj)
-		klog.Errorf("Expected type 'NamespacedName' in work queue but got object", "object", obj)
+		klog.ErrorS(nil, "Expected type 'NamespacedName' in work queue but got object", "object", obj)
 	} else if err := s.syncPodClassifierFlow(podRef); err == nil {
 		s.queue.Forget(podRef)
 	} else {

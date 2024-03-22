@@ -18,6 +18,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -236,16 +237,17 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 
 	// Move network configuration of uplink interface to OVS bridge local interface.
 	// The net configuration of uplink will be restored by RestoreOVSBridge when shutting down.
-	wait.PollImmediate(100*time.Millisecond, 10000*time.Millisecond, func() (bool, error) {
-		// Wait a few seconds for OVS bridge local port.
-		link, err := netlink.LinkByName(uplinkName)
-		if err != nil {
-			klog.V(4).InfoS("OVS bridge local port is not ready", "port", uplinkName, "err", err)
-			return false, nil
-		}
-		klog.InfoS("OVS bridge local port is ready", "type", link.Type(), "attrs", link.Attrs())
-		return true, nil
-	})
+	wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 10000*time.Millisecond, true,
+		func(ctx context.Context) (bool, error) {
+			// Wait a few seconds for OVS bridge local port.
+			link, err := netlink.LinkByName(uplinkName)
+			if err != nil {
+				klog.V(4).InfoS("OVS bridge local port is not ready", "port", uplinkName, "err", err)
+				return false, nil
+			}
+			klog.InfoS("OVS bridge local port is ready", "type", link.Type(), "attrs", link.Attrs())
+			return true, nil
+		})
 	localLink, err := netlink.LinkByName(uplinkName)
 	if err != nil {
 		return err
@@ -359,7 +361,7 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 		if err != nil {
 			return err
 		}
-		if pollErr := wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
+		if pollErr := wait.PollUntilContextTimeout(context.TODO(), time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 			_, _, err := util.SetLinkUp(portName)
 			if err == nil {
 				return true, nil

@@ -298,8 +298,6 @@ data:
       bindAddress: "0"
     webhook:
       port: 9443
-    leaderElection:
-      leaderElect: false
     serviceCIDR: ""
     podCIDRs:
       - ""
@@ -356,7 +354,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 7eb0f1e65f7eb3e35b0739d6064b92b7621af0f4e41813c35bfdee71ceaefbe2
+        checksum/config: 81ec1a33aace39ae40ac2f5d909b5d1d0208bbe6a1e8d1d9ada232bcc583b76a
       labels:
         app: antrea
         component: antrea-mc-controller

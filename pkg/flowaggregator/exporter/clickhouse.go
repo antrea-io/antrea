@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -62,7 +63,7 @@ func NewClickHouseExporter(k8sClient kubernetes.Interface, opt *options.Options)
 		"compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval, "insecureSkipVerify", chConfig.InsecureSkipVerify, "caCert", chConfig.CACert)
 	var errMessage error
 	if chConfig.CACert {
-		err := wait.Poll(DefaultInterval, Timeout, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), DefaultInterval, Timeout, false, func(ctx context.Context) (bool, error) {
 			caCertPath := path.Join(CertDir, CACertFile)
 			certificate, err := os.ReadFile(caCertPath)
 			if err != nil {

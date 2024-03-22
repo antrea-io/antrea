@@ -38,7 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -135,10 +134,10 @@ func (r *LabelIdentityReconciler) checkRemoteCommonArea() bool {
 func (r *LabelIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}, builder.WithPredicates(predicate.LabelChangedPredicate{})).
-		Watches(&source.Kind{Type: &v1.Namespace{}},
+		Watches(&v1.Namespace{},
 			handler.EnqueueRequestsFromMapFunc(r.namespaceMapFunc),
 			builder.WithPredicates(predicate.LabelChangedPredicate{})).
-		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}},
+		Watches(&mcv1alpha2.ClusterSet{},
 			handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
 			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
@@ -147,13 +146,12 @@ func (r *LabelIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *LabelIdentityReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+func (r *LabelIdentityReconciler) clusterSetMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	requests := []reconcile.Request{}
 	if a.GetNamespace() != r.namespace {
 		return requests
 	}
-	ctx := context.TODO()
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == v1.ConditionTrue {
@@ -181,7 +179,7 @@ func (r *LabelIdentityReconciler) clusterSetMapFunc(a client.Object) []reconcile
 
 // namespaceMapFunc handles Namespace update events (Namespace label change) by enqueuing
 // all Pods in the Namespace into the reconciler processing queue.
-func (r *LabelIdentityReconciler) namespaceMapFunc(ns client.Object) []reconcile.Request {
+func (r *LabelIdentityReconciler) namespaceMapFunc(ctx context.Context, ns client.Object) []reconcile.Request {
 	podList := &v1.PodList{}
 	r.Client.List(context.TODO(), podList, client.InNamespace(ns.GetName()))
 	requests := make([]reconcile.Request, len(podList.Items))

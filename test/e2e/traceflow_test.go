@@ -2315,7 +2315,7 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1beta1.
 	var tf *v1beta1.Traceflow
 	var err error
 	timeout := 15 * time.Second
-	if err = wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
+	if err = wait.PollUntilContextTimeout(context.Background(), defaultInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		tf, err = data.crdClient.CrdV1beta1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
@@ -2442,7 +2442,7 @@ func (data *TestData) waitForNetworkpolicyRealized(pod string, node string, isWi
 	if npType == v1beta2.AntreaNetworkPolicy {
 		npOption = "ANNP"
 	}
-	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 5*time.Second, false, func(ctx context.Context) (bool, error) {
 		var stdout, stderr string
 		var err error
 		if isWindows {
@@ -2458,7 +2458,7 @@ func (data *TestData) waitForNetworkpolicyRealized(pod string, node string, isWi
 			return false, fmt.Errorf("Error when executing antctl get NetworkPolicy, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 		}
 		return strings.Contains(stdout, fmt.Sprintf("%s:%s/%s", npType, data.testNamespace, networkpolicy)), nil
-	}); err == wait.ErrWaitTimeout {
+	}); wait.Interrupted(err) {
 		return fmt.Errorf("NetworkPolicy %s isn't realized in time", networkpolicy)
 	} else if err != nil {
 		return err

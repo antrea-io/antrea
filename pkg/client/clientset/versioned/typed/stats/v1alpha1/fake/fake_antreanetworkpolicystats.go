@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
@@ -33,9 +32,9 @@ type FakeAntreaNetworkPolicyStats struct {
 	ns   string
 }
 
-var antreanetworkpolicystatsResource = schema.GroupVersionResource{Group: "stats.antrea.io", Version: "v1alpha1", Resource: "antreanetworkpolicystats"}
+var antreanetworkpolicystatsResource = v1alpha1.SchemeGroupVersion.WithResource("antreanetworkpolicystats")
 
-var antreanetworkpolicystatsKind = schema.GroupVersionKind{Group: "stats.antrea.io", Version: "v1alpha1", Kind: "AntreaNetworkPolicyStats"}
+var antreanetworkpolicystatsKind = v1alpha1.SchemeGroupVersion.WithKind("AntreaNetworkPolicyStats")
 
 // Get takes name of the antreaNetworkPolicyStats, and returns the corresponding antreaNetworkPolicyStats object, and an error if there is any.
 func (c *FakeAntreaNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.AntreaNetworkPolicyStats, err error) {

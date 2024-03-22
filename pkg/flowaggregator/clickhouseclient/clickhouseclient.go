@@ -427,7 +427,7 @@ func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
 	connTimeout := 10 * time.Second
 
 	// Connect to ClickHouse in a loop
-	if err := wait.PollImmediate(connRetryInterval, connTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), connRetryInterval, connTimeout, true, func(ctx context.Context) (bool, error) {
 		// Open the database and ping it
 		opt := clickhouse.Options{
 			Addr: []string{addr},

@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -1118,16 +1117,17 @@ func TestSyncEgress(t *testing.T) {
 			if tt.newLocalIPs != nil {
 				c.localIPDetector = &fakeLocalIPDetector{localIPs: tt.newLocalIPs}
 			}
-			assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
+			assert.Eventually(t, func() bool {
 				if tt.newExternalIPPool != nil {
 					pool, _ := c.externalIPPoolLister.Get(tt.newExternalIPPool.Name)
 					if !reflect.DeepEqual(pool, tt.newExternalIPPool) {
-						return false, nil
+						return false
 					}
 				}
 				egress, _ := c.egressLister.Get(tt.newEgress.Name)
-				return reflect.DeepEqual(egress, tt.newEgress), nil
-			}))
+				return reflect.DeepEqual(egress, tt.newEgress)
+			}, time.Second, 100*time.Millisecond)
+
 			c.egressIPScheduler.schedule()
 			err = c.syncEgress(tt.newEgress.Name)
 			assert.NoError(t, err)
@@ -1184,9 +1184,9 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 		PodNamespace: "ns1",
 	}
 	c.podUpdateChannel.Notify(ev)
-	require.NoError(t, wait.PollImmediate(10*time.Millisecond, time.Second, func() (done bool, err error) {
-		return c.queue.Len() == 1, nil
-	}))
+	require.Eventually(t, func() bool {
+		return c.queue.Len() == 1
+	}, time.Second, 10*time.Millisecond)
 	item, _ = c.queue.Get()
 	require.Equal(t, egress.Name, item)
 	require.NoError(t, c.syncEgress(item.(string)))
@@ -1216,9 +1216,9 @@ func TestExternalIPPoolUpdateShouldSyncEgress(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 
 	assertItemsInQueue := func(items ...string) {
-		require.NoError(t, wait.Poll(10*time.Millisecond, time.Second, func() (done bool, err error) {
-			return c.queue.Len() == len(items), nil
-		}))
+		require.Eventually(t, func() bool {
+			return c.queue.Len() == len(items)
+		}, time.Second, 10*time.Millisecond)
 		expectedItems := sets.New[string](items...)
 		for i := 0; i < len(items); i++ {
 			item, _ := c.queue.Get()
@@ -1325,10 +1325,10 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
 	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress1.Name, metav1.DeleteOptions{})
-	assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
+	assert.Eventually(t, func() bool {
 		_, err := c.egressLister.Get(egress1.Name)
-		return err != nil, nil
-	}))
+		return err != nil
+	}, time.Second, time.Millisecond*100)
 	checkQueueItemExistence(t, c.queue, egress1.Name)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err = c.syncEgress(egress1.Name)
@@ -1352,10 +1352,10 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress2.Name, metav1.DeleteOptions{})
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
-	assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
+	assert.Eventually(t, func() bool {
 		_, err := c.egressLister.Get(egress2.Name)
-		return err != nil, nil
-	}))
+		return err != nil
+	}, time.Second, time.Millisecond*100)
 	checkQueueItemExistence(t, c.queue, egress2.Name)
 	err = c.syncEgress(egress2.Name)
 	assert.NoError(t, err)
@@ -1368,10 +1368,10 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(4))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress3.Name, metav1.DeleteOptions{})
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
-	assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
+	assert.Eventually(t, func() bool {
 		_, err := c.egressLister.Get(egress3.Name)
-		return err != nil, nil
-	}))
+		return err != nil
+	}, time.Second, time.Millisecond*100)
 	checkQueueItemExistence(t, c.queue, egress3.Name)
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)

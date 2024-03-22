@@ -328,10 +328,11 @@ func DeleteMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 }
 
 func waitForSecretReady(client client.Client, secretName string, namespace string) error {
-	return wait.PollImmediate(
+	return wait.PollUntilContextTimeout(context.TODO(),
 		1*time.Second,
 		5*time.Second,
-		func() (bool, error) {
+		true,
+		func(ctx context.Context) (bool, error) {
 			secret := &corev1.Secret{}
 			if err := client.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: namespace}, secret); err != nil {
 				if apierrors.IsNotFound(err) {

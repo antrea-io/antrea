@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
@@ -32,9 +31,9 @@ type FakeEgressGroups struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var egressgroupsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "egressgroups"}
+var egressgroupsResource = v1beta2.SchemeGroupVersion.WithResource("egressgroups")
 
-var egressgroupsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "EgressGroup"}
+var egressgroupsKind = v1beta2.SchemeGroupVersion.WithKind("EgressGroup")
 
 // Get takes name of the egressGroup, and returns the corresponding egressGroup object, and an error if there is any.
 func (c *FakeEgressGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.EgressGroup, err error) {

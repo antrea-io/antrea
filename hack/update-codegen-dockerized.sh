@@ -85,7 +85,7 @@ fi
 
 function generate_antrea_client_code {
   # Generate protobuf code for CNI gRPC service with protoc.
-  protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
+  protoc --go_out=. --go-grpc_out=. pkg/apis/cni/v1beta1/cni.proto
 
   # Generate clientset and apis code with K8s codegen tools.
   $GOPATH/bin/client-gen \

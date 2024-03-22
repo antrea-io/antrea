@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
@@ -506,9 +505,9 @@ func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.endpointSliceEnabled {
 		return ctrl.NewControllerManagedBy(mgr).
 			For(&k8smcsv1alpha1.ServiceExport{}, versionChangePredicates).
-			Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
-			Watches(&source.Kind{Type: &discovery.EndpointSlice{}}, handler.EnqueueRequestsFromMapFunc(endpointSliceMapFunc), versionChangePredicates).
-			Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+			Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+			Watches(&discovery.EndpointSlice{}, handler.EnqueueRequestsFromMapFunc(endpointSliceMapFunc), versionChangePredicates).
+			Watches(&mcv1alpha2.ClusterSet{}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
 				builder.WithPredicates(statusReadyPredicate)).
 			WithOptions(controller.Options{
 				MaxConcurrentReconciles: common.DefaultWorkerCount,
@@ -517,9 +516,9 @@ func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8smcsv1alpha1.ServiceExport{}, versionChangePredicates).
-		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
-		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
-		Watches(&source.Kind{Type: &mcv1alpha2.ClusterSet{}}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
+		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+		Watches(&corev1.Endpoints{}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+		Watches(&mcv1alpha2.ClusterSet{}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
 			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
@@ -529,14 +528,13 @@ func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // clusterSetMapFunc handles ClusterSet events by enqueuing all ServiceExports
 // into the reconciler processing queue.
-func (r *ServiceExportReconciler) clusterSetMapFunc(a client.Object) []reconcile.Request {
+func (r *ServiceExportReconciler) clusterSetMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	requests := []reconcile.Request{}
 	if a.GetNamespace() != r.namespace {
 		return requests
 	}
 
-	ctx := context.TODO()
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: a.GetNamespace(), Name: a.GetName()}, clusterSet)
 	if err == nil {
 		if len(clusterSet.Status.Conditions) > 0 && clusterSet.Status.Conditions[0].Status == corev1.ConditionTrue {
@@ -566,7 +564,7 @@ func (r *ServiceExportReconciler) clusterSetMapFunc(a client.Object) []reconcile
 // When there are any Service or Endpoints changes, it might be reflected in ResourceExport
 // in leader cluster as well, so ServiceExportReconciler also needs to watch
 // Service and Endpoints events.
-func objectMapFunc(a client.Object) []reconcile.Request {
+func objectMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	return []reconcile.Request{
 		{
 			NamespacedName: types.NamespacedName{
@@ -577,7 +575,7 @@ func objectMapFunc(a client.Object) []reconcile.Request {
 	}
 }
 
-func endpointSliceMapFunc(a client.Object) []reconcile.Request {
+func endpointSliceMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	labels := a.GetLabels()
 	svcName := labels[discovery.LabelServiceName]
 	mappedObject := types.NamespacedName{}

@@ -310,7 +310,7 @@ func (t *testData) pollForPodAnnotation(podName string, found bool) ([]types.NPL
 	var exists bool
 	// do not use PollImmediate: 1 second is reserved for the controller to do his job and
 	// update Pod NPL annotations as needed.
-	err := wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		updatedPod, err := t.k8sClient.CoreV1().Pods(defaultNS).Get(context.TODO(), podName, metav1.GetOptions{})
 		require.NoError(t, err, "Failed to get Pod")
 		annotation := updatedPod.GetAnnotations()
@@ -489,7 +489,7 @@ func TestPodDelete(t *testing.T) {
 	require.NoError(t, err, "Pod deletion failed")
 	t.Logf("Successfully deleted Pod: %s", testPod.Name)
 
-	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		return !testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP), nil
 	})
 	assert.NoError(t, err, "Error when polling for port table update")

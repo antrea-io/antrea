@@ -759,13 +759,14 @@ func TestSyncEgressIP(t *testing.T) {
 func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolName string, used int) {
 	exists := controller.externalIPAllocator.IPPoolExists(poolName)
 	require.True(t, exists)
-	err := wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (found bool, err error) {
-		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		return eip.Status.Usage.Used == used, nil
-	})
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true,
+		func(ctx context.Context) (found bool, err error) {
+			eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			return eip.Status.Usage.Used == used, nil
+		})
 	assert.NoError(t, err)
 }
 

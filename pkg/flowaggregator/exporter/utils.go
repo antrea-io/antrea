@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -41,7 +42,7 @@ func getClusterUUID(k8sClient kubernetes.Interface) (uuid.UUID, error) {
 		k8sClient,
 	)
 	var clusterUUID uuid.UUID
-	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), retryInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		clusterIdentity, _, err := clusterIdentityProvider.Get()
 		if err != nil {
 			return false, nil

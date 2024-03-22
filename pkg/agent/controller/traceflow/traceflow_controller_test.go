@@ -31,7 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -227,7 +227,7 @@ func TestPreparePacket(t *testing.T) {
 							TCP: &crdv1beta1.TCPHeader{
 								SrcPort: 80,
 								DstPort: 81,
-								Flags:   pointer.Int32(11),
+								Flags:   ptr.To[int32](11),
 							},
 						},
 					},

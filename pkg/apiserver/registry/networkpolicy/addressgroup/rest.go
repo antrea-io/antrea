@@ -38,11 +38,12 @@ type REST struct {
 }
 
 var (
-	_ rest.Storage = &REST{}
-	_ rest.Watcher = &REST{}
-	_ rest.Scoper  = &REST{}
-	_ rest.Lister  = &REST{}
-	_ rest.Getter  = &REST{}
+	_ rest.Storage              = &REST{}
+	_ rest.Watcher              = &REST{}
+	_ rest.Scoper               = &REST{}
+	_ rest.Lister               = &REST{}
+	_ rest.Getter               = &REST{}
+	_ rest.SingularNameProvider = &REST{}
 )
 
 // NewREST returns a REST object that will work against API services.
@@ -103,4 +104,8 @@ func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) 
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	return rest.NewDefaultTableConvertor(controlplane.Resource("addressgroup")).ConvertToTable(ctx, obj, tableOptions)
+}
+
+func (r *REST) GetSingularName() string {
+	return "addressgroup"
 }

@@ -147,7 +147,7 @@ func TestAddExternalNode(t *testing.T) {
 			defer close(stopCh)
 			informerFactory.Start(stopCh)
 			go controller.Run(stopCh)
-			err := wait.PollImmediate(time.Millisecond*50, time.Second, func() (done bool, err error) {
+			err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
 				for _, ee := range tc.expectedEntities {
 					ok, err := checkExternalEntityExists(controller.crdClient, ee)
 					if err != nil {
@@ -416,7 +416,7 @@ func TestUpdateExternalNode(t *testing.T) {
 			defer close(stopCh)
 			informerFactory.Start(stopCh)
 			go controller.Run(stopCh)
-			err := wait.PollImmediate(time.Millisecond*50, time.Second, func() (done bool, err error) {
+			err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
 				entities, listErr := controller.crdClient.CrdV1alpha2().ExternalEntities(tc.externalNode.Namespace).List(context.TODO(), metav1.ListOptions{})
 				if listErr != nil {
 					return false, listErr
@@ -437,7 +437,7 @@ func TestUpdateExternalNode(t *testing.T) {
 
 			_, err = controller.crdClient.CrdV1alpha1().ExternalNodes(tc.externalNode.Namespace).Update(context.TODO(), tc.updatedExternalNode, metav1.UpdateOptions{})
 			require.NoError(t, err)
-			err = wait.PollImmediate(time.Millisecond*50, time.Second, func() (done bool, err error) {
+			err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
 				return checkExternalEntityExists(controller.crdClient, tc.expectedEntity)
 			})
 			assert.NoError(t, err)
@@ -488,7 +488,7 @@ func TestDeleteExternalNode(t *testing.T) {
 	err := controller.crdClient.CrdV1alpha1().ExternalNodes(externalNode.Namespace).Delete(context.TODO(), externalNode.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 	key, _ := keyFunc(externalNode)
-	err = wait.PollImmediate(time.Millisecond*50, time.Second, func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
 		entities, listErr := controller.crdClient.CrdV1alpha2().ExternalEntities(externalNode.Namespace).List(context.TODO(), metav1.ListOptions{})
 		if listErr != nil {
 			return false, listErr

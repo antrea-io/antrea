@@ -371,7 +371,7 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
-	ctx, _ := wait.ContextForChannel(stopCh)
+	ctx := wait.ContextForChannel(stopCh)
 
 	go func() {
 		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },

@@ -17,6 +17,7 @@ limitations under the License.
 package member
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -246,7 +247,7 @@ func TestNamespaceMapFunc(t *testing.T) {
 	mcReconciler.SetRemoteCommonArea(commonArea)
 
 	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, mcReconciler, "default")
-	actualReq := r.namespaceMapFunc(ns)
+	actualReq := r.namespaceMapFunc(context.Background(), ns)
 	assert.ElementsMatch(t, expReq, actualReq)
 }
 
@@ -342,18 +343,18 @@ func TestClusterSetMapFunc_LabelIdentity(t *testing.T) {
 	}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(pods).Build()
 	r := NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, clusterSet.Namespace)
-	requests := r.clusterSetMapFunc(clusterSet)
+	requests := r.clusterSetMapFunc(context.Background(), clusterSet)
 	assert.Equal(t, expectedReqs, requests)
 
 	r = NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, "mismatch_ns")
-	requests = r.clusterSetMapFunc(clusterSet)
+	requests = r.clusterSetMapFunc(context.Background(), clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 
 	// non-existing ClusterSet
 	r = NewLabelIdentityReconciler(fakeClient, common.TestScheme, nil, "default")
 	r.labelToPodsCache["label"] = sets.New[string]("default/nginx")
 	r.podLabelCache["default/nginx"] = "label"
-	requests = r.clusterSetMapFunc(clusterSet2)
+	requests = r.clusterSetMapFunc(context.Background(), clusterSet2)
 	assert.Equal(t, []reconcile.Request{}, requests)
 	assert.Equal(t, 0, len(r.labelToPodsCache))
 	assert.Equal(t, 0, len(r.labelToPodsCache))

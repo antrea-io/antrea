@@ -134,7 +134,7 @@ var _ = BeforeSuite(func() {
 
 	k8sServerURL = testEnv.Config.Host
 	stopCh := signals.RegisterSignalHandlers()
-	ctx, _ := wait.ContextForChannel(stopCh)
+	ctx := wait.ContextForChannel(stopCh)
 
 	By("Creating MemberClusterSetReconciler")
 	k8sClient.Create(ctx, leaderNS)

@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -34,9 +33,9 @@ type FakeNetworkPolicies struct {
 	ns   string
 }
 
-var networkpoliciesResource = schema.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "networkpolicies"}
+var networkpoliciesResource = v1beta1.SchemeGroupVersion.WithResource("networkpolicies")
 
-var networkpoliciesKind = schema.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "NetworkPolicy"}
+var networkpoliciesKind = v1beta1.SchemeGroupVersion.WithKind("NetworkPolicy")
 
 // Get takes name of the networkPolicy, and returns the corresponding networkPolicy object, and an error if there is any.
 func (c *FakeNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.NetworkPolicy, err error) {

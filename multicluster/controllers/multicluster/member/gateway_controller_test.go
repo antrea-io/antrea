@@ -17,6 +17,7 @@ limitations under the License.
 package member
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -81,6 +82,7 @@ func TestGatewayReconciler(t *testing.T) {
 	gwNode1New.GatewayIP = "10.10.10.12"
 	staleExistingResExport := existingResExport.DeepCopy()
 	staleExistingResExport.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+	staleExistingResExport.Finalizers = append(staleExistingResExport.Finalizers, constants.ResourceExportFinalizer)
 	tests := []struct {
 		name           string
 		namespacedName types.NamespacedName
@@ -148,10 +150,10 @@ func TestGatewayReconciler(t *testing.T) {
 			node := n
 			obj = append(obj, &node)
 		}
-		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(obj...).Build()
-		fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().Build()
+		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(obj...).WithStatusSubresource(obj...).Build()
+		fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().WithStatusSubresource().Build()
 		if tt.resExport != nil {
-			fakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.resExport).Build()
+			fakeRemoteClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.resExport).WithStatusSubresource(tt.resExport).Build()
 		}
 		commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, common.LeaderNamespace, nil)
 		mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
@@ -254,15 +256,17 @@ func TestClusterSetMapFunc_Gateway(t *testing.T) {
 			},
 		},
 	}
+	ctx := context.Background()
+
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, gw1).Build()
 	r := NewGatewayReconciler(fakeClient, common.TestScheme, "default", []string{"10.200.1.1/16"}, nil)
-	requests := r.clusterSetMapFunc(clusterSet)
+	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
 
-	requests = r.clusterSetMapFunc(deletedClusterSet)
+	requests = r.clusterSetMapFunc(ctx, deletedClusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 
 	r = NewGatewayReconciler(fakeClient, common.TestScheme, "mismatch_ns", []string{"10.200.1.1/16"}, nil)
-	requests = r.clusterSetMapFunc(clusterSet)
+	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 }

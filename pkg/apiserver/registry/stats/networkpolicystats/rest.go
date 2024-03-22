@@ -52,10 +52,11 @@ func NewREST(p statsProvider) *REST {
 }
 
 var (
-	_ rest.Storage = &REST{}
-	_ rest.Scoper  = &REST{}
-	_ rest.Getter  = &REST{}
-	_ rest.Lister  = &REST{}
+	_ rest.Storage              = &REST{}
+	_ rest.Scoper               = &REST{}
+	_ rest.Getter               = &REST{}
+	_ rest.Lister               = &REST{}
+	_ rest.SingularNameProvider = &REST{}
 )
 
 type statsProvider interface {
@@ -142,4 +143,8 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 
 func (r *REST) NamespaceScoped() bool {
 	return true
+}
+
+func (r *REST) GetSingularName() string {
+	return "networkpolicystats"
 }

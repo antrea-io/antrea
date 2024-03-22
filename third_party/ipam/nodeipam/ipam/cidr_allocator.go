@@ -41,7 +41,7 @@ import (
 	"net"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -144,18 +144,19 @@ func listNodes(kubeClient clientset.Interface) (*v1.NodeList, error) {
 	var nodeList *v1.NodeList
 	// We must poll because apiserver might not be up. This error causes
 	// controller manager to restart.
-	if pollErr := wait.Poll(nodePollInterval, apiserverStartupGracePeriod, func() (bool, error) {
-		var err error
-		nodeList, err = kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{
-			FieldSelector: fields.Everything().String(),
-			LabelSelector: labels.Everything().String(),
-		})
-		if err != nil {
-			klog.Errorf("Failed to list all nodes: %v", err)
-			return false, nil
-		}
-		return true, nil
-	}); pollErr != nil {
+	if pollErr := wait.PollUntilContextTimeout(context.TODO(), nodePollInterval, apiserverStartupGracePeriod, false,
+		func(ctx context.Context) (bool, error) {
+			var err error
+			nodeList, err = kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{
+				FieldSelector: fields.Everything().String(),
+				LabelSelector: labels.Everything().String(),
+			})
+			if err != nil {
+				klog.Errorf("Failed to list all nodes: %v", err)
+				return false, nil
+			}
+			return true, nil
+		}); pollErr != nil {
 		return nil, fmt.Errorf("failed to list all nodes in %v, cannot proceed without updating CIDR map",
 			apiserverStartupGracePeriod)
 	}

@@ -477,7 +477,7 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	expectedIPAddressJson, _ := json.Marshal(expectedIPAddressMap)
 	tb.Logf("expectedIPAddressMap: %s", expectedIPAddressJson)
 
-	err = wait.Poll(time.Second*3, time.Second*15, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), time.Second*3, time.Second*15, false, func(ctx context.Context) (bool, error) {
 		ipPool, err := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 		if err != nil {
 			tb.Fatalf("Failed to get IPPool %s, err: %+v", ipPoolName, err)
@@ -574,7 +574,7 @@ func deleteIPPoolWrapper(tb testing.TB, data *TestData, name string) {
 
 func checkIPPoolsEmpty(tb testing.TB, data *TestData, names []string) {
 	count := 0
-	err := wait.PollImmediate(3*time.Second, defaultTimeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		for _, name := range names {
 			ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
 			if len(ipPool.Status.IPAddresses) > 0 {

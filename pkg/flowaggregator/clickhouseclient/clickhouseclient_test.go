@@ -31,7 +31,6 @@ import (
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
@@ -314,10 +313,10 @@ func TestUpdateCH(t *testing.T) {
 	chExportProc.Start()
 	defer chExportProc.Stop()
 
-	require.NoError(t, wait.Poll(commitInterval, time.Second, func() (bool, error) {
+	require.Eventually(t, func() bool {
 		err := mock1.ExpectationsWereMet()
-		return (err == nil), nil
-	}), "timeout while waiting for first flow record to be committed (before DB connection update)")
+		return err == nil
+	}, time.Second, commitInterval, "timeout while waiting for first flow record to be committed (before DB connection update)")
 
 	mock2.ExpectBegin()
 	mock2.ExpectPrepare(insertQuery).ExpectExec().WillReturnResult(sqlmock.NewResult(0, 1))
@@ -332,10 +331,10 @@ func TestUpdateCH(t *testing.T) {
 		chExportProc.deque.PushBack(recordRow)
 	}()
 
-	require.NoError(t, wait.Poll(commitInterval, time.Second, func() (bool, error) {
+	require.Eventually(t, func() bool {
 		err := mock2.ExpectationsWereMet()
-		return (err == nil), nil
-	}), "timeout while waiting for second flow record to be committed (after DB connection update)")
+		return err == nil
+	}, time.Second, commitInterval, "timeout while waiting for second flow record to be committed (after DB connection update)")
 }
 
 func TestParseDatabaseURL(t *testing.T) {

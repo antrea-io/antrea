@@ -38,6 +38,8 @@ import (
 	"antrea.io/antrea/test/e2e/utils"
 )
 
+var ErrPodNotFound = errors.New("pod not found")
+
 type KubernetesUtils struct {
 	*TestData
 	podCache map[string][]v1.Pod
@@ -60,13 +62,15 @@ type TestCase struct {
 // TestStep is a single unit of testing spec. It includes the policy specs that need to be
 // applied for this test, the port to test traffic on and the expected Reachability matrix.
 type TestStep struct {
-	Name          string
-	Reachability  *Reachability
-	TestResources []metav1.Object
-	Ports         []int32
-	Protocol      utils.AntreaPolicyProtocol
-	Duration      time.Duration
-	CustomProbes  []*CustomProbe
+	Name           string
+	Reachability   *Reachability
+	TestResources  []metav1.Object
+	Ports          []int32
+	Protocol       utils.AntreaPolicyProtocol
+	Duration       time.Duration
+	CustomProbes   []*CustomProbe
+	CustomSetup    func()
+	CustomTeardown func()
 }
 
 // CustomProbe will spin up (or update) SourcePod and DestPod such that Add event of Pods
@@ -89,7 +93,11 @@ type probeResult struct {
 	err          error
 }
 
-var ErrPodNotFound = errors.New("Pod not found")
+// TestNamespaceMeta holds the relevant metadata of a test Namespace during initialization.
+type TestNamespaceMeta struct {
+	Name   string
+	Labels map[string]string
+}
 
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label if it's found.
 // If the pod is not found, GetPodByLabel returns "ErrPodNotFound".
@@ -736,9 +744,9 @@ func (data *TestData) DeleteNetworkPolicy(ns, name string) error {
 }
 
 // CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
-func (data *TestData) CleanNetworkPolicies(namespaces map[string]string) error {
+func (data *TestData) CleanNetworkPolicies(namespaces map[string]TestNamespaceMeta) error {
 	for _, ns := range namespaces {
-		if err := data.clientset.NetworkingV1().NetworkPolicies(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+		if err := data.clientset.NetworkingV1().NetworkPolicies(ns.Name).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
 			return fmt.Errorf("unable to delete NetworkPolicies in Namespace '%s': %w", ns, err)
 		}
 	}
@@ -938,7 +946,7 @@ func (data *TestData) CleanANNPs(namespaces []string) error {
 
 func (data *TestData) WaitForANNPCreationAndRealization(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ANNP '%s/%s' to be realized", namespace, name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		annp, err := data.crdClient.CrdV1beta1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
@@ -952,7 +960,7 @@ func (data *TestData) WaitForANNPCreationAndRealization(t *testing.T, namespace 
 
 func (data *TestData) WaitForACNPCreationAndRealization(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be created and realized", name)
-	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
 		acnp, err := data.crdClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
@@ -1101,11 +1109,15 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, podsPerNamespace []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
 	for key, ns := range namespaces {
 		if createNamespaces {
-			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
-			if err != nil {
+			if ns.Labels == nil {
+				ns.Labels = make(map[string]string)
+			}
+			// convenience label for testing
+			ns.Labels["ns"] = ns.Name
+			if _, err := k.CreateOrUpdateNamespace(ns.Name, ns.Labels); err != nil {
 				return nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
 			}
 		}
@@ -1117,20 +1129,20 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 		if hostNetworks != nil {
 			hostNetwork = hostNetworks[key]
 		}
-		for _, pod := range pods {
+		for _, pod := range podsPerNamespace {
 			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)
-			deployment := ns + pod
-			_, err := k.CreateOrUpdateDeployment(ns, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
+			deployment := ns.Name + pod
+			_, err := k.CreateOrUpdateDeployment(ns.Name, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create/update Deployment '%s/%s': %w", ns, pod, err)
 			}
 		}
 	}
 	var allPods []Pod
-	podIPs := make(map[string][]string, len(pods)*len(namespaces))
-	for _, podName := range pods {
+	podIPs := make(map[string][]string, len(podsPerNamespace)*len(namespaces))
+	for _, podName := range podsPerNamespace {
 		for _, ns := range namespaces {
-			allPods = append(allPods, NewPod(ns, podName))
+			allPods = append(allPods, NewPod(ns.Name, podName))
 		}
 	}
 	for _, pod := range allPods {
@@ -1150,7 +1162,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 	return podIPs, nil
 }
 
-func (k *KubernetesUtils) Cleanup(namespaces map[string]string) {
+func (k *KubernetesUtils) Cleanup(namespaces map[string]TestNamespaceMeta) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
 		log.Errorf("Error when cleaning up ACNPs: %v", err)
@@ -1161,7 +1173,7 @@ func (k *KubernetesUtils) Cleanup(namespaces map[string]string) {
 
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
-		if err := k.DeleteNamespace(ns, defaultTimeout); err != nil {
+		if err := k.DeleteNamespace(ns.Name, defaultTimeout); err != nil {
 			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}

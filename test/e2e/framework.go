@@ -53,7 +53,7 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubectl/pkg/util/podutils"
 	utilnet "k8s.io/utils/net"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -801,7 +801,7 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
 	if timeout >= 0 {
-		return wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		return wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 			if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
 					// Success
@@ -865,7 +865,7 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 	if err != nil || rc != 0 {
 		return "", fmt.Errorf("error when deploying the ClickHouse Operator YML; %s not available on the control-plane Node", chOperatorYML)
 	}
-	if err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 		rc, stdout, stderr, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", visibilityYML))
 		if err != nil || rc != 0 {
 			// ClickHouseInstallation CRD from ClickHouse Operator install bundle applied soon before
@@ -888,7 +888,7 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 
 	// check clickhouse service http port for service connectivity
 	var chSvc *corev1.Service
-	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		chSvc, err = data.GetService(flowVisibilityNamespace, "clickhouse-clickhouse")
 		if err != nil {
 			return false, nil
@@ -899,7 +899,7 @@ func (data *TestData) deployFlowVisibilityClickHouse(o flowVisibilityTestOptions
 		return "", fmt.Errorf("timeout waiting for ClickHouse Service: %v", err)
 	}
 
-	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		rc, stdout, stderr, err := testData.RunCommandOnNode(controlPlaneNodeName(),
 			fmt.Sprintf("curl -Ss %s:%s", chSvc.Spec.ClusterIP, clickHouseHTTPPort))
 		if rc != 0 || err != nil {
@@ -1075,7 +1075,7 @@ func (data *TestData) getAgentContainersRestartCount() (int, error) {
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		getDS := func(dsName string, os string) (*appsv1.DaemonSet, error) {
 			ds, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), dsName, metav1.GetOptions{})
 			if err != nil {
@@ -1126,7 +1126,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 		}
 		return true, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", antreaNamespace))
 		return fmt.Errorf("antrea-agent DaemonSet not ready within %v; kubectl describe pod output: %v", defaultTimeout, stdout)
 	} else if err != nil {
@@ -1138,7 +1138,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 
 // waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
 func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
-	err := wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		deployment, err := data.clientset.AppsV1().Deployments("kube-system").Get(context.TODO(), "coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
@@ -1149,7 +1149,7 @@ func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
 		// Keep trying
 		return false, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		return fmt.Errorf("some CoreDNS replicas are still unavailable after %v", defaultTimeout)
 	} else if err != nil {
 		return err
@@ -1240,7 +1240,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 			}
 			return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
 		}
-		err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 			if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), ds, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
 					// Antrea DaemonSet does not exist any more, success
@@ -1448,7 +1448,7 @@ func (b *PodBuilder) Create(data *TestData) error {
 		HostNetwork:        b.HostNetwork,
 		ServiceAccountName: b.ServiceAccountName,
 		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
-		TerminationGracePeriodSeconds: pointer.Int64(1),
+		TerminationGracePeriodSeconds: ptr.To[int64](1),
 	}
 	if b.NodeName != "" {
 		podSpec.NodeSelector = map[string]string{
@@ -1579,7 +1579,7 @@ func (data *TestData) DeletePodAndWait(timeout time.Duration, name string, ns st
 	if err := data.DeletePod(ns, name); err != nil {
 		return err
 	}
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		if _, err := data.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -1589,7 +1589,7 @@ func (data *TestData) DeletePodAndWait(timeout time.Duration, name string, ns st
 		// Keep trying
 		return false, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		return fmt.Errorf("Pod '%s' still visible to client after %v", name, timeout)
 	}
 	return err
@@ -1601,7 +1601,7 @@ type PodCondition func(*corev1.Pod) (bool, error)
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) PodWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
 	var pod *corev1.Pod
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		var err error
 		pod, err = data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
@@ -1613,7 +1613,7 @@ func (data *TestData) PodWaitFor(timeout time.Duration, name, namespace string, 
 		return condition(pod)
 	})
 	if err != nil {
-		if err == wait.ErrWaitTimeout && pod != nil {
+		if wait.Interrupted(err) && pod != nil {
 			return nil, fmt.Errorf("timed out waiting for the condition, Pod.Status: %s", pod.Status.String())
 		}
 		return nil, err
@@ -1743,7 +1743,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
 
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		for _, pod := range pods.Items {
 			if _, err := data.clientset.CoreV1().Pods(antreaNamespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
@@ -1762,7 +1762,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	delay := time.Since(start)
 
 	// wait for new antrea-agent Pod
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
@@ -1857,7 +1857,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 
 	var newPod *corev1.Pod
 	// wait for new antrea-controller Pod
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
@@ -2075,7 +2075,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name, namespac
 	if err := data.deleteService(namespace, name); err != nil {
 		return err
 	}
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		if _, err := data.clientset.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -2085,7 +2085,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name, namespac
 		// Keep trying
 		return false, nil
 	})
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		return fmt.Errorf("Service '%s' still visible to client after %v", name, timeout)
 	}
 	return err
@@ -2660,7 +2660,7 @@ func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containe
 	}
 
 	log.Infof("Copying coverage files from Pod '%s'", podName)
-	if err := wait.PollImmediate(1*time.Second, 5*time.Second, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 		if err = data.copyPodFiles(podName, containerName, namespace, covFile, covDir); err != nil {
 			log.Infof("Coverage file not available yet for copy: %v", err)
 			return false, nil
@@ -2752,7 +2752,10 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 	// copy antctl coverage files from node to the coverage directory
 	var cmd string
 	if testOptions.providerName == "kind" {
-		cmd = fmt.Sprintf("/bin/sh -c find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
+		// Do not use single quotes here, as they will be interpreted literally.
+		// RunDockerExecCommand does not invoke a shell by default and it will split this
+		// string into a list of args.
+		cmd = fmt.Sprintf("find %s -maxdepth 1 -name antctl*.out", cpNodeCoverageDir)
 	} else {
 		cmd = fmt.Sprintf("find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
 	}
@@ -2863,7 +2866,7 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 	podSpec := corev1.PodSpec{
 		Tolerations: controlPlaneNoScheduleTolerations(),
 		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
-		TerminationGracePeriodSeconds: pointer.Int64(1),
+		TerminationGracePeriodSeconds: ptr.To[int64](1),
 		Containers: []corev1.Container{
 			{
 				Name:            ctrName,
@@ -2917,7 +2920,7 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 }
 
 func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string, namespace string) error {
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -2946,7 +2949,7 @@ func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrN
 			},
 		},
 		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
-		TerminationGracePeriodSeconds: pointer.Int64(1),
+		TerminationGracePeriodSeconds: ptr.To[int64](1),
 	}
 	stsSpec := appsv1.StatefulSetSpec{
 		Selector: &metav1.LabelSelector{
@@ -3019,7 +3022,7 @@ func (data *TestData) restartStatefulSet(name string, ns string) (*appsv1.Statef
 }
 
 func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName string, namespace string) error {
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		sts, err := data.clientset.AppsV1().StatefulSets(namespace).Get(context.TODO(), stsName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -3046,7 +3049,7 @@ func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
 }
 
 func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.Duration, name string) error {
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, true, func(ctx context.Context) (bool, error) {
 		aai, err := data.crdClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
