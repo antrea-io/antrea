@@ -34,6 +34,13 @@ else
         DOCKER_IMG_VERSION := $(VERSION)
 endif
 
+ifndef CUSTOM_BUILD_TAG
+        BUILD_TAGS := $(shell build/images/build-tag.sh)
+else
+        BUILD_TAGS := $(CUSTOM_BUILD_TAG)
+        DOCKER_IMG_VERSION := $(BUILD_TAGS)
+endif
+
 VERSION_LDFLAGS = -X antrea.io/antrea/pkg/version.Version=$(VERSION)
 VERSION_LDFLAGS += -X antrea.io/antrea/pkg/version.GitSHA=$(GIT_SHA)
 VERSION_LDFLAGS += -X antrea.io/antrea/pkg/version.GitTreeState=$(GIT_TREE_STATE)
@@ -46,3 +53,4 @@ version-info:
 	@echo "GIT_TREE_STATE: $(GIT_TREE_STATE)"
 	@echo "RELEASE_STATUS: $(RELEASE_STATUS)"
 	@echo "DOCKER_IMG_VERSION: $(DOCKER_IMG_VERSION)"
+        @echo "BUILD_TAG: $(BUILD_TAG)"

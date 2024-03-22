@@ -29,7 +29,12 @@ all Dockerfiles.
         --coverage              Build the image with support for code coverage.
         --platform <PLATFORM>   Target platform for the images if server is multi-platform capable.
         --distro <distro>       Target Linux distribution.
-        --no-cache              Do not use the local build cache nor the cached image from the registry."
+        --no-cache              Do not use the local build cache nor the cached image from the registry.
+        --build-tag             Custom build tag for images."
+
+function print_usage {
+    echoerr "$_usage"
+}
 
 PULL=false
 PUSH=false
@@ -37,6 +42,7 @@ NO_CACHE=false
 COVERAGE=false
 PLATFORM=""
 DISTRO="ubuntu"
+CUSTOM_BUILD_TAG=""
 
 while [[ $# -gt 0 ]]
 do
@@ -66,6 +72,10 @@ case $key in
     --no-cache)
     NO_CACHE=true
     shift
+    ;;
+    --build-tag)
+    CUSTOM_BUILD_TAG="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -118,6 +128,9 @@ GO_VERSION=$(head -n 1 build/images/deps/go-version)
 
 BUILD_TAG=$(build/images/build-tag.sh)
 echo "BUILD_TAG: $BUILD_TAG"
+if [ "$CUSTOM_BUILD_TAG" != "" ]; then
+    ARGS="$ARGS --build-tag $CUSTOM_BUILD_TAG"
+fi
 
 # We pull all images ahead of time, instead of calling the independent build.sh
 # scripts with "--pull". We do not want to overwrite the antrea/openvswitch
@@ -159,18 +172,36 @@ export NO_PULL=1
 export DOCKER_BUILDKIT=1
 if [ "$DISTRO" == "ubuntu" ]; then
     if $COVERAGE; then
-        make build-controller-ubuntu-coverage
-        make build-agent-ubuntu-coverage
-        make build-ubuntu-coverage
+        if [ "$CUSTOM_BUILD_TAG" != "" ]; then
+            make build-controller-ubuntu-coverage CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+            make build-agent-ubuntu-coverage CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+            make build-ubuntu-coverage CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+        else
+            make build-controller-ubuntu-coverage
+            make build-agent-ubuntu-coverage
+            make build-ubuntu-coverage
+        fi
     else
-        make build-controller-ubuntu
-        make build-agent-ubuntu
-        make build-ubuntu
+        if [ "$CUSTOM_BUILD_TAG" != "" ]; then
+            make build-controller-ubuntu CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+            make build-agent-ubuntu CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+            make build-ubuntu CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+        else
+            make build-controller-ubuntu
+            make build-agent-ubuntu
+            make build-ubuntu
+        fi
     fi
 elif [ "$DISTRO" == "ubi" ]; then
-    make build-controller-ubi
-    make build-agent-ubi
-    make build-ubi
+    if [ "$CUSTOM_BUILD_TAG" != "" ]; then
+        make build-controller-ubi CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+        make build-agent-ubi CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+        make build-ubi CUSTOM_BUILD_TAG=$CUSTOM_BUILD_TAG
+    else
+        make build-controller-ubi
+        make build-agent-ubi
+        make build-ubi
+    fi
 fi
 
 popd > /dev/null

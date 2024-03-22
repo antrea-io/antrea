@@ -29,13 +29,19 @@ Build the antrea openvswitch image.
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
         --distro <distro>       Target Linux distribution
-        --no-cache              Do not use the local build cache nor the cached image from the registry"
+        --no-cache              Do not use the local build cache nor the cached image from the registry
+        --build-tag             Custom build tag for images."
+
+function print_usage {
+    echoerr "$_usage"
+}
 
 PULL=false
 PUSH=false
 NO_CACHE=false
 PLATFORM=""
 DISTRO="ubuntu"
+CUSTOM_BUILD_TAG=""
 
 while [[ $# -gt 0 ]]
 do
@@ -61,6 +67,10 @@ case $key in
     --no-cache)
     NO_CACHE=true
     shift
+    ;;
+    --build-tag)
+    CUSTOM_BUILD_TAG="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -103,6 +113,10 @@ OVS_VERSION=$(head -n 1 ../deps/ovs-version)
 
 BUILD_TAG=$(../build-tag.sh)
 
+if [[ $CUSTOM_BUILD_TAG == "" ]]; then
+    CUSTOM_BUILD_TAG=$BUILD_TAG
+fi
+
 if $PULL; then
     if [ "$DISTRO" == "ubuntu" ]; then
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
@@ -120,6 +134,7 @@ fi
 function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
+    local custom_build_tag="$CUSTOM_BUILD_TAG"
     local build_args="--build-arg OVS_VERSION=$OVS_VERSION"
     local cache_args=""
     if $PUSH; then
@@ -130,7 +145,7 @@ function docker_build_and_push() {
     else
         cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_TAG,mode=max"
     fi
-    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args -f $dockerfile .
+    docker buildx build $PLATFORM_ARG -o type=docker -t $image:$custom_build_tag $cache_args $build_args -f $dockerfile .
 
     if $PUSH; then
         docker push $image:$BUILD_TAG
