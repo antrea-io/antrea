@@ -6840,6 +6840,7 @@ spec:
               add:
                 - SYS_MODULE
           env:
+            # If coverage is enabled, provide coverage directory variable needed by Go
             # SKIP_CNI_BINARIES takes in values as a comma separated list of
             # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
             - name: SKIP_CNI_BINARIES
@@ -6887,6 +6888,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # If coverage is enabled, provide coverage directory variable needed by Go
           resources:
             requests:
               cpu: 200m

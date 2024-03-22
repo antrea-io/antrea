@@ -97,6 +97,11 @@ spec:
             - name: {{ $k | quote }}
               value: {{ $v | quote }}
             {{- end }}
+            # If coverage is enabled, provide coverage directory variable needed by Go 
+            {{- if ((.Values.testing).coverage) }}
+            - name: GOCOVERDIR
+              value: /tmp/coverage
+            {{- end }}
             # SKIP_CNI_BINARIES takes in values as a comma separated list of
             # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
             - name: SKIP_CNI_BINARIES
@@ -130,8 +135,15 @@ spec:
           image: {{ include "antreaAgentImage" . | quote }}
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           {{- if ((.Values.testing).coverage) }}
-          command: ["/bin/sh"]
-          args: ["-c", "sleep 2; antrea-agent-coverage -test.run=TestBincoverRunMain -test.coverprofile=antrea-agent.cov.out -args-file=/agent-arg-file; while true; do sleep 5 & wait $!; done"]
+          args:
+            - "antrea-agent-coverage"
+            - "--config=/etc/antrea/antrea-agent.conf"
+            - "--logtostderr=false"
+            - "--log_dir=/var/log/antrea"
+            - "--alsologtostderr"
+            - "--log_file_max_size=100"
+            - "--log_file_max_num=4"
+            - "--v=4"
           {{- else}}
           command: ["antrea-agent"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).-
@@ -163,6 +175,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # If coverage is enabled, provide coverage directory variable needed by Go 
+            {{- if ((.Values.testing).coverage) }}
+            - name: GOCOVERDIR
+              value: /tmp/coverage
+            {{- end }}
             {{- if eq .Values.trafficEncryptionMode "ipsec" }}
             # Pre-shared key for IPsec IKE.
             - name: ANTREA_IPSEC_PSK
