@@ -198,60 +198,6 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
-  conduct-connectivity-test:
-    name: Test connectivity using antctl test command
-    needs: [build-antrea-coverage-image]
-    runs-on: [ubuntu-latest]
-    steps:
-      - name: Free disk space
-        run: |
-          sudo apt-get clean
-          df -h
-      - uses: actions/checkout@v4
-        with:
-          show-progress: false
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v4
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
-      - name: Create Kind Cluster
-        run: |
-          cat <<EOF > kind-config.yml
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          networking:
-            disableDefaultCNI: true
-            podSubnet: 10.10.0.0/16
-          nodes:
-          - role: control-plane
-          - role: worker
-          - role: worker
-          EOF
-          kind create cluster --config kind-config.yml
-      - name: load docker image into kind
-        run: |
-          kind load docker-image antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-agent-ubuntu-coverage:latest
-          kubectl apply -f build/yamls/antrea.yml
-      - name: build antctl binaries
-        run: |
-          make antctl
-          sudo cp bin/antctl-linux /usr/local/bin/antctl
-      - name: run antctl command
-        run: |
-          antctl test
-
   test-e2e-encap-all-features-enabled:
     name: E2e tests on a Kind cluster on Linux with all features enabled
     needs: [build-antrea-coverage-image]
@@ -792,6 +738,60 @@ jobs:
           name: api-compatible-with-client-version-n-2.tar.gz
           path: log.tar.gz
           retention-days: 30
+
+  conduct-connectivity-test:
+    name: Test connectivity using antctl test command
+    needs: [ build-antrea-coverage-image ]
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - name: Free disk space
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v4
+        with:
+          show-progress: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v4
+        with:
+          name: antrea-ubuntu-cov
+      - name: Load Antrea image
+        run: |
+          docker load -i antrea-ubuntu.tar
+      - name: Install Kind
+        run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Create Kind Cluster
+        run: |
+          cat <<EOF > kind-config.yml
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          networking:
+            disableDefaultCNI: true
+            podSubnet: 10.10.0.0/16
+          nodes:
+          - role: control-plane
+          - role: worker
+          - role: worker
+          EOF
+          kind create cluster --config kind-config.yml
+      - name: load docker image into kind
+        run: |
+          kind load docker-image antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-agent-ubuntu-coverage:latest
+          kubectl apply -f build/yamls/antrea.yml
+      - name: build antctl binaries
+        run: |
+          make antctl
+          sudo cp bin/antctl-linux /usr/local/bin/antctl
+      - name: run antctl command
+        run: |
+          antctl test
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
