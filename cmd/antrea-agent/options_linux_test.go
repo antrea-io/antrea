@@ -47,23 +47,6 @@ func TestMulticlusterOptions(t *testing.T) {
 			expectedErr: "",
 		},
 		{
-			name: "Enable",
-			mcConfig: agentconfig.MulticlusterConfig{
-				Enable: true,
-			},
-			featureGate: true,
-			expectedErr: "",
-		},
-		{
-			name: "Enable and EnableGateway",
-			mcConfig: agentconfig.MulticlusterConfig{
-				Enable:        true,
-				EnableGateway: true,
-			},
-			featureGate: true,
-			expectedErr: "",
-		},
-		{
 			name: "EnableGateway and EnableStretchedNetworkPolicy",
 			mcConfig: agentconfig.MulticlusterConfig{
 				EnableGateway:                true,
@@ -112,10 +95,10 @@ func TestMulticlusterOptions(t *testing.T) {
 			o := &Options{config: config, enableAntreaProxy: true}
 			features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 			o.setDefaults()
-			if tt.mcConfig.Enable && tt.featureGate {
+			if tt.mcConfig.EnableGateway && tt.featureGate {
 				assert.True(t, o.config.Multicluster.EnableGateway)
 			}
-			if !tt.mcConfig.Enable && !tt.mcConfig.EnableGateway {
+			if !tt.mcConfig.EnableGateway {
 				assert.False(t, o.config.Multicluster.EnableGateway)
 			}
 

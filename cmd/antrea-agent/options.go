@@ -338,10 +338,6 @@ func (o *Options) validateMulticastConfig(encryptionMode config.TrafficEncryptio
 		for _, version := range o.config.Multicast.IGMPQueryVersions {
 			o.igmpQueryVersions = append(o.igmpQueryVersions, uint8(version))
 		}
-		if len(o.config.Multicast.MulticastInterfaces) == 0 && len(o.config.MulticastInterfaces) > 0 {
-			klog.InfoS("The multicastInterfaces option is deprecated, please use multicast.multicastInterfaces instead")
-			o.config.Multicast.MulticastInterfaces = o.config.MulticastInterfaces
-		}
 	} else if o.config.Multicast.Enable {
 		klog.InfoS("The multicast.enable config option is set to true, but it will be ignored because the Multicast feature gate is disabled")
 	}
@@ -484,13 +480,6 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Multicluster) {
-		if o.config.Multicluster.Enable {
-			// Multicluster.Enable is deprecated but it may be set by an earlier version
-			// deployment manifest. If it is set to true, pass the value to
-			// Multicluster.EnableGateway.
-			o.config.Multicluster.EnableGateway = true
-		}
-
 		if o.config.Multicluster.EnableGateway && o.config.Multicluster.Namespace == "" {
 			o.config.Multicluster.Namespace = env.GetPodNamespace()
 		}
@@ -637,9 +626,6 @@ func (o *Options) validateExternalNodeOptions() error {
 	}
 	if o.config.NodePortLocal.Enable {
 		unsupported = append(unsupported, "NodePortLocal")
-	}
-	if o.config.EnableIPSecTunnel {
-		unsupported = append(unsupported, "EnableIPSecTunnel")
 	}
 	if unsupported != nil {
 		return fmt.Errorf("unsupported features on Virtual Machine: {%s}", strings.Join(unsupported, ", "))

@@ -63,7 +63,6 @@ func newMCDefaultRouteController(t *testing.T,
 	ciImportInformer := mcInformerFactory.Multicluster().V1alpha1().ClusterInfoImports()
 
 	multiclusterConfig := agent.MulticlusterConfig{
-		Enable:                       true,
 		EnableGateway:                true,
 		Namespace:                    "default",
 		EnableStretchedNetworkPolicy: true,

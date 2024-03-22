@@ -64,8 +64,6 @@ type ControllerConfig struct {
 	// ClientCAFile is the file path of the certificate bundle for all the signers that is recognized for incoming
 	// client certificates.
 	ClientCAFile string `yaml:"clientCAFile,omitempty"`
-	// Legacy CRD mirroring (deprecated).
-	LegacyCRDMirroring *bool `yaml:"legacyCRDMirroring,omitempty"`
 	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
 	// It is typically used when kube-proxy is not deployed (replaced by AntreaProxy) and kube-controller-manager
 	// does not run NodeIPAMController (replaced by Antrea NodeIPAM).

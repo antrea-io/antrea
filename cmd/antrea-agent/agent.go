@@ -194,10 +194,6 @@ func run(o *Options) error {
 
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
-	if o.config.EnableIPSecTunnel {
-		klog.InfoS("enableIPSecTunnel is deprecated, use trafficEncryptionMode instead.")
-		encryptionMode = config.TrafficEncryptionModeIPSec
-	}
 	_, ipsecAuthenticationMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
 
 	networkConfig := &config.NetworkConfig{
