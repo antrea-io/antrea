@@ -133,7 +133,7 @@ const (
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	toolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.2-1"
+	toolboxImage        = "projects.registry.vmware.com/antrea/toolbox:1.3-0"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.8.2"
 	ipfixCollectorPort  = "4739"
 	clickHouseHTTPPort  = "8123"
