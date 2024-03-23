@@ -18,6 +18,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,14 +28,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Client struct {
 	Clientset   kubernetes.Interface
 	Config      *rest.Config
-	RawConfig   clientcmdapi.Config
 	contextName string
+	clusterName string
 }
 
 func NewClient(contextName, kubeconfig string) (*Client, error) {
@@ -63,11 +65,16 @@ func NewClient(contextName, kubeconfig string) (*Client, error) {
 		contextName = rawConfig.CurrentContext
 	}
 
+	clusterName := ""
+	if context, ok := rawConfig.Contexts[contextName]; ok {
+		clusterName = context.Cluster
+	}
+
 	return &Client{
 		Clientset:   clientset,
 		Config:      config,
-		RawConfig:   rawConfig,
 		contextName: contextName,
+		clusterName: clusterName,
 	}, nil
 }
 
@@ -76,10 +83,7 @@ func (c *Client) ContextName() (name string) {
 }
 
 func (c *Client) ClusterName() (name string) {
-	if context, ok := c.RawConfig.Contexts[c.ContextName()]; ok {
-		name = context.Cluster
-	}
-	return
+	return c.clusterName
 }
 
 func (c *Client) CreateService(ctx context.Context, namespace string, service *corev1.Service, opts metav1.CreateOptions) (*corev1.Service, error) {
@@ -181,8 +185,10 @@ func (c *Client) DeleteDaemonSet(ctx context.Context, namespace, name string, op
 	return c.Clientset.AppsV1().DaemonSets(namespace).Delete(ctx, name, opts)
 }
 
-type Kind int
-
 func (c *Client) ListNodes(ctx context.Context, options metav1.ListOptions) (*corev1.NodeList, error) {
 	return c.Clientset.CoreV1().Nodes().List(ctx, options)
+}
+
+func (c *Client) WaitForDeployment(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error {
+	return wait.PollUntilContextTimeout(ctx, interval, timeout, immediate, condition)
 }

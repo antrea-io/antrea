@@ -769,29 +769,17 @@ jobs:
           sudo mv kind /usr/local/bin
       - name: Create Kind Cluster
         run: |
-          cat <<EOF > kind-config.yml
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          networking:
-            disableDefaultCNI: true
-            podSubnet: 10.10.0.0/16
-          nodes:
-          - role: control-plane
-          - role: worker
-          - role: worker
-          EOF
-          kind create cluster --config kind-config.yml
+          kind create cluster --config ci/kind/config-3nodes.yml
       - name: load docker image into kind
         run: |
           kind load docker-image antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-agent-ubuntu-coverage:latest
           kubectl apply -f build/yamls/antrea.yml
       - name: build antctl binaries
         run: |
-          make antctl
-          sudo cp bin/antctl-linux /usr/local/bin/antctl
+          make antctl-linux
       - name: run antctl command
         run: |
-          antctl test
+          ./bin/antctl-linux test
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
