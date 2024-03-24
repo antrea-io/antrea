@@ -33,22 +33,19 @@ func TestGetNodeName(t *testing.T) {
 	}
 
 	for k, v := range testTable {
-		compareNodeName(k, v, t)
-	}
-}
-
-func compareNodeName(k, v string, t *testing.T) {
-	if k != "" {
-		_ = os.Setenv(NodeNameEnvKey, k)
-		defer os.Unsetenv(NodeNameEnvKey)
-	}
-	nodeName, err := GetNodeName()
-	if err != nil {
-		t.Errorf("Failure with expected name %s: %v", k, err)
-		return
-	}
-	if nodeName != v {
-		t.Errorf("Failed to retrieve nodename, want: %s, get: %s", v, nodeName)
+		t.Run("nodeName: "+k, func(t *testing.T) {
+			if k != "" {
+				t.Setenv(NodeNameEnvKey, k)
+			}
+			nodeName, err := GetNodeName()
+			if err != nil {
+				t.Errorf("Failure with expected name %s: %v", k, err)
+				return
+			}
+			if nodeName != v {
+				t.Errorf("Failed to retrieve nodename, want: %s, get: %s", v, nodeName)
+			}
+		})
 	}
 }
 
@@ -60,18 +57,15 @@ func TestGetPodName(t *testing.T) {
 	}
 
 	for k, v := range testTable {
-		comparePodName(k, v, t)
-	}
-}
-
-func comparePodName(k, v string, t *testing.T) {
-	if k != "" {
-		_ = os.Setenv(podNameEnvKey, k)
-		defer os.Unsetenv(podNameEnvKey)
-	}
-	podName := GetPodName()
-	if podName != v {
-		t.Errorf("Failed to retrieve pod name, want: %s, get: %s", v, podName)
+		t.Run("podName: "+k, func(t *testing.T) {
+			if k != "" {
+				t.Setenv(podNameEnvKey, k)
+			}
+			podName := GetPodName()
+			if podName != v {
+				t.Errorf("Failed to retrieve pod name, want: %s, get: %s", v, podName)
+			}
+		})
 	}
 }
 
@@ -82,13 +76,14 @@ func TestGetAntreaConfigMapName(t *testing.T) {
 	}
 
 	for k, v := range testTable {
-		if k != "" {
-			_ = os.Setenv(antreaConfigMapEnvKey, k)
-			defer os.Unsetenv(antreaConfigMapEnvKey)
-		}
-		configMapName := GetAntreaConfigMapName()
-		if configMapName != v {
-			t.Errorf("Failed to retrieve antrea configmap name, want: %s, get: %s", v, configMapName)
-		}
+		t.Run("config: "+k, func(t *testing.T) {
+			if k != "" {
+				t.Setenv(antreaConfigMapEnvKey, k)
+			}
+			configMapName := GetAntreaConfigMapName()
+			if configMapName != v {
+				t.Errorf("Failed to retrieve antrea configmap name, want: %s, get: %s", v, configMapName)
+			}
+		})
 	}
 }

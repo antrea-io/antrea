@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -453,8 +452,9 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
 				mockGetIPNetDeviceByCIDRs(t, tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)
 			}
+
+			t.Setenv(env.NodeNameEnvKey, nodeName)
 			mockGetIPNetDeviceFromIP(t, nodeIPNet, ipDevice)
-			mockNodeNameEnv(t, nodeName)
 			mockGetNodeTimeout(t, 100*time.Millisecond)
 
 			err := initializer.initK8sNodeLocalConfig(nodeName)
@@ -477,11 +477,6 @@ func mockGetIPNetDeviceFromIP(t *testing.T, ipNet *net.IPNet, ipDevice *net.Inte
 		return ipNet, nil, ipDevice, nil
 	}
 	t.Cleanup(func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP })
-}
-
-func mockNodeNameEnv(t *testing.T, name string) {
-	_ = os.Setenv(env.NodeNameEnvKey, name)
-	t.Cleanup(func() { os.Unsetenv(env.NodeNameEnvKey) })
 }
 
 func mockGetNodeTimeout(t *testing.T, timeout time.Duration) {
@@ -826,11 +821,6 @@ func TestSetOVSDatapath(t *testing.T) {
 	}
 }
 
-func mockIPsecPSKEnv(t *testing.T, name string) {
-	os.Setenv(ipsecPSKEnvKey, name)
-	t.Cleanup(func() { os.Unsetenv(ipsecPSKEnvKey) })
-}
-
 func TestReadIPSecPSK(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -855,7 +845,7 @@ func TestReadIPSecPSK(t *testing.T) {
 				},
 			}
 			if tt.isIPsecPSK {
-				mockIPsecPSKEnv(t, "key")
+				t.Setenv(ipsecPSKEnvKey, "key")
 			}
 
 			err := initializer.readIPSecPSK()
