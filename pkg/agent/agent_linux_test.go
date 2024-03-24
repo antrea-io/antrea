@@ -41,14 +41,6 @@ func mockGetInterfaceByName(t *testing.T, ipDevice *net.Interface) {
 	t.Cleanup(func() { getInterfaceByName = prevGetInterfaceByName })
 }
 
-func mockGetAllIPNetsByName(t *testing.T, ips []*net.IPNet) {
-	prevGetAllIPNetsByName := getAllIPNetsByName
-	getAllIPNetsByName = func(name string) ([]*net.IPNet, error) {
-		return ips, nil
-	}
-	t.Cleanup(func() { getAllIPNetsByName = prevGetAllIPNetsByName })
-}
-
 func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 	macAddr, _ := net.ParseMAC("00:00:5e:00:53:01")
 	_, nodeIPNet, _ := net.ParseCIDR("192.168.10.10/24")
@@ -119,7 +111,6 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			initializer.nodeConfig = nodeConfig
 			mockGetIPNetDeviceFromIP(t, nodeIPNet, ipDevice)
 			mockGetInterfaceByName(t, ipDevice)
-			mockGetAllIPNetsByName(t, []*net.IPNet{nodeIPNet})
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(mockOVSBridgeClient)
 			}

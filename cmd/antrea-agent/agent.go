@@ -728,6 +728,7 @@ func run(o *Options) error {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		defer secondarynetwork.RestoreHostInterfaceConfiguration(&o.config.SecondaryNetwork)
 		if err := secondarynetwork.Initialize(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer.Get(), nodeConfig.Name,
