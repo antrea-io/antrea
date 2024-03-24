@@ -82,7 +82,7 @@ func ScaleDown(ctx context.Context, cs kubernetes.Interface, nsPrefix string) er
 			return err
 		}
 	}
-	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
+	return wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (done bool, err error) {
 		count := 0
 		for _, ns := range nssToDelete {
 			if err := cs.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{}); errors.IsNotFound(err) {
@@ -96,10 +96,5 @@ func ScaleDown(ctx context.Context, cs kubernetes.Interface, nsPrefix string) er
 		}
 		klog.InfoS("Waiting for clean up namespaces", "all", len(nssToDelete), "deletedCount", count)
 		return count == len(nssToDelete), nil
-	}, ctx.Done())
-}
-
-// ScaleDownOnlyPods delete pods only so it will get recreated inside same ns
-func ScaleDownOnlyPods(ctx context.Context) error {
-	return nil
+	})
 }

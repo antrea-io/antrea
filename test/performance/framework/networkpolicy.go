@@ -220,7 +220,7 @@ func (nps networkPolicies) scaleDown(ctx context.Context) error {
 		klog.V(2).InfoS("Deleted NetworkPolicies", "namespace", ns)
 	}
 
-	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
+	return wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (done bool, err error) {
 		cleanCount := 0
 		staleNpNum := 0
 		for _, ns := range nss {
@@ -240,5 +240,5 @@ func (nps networkPolicies) scaleDown(ctx context.Context) error {
 		}
 		klog.InfoS("Scale down NetworkPolicies", "CleanedNamespaceNum", cleanCount, "staleNpNum", staleNpNum)
 		return cleanCount == len(nss), nil
-	}, ctx.Done())
+	})
 }

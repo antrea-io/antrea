@@ -253,7 +253,7 @@ func scaleDown(ctx context.Context, data *ScaleData, svcs []ServiceInfo) error {
 		}
 		klog.V(2).InfoS("Deleted service", "serviceName", svc)
 	}
-	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
+	return wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (done bool, err error) {
 		count := 0
 		for _, svc := range svcs {
 			if err := cs.CoreV1().Services(svc.NameSpace).Delete(ctx, svc.Name, metav1.DeleteOptions{}); errors.IsNotFound(err) {
@@ -262,5 +262,5 @@ func scaleDown(ctx context.Context, data *ScaleData, svcs []ServiceInfo) error {
 		}
 		klog.InfoS("Scale down Services", "Services", len(svcs), "cleanedUpCount", count)
 		return count == len(svcs), nil
-	}, ctx.Done())
+	})
 }

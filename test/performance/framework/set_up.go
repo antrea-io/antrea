@@ -76,16 +76,16 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface, ns 
 	}); err != nil {
 		return err
 	}
-	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
+	if err := wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (bool, error) {
 		ds, err := kClient.AppsV1().DaemonSets(ns).Get(ctx, client_pod.ScaleTestClientDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
 		return ds.Status.DesiredNumberScheduled == ds.Status.NumberReady, nil
-	}, ctx.Done()); err != nil {
+	}); err != nil {
 		return fmt.Errorf("error when waiting scale test clients to be ready: %w", err)
 	}
-	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
+	if err := wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (bool, error) {
 		podList, err := kClient.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: client_pod.ScaleClientPodTemplateName})
 		if err != nil {
 			return false, nil
@@ -96,7 +96,7 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface, ns 
 			}
 		}
 		return true, nil
-	}, ctx.Done()); err != nil {
+	}); err != nil {
 		return fmt.Errorf("error when waiting scale test clients to get IP: %w", err)
 	}
 	return nil
@@ -217,7 +217,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath, templateFiles
 	}
 	klog.Infof("Checking scale test client DaemonSet")
 	expectClientNum := td.nodesNum - td.simulateNodesNum
-	err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
+	err = wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (bool, error) {
 		podList, err := kClient.CoreV1().Pods(client_pod.ClientPodsNamespace).List(ctx, metav1.ListOptions{LabelSelector: client_pod.ScaleClientPodTemplateName})
 		if err != nil {
 			return false, fmt.Errorf("error when getting scale test client pods: %w", err)
@@ -228,7 +228,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath, templateFiles
 		klog.InfoS("Waiting test client DaemonSet Pods ready", "podsNum", len(podList.Items),
 			"expectClientNum", expectClientNum)
 		return false, nil
-	}, ctx.Done())
+	})
 	if err != nil {
 		return nil, err
 	}

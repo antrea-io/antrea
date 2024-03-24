@@ -80,7 +80,7 @@ func Update(ctx context.Context, kClient kubernetes.Interface, ns, clientDaemonS
 
 	klog.InfoS("DaemonSet updated successfully!", "Name", clientDaemonSetName)
 
-	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
+	if err := wait.PollUntilContextTimeout(ctx, config.WaitInterval, config.DefaultTimeout, true, func(ctx context.Context) (bool, error) {
 		ds, err := kClient.AppsV1().DaemonSets(ns).Get(ctx, clientDaemonSetName, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
@@ -107,7 +107,7 @@ func Update(ctx context.Context, kClient kubernetes.Interface, ns, clientDaemonS
 		clientPods = podList.Items
 		klog.InfoS("All Pods in DaemonSet updated successfully!", "Name", clientDaemonSetName, "PodNum", len(podList.Items))
 		return true, nil
-	}, ctx.Done()); err != nil {
+	}); err != nil {
 		return nil, fmt.Errorf("error when waiting scale test clients to be ready: %w", err)
 	}
 	return

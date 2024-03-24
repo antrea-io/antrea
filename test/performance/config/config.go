@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	WaitInterval = 5 * time.Second
+	WaitInterval   = 5 * time.Second
+	DefaultTimeout = 60 * time.Second
 )
 
 type ScaleConfiguration struct {

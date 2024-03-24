@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,76 +27,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/klog/v2"
-
-	"antrea.io/antrea/test/performance/framework/client_pod"
 )
 
 const (
 	defaultInterval = 1 * time.Second
 	defaultTimeout  = 3 * time.Minute
 )
-
-func ExecURL(kClient kubernetes.Interface, clientPodNamespace, clientPodName, peerIP string) *url.URL {
-	return kClient.CoreV1().RESTClient().Post().
-		Namespace(clientPodNamespace).
-		Resource("pods").Name(clientPodName).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Command:   []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 1 %s 80", peerIP)},
-			Container: client_pod.ScaleClientContainerName,
-			Stdin:     false,
-			Stdout:    true,
-			Stderr:    true,
-			TTY:       false,
-		}, scheme.ParameterCodec).URL()
-}
-
-func WaitUntil(ctx context.Context, ch chan time.Duration, kubeConfig *rest.Config, kc kubernetes.Interface, podNs, podName, ip string, expectErr bool) error {
-	var err error
-	startTime := time.Now()
-	defer func() {
-		if err == nil {
-			select {
-			case ch <- time.Since(startTime):
-				klog.InfoS("Successfully write in channel")
-			default:
-				klog.InfoS("Skipped writing to the channel. No receiver.")
-			}
-		}
-	}()
-	err = wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
-		err := PingIP(ctx, kubeConfig, kc, podNs, podName, ip)
-		if (err != nil && !expectErr) || (err == nil && expectErr) {
-			return false, fmt.Errorf("error when getting expected condition: %+v", err)
-		}
-		return true, nil
-	})
-	return err
-}
-
-func PingIP(ctx context.Context, kubeConfig *rest.Config, kc kubernetes.Interface, podNs, podName, ip string) error {
-	executor, err := remotecommand.NewSPDYExecutor(kubeConfig, "POST", ExecURL(kc, podNs, podName, ip))
-	if err != nil {
-		return fmt.Errorf("error when creating SPDY executor: %w", err)
-	}
-
-	// Try to execute command with failure tolerant.
-	if err = DefaultRetry(func() error {
-		var stdout, stderr bytes.Buffer
-		if err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
-			err := fmt.Errorf("executing commands on service client Pod error: %v", err)
-			return fmt.Errorf("ping ip %s error: %v, stdout:`%s`, stderr:`%s`, client pod: %s", ip, err, stdout.String(), stderr.String(), podName)
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
-}
 
 func extractNanoseconds(logEntry, key string) (int64, error) {
 	// re := regexp.MustCompile(fmt.Sprintf(`(\d+)\s+Status changed from (unknown|down|up)? %s after`, key))
@@ -124,7 +60,7 @@ func extractNanoseconds(logEntry, key string) (int64, error) {
 }
 
 func FetchTimestampFromLog(ctx context.Context, kc kubernetes.Interface, namespace, podName, containerName string, ch chan time.Duration, startTime int64, key string) error {
-	return wait.Poll(defaultInterval, defaultTimeout, func() (done bool, err error) {
+	return wait.PollUntilContextTimeout(ctx, defaultInterval, defaultTimeout, false, func(ctx context.Context) (done bool, err error) {
 		req := kc.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{
 			Container: containerName,
 		})

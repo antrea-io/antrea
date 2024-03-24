@@ -14,7 +14,6 @@
 
 package framework
 
-//goland:noinspection ALL
 import (
 	"context"
 	"fmt"
@@ -57,7 +56,7 @@ func ScaleRestartAgent(ctx context.Context, ch chan time.Duration, data *ScaleDa
 	}
 	startTime := time.Now().UnixNano()
 
-	err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, config.WaitInterval, config.DefaultTimeout, true, func(ctx context.Context) (bool, error) {
 		var ds *appv1.DaemonSet
 		if err := utils.DefaultRetry(func() error {
 			var err error
@@ -71,7 +70,7 @@ func ScaleRestartAgent(ctx context.Context, ch chan time.Duration, data *ScaleDa
 		klog.V(2).InfoS("Check agent restart", "DesiredNumberScheduled", ds.Status.DesiredNumberScheduled,
 			"NumberAvailable", ds.Status.NumberAvailable)
 		return ds.Status.DesiredNumberScheduled == ds.Status.NumberAvailable, nil
-	}, ctx.Done())
+	})
 
 	go func() {
 		podList, err := data.kubernetesClientSet.CoreV1().Pods(client_pod.ClientPodsNamespace).List(ctx, metav1.ListOptions{LabelSelector: client_pod.ScaleClientPodTemplateName})
@@ -139,7 +138,7 @@ func RestartController(ctx context.Context, ch chan time.Duration, data *ScaleDa
 	startTime := time.Now().UnixNano()
 	klog.InfoS("Deleting operate time", "Duration(ms)", (startTime-startTime0)/1000000)
 
-	err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, config.WaitInterval, config.DefaultTimeout, true, func(ctx context.Context) (bool, error) {
 		var dp *appv1.Deployment
 		if err := utils.DefaultRetry(func() error {
 			var err error
@@ -149,7 +148,7 @@ func RestartController(ctx context.Context, ch chan time.Duration, data *ScaleDa
 			return false, err
 		}
 		return dp.Status.ObservedGeneration == dp.Generation && dp.Status.ReadyReplicas == *dp.Spec.Replicas, nil
-	}, ctx.Done())
+	})
 
 	go func() {
 		key := "down to up"

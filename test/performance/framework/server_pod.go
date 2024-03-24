@@ -125,7 +125,7 @@ func ScaleUpWorkloadPods(ctx context.Context, ch chan time.Duration, data *Scale
 		}
 
 		// Waiting scale workload Pods to be ready
-		err = wait.PollUntil(config.WaitInterval, func() (bool, error) {
+		err = wait.PollUntilContextCancel(ctx, config.WaitInterval, true, func(ctx context.Context) (bool, error) {
 			podsResult, err := data.kubernetesClientSet.
 				CoreV1().Pods(ns).
 				List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", client_pod.AppLabelKey, client_pod.AppLabelValue)})
@@ -142,7 +142,7 @@ func ScaleUpWorkloadPods(ctx context.Context, ch chan time.Duration, data *Scale
 				return count >= data.podsNumPerNs, nil
 			}
 			return false, nil
-		}, ctx.Done())
+		})
 		if err != nil {
 			return
 		}
