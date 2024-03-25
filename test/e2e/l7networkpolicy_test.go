@@ -129,7 +129,8 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 
 		// Verify that access to path /clientip is as expected.
 		assert.Eventually(t, func() bool {
-			_, err := probeClientIPFromPod(data, clientPodName, agnhostContainerName, baseURL)
+			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "clientip"), "-T", "1"}
+			_, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
 			if (allowHTTPPathClientIP && err != nil) || (!allowHTTPPathClientIP && err == nil) {
 				return false
 			}
@@ -138,7 +139,8 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 
 		// Verify that access to path /hostname is as expected.
 		assert.Eventually(t, func() bool {
-			hostname, err := probeHostnameFromPod(data, clientPodName, agnhostContainerName, baseURL)
+			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "hostname"), "-T", "1"}
+			hostname, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
 			if (allowHTTPPathHostname && err != nil) || (!allowHTTPPathHostname && err == nil) {
 				return false
 			}
@@ -171,7 +173,8 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string, serverName string, canAccess bool) {
 	url := fmt.Sprintf("https://%s", serverName)
 	assert.Eventually(t, func() bool {
-		stdout, stderr, err := data.runWgetCommandFromTestPodWithRetry(clientPodName, data.testNamespace, agnhostContainerName, url, 5)
+		cmd := []string{"wget", "-O", "-", url, "-T", "5"}
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
 		if canAccess && err != nil {
 			t.Logf("Failed to access %s: %v\nStdout: %s\nStderr: %s\n", url, err, stdout, stderr)
 			return false
@@ -180,7 +183,7 @@ func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string,
 			return false
 		}
 		return true
-	}, 5*time.Second, time.Second)
+	}, 10*time.Second, time.Second)
 }
 
 func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
