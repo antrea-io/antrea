@@ -156,10 +156,8 @@ func TestUpdateRunE(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := NewFlowAggregatorSetCommand()
-			os.Setenv("POD_NAMESPACE", tc.podNamespace)
-			os.Setenv("FA_CONFIG_MAP_NAME", tc.configMapName)
-			defer os.Unsetenv("POD_NAMESPACE")
-			defer os.Unsetenv("FA_CONFIG_MAP_NAME")
+			t.Setenv("POD_NAMESPACE", tc.podNamespace)
+			t.Setenv("FA_CONFIG_MAP_NAME", tc.configMapName)
 			err := updateRunE(cmd, tc.args)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
