@@ -66,7 +66,7 @@ type BaseServiceInfo struct {
 	port                     int
 	protocol                 v1.Protocol
 	nodePort                 int
-	loadBalancerStatus       v1.LoadBalancerStatus
+	loadBalancerVIPs         []string
 	sessionAffinityType      v1.ServiceAffinity
 	stickyMaxAgeSeconds      int
 	externalIPs              []string
@@ -132,11 +132,7 @@ func (info *BaseServiceInfo) ExternalIPStrings() []string {
 
 // LoadBalancerIPStrings is part of ServicePort interface.
 func (info *BaseServiceInfo) LoadBalancerIPStrings() []string {
-	var ips []string
-	for _, ing := range info.loadBalancerStatus.Ingress {
-		ips = append(ips, ing.IP)
-	}
-	return ips
+	return info.loadBalancerVIPs
 }
 
 // ExternalPolicyLocal is part of ServicePort interface.
@@ -161,7 +157,7 @@ func (info *BaseServiceInfo) HintsAnnotation() string {
 
 // ExternallyAccessible is part of ServicePort interface.
 func (info *BaseServiceInfo) ExternallyAccessible() bool {
-	return info.nodePort != 0 || len(info.loadBalancerStatus.Ingress) != 0 || len(info.externalIPs) != 0
+	return info.nodePort != 0 || len(info.loadBalancerVIPs) != 0 || len(info.externalIPs) != 0
 }
 
 // UsesClusterEndpoints is part of ServicePort interface.
@@ -183,7 +179,7 @@ func (info *BaseServiceInfo) UsesLocalEndpoints() bool {
 	// When DSR is enabled, local group could be used by DSR traffic on backend Node.
 	// As the Service's own information is not enough to determine its load balancer mode, we just ensure the local group
 	// exist as long as it can potentially work in DSR mode.
-	if features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && (len(info.loadBalancerStatus.Ingress) != 0 || len(info.externalIPs) != 0) {
+	if features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && (len(info.loadBalancerVIPs) != 0 || len(info.externalIPs) != 0) {
 		return true
 	}
 	return false
@@ -194,7 +190,7 @@ func NewBaseServiceInfo(clusterIP net.IP,
 	port int,
 	protocol v1.Protocol,
 	nodePort int,
-	loadBalancerStatus v1.LoadBalancerStatus,
+	loadBalancerVIPs []string,
 	sessionAffinityType v1.ServiceAffinity,
 	stickyMaxAgeSeconds int,
 	externalIPs []string,
@@ -209,7 +205,7 @@ func NewBaseServiceInfo(clusterIP net.IP,
 		port:                     port,
 		protocol:                 protocol,
 		nodePort:                 nodePort,
-		loadBalancerStatus:       loadBalancerStatus,
+		loadBalancerVIPs:         loadBalancerVIPs,
 		sessionAffinityType:      sessionAffinityType,
 		stickyMaxAgeSeconds:      stickyMaxAgeSeconds,
 		externalIPs:              externalIPs,
@@ -276,25 +272,32 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 	}
 
 	// Obtain Load Balancer Ingress IPs
-	var ips []string
+	var invalidIPs []string
 	for _, ing := range service.Status.LoadBalancer.Ingress {
-		// IP is optional and may be not set for load-balancer ingress points that are DNS based.
-		if ing.IP != "" {
-			ips = append(ips, ing.IP)
+		if ing.IP == "" {
+			continue
+		}
+		// proxy mode load balancers do not need to track the IPs in the service cache
+		// and they can also implement IP family translation, so no need to check if
+		// the status ingress.IP and the ClusterIP belong to the same family.
+		if !utilproxy.IsVIPMode(ing) {
+			klog.V(4).InfoS("Service change tracker ignored the following load balancer ingress IP for given Service as it using Proxy mode",
+				"ipFamily", sct.ipFamily, "loadBalancerIngressIP", ing.IP, "service", klog.KObj(service))
+			continue
+		}
+
+		// kube-proxy does not implement IP family translation, skip addresses with
+		// different IP family
+		if ipFamily := utilproxy.GetIPFamilyFromIP(ing.IP); ipFamily == sct.ipFamily {
+			info.loadBalancerVIPs = append(info.loadBalancerVIPs, ing.IP)
+		} else {
+			invalidIPs = append(invalidIPs, ing.IP)
 		}
 	}
 
-	if len(ips) > 0 {
-		ipFamilyMap = utilproxy.MapIPsByIPFamily(ips)
-
-		if ipList, ok := ipFamilyMap[utilproxy.OtherIPFamily(sct.ipFamily)]; ok && len(ipList) > 0 {
-			klog.V(4).Infof("service change tracker(%v) ignored the following load balancer(%s) ingress ips for service %v/%v as they don't match IPFamily", sct.ipFamily, strings.Join(ipList, ","), service.Namespace, service.Name)
-
-		}
-		// Create the LoadBalancerStatus with the filtered IPs
-		for _, ip := range ipFamilyMap[sct.ipFamily] {
-			info.loadBalancerStatus.Ingress = append(info.loadBalancerStatus.Ingress, v1.LoadBalancerIngress{IP: ip})
-		}
+	if len(invalidIPs) > 0 {
+		klog.V(4).InfoS("Service change tracker ignored the following load balancer ingress IPs for given Service as they don't match the IP Family",
+			"ipFamily", sct.ipFamily, "loadBalancerIngressIPs", strings.Join(invalidIPs, ", "), "service", klog.KObj(service))
 	}
 
 	if utilproxy.NeedsHealthCheck(service) {
