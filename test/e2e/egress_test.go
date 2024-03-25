@@ -517,6 +517,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 
 			err = data.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			require.NoError(t, err, "Failed to delete Egress")
+
 			if egress.Status.EgressNode != "" {
 				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
 					func(ctx context.Context) (done bool, err error) {
@@ -600,6 +601,18 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 				return err
 			})
 			require.NoError(t, err, "Failed to update Egress")
+			// Testing the events recorded during deletion of an Egress resource.
+			expectedMessage := fmt.Sprintf("Unassigned Egress %s with IP %s from Node %v", egress.Name, tt.originalEgressIP, egress.Status.EgressNode)
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				events, err := data.clientset.CoreV1().Events("").Search(scheme.Scheme, egress)
+				assert.NoError(c, err)
+				recordedMessages := []string{}
+				for _, items := range events.Items {
+					recordedMessages = append(recordedMessages, items.Message)
+				}
+
+				assert.Contains(c, recordedMessages, expectedMessage)
+			}, 2*time.Second, 200*time.Millisecond)
 
 			_, err = data.checkEgressState(egress.Name, tt.newEgressIP, tt.newNode, "", time.Second)
 			require.NoError(t, err)
