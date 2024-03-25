@@ -113,12 +113,6 @@ func probeFromPod(data *TestData, pod, container string, url string) error {
 	return err
 }
 
-func probeHostnameFromPod(data *TestData, pod, container string, baseUrl string) (string, error) {
-	url := fmt.Sprintf("%s/%s", baseUrl, "hostname")
-	hostname, _, err := data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
-	return hostname, err
-}
-
 func probeClientIPFromPod(data *TestData, pod, container string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "clientip")
 	hostPort, _, err := data.runWgetCommandFromTestPodWithRetry(pod, data.testNamespace, container, url, 5)
