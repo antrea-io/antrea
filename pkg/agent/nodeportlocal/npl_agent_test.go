@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -214,7 +213,7 @@ func (tc *testConfig) withCustomPodPortRulesExpectations(fn customizePodPortRule
 }
 
 func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
-	os.Setenv("NODE_NAME", defaultNodeName)
+	t.Setenv("NODE_NAME", defaultNodeName)
 
 	mockCtrl := gomock.NewController(t)
 
@@ -302,7 +301,6 @@ func setUpWithTestServiceAndPod(t *testing.T, tc *testConfig, customNodePort *in
 func (t *testData) tearDown() {
 	close(t.stopCh)
 	t.wg.Wait()
-	os.Unsetenv("NODE_NAME")
 }
 
 func (t *testData) pollForPodAnnotation(podName string, found bool) ([]types.NPLAnnotation, error) {

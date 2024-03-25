@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -160,8 +159,8 @@ func TestHandleFunc(t *testing.T) {
 		},
 	)
 
-	os.Setenv("POD_NAME", "antrea-controller-wotqiwth")
-	os.Setenv("ANTREA_CONFIG_MAP_NAME", "antrea-config-aswieut")
+	t.Setenv("POD_NAME", "antrea-controller-wotqiwth")
+	t.Setenv("ANTREA_CONFIG_MAP_NAME", "antrea-config-aswieut")
 
 	handler := HandleFunc(fakeClient)
 	req, err := http.NewRequest(http.MethodGet, "", nil)

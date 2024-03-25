@@ -16,7 +16,6 @@ package exporter
 
 import (
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
@@ -30,10 +29,8 @@ import (
 )
 
 func TestClickHouse_UpdateOptions(t *testing.T) {
-	os.Setenv("CH_USERNAME", "default")
-	os.Setenv("CH_PASSWORD", "default")
-	defer os.Unsetenv("CH_USERNAME")
-	defer os.Unsetenv("CH_PASSWORD")
+	t.Setenv("CH_USERNAME", "default")
+	t.Setenv("CH_PASSWORD", "default")
 	PrepareClickHouseConnectionSaved := clickhouseclient.PrepareClickHouseConnection
 	clickhouseclient.PrepareClickHouseConnection = func(input clickhouseclient.ClickHouseConfig) (*sql.DB, error) {
 		return nil, nil
