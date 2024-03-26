@@ -50,7 +50,7 @@ RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0 && \
     go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 && \
     go install golang.org/x/tools/cmd/goimports@latest && \
-    go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
+    go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0
 
 COPY --from=protoc /tmp/protoc/bin /usr/local/bin
 COPY --from=protoc /tmp/protoc/include /usr/local/include
