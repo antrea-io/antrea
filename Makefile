@@ -358,7 +358,8 @@ build-agent-ubuntu:
 	docker build -t antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.agent.ubuntu $(DOCKER_BUILD_ARGS) .
 	docker tag antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-agent-ubuntu
 
-antrea-scale-image:
+.PHONY: build-antrea-scale
+build-antrea-scale:
 	@echo "===> Building antrea/antrea-scale Docker image <==="
 	docker build -t antrea/antrea-scale:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.scale .
 	docker tag antrea/antrea-scale:$(DOCKER_IMG_VERSION) antrea/antrea-scale
