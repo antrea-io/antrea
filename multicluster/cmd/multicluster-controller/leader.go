@@ -50,9 +50,7 @@ func newLeaderCommand() *cobra.Command {
 }
 
 func runLeader(o *Options) error {
-	// on the leader we want the reconciler to run for a given Namespace instead of cluster scope
 	podNamespace := env.GetPodNamespace()
-	o.Namespace = podNamespace
 	stopCh := signals.RegisterSignalHandlers()
 
 	mgr, err := setupManagerAndCertControllerFunc(true, o)

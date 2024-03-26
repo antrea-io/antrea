@@ -35,8 +35,8 @@ type Options struct {
 	// The path of configuration file.
 	configFile     string
 	SelfSignedCert bool
-	options        ctrl.Options
-	Namespace      string
+	// options store some base controller Manager options (initialized from the provided config).
+	options ctrl.Options
 	// The Service ClusterIP range used in the member cluster.
 	ServiceCIDR string
 	// PodCIDRs is the Pod IP address CIDRs of the member cluster.
@@ -68,14 +68,12 @@ func newOptions() *Options {
 func (o *Options) complete(args []string) error {
 	var err error
 	o.setDefaults()
-	options := ctrl.Options{Scheme: scheme}
 	ctrlConfig := &mcsv1alpha1.MultiClusterConfig{}
 	if len(o.configFile) > 0 {
 		klog.InfoS("Loading config", "file", o.configFile)
 		if err = o.loadConfigFromFile(ctrlConfig); err != nil {
 			return err
 		}
-		o.options = options
 		if ctrlConfig.ServiceCIDR != "" {
 			if _, _, err := net.ParseCIDR(ctrlConfig.ServiceCIDR); err != nil {
 				return fmt.Errorf("failed to parse serviceCIDR, invalid CIDR string %s", ctrlConfig.ServiceCIDR)
