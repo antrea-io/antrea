@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -129,59 +130,65 @@ func (nps networkPolicies) scaleUp(ctx context.Context) (actualCheckNum int, err
 	// ScaleUp networkPolicies
 	start := time.Now()
 	for _, ns := range nss {
-		npsData, err := renderNetworkPolicies(nps.data.templateFilesPath, ns, numPerNs)
-		if err != nil {
-			return 0, fmt.Errorf("error when generating network policies: %w", err)
+		gErr, _ := errgroup.WithContext(ctx)
+		npsData, renderErr := renderNetworkPolicies(nps.data.templateFilesPath, ns, numPerNs)
+		if renderErr != nil {
+			return 0, fmt.Errorf("error when generating network policies: %w", renderErr)
 		}
 		klog.InfoS("Scale up NetworkPolicies", "Num", len(npsData), "Namespace", ns)
-		for _, np := range npsData {
-			npInfo := NetworkPolicyInfo{Name: np.Name, Namespace: np.Namespace, Spec: np.Spec}
-			shouldCheck := actualCheckNum < cap(ch)
-			var clientPod *corev1.Pod
-			var serverIP string
-			if shouldCheck {
+		for i := range npsData {
+			np := npsData[i]
+			gErr.Go(func() error {
+				npInfo := NetworkPolicyInfo{Name: np.Name, Namespace: np.Namespace, Spec: np.Spec}
+				var clientPod *corev1.Pod
+				var serverIP string
 				serverIP, err = selectServerPod(ctx, cs, ns, npInfo)
 				klog.InfoS("Select server Pod", "serverIP", serverIP, "error", err)
 				if err != nil {
 					klog.ErrorS(err, "selectServerPod")
-					return 0, fmt.Errorf("select server Pod error: %+v", err)
+					return fmt.Errorf("select server Pod error: %+v", err)
 				}
 				clientPod, err = client_pod.CreatePod(ctx, cs, []string{fmt.Sprintf("%s:%d", serverIP, 80)}, client_pod.ScaleClientPodProbeContainer, client_pod.ClientPodsNamespace)
 				if err != nil {
 					klog.ErrorS(err, "Create client test Pod failed")
-					return 0, fmt.Errorf("create client test Pod failed: %+v", err)
+					return fmt.Errorf("create client test Pod failed: %+v", err)
 				}
-			}
-			if err := utils.DefaultRetry(func() error {
-				startTime0 := time.Now().UnixNano()
-				_, err := cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, np, metav1.CreateOptions{})
-				if err != nil {
-					if errors.IsAlreadyExists(err) {
-						_, _ = cs.NetworkingV1().NetworkPolicies(ns).Get(ctx, np.Name, metav1.GetOptions{})
-					} else {
-						return err
-					}
-				}
-				if shouldCheck && clientPod != nil && serverIP != "" {
-					startTimeStamp := time.Now().UnixNano()
-					klog.InfoS("Networkpolicy creating operate time", "Duration(ms)", (startTimeStamp-startTime0)/1000000)
-					actualCheckNum++
-					go func() {
-						klog.InfoS("Update test Pod to check NetworkPolicy", "serverIP", serverIP, "StartTimeStamp", startTimeStamp)
-						key := "up to down"
-						if err := utils.FetchTimestampFromLog(ctx, cs, clientPod.Namespace, clientPod.Name, client_pod.ScaleClientPodProbeContainer, ch, startTimeStamp, key); err != nil {
-							klog.ErrorS(err, "Checking the validity the NetworkPolicy error", "ClientPodName", clientPod.Name, "NetworkPolicy", npInfo)
+				if err := utils.DefaultRetry(func() error {
+					startTime0 := time.Now().UnixNano()
+					_, err := cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, np, metav1.CreateOptions{})
+					if err != nil {
+						if errors.IsAlreadyExists(err) {
+							_, _ = cs.NetworkingV1().NetworkPolicies(ns).Get(ctx, np.Name, metav1.GetOptions{})
+						} else {
+							return err
 						}
-					}()
+					}
+					if clientPod != nil && serverIP != "" {
+						startTimeStamp := time.Now().UnixNano()
+						klog.InfoS("Networkpolicy creating operate time", "Duration(ms)", (startTimeStamp-startTime0)/1000000)
+						actualCheckNum++
+						go func() {
+							klog.InfoS("Update test Pod to check NetworkPolicy", "serverIP", serverIP, "StartTimeStamp", startTimeStamp)
+							key := "up to down"
+							if err := utils.FetchTimestampFromLog(ctx, cs, clientPod.Namespace, clientPod.Name, client_pod.ScaleClientPodProbeContainer, ch, startTimeStamp, key); err != nil {
+								klog.ErrorS(err, "Checking the validity the NetworkPolicy error", "ClientPodName", clientPod.Name, "NetworkPolicy", npInfo)
+							}
+						}()
+					}
+					return nil
+				}); err != nil {
+					return err
 				}
+				klog.InfoS("Create new NetworkPolicy", "npInfo", npInfo)
 				return nil
-			}); err != nil {
-				return 0, err
-			}
-			klog.InfoS("Create new NetworkPolicy", "npInfo", npInfo)
+			})
+		}
+		err = gErr.Wait()
+		if err != nil {
+			return
 		}
 	}
-	klog.InfoS("Scale up NetworkPolicies", "Duration", time.Since(start), "actualCheckNum", actualCheckNum)
+	klog.InfoS("Scale up NetworkPolicies", "Duration", time.Since(start))
 	return
 }
 

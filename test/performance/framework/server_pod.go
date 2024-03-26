@@ -104,7 +104,7 @@ func ScaleUpWorkloadPods(ctx context.Context, ch chan time.Duration, data *Scale
 	serviceNumPerNs := data.Specification.SvcNumPerNs
 	count := 0
 	for _, ns := range data.namespaces {
-		gErr, _ := errgroup.WithContext(context.Background())
+		gErr, _ := errgroup.WithContext(ctx)
 		var pods []*corev1.Pod
 		pods, err = renderServerPods(data.templateFilesPath, ns, podNum, serviceNumPerNs)
 		if err != nil {

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -182,63 +183,71 @@ func scaleUp(ctx context.Context, data *ScaleData, ch chan time.Duration) (svcs 
 	allocator, err := ipallocator.NewCIDRAllocator(ipNet, []net.IP{net.ParseIP("10.96.0.1"), net.ParseIP("10.96.0.10")})
 
 	for _, ns := range nss {
+		gErr, _ := errgroup.WithContext(ctx)
 		klog.InfoS("Scale up Services", "Namespace", ns)
 		var services []*corev1.Service
 		services, err = renderServices(data.templateFilesPath, numPerNs)
 		if err != nil {
 			return
 		}
-		for _, svc := range services {
-			if ipv6 {
-				ipFamily := corev1.IPv6Protocol
-				svc.Spec.IPFamilies = []corev1.IPFamily{ipFamily}
-			}
-			if err := utils.DefaultRetry(func() error {
-				var clusterIP net.IP
-				clusterIP, err = allocator.AllocateNext()
-				if err != nil {
-					return fmt.Errorf("allocate IP from ServiceCIDR error: %+v", err)
+		for i := range services {
+			svc := services[i]
+			gErr.Go(func() error {
+				if ipv6 {
+					ipFamily := corev1.IPv6Protocol
+					svc.Spec.IPFamilies = []corev1.IPFamily{ipFamily}
 				}
+				if err := utils.DefaultRetry(func() error {
+					var clusterIP net.IP
+					clusterIP, err = allocator.AllocateNext()
+					if err != nil {
+						return fmt.Errorf("allocate IP from ServiceCIDR error: %+v", err)
+					}
 
-				var newSvc *corev1.Service
-				var err error
-				var clientPod *corev1.Pod
-				svc.Spec.ClusterIP = clusterIP.String()
-				klog.InfoS("go FetchTimestampFromLog", "cap(ch)", cap(ch), "len(ch)", len(ch))
-				clientPod, err = client_pod.CreatePod(ctx, cs, []string{fmt.Sprintf("%s:%d", clusterIP, 80)}, client_pod.ScaleTestPodProbeContainerName, ns)
-				if err != nil || clientPod == nil {
-					klog.ErrorS(err, "Create client test Pod failed, can not verify the Service, will exist")
-					return err
-				}
-				startTime0 := time.Now().UnixNano()
-				newSvc, err = cs.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
-				if err != nil {
-					if errors.IsAlreadyExists(err) {
-						newSvc, _ = cs.CoreV1().Services(ns).Get(ctx, svc.Name, metav1.GetOptions{})
-					} else {
+					var newSvc *corev1.Service
+					var err error
+					var clientPod *corev1.Pod
+					svc.Spec.ClusterIP = clusterIP.String()
+					klog.InfoS("go FetchTimestampFromLog", "cap(ch)", cap(ch), "len(ch)", len(ch))
+					clientPod, err = client_pod.CreatePod(ctx, cs, []string{fmt.Sprintf("%s:%d", clusterIP, 80)}, client_pod.ScaleTestPodProbeContainerName, ns)
+					if err != nil || clientPod == nil {
+						klog.ErrorS(err, "Create client test Pod failed, can not verify the Service, will exist")
 						return err
 					}
-				}
-
-				if newSvc.Spec.ClusterIP == "" {
-					return fmt.Errorf("service %s Spec.ClusterIP is empty", svc.Name)
-				}
-				klog.InfoS("Create Service", "Name", newSvc.Name, "ClusterIP", newSvc.Spec.ClusterIP, "Namespace", ns)
-				svcs = append(svcs, ServiceInfo{Name: newSvc.Name, IP: newSvc.Spec.ClusterIP, NameSpace: newSvc.Namespace})
-				go func() {
-					startTimeStamp := time.Now().UnixNano()
-					klog.InfoS("Service creating operate time", "Duration(ms)", (startTimeStamp-startTime0)/1000000)
-					key := "down to up"
-					if err := utils.FetchTimestampFromLog(ctx, cs, clientPod.Namespace, clientPod.Name, client_pod.ScaleTestPodProbeContainerName, ch, startTimeStamp, key); err != nil {
-						klog.ErrorS(err, "Check readiness of service error", "ClientPodName", clientPod.Name, "svc", svc)
+					startTime0 := time.Now().UnixNano()
+					newSvc, err = cs.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
+					if err != nil {
+						if errors.IsAlreadyExists(err) {
+							newSvc, _ = cs.CoreV1().Services(ns).Get(ctx, svc.Name, metav1.GetOptions{})
+						} else {
+							return err
+						}
 					}
-					klog.InfoS("Update test Pod to check Service", "ClusterIP", clusterIP)
-				}()
+
+					if newSvc.Spec.ClusterIP == "" {
+						return fmt.Errorf("service %s Spec.ClusterIP is empty", svc.Name)
+					}
+					klog.InfoS("Create Service", "Name", newSvc.Name, "ClusterIP", newSvc.Spec.ClusterIP, "Namespace", ns)
+					svcs = append(svcs, ServiceInfo{Name: newSvc.Name, IP: newSvc.Spec.ClusterIP, NameSpace: newSvc.Namespace})
+					go func() {
+						startTimeStamp := time.Now().UnixNano()
+						klog.InfoS("Service creating operate time", "Duration(ms)", (startTimeStamp-startTime0)/1000000)
+						key := "down to up"
+						if err := utils.FetchTimestampFromLog(ctx, cs, clientPod.Namespace, clientPod.Name, client_pod.ScaleTestPodProbeContainerName, ch, startTimeStamp, key); err != nil {
+							klog.ErrorS(err, "Check readiness of service error", "ClientPodName", clientPod.Name, "svc", svc)
+						}
+						klog.InfoS("Update test Pod to check Service", "ClusterIP", clusterIP)
+					}()
+					return nil
+				}); err != nil {
+					return err
+				}
 				return nil
-			}); err != nil {
-				return nil, err
-			}
-			time.Sleep(time.Duration(utils.GenRandInt()%2000) * time.Millisecond)
+			})
+		}
+		err = gErr.Wait()
+		if err != nil {
+			return
 		}
 	}
 	klog.InfoS("Scale up Services", "Duration", time.Since(start), "count", len(svcs))
