@@ -17,6 +17,7 @@ package test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -57,9 +58,6 @@ func init() {
 		},
 	}
 	Command.Flags().StringVarP(&parameters.antreaNamespace, "namespace", "n", "kube-system", "Configure namespace in which Antrea is running")
-	Command.Flags().BoolVar(&parameters.ForceDeploy, "force-deploy", false, "Force deploys test deployments")
-	//TODO
-	Command.Flags().BoolVar(&parameters.SingleNode, "single-node", false, "Runs tests applicable only on single node environment")
 }
 
 const (
@@ -69,7 +67,7 @@ const (
 	echoOtherNodeDeploymentName = "echo-other-node"
 	kindEchoName                = "echo"
 	kindClientName              = "client"
-	AgentDaemonSetName          = "antrea-agent"
+	agentDaemonSetName          = "antrea-agent"
 )
 
 func (k *k8sConnectivityParams) Run(ctx context.Context) error {
@@ -188,6 +186,7 @@ type k8sConnectivityParams struct {
 	antreaNamespace string
 	clientPods      *corev1.PodList
 	echoPods        map[string]string
+	namespace       string
 }
 
 func NewAntreaConnectivityCheck(client k8sClientOperations, p Parameters) *k8sConnectivityParams {
@@ -195,7 +194,21 @@ func NewAntreaConnectivityCheck(client k8sClientOperations, p Parameters) *k8sCo
 		client:          client,
 		antreaNamespace: "kube-system",
 		params:          p,
+		namespace:       generateRandomNamespace(connectivityCheckNamespace),
 	}
+}
+
+func generateRandomNamespace(baseName string) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	bytes := make([]byte, 5)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+	for i, b := range bytes {
+		bytes[i] = letters[b%byte(len(letters))]
+	}
+	return fmt.Sprintf("%s-%s", baseName, string(bytes))
 }
 
 func (k *k8sConnectivityParams) validatePodToPod(ctx context.Context) {
@@ -203,12 +216,12 @@ func (k *k8sConnectivityParams) validatePodToPod(ctx context.Context) {
 	for _, clientPod := range k.clientPods.Items {
 		for echoName, echoIP := range k.echoPods {
 			var (
-				srcPod  = connectivityCheckNamespace + "/" + clientPod.Name
-				dstPod  = connectivityCheckNamespace + "/" + echoName
+				srcPod  = k.namespace + "/" + clientPod.Name
+				dstPod  = k.namespace + "/" + echoName
 				success = true
 			)
 			k.Header("Validating from pod %s to pod %s...", srcPod, dstPod)
-			_, err := k.client.ExecInPod(ctx, connectivityCheckNamespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
+			_, err := k.client.ExecInPod(ctx, k.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
 			if err != nil {
 				k.Log("curl connectivity check command failed: %s", err)
 				success = false
@@ -228,12 +241,12 @@ func (k *k8sConnectivityParams) validatePodToPod(ctx context.Context) {
 func (k *k8sConnectivityParams) validatePodInternetConnectivity(ctx context.Context) error {
 	for _, clientPod := range k.clientPods.Items {
 		var (
-			srcPod  = connectivityCheckNamespace + "/" + clientPod.Name
+			srcPod  = k.namespace + "/" + clientPod.Name
 			success = true
 		)
 
 		k.Header("Validating connectivity from pod %s to the world (google.com)...", srcPod)
-		_, err := k.client.ExecInPod(ctx, connectivityCheckNamespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
+		_, err := k.client.ExecInPod(ctx, k.namespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
 		if err != nil {
 			k.Log("Connectivity test from pod %s to google.com failed: %s", srcPod, err)
 			success = false
@@ -254,8 +267,6 @@ func (k *k8sConnectivityParams) Relax() {
 
 type Parameters struct {
 	antreaNamespace string
-	SingleNode      bool
-	ForceDeploy     bool
 	Writer          io.Writer
 }
 
@@ -263,19 +274,14 @@ const podReadyTimeout = 5 * time.Minute
 
 func (k *k8sConnectivityParams) deleteDeployments(ctx context.Context, client k8sClientOperations) error {
 	k.Log("[%s] Deleting connectivity check deployments...", client.ClusterName())
-	client.DeleteDeployment(ctx, connectivityCheckNamespace, echoSameNodeDeploymentName, metav1.DeleteOptions{})
-	client.DeleteDeployment(ctx, connectivityCheckNamespace, echoOtherNodeDeploymentName, metav1.DeleteOptions{})
-	client.DeleteDeployment(ctx, connectivityCheckNamespace, clientDeploymentName, metav1.DeleteOptions{})
-	client.DeleteService(ctx, connectivityCheckNamespace, echoSameNodeDeploymentName, metav1.DeleteOptions{})
-	client.DeleteService(ctx, connectivityCheckNamespace, echoOtherNodeDeploymentName, metav1.DeleteOptions{})
-	client.DeleteNamespace(ctx, connectivityCheckNamespace, metav1.DeleteOptions{})
+	client.DeleteNamespace(ctx, k.namespace, metav1.DeleteOptions{})
 
-	_, err := client.GetNamespace(ctx, connectivityCheckNamespace, metav1.GetOptions{})
+	_, err := client.GetNamespace(ctx, k.namespace, metav1.GetOptions{})
 	if err == nil {
-		k.Log("[%s] Waiting for namespace %s to disappear", client.ClusterName(), connectivityCheckNamespace)
+		k.Log("[%s] Waiting for namespace %s to disappear", client.ClusterName(), k.namespace)
 		for err == nil {
 			time.Sleep(time.Second)
-			_, err = client.GetNamespace(ctx, connectivityCheckNamespace, metav1.GetOptions{})
+			_, err = client.GetNamespace(ctx, k.namespace, metav1.GetOptions{})
 		}
 	}
 
@@ -284,10 +290,7 @@ func (k *k8sConnectivityParams) deleteDeployments(ctx context.Context, client k8
 
 func (k *k8sConnectivityParams) deploymentList() (srcList []string, dstList []string) {
 	srcList = []string{clientDeploymentName, echoSameNodeDeploymentName}
-
-	if !k.params.SingleNode {
-		dstList = append(dstList, echoOtherNodeDeploymentName)
-	}
+	dstList = append(dstList, echoOtherNodeDeploymentName)
 
 	return srcList, dstList
 }
@@ -307,15 +310,10 @@ func (k *k8sConnectivityParams) initClients(ctx context.Context) (*deploymentCli
 		destination: k.client,
 	}
 
-	daemonSet, err := k.client.GetDaemonSet(ctx, k.params.antreaNamespace, AgentDaemonSetName, metav1.GetOptions{})
+	_, err := k.client.GetDaemonSet(ctx, k.params.antreaNamespace, agentDaemonSetName, metav1.GetOptions{})
 	if err != nil {
 		k.Log("Unable to determine status of Antrea DaemonSet.")
 		return nil, fmt.Errorf("Unable to determine status of antrea DaemonSet: %w", err)
-	}
-
-	if daemonSet.Status.DesiredNumberScheduled == 1 && !k.params.SingleNode {
-		k.Log("Single node environment detected, enabling single node connectivity test")
-		k.params.SingleNode = true
 	}
 
 	return c, nil
@@ -324,28 +322,22 @@ func (k *k8sConnectivityParams) initClients(ctx context.Context) (*deploymentCli
 func (k *k8sConnectivityParams) deploy(ctx context.Context) error {
 	var srcDeploymentNeeded, dstDeploymentNeeded bool
 
-	if k.params.ForceDeploy {
-		if err := k.deleteDeployments(ctx, k.clients.source); err != nil {
-			return err
-		}
-	}
-
-	_, err := k.clients.source.GetNamespace(ctx, connectivityCheckNamespace, metav1.GetOptions{})
+	_, err := k.clients.source.GetNamespace(ctx, k.namespace, metav1.GetOptions{})
 	if err != nil {
 		srcDeploymentNeeded = true
 		dstDeploymentNeeded = true
 
 		k.Log("[%s] Creating namespace for connectivity check...", k.clients.source.ClusterName())
-		_, err = k.clients.source.CreateNamespace(ctx, connectivityCheckNamespace, metav1.CreateOptions{})
+		_, err = k.clients.source.CreateNamespace(ctx, k.namespace, metav1.CreateOptions{})
 		if err != nil {
-			return fmt.Errorf("unable to create namespace %s: %s", connectivityCheckNamespace, err)
+			return fmt.Errorf("unable to create namespace %s: %s", k.namespace, err)
 		}
 	}
 
 	if srcDeploymentNeeded {
 		k.Log("[%s] Deploying echo-same-node service...", k.clients.source.ClusterName())
 		svc := newService(echoSameNodeDeploymentName, map[string]string{"name": echoSameNodeDeploymentName}, "http", 80)
-		_, err = k.clients.source.CreateService(ctx, connectivityCheckNamespace, svc, metav1.CreateOptions{})
+		_, err = k.clients.source.CreateService(ctx, k.namespace, svc, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -384,7 +376,7 @@ func (k *k8sConnectivityParams) deploy(ctx context.Context) error {
 			Labels: map[string]string{"app": echoSameNodeDeploymentName},
 		})
 
-		_, err = k.clients.source.CreateDeployment(ctx, connectivityCheckNamespace, echoDeployment, metav1.CreateOptions{})
+		_, err = k.clients.source.CreateDeployment(ctx, k.namespace, echoDeployment, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to create deployment %s: %s", echoSameNodeDeploymentName, err)
 		}
@@ -398,7 +390,7 @@ func (k *k8sConnectivityParams) deploy(ctx context.Context) error {
 			Port:    80,
 			Labels:  map[string]string{"app": clientDeploymentName},
 		})
-		_, err = k.clients.source.CreateDeployment(ctx, connectivityCheckNamespace, clientDeployment, metav1.CreateOptions{})
+		_, err = k.clients.source.CreateDeployment(ctx, k.namespace, clientDeployment, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to create deployment %s: %s", clientDeploymentName, err)
 		}
@@ -407,7 +399,7 @@ func (k *k8sConnectivityParams) deploy(ctx context.Context) error {
 	if dstDeploymentNeeded {
 		k.Log("[%s] Deploying echo-other-node service...", k.clients.destination.ClusterName())
 		svc := newService(echoOtherNodeDeploymentName, map[string]string{"name": echoOtherNodeDeploymentName}, "http", 80)
-		_, err = k.clients.destination.CreateService(ctx, connectivityCheckNamespace, svc, metav1.CreateOptions{})
+		_, err = k.clients.destination.CreateService(ctx, k.namespace, svc, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -435,7 +427,7 @@ func (k *k8sConnectivityParams) deploy(ctx context.Context) error {
 			Labels: map[string]string{"app": echoOtherNodeDeploymentName},
 		})
 
-		_, err = k.clients.destination.CreateDeployment(ctx, connectivityCheckNamespace, echoOtherNodeDeployment, metav1.CreateOptions{})
+		_, err = k.clients.destination.CreateDeployment(ctx, k.namespace, echoOtherNodeDeployment, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to create deployment %s: %s", echoOtherNodeDeploymentName, err)
 		}
@@ -451,7 +443,7 @@ func (k *k8sConnectivityParams) waitForDeploymentsReady(ctx context.Context, cli
 
 	for _, name := range deployments {
 		err := k.client.WaitForDeployment(ctx, time.Second, podReadyTimeout, false, func(ctx context.Context) (bool, error) {
-			err := client.DeploymentIsReady(ctx, connectivityCheckNamespace, name)
+			err := client.DeploymentIsReady(ctx, k.namespace, name)
 			if err != nil {
 				return false, nil
 			}
@@ -475,14 +467,14 @@ func (k *k8sConnectivityParams) validateDeployment(ctx context.Context) error {
 		return err
 	}
 
-	k.clientPods, err = k.client.ListPods(ctx, connectivityCheckNamespace, metav1.ListOptions{LabelSelector: "kind=" + kindClientName})
+	k.clientPods, err = k.client.ListPods(ctx, k.namespace, metav1.ListOptions{LabelSelector: "kind=" + kindClientName})
 	if err != nil {
 		return fmt.Errorf("unable to list client pods: %s", err)
 	}
 
 	k.echoPods = map[string]string{}
 	for _, client := range k.clients.clients() {
-		echoPods, err := client.ListPods(ctx, connectivityCheckNamespace, metav1.ListOptions{LabelSelector: "kind=" + kindEchoName})
+		echoPods, err := client.ListPods(ctx, k.namespace, metav1.ListOptions{LabelSelector: "kind=" + kindEchoName})
 		if err != nil {
 			return fmt.Errorf("unable to list echo pods: %s", err)
 		}
