@@ -180,8 +180,9 @@ func TestWebhookGatewayEvents(t *testing.T) {
 		}
 		gatewayWebhookUnderTest = &gatewayValidator{
 			Client:    fakeClient,
-			namespace: "default"}
-		gatewayWebhookUnderTest.InjectDecoder(decoder)
+			decoder:   decoder,
+			namespace: "default",
+		}
 
 		t.Run(tt.name, func(t *testing.T) {
 			response := gatewayWebhookUnderTest.Handle(context.Background(), tt.req)

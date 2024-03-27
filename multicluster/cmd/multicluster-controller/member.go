@@ -22,6 +22,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/pkg/log"
@@ -62,14 +63,19 @@ func runMember(o *Options) error {
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-gateway",
 		&webhook.Admission{Handler: &gatewayValidator{
 			Client:    mgrClient,
-			namespace: podNamespace}})
+			decoder:   admission.NewDecoder(mgr.GetScheme()),
+			namespace: podNamespace,
+		}},
+	)
 
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
 			Client:    mgrClient,
+			decoder:   admission.NewDecoder(mgr.GetScheme()),
 			namespace: podNamespace,
-			role:      memberRole},
-		})
+			role:      memberRole,
+		}},
+	)
 
 	commonAreaCreationCh := make(chan struct{}, 1)
 	clusterSetReconciler := member.NewMemberClusterSetReconciler(mgr.GetClient(),

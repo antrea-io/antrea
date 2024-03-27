@@ -67,8 +67,3 @@ func (v *gatewayValidator) Handle(ctx context.Context, req admission.Request) ad
 	}
 	return admission.Allowed("")
 }
-
-func (v *gatewayValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
-}

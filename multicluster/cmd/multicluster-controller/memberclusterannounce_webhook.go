@@ -108,8 +108,3 @@ func (v *memberClusterAnnounceValidator) Handle(ctx context.Context, req admissi
 		return admission.Allowed("")
 	}
 }
-
-func (v *memberClusterAnnounceValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
-}

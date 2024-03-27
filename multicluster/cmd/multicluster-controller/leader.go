@@ -21,6 +21,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
@@ -74,14 +75,19 @@ func runLeader(o *Options) error {
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce",
 		&webhook.Admission{Handler: &memberClusterAnnounceValidator{
 			Client:    noCachedClient,
-			namespace: podNamespace}})
+			decoder:   admission.NewDecoder(mgr.GetScheme()),
+			namespace: podNamespace,
+		}},
+	)
 
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
 			Client:    mgr.GetClient(),
+			decoder:   admission.NewDecoder(mgr.GetScheme()),
 			namespace: env.GetPodNamespace(),
-			role:      leaderRole},
-		})
+			role:      leaderRole,
+		}},
+	)
 
 	clusterSetReconciler := leader.NewLeaderClusterSetReconciler(mgrClient, podNamespace,
 		o.ClusterCalimCRDAvailable, memberClusterStatusManager)
