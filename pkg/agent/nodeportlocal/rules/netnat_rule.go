@@ -25,6 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -39,13 +40,15 @@ func InitRules() PodPortRules {
 }
 
 type netnatRules struct {
-	name string
+	name   string
+	winnet winnet.Interface
 }
 
-// NewNetNatRules retruns a new instance of netnatRules.
+// NewNetNatRules returns a new instance of netnatRules.
 func NewNetNatRules() *netnatRules {
 	nnRule := netnatRules{
-		name: antreaNatNPL,
+		name:   antreaNatNPL,
+		winnet: &winnet.Handle{},
 	}
 	return &nnRule
 }
@@ -61,7 +64,7 @@ func (nn *netnatRules) Init() error {
 // initRules creates or reuses NetNat table as NPL rule instance on Windows.
 func (nn *netnatRules) initRules() error {
 	nn.DeleteAllRules()
-	if err := util.NewNetNat(antreaNatNPL, route.PodCIDRIPv4); err != nil {
+	if err := nn.winnet.AddNetNat(antreaNatNPL, route.PodCIDRIPv4); err != nil {
 		return err
 	}
 	klog.InfoS("Successfully created NetNat rule", "name", antreaNatNPL, "CIDR", route.PodCIDRIPv4)
@@ -70,7 +73,7 @@ func (nn *netnatRules) initRules() error {
 
 // AddRule appends a NetNatStaticMapping rule.
 func (nn *netnatRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
-	netNatStaticMapping := &util.NetNatStaticMapping{
+	netNatStaticMapping := &winnet.NetNatStaticMapping{
 		Name:         antreaNatNPL,
 		ExternalIP:   net.ParseIP("0.0.0.0"),
 		ExternalPort: util.PortToUint16(nodePort),
@@ -78,7 +81,7 @@ func (nn *netnatRules) AddRule(nodePort int, podIP string, podPort int, protocol
 		InternalPort: util.PortToUint16(podPort),
 		Protocol:     binding.Protocol(protocol),
 	}
-	if err := util.ReplaceNetNatStaticMapping(netNatStaticMapping); err != nil {
+	if err := nn.winnet.ReplaceNetNatStaticMapping(netNatStaticMapping); err != nil {
 		return err
 	}
 	klog.InfoS("Successfully added NetNatStaticMapping", "NetNatStaticMapping", netNatStaticMapping)
@@ -97,7 +100,7 @@ func (nn *netnatRules) AddAllRules(nplList []PodNodePort) error {
 
 // DeleteRule deletes a specific NPL rule from NetNatStaticMapping table
 func (nn *netnatRules) DeleteRule(nodePort int, podIP string, podPort int, protocol string) error {
-	netNatStaticMapping := &util.NetNatStaticMapping{
+	netNatStaticMapping := &winnet.NetNatStaticMapping{
 		Name:         antreaNatNPL,
 		ExternalIP:   net.ParseIP("0.0.0.0"),
 		ExternalPort: util.PortToUint16(nodePort),
@@ -105,7 +108,7 @@ func (nn *netnatRules) DeleteRule(nodePort int, podIP string, podPort int, proto
 		InternalPort: util.PortToUint16(podPort),
 		Protocol:     binding.Protocol(protocol),
 	}
-	if err := util.RemoveNetNatStaticMappingByNPLTuples(netNatStaticMapping); err != nil {
+	if err := nn.winnet.RemoveNetNatStaticMapping(netNatStaticMapping); err != nil {
 		return err
 	}
 	klog.InfoS("Successfully deleted NetNatStaticMapping", "NetNatStaticMapping", netNatStaticMapping)
@@ -114,7 +117,7 @@ func (nn *netnatRules) DeleteRule(nodePort int, podIP string, podPort int, proto
 
 // DeleteAllRules deletes the NetNatStaticMapping table in the node
 func (nn *netnatRules) DeleteAllRules() error {
-	if err := util.RemoveNetNatStaticMappingByNAME(antreaNatNPL); err != nil {
+	if err := nn.winnet.RemoveNetNatStaticMappingsByNetNat(antreaNatNPL); err != nil {
 		return err
 	}
 	klog.InfoS("Successfully deleted all NPL NetNatStaticMapping rules", "NatName", antreaNatNPL)

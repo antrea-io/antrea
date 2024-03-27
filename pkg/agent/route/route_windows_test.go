@@ -18,101 +18,421 @@
 package route
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"k8s.io/klog/v2"
+	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/util"
+	servicecidrtesting "antrea.io/antrea/pkg/agent/servicecidr/testing"
 	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	"antrea.io/antrea/pkg/agent/util/winnet"
+	winnettesting "antrea.io/antrea/pkg/agent/util/winnet/testing"
+	"antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 var (
-	// Leverage loopback interface for testing.
-	hostGateway = "Loopback Pseudo-Interface 1"
-	gwLink      = getNetLinkIndex("Loopback Pseudo-Interface 1")
-	nodeConfig  = &config.NodeConfig{
-		OVSBridge: "Loopback Pseudo-Interface 1",
-		GatewayConfig: &config.GatewayConfig{
-			Name:      hostGateway,
-			LinkIndex: gwLink,
-		},
+	externalIPv4Addr1           = "1.1.1.1"
+	externalIPv4Addr2           = "1.1.1.2"
+	externalIPv4Addr1WithPrefix = externalIPv4Addr1 + "/32"
+	externalIPv4Addr2WithPrefix = externalIPv4Addr2 + "/32"
+
+	ipv4Route1 = generateRoute(ip.MustParseCIDR(externalIPv4Addr1WithPrefix), config.VirtualServiceIPv4, 10, winnet.MetricHigh)
+	ipv4Route2 = generateRoute(ip.MustParseCIDR(externalIPv4Addr2WithPrefix), config.VirtualServiceIPv4, 10, winnet.MetricHigh)
+
+	nodePort                    = uint16(30000)
+	protocol                    = openflow.ProtocolTCP
+	nodePortNetNatStaticMapping = &winnet.NetNatStaticMapping{
+		Name:         antreaNatNodePort,
+		ExternalIP:   net.ParseIP("0.0.0.0"),
+		ExternalPort: nodePort,
+		InternalIP:   config.VirtualNodePortDNATIPv4,
+		InternalPort: nodePort,
+		Protocol:     protocol,
 	}
 )
 
-func getNetLinkIndex(dev string) int {
-	link, err := net.InterfaceByName(dev)
-	if err != nil {
-		klog.Fatalf("cannot find dev %s: %v", dev, err)
-	}
-	return link.Index
-}
+func TestSyncRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
 
-func TestRouteOperation(t *testing.T) {
-	peerNodeIP1 := net.ParseIP("10.0.0.2")
-	peerNodeIP2 := net.ParseIP("10.0.0.3")
-	gwIP1 := net.ParseIP("192.168.2.1")
-	_, destCIDR1, _ := net.ParseCIDR("192.168.2.0/24")
-	dest2 := "192.168.3.0/24"
-	gwIP2 := net.ParseIP("192.168.3.1")
-	_, destCIDR2, _ := net.ParseCIDR(dest2)
+	nodeRoute1 := &winnet.Route{DestinationSubnet: ip.MustParseCIDR("192.168.1.0/24"), GatewayAddress: net.ParseIP("1.1.1.1")}
+	nodeRoute2 := &winnet.Route{DestinationSubnet: ip.MustParseCIDR("192.168.2.0/24"), GatewayAddress: net.ParseIP("1.1.1.2")}
+	serviceRoute1 := &winnet.Route{DestinationSubnet: ip.MustParseCIDR("169.254.0.253/32"), LinkIndex: 10}
+	serviceRoute2 := &winnet.Route{DestinationSubnet: ip.MustParseCIDR("169.254.0.252/32"), GatewayAddress: net.ParseIP("169.254.0.253")}
+	mockWinnet.EXPECT().ReplaceNetRoute(nodeRoute1)
+	mockWinnet.EXPECT().ReplaceNetRoute(nodeRoute2)
+	mockWinnet.EXPECT().ReplaceNetRoute(serviceRoute1)
+	mockWinnet.EXPECT().ReplaceNetRoute(serviceRoute2)
+	mockWinnet.EXPECT().ReplaceNetRoute(&winnet.Route{
+		LinkIndex:         10,
+		DestinationSubnet: ip.MustParseCIDR("192.168.0.0/24"),
+		GatewayAddress:    net.IPv4zero,
+		RouteMetric:       winnet.MetricDefault,
+	})
 
-	client, err := NewClient(&config.NetworkConfig{}, true, false, false, false, false, nil)
-
-	require.Nil(t, err)
-	called := false
-	err = client.Initialize(nodeConfig, func() { called = true })
-	require.Nil(t, err)
-	require.True(t, called)
-
-	// Add initial routes.
-	err = client.AddRoutes(destCIDR1, "node1", peerNodeIP1, gwIP1)
-	require.Nil(t, err)
-	routes1, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: destCIDR1}, util.RT_FILTER_IF|util.RT_FILTER_DST)
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(routes1))
-
-	err = client.AddRoutes(destCIDR2, "node2", peerNodeIP2, gwIP2)
-	require.Nil(t, err)
-	routes2, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: destCIDR2}, util.RT_FILTER_IF|util.RT_FILTER_DST)
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(routes2))
-
-	err = client.Reconcile([]string{dest2})
-	require.Nil(t, err)
-
-	err = client.DeleteRoutes(destCIDR2)
-	require.Nil(t, err)
-	routes7, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: destCIDR2}, util.RT_FILTER_IF|util.RT_FILTER_DST)
-	require.Nil(t, err)
-	assert.Equal(t, 0, len(routes7))
-}
-
-func TestAddAndDeleteExternalIPRoute(t *testing.T) {
 	c := &Client{
-		nodeConfig:    nodeConfig,
-		serviceRoutes: &sync.Map{},
+		winnet:        mockWinnet,
+		proxyAll:      true,
+		nodeRoutes:    sync.Map{},
+		serviceRoutes: sync.Map{},
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{LinkIndex: 10, IPv4: net.ParseIP("192.168.0.1")},
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.0.0/24"),
+		},
 	}
-	externalIP := net.ParseIP("1.1.1.1")
+	c.nodeRoutes.Store("192.168.1.0/24", nodeRoute1)
+	c.nodeRoutes.Store("192.168.2.0/24", nodeRoute2)
+	c.serviceRoutes.Store("169.254.0.253/32", serviceRoute1)
+	c.serviceRoutes.Store("169.254.0.252/32", serviceRoute2)
 
-	assert.NoError(t, c.AddExternalIPRoute(externalIP))
-	externalIPNet := util.NewIPNet(externalIP)
-	routes, err := util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: externalIPNet}, util.RT_FILTER_IF|util.RT_FILTER_DST)
-	require.Nil(t, err)
-	assert.Equal(t, 1, len(routes))
+	assert.NoError(t, c.syncRoute())
+}
 
-	route, ok := c.serviceRoutes.Load(externalIP.String())
-	assert.True(t, ok)
-	assert.EqualValues(t, routes[0], *route.(*util.Route))
+func TestInitServiceIPRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	mockServiceCIDRProvider := servicecidrtesting.NewMockInterface(ctrl)
+	c := &Client{winnet: mockWinnet,
+		networkConfig: &config.NetworkConfig{
+			TrafficEncapMode: config.TrafficEncapModeEncap,
+			IPv4Enabled:      true,
+		},
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0", LinkIndex: 10},
+		},
+		serviceCIDRProvider: mockServiceCIDRProvider,
+	}
+	mockWinnet.EXPECT().ReplaceNetRoute(generateRoute(virtualServiceIPv4Net, net.IPv4zero, 10, winnet.MetricHigh))
+	mockWinnet.EXPECT().ReplaceNetRoute(generateRoute(virtualNodePortDNATIPv4Net, config.VirtualServiceIPv4, 10, winnet.MetricHigh))
+	mockWinnet.EXPECT().ReplaceNetNeighbor(generateNeigh(config.VirtualServiceIPv4, 10))
+	mockServiceCIDRProvider.EXPECT().AddEventHandler(gomock.Any())
+	assert.NoError(t, c.initServiceIPRoutes())
+}
 
-	assert.NoError(t, c.DeleteExternalIPRoute(externalIP))
-	routes, err = util.RouteListFiltered(antreasyscall.AF_INET, &util.Route{LinkIndex: gwLink, DestinationSubnet: externalIPNet}, util.RT_FILTER_IF|util.RT_FILTER_DST)
-	require.Nil(t, err)
-	assert.Equal(t, 0, len(routes))
-	_, ok = c.serviceRoutes.Load(externalIP.String())
-	assert.False(t, ok)
+func TestReconcile(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{winnet: mockWinnet,
+		proxyAll:      true,
+		networkConfig: &config.NetworkConfig{},
+		nodeConfig: &config.NodeConfig{
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.10.0/24"),
+			GatewayConfig: &config.GatewayConfig{LinkIndex: 10},
+		},
+	}
+
+	mockWinnet.EXPECT().RouteListFiltered(antreasyscall.AF_INET, &winnet.Route{LinkIndex: 10}, winnet.RT_FILTER_IF).Return([]winnet.Route{
+		{DestinationSubnet: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 10},  // local podCIDR, should not be deleted.
+		{DestinationSubnet: ip.MustParseCIDR("192.168.1.0/24"), LinkIndex: 10},   // existing podCIDR, should not be deleted.
+		{DestinationSubnet: ip.MustParseCIDR("169.254.0.253/32"), LinkIndex: 10}, // service route, should not be deleted.
+		{DestinationSubnet: ip.MustParseCIDR("192.168.11.0/24"), LinkIndex: 10},  // non-existing podCIDR, should be deleted.
+	}, nil)
+
+	podCIDRs := []string{"192.168.0.0/24", "192.168.1.0/24"}
+	mockWinnet.EXPECT().RemoveNetRoute(&winnet.Route{DestinationSubnet: ip.MustParseCIDR("192.168.11.0/24"), LinkIndex: 10})
+	assert.NoError(t, c.Reconcile(podCIDRs))
+}
+
+func TestAddRoutes(t *testing.T) {
+	ipv4, nodeTransPortIPv4Addr, _ := net.ParseCIDR("172.16.10.2/24")
+	nodeTransPortIPv4Addr.IP = ipv4
+
+	tests := []struct {
+		name                 string
+		networkConfig        *config.NetworkConfig
+		nodeConfig           *config.NodeConfig
+		podCIDR              *net.IPNet
+		nodeName             string
+		nodeIP               net.IP
+		nodeGwIP             net.IP
+		expectedNetUtilCalls func(mockWinnet *winnettesting.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "encap IPv4",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("1.1.1.1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("1.1.1.10"),
+			nodeGwIP: net.ParseIP("192.168.10.1"),
+			expectedNetUtilCalls: func(mockWinnet *winnettesting.MockInterfaceMockRecorder) {
+				mockWinnet.ReplaceNetRoute(&winnet.Route{
+					GatewayAddress:    net.ParseIP("192.168.10.1"),
+					DestinationSubnet: ip.MustParseCIDR("192.168.10.0/24"),
+					LinkIndex:         10,
+					RouteMetric:       winnet.MetricDefault,
+				})
+			},
+		},
+		{
+			name: "noencap IPv4, direct routing",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("192.168.1.1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("172.16.10.3"), // In the same subnet as local Node IP.
+			nodeGwIP: net.ParseIP("192.168.10.1"),
+			expectedNetUtilCalls: func(mockWinnet *winnettesting.MockInterfaceMockRecorder) {
+				mockWinnet.ReplaceNetRoute(&winnet.Route{
+					GatewayAddress:    net.ParseIP("172.16.10.3"),
+					DestinationSubnet: ip.MustParseCIDR("192.168.10.0/24"),
+					RouteMetric:       winnet.MetricDefault,
+				})
+			},
+		},
+		{
+			name: "noencap IPv4, no direct routing",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("192.168.1.1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:              ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName:             "node0",
+			nodeIP:               net.ParseIP("172.16.11.3"), // In different subnet from local Node IP.
+			nodeGwIP:             net.ParseIP("192.168.10.1"),
+			expectedNetUtilCalls: func(mockWinnet *winnettesting.MockInterfaceMockRecorder) {},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			netutil := winnettesting.NewMockInterface(ctrl)
+			c := &Client{winnet: netutil,
+				networkConfig: tt.networkConfig,
+				nodeConfig:    tt.nodeConfig,
+			}
+			tt.expectedNetUtilCalls(netutil.EXPECT())
+			assert.NoError(t, c.AddRoutes(tt.podCIDR, tt.nodeName, tt.nodeIP, tt.nodeGwIP))
+		})
+	}
+}
+
+func TestDeleteRoutes(t *testing.T) {
+	existingNodeRoutes := map[string]*winnet.Route{
+		"192.168.10.0/24": {GatewayAddress: net.ParseIP("172.16.10.3"), DestinationSubnet: ip.MustParseCIDR("192.168.10.0/24")},
+		"192.168.11.0/24": {GatewayAddress: net.ParseIP("172.16.10.4"), DestinationSubnet: ip.MustParseCIDR("192.168.11.0/24")},
+	}
+	podCIDR := ip.MustParseCIDR("192.168.10.0/24")
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{winnet: mockWinnet,
+		nodeRoutes: sync.Map{},
+	}
+	for podCIDRStr, nodeRoute := range existingNodeRoutes {
+		c.nodeRoutes.Store(podCIDRStr, nodeRoute)
+	}
+	mockWinnet.EXPECT().RemoveNetRoute(&winnet.Route{GatewayAddress: net.ParseIP("172.16.10.3"), DestinationSubnet: ip.MustParseCIDR("192.168.10.0/24")})
+	assert.NoError(t, c.DeleteRoutes(podCIDR))
+}
+
+func TestAddNodePort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{
+		winnet:               mockWinnet,
+		netNatStaticMappings: sync.Map{},
+	}
+	mockWinnet.EXPECT().ReplaceNetNatStaticMapping(nodePortNetNatStaticMapping)
+	assert.NoError(t, c.AddNodePort(nil, nodePort, protocol))
+}
+
+func TestDeleteNodePort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{
+		winnet:               mockWinnet,
+		netNatStaticMappings: sync.Map{},
+	}
+	c.netNatStaticMappings.Store(fmt.Sprintf("%d-%s", nodePort, protocol), nodePortNetNatStaticMapping)
+	mockWinnet.EXPECT().RemoveNetNatStaticMapping(nodePortNetNatStaticMapping)
+	assert.NoError(t, c.DeleteNodePort(nil, nodePort, protocol))
+}
+
+func TestAddServiceCIDRRoute(t *testing.T) {
+	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
+	tests := []struct {
+		name                 string
+		curServiceIPv4CIDR   *net.IPNet
+		newServiceIPv4CIDR   *net.IPNet
+		expectedNetUtilCalls func(mockWinnet *winnettesting.MockInterfaceMockRecorder)
+	}{
+		{
+			name:               "Add route for Service IPv4 CIDR",
+			curServiceIPv4CIDR: nil,
+			newServiceIPv4CIDR: ip.MustParseCIDR("10.96.0.1/32"),
+			expectedNetUtilCalls: func(mockWinnet *winnettesting.MockInterfaceMockRecorder) {
+				mockWinnet.ReplaceNetRoute(&winnet.Route{
+					DestinationSubnet: &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+				mockWinnet.RouteListFiltered(antreasyscall.AF_INET, &winnet.Route{LinkIndex: 10}, winnet.RT_FILTER_IF).Return([]winnet.Route{
+					{
+						DestinationSubnet: ip.MustParseCIDR("10.96.0.0/24"),
+						GatewayAddress:    config.VirtualServiceIPv4,
+						RouteMetric:       winnet.MetricHigh,
+						LinkIndex:         10,
+					},
+				}, nil)
+				mockWinnet.RemoveNetRoute(&winnet.Route{
+					DestinationSubnet: ip.MustParseCIDR("10.96.0.0/24"),
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+			},
+		},
+		{
+			name:               "Add route for Service IPv4 CIDR and clean up stale routes",
+			curServiceIPv4CIDR: nil,
+			newServiceIPv4CIDR: ip.MustParseCIDR("10.96.0.0/28"),
+			expectedNetUtilCalls: func(mockWinnet *winnettesting.MockInterfaceMockRecorder) {
+				mockWinnet.ReplaceNetRoute(&winnet.Route{
+					DestinationSubnet: &net.IPNet{IP: net.ParseIP("10.96.0.0").To4(), Mask: net.CIDRMask(28, 32)},
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+				mockWinnet.RouteListFiltered(antreasyscall.AF_INET, &winnet.Route{LinkIndex: 10}, winnet.RT_FILTER_IF).Return([]winnet.Route{
+					{
+						DestinationSubnet: ip.MustParseCIDR("10.96.0.0/24"),
+						GatewayAddress:    config.VirtualServiceIPv4,
+						RouteMetric:       winnet.MetricHigh,
+						LinkIndex:         10,
+					},
+					{
+						DestinationSubnet: ip.MustParseCIDR("10.96.0.0/30"),
+						GatewayAddress:    config.VirtualServiceIPv4,
+						RouteMetric:       winnet.MetricHigh,
+						LinkIndex:         10,
+					},
+				}, nil)
+				mockWinnet.RemoveNetRoute(&winnet.Route{
+					DestinationSubnet: ip.MustParseCIDR("10.96.0.0/24"),
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+				mockWinnet.RemoveNetRoute(&winnet.Route{
+					DestinationSubnet: ip.MustParseCIDR("10.96.0.0/30"),
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+			},
+		},
+		{
+			name:               "Update route for Service IPv4 CIDR",
+			curServiceIPv4CIDR: ip.MustParseCIDR("10.96.0.1/32"),
+			newServiceIPv4CIDR: ip.MustParseCIDR("10.96.0.0/28"),
+			expectedNetUtilCalls: func(mockWinnet *winnettesting.MockInterfaceMockRecorder) {
+				mockWinnet.ReplaceNetRoute(&winnet.Route{
+					DestinationSubnet: &net.IPNet{IP: net.ParseIP("10.96.0.0").To4(), Mask: net.CIDRMask(28, 32)},
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+				mockWinnet.RemoveNetRoute(&winnet.Route{
+					DestinationSubnet: &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockWinnet := winnettesting.NewMockInterface(ctrl)
+			c := &Client{
+				winnet:     mockWinnet,
+				nodeConfig: nodeConfig,
+			}
+			tt.expectedNetUtilCalls(mockWinnet.EXPECT())
+
+			if tt.curServiceIPv4CIDR != nil {
+				c.serviceRoutes.Store(serviceIPv4CIDRKey, &winnet.Route{
+					DestinationSubnet: &net.IPNet{IP: net.ParseIP("10.96.0.1").To4(), Mask: net.CIDRMask(32, 32)},
+					GatewayAddress:    config.VirtualServiceIPv4,
+					RouteMetric:       winnet.MetricHigh,
+					LinkIndex:         10,
+				})
+			}
+
+			assert.NoError(t, c.addServiceCIDRRoute(tt.newServiceIPv4CIDR))
+		})
+	}
+}
+
+func TestAddExternalIPRoute(t *testing.T) {
+	externalIPs := []string{externalIPv4Addr1, externalIPv4Addr2}
+
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{winnet: mockWinnet,
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{
+				LinkIndex: 10,
+			},
+		},
+	}
+	mockWinnet.EXPECT().ReplaceNetRoute(ipv4Route1)
+	mockWinnet.EXPECT().ReplaceNetRoute(ipv4Route2)
+
+	for _, externalIP := range externalIPs {
+		assert.NoError(t, c.AddExternalIPRoute(net.ParseIP(externalIP)))
+	}
+}
+
+func TestDeleteExternalIPRoute(t *testing.T) {
+	externalIPs := []string{externalIPv4Addr1, externalIPv4Addr2}
+
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{winnet: mockWinnet}
+	for ipStr, route := range map[string]*winnet.Route{externalIPv4Addr1: ipv4Route1, externalIPv4Addr2: ipv4Route2} {
+		c.serviceRoutes.Store(ipStr, route)
+	}
+
+	mockWinnet.EXPECT().RemoveNetRoute(ipv4Route1)
+	mockWinnet.EXPECT().RemoveNetRoute(ipv4Route2)
+
+	for _, externalIP := range externalIPs {
+		assert.NoError(t, c.DeleteExternalIPRoute(net.ParseIP(externalIP)))
+	}
 }

@@ -15,13 +15,18 @@
 package agent
 
 import (
-	"testing"
+	"go.uber.org/mock/gomock"
+
+	winnettest "antrea.io/antrea/pkg/agent/util/winnet/testing"
 )
 
-func mockSetInterfaceMTU(t *testing.T, returnErr error) {
-	originalSetInterfaceMTU := setInterfaceMTU
-	setInterfaceMTU = func(ifaceName string, mtu int) error {
-		return returnErr
+func mockSetInterfaceMTU(controller *gomock.Controller, ift string, mtu int) func() {
+	originalWinnetUtil := winnetUtil
+	testWinnetInterface := winnettest.NewMockInterface(controller)
+	winnetUtil = testWinnetInterface
+	testWinnetInterface.EXPECT().SetNetAdapterMTU(ift, mtu).Return(nil).Times(1)
+
+	return func() {
+		winnetUtil = originalWinnetUtil
 	}
-	t.Cleanup(func() { setInterfaceMTU = originalSetInterfaceMTU })
 }

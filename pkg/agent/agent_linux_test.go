@@ -30,7 +30,8 @@ import (
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
-func mockSetInterfaceMTU(t *testing.T, returnErr error) {
+func mockSetInterfaceMTU(_ *mock.Controller, _ string, _ int) func() {
+	return func() {}
 }
 
 func mockGetInterfaceByName(t *testing.T, ipDevice *net.Interface) {
