@@ -66,7 +66,7 @@ func FetchTimestampFromLog(ctx context.Context, kc kubernetes.Interface, namespa
 		})
 		podLogs, err := req.Stream(ctx)
 		if err != nil {
-			klog.ErrorS(err, "error when opening stream to retrieve logs for Pod", "namespace", namespace, "podName", podName)
+			klog.ErrorS(err, "error when opening stream to retrieve logs for Pod", "Namespace", namespace, "PodName", podName)
 			return false, nil
 		}
 		defer podLogs.Close()
@@ -75,15 +75,22 @@ func FetchTimestampFromLog(ctx context.Context, kc kubernetes.Interface, namespa
 		if _, err := io.Copy(&b, podLogs); err != nil {
 			return false, fmt.Errorf("error when copying logs for Pod '%s/%s': %w", namespace, podName, err)
 		}
-		klog.V(4).InfoS("GetLogs from probe container", "podName", podName, "namespace", namespace, "logs", b.String())
+		klog.V(4).InfoS("GetLogs from probe container", "PodName", podName, "Namespace", namespace, "logs", b.String())
 		if strings.Contains(b.String(), key) {
 			changedTimeStamp, err := extractNanoseconds(b.String(), key)
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("extract timestamp from log error: %+v, PodName: %s, PodName: %s", err, namespace, podName)
 			}
 			if time.Duration(changedTimeStamp-startTime) < 0 {
-				klog.ErrorS(nil, "timestamp fetch from the client Pod log is invalid, please check", "startTime", startTime, "chengedTime", changedTimeStamp)
-				return false, nil
+				// Probe every 100ms. If the TCP disconnection occurs exactly within this 100ms interval,
+				// the timestamp might be earlier than the start time we recorded. To reduce the error, we take 50ms as the result.
+				if time.Duration(startTime-changedTimeStamp) < 100*time.Millisecond {
+					changedTimeStamp = startTime + int64(50*time.Millisecond)
+					klog.InfoS("The TCP disconnection occurs exactly within this 100ms interval, change the timestamp within 100ms", "newChangedTimeStamp", changedTimeStamp, "startTime", startTime)
+				} else {
+					klog.ErrorS(nil, "timestamp fetch from the client Pod log is invalid, please check", "Namespace", namespace, "PodName", podName, "startTime", startTime, "changedTime", changedTimeStamp)
+					return false, nil
+				}
 			}
 			select {
 			case ch <- time.Duration(changedTimeStamp - startTime):

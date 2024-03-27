@@ -165,7 +165,7 @@ func (nps networkPolicies) scaleUp(ctx context.Context) (actualCheckNum int, err
 					}
 					if clientPod != nil && serverIP != "" {
 						startTimeStamp := time.Now().UnixNano()
-						klog.InfoS("Networkpolicy creating operate time", "Duration(ms)", (startTimeStamp-startTime0)/1000000)
+						klog.InfoS("Networkpolicy creating operate time", "Duration(ms)", (startTimeStamp-startTime0)/1000000, "StartTimeStamp", startTimeStamp)
 						actualCheckNum++
 						go func() {
 							klog.InfoS("Update test Pod to check NetworkPolicy", "serverIP", serverIP, "StartTimeStamp", startTimeStamp)
