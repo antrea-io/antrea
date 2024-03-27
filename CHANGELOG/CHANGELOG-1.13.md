@@ -1,5 +1,27 @@
 # Changelog 1.13
 
+## 1.13.4 - 2024-04-08
+
+### Added
+
+- Enable Windows OVS container to run on pristine host environment, without requiring some dependencies to be installed manually ahead of time. ([#5440](https://github.com/antrea-io/antrea/pull/5440), [@NamanAg30])
+
+### Changed
+
+- Stop using `projects.registry.vmware.com` for user-facing images. ([#6073](https://github.com/antrea-io/antrea/pull/6073), [@antoninbas])
+- Persist TLS certificate and key of antrea-controller and periodically sync the CA cert to improve robustness. ([#5955](https://github.com/antrea-io/antrea/pull/5955), [@tnqn])
+- Disable cgo for all Antrea binaries. ([#5988](https://github.com/antrea-io/antrea/pull/5988), [@antoninbas])
+
+### Fixed
+
+- Disable `libcapng` to make logrotate run as root in UBI images to fix an OVS crash issue. ([#6052](https://github.com/antrea-io/antrea/pull/6052), [@xliuxu])
+- Fix nil pointer dereference when ClusterGroup/Group is used in NetworkPolicy controller. ([#6077](https://github.com/antrea-io/antrea/pull/6077), [@tnqn])
+- Fix race condition in agent Traceflow controller when a tag is associated again with a new Traceflow before the old Traceflow deletion event is processed. ([#5954](https://github.com/antrea-io/antrea/pull/5954), [@tnqn])
+- Change the maximum flags from 7 to 255 to fix the wrong TCP flags validation issue in Traceflow CRD. ([#6050](https://github.com/antrea-io/antrea/pull/6050), [@gran-vmv])
+- Fix incorrect MTU configurations for the WireGuard encryption mode and GRE tunnel mode. ([#5880](https://github.com/antrea-io/antrea/pull/5880) [#5926](https://github.com/antrea-io/antrea/pull/5926), [@hjiajing] [@tnqn])
+- Use 65000 MTU upper bound for interfaces in encap mode in case of large packets being dropped unexpectedly. ([#5997](https://github.com/antrea-io/antrea/pull/5997), [@antoninbas])
+- Install Multicast related iptables rules only on IPv4 chains to fix the Antrea agent initialization failure occurred when Multicast feature is enabled in dual-stack clusters. ([#6123](https://github.com/antrea-io/antrea/pull/6123), [@wenyingd])
+
 ## 1.13.3 - 2024-01-13
 
 ### Fixed
@@ -120,7 +142,9 @@
 [@antoninbas]: https://github.com/antoninbas
 [@ceclinux]: https://github.com/ceclinux
 [@dreamtalen]: https://github.com/dreamtalen
+[@gran-vmv]: https://github.com/gran-vmv
 [@heanlan]: https://github.com/heanlan
+[@hjiajing]: https://github.com/hjiajing
 [@hongliangl]: https://github.com/hongliangl
 [@jainpulkit22]: https://github.com/jainpulkit22
 [@luolanzone]: https://github.com/luolanzone
@@ -131,3 +155,4 @@
 [@wenqiq]: https://github.com/wenqiq
 [@wenyingd]: https://github.com/wenyingd
 [@yuntanghsu]: https://github.com/yuntanghsu
+[@xliuxu]: https://github.com/xliuxu
