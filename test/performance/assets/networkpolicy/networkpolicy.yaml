@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: 13f98fc7-9373-40d4-b6b2-5beedcf8b279
+  namespace: antrea-scale-ns-3f1237-0
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          namespace: antrea-scale-ns-3f1237-0
+    ports:
+    - port: 80
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app-1: scale-1
+  policyTypes:
+  - Ingress

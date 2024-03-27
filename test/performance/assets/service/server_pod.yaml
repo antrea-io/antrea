@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scale-test-server-pod
+spec:
+  containers:
+  - command:
+    - httpd
+    - -f
+    image: busybox
+    imagePullPolicy: IfNotPresent
+    name: antrea-scale-test-server
+    resources:
+      limits:
+        cpu: 20m
+        memory: 64Mi
+      requests:
+        cpu: 10m
+        memory: 32Mi

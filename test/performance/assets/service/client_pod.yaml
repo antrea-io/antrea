@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scale-test-client-pod
+spec:
+  containers:
+  - command:
+    - /bin/sh
+    - -c
+    - |
+      server=10.96.0.12; output_file="ping_log.txt"; if [ ! -e "$output_file" ]; then touch "$output_file"; fi; last_status="unknown"; last_change_time=$(adjtimex | awk '/(time.tv_sec|time.tv_usec):/ { printf("%06d", $2) }' && printf "\n"); while true; do current_time=$(adjtimex | awk '/(time.tv_sec|time.tv_usec):/ { printf("%06d", $2) }' && printf "\n"); status=$(nc -vz -w 1 "$server" 80 > /dev/null && echo "up" || echo "down"); time_diff=$((current_time - last_change_time)); if [ "$status" != "$last_status" ]; then echo "$current_time Status changed from $last_status to $status after ${time_diff} nanoseconds"; echo "$current_time Status changed from $last_status to $status after ${time_diff} nanoseconds" >> "$output_file"; last_change_time=$current_time; last_status=$status; fi; sleep 0.1; done
+    image: busybox
+    imagePullPolicy: IfNotPresent
+    name: antrea-scale-test-pod-probe
