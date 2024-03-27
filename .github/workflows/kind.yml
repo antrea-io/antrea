@@ -779,7 +779,7 @@ jobs:
           make antctl-linux
       - name: run antctl command
         run: |
-          ./bin/antctl-linux test
+          ./bin/antctl-linux check installation
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's

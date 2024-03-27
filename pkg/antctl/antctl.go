@@ -641,9 +641,10 @@ $ antctl get podmulticaststats pod -n namespace`,
 	},
 	rawCommands: []rawCommand{
 		{
-			cobraCommand:      test.Command,
-			supportAgent:      true,
-			supportController: true,
+			cobraCommand:      test.Command(),
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      check,
 		},
 		{
 			cobraCommand:      supportbundle.Command,

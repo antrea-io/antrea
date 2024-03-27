@@ -23,41 +23,30 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var Command *cobra.Command
-var (
-	contextName string
-	k8sClient   *Client
-)
-
-func init() {
-	client, err := NewClient(contextName, "")
+func Command() *cobra.Command {
+	client, err := NewClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to create kubernetes client: %s", err)
 	}
-	k8sClient = client
-
-	parameters := Parameters{
-		antreaNamespace: "kube-system",
-		Writer:          os.Stdout,
-	}
-	Command = &cobra.Command{
-		Use:   "test",
-		Short: "test connectivity",
+	k8sClient := client
+	check := NewAntreaConnectivityCheck(k8sClient)
+	command := &cobra.Command{
+		Use:   "installation",
+		Short: "Runs post installation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Print("test starting")
-			check := NewAntreaConnectivityCheck(k8sClient, parameters)
+			fmt.Fprintf(check.Writer, "Test starting \n")
 			return check.Run(context.Background())
 		},
 	}
-	Command.Flags().StringVarP(&parameters.antreaNamespace, "namespace", "n", "kube-system", "Configure namespace in which Antrea is running")
+	command.Flags().StringVarP(&check.antreaNamespace, "namespace", "n", check.antreaNamespace, "Configure namespace in which antrea is running")
+	return command
 }
 
 const (
@@ -89,7 +78,7 @@ func (k *k8sConnectivityParams) Run(ctx context.Context) error {
 	k.validatePodInternetConnectivity(ctx)
 	k.Log("Test finished")
 	k.Log("Deleting deployments")
-	if err := k.deleteDeployments(ctx, k8sClient); err != nil {
+	if err := k.deleteDeployments(ctx, k.client); err != nil {
 		k.Log("Deployments deletion failed")
 	} else {
 		k.Log("Deployments deletion successful")
@@ -182,18 +171,18 @@ func newDeployment(p deploymentParameters) *appsv1.Deployment {
 type k8sConnectivityParams struct {
 	clients         *deploymentClients
 	client          k8sClientOperations
-	params          Parameters
+	Writer          io.Writer
 	antreaNamespace string
 	clientPods      *corev1.PodList
 	echoPods        map[string]string
 	namespace       string
 }
 
-func NewAntreaConnectivityCheck(client k8sClientOperations, p Parameters) *k8sConnectivityParams {
+func NewAntreaConnectivityCheck(client k8sClientOperations) *k8sConnectivityParams {
 	return &k8sConnectivityParams{
 		client:          client,
 		antreaNamespace: "kube-system",
-		params:          p,
+		Writer:          os.Stdout,
 		namespace:       generateRandomNamespace(connectivityCheckNamespace),
 	}
 }
@@ -265,11 +254,6 @@ func (k *k8sConnectivityParams) Relax() {
 	time.Sleep(2 * time.Second)
 }
 
-type Parameters struct {
-	antreaNamespace string
-	Writer          io.Writer
-}
-
 const podReadyTimeout = 5 * time.Minute
 
 func (k *k8sConnectivityParams) deleteDeployments(ctx context.Context, client k8sClientOperations) error {
@@ -310,7 +294,7 @@ func (k *k8sConnectivityParams) initClients(ctx context.Context) (*deploymentCli
 		destination: k.client,
 	}
 
-	_, err := k.client.GetDaemonSet(ctx, k.params.antreaNamespace, agentDaemonSetName, metav1.GetOptions{})
+	_, err := k.client.GetDaemonSet(ctx, k.antreaNamespace, agentDaemonSetName, metav1.GetOptions{})
 	if err != nil {
 		k.Log("Unable to determine status of Antrea DaemonSet.")
 		return nil, fmt.Errorf("Unable to determine status of antrea DaemonSet: %w", err)
@@ -436,22 +420,20 @@ func (k *k8sConnectivityParams) deploy(ctx context.Context) error {
 	return nil
 }
 
-func (k *k8sConnectivityParams) waitForDeploymentsReady(ctx context.Context, client k8sClientOperations, deployments []string) error {
+func (k *k8sConnectivityParams) waitForDeploymentsReady(ctx context.Context, client k8sClientOperations, deployments []string, interval, timeout time.Duration) error {
 	for _, deployment := range deployments {
-		k.Log("[%s] Waiting for deployments %s to become ready...", client.ClusterName(), deployment)
-	}
-
-	for _, name := range deployments {
-		err := k.client.WaitForDeployment(ctx, time.Second, podReadyTimeout, false, func(ctx context.Context) (bool, error) {
-			err := client.DeploymentIsReady(ctx, k.namespace, name)
+		k.Log("[%s] Waiting for deployment %s to become ready...", client.ClusterName(), deployment)
+		err := wait.PollUntilContextTimeout(ctx, interval, timeout, false, func(ctx context.Context) (bool, error) {
+			ready, err := client.DeploymentIsReady(ctx, k.namespace, deployment)
 			if err != nil {
-				return false, nil
+				return false, fmt.Errorf("error checking readiness of deployment %s: %w", deployment, err)
 			}
-			return true, nil
+			return ready, nil
 		})
 		if err != nil {
-			return fmt.Errorf("waiting for deployment %s to become ready has been interrupted: %w", name, err)
+			return fmt.Errorf("waiting for deployment %s to become ready has been interrupted: %w", deployment, err)
 		}
+		k.Log("[%s] Deployment %s is ready.", client.ClusterName(), deployment)
 	}
 	return nil
 }
@@ -460,10 +442,10 @@ func (k *k8sConnectivityParams) validateDeployment(ctx context.Context) error {
 	var err error
 
 	srcDeployments, dstDeployments := k.deploymentList()
-	if err := k.waitForDeploymentsReady(ctx, k.clients.source, srcDeployments); err != nil {
+	if err := k.waitForDeploymentsReady(ctx, k.clients.source, srcDeployments, time.Second, podReadyTimeout); err != nil {
 		return err
 	}
-	if err := k.waitForDeploymentsReady(ctx, k.clients.destination, dstDeployments); err != nil {
+	if err := k.waitForDeploymentsReady(ctx, k.clients.destination, dstDeployments, time.Second, podReadyTimeout); err != nil {
 		return err
 	}
 
@@ -482,12 +464,12 @@ func (k *k8sConnectivityParams) validateDeployment(ctx context.Context) error {
 			k.echoPods[echoPod.Name] = echoPod.Status.PodIP
 		}
 	}
-	fmt.Printf("deployment is validated\n")
+	fmt.Fprintf(k.Writer, "Deployment is validated\n")
 	return nil
 }
 
 func (k *k8sConnectivityParams) Log(format string, a ...interface{}) {
-	fmt.Fprintf(k.params.Writer, format+"\n", a...)
+	fmt.Fprintf(k.Writer, format+"\n", a...)
 }
 
 func (k *k8sConnectivityParams) Header(format string, a ...interface{}) {
@@ -498,17 +480,14 @@ func (k *k8sConnectivityParams) Header(format string, a ...interface{}) {
 
 type k8sClientOperations interface {
 	CreateService(ctx context.Context, namespace string, service *corev1.Service, opts metav1.CreateOptions) (*corev1.Service, error)
-	DeleteService(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error
-	DeleteDeployment(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error
 	CreateDeployment(ctx context.Context, namespace string, deployment *appsv1.Deployment, opts metav1.CreateOptions) (*appsv1.Deployment, error)
 	GetDeployment(ctx context.Context, namespace, name string, opts metav1.GetOptions) (*appsv1.Deployment, error)
 	GetDaemonSet(ctx context.Context, namespace, name string, options metav1.GetOptions) (*appsv1.DaemonSet, error)
-	DeploymentIsReady(ctx context.Context, namespace, deployment string) error
+	DeploymentIsReady(ctx context.Context, namespace, deploymentName string) (bool, error)
 	DeleteNamespace(ctx context.Context, namespace string, opts metav1.DeleteOptions) error
 	CreateNamespace(ctx context.Context, namespace string, opts metav1.CreateOptions) (*corev1.Namespace, error)
 	GetNamespace(ctx context.Context, namespace string, options metav1.GetOptions) (*corev1.Namespace, error)
 	ListPods(ctx context.Context, namespace string, options metav1.ListOptions) (*corev1.PodList, error)
 	ExecInPod(ctx context.Context, namespace, pod, container string, command []string) (bytes.Buffer, error)
 	ClusterName() (name string)
-	WaitForDeployment(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error
 }

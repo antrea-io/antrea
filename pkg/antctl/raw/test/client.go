@@ -18,33 +18,34 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/remotecommand"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Client struct {
-	Clientset   kubernetes.Interface
-	Config      *rest.Config
-	contextName string
+	clientSet   kubernetes.Interface
+	config      *rest.Config
 	clusterName string
 }
 
-func NewClient(contextName, kubeconfig string) (*Client, error) {
+type ExecResult struct {
+	Stdout bytes.Buffer
+	Stderr bytes.Buffer
+}
+
+func NewClient() (*Client, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 
-	if kubeconfig != "" {
-		rules.ExplicitPath = kubeconfig
-	}
-
-	nonInteractiveClient := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{CurrentContext: contextName})
+	nonInteractiveClient := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
 
 	config, err := nonInteractiveClient.ClientConfig()
 	if err != nil {
@@ -61,9 +62,7 @@ func NewClient(contextName, kubeconfig string) (*Client, error) {
 		return nil, err
 	}
 
-	if contextName == "" {
-		contextName = rawConfig.CurrentContext
-	}
+	contextName := rawConfig.CurrentContext
 
 	clusterName := ""
 	if context, ok := rawConfig.Contexts[contextName]; ok {
@@ -71,15 +70,10 @@ func NewClient(contextName, kubeconfig string) (*Client, error) {
 	}
 
 	return &Client{
-		Clientset:   clientset,
-		Config:      config,
-		contextName: contextName,
+		clientSet:   clientset,
+		config:      config,
 		clusterName: clusterName,
 	}, nil
-}
-
-func (c *Client) ContextName() (name string) {
-	return c.contextName
 }
 
 func (c *Client) ClusterName() (name string) {
@@ -87,87 +81,93 @@ func (c *Client) ClusterName() (name string) {
 }
 
 func (c *Client) CreateService(ctx context.Context, namespace string, service *corev1.Service, opts metav1.CreateOptions) (*corev1.Service, error) {
-	return c.Clientset.CoreV1().Services(namespace).Create(ctx, service, opts)
-}
-
-func (c *Client) DeleteService(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error {
-	return c.Clientset.CoreV1().Services(namespace).Delete(ctx, name, opts)
-}
-
-func (c *Client) GetService(ctx context.Context, namespace, name string, opts metav1.GetOptions) (*corev1.Service, error) {
-	return c.Clientset.CoreV1().Services(namespace).Get(ctx, name, opts)
+	return c.clientSet.CoreV1().Services(namespace).Create(ctx, service, opts)
 }
 
 func (c *Client) CreateDeployment(ctx context.Context, namespace string, deployment *appsv1.Deployment, opts metav1.CreateOptions) (*appsv1.Deployment, error) {
-	return c.Clientset.AppsV1().Deployments(namespace).Create(ctx, deployment, opts)
+	return c.clientSet.AppsV1().Deployments(namespace).Create(ctx, deployment, opts)
 }
 
 func (c *Client) GetDeployment(ctx context.Context, namespace, name string, opts metav1.GetOptions) (*appsv1.Deployment, error) {
-	return c.Clientset.AppsV1().Deployments(namespace).Get(ctx, name, opts)
+	return c.clientSet.AppsV1().Deployments(namespace).Get(ctx, name, opts)
 }
 
-func (c *Client) DeleteDeployment(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error {
-	return c.Clientset.AppsV1().Deployments(namespace).Delete(ctx, name, opts)
-}
-
-func (c *Client) DeploymentIsReady(ctx context.Context, namespace, deployment string) error {
-	d, err := c.GetDeployment(ctx, namespace, deployment, metav1.GetOptions{})
+func (c *Client) DeploymentIsReady(ctx context.Context, namespace, deploymentName string) (bool, error) {
+	deployment, err := c.GetDeployment(ctx, namespace, deploymentName, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	if d == nil {
-		return fmt.Errorf("deployment is not available")
+	if deployment.Generation <= deployment.Status.ObservedGeneration {
+		for _, cond := range deployment.Status.Conditions {
+			if cond.Type == appsv1.DeploymentProgressing && cond.Reason == "ProgressDeadlineExceeded" {
+				return false, fmt.Errorf("deployment %q exceeded its progress deadline", deployment.Name)
+			}
+		}
+		if deployment.Spec.Replicas != nil && deployment.Status.UpdatedReplicas < *deployment.Spec.Replicas {
+			return false, nil
+		}
+		if deployment.Status.Replicas > deployment.Status.UpdatedReplicas {
+			return false, nil
+		}
+		if deployment.Status.AvailableReplicas < deployment.Status.UpdatedReplicas {
+			return false, nil
+		}
+		return true, nil
 	}
-
-	if d.Status.Replicas == 0 {
-		return fmt.Errorf("replicas count is zero")
-	}
-
-	if d.Status.AvailableReplicas != d.Status.Replicas {
-		return fmt.Errorf("only %d of %d replicas are available", d.Status.AvailableReplicas, d.Status.Replicas)
-	}
-
-	if d.Status.ReadyReplicas != d.Status.Replicas {
-		return fmt.Errorf("only %d of %d replicas are ready", d.Status.ReadyReplicas, d.Status.Replicas)
-	}
-
-	if d.Status.UpdatedReplicas != d.Status.Replicas {
-		return fmt.Errorf("only %d of %d replicas are up-to-date", d.Status.UpdatedReplicas, d.Status.Replicas)
-	}
-
-	return nil
+	return false, nil
 }
 
 func (c *Client) CreateNamespace(ctx context.Context, namespace string, opts metav1.CreateOptions) (*corev1.Namespace, error) {
-	return c.Clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, opts)
+	return c.clientSet.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, opts)
 }
 
 func (c *Client) GetNamespace(ctx context.Context, namespace string, options metav1.GetOptions) (*corev1.Namespace, error) {
-	return c.Clientset.CoreV1().Namespaces().Get(ctx, namespace, options)
+	return c.clientSet.CoreV1().Namespaces().Get(ctx, namespace, options)
 }
 
 func (c *Client) DeleteNamespace(ctx context.Context, namespace string, opts metav1.DeleteOptions) error {
-	return c.Clientset.CoreV1().Namespaces().Delete(ctx, namespace, opts)
-}
-
-func (c *Client) DeletePod(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error {
-	return c.Clientset.CoreV1().Pods(namespace).Delete(ctx, name, opts)
+	return c.clientSet.CoreV1().Namespaces().Delete(ctx, namespace, opts)
 }
 
 func (c *Client) ListPods(ctx context.Context, namespace string, options metav1.ListOptions) (*corev1.PodList, error) {
-	return c.Clientset.CoreV1().Pods(namespace).List(ctx, options)
+	return c.clientSet.CoreV1().Pods(namespace).List(ctx, options)
 }
 
 func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string, command []string) (bytes.Buffer, error) {
-	result, err := c.execInPod(ctx, ExecParameters{
-		Namespace: namespace,
-		Pod:       pod,
-		Container: container,
+	req := c.clientSet.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return bytes.Buffer{}, fmt.Errorf("error adding to scheme: %w", err)
+	}
+
+	parameterCodec := runtime.NewParameterCodec(scheme)
+
+	req.VersionedParams(&corev1.PodExecOptions{
 		Command:   command,
+		Container: container,
+		Stdin:     false,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}, parameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	if err != nil {
+		return bytes.Buffer{}, fmt.Errorf("error while creating executor: %w", err)
+	}
+
+	result := &ExecResult{}
+
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &result.Stdout,
+		Stderr: &result.Stderr,
+		Tty:    false,
 	})
 	if err != nil {
-		return bytes.Buffer{}, err
+		return bytes.Buffer{}, fmt.Errorf("error in stream: %w", err)
 	}
 
 	if errString := result.Stderr.String(); errString != "" {
@@ -178,17 +178,5 @@ func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string
 }
 
 func (c *Client) GetDaemonSet(ctx context.Context, namespace, name string, opts metav1.GetOptions) (*appsv1.DaemonSet, error) {
-	return c.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, opts)
-}
-
-func (c *Client) DeleteDaemonSet(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error {
-	return c.Clientset.AppsV1().DaemonSets(namespace).Delete(ctx, name, opts)
-}
-
-func (c *Client) ListNodes(ctx context.Context, options metav1.ListOptions) (*corev1.NodeList, error) {
-	return c.Clientset.CoreV1().Nodes().List(ctx, options)
-}
-
-func (c *Client) WaitForDeployment(ctx context.Context, interval, timeout time.Duration, immediate bool, condition wait.ConditionWithContextFunc) error {
-	return wait.PollUntilContextTimeout(ctx, interval, timeout, immediate, condition)
+	return c.clientSet.AppsV1().DaemonSets(namespace).Get(ctx, name, opts)
 }
