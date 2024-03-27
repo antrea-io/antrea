@@ -26,10 +26,11 @@ import (
 
 	"antrea.io/antrea/pkg/agent/util"
 	ps "antrea.io/antrea/pkg/agent/util/powershell"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 )
 
 func adapterName(name string) string {
-	return fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, name)
+	return fmt.Sprintf("%s (%s)", winnet.ContainerVNICPrefix, name)
 }
 
 // windowsHyperVEnabled checks if the Hyper-V is enabled on the host.
