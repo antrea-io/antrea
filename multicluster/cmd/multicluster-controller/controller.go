@@ -25,7 +25,6 @@ import (
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	clientset "k8s.io/client-go/kubernetes"
@@ -139,6 +138,15 @@ func getWebhookLabel(isLeader bool, controllerNs string) *metav1.LabelSelector {
 func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, error) {
 	ctrl.SetLogger(klog.NewKlogr())
 
+	podNamespace := env.GetPodNamespace()
+
+	var caConfig *certificate.CAConfig
+	if isLeader {
+		caConfig = getCaConfig(isLeader, podNamespace)
+	} else {
+		caConfig = getCaConfig(isLeader, "")
+	}
+
 	// build up cert controller to manage certificate for MC Controller
 	k8sConfig := ctrl.GetConfigOrDie()
 	k8sConfig.QPS = common.ResourceExchangeQPS
@@ -149,8 +157,7 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	}
 
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
-	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient,
-		secureServing, getCaConfig(isLeader, o.Namespace))
+	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, caConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}
@@ -158,31 +165,40 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 		return nil, err
 	}
 
+	options := o.options
 	if o.SelfSignedCert {
-		o.options.Metrics.CertDir = selfSignedCertDir
+		options.Metrics.CertDir = selfSignedCertDir
 		o.WebhookConfig.CertDir = selfSignedCertDir
 	} else {
-		o.options.Metrics.CertDir = certDir
+		options.Metrics.CertDir = certDir
 		o.WebhookConfig.CertDir = certDir
 	}
-	o.options.WebhookServer = webhook.NewServer(webhook.Options{
+	options.WebhookServer = webhook.NewServer(webhook.Options{
 		Port:    *o.WebhookConfig.Port,
 		Host:    o.WebhookConfig.Host,
 		CertDir: o.WebhookConfig.CertDir,
 	})
 
-	namespaceFieldSelector := fields.SelectorFromSet(fields.Set{"metadata.namespace": env.GetPodNamespace()})
-	o.options.Cache.DefaultFieldSelector = namespaceFieldSelector
-	o.options.Cache.ByObject = map[controllerruntimeclient.Object]cache.ByObject{
-		&mcv1alpha1.Gateway{}: {
-			Field: namespaceFieldSelector,
-		},
-		&mcv1alpha2.ClusterSet{}: {
-			Field: namespaceFieldSelector,
-		},
-		&mcv1alpha1.MemberClusterAnnounce{}: {
-			Field: namespaceFieldSelector,
-		},
+	cacheOptions := &options.Cache
+	if isLeader {
+		// For the leader, restrict the cache to the controller's Namespace.
+		cacheOptions.DefaultNamespaces = map[string]cache.Config{
+			podNamespace: {},
+		}
+	} else {
+		// For a member, restict the cache to the controller's Namespace for the following objects.
+		cacheOptions.ByObject = map[controllerruntimeclient.Object]cache.ByObject{
+			&mcv1alpha1.Gateway{}: {
+				Namespaces: map[string]cache.Config{
+					podNamespace: {},
+				},
+			},
+			&mcv1alpha2.ClusterSet{}: {
+				Namespaces: map[string]cache.Config{
+					podNamespace: {},
+				},
+			},
+		}
 	}
 
 	// EndpointSlice is enabled in AntreaProxy by default since v1.11, so Antrea MC
@@ -206,11 +222,7 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 	}
 	o.ClusterCalimCRDAvailable = clusterClaimCRDAvailable
 
-	mgr, err := ctrl.NewManager(k8sConfig, manager.Options{
-		Scheme:                 o.options.Scheme,
-		Metrics:                o.options.Metrics,
-		HealthProbeBindAddress: o.options.HealthProbeBindAddress,
-	})
+	mgr, err := ctrl.NewManager(k8sConfig, options)
 	if err != nil {
 		return nil, fmt.Errorf("error creating manager: %v", err)
 	}
