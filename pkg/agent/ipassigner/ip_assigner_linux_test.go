@@ -94,61 +94,13 @@ func (d *dummyDeviceMock) Type() string {
 	return "dummy"
 }
 
-func DummyDeviceMockVlan(vlanID int) *dummyDeviceMock {
-	return &dummyDeviceMock{vlanID: vlanID}
-}
-
-func addrAddDel(link netlink.Link, addr *netlink.Addr) error {
-
-	fmt.Println("calling addrAddDel")
-	// Find the existing record for the link
-	var linkRecord *AddrRecord
-	for _, record := range addedAddresses {
-		if record.Link == link {
-			linkRecord = record
-			break
-		}
-	}
-
-	// If the link record doesn't exist, create a new one
-	if linkRecord == nil {
-		linkRecord = &AddrRecord{
-			Link:    link,
-			Address: []*netlink.Addr{addr},
-		}
-		addedAddresses = append(addedAddresses, linkRecord)
-	} else {
-		// Check if the address already exists in the record
-		var addrIndex = -1
-		for i, existingAddr := range linkRecord.Address {
-			if existingAddr.IPNet.IP.Equal(addr.IPNet.IP) {
-				addrIndex = i
-				break
-			}
-		}
-
-		if addrIndex != -1 {
-			// Address already exists, remove it
-			linkRecord.Address = append(linkRecord.Address[:addrIndex], linkRecord.Address[addrIndex+1:]...)
-		} else {
-			// Address doesn't exist, add it
-			linkRecord.Address = append(linkRecord.Address, addr)
-		}
-	}
-
-	return nil
-}
-
-func netlinkAddrLst(link netlink.Link, family int) ([]netlink.Addr, error) {
-	return []netlink.Addr{}, nil
-}
-
 func TestIPAssigner_AssignIP(t *testing.T) {
 	var err error
 	var subnetInfo *crdv1b1.SubnetInfo
 
 	controller := gomock.NewController(t)
 	mockResponder := respondertest.NewMockResponder(controller)
+	mockNetlink := netlinktest.NewMockInterface(controller)
 
 	tests := []struct {
 		name                string
@@ -159,6 +111,7 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 		expectedError       bool
 		expectedAssignedIPs map[string]*crdv1b1.SubnetInfo
 		expectFunc          func(mock *respondertest.MockResponder)
+		expectedCalls       func(mockNetlink *netlinktest.MockInterface)
 	}{
 		{
 			name:                "Invalid IP",
@@ -169,6 +122,8 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 			expectedError:       true,
 			expectedAssignedIPs: make(map[string]*crdv1b1.SubnetInfo),
 			expectFunc: func(mock *respondertest.MockResponder) {
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
 			},
 		},
 		{
@@ -183,6 +138,15 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 			expectFunc: func(mock *respondertest.MockResponder) {
 				mock.EXPECT().AddIP(net.ParseIP("2.1.1.1")).Return(nil)
 			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "2.1.1.1"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				mockNetlink.EXPECT().AddrAdd(&dummyDeviceMock{}, addr).Return(nil)
+			},
 		},
 		{
 			name:   "Assign existing IP",
@@ -196,6 +160,9 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 				"2.1.1.1": subnetInfo,
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+
 			},
 		},
 		{
@@ -212,6 +179,14 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 				mock.EXPECT().AddIP(net.ParseIP("2.2.2.1")).Return(nil)
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP("2.2.2.1"),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				mockNetlink.EXPECT().AddrAdd(&dummyDeviceMock{}, addr).Return(nil)
 			},
 		},
 		{
@@ -230,6 +205,14 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 				mock.EXPECT().AddIP(net.ParseIP("2001:db8::1")).Return(nil)
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP("2001:db8::1"),
+					Mask: net.CIDRMask(128, 128),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				mockNetlink.EXPECT().AddrAdd(&dummyDeviceMock{}, addr).Return(nil)
 			},
 		},
 	}
@@ -254,7 +237,9 @@ func TestIPAssigner_AssignIP(t *testing.T) {
 
 				netlinkAddrAddFunc := netlinkAddrAdd
 				defer func() { netlinkAddrAdd = netlinkAddrAddFunc }()
-				netlinkAddrAdd = addrAddDel
+				netlinkAddrAdd = mockNetlink.AddrAdd
+
+				tt.expectedCalls(mockNetlink)
 
 				_, err = a.AssignIP(tt.ip, subnetInfo, false)
 				if tt.expectedError {
@@ -275,6 +260,7 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockResponder := respondertest.NewMockResponder(controller)
 	var subnetInfo *crdv1b1.SubnetInfo
+	mockNetlink := netlinktest.NewMockInterface(controller)
 
 	tests := []struct {
 		name                string
@@ -285,6 +271,7 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 		expectedError       bool
 		expectedAssignedIPs map[string]*crdv1b1.SubnetInfo
 		expectFunc          func(mock *respondertest.MockResponder)
+		expectedCalls       func(mockNetlink *netlinktest.MockInterface)
 	}{
 		{
 			name:   "Assign IPv4 vlan 12",
@@ -300,11 +287,28 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 				"2.1.1.1":     subnetInfo,
 				"2.2.2.1":     subnetInfo,
 				"2001:db8::1": subnetInfo,
-				"4.4.4.2": {PrefixLength: 24,
+				"4.4.4.2": {PrefixLength: 32,
 					VLAN: 12,
 				},
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "4.4.4.2"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+
+				vlan := &netlink.Vlan{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: "antrea-ext.12",
+					},
+					VlanId: 12,
+				}
+				mockNetlink.EXPECT().LinkSetUp(vlan).Return(nil)
+				mockNetlink.EXPECT().AddrAdd(vlan, addr).Return(nil)
 			},
 		},
 		{
@@ -316,7 +320,7 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 				"2.1.1.1":     subnetInfo,
 				"2.2.2.1":     subnetInfo,
 				"2001:db8::1": subnetInfo,
-				"4.4.4.2": {PrefixLength: 24,
+				"4.4.4.2": {PrefixLength: 32,
 					VLAN: 12,
 				},
 			},
@@ -324,14 +328,30 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 				"2.1.1.1":     subnetInfo,
 				"2.2.2.1":     subnetInfo,
 				"2001:db8::1": subnetInfo,
-				"4.4.4.2": {PrefixLength: 24,
+				"4.4.4.2": {PrefixLength: 32,
 					VLAN: 12,
 				},
-				"5.5.5.2": {PrefixLength: 24,
+				"5.5.5.2": {PrefixLength: 32,
 					VLAN: 13,
 				},
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "5.5.5.2"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				vlan := &netlink.Vlan{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: "antrea-ext.13",
+					},
+					VlanId: 13,
+				}
+				mockNetlink.EXPECT().AddrAdd(vlan, addr).Return(nil)
+				mockNetlink.EXPECT().LinkSetUp(vlan).Return(nil)
 			},
 		},
 	}
@@ -352,11 +372,12 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 			}
 
 			subnetInfo := &crdv1b1.SubnetInfo{
-				PrefixLength: 24,
+				PrefixLength: 32,
 				VLAN:         int32(tt.vlanid),
 			}
 
 			tt.expectFunc(mockResponder)
+			tt.expectedCalls(mockNetlink)
 
 			netlinkAddFunc := netlinkAdd
 			defer func() { netlinkAdd = netlinkAddFunc }()
@@ -368,7 +389,7 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 
 			netlinkSetUpFunc := netlinkSetUp
 			defer func() { netlinkSetUp = netlinkSetUpFunc }()
-			netlinkSetUp = netlinkLinkSetup
+			netlinkSetUp = mockNetlink.LinkSetUp
 
 			netInterfaceByNameFunc := netInterfaceByName
 			defer func() { netInterfaceByName = netInterfaceByNameFunc }()
@@ -376,7 +397,7 @@ func TestIPAssigner_AssignIPVlan(t *testing.T) {
 
 			netlinkAddrAddFunc := netlinkAddrAdd
 			defer func() { netlinkAddrAdd = netlinkAddrAddFunc }()
-			netlinkAddrAdd = addrAddDel
+			netlinkAddrAdd = mockNetlink.AddrAdd
 
 			_, err = a.AssignIP(tt.ip, subnetInfo, false)
 			if tt.expectedError {
@@ -393,6 +414,7 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockResponder := respondertest.NewMockResponder(controller)
 	var subnetInfo *crdv1b1.SubnetInfo
+	mockNetlink := netlinktest.NewMockInterface(controller)
 
 	tests := []struct {
 		name                string
@@ -402,6 +424,7 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 		expectedError       bool
 		expectedAssignedIPs map[string]*crdv1b1.SubnetInfo
 		expectFunc          func(mock *respondertest.MockResponder)
+		expectedCalls       func(mockNetlink *netlinktest.MockInterface)
 	}{
 		{
 			name:                "Invalid IP",
@@ -412,6 +435,9 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 			expectedAssignedIPs: make(map[string]*crdv1b1.SubnetInfo),
 			expectFunc: func(mock *respondertest.MockResponder) {
 			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+
+			},
 		},
 		{
 			name:                "UnassignIP not assigned",
@@ -420,6 +446,9 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 			ips:                 sets.New[string](),
 			expectedAssignedIPs: make(map[string]*crdv1b1.SubnetInfo),
 			expectFunc: func(mock *respondertest.MockResponder) {
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+
 			},
 		},
 		{
@@ -436,6 +465,16 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 			expectFunc: func(mock *respondertest.MockResponder) {
 				mock.EXPECT().RemoveIP(net.ParseIP("2.1.1.1")).Return(nil)
 			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP("2.1.1.1"),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				mockNetlink.EXPECT().AddrDel(&dummyDeviceMock{}, addr).Return(nil)
+
+			},
 		},
 		{
 			name: "Unassign IPv6",
@@ -450,6 +489,15 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 				mock.EXPECT().RemoveIP(net.ParseIP("2001:db8::1")).Return(nil)
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP("2001:db8::1"),
+					Mask: net.CIDRMask(128, 128),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				mockNetlink.EXPECT().AddrDel(&dummyDeviceMock{}, addr).Return(nil)
+
 			},
 		},
 	}
@@ -471,9 +519,11 @@ func TestIPAssigner_UnAssignIP(t *testing.T) {
 			a.defaultAssignee.ndpResponder = mockResponder
 			tt.expectFunc(mockResponder)
 
+			tt.expectedCalls(mockNetlink)
+
 			netlinkAddrAddFunc := netlinkAddrDel
 			defer func() { netlinkAddrDel = netlinkAddrAddFunc }()
-			netlinkAddrDel = addrAddDel
+			netlinkAddrDel = mockNetlink.AddrDel
 
 			_, err := a.UnassignIP(tt.ip)
 			if tt.expectedError {
@@ -494,6 +544,7 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockResponder := respondertest.NewMockResponder(controller)
 	var subnetInfo *crdv1b1.SubnetInfo
+	mockNetlink := netlinktest.NewMockInterface(controller)
 
 	tests := []struct {
 		name                string
@@ -505,13 +556,14 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 		expectedError       bool
 		expectedAssignedIPs map[string]*crdv1b1.SubnetInfo
 		expectFunc          func(mock *respondertest.MockResponder)
+		expectedCalls       func(mockNetlink *netlinktest.MockInterface)
 	}{
 		{
 			name:   "Unassign IPv4 Vlan IP",
 			ip:     "4.4.4.2",
 			vlanid: 12,
 			assignedIPs: map[string]*crdv1b1.SubnetInfo{
-				"4.4.4.2": {PrefixLength: 24,
+				"4.4.4.2": {PrefixLength: 32,
 					VLAN: 12,
 				},
 				"2.1.1.1":     subnetInfo,
@@ -527,6 +579,21 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "4.4.4.2"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				vlan := &netlink.Vlan{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: "antrea-ext.12",
+					},
+					VlanId: 12,
+				}
+				mockNetlink.EXPECT().AddrDel(vlan, addr).Return(nil)
+			},
 		},
 		{
 			name:   "Unassign IPv4 Vlan IP-2",
@@ -535,7 +602,7 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 			assignedIPs: map[string]*crdv1b1.SubnetInfo{
 				"2.2.2.1":     subnetInfo,
 				"2001:db8::1": subnetInfo,
-				"5.5.5.2": {PrefixLength: 24,
+				"5.5.5.2": {PrefixLength: 32,
 					VLAN: 13,
 				},
 			},
@@ -543,6 +610,21 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 			expectedAssignedIPs: map[string]*crdv1b1.SubnetInfo{
 				"2.2.2.1":     subnetInfo,
 				"2001:db8::1": subnetInfo,
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "5.5.5.2"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				vlan := &netlink.Vlan{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: "antrea-ext.13",
+					},
+					VlanId: 13,
+				}
+				mockNetlink.EXPECT().AddrDel(vlan, addr).Return(nil)
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 			},
@@ -583,6 +665,7 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 			}
 
 			tt.expectFunc(mockResponder)
+			tt.expectedCalls(mockNetlink)
 
 			netlinkAddFunc := netlinkDel
 			defer func() { netlinkDel = netlinkAddFunc }()
@@ -592,17 +675,13 @@ func TestIPAssigner_UnAssignIPVlan(t *testing.T) {
 			defer func() { ensureRPF = ensRpfFunc }()
 			ensureRPF = ensureRPFInt
 
-			netlinkSetUpFunc := netlinkSetUp
-			defer func() { netlinkSetUp = netlinkSetUpFunc }()
-			netlinkSetUp = netlinkLinkSetup
-
 			netInterfaceByNameFunc := netInterfaceByName
 			defer func() { netInterfaceByName = netInterfaceByNameFunc }()
 			netInterfaceByName = DummyInterfaceByName
 
 			netlinkAddrAddFunc := netlinkAddrDel
 			defer func() { netlinkAddrDel = netlinkAddrAddFunc }()
-			netlinkAddrDel = addrAddDel
+			netlinkAddrDel = mockNetlink.AddrDel
 
 			_, err := a.UnassignIP(tt.ip)
 			if tt.expectedError {
@@ -758,6 +837,9 @@ func TestIPAssigner_AssignedIPsVlan(t *testing.T) {
 func TestIPAssigner_InitIPs(t *testing.T) {
 	var err error
 	var subnetInfo *crdv1b1.SubnetInfo
+	controller := gomock.NewController(t)
+	mockResponder := respondertest.NewMockResponder(controller)
+	mockNetlink := netlinktest.NewMockInterface(controller)
 
 	tests := []struct {
 		name                string
@@ -767,6 +849,7 @@ func TestIPAssigner_InitIPs(t *testing.T) {
 		expectedError       bool
 		expectedAssignedIPs map[string]*crdv1b1.SubnetInfo
 		expectFunc          func(mock *respondertest.MockResponder)
+		expectedCalls       func(mockNetlink *netlinktest.MockInterface)
 	}{
 		{
 
@@ -784,6 +867,16 @@ func TestIPAssigner_InitIPs(t *testing.T) {
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 				mock.EXPECT().AddIP(net.ParseIP("8.8.8.1")).Return(nil)
+
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "8.8.8.1"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				mockNetlink.EXPECT().AddrAdd(&dummyDeviceMock{}, addr).Return(nil)
 			},
 		},
 		{
@@ -807,13 +900,26 @@ func TestIPAssigner_InitIPs(t *testing.T) {
 				mock.EXPECT().AddIP(net.ParseIP("8.8.8.1")).Return(nil)
 				mock.EXPECT().AddIP(net.ParseIP("8.8.8.2")).Return(nil)
 			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "8.8.8.1"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				ipAddress1 := "8.8.8.2"
+				ipNet1 := &net.IPNet{
+					IP:   net.ParseIP(ipAddress1),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr1 := &netlink.Addr{IPNet: ipNet1}
+				mockNetlink.EXPECT().AddrAdd(&dummyDeviceMock{}, addr).Return(nil)
+				mockNetlink.EXPECT().AddrAdd(&dummyDeviceMock{}, addr1).Return(nil)
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			controller := gomock.NewController(t)
-			mockResponder := respondertest.NewMockResponder(controller)
 
 			a := &ipAssigner{
 				externalInterface: newFakeNetworkInterface(),
@@ -829,14 +935,15 @@ func TestIPAssigner_InitIPs(t *testing.T) {
 			a.defaultAssignee.arpResponder = mockResponder
 			a.defaultAssignee.ndpResponder = mockResponder
 			tt.expectFunc(mockResponder)
+			tt.expectedCalls(mockNetlink)
 
 			netlinkAddrAddFunc := netlinkAddrAdd
 			defer func() { netlinkAddrAdd = netlinkAddrAddFunc }()
-			netlinkAddrAdd = addrAddDel
+			netlinkAddrAdd = mockNetlink.AddrAdd
 
 			netlinkAddrAddFunc1 := netlinkAddrDel
 			defer func() { netlinkAddrDel = netlinkAddrAddFunc1 }()
-			netlinkAddrDel = addrAddDel
+			netlinkAddrDel = mockNetlink.AddrDel
 
 			err = a.InitIPs(tt.desiredIPs)
 			if tt.expectedError {
@@ -852,6 +959,10 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 	var err error
 	var subnetInfo *crdv1b1.SubnetInfo
 
+	controller := gomock.NewController(t)
+	mockResponder := respondertest.NewMockResponder(controller)
+	mockNetlink := netlinktest.NewMockInterface(controller)
+
 	tests := []struct {
 		name                string
 		vlanid              int
@@ -862,13 +973,14 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 		expectedError       bool
 		expectedAssignedIPs map[string]*crdv1b1.SubnetInfo
 		expectFunc          func(mock *respondertest.MockResponder)
+		expectedCalls       func(mockNetlink *netlinktest.MockInterface)
 	}{
 		{
 
 			name:   "InitIPs with vlan IP",
 			vlanid: 12,
 			desiredIPs: map[string]*crdv1b1.SubnetInfo{
-				"8.8.8.1": {PrefixLength: 24,
+				"8.8.8.1": {PrefixLength: 32,
 					VLAN: 12,
 				},
 			},
@@ -884,13 +996,27 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 			},
 			expectFunc: func(mock *respondertest.MockResponder) {
 			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterface) {
+				ipAddress := "8.8.8.1"
+				ipNet := &net.IPNet{
+					IP:   net.ParseIP(ipAddress),
+					Mask: net.CIDRMask(32, 32),
+				}
+				addr := &netlink.Addr{IPNet: ipNet}
+				vlan := &netlink.Vlan{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: "antrea-ext.12",
+					},
+					VlanId: 12,
+				}
+				mockNetlink.EXPECT().AddrAdd(vlan, addr).Return(nil)
+				mockNetlink.EXPECT().AddrList(&dummyDeviceMock{}, netlink.FAMILY_ALL).Return(nil, nil)
+				mockNetlink.EXPECT().LinkSetUp(vlan).Return(nil)
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			controller := gomock.NewController(t)
-			mockResponder := respondertest.NewMockResponder(controller)
 
 			a := &ipAssigner{
 				externalInterface: newFakeNetworkInterface(),
@@ -907,6 +1033,7 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 			a.defaultAssignee.arpResponder = mockResponder
 			a.defaultAssignee.ndpResponder = mockResponder
 			tt.expectFunc(mockResponder)
+			tt.expectedCalls(mockNetlink)
 
 			netlinkAddFunc := netlinkAdd
 			defer func() { netlinkAdd = netlinkAddFunc }()
@@ -918,7 +1045,7 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 
 			netlinkSetUpFunc := netlinkSetUp
 			defer func() { netlinkSetUp = netlinkSetUpFunc }()
-			netlinkSetUp = netlinkLinkSetup
+			netlinkSetUp = mockNetlink.LinkSetUp
 
 			netInterfaceByNameFunc := netInterfaceByName
 			defer func() { netInterfaceByName = netInterfaceByNameFunc }()
@@ -926,15 +1053,11 @@ func TestIPAssigner_InitIPsVlan(t *testing.T) {
 
 			netlinkAddrAddFunc := netlinkAddrAdd
 			defer func() { netlinkAddrAdd = netlinkAddrAddFunc }()
-			netlinkAddrAdd = addrAddDel
-
-			netlinkAddrAddFunc1 := netlinkAddrDel
-			defer func() { netlinkAddrDel = netlinkAddrAddFunc1 }()
-			netlinkAddrDel = addrAddDel
+			netlinkAddrAdd = mockNetlink.AddrAdd
 
 			netlinkAdrLst := netlinkAddrList
 			defer func() { netlinkAddrList = netlinkAdrLst }()
-			netlinkAddrList = netlinkAddrLst
+			netlinkAddrList = mockNetlink.AddrList
 
 			err = a.InitIPs(tt.desiredIPs)
 			if tt.expectedError {
