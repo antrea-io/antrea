@@ -249,7 +249,7 @@ func TestCreateOVSPort(t *testing.T) {
 		name                string
 		portName            string
 		portType            int
-		vlanID              uint16
+		vlanID              int32
 		createOVSPort       bool
 		createOVSAccessPort bool
 	}{
@@ -603,7 +603,7 @@ func newTestContainerInterfaceConfig(podName, containerID, ifDev string, vlan in
 	podIPv6 := net.ParseIP("3ffe:ffff:10:1ff::111")
 	containerConfig := interfacestore.NewContainerInterface(
 		hostIfaceName, containerID, podName, testPodNamespace,
-		ifDev, podMAC, []net.IP{podIP, podIPv6}, uint16(vlan))
+		ifDev, podMAC, []net.IP{podIP, podIPv6}, int32(vlan))
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 	return containerConfig
 }
@@ -632,7 +632,7 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 
 	mockOVSBridgeClient.EXPECT().CreateAccessPort(
 		containerCfg1.InterfaceName, containerCfg1.InterfaceName,
-		gomock.Any(), uint16(100)).Return(containerCfg1.PortUUID, nil).Times(1)
+		gomock.Any(), int32(100)).Return(containerCfg1.PortUUID, nil).Times(1)
 	assert.NoError(t, pc.ConfigureVLANSecondaryInterface(podName, testPodNamespace, containerID, containerNS, "eth1", 1500, ipamResult))
 	assert.Equal(t, 1, ifaceStore.Len())
 	intfConfig, _ := ifaceStore.GetContainerInterface(containerID)

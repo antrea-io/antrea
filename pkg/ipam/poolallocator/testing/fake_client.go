@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
@@ -41,7 +41,7 @@ type IPPoolClientset struct {
 	watcher     *watch.RaceFreeFakeWatcher
 }
 
-func (c *IPPoolClientset) InitPool(pool *crdv1a2.IPPool) {
+func (c *IPPoolClientset) InitPool(pool *crdv1b1.IPPool) {
 	pool.ResourceVersion = uuid.New().String()
 	c.poolVersion.Store(pool.Name, pool.ResourceVersion)
 
@@ -54,7 +54,7 @@ func NewIPPoolClient() *IPPoolClientset {
 		poolVersion: sync.Map{}}
 
 	crdClient.AddReactor("update", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		updatedPool := action.(k8stesting.UpdateAction).GetObject().(*crdv1a2.IPPool)
+		updatedPool := action.(k8stesting.UpdateAction).GetObject().(*crdv1b1.IPPool)
 		obj, exists := crdClient.poolVersion.Load(updatedPool.Name)
 		if !exists {
 			return false, nil, nil

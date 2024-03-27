@@ -32,80 +32,84 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilnet "k8s.io/utils/net"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	annotation "antrea.io/antrea/pkg/ipam"
 )
 
 var (
-	subnetIPv4RangesMap = map[string]crdv1alpha2.IPPool{
+	subnetIPv4RangesMap = map[string]crdv1beta1.IPPool{
 		testAntreaIPAMNamespace: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-0",
 			},
-			Spec: crdv1alpha2.IPPoolSpec{
-				IPVersion: crdv1alpha2.IPv4,
-				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-					CIDR:  "",
-					Start: "192.168.240.100",
-					End:   "192.168.240.129",
+			Spec: crdv1beta1.IPPoolSpec{
+				IPRanges: []crdv1beta1.IPRange{
+					{
+						CIDR:  "",
+						Start: "192.168.240.100",
+						End:   "192.168.240.129",
+					},
 				},
-					SubnetInfo: crdv1alpha2.SubnetInfo{
-						Gateway:      "192.168.240.1",
-						PrefixLength: 24,
-					}}},
+				SubnetInfo: &crdv1beta1.SubnetInfo{
+					Gateway:      "192.168.240.1",
+					PrefixLength: 24,
+				},
 			},
 		},
 		"1": {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-1",
 			},
-			Spec: crdv1alpha2.IPPoolSpec{
-				IPVersion: crdv1alpha2.IPv4,
-				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-					CIDR:  "",
-					Start: "192.168.240.130",
-					End:   "192.168.240.139",
+			Spec: crdv1beta1.IPPoolSpec{
+				IPRanges: []crdv1beta1.IPRange{
+					{
+						CIDR:  "",
+						Start: "192.168.240.130",
+						End:   "192.168.240.139",
+					},
 				},
-					SubnetInfo: crdv1alpha2.SubnetInfo{
-						Gateway:      "192.168.240.1",
-						PrefixLength: 24,
-					}}},
+				SubnetInfo: &crdv1beta1.SubnetInfo{
+					Gateway:      "192.168.240.1",
+					PrefixLength: 24,
+				},
 			},
 		},
 		testAntreaIPAMNamespace11: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-11",
 			},
-			Spec: crdv1alpha2.IPPoolSpec{
-				IPVersion: 4,
-				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-					CIDR:  "",
-					Start: "192.168.241.100",
-					End:   "192.168.241.129",
+			Spec: crdv1beta1.IPPoolSpec{
+				IPRanges: []crdv1beta1.IPRange{
+					{
+						CIDR:  "",
+						Start: "192.168.241.100",
+						End:   "192.168.241.129",
+					},
 				},
-					SubnetInfo: crdv1alpha2.SubnetInfo{
-						Gateway:      "192.168.241.1",
-						PrefixLength: 24,
-						VLAN:         11,
-					}}},
+				SubnetInfo: &crdv1beta1.SubnetInfo{
+					Gateway:      "192.168.241.1",
+					PrefixLength: 24,
+					VLAN:         11,
+				},
 			},
 		},
 		testAntreaIPAMNamespace12: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-12",
 			},
-			Spec: crdv1alpha2.IPPoolSpec{
-				IPVersion: 4,
-				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-					CIDR:  "",
-					Start: "192.168.242.100",
-					End:   "192.168.242.129",
+			Spec: crdv1beta1.IPPoolSpec{
+				IPRanges: []crdv1beta1.IPRange{
+					{
+						CIDR:  "",
+						Start: "192.168.242.100",
+						End:   "192.168.242.129",
+					},
 				},
-					SubnetInfo: crdv1alpha2.SubnetInfo{
-						Gateway:      "192.168.242.1",
-						PrefixLength: 24,
-						VLAN:         12,
-					}}},
+				SubnetInfo: &crdv1beta1.SubnetInfo{
+					Gateway:      "192.168.242.1",
+					PrefixLength: 24,
+					VLAN:         12,
+				},
 			},
 		},
 	}
@@ -391,11 +395,11 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	}
 	expectedPodIP = utilnet.AddIPOffset(utilnet.BigForIP(net.ParseIP(startIPString)), offset)
 	assert.True(t, isBelongTo)
-	assert.True(t, reflect.DeepEqual(ipAddressState, &crdv1alpha2.IPAddressState{
+	assert.True(t, reflect.DeepEqual(ipAddressState, &crdv1beta1.IPAddressState{
 		IPAddress: expectedPodIP.String(),
-		Phase:     crdv1alpha2.IPAddressPhaseAllocated,
-		Owner: crdv1alpha2.IPAddressOwner{
-			Pod: &crdv1alpha2.PodOwner{
+		Phase:     crdv1beta1.IPAddressPhaseAllocated,
+		Owner: crdv1beta1.IPAddressOwner{
+			Pod: &crdv1beta1.PodOwner{
 				Name:        podName,
 				Namespace:   testAntreaIPAMNamespace,
 				ContainerID: ipAddressState.Owner.Pod.ContainerID,
@@ -434,20 +438,20 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 }
 
 func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string, namespace string, ipPoolName string, ipOffsets, reservedIPOffsets []int32) {
-	ipPool, err := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
+	ipPool, err := data.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 	if err != nil {
 		tb.Fatalf("Failed to get IPPool %s, err: %+v", ipPoolName, err)
 	}
 	startIP := net.ParseIP(ipPool.Spec.IPRanges[0].Start)
-	expectedIPAddressMap := map[string]*crdv1alpha2.IPAddressState{}
+	expectedIPAddressMap := map[string]*crdv1beta1.IPAddressState{}
 	for i, offset := range ipOffsets {
 		ipString := utilnet.AddIPOffset(utilnet.BigForIP(startIP), int(offset)).String()
 		podName := fmt.Sprintf("%s-%d", name, i)
-		expectedIPAddressMap[ipString] = &crdv1alpha2.IPAddressState{
+		expectedIPAddressMap[ipString] = &crdv1beta1.IPAddressState{
 			IPAddress: ipString,
-			Phase:     crdv1alpha2.IPAddressPhaseAllocated,
-			Owner: crdv1alpha2.IPAddressOwner{
-				Pod: &crdv1alpha2.PodOwner{
+			Phase:     crdv1beta1.IPAddressPhaseAllocated,
+			Owner: crdv1beta1.IPAddressOwner{
+				Pod: &crdv1beta1.PodOwner{
 					Name:        podName,
 					Namespace:   namespace,
 					ContainerID: "",
@@ -457,7 +461,7 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	}
 	for i, offset := range reservedIPOffsets {
 		ipString := utilnet.AddIPOffset(utilnet.BigForIP(startIP), int(offset)).String()
-		stsOwner := &crdv1alpha2.StatefulSetOwner{
+		stsOwner := &crdv1beta1.StatefulSetOwner{
 			Name:      name,
 			Namespace: namespace,
 			Index:     i,
@@ -465,10 +469,10 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 		if _, ok := expectedIPAddressMap[ipString]; ok {
 			expectedIPAddressMap[ipString].Owner.StatefulSet = stsOwner
 		} else {
-			expectedIPAddressMap[ipString] = &crdv1alpha2.IPAddressState{
+			expectedIPAddressMap[ipString] = &crdv1beta1.IPAddressState{
 				IPAddress: ipString,
-				Phase:     crdv1alpha2.IPAddressPhaseReserved,
-				Owner: crdv1alpha2.IPAddressOwner{
+				Phase:     crdv1beta1.IPAddressPhaseReserved,
+				Owner: crdv1beta1.IPAddressOwner{
 					StatefulSet: stsOwner,
 				},
 			}
@@ -478,11 +482,11 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	tb.Logf("expectedIPAddressMap: %s", expectedIPAddressJson)
 
 	err = wait.PollUntilContextTimeout(context.Background(), time.Second*3, time.Second*15, false, func(ctx context.Context) (bool, error) {
-		ipPool, err := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
+		ipPool, err := data.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 		if err != nil {
 			tb.Fatalf("Failed to get IPPool %s, err: %+v", ipPoolName, err)
 		}
-		actualIPAddressMap := map[string]*crdv1alpha2.IPAddressState{}
+		actualIPAddressMap := map[string]*crdv1beta1.IPAddressState{}
 	actualIPAddressLoop:
 		for i, ipAddress := range ipPool.Status.IPAddresses {
 			for expectedIP := range expectedIPAddressMap {
@@ -520,14 +524,14 @@ func deleteAntreaIPAMNamespace(tb testing.TB, data *TestData, namespace string) 
 	}
 }
 
-func createIPPool(tb testing.TB, data *TestData, key string) (*crdv1alpha2.IPPool, error) {
+func createIPPool(tb testing.TB, data *TestData, key string) (*crdv1beta1.IPPool, error) {
 	ipv4IPPool := subnetIPv4RangesMap[key]
 	tb.Logf("Creating IPPool '%s'", ipv4IPPool.Name)
-	return data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), &ipv4IPPool, metav1.CreateOptions{})
+	return data.crdClient.CrdV1beta1().IPPools().Create(context.TODO(), &ipv4IPPool, metav1.CreateOptions{})
 }
 
-func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPString string) (isBelongTo bool, ipAddressState *crdv1alpha2.IPAddressState, err error) {
-	ipPool, err := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
+func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPString string) (isBelongTo bool, ipAddressState *crdv1beta1.IPAddressState, err error) {
+	ipPool, err := data.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 	if err != nil {
 		return
 	}
@@ -561,8 +565,8 @@ func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPStrin
 func deleteIPPoolWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting IPPool '%s'", name)
 	for i := 0; i < 10; i++ {
-		if err := data.crdClient.CrdV1alpha2().IPPools().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
-			ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
+		if err := data.crdClient.CrdV1beta1().IPPools().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+			ipPool, _ := data.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
 			ipPoolJson, _ := json.Marshal(ipPool)
 			tb.Logf("Error when deleting IPPool, err: %v, data: %s", err, ipPoolJson)
 			time.Sleep(defaultInterval)
@@ -576,7 +580,7 @@ func checkIPPoolsEmpty(tb testing.TB, data *TestData, names []string) {
 	count := 0
 	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		for _, name := range names {
-			ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
+			ipPool, _ := data.crdClient.CrdV1beta1().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
 			if len(ipPool.Status.IPAddresses) > 0 {
 				ipPoolJson, _ := json.Marshal(ipPool)
 				if count > 20 {

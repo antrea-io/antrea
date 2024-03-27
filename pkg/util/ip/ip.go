@@ -32,6 +32,20 @@ const (
 	V6BitLen = 8 * net.IPv6len
 )
 
+type IPVersion int
+
+const (
+	IPv4 = IPVersion(4)
+	IPv6 = IPVersion(6)
+)
+
+func GetIPVersion(ip net.IP) IPVersion {
+	if ip.To4() != nil {
+		return IPv4
+	}
+	return IPv6
+}
+
 type DualStackIPs struct {
 	IPv4 net.IP
 	IPv6 net.IP

@@ -78,7 +78,7 @@ function generateAntreaConfig() {
         if [ "$1" == "sriov" ]; then
                 $genManifest --sriov --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREA
         elif [ "$1" == "vlan" ]; then
-                $genManifest --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREAc
+                $genManifest --extra-helm-values "featureGates.SecondaryNetwork=true" > $YAML_ANTREA
         else
               echoerr "Incorrect network option $1. Failed to generate antrea.yml"
               exit 1

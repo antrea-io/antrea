@@ -30,7 +30,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	podName, podNamespace, containerID, netNS string,
 	hostIface, containerIface *current.Interface,
 	ips []*current.IPConfig,
-	vlanID uint16,
+	vlanID int32,
 	containerAccess *containerAccessArbitrator) (*interfacestore.InterfaceConfig, error) {
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name

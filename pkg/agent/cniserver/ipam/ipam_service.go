@@ -38,7 +38,7 @@ var ipamResults = sync.Map{}
 
 type IPAMResult struct {
 	current.Result
-	VLANID uint16
+	VLANID int32
 }
 
 type IPAMDriver interface {

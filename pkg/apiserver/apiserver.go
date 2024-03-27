@@ -333,6 +333,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/convert/ippool", webhook.HandleCRDConversion(ipam.ConvertIPPoolCRD))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
 	}
 
