@@ -381,3 +381,62 @@ func (r *Reachability) PrintSummary(printExpected bool, printObserved bool, prin
 		fmt.Printf("comparison:\n\n%s\n\n\n", comparison.PrettyPrint(""))
 	}
 }
+
+// NPEvaluationLevel indicates evaluation test levels (higher level has smaller number).
+// Tests with higher levels should apply in more general test configs.
+// SkipEval always have the highest level to override evaluation tests.
+type NPEvaluationLevel int
+
+const (
+	SkipEval     NPEvaluationLevel = iota
+	BasicEval    NPEvaluationLevel = iota
+	ExtendedEval NPEvaluationLevel = iota
+	NoEval       NPEvaluationLevel = iota
+)
+
+var toNPEvaluationLevel = map[string]NPEvaluationLevel{"": SkipEval, "basic": BasicEval, "extended": ExtendedEval}
+
+func (l NPEvaluationLevel) matchLevel(testLevel string) bool {
+	return l <= toNPEvaluationLevel[testLevel]
+}
+
+func (l NPEvaluationLevel) skipEvaluation() bool {
+	return l == SkipEval
+}
+
+type NPEvaluationSpec struct {
+	NPName string
+	Level  NPEvaluationLevel
+}
+
+type NPEvaluation struct {
+	Items []string
+	Truth map[string]map[string]*NPEvaluationSpec
+}
+
+func NewNPEvaluation(pods []Pod) *NPEvaluation {
+	var items []string
+	truth := map[string]map[string]*NPEvaluationSpec{}
+	for _, from := range pods {
+		items = append(items, from.String())
+		truth[from.String()] = map[string]*NPEvaluationSpec{}
+		for _, to := range pods {
+			truth[from.String()][to.String()] = &NPEvaluationSpec{"", NoEval}
+		}
+	}
+	return &NPEvaluation{
+		Items: items,
+		Truth: truth,
+	}
+}
+
+func (e *NPEvaluation) Expect(from Pod, to Pod, evalSpec NPEvaluationSpec) {
+	dict, ok := e.Truth[from.String()]
+	if !ok {
+		panic(fmt.Errorf("key %s not found in map", from))
+	}
+	if _, ok = dict[to.String()]; !ok {
+		panic(fmt.Errorf("key %s not allowed", to))
+	}
+	dict[to.String()] = &evalSpec
+}
