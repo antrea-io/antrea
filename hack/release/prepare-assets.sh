@@ -49,6 +49,9 @@ pushd $THIS_DIR/../.. > /dev/null
 mkdir -p "$1"
 OUTPUT_DIR=$(cd "$1" && pwd)
 
+# Cgo should always be disabled for release assets.
+export CGO_ENABLED=0
+
 ANTREA_BUILDS=(
     "linux amd64 linux-x86_64"
     "linux arm64 linux-arm64"
@@ -63,8 +66,6 @@ for build in "${ANTREA_BUILDS[@]}"; do
     arch="${args[1]}"
     suffix="${args[2]}"
 
-    # all "*-release" targets disable cgo, which is appropriate when
-    # distributing release assets, for portability.
     GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR" make antctl-release
 done
 
