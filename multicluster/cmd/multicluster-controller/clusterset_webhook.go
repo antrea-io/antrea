@@ -97,8 +97,3 @@ func (v *clusterSetValidator) Handle(ctx context.Context, req admission.Request)
 	}
 	return admission.Allowed("")
 }
-
-func (v *clusterSetValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
-}

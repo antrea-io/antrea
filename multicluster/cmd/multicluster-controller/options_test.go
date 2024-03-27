@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func TestComplete(t *testing.T) {
@@ -34,7 +33,6 @@ func TestComplete(t *testing.T) {
 			o: Options{
 				configFile:          "./testdata/antrea-mc-config-with-valid-podcidrs.yml",
 				SelfSignedCert:      false,
-				options:             ctrl.Options{},
 				ServiceCIDR:         "",
 				PodCIDRs:            nil,
 				GatewayIPPrecedence: "",
@@ -47,7 +45,6 @@ func TestComplete(t *testing.T) {
 			o: Options{
 				configFile:          "./testdata/antrea-mc-config-with-empty-podcidrs.yml",
 				SelfSignedCert:      false,
-				options:             ctrl.Options{},
 				ServiceCIDR:         "",
 				PodCIDRs:            nil,
 				GatewayIPPrecedence: "",
@@ -60,7 +57,6 @@ func TestComplete(t *testing.T) {
 			o: Options{
 				configFile:          "./testdata/antrea-mc-config-with-invalid-podcidrs.yml",
 				SelfSignedCert:      false,
-				options:             ctrl.Options{},
 				ServiceCIDR:         "10.100.0.0/16",
 				PodCIDRs:            nil,
 				GatewayIPPrecedence: "",
@@ -73,7 +69,6 @@ func TestComplete(t *testing.T) {
 			o: Options{
 				configFile:          "./testdata/antrea-mc-config-with-invalid-endpointiptype.yml",
 				SelfSignedCert:      false,
-				options:             ctrl.Options{},
 				ServiceCIDR:         "10.100.0.0/16",
 				PodCIDRs:            nil,
 				GatewayIPPrecedence: "",

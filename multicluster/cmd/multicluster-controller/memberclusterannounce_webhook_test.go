@@ -259,8 +259,9 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		}
 		mcaWebhookUnderTest = &memberClusterAnnounceValidator{
 			Client:    fakeClient,
-			namespace: "mcs1"}
-		mcaWebhookUnderTest.InjectDecoder(decoder)
+			decoder:   decoder,
+			namespace: "mcs1",
+		}
 		t.Run(tt.name, func(t *testing.T) {
 			response := mcaWebhookUnderTest.Handle(context.Background(), tt.req)
 			assert.Equal(t, tt.isAllowed, response.Allowed)
