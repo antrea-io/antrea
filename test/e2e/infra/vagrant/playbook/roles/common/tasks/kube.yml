@@ -1,13 +1,22 @@
+- name: Get Kubernetes stable release
+  uri:
+    url: https://dl.k8s.io/release/stable.txt
+    return_content: yes
+  register: k8sRelease
+
 - name: Add an apt signing key for Kubernetes
+  vars:
+    k8sVersion: "{{ k8sRelease.content.split('.')[0] }}.{{ k8sRelease.content.split('.')[1] }}"
   apt_key:
-    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    url: https://pkgs.k8s.io/core:/stable:/{{ k8sVersion }}/deb/Release.key
+    keyring: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
     state: present
 
 - name: Adding apt repository for Kubernetes
+  vars:
+    k8sVersion: "{{ k8sRelease.content.split('.')[0] }}.{{ k8sRelease.content.split('.')[1] }}"
   apt_repository:
-    # kubernetes-xenial should work for Ubuntu 16.04+, there is no
-    # kubernetes-bionic
-    repo: deb https://packages.cloud.google.com/apt/ kubernetes-xenial main
+    repo: deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/{{ k8sVersion }}/deb/ /
     state: present
     filename: kubernetes.list
 
