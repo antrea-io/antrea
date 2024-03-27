@@ -77,8 +77,12 @@ spec:
         spec:
           containers:
           - args:
-            - start
+            - --logtostderr
+            - -v=6
+            - manager
             env:
+            - name: cp_enable
+              value: "true"
             - name: vip_arp
               value: "true"
             - name: vip_leaderelection
@@ -93,7 +97,11 @@ spec:
               value: "10"
             - name: vip_retryperiod
               value: "2"
-            image: ghcr.io/kube-vip/kube-vip:v0.3.5
+            - name: svc_enable
+              value: "true"
+            - name: svc_election
+              value: "true"
+            image: ghcr.io/kube-vip/kube-vip:v0.6.4
             imagePullPolicy: IfNotPresent
             name: kube-vip
             resources: {}
@@ -101,34 +109,92 @@ spec:
               capabilities:
                 add:
                 - NET_ADMIN
-                - SYS_TIME
+                - NET_RAW
             volumeMounts:
             - mountPath: /etc/kubernetes/admin.conf
               name: kubeconfig
+            - mountPath: /etc/hosts
+              name: etchosts
           hostNetwork: true
           volumes:
           - hostPath:
               path: /etc/kubernetes/admin.conf
-              type: FileOrCreate
+              type: File
             name: kubeconfig
+          - hostPath:
+              path: /etc/kube-vip.hosts
+              type: File
+            name: etchosts
         status: {}
       owner: root:root
       path: /etc/kubernetes/manifests/kube-vip.yaml
+      permissions: "0644"
+    - content: 127.0.0.1 localhost kubernetes
+      owner: root:root
+      path: /etc/kube-vip.hosts
+      permissions: "0644"
+    - content: |
+        #!/bin/bash
+        # Copyright 2020 The Kubernetes Authors.
+        #
+        # Licensed under the Apache License, Version 2.0 (the "License");
+        # you may not use this file except in compliance with the License.
+        # You may obtain a copy of the License at
+        #
+        #     http://www.apache.org/licenses/LICENSE-2.0
+        #
+        # Unless required by applicable law or agreed to in writing, software
+        # distributed under the License is distributed on an "AS IS" BASIS,
+        # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        # See the License for the specific language governing permissions and
+        # limitations under the License.
+        set -e
+        # Configure the workaround required for kubeadm init with kube-vip:
+        # xref: https://github.com/kube-vip/kube-vip/issues/684
+        # Nothing to do for kubernetes < v1.29
+        KUBEADM_MINOR="$(kubeadm version -o short | cut -d '.' -f 2)"
+        if [[ "$KUBEADM_MINOR" -lt "29" ]]; then
+          return
+        fi
+        IS_KUBEADM_INIT="false"
+        # cloud-init kubeadm init
+        if [[ -f /run/kubeadm/kubeadm.yaml ]]; then
+          IS_KUBEADM_INIT="true"
+        fi
+        # ignition kubeadm init
+        if [[ -f /etc/kubeadm.sh ]] && grep -q -e "kubeadm init" /etc/kubeadm.sh; then
+          IS_KUBEADM_INIT="true"
+        fi
+        if [[ "$IS_KUBEADM_INIT" == "true" ]]; then
+          sed -i 's#path: /etc/kubernetes/admin.conf#path: /etc/kubernetes/super-admin.conf#' \
+            /etc/kubernetes/manifests/kube-vip.yaml
+        fi
+      owner: root:root
+      path: /etc/kube-vip-prepare.sh
+      permissions: "0700"
     initConfiguration:
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
-        name: '{{ ds.meta_data.hostname }}'
+        name: '{{ local_hostname }}'
     joinConfiguration:
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
-        name: '{{ ds.meta_data.hostname }}'
+        name: '{{ local_hostname }}'
     preKubeadmCommands:
-    - hostname "{{ ds.meta_data.hostname }}"
-    - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
-    - echo "127.0.0.1   localhost" >>/etc/hosts
-    - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
-    - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+    - hostnamectl set-hostname "{{ ds.meta_data.hostname }}"
+    - echo "::1         ipv6-localhost ipv6-loopback localhost6 localhost6.localdomain6"
+      >/etc/hosts
+    - echo "127.0.0.1   {{ ds.meta_data.hostname }} {{ local_hostname }} localhost
+      localhost.localdomain localhost4 localhost4.localdomain4" >>/etc/hosts
+    - /etc/kube-vip-prepare.sh
+    - mkdir -p back
+    - cp -r /etc/kubernetes/* back
+    - kubeadm reset -f
+    - cp -r back/* /etc/kubernetes
+    - rm /etc/kubernetes/manifests/kube-vip.yaml
+    - ip addr add CONTROLVIP/32 dev eth0
     - ip link set eth0 mtu 1442
+    - ethtool -K eth0 tx off
     useExperimentalRetryJoin: true
     users:
     - name: capv
@@ -154,14 +220,15 @@ spec:
       joinConfiguration:
         nodeRegistration:
           criSocket: /var/run/containerd/containerd.sock
-          name: '{{ ds.meta_data.hostname }}'
+          name: '{{ local_hostname }}'
       preKubeadmCommands:
-      - hostname "{{ ds.meta_data.hostname }}"
-      - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
-      - echo "127.0.0.1   localhost" >>/etc/hosts
-      - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
-      - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+      - hostnamectl set-hostname "{{ ds.meta_data.hostname }}"
+      - echo "::1         ipv6-localhost ipv6-loopback localhost6 localhost6.localdomain6"
+        >/etc/hosts
+      - echo "127.0.0.1   {{ ds.meta_data.hostname }} {{ local_hostname }} localhost
+        localhost.localdomain localhost4 localhost4.localdomain4" >>/etc/hosts
       - ip link set eth0 mtu 1442
+      - ethtool -K eth0 tx off
       users:
       - name: capv
         sshAuthorizedKeys:
