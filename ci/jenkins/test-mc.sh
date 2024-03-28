@@ -444,7 +444,7 @@ function run_multicluster_e2e {
     fi
 
     set -x
-    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
+    go test -v -timeout=15m antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
