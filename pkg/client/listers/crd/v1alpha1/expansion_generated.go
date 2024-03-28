@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,6 @@ type NetworkPolicyNamespaceListerExpansion interface{}
 // SupportBundleCollectionListerExpansion allows custom methods to be added to
 // SupportBundleCollectionLister.
 type SupportBundleCollectionListerExpansion interface{}
-
-// TierListerExpansion allows custom methods to be added to
-// TierLister.
-type TierListerExpansion interface{}
 
 // TraceflowListerExpansion allows custom methods to be added to
 // TraceflowLister.

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,10 +40,6 @@ func (c *FakeCrdV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPoli
 
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {
 	return &FakeSupportBundleCollections{c}
-}
-
-func (c *FakeCrdV1alpha1) Tiers() v1alpha1.TierInterface {
-	return &FakeTiers{c}
 }
 
 func (c *FakeCrdV1alpha1) Traceflows() v1alpha1.TraceflowInterface {
