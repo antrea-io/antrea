@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
@@ -38,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/flowexport"
 	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/yaml"
 )
 
 const (
@@ -172,7 +172,11 @@ func (o *Options) loadConfigFromFile() error {
 		return err
 	}
 
-	return yaml.UnmarshalStrict(data, &o.config)
+	err = yaml.UnmarshalLenient(data, &o.config)
+	if err != nil {
+		return fmt.Errorf("failed to decode config file %s: %w", o.configFile, err)
+	}
+	return nil
 }
 
 func (o *Options) setDefaults() {

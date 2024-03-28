@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
@@ -58,6 +59,7 @@ func TestBasic(t *testing.T) {
 	t.Run("testGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data, data.testNamespace) })
 	t.Run("testClusterIdentity", func(t *testing.T) { testClusterIdentity(t, data) })
 	t.Run("testLogRotate", func(t *testing.T) { testLogRotate(t, data) })
+	t.Run("testConfigForwardCompatibility", func(t *testing.T) { testConfigForwardCompatibility(t, data) })
 }
 
 // testPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
@@ -904,4 +906,26 @@ func testLogRotate(t *testing.T, data *TestData) {
 		t.Fatalf("Error when running logrotate command in Pod '%s': %v, stdout: %s, stderr: %s", podName, err, stdout, stderr)
 	}
 	t.Logf("Successfully ran logrotate command in Pod '%s': stdout: %s, stderr: %s", podName, stdout, stderr)
+}
+
+// testConfigForwardCompatibility verifies that antrea-controller and antrea-agent can run with unknown fields in the config.
+func testConfigForwardCompatibility(t *testing.T, data *TestData) {
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	require.NoError(t, err)
+	originConfigMap := configMap.DeepCopy()
+	configMap.Data["antrea-agent.conf"] += "newField: newValue\n"
+	configMap.Data["antrea-controller.conf"] += "newField: newValue\n"
+	updatedConfigMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		updatedConfigMap.Data = originConfigMap.Data
+		_, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), updatedConfigMap, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+	})
+
+	err = data.RestartAntreaAgentPods(defaultTimeout)
+	assert.NoError(t, err)
+
+	_, err = data.restartAntreaControllerPod(defaultTimeout)
+	assert.NoError(t, err)
 }

@@ -20,7 +20,6 @@ import (
 	"os"
 
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
@@ -29,6 +28,7 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/pkg/util/yaml"
 )
 
 type Options struct {
@@ -129,7 +129,7 @@ func (o *Options) loadConfigFromFile(multiclusterConfig *mcsv1alpha1.MultiCluste
 		return err
 	}
 	codecs := serializer.NewCodecFactory(scheme)
-	if err := yaml.Unmarshal(data, multiclusterConfig); err != nil {
+	if err := yaml.UnmarshalLenient(data, multiclusterConfig); err != nil {
 		return err
 	}
 	if err = runtime.DecodeInto(codecs.UniversalDecoder(), data, multiclusterConfig); err != nil {

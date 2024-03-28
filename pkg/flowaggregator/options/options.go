@@ -19,10 +19,9 @@ import (
 	"net"
 	"time"
 
-	"gopkg.in/yaml.v2"
-
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/util/flowexport"
+	"antrea.io/antrea/pkg/util/yaml"
 )
 
 type Options struct {
@@ -46,7 +45,7 @@ type Options struct {
 
 func LoadConfig(configBytes []byte) (*Options, error) {
 	var opt Options
-	if err := yaml.UnmarshalStrict(configBytes, &opt.Config); err != nil {
+	if err := yaml.UnmarshalLenient(configBytes, &opt.Config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
 	}
 	flowaggregatorconfig.SetConfigDefaults(opt.Config)
