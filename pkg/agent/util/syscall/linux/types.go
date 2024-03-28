@@ -47,6 +47,7 @@ const (
 
 type Mfcctl C.struct_mfcctl
 type Vifctl C.struct_vifctl_with_ifindex
+type SiocSgReq C.struct_siocsgreq
 
 const SizeofMfcctl = C.sizeof_struct_mfcctl
 const SizeofVifctl = C.sizeof_struct_vifctl_with_ifindex
