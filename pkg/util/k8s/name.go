@@ -55,3 +55,10 @@ func ParseStatefulSetName(name string) (statefulSetName string, index int, err e
 	statefulSetName = strings.Join(splittedName[:len(splittedName)-1], "-")
 	return
 }
+
+// GetServiceDNSNames returns the DNS names that can be used to access the given Service.
+// It currently returns one name only and may add other alternate names when needed.
+func GetServiceDNSNames(namespace, serviceName string) []string {
+	dnsName := serviceName + "." + namespace + ".svc"
+	return []string{dnsName}
+}

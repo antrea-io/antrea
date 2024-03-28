@@ -25,6 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apiserver/apis"
 	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -34,7 +35,7 @@ type TestCase struct {
 	handlerRequest string
 	expectedStatus int
 	// expected result written by handler function
-	expectedResponse *EndpointQueryResponse
+	expectedResponse *apis.EndpointQueryResponse
 
 	// arguments of call to mock
 	argsMock []string
@@ -97,12 +98,12 @@ func TestSinglePolicyResponse(t *testing.T) {
 		"Responds with list of single element": {
 			handlerRequest: "?namespace=namespace&pod=pod",
 			expectedStatus: http.StatusOK,
-			expectedResponse: &EndpointQueryResponse{Endpoints: []Endpoint{
+			expectedResponse: &apis.EndpointQueryResponse{Endpoints: []apis.Endpoint{
 				{
 					AppliedPolicies: []v1beta2.NetworkPolicyReference{
 						{Name: "policy1"},
 					},
-					IngressSrcRules: []Rule{
+					IngressSrcRules: []apis.Rule{
 						{PolicyRef: v1beta2.NetworkPolicyReference{Name: "policy2"}},
 					},
 				},
@@ -143,7 +144,7 @@ func TestMultiPolicyResponse(t *testing.T) {
 		"Responds with list of single element": {
 			handlerRequest: "?namespace=namespace&pod=pod",
 			expectedStatus: http.StatusOK,
-			expectedResponse: &EndpointQueryResponse{Endpoints: []Endpoint{
+			expectedResponse: &apis.EndpointQueryResponse{Endpoints: []apis.Endpoint{
 				{
 					AppliedPolicies: []v1beta2.NetworkPolicyReference{
 						{Name: "policy1"}, {Name: "policy2"},
@@ -184,7 +185,7 @@ func evaluateTestCases(testCases map[string]TestCase, mockCtrl *gomock.Controlle
 			return
 		}
 		// check response is expected
-		var received EndpointQueryResponse
+		var received apis.EndpointQueryResponse
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)
 		assert.Nil(t, err)
 		for i, policy := range tc.expectedResponse.Endpoints[0].AppliedPolicies {

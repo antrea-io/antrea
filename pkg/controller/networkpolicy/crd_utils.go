@@ -330,7 +330,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForGroup(namespace, group 
 // is returned.
 func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	if tier == "" {
-		return DefaultTierPriority
+		return crdv1beta1.DefaultTierPriority
 	}
 	// If the tier name is part of the static tier name set, we need to convert
 	// tier name to lowercase to match the corresponding Tier CRD name. This is
@@ -345,7 +345,7 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	if err != nil {
 		// This error should ideally not occur as we perform validation.
 		klog.Errorf("Failed to retrieve Tier %s. Setting default tier priority: %v", tier, err)
-		return DefaultTierPriority
+		return crdv1beta1.DefaultTierPriority
 	}
 	return t.Spec.Priority
 }

@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -430,10 +431,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "Pass rule fallthrough",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &BaselineTierPriority, nil, 1, &allowAction),
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.BaselineTierPriority), nil, 1, &allowAction),
 					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &tierEmergency, nil, 1, &passAction)[0]))},
 				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &tierEmergency, nil, 1, &passAction),
-					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &BaselineTierPriority, nil, 1, &allowAction)[0]))},
+					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.BaselineTierPriority), nil, 1, &allowAction)[0]))},
 			},
 			expectedResult: &expectedResponse111,
 		},
@@ -442,8 +443,8 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
 				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &tierEmergency, nil, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, nil, 1, &allowAction)[0]))},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, nil, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), nil, 1, &allowAction)[0]))},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), nil, 1, &allowAction),
 					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &tierEmergency, nil, 1, &allowAction)[0]))},
 			},
 			expectedResult: &expectedResponse111,
@@ -452,10 +453,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "Different policy priorities 1",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, &priority1, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority2, 1, &allowAction)[0]))},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority2, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, &priority1, 1, &allowAction)[0]))},
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority2, 1, &allowAction)[0]))},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority2, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction)[0]))},
 			},
 			expectedResult: &expectedResponse111,
 		},
@@ -463,10 +464,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "Different policy priorities 2",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, &priority2, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority1, 1, &allowAction)[0]))},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority1, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, &priority2, 1, &allowAction)[0]))},
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), &priority2, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction)[0]))},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), &priority2, 1, &allowAction)[0]))},
 			},
 			expectedResult: &expectedResponse222,
 		},
@@ -474,8 +475,8 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "Different rule priorities",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, nil, generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority1, 2, &allowAction)[0]))},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority1, 2, &allowAction), nil)},
+				{response: generateResponse(1, nil, generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 2, &allowAction)[0]))},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 2, &allowAction), nil)},
 			},
 			expectedResult: &expectedResponse222,
 		},
@@ -483,10 +484,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "Different policy names",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, &priority1, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority1, 1, &allowAction)[0]))},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, &DefaultTierPriority, &priority1, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, &priority1, 1, &allowAction)[0]))},
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction)[0]))},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.AntreaNetworkPolicy, controlplane.DirectionIn, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), &priority1, 1, &allowAction)[0]))},
 			},
 			expectedResult: &expectedResponse111,
 		},
@@ -494,10 +495,10 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "KNP and baseline ANP",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &BaselineTierPriority, nil, 1, &allowAction),
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.BaselineTierPriority), nil, 1, &allowAction),
 					generateRuleInfo(generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, nil)[0]))},
 				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, nil),
-					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &BaselineTierPriority, nil, 1, &allowAction)[0]))},
+					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.BaselineTierPriority), nil, 1, &allowAction)[0]))},
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
 				NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: namespace, Name: "Policy222", UID: uid2},
@@ -549,7 +550,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			name:    "No common rule found",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, &DefaultTierPriority, nil, 1, &allowAction), nil)},
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.DefaultTierPriority), nil, 1, &allowAction), nil)},
 				{response: generateResponse(2, nil, nil)},
 			},
 		},

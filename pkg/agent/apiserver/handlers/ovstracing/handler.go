@@ -29,17 +29,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 )
-
-// Response is the response struct of ovsflows command.
-type Response struct {
-	Result string `json:"result,omitempty"`
-}
 
 type tracingPeer struct {
 	ovsPort string
@@ -390,7 +386,7 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			}
 		}
 
-		err = json.NewEncoder(w).Encode(Response{out})
+		err = json.NewEncoder(w).Encode(apis.OVSTracingResponse{Result: out})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}

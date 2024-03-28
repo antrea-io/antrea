@@ -159,7 +159,7 @@ func TestApplyServerCert(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			caConfig := &CAConfig{
-				ServiceName: AntreaServiceName,
+				ServiceName: "antrea",
 				PairName:    "antrea-controller",
 			}
 			var err error

@@ -28,6 +28,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
+	"antrea.io/antrea/pkg/apis"
 	systeminstall "antrea.io/antrea/pkg/apis/system/install"
 	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
@@ -51,8 +52,6 @@ var (
 	// Codecs provides methods for retrieving codecs and serializers for specific
 	// versions and content types.
 	codecs = serializer.NewCodecFactory(scheme)
-	// #nosec G101: false positive triggered by variable name which includes "token"
-	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 
 func init() {
@@ -116,10 +115,10 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 	if err := authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(path.Dir(TokenPath), os.ModeDir); err != nil {
+	if err := os.MkdirAll(path.Dir(apis.APIServerLoopbackTokenPath), os.ModeDir); err != nil {
 		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
 	}
-	if err := os.WriteFile(TokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
+	if err := os.WriteFile(apis.APIServerLoopbackTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
 	v := antreaversion.GetVersion()

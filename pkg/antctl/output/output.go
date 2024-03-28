@@ -28,7 +28,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"antrea.io/antrea/pkg/antctl/transform/common"
-	endpointserver "antrea.io/antrea/pkg/apiserver/handlers/endpoint"
+	"antrea.io/antrea/pkg/apiserver/apis"
 )
 
 const (
@@ -319,7 +319,7 @@ func TableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
 	}
 
 	// transform egress and ingress rules to string representation
-	toStringRep := func(effectiveRules []endpointserver.Rule) [][]string {
+	toStringRep := func(effectiveRules []apis.Rule) [][]string {
 		ruleStrings := make([][]string, 0)
 		for _, rule := range effectiveRules {
 			ruleStrings = append(ruleStrings, []string{rule.PolicyRef.Name, rule.PolicyRef.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.PolicyRef.UID)})
@@ -327,7 +327,7 @@ func TableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
 		return ruleStrings
 	}
 	// iterate through each endpoint and construct response
-	endpointQueryResponse := obj.(*endpointserver.EndpointQueryResponse)
+	endpointQueryResponse := obj.(*apis.EndpointQueryResponse)
 	for _, endpoint := range endpointQueryResponse.Endpoints {
 		// indicate each endpoint Namespace/Name
 		if err := writeSingleLine("Endpoint "+endpoint.Namespace+"/"+endpoint.Name, writer); err != nil {

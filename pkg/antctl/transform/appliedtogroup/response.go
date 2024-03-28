@@ -25,6 +25,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/printers"
 )
 
 type Response struct {
@@ -85,7 +86,7 @@ func (r Response) GetPodNames(maxColumnLength int) string {
 	for i, pod := range r.Pods {
 		list[i] = pod.Pod.Namespace + "/" + pod.Pod.Name
 	}
-	return common.GenerateTableElementWithSummary(list, maxColumnLength)
+	return printers.GenerateTableElementWithSummary(list, maxColumnLength)
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {

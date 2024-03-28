@@ -33,10 +33,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	utilnet "k8s.io/utils/net"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/querier"
 )
 
 func TestServiceExternalIP(t *testing.T) {
@@ -702,7 +702,7 @@ func (data *TestData) getServiceAssignedNode(node string, service *v1.Service) (
 	if err != nil {
 		return "", err
 	}
-	var serviceExternalIPInfo []querier.ServiceExternalIPInfo
+	var serviceExternalIPInfo []apis.ServiceExternalIPInfo
 	if err := json.Unmarshal([]byte(stdout), &serviceExternalIPInfo); err != nil {
 		return "", err
 	}

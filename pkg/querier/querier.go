@@ -18,6 +18,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/multicast"
 	"antrea.io/antrea/pkg/agent/types"
@@ -115,14 +116,5 @@ type NetworkPolicyQueryFilter struct {
 // Ideally, every Node should have consistent results eventually. This should only be used when
 // ServiceExternalIP feature is enabled.
 type ServiceExternalIPStatusQuerier interface {
-	GetServiceExternalIPStatus() []ServiceExternalIPInfo
-}
-
-// ServiceExternalIPInfo contains the essential information for Services with type of Loadbalancer managed by Antrea.
-type ServiceExternalIPInfo struct {
-	ServiceName    string `json:"serviceName,omitempty" antctl:"name,Name of the Service"`
-	Namespace      string `json:"namespace,omitempty"`
-	ExternalIP     string `json:"externalIP,omitempty"`
-	ExternalIPPool string `json:"externalIPPool,omitempty"`
-	AssignedNode   string `json:"assignedNode,omitempty"`
+	GetServiceExternalIPStatus() []apis.ServiceExternalIPInfo
 }

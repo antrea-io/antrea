@@ -89,7 +89,7 @@ func TestSyncConfigMap(t *testing.T) {
 		},
 	}
 	caConfig := &CAConfig{
-		ServiceName:     AntreaServiceName,
+		ServiceName:     "antrea",
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
 	}
@@ -174,7 +174,7 @@ func TestSyncAPIServices(t *testing.T) {
 		},
 	}
 	caConfig := &CAConfig{
-		ServiceName:     AntreaServiceName,
+		ServiceName:     "antrea",
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
 		APIServiceSelector: &metav1.LabelSelector{
@@ -263,7 +263,7 @@ func TestSyncValidatingWebhooks(t *testing.T) {
 		},
 	}
 	caConfig := &CAConfig{
-		ServiceName:     AntreaServiceName,
+		ServiceName:     "antrea",
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
 		ValidatingWebhookSelector: &metav1.LabelSelector{
@@ -385,7 +385,7 @@ func TestSyncMutatingWebhooks(t *testing.T) {
 		},
 	}
 	caConfig := &CAConfig{
-		ServiceName:     AntreaServiceName,
+		ServiceName:     "antrea",
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
 		MutationWebhookSelector: &metav1.LabelSelector{
@@ -498,7 +498,7 @@ func TestSyncConversionWebhooks(t *testing.T) {
 		},
 	}
 	caConfig := &CAConfig{
-		ServiceName:     AntreaServiceName,
+		ServiceName:     "antrea",
 		PairName:        "antrea-controller",
 		CAConfigMapName: "antrea-ca",
 		CRDConversionWebhookSelector: &metav1.LabelSelector{

@@ -20,12 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	AntreaCAConfigMapName         = "antrea-ca"
-	AntreaControllerTLSSecretName = "antrea-controller-tls"
-	AntreaServiceName             = "antrea"
-)
-
 type CAConfig struct {
 	// Name of the ConfigMap that will hold the CA certificate that validates the TLS
 	// certificate of antrea-controller.

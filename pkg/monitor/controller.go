@@ -39,7 +39,6 @@ import (
 )
 
 const (
-	crdName        = "antrea-controller"
 	controllerName = "AntreaControllerMonitor"
 	// How long to wait before retrying the processing of a Node/ExternalNode change.
 	minRetryDelay = 5 * time.Second
@@ -155,10 +154,10 @@ func (monitor *controllerMonitor) syncControllerCRD() {
 		monitor.controllerCRD = nil
 	}
 
-	monitor.controllerCRD, err = monitor.getControllerCRD(crdName)
+	monitor.controllerCRD, err = monitor.getControllerCRD(v1beta1.AntreaControllerInfoResourceName)
 
 	if errors.IsNotFound(err) {
-		monitor.controllerCRD, err = monitor.createControllerCRD(crdName)
+		monitor.controllerCRD, err = monitor.createControllerCRD(v1beta1.AntreaControllerInfoResourceName)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create controller monitoring CRD")
 			monitor.controllerCRD = nil

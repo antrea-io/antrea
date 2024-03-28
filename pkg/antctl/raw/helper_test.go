@@ -29,9 +29,10 @@ import (
 	"k8s.io/client-go/rest"
 
 	"antrea.io/antrea/pkg/apis"
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	cert "antrea.io/antrea/pkg/apiserver/certificate"
 	antreafakeclient "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const nodeIP = "8.8.8.8"
@@ -57,6 +58,11 @@ var (
 		NodeRef: corev1.ObjectReference{
 			Kind: "Node",
 			Name: node.Name,
+		},
+		PodRef: corev1.ObjectReference{
+			Kind:      "Pod",
+			Namespace: "kube-system",
+			Name:      "antrea-controller-foo",
 		},
 		APIPort: apis.AntreaControllerAPIPort,
 	}
@@ -142,16 +148,16 @@ func TestCreateControllerClientCfg(t *testing.T) {
 	goodCM := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cert.GetCAConfigMapNamespace(),
-			Name:      cert.AntreaCAConfigMapName,
+			Name:      apis.AntreaCAConfigMapName,
 		},
 		Data: map[string]string{
-			cert.CAConfigMapKey: fakeCAData,
+			apis.CAConfigMapKey: fakeCAData,
 		},
 	}
 	badCM := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cert.GetCAConfigMapNamespace(),
-			Name:      cert.AntreaCAConfigMapName,
+			Name:      apis.AntreaCAConfigMapName,
 		},
 		Data: map[string]string{
 			"foo": "bar",
@@ -206,7 +212,7 @@ func TestCreateControllerClientCfg(t *testing.T) {
 				require.NotNil(t, cfg)
 				assert.Equal(t, tc.insecure, cfg.Insecure)
 				if !tc.insecure {
-					assert.Equal(t, cert.GetAntreaServerNames(cert.AntreaServiceName)[0], cfg.ServerName)
+					assert.Equal(t, k8s.GetServiceDNSNames("kube-system", apis.AntreaServiceName)[0], cfg.ServerName)
 					assert.Equal(t, []byte(fakeCAData), cfg.CAData)
 					assert.Equal(t, apiHost, cfg.Host)
 				} else {

@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/querier"
 )
@@ -34,10 +34,10 @@ func HandleFunc(sq querier.ServiceExternalIPStatusQuerier) http.HandlerFunc {
 			return
 		}
 		result := sq.GetServiceExternalIPStatus()
-		var response []Response
+		var response []apis.ServiceExternalIPInfo
 		for _, r := range result {
 			if (len(name) == 0 || name == r.ServiceName) && (len(ns) == 0 || ns == r.Namespace) {
-				response = append(response, Response{r})
+				response = append(response, r)
 			}
 		}
 		if len(name) > 0 && len(response) == 0 {
@@ -48,23 +48,4 @@ func HandleFunc(sq querier.ServiceExternalIPStatusQuerier) http.HandlerFunc {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}
 	}
-}
-
-// Response describes the response struct of serviceexternalip command.
-type Response struct {
-	querier.ServiceExternalIPInfo
-}
-
-var _ common.TableOutput = (*Response)(nil)
-
-func (r Response) GetTableHeader() []string {
-	return []string{"NAMESPACE", "NAME", "EXTERNAL-IP-POOL", "EXTERNAL-IP", "ASSIGNED-NODE"}
-}
-
-func (r Response) GetTableRow(_ int) []string {
-	return []string{r.Namespace, r.ServiceName, r.ExternalIPPool, r.ExternalIP, r.AssignedNode}
-}
-
-func (r Response) SortRows() bool {
-	return true
 }

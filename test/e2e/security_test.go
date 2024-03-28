@@ -28,9 +28,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	certutil "k8s.io/client-go/util/cert"
 
+	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -75,7 +77,7 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 	})
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
-		certPem, keyPem, _ := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames(certificate.AntreaServiceName))
+		certPem, keyPem, _ := certutil.GenerateSelfSignedCertKey("antrea", nil, k8s.GetServiceDNSNames("kube-system", apis.AntreaServiceName))
 		secret, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
 		exists := true
 		if err != nil {
@@ -168,12 +170,12 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	var configMap *v1.ConfigMap
 	if err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		var err error
-		configMap, err = data.clientset.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), certificate.AntreaCAConfigMapName, metav1.GetOptions{})
+		configMap, err = data.clientset.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), apis.AntreaCAConfigMapName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("cannot get ConfigMap antrea-ca")
 		}
 		var exists bool
-		caBundle, exists = configMap.Data[certificate.CAConfigMapKey]
+		caBundle, exists = configMap.Data[apis.CAConfigMapKey]
 		if !exists {
 			t.Log("Missing content for CA bundle, retrying")
 			return false, nil
@@ -209,7 +211,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 
 	caFile := "/etc/config/ca.crt"
 	clientName := "agnhost"
-	reqURL := fmt.Sprintf("https://%s/readyz", certificate.GetAntreaServerNames(certificate.AntreaServiceName)[0])
+	reqURL := fmt.Sprintf("https://%s/readyz", k8s.GetServiceDNSNames("kube-system", apis.AntreaServiceName)[0])
 	cmd := []string{"curl", "--cacert", caFile, "-s", reqURL}
 	require.NoError(t, NewPodBuilder(clientName, data.testNamespace, agnhostImage).WithContainerName(getImageName(agnhostImage)).MountConfigMap(configMapCopy.Name, "/etc/config/", "config-volume").WithHostNetwork(false).Create(data))
 	defer data.DeletePodAndWait(defaultTimeout, clientName, data.testNamespace)

@@ -25,14 +25,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 
-	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis"
-	controllerapiserver "antrea.io/antrea/pkg/apiserver"
-	flowaggregatorapiserver "antrea.io/antrea/pkg/flowaggregator/apiserver"
 )
 
 // requestOption describes options to issue requests.
@@ -77,15 +73,13 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 		kubeconfig.Insecure = true
 		kubeconfig.CAFile = ""
 		kubeconfig.CAData = nil
+		kubeconfig.BearerTokenFile = apis.APIServerLoopbackTokenPath
 		if runtime.Mode == runtime.ModeAgent {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
-			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
 		} else if runtime.Mode == runtime.ModeController {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
-			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 		} else if runtime.Mode == runtime.ModeFlowAggregator {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.FlowAggregatorAPIPort))
-			kubeconfig.BearerTokenFile = flowaggregatorapiserver.TokenPath
 		}
 	} else {
 		var err error
@@ -152,7 +146,7 @@ func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Re
 	}
 	gv := e.groupVersionResource.GroupVersion()
 	kubeconfig.GroupVersion = &gv
-	kubeconfig.APIPath = genericapiserver.APIGroupPrefix
+	kubeconfig.APIPath = "/apis"
 
 	restClient, err := rest.RESTClientFor(kubeconfig)
 	if err != nil {

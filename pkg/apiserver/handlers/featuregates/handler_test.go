@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/featuregate"
 
+	"antrea.io/antrea/pkg/apiserver/apis"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/runtime"
 )
@@ -40,7 +41,7 @@ func Test_getGatesResponse(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  *Config
-		want []Response
+		want []apis.FeatureGateResponse
 	}{
 		{
 			name: "mutated AntreaPolicy feature gate, agent mode",
@@ -49,7 +50,7 @@ func Test_getGatesResponse(t *testing.T) {
 					"AntreaPolicy": false,
 				},
 			},
-			want: []Response{
+			want: []apis.FeatureGateResponse{
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
@@ -90,7 +91,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  *Config
-		want []Response
+		want []apis.FeatureGateResponse
 	}{
 		{
 			name: "mutated AntreaPolicy feature gate, agent windows mode",
@@ -99,7 +100,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 					"AntreaPolicy": false,
 				},
 			},
-			want: []Response{
+			want: []apis.FeatureGateResponse{
 				{Component: "agent-windows", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled", Version: "GA"},
@@ -170,7 +171,7 @@ func TestHandleFunc(t *testing.T) {
 	handler.ServeHTTP(recorder, req)
 	require.Equal(t, http.StatusOK, recorder.Code)
 
-	var resp []Response
+	var resp []apis.FeatureGateResponse
 	err = json.Unmarshal(recorder.Body.Bytes(), &resp)
 	require.Nil(t, err)
 
@@ -185,11 +186,11 @@ func TestHandleFunc(t *testing.T) {
 func Test_getControllerGatesResponse(t *testing.T) {
 	tests := []struct {
 		name string
-		want []Response
+		want []apis.FeatureGateResponse
 	}{
 		{
 			name: "good path",
-			want: []Response{
+			want: []apis.FeatureGateResponse{
 				{Component: "controller", Name: "AdminNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},

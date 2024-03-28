@@ -21,24 +21,18 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/features"
 )
-
-type Response struct {
-	Component string `json:"component,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Status    string `json:"status,omitempty"`
-	Version   string `json:"version,omitempty"`
-}
 
 // HandleFunc returns the function which can handle queries issued by 'antctl get featuregates' command.
 // The handler function populates Antrea Agent feature gates information to the response.
 func HandleFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var featureGates []Response
+		var featureGates []apis.FeatureGateResponse
 		for df := range features.DefaultAntreaFeatureGates {
 			if features.AgentGates.Has(df) {
-				featureGates = append(featureGates, Response{
+				featureGates = append(featureGates, apis.FeatureGateResponse{
 					Component: "agent",
 					Name:      string(df),
 					Status:    features.GetStatus(features.DefaultFeatureGate.Enabled(df)),

@@ -24,22 +24,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/querier"
 )
 
-// Response describes the response struct of memberlist command.
-type Response struct {
-	NodeName string `json:"nodeName,omitempty"`
-	IP       string `json:"ip,omitempty"`
-	Status   string `json:"status,omitempty"`
-}
-
-func generateResponse(node *v1.Node, aliveNodes sets.Set[string]) Response {
+func generateResponse(node *v1.Node, aliveNodes sets.Set[string]) apis.MemberlistResponse {
 	status := "Dead"
 	if aliveNodes.Has(node.Name) {
 		status = "Alive"
 	}
-	return Response{
+	return apis.MemberlistResponse{
 		NodeName: node.Name,
 		Status:   status,
 		IP:       node.Status.Addresses[0].Address,
@@ -55,7 +49,7 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			http.Error(w, "memberlist is not enabled", http.StatusServiceUnavailable)
 			return
 		}
-		var memberlist []Response
+		var memberlist []apis.MemberlistResponse
 		allNodes, _ := aq.GetNodeLister().List(labels.Everything())
 		aliveNodes := memberlistCluster.AliveNodes()
 		for _, node := range allNodes {
@@ -68,16 +62,4 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			klog.Errorf("Error when encoding Memberlist to json: %v", err)
 		}
 	}
-}
-
-func (r Response) GetTableHeader() []string {
-	return []string{"NODE", "IP", "STATUS"}
-}
-
-func (r Response) GetTableRow(_ int) []string {
-	return []string{r.NodeName, r.IP, r.Status}
-}
-
-func (r Response) SortRows() bool {
-	return true
 }

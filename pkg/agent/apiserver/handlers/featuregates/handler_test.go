@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/component-base/featuregate"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -41,7 +42,7 @@ func TestHandleFunc(t *testing.T) {
 	handler.ServeHTTP(recorder, req)
 	require.Equal(t, http.StatusOK, recorder.Code)
 
-	var resp []Response
+	var resp []apis.FeatureGateResponse
 	err = json.Unmarshal(recorder.Body.Bytes(), &resp)
 	require.Nil(t, err)
 

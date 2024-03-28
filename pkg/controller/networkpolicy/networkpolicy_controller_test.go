@@ -3213,7 +3213,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 			UID:  "uidA",
 		},
 		Priority:     &p10,
-		TierPriority: &DefaultTierPriority,
+		TierPriority: ptr.To(v1beta1.DefaultTierPriority),
 		Rules: []controlplane.NetworkPolicyRule{
 			{
 				Direction: controlplane.DirectionIn,
@@ -3546,7 +3546,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(v1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -3595,7 +3595,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(v1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -3639,7 +3639,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(v1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -3688,7 +3688,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 					UID:       "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(v1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -3948,7 +3948,7 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 			},
 		},
 		AppliedToGroups: []string{cgA.Name},
-		TierPriority:    &DefaultTierPriority,
+		TierPriority:    ptr.To(v1beta1.DefaultTierPriority),
 	}
 	expectedAppliedToGroup := &antreatypes.AppliedToGroup{
 		SpanMeta:    antreatypes.SpanMeta{NodeNames: sets.New(podA.Spec.NodeName)},
@@ -4015,7 +4015,7 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 			{Direction: controlplane.DirectionIn, Action: &allowAction},
 		},
 		AppliedToGroups: []string{cgA.Name},
-		TierPriority:    &DefaultTierPriority,
+		TierPriority:    ptr.To(v1beta1.DefaultTierPriority),
 	}
 	checkResources(expectedPolicy2, expectedAppliedToGroup, nil)
 
@@ -4032,7 +4032,7 @@ func TestClusterNetworkPolicyWithClusterGroup(t *testing.T) {
 			{Direction: controlplane.DirectionIn, Action: &allowAction},
 		},
 		AppliedToGroups: []string{},
-		TierPriority:    &DefaultTierPriority,
+		TierPriority:    ptr.To(v1beta1.DefaultTierPriority),
 	}
 	checkResources(expectedPolicy3, nil, nil)
 

@@ -23,9 +23,9 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/openflow"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/antctl/transform/common"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/querier"
 )
@@ -37,13 +37,8 @@ var (
 	getFlowTableList = openflow.GetTableList
 )
 
-// Response is the response struct of ovsflows command.
-type Response struct {
-	Flow string `json:"flow,omitempty"`
-}
-
-func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]Response, error) {
-	resps := []Response{}
+func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]apis.OVSFlowResponse, error) {
+	resps := []apis.OVSFlowResponse{}
 	for _, f := range flowKeys {
 		flowStr, err := aq.GetOVSCtlClient().DumpMatchedFlow(f)
 		if err != nil {
@@ -51,14 +46,14 @@ func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]Respon
 			return nil, err
 		}
 		if flowStr != "" {
-			resps = append(resps, Response{flowStr})
+			resps = append(resps, apis.OVSFlowResponse{Flow: flowStr})
 		}
 	}
 	return resps, nil
 }
 
-func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]Response, error) {
-	resps := []Response{}
+func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]apis.OVSFlowResponse, error) {
+	resps := []apis.OVSFlowResponse{}
 	var flowStrs []string
 	var err error
 	if table != binding.TableIDAll {
@@ -70,13 +65,13 @@ func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]Response, error) {
 		return nil, err
 	}
 	for _, s := range flowStrs {
-		resps = append(resps, Response{s})
+		resps = append(resps, apis.OVSFlowResponse{Flow: s})
 	}
 	return resps, nil
 }
 
-func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDType) ([]Response, error) {
-	resps := []Response{}
+func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDType) ([]apis.OVSFlowResponse, error) {
+	resps := []apis.OVSFlowResponse{}
 	for _, g := range groupIDs {
 		groupStr, err := aq.GetOVSCtlClient().DumpGroup(uint32(g))
 		if err != nil {
@@ -84,7 +79,7 @@ func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDT
 			return nil, err
 		}
 		if groupStr != "" {
-			resps = append(resps, Response{groupStr})
+			resps = append(resps, apis.OVSFlowResponse{Flow: groupStr})
 		}
 	}
 	return resps, nil
@@ -92,8 +87,8 @@ func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDT
 
 // nil is returned if the flow table can not be found (the passed table name or
 // number is invalid).
-func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]Response, error) {
-	var resps []Response
+func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]apis.OVSFlowResponse, error) {
+	var resps []apis.OVSFlowResponse
 	for _, tableSeg := range strings.Split(tables, ",") {
 		tableSeg = strings.TrimSpace(tableSeg)
 		var tableNumber uint8
@@ -120,15 +115,15 @@ func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]Response, err
 }
 
 // nil is returned if the passed group IDs are invalid.
-func getGroups(aq agentquerier.AgentQuerier, groups string) ([]Response, error) {
+func getGroups(aq agentquerier.AgentQuerier, groups string) ([]apis.OVSFlowResponse, error) {
 	if strings.EqualFold(groups, "all") {
 		groupStrs, err := aq.GetOVSCtlClient().DumpGroups()
 		if err != nil {
 			return nil, err
 		}
-		resps := make([]Response, 0, len(groupStrs))
+		resps := make([]apis.OVSFlowResponse, 0, len(groupStrs))
 		for _, s := range groupStrs {
-			resps = append(resps, Response{s})
+			resps = append(resps, apis.OVSFlowResponse{Flow: s})
 		}
 		return resps, nil
 	}
@@ -149,7 +144,7 @@ func getGroups(aq agentquerier.AgentQuerier, groups string) ([]Response, error) 
 	return dumpMatchedGroups(aq, groupIDs)
 }
 
-func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Response, error) {
+func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]apis.OVSFlowResponse, error) {
 	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(podName, namespace)
 	if len(interfaces) == 0 {
 		return nil, nil
@@ -159,7 +154,7 @@ func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Res
 	return dumpMatchedFlows(aq, flowKeys)
 }
 
-func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string) ([]Response, error) {
+func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string) ([]apis.OVSFlowResponse, error) {
 	flowKeys, groupIDs, found := aq.GetProxier().GetServiceFlowKeys(serviceName, namespace)
 	if !found {
 		return nil, nil
@@ -175,7 +170,7 @@ func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string
 	return append(resps, groupResps...), nil
 }
 
-func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string) ([]Response, error) {
+func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string) ([]apis.OVSFlowResponse, error) {
 	if len(aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: npName, Namespace: namespace})) == 0 {
 		// NetworkPolicy not found.
 		return nil, nil
@@ -185,15 +180,15 @@ func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace strin
 	return dumpMatchedFlows(aq, flowKeys)
 }
 
-func getTableNames(aq agentquerier.AgentQuerier) []Response {
-	resps := []Response{}
+func getTableNames(aq agentquerier.AgentQuerier) []apis.OVSFlowResponse {
+	resps := []apis.OVSFlowResponse{}
 	names := []string{}
 	for _, t := range getFlowTableList() {
 		names = append(names, t.GetName())
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		resps = append(resps, Response{name})
+		resps = append(resps, apis.OVSFlowResponse{Flow: name})
 	}
 	return resps
 }
@@ -202,7 +197,7 @@ func getTableNames(aq agentquerier.AgentQuerier) []Response {
 func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		var resps []Response
+		var resps []apis.OVSFlowResponse
 		pod := r.URL.Query().Get("pod")
 		service := r.URL.Query().Get("service")
 		networkPolicy := r.URL.Query().Get("networkpolicy")
@@ -271,18 +266,4 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 
 		encodeResp()
 	}
-}
-
-var _ common.TableOutput = new(Response)
-
-func (r Response) GetTableHeader() []string {
-	return []string{""}
-}
-
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.Flow}
-}
-
-func (r Response) SortRows() bool {
-	return false
 }

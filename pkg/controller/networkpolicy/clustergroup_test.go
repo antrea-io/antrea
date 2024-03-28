@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -988,7 +989,7 @@ func TestSyncInternalGroup(t *testing.T) {
 			UID:  "uid1",
 		},
 		Priority:     &p10,
-		TierPriority: &DefaultTierPriority,
+		TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 		Rules: []controlplane.NetworkPolicyRule{
 			{
 				Direction: controlplane.DirectionIn,
@@ -1039,7 +1040,7 @@ func TestSyncInternalGroup(t *testing.T) {
 			UID:  "uid2",
 		},
 		Priority:     &p20,
-		TierPriority: &DefaultTierPriority,
+		TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 		Rules: []controlplane.NetworkPolicyRule{
 			{
 				Direction: controlplane.DirectionIn,

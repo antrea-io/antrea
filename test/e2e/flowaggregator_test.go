@@ -41,7 +41,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/runtime"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
+	"antrea.io/antrea/pkg/flowaggregator/apis"
 	"antrea.io/antrea/test/e2e/utils"
 )
 
@@ -1869,7 +1869,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData) error {
 			t.Logf("Error when requesting recordmetrics, %v", err)
 			return false, nil
 		}
-		metrics := &recordmetrics.Response{}
+		metrics := &apis.RecordMetricsResponse{}
 		if err := json.Unmarshal([]byte(stdout), metrics); err != nil {
 			return false, fmt.Errorf("error when decoding recordmetrics: %w", err)
 		}

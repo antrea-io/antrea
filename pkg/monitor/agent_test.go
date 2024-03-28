@@ -44,6 +44,7 @@ var fakeCertData = []byte("foobar")
 
 func TestSyncAgentCRD(t *testing.T) {
 	ctx := context.Background()
+	crdName := "antrea-agent-foo"
 	existingCRD := &v1beta1.AntreaAgentInfo{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "testAgentCRD",

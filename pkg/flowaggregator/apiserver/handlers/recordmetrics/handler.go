@@ -20,27 +20,15 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/flowaggregator/apis"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 )
-
-// Response is the response struct of recordmetrics command.
-type Response struct {
-	NumRecordsExported     int64 `json:"numRecordsExported,omitempty"`
-	NumRecordsReceived     int64 `json:"numRecordsReceived,omitempty"`
-	NumFlows               int64 `json:"numFlows,omitempty"`
-	NumConnToCollector     int64 `json:"numConnToCollector,omitempty"`
-	WithClickHouseExporter bool  `json:"withClickHouseExporter,omitempty"`
-	WithS3Exporter         bool  `json:"withS3Exporter,omitempty"`
-	WithLogExporter        bool  `json:"withLogExporter,omitempty"`
-	WithIPFIXExporter      bool  `json:"withIPFIXExporter,omitempty"`
-}
 
 // HandleFunc returns the function which can handle the /recordmetrics API request.
 func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metrics := faq.GetRecordMetrics()
-		metricsResponse := Response{
+		metricsResponse := apis.RecordMetricsResponse{
 			NumRecordsExported:     metrics.NumRecordsExported,
 			NumRecordsReceived:     metrics.NumRecordsReceived,
 			NumFlows:               metrics.NumFlows,
@@ -56,25 +44,4 @@ func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 			klog.Errorf("Error when encoding record metrics to json: %v", err)
 		}
 	}
-}
-
-func (r Response) GetTableHeader() []string {
-	return []string{"RECORDS-EXPORTED", "RECORDS-RECEIVED", "FLOWS", "EXPORTERS-CONNECTED", "CLICKHOUSE-EXPORTER", "S3-EXPORTER", "LOG-EXPORTER", "IPFIX-EXPORTER"}
-}
-
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{
-		common.Int64ToString(r.NumRecordsExported),
-		common.Int64ToString(r.NumRecordsReceived),
-		common.Int64ToString(r.NumFlows),
-		common.Int64ToString(r.NumConnToCollector),
-		common.BoolToString(r.WithClickHouseExporter),
-		common.BoolToString(r.WithS3Exporter),
-		common.BoolToString(r.WithLogExporter),
-		common.BoolToString(r.WithIPFIXExporter),
-	}
-}
-
-func (r Response) SortRows() bool {
-	return true
 }

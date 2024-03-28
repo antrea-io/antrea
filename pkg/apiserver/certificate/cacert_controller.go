@@ -33,11 +33,8 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/util/env"
-)
-
-const (
-	CAConfigMapKey = "ca.crt"
 )
 
 // CACertController is responsible for taking the CA certificate from the
@@ -279,12 +276,12 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 			},
 		}
 	}
-	if caConfigMap.Data != nil && caConfigMap.Data[CAConfigMapKey] == string(caCert) {
+	if caConfigMap.Data != nil && caConfigMap.Data[apis.CAConfigMapKey] == string(caCert) {
 		return nil
 	}
 	klog.InfoS("Syncing CA certificate with ConfigMap", "name", klog.KObj(caConfigMap))
 	caConfigMap.Data = map[string]string{
-		CAConfigMapKey: string(caCert),
+		apis.CAConfigMapKey: string(caCert),
 	}
 	if exists {
 		if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
