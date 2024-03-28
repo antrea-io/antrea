@@ -46,7 +46,7 @@ type fakeInterfaceConfigurator struct {
 	configureContainerLinkError         error
 	removeContainerLinkError            error
 	advertiseContainerAddrError         error
-	ovsInterfaceTypeMapping             map[string]int
+	ovsInterfaceTypeMapping             string
 	validateVFRepInterfaceError         error
 	validateContainerPeerInterfaceError error
 	containerVethPair                   *vethPair
@@ -248,7 +248,6 @@ func TestCreateOVSPort(t *testing.T) {
 	for _, tc := range []struct {
 		name                string
 		portName            string
-		portType            int
 		vlanID              uint16
 		createOVSPort       bool
 		createOVSAccessPort bool
@@ -256,19 +255,17 @@ func TestCreateOVSPort(t *testing.T) {
 		{
 			name:          "create-general-port",
 			portName:      "p1",
-			portType:      defaultOVSInterfaceType,
 			vlanID:        0,
 			createOVSPort: true,
 		}, {
 			name:                "create-access-port",
 			portName:            "p3",
-			portType:            defaultOVSInterfaceType,
 			vlanID:              10,
 			createOVSAccessPort: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			testIfaceConfigurator := &fakeInterfaceConfigurator{ovsInterfaceTypeMapping: map[string]int{tc.portName: tc.portType}}
+			testIfaceConfigurator := &fakeInterfaceConfigurator{ovsInterfaceTypeMapping: tc.portName}
 			podConfigurator := createPodConfigurator(controller, testIfaceConfigurator)
 			containerConfig := buildContainerConfig(tc.portName, containerID, podName, podNamespace, &current.Interface{Mac: "01:02:03:04:05:06"}, ipamResult.IPs, tc.vlanID)
 			attachInfo := BuildOVSPortExternalIDs(containerConfig)

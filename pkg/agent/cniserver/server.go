@@ -447,6 +447,10 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 
 	result := &ipam.IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}}
 	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if !validateRuntime(netNS) {
+		// Support for Docker runtime has been deprecated in Antrea 2.0.
+		return nil, fmt.Errorf("failed to process CmdAdd request because Docker runtime is not supported after Antrea 2.0")
+	}
 	isInfraContainer := isInfraContainer(netNS)
 
 	success := false
@@ -568,6 +572,12 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return response, nil
 	}
 
+	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if !validateRuntime(netNS) {
+		// Support for Docker runtime has been deprecated in Antrea 2.0.
+		return nil, fmt.Errorf("failed to process CmdDel request because Docker runtime is not supported after Antrea 2.0")
+	}
+
 	return s.cmdDel(ctx, cniConfig)
 }
 
@@ -578,6 +588,12 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	cniConfig, response := s.validateRequestMessage(request)
 	if response != nil {
 		return response, nil
+	}
+
+	netNS := s.hostNetNsPath(cniConfig.Netns)
+	if !validateRuntime(netNS) {
+		// Support for Docker runtime has been deprecated in Antrea 2.0.
+		return nil, fmt.Errorf("failed to process CmdCheck request because Docker runtime is not supported after Antrea 2.0")
 	}
 
 	infraContainer := cniConfig.getInfraContainer()

@@ -64,6 +64,12 @@ func isDockerContainer(netNS string) bool {
 	return netNS == dockerInfraContainerNetNS || strings.Contains(netNS, ":")
 }
 
+// validateRuntime returns false if a container is created by Docker with the provided network namespace
+// because the Docker support has been removed since Antrea 2.0.
+func validateRuntime(netNS string) bool {
+	return !isDockerContainer(netNS)
+}
+
 func getInfraContainer(containerID, netNS string) string {
 	if isInfraContainer(netNS) {
 		return containerID
