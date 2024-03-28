@@ -242,13 +242,6 @@ spec:
                       description: API server endpoint of the leader cluster. E.g.
                         "https://172.18.0.1:6443", "https://example.com:6443".
                       type: string
-                    serviceAccount:
-                      description: "ServiceAccount in the leader cluster, from which
-                        the member cluster's token is generated. This is an optional
-                        field which helps admin to check which ServiceAccount is used
-                        by a member cluster to access the leader cluster. \n DEPRECATED
-                        This field is planned to be removed in the future releases."
-                      type: string
                   type: object
                 maxItems: 1
                 minItems: 1
