@@ -1031,8 +1031,6 @@ func TestAddRoutes(t *testing.T) {
 func TestDeleteRoutes(t *testing.T) {
 	tests := []struct {
 		name                  string
-		networkConfig         *config.NetworkConfig
-		nodeConfig            *config.NodeConfig
 		podCIDR               *net.IPNet
 		existingNodeRoutes    map[string][]*netlink.Route
 		existingNodeNeighbors map[string]*netlink.Neigh
@@ -1077,8 +1075,6 @@ func TestDeleteRoutes(t *testing.T) {
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
 			c := &Client{netlink: mockNetlink,
 				ipset:         mockIPSet,
-				networkConfig: tt.networkConfig,
-				nodeConfig:    tt.nodeConfig,
 				nodeRoutes:    sync.Map{},
 				nodeNeighbors: sync.Map{},
 			}
@@ -1567,15 +1563,10 @@ func TestAddExternalIPRoute(t *testing.T) {
 	tests := []struct {
 		name          string
 		externalIPs   []string
-		serviceRoutes map[string]*netlink.Route
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name: "IPv4",
-			serviceRoutes: map[string]*netlink.Route{
-				externalIPv4Addr1: ipv4Route1,
-				externalIPv4Addr2: ipv4Route2,
-			},
+			name:        "IPv4",
 			externalIPs: []string{externalIPv4Addr1, externalIPv4Addr2},
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(ipv4Route1)
@@ -1583,11 +1574,7 @@ func TestAddExternalIPRoute(t *testing.T) {
 			},
 		},
 		{
-			name: "IPv6",
-			serviceRoutes: map[string]*netlink.Route{
-				externalIPv6Addr1: ipv6Route1,
-				externalIPv6Addr2: ipv6Route2,
-			},
+			name:        "IPv6",
 			externalIPs: []string{externalIPv6Addr1, externalIPv6Addr2},
 			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
 				mockNetlink.RouteReplace(ipv6Route1)

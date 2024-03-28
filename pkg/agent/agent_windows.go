@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/pkg/util/ip"
@@ -377,11 +378,11 @@ func (i *Initializer) saveHostRoutes() error {
 	// IPv6 is not supported on Windows currently. Please refer to https://github.com/antrea-io/antrea/issues/5162
 	// for more information.
 	family := antreasyscall.AF_INET
-	filter := &util.Route{
+	filter := &winnet.Route{
 		LinkIndex:      i.nodeConfig.UplinkNetConfig.Index,
 		GatewayAddress: net.ParseIP(i.nodeConfig.UplinkNetConfig.Gateway),
 	}
-	routes, err := util.RouteListFiltered(family, filter, util.RT_FILTER_IF|util.RT_FILTER_GW)
+	routes, err := util.RouteListFiltered(family, filter, winnet.RT_FILTER_IF|winnet.RT_FILTER_GW)
 	if err != nil {
 		return err
 	}
