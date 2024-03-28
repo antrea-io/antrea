@@ -15,6 +15,7 @@
 package multicast
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -264,6 +265,13 @@ type Controller struct {
 	// installedNodes is the installed Node set that the IGMP report message is sent to.
 	installedNodes sets.Set[string]
 	encapEnabled   bool
+	// ipv4Enabled is the flag that if it is running on IPv4 cluster. An error is returned if IPv4Enabled is false
+	// in Initialize as Multicast does not support IPv6 for now.
+	// TODO: remove this flag after IPv6 is supported in Multicast.
+	ipv4Enabled bool
+	// ipv6Enabled is the flag that if it is running on IPv6 cluster.
+	// TODO: remove this flag after IPv6 is supported in Multicast.
+	ipv6Enabled bool
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -277,7 +285,9 @@ func NewMulticastController(ofClient openflow.Client,
 	igmpQueryVersions []uint8,
 	validator types.McastNetworkPolicyController,
 	isEncap bool,
-	nodeInformer coreinformers.NodeInformer) *Controller {
+	nodeInformer coreinformers.NodeInformer,
+	ipv4Enabled bool,
+	ipv6Enabled bool) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
 	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
@@ -300,6 +310,8 @@ func NewMulticastController(ofClient openflow.Client,
 		mcastGroupTimeout:    igmpQueryInterval * 3,
 		queryGroupId:         v4GroupAllocator.Allocate(),
 		encapEnabled:         isEncap,
+		ipv4Enabled:          ipv4Enabled,
+		ipv6Enabled:          ipv6Enabled,
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -328,6 +340,11 @@ func NewMulticastController(ofClient openflow.Client,
 }
 
 func (c *Controller) Initialize() error {
+	if !c.ipv4Enabled {
+		return fmt.Errorf("Multicast is not supported on an IPv6-only cluster")
+	} else if c.ipv6Enabled {
+		klog.InfoS("Multicast only works with IPv4 traffic on a dual-stack cluster")
+	}
 	err := c.mRouteClient.Initialize()
 	if err != nil {
 		return err
