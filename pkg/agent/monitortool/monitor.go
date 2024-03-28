@@ -15,23 +15,45 @@
 package monitortool
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"net"
+	"os"
 	"sync"
 	"time"
 
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 
-	"github.com/go-ping/ping"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 )
+
+var (
+	icmpSeq      uint16
+	icmpSeqMutex sync.Mutex
+)
+
+func getICMPSeq() uint16 {
+	icmpSeqMutex.Lock()
+	defer icmpSeqMutex.Unlock()
+	icmpSeq++
+	return icmpSeq
+}
 
 // MonitorTool is a tool to monitor the latency of the node.
 type MonitorTool struct {
 	latencyStore *LatencyStore
 
+	// interval is the interval time to ping all nodes.
 	interval time.Duration
-	timeout  time.Duration
+	// timeout is the timeout time for each ping.
+	timeout time.Duration
+	// limit is the conncurrent limit of the ping.
+	limit int
 }
 
 // TODO: Maybe we need to implement it like podStore.
@@ -104,12 +126,18 @@ func (n *NodeStore) UpdatePingItem(name string, ips []string) {
 	}
 }
 
-func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer, interval, timeout time.Duration) *MonitorTool {
+func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer, interval, timeout time.Duration, limit int) *MonitorTool {
 	return &MonitorTool{
 		latencyStore: NewLatencyStore(nodeInformer),
 		interval:     interval,
 		timeout:      timeout,
+		limit:        limit,
 	}
+}
+
+func getRate(count int, d time.Duration, burst int) *rate.Limiter {
+	r := float64(count) / (d.Seconds() * 0.9)
+	return rate.NewLimiter(rate.Limit(r), burst)
 }
 
 func (m *MonitorTool) pingAll() {
@@ -119,12 +147,17 @@ func (m *MonitorTool) pingAll() {
 	// TODO: Get current node internal/external IP.
 	fromIP := ""
 
+	// A simple rate limiter
+	limiter := getRate(len(nodeIPs), m.interval, m.limit)
+	limitGroup := make(chan bool, int(m.limit))
+
 	klog.InfoS("Start to ping all nodes")
 	wg := sync.WaitGroup{}
 	for toIP, name := range nodeIPs {
+		limitGroup <- true
+		limiter.Wait(context.Background())
 		wg.Add(1)
 
-		// TODO: Add ping limiter
 		go func(toIP string, name string) {
 			ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
 			defer cancel()
@@ -148,6 +181,9 @@ func (m *MonitorTool) pingAll() {
 					LastUpdated: time.Now(),
 				})
 			}
+
+			<-limitGroup
+
 		}(toIP, name)
 	}
 
@@ -161,30 +197,118 @@ func (m *MonitorTool) pingAll() {
 	}
 }
 
-func (m *MonitorTool) pingNode(ctx context.Context, ip string) (bool, time.Duration) {
-	pinger, err := ping.NewPinger(ip)
-	if err != nil {
-		// Try to show log
-		return false, 0
-	}
-	defer pinger.Stop()
+// resolveIP resolves the target address to an IP address.
+func resolveIPV4(ctx context.Context, target string) (*net.IPAddr, error) {
+	IPProtocol := "ip4"
 
-	// Get timeout channel
-	go func() {
-		<-ctx.Done()
-		pinger.Stop()
-	}()
+	klog.InfoS("Resolving target address", "ip_protocol", IPProtocol)
 
-	err = pinger.Run()
+	resolver := &net.Resolver{}
+	ips, err := resolver.LookupIPAddr(ctx, target)
 	if err != nil {
-		// Try to show log
-		return false, 0
+		klog.ErrorS(err, "Resolution with IP protocol failed")
+		return nil, err
 	}
 
-	stats := pinger.Statistics()
-	klog.InfoS("Ping statistics", "Statistics", stats)
+	// Return the first IPv4 address
+	for _, ip := range ips {
+		if ip.IP.To4() != nil {
+			klog.InfoS("Resolved target address", "ip", ip.String())
+			return &ip, nil
+		}
+	}
 
-	return true, stats.AvgRtt
+	return nil, fmt.Errorf("unable to find IPv4 address for target")
+}
+
+func (m *MonitorTool) pingNode(ctx context.Context, addr string) (bool, time.Duration) {
+	// Resolve the IP address
+	ip, err := resolveIPV4(ctx, addr)
+	if err != nil {
+		klog.ErrorS(err, "Failed to resolve IP address")
+
+		return false, 0
+	}
+
+	srcIP := net.ParseIP("0.0.0.0")
+	requestType := ipv4.ICMPTypeEcho
+	replyType := ipv4.ICMPTypeEchoReply
+
+	// TODO: Enable DontFragment?
+	socket, err := net.ListenPacket("ip4:icmp", srcIP.String())
+	if err != nil {
+		klog.ErrorS(err, "Failed to listen on ICMP")
+		return false, 0
+	}
+	defer socket.Close()
+
+	// Create a new ICMP packet
+	body := &icmp.Echo{
+		ID:   os.Getpid() & 0xffff, // Use the current process ID as the ICMP ID
+		Seq:  int(getICMPSeq()),
+		Data: []byte("HELLO-ANTREA-AGENT"),
+	}
+	msg := icmp.Message{
+		Type: requestType,
+		Code: 0,
+		Body: body,
+	}
+
+	// Serialize the ICMP message
+	msgBytes, err := msg.Marshal(nil)
+	if err != nil {
+		klog.ErrorS(err, "Failed to marshal ICMP message")
+		return false, 0
+	}
+	rttStart := time.Now()
+	if _, err = socket.WriteTo(msgBytes, ip); err != nil {
+		klog.ErrorS(err, "Failed to write ICMP message")
+		return false, 0
+	}
+
+	// Reply message
+	msg.Type = replyType
+	msgBytes, err = msg.Marshal(nil)
+	if err != nil {
+		klog.ErrorS(err, "Failed to marshal ICMP message")
+		return false, 0
+	}
+
+	readBuffer := make([]byte, 1024)
+	deadline, _ := ctx.Deadline()
+	if err := socket.SetReadDeadline(deadline); err != nil {
+		klog.ErrorS(err, "Failed to set read deadline")
+		return false, 0
+	}
+
+	// Receive the ICMP message
+	for {
+		n, peer, err := socket.ReadFrom(readBuffer)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				klog.ErrorS(err, "Timeout reading ICMP message")
+				return false, 0
+			}
+
+			klog.ErrorS(err, "Failed to read ICMP message")
+			return false, 0
+		}
+		if peer.String() != ip.String() {
+			klog.ErrorS(err, "Received ICMP message from unexpected peer")
+			return false, 0
+		}
+		if replyType == ipv4.ICMPTypeTimeExceeded {
+			// Clear checksum
+			readBuffer[2] = 0
+			readBuffer[3] = 0
+		}
+		if bytes.Equal(readBuffer[:n], msgBytes) {
+			rtt := time.Since(rttStart)
+
+			klog.InfoS("Received ICMP reply")
+			return true, rtt
+		}
+	}
 }
 
 func (m *MonitorTool) Run(stopCh <-chan struct{}) {
