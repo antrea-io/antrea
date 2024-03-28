@@ -19,7 +19,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
@@ -158,7 +158,7 @@ func mockInterfaceByName(t *testing.T) {
 
 func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
 	prevFunc := newOVSBridgeFn
-	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb *ovsdb.OVSDB) ovsconfig.OVSBridgeClient {
+	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb libovsdbclient.Client) ovsconfig.OVSBridgeClient {
 		return brClient
 	}
 	t.Cleanup(func() { newOVSBridgeFn = prevFunc })
