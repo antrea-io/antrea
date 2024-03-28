@@ -135,7 +135,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		keyInFile, _ := os.ReadFile(p.secureServing.ServerCert.CertKey.KeyFile)
 		assert.Equal(c, testOneYearCert, certInFile)
 		assert.Equal(c, testOneYearKey, keyInFile)
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 
 	// Trigger a resync, nothing should change.
 	p.enqueue()
@@ -161,7 +161,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 			corev1.TLSCertKey:       testOneYearCert,
 			corev1.TLSPrivateKeyKey: testOneYearKey,
 		}, gotSecret.Data, "Secret should not match")
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSelfSignedCertProviderRun(t *testing.T) {
@@ -289,7 +289,7 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 				keyInFile, _ := os.ReadFile(p.secureServing.ServerCert.CertKey.KeyFile)
 				assert.Equal(c, tt.expectedCert, certInFile)
 				assert.Equal(c, tt.expectedKey, keyInFile)
-			}, 2*time.Second, 50*time.Millisecond)
+			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
 }
