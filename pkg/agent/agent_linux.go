@@ -166,30 +166,6 @@ func (i *Initializer) saveHostRoutes() error {
 	return nil
 }
 
-// restoreHostRoutes restores the host routes which are lost when moving the IP
-// configuration of uplink interface to the OVS bridge interface during
-// the Antrea bridge initialization stage.
-// The backup routes are restored after the IP configuration changes.
-func (i *Initializer) restoreHostRoutes() error {
-	return i.restoreHostRoutesToInterface(i.nodeConfig.UplinkNetConfig.Name)
-}
-
-func (i *Initializer) restoreHostRoutesToInterface(ifaceName string) error {
-	iface, err := net.InterfaceByName(ifaceName)
-	if err != nil {
-		return nil
-	}
-	for _, routeInterface := range i.nodeConfig.UplinkNetConfig.Routes {
-		route := routeInterface.(netlink.Route)
-		newRoute := route
-		newRoute.LinkIndex = iface.Index
-		if err := netlink.RouteReplace(&newRoute); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	// Return immediately on Linux if connectUplinkToBridge is false.
 	if !i.connectUplinkToBridge {
@@ -198,18 +174,16 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	klog.InfoS("Bridging uplink to OVS bridge")
 	var err error
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
-	uplinkName := uplinkNetConfig.Name
-	bridgedUplinkName := util.GenerateUplinkInterfaceName(uplinkNetConfig.Name)
-	uplinkIPs := uplinkNetConfig.IPs
 
-	// If the uplink port already exists, just return.
-	if uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName, false); err == nil {
-		klog.InfoS("Uplink already exists, skip the configuration", "uplink", bridgedUplinkName, "port", uplinkOFPort)
-		return nil
+	externalIDs := map[string]interface{}{
+		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 	}
-
-	if err := util.RenameInterface(uplinkName, bridgedUplinkName); err != nil {
-		return fmt.Errorf("failed to change uplink interface name: err=%w", err)
+	bridgedUplinkName, exists, err := util.PrepareHostInterfaceConnection(i.ovsBridgeClient, uplinkNetConfig, externalIDs)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
 	}
 
 	// Create uplink port.
@@ -226,64 +200,6 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	klog.InfoS("Allocated OpenFlow port for uplink interface", "port", bridgedUplinkName, "ofPort", uplinkOFPort)
 	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUID, uplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)
-
-	// Create local port.
-	externalIDs := map[string]interface{}{
-		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
-	}
-	if _, err = i.ovsBridgeClient.CreateInternalPort(uplinkName, int32(i.nodeConfig.HostInterfaceOFPort), uplinkNetConfig.MAC.String(), externalIDs); err != nil {
-		return fmt.Errorf("cannot create host interface port %s: err=%w", uplinkName, err)
-	}
-
-	// Move network configuration of uplink interface to OVS bridge local interface.
-	// The net configuration of uplink will be restored by RestoreOVSBridge when shutting down.
-	wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 10000*time.Millisecond, true,
-		func(ctx context.Context) (bool, error) {
-			// Wait a few seconds for OVS bridge local port.
-			link, err := netlink.LinkByName(uplinkName)
-			if err != nil {
-				klog.V(4).InfoS("OVS bridge local port is not ready", "port", uplinkName, "err", err)
-				return false, nil
-			}
-			klog.InfoS("OVS bridge local port is ready", "type", link.Type(), "attrs", link.Attrs())
-			return true, nil
-		})
-	localLink, err := netlink.LinkByName(uplinkName)
-	if err != nil {
-		return err
-	}
-	if _, _, err = util.SetLinkUp(uplinkName); err != nil {
-		return err
-	}
-
-	// Check if uplink is configured with an IPv6 address: if it is, we need to ensure that IPv6
-	// is enabled on the OVS internal port as we need to move all IP addresses over.
-	uplinkHasIPv6Address := false
-	for _, ip := range uplinkIPs {
-		if ip.IP.To4() == nil {
-			uplinkHasIPv6Address = true
-			break
-		}
-	}
-	if uplinkHasIPv6Address {
-		klog.InfoS("Uplink has IPv6 address, ensuring that IPv6 is enabled on bridge local port", "port", uplinkName)
-		if err := util.EnsureIPv6EnabledOnInterface(uplinkName); err != nil {
-			klog.ErrorS(err, "Failed to ensure that IPv6 is enabled on bridge local port, moving uplink IPs to bridge is likely to fail", "port", uplinkName)
-		}
-	}
-
-	if err = util.ConfigureLinkAddresses(localLink.Attrs().Index, uplinkIPs); err != nil {
-		return err
-	}
-	if err = util.ConfigureLinkAddresses(uplinkNetConfig.Index, nil); err != nil {
-		return err
-	}
-	// Restore the host routes which are lost when moving the network configuration of the
-	// uplink interface to OVS bridge interface.
-	if err = i.restoreHostRoutes(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -294,33 +210,9 @@ func (i *Initializer) RestoreOVSBridge() {
 		return
 	}
 	klog.InfoS("Restoring bridge config to uplink...")
-	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
-	uplinkName := ""
-	bridgedUplinkName := ""
-	if uplinkNetConfig != nil {
-		uplinkName = uplinkNetConfig.Name
-		bridgedUplinkName = util.GenerateUplinkInterfaceName(uplinkName)
-	}
-	brName := i.ovsBridge
 
-	if uplinkName != "" {
-		uplinkIPs := uplinkNetConfig.IPs
-		if err := util.DeleteOVSPort(brName, uplinkName); err != nil {
-			klog.ErrorS(err, "Delete OVS port failed", "port", uplinkName)
-		}
-		if err := util.DeleteOVSPort(brName, bridgedUplinkName); err != nil {
-			klog.ErrorS(err, "Delete OVS port failed", "port", bridgedUplinkName)
-		}
-		if err := util.RenameInterface(bridgedUplinkName, uplinkName); err != nil {
-			klog.ErrorS(err, "Restore uplink name failed", "uplink", bridgedUplinkName)
-		}
-		if err := util.ConfigureLinkAddresses(uplinkNetConfig.Index, uplinkIPs); err != nil {
-			klog.ErrorS(err, "Configure IP to uplink failed", "uplink", uplinkName)
-		}
-		if err := i.restoreHostRoutesToInterface(uplinkName); err != nil {
-			klog.ErrorS(err, "Configure route to uplink interface failed", "uplink", uplinkName)
-		}
-	}
+	util.RestoreHostInterfaceConfiguration(i.ovsBridge, i.nodeConfig.UplinkNetConfig)
+
 	klog.InfoS("Finished to restore bridge config to uplink...")
 }
 
