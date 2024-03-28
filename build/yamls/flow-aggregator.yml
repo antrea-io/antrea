@@ -401,6 +401,8 @@ spec:
         - --alsologtostderr
         - --log_file_max_size=100
         - --log_file_max_num=4
+        command:
+        - flow-aggregator
         env:
         - name: POD_NAME
           valueFrom:

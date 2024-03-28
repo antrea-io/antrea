@@ -25,7 +25,6 @@ RUN go mod download
 COPY . /antrea
 
 RUN make antctl-linux antctl-instr-binary && mv bin/antctl-linux bin/antctl
-
 RUN make antrea-controller antrea-controller-instr-binary
 
 FROM ubuntu:22.04
@@ -39,4 +38,7 @@ COPY --from=antrea-build /antrea/bin/antrea-controller /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antctl /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antrea-controller-coverage /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/
-COPY --from=antrea-build /antrea/test/e2e/coverage/controller-arg-file /
+COPY --from=antrea-build /antrea/test/e2e/utils/run_cov_binary.sh /
+RUN mkdir -p /tmp/coverage
+
+ENTRYPOINT [ "/run_cov_binary.sh" ]

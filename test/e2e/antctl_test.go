@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -116,16 +115,6 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 	return stdout, stderr, err
 }
 
-func antctlCoverageArgs(antctlPath string, covDir string) []string {
-	const timeFormat = "20060102T150405Z0700"
-	timestamp := time.Now().Format(timeFormat)
-	covFile := fmt.Sprintf("antctl-%s.out", timestamp)
-	if covDir != "" {
-		covFile = path.Join(covDir, covFile)
-	}
-	return []string{antctlPath, "-test.run=TestBincoverRunMain", fmt.Sprintf("-test.coverprofile=%s", covFile)}
-}
-
 // testAntctlAgentLocalAccess ensures antctl is accessible in an agent Pod.
 func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	podName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
@@ -136,7 +125,7 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeAgent) {
 		args := []string{antctlName}
 		if testOptions.enableCoverage {
-			antctlCovArgs := antctlCoverageArgs(antctlName, "")
+			antctlCovArgs := []string{"antctl-coverage"}
 			args = append(antctlCovArgs, c...)
 		} else {
 			args = append(args, c...)
@@ -162,7 +151,7 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 
 func runAntctlPod(t *testing.T, data *TestData, podName string, antctlServiceAccountName string, antctlImage string, covDir string) {
 	b := NewPodBuilder(podName, data.testNamespace, antctlImage).WithServiceAccountName(antctlServiceAccountName).
-		WithContainerName("antctl").WithCommand([]string{"sleep", "3600"}).
+		WithContainerName("antctl").WithEnv([]corev1.EnvVar{{Name: "GOCOVERDIR", Value: cpNodeCoverageDir}}).WithCommand([]string{"sleep", "3600"}).
 		OnNode(controlPlaneNodeName()).InHostNetwork()
 	if testOptions.enableCoverage {
 		// collectAntctlCovFilesFromControlPlaneNode expects coverage data in this directory
@@ -183,7 +172,7 @@ func runAntctlCommandFromPod(data *TestData, podName string, cmd []string) (stri
 // Pod.
 func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServiceAccountName string, antctlImage string) {
 	const podName = "antctl"
-	const covDir = "/coverage"
+	const covDir = "/tmp/coverage"
 	antctlName := antctlName()
 
 	runAntctlPod(t, data, podName, antctlServiceAccountName, antctlImage, covDir)
@@ -194,7 +183,7 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
 		cmd := []string{antctlName}
 		if testOptions.enableCoverage {
-			antctlCovArgs := antctlCoverageArgs(antctlName, covDir)
+			antctlCovArgs := []string{antctlName}
 			cmd = append(antctlCovArgs, c...)
 		} else {
 			cmd = append(cmd, c...)
