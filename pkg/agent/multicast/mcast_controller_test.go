@@ -94,7 +94,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 		iface: if1,
 	}
 	mctrl := newMockMulticastController(t, false)
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
 	}
@@ -117,7 +117,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 
 func TestUpdateGroupMemberStatus(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	assert.NoError(t, err)
 	mgroup := net.ParseIP("224.96.1.4")
 	event := &mcastGroupEvent{
@@ -183,7 +183,7 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 
 func TestCheckNodeUpdate(t *testing.T) {
 	mockController := newMockMulticastController(t, false)
-	err := mockController.initialize(t)
+	err := mockController.initialize()
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -351,7 +351,7 @@ func TestGetGroupPods(t *testing.T) {
 	now := time.Now()
 
 	mctrl := newMockMulticastController(t, false)
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	require.NoError(t, err)
 	groupMemberStatuses := []*GroupMemberStatus{
 		{
@@ -387,7 +387,7 @@ func TestGetGroupPods(t *testing.T) {
 
 func TestGetPodStats(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	require.NoError(t, err)
 
 	iface := if1
@@ -404,7 +404,7 @@ func TestGetPodStats(t *testing.T) {
 
 func TestGetAllPodStats(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -449,7 +449,7 @@ func TestGetAllPodStats(t *testing.T) {
 func TestClearStaleGroupsCreatingLeaveEvent(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
 	workerCount = 1
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	require.NoError(t, err)
 	now := time.Now()
 	staleTime := now.Add(-mctrl.mcastGroupTimeout - time.Second)
@@ -485,7 +485,7 @@ func TestClearStaleGroupsCreatingLeaveEvent(t *testing.T) {
 func TestClearStaleGroups(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
 	workerCount = 1
-	err := mctrl.initialize(t)
+	err := mctrl.initialize()
 	require.NoError(t, err)
 	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
@@ -736,13 +736,13 @@ func TestProcessPacketIn(t *testing.T) {
 func TestEncapModeInitialize(t *testing.T) {
 	mockController := newMockMulticastController(t, true)
 	assert.True(t, mockController.nodeGroupID != 0)
-	err := mockController.initialize(t)
+	err := mockController.initialize()
 	assert.NoError(t, err)
 }
 
 func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
 	mockController := newMockMulticastController(t, true)
-	_ = mockController.initialize(t)
+	_ = mockController.initialize()
 	mockController.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
 	}
@@ -944,7 +944,7 @@ func TestNodeUpdate(t *testing.T) {
 
 func TestMemberChanged(t *testing.T) {
 	mockController := newMockMulticastController(t, false)
-	_ = mockController.initialize(t)
+	_ = mockController.initialize()
 
 	containerA := &interfacestore.ContainerInterfaceConfig{PodNamespace: "nameA", PodName: "podA", ContainerID: "tttt"}
 	containerB := &interfacestore.ContainerInterfaceConfig{PodNamespace: "nameA", PodName: "podB", ContainerID: "mmmm"}
@@ -1087,7 +1087,7 @@ func TestConcurrentEventHandlerAndWorkers(t *testing.T) {
 
 func TestRemoteMemberJoinLeave(t *testing.T) {
 	mockController := newMockMulticastController(t, true)
-	_ = mockController.initialize(t)
+	_ = mockController.initialize()
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
@@ -1257,11 +1257,52 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 
 	clientset = fake.NewSimpleClientset()
 	informerFactory = informers.NewSharedInformerFactory(clientset, 12*time.Hour)
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), ovsClient, podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, informerFactory)
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), ovsClient, podUpdateSubscriber, time.Second*5, []uint8{1, 2, 3}, mockMulticastValidator, isEncap, informerFactory, true, false)
 	return mctrl
 }
 
-func (c *Controller) initialize(t *testing.T) error {
+func TestMulticastControllerOnIPv6Cluster(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		ipv4Enabled bool
+		ipv6Enabled bool
+		expErr      string
+	}{
+		{
+			name:        "Fails on IPv6-only cluster",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			expErr:      "Multicast is not supported on an IPv6-only cluster",
+		},
+		{
+			name:        "Succeeds on dual-stack cluster",
+			ipv4Enabled: true,
+			ipv6Enabled: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockController := newMockMulticastController(t, true)
+			mockController.ipv4Enabled = tc.ipv4Enabled
+			mockController.ipv6Enabled = tc.ipv6Enabled
+			if tc.expErr == "" {
+				mockController.initMocks()
+			}
+			err := mockController.Initialize()
+			if tc.expErr != "" {
+				assert.EqualError(t, err, tc.expErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func (c *Controller) initialize() error {
+	c.initMocks()
+	return c.Initialize()
+}
+
+func (c *Controller) initMocks() {
 	mockOFClient.EXPECT().InstallMulticastGroup(c.queryGroupId, gomock.Any(), gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallMulticastFlows(gomock.Any(), gomock.Any())
 	mockIfaceStore.EXPECT().GetInterfacesByType(interfacestore.InterfaceType(0)).Times(1).Return([]*interfacestore.InterfaceConfig{})
@@ -1271,7 +1312,6 @@ func (c *Controller) initialize(t *testing.T) error {
 		mockOFClient.EXPECT().InstallMulticastGroup(c.nodeGroupID, gomock.Any(), gomock.Any()).Times(1)
 		mockOFClient.EXPECT().InstallMulticastRemoteReportFlows(c.nodeGroupID).Times(1)
 	}
-	return c.Initialize()
 }
 
 func createInterface(name string, ofport uint32) *interfacestore.InterfaceConfig {
