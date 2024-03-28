@@ -45,6 +45,7 @@ func statusSucceed() metav1.Status {
 
 // doConversionV1beta1 converts the requested objects in the v1beta1 ConversionRequest using the given conversion function and
 // returns a conversion response. Failures are reported with the Reason in the conversion response.
+// Deprecated: apiextensions/v1beta1 is deprecated, use apiextensions/v1 instead
 func doConversionV1beta1(convertRequest *v1beta1.ConversionRequest, convert convertFunc) *v1beta1.ConversionResponse {
 	var convertedObjects []runtime.RawExtension
 	for _, obj := range convertRequest.Objects {

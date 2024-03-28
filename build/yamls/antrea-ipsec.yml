@@ -314,6 +314,8 @@ spec:
     - name: v1alpha3
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha3 ClusterGroup is deprecated; use crd.antrea.io/v1beta1 ClusterGroup"
       schema:
         openAPIV3Schema:
           type: object
@@ -576,6 +578,8 @@ spec:
     - name: v1alpha1
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 ClusterNetworkPolicy is deprecated; use crd.antrea.io/v1beta1 ClusterNetworkPolicy"
       additionalPrinterColumns:
         - name: Tier
           type: string
@@ -2385,6 +2389,9 @@ spec:
                 externalNode:
                   type: string
     - name: v1alpha1
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 ExternalEntity is deprecated; use crd.antrea.io/v1alpha2
+      ExternalEntity"
       served: false
       storage: false
       schema:
@@ -2412,6 +2419,8 @@ spec:
     - name: v1alpha2
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha2 ExternalIPPool is deprecated; use crd.antrea.io/v1beta1 ExternalIPPool"
       schema:
         openAPIV3Schema:
           type: object
@@ -2677,6 +2686,8 @@ spec:
     - name: v1alpha3
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha3 Group is deprecated; use crd.antrea.io/v1beta1 Group"
       schema:
         openAPIV3Schema:
           type: object
@@ -3058,6 +3069,8 @@ spec:
     - name: v1alpha1
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 NetworkPolicy is deprecated; use crd.antrea.io/v1beta1 NetworkPolicy"
       additionalPrinterColumns:
         - name: Tier
           type: string
@@ -4476,6 +4489,8 @@ spec:
     - name: v1alpha1
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 Tier is deprecated; use crd.antrea.io/v1beta1 Tier"
       additionalPrinterColumns:
         - name: Priority
           type: integer
@@ -4547,6 +4562,8 @@ spec:
     - name: v1alpha1
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 Traceflow is deprecated; use crd.antrea.io/v1beta1 Traceflow"
       additionalPrinterColumns:
         - jsonPath: .status.phase
           description: The phase of the Traceflow.

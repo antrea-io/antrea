@@ -10,6 +10,8 @@ spec:
     - name: v1alpha1
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha1 Traceflow is deprecated; use crd.antrea.io/v1beta1 Traceflow"
       additionalPrinterColumns:
         - jsonPath: .status.phase
           description: The phase of the Traceflow.

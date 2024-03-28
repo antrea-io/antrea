@@ -10,6 +10,8 @@ spec:
     - name: v1alpha2
       served: true
       storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha2 ExternalIPPool is deprecated; use crd.antrea.io/v1beta1 ExternalIPPool"
       schema:
         openAPIV3Schema:
           type: object
