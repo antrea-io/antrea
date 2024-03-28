@@ -22,7 +22,7 @@ WORKDIR=$1
 os=$(echo $(uname) | tr '[:upper:]' '[:lower:]')
 if ! which kind > /dev/null; then
     if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.20.0/kind-${os}-amd64
+        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.22.0/kind-${os}-amd64
         chmod +x ./kind
         if [[ "$WORKDIR" != "" ]];then
           mv kind "$WORKDIR"
@@ -34,7 +34,7 @@ fi
 
 if ! which kubectl > /dev/null; then
     if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
-        curl -LO https://dl.k8s.io/release/v1.27.3/bin/${os}/amd64/kubectl
+        curl -LO https://dl.k8s.io/release/v1.29.2/bin/${os}/amd64/kubectl
         chmod +x ./kubectl
         if [[ "$WORKDIR" != "" ]];then
           mv kubectl "$WORKDIR"
