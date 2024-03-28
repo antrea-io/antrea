@@ -197,6 +197,8 @@ type AgentConfig struct {
 	// second(pps) and the burst size will be automatically set to twice the rate.
 	// When the rate and burst size are exceeded, new packets will be dropped.
 	PacketInRate int `yaml:"packetInRate,omitempty"`
+	// PingMonitoringTool contains configuration options for the ping monitoring tool.
+	PingMonitoringTool PingMonitoringToolConfig `yaml:"pingMonitoringTool,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -391,4 +393,25 @@ type OVSBridgeConfig struct {
 	BridgeName string `yaml:"bridgeName"`
 	// Names of physical interfaces to be connected to the bridge.
 	PhysicalInterfaces []string `yaml:"physicalInterfaces,omitempty"`
+}
+
+type PingMonitoringToolConfig struct {
+	// Enable PingMonitoringTool, a feature used to monitor the latency between Nodes.
+	// To enable this feature, you need to set "enable" to true, and ensure that the
+	// PingMonitoringTool feature gate is also enabled.
+	Enable bool `yaml:"enable,omitempty"`
+	// The interval for antrea-agent to ping the remote Nodes.
+	// Ping interval should be greater than or equal to 1s(one second).
+	// Defaults to "10s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	PingInterval string `yaml:"pingInterval,omitempty"`
+	// The timeout for antrea-agent to wait for a ping response from the remote Nodes.
+	// Ping timeout should be greater than or equal to 1s(one second).
+	// Defaults to "5s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	PingTimeout string `yaml:"pingTimeout,omitempty"`
+	// The number of concurrent ping requests that can be sent by antrea-agent.
+	// Concurrency should be greater than or equal to 1.
+	// Defaults to 10. Valid range is unsigned integer.
+	PingConncurrentLimit int `yaml:"pingConcurrentLimit,omitempty"`
 }

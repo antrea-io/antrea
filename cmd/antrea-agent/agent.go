@@ -140,6 +140,7 @@ func run(o *Options) error {
 		return fmt.Errorf("error connecting OVSDB: %v", err)
 	}
 	defer ovsdbConnection.Close()
+	klog.InfoS("Connected to OVSDB", "address", ovsdbAddress)
 
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
@@ -931,9 +932,27 @@ func run(o *Options) error {
 	}
 
 	// Start the node latency monitor.
-	// TODO: Set interval and timeout in config.
-	nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(nodeInformer, time.Second*10, time.Second*5)
-	go nodeLatencyMonitor.Run(stopCh)
+	if features.DefaultFeatureGate.Enabled(features.PingMonitoringTool) {
+		pingInterval, err := time.ParseDuration(o.config.PingMonitoringTool.PingInterval)
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse ping interval")
+			return fmt.Errorf("error parsing ping interval: %v", err)
+		}
+		pingTimeout, err := time.ParseDuration(o.config.PingMonitoringTool.PingTimeout)
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse ping timeout")
+			return fmt.Errorf("error parsing ping timeout: %v", err)
+		}
+
+		nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(
+			nodeInformer,
+			pingInterval,
+			pingTimeout,
+			o.config.PingMonitoringTool.PingConncurrentLimit,
+		)
+
+		go nodeLatencyMonitor.Run(stopCh)
+	}
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent")

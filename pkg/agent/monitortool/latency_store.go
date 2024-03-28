@@ -86,19 +86,6 @@ func (l *LatencyStore) OnNodeDelete(obj interface{}) {
 	l.DeleteNodeByKey(node.Name)
 }
 
-func (l *LatencyStore) AddConnToMap(connKey string, conn *Connection) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	// Judge if the connection is already in the map
-	_, found := l.connectionMap[connKey]
-	if !found {
-		conn.CreatedAt = conn.LastUpdated
-	}
-
-	l.connectionMap[connKey] = conn
-}
-
 func (l *LatencyStore) GetConnByKey(connKey string) (*Connection, bool) {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
