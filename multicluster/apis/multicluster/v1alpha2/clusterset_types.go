@@ -31,13 +31,6 @@ type LeaderClusterInfo struct {
 	// Name of the Secret resource in the member cluster, which stores
 	// the token to access the leader cluster's API server.
 	Secret string `json:"secret,omitempty"`
-	// ServiceAccount in the leader cluster, from which the member cluster's token
-	// is generated. This is an optional field which helps admin to check
-	// which ServiceAccount is used by a member cluster to access the leader cluster.
-	//
-	// DEPRECATED
-	// This field is planned to be removed in the future releases.
-	ServiceAccount string `json:"serviceAccount,omitempty"`
 }
 
 // ClusterSetSpec defines the desired state of ClusterSet.
