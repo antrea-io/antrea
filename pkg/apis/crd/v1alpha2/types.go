@@ -455,3 +455,93 @@ type TrafficControlList struct {
 
 	Items []TrafficControl `json:"items"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// BGPPolicy defines BGP configuration applied to Nodes.
+type BGPPolicy struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec BGPPolicySpec `json:"spec"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type BGPPolicyList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []BGPPolicy `json:"items"`
+}
+
+// BGPPolicySpec defines the specification for a BGP policy.
+type BGPPolicySpec struct {
+	// NodeSelector is utilized to select Nodes to which the policy is applied. It's important to note that only one
+	// BGPPolicy will be effective and enforced per Node, and others serve as alternatives.
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector"`
+
+	// LocalASN is the AS number used by the BGP protocol.
+	LocalASN int32 `json:"localASN"`
+
+	// ListenPort is the port on which the BGP protocol listens.
+	ListenPort *int32 `json:"listenPort,omitempty"`
+
+	// Advertisements selects IPs or CIDRs to be advertised to external BGP peers.
+	Advertisements Advertisements `json:"advertisements"`
+
+	// BGPPeers are the list of external BGP peers.
+	BGPPeers []BGPPeer `json:"bgpPeers"`
+}
+
+type Advertisements struct {
+	Services []ServiceAdvertisement `json:"serviceIPs,omitempty"`
+
+	Pods []PodAdvertisement `json:"podIPs,omitempty"`
+
+	// Determine whether to advertise local Egress IPs.
+	EgressIPs bool `json:"egressIPs,omitempty"`
+}
+
+type ServiceAdvertisement struct {
+	// Determine whether to advertise ClusterIPs.
+	ClusterIPs bool `json:"clusterIPs,omitempty"`
+
+	// Determine whether to advertise ExternalIPs.
+	ExternalIPs bool `json:"externalIPs,omitempty"`
+
+	// Determine whether to advertise LoadBalancerIPs.
+	LoadBalancerIPs bool `json:"loadBalancerIPs,omitempty"`
+
+	// Selectors to be added later, which are used to select specific Services.
+	// ServiceSelector   *metav1.LabelSelector `json:"serviceSelector,omitempty"`
+	// NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+}
+
+type PodAdvertisement struct {
+	// Empty now, and selectors to be added later, which are used to select specific Pods.
+	// PodSelector       *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+}
+
+type BGPPeer struct {
+	// The IP address on which the external BGP peer listens.
+	Address string `json:"address"`
+
+	// The port number on which the external BGP peer listens. The default value is 179, the well-known port of BGP
+	// protocol.
+	Port *int32 `json:"port,omitempty"`
+
+	// The AS number of the external BGP peer.
+	ASN int32 `json:"asn"`
+
+	// GracefulRestartTime specifies how long the external BGP peer would wait for the BGP session to re-establish after
+	// a restart before deleting stale routes. The range of the value is from 1 to 3600 seconds, and the default value
+	// is 120 seconds.
+	GracefulRestartTime *int32 `json:"gracefulRestartTime,omitempty"`
+}

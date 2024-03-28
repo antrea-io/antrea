@@ -301,6 +301,146 @@ spec:
       - aci
 
 ---
+# Source: crds/bgppolicy.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: bgppolicies.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - nodeSelector
+                - localASN
+                - advertisements
+                - bgpPeers
+              properties:
+                nodeSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      items:
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                            type: array
+                        type: object
+                      type: array
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                localASN:
+                  type: integer
+                  minimum: 64512
+                  maximum: 65535
+                  format: int32
+                listenPort:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                  format: int32
+                  default: 179
+                advertisements:
+                  type: object
+                  anyOf:
+                    - required: [services]
+                    - required: [pods]
+                    - required: [egressIPs]
+                  properties:
+                    services:
+                      type: array
+                      items:
+                        type: object
+                        anyOf:
+                          - required: [ clusterIPs ]
+                          - required: [ externalIPs ]
+                          - required: [ loadBalancerIPs ]
+                        properties:
+                          clusterIPs:
+                            type: boolean
+                            default: false
+                          externalIPs:
+                            type: boolean
+                            default: false
+                          loadBalancerIPs:
+                            type: boolean
+                            default: false
+                    pods:
+                      type: array
+                      items:
+                        type: object
+                        properties: {}
+                    egressIPs:
+                      type: boolean
+                      default: false
+                bgpPeers:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - address
+                      - asn
+                    properties:
+                      address:
+                        type: string
+                        format: cidr
+                      port:
+                        type: integer
+                        default: 179
+                        format: int32
+                        minimum: 1
+                        maximum: 65535
+                      asn:
+                        type: integer
+                        minimum: 1
+                        maximum: 65535
+                        format: int32
+                      gracefulRestartTime:
+                        type: integer
+                        default: 120
+                        format: int32
+                        minimum: 1
+                        maximum: 3600
+      additionalPrinterColumns:
+        - description: Local BGP ASN.
+          jsonPath: .spec.localASN
+          name: Local ASN
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: bgppolicies
+    singular: bgppolicy
+    kind: BGPPolicy
+    shortNames:
+      - bp
+
+---
 # Source: crds/clustergroup.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -5394,6 +5534,14 @@ metadata:
   labels:
     app: antrea
 ---
+# Source: antrea/templates/agent/bgp-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: antrea-bgp-passwords
+  namespace: kube-system
+type: Opaque
+---
 # Source: antrea/templates/agent/secret.yaml
 apiVersion: v1
 kind: Secret
@@ -5513,6 +5661,9 @@ data:
 
     # Enable L7FlowExporter on Pods and Namespaces to export the application layer flows such as HTTP flows.
     #  L7FlowExporter: false
+
+    # Allow usesrs to advertise Service IPs, Pod IPs, and Egress IPs to external BGP peers.
+    #  BGPPolicy: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -5822,6 +5973,11 @@ data:
       maxAge: 28
       # Compress enables gzip compression on rotated files.
       compress: true
+
+    bgpPolicy:
+      # The name of the Secret storing passwords of the BGP peers. For each BGP peer, the Secret key is generated by
+      # concatenating its IP address and AS number, e.g., `192.168.1.1-65521`.
+      secretName: "antrea-bgp-passwords"
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -6202,6 +6358,15 @@ rules:
       - create
       - patch
       - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    resourceNames:
+      - antrea-bgp-passwords
+    verbs:
+      - get
+      - watch
 ---
 # Source: antrea/templates/antctl/clusterrole.yaml
 kind: ClusterRole
@@ -6810,7 +6975,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 30843b57762c91dfcffb560917191e3bc7e662c06552759bac2a173bc060b82c
+        checksum/config: d8cdc04e7a9cbfd6e09ab34d9f36ed0c5f9b824c9f80a1eac85a700074296aea
       labels:
         app: antrea
         component: antrea-agent
@@ -7049,7 +7214,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 30843b57762c91dfcffb560917191e3bc7e662c06552759bac2a173bc060b82c
+        checksum/config: d8cdc04e7a9cbfd6e09ab34d9f36ed0c5f9b824c9f80a1eac85a700074296aea
       labels:
         app: antrea
         component: antrea-controller
