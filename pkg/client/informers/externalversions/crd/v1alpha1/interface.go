@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ type Interface interface {
 	NetworkPolicies() NetworkPolicyInformer
 	// SupportBundleCollections returns a SupportBundleCollectionInformer.
 	SupportBundleCollections() SupportBundleCollectionInformer
-	// Tiers returns a TierInformer.
-	Tiers() TierInformer
 	// Traceflows returns a TraceflowInformer.
 	Traceflows() TraceflowInformer
 }
@@ -65,11 +63,6 @@ func (v *version) NetworkPolicies() NetworkPolicyInformer {
 // SupportBundleCollections returns a SupportBundleCollectionInformer.
 func (v *version) SupportBundleCollections() SupportBundleCollectionInformer {
 	return &supportBundleCollectionInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
-// Tiers returns a TierInformer.
-func (v *version) Tiers() TierInformer {
-	return &tierInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Traceflows returns a TraceflowInformer.

@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ type CrdV1alpha1Interface interface {
 	ExternalNodesGetter
 	NetworkPoliciesGetter
 	SupportBundleCollectionsGetter
-	TiersGetter
 	TraceflowsGetter
 }
 
@@ -53,10 +52,6 @@ func (c *CrdV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInter
 
 func (c *CrdV1alpha1Client) SupportBundleCollections() SupportBundleCollectionInterface {
 	return newSupportBundleCollections(c)
-}
-
-func (c *CrdV1alpha1Client) Tiers() TierInterface {
-	return newTiers(c)
 }
 
 func (c *CrdV1alpha1Client) Traceflows() TraceflowInterface {
