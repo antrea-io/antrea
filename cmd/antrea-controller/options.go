@@ -21,13 +21,13 @@ import (
 	"os"
 
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apis"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/yaml"
 )
 
 const (
@@ -164,7 +164,11 @@ func (o *Options) loadConfigFromFile() error {
 		return err
 	}
 
-	return yaml.UnmarshalStrict(data, &o.config)
+	err = yaml.UnmarshalLenient(data, &o.config)
+	if err != nil {
+		return fmt.Errorf("failed to decode config file %s: %w", o.configFile, err)
+	}
+	return nil
 }
 
 func (o *Options) setDefaults() {
