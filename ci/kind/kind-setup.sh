@@ -32,6 +32,8 @@ SUBNETS=""
 EXTRA_NETWORKS=""
 VLAN_SUBNETS=""
 VLAN_ID=""
+IPAM_VLAN_SUBNETS=""
+IPAM_VLAN_IDS=""
 ENCAP_MODE=""
 PROXY=true
 KUBE_PROXY_MODE="iptables"
@@ -39,6 +41,7 @@ PROMETHEUS=false
 K8S_VERSION=""
 KUBE_NODE_IPAM=true
 DEPLOY_EXTERNAL_SERVER=false
+FLEXIBLE_IPAM=false
 positional_args=()
 options=()
 
@@ -242,6 +245,44 @@ function configure_extra_networks {
   done
 }
 
+function get_bridge_id {
+  local bridge_id=$(docker network inspect kind -f {{.ID}})
+  local return_value=$?
+  if [ $return_value -eq 0 ]; then
+        echo "$bridge_id"
+    else
+        echo "Unable to get kind bridge id, Docker command failed with exit code $return_value"
+        exit 1
+    fi
+}
+
+function configure_kind_ipam_vlan_subnets {
+  if [[ -z $IPAM_VLAN_SUBNETS || -z $IPAM_VLAN_IDS ]]; then
+    return
+  fi
+  echo "Configuring Flexible IPAM kind networks"
+  
+  IFS=',' read -r -a ipam_vlan_subnets <<< "$IPAM_VLAN_SUBNETS"
+  IFS=',' read -r -a ipam_vlan_ids <<< "$IPAM_VLAN_IDS"
+  i=0
+
+  for s in "${ipam_vlan_subnets[@]}"; do
+    vlan_id=${ipam_vlan_ids[$i]}
+    i=$(($i+1))
+    echo "Configuring VLAN-$vlan_id subnets"
+    bridge_id=$(get_bridge_id)
+    bridge_interface="br-${bridge_id:0:12}"
+    vlan_interface="br-${bridge_id:0:7}.$vlan_id"
+
+    docker_run_with_host_net ip link add link $bridge_interface name $vlan_interface type vlan id $vlan_id
+    docker_run_with_host_net ip link set $vlan_interface up
+    echo "Configuring extra IP $s to vlan interface $vlan_interface"
+    docker_run_with_host_net ip addr add dev $vlan_interface $s
+    docker_run_with_host_net iptables -t filter -A FORWARD -i $bridge_interface -o $vlan_interface -j ACCEPT
+    docker_run_with_host_net iptables -t filter -A FORWARD -o $bridge_interface -i $vlan_interface -j ACCEPT
+  done
+}
+
 function configure_vlan_subnets {
   if [[ -z $VLAN_SUBNETS || -z $VLAN_ID ]]; then
     return
@@ -410,6 +451,7 @@ EOF
 
   configure_networks
   configure_extra_networks
+  configure_kind_ipam_vlan_subnets
   configure_vlan_subnets
   setup_external_server
   load_images
@@ -419,6 +461,9 @@ EOF
     cmd+="/../../hack/generate-manifest.sh"
     if [[ $PROXY == false ]]; then
       cmd+=" --no-proxy"
+    fi
+    if [[ $FLEXIBLE_IPAM == true ]]; then
+       cmd+=" --flexible-ipam --multicast"
     fi
     echo "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
     eval "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
@@ -563,6 +608,21 @@ while [[ $# -gt 0 ]]
       VLAN_ID="$2"
       shift 2
       ;;
+    --ipam-vlan-subnets)
+      add_option "--ipam-vlan-subnets" "create"
+      IPAM_VLAN_SUBNETS="$2"
+      shift 2
+      ;;
+    --ipam-vlan-ids)
+      add_option "--ipam-vlan-ids" "create"
+      IPAM_VLAN_IDS="$2"
+      shift 2
+      ;;
+    --flexible-ipam)
+      add_option "--flexible-ipam" "create"
+      FLEXIBLE_IPAM=true
+      shift
+      ;; 
     --images)
       add_option "--image" "create"
       IMAGES="$2"
