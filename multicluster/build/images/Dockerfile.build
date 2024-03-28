@@ -17,13 +17,16 @@ FROM golang:${GO_VERSION} as antrea-build
 
 WORKDIR /antrea
 
-COPY go.mod /antrea/go.mod
-
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=bind,source=go.mod,target=go.mod \
+    go mod download
 
 COPY . /antrea
 
-RUN cd multicluster && make bin
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=cache,target=/root/.cache/go-build/ \
+    cd multicluster && make bin
 
 FROM gcr.io/distroless/static:nonroot
 
