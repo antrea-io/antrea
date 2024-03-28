@@ -36,7 +36,7 @@ jobs:
         docker pull antrea/antrea-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
     - name: Run Trivy vulnerability scanner on latest Antrea Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@0.18.0
+      uses: aquasecurity/trivy-action@0.19.0
       # we cannot use .trivy.yml as we need to override some config parameters
       # and that is not supported by aquasecurity/trivy-action
       with:
@@ -51,7 +51,7 @@ jobs:
         output: 'trivy.latest.txt'
     - name: Run Trivy vulnerability scanner on Antrea Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@0.18.0
+      uses: aquasecurity/trivy-action@0.19.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
