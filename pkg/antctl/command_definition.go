@@ -70,6 +70,7 @@ const (
 	query
 	mc
 	upgrade
+	check
 )
 
 var groupCommands = map[commandGroup]*cobra.Command{
@@ -92,6 +93,10 @@ var groupCommands = map[commandGroup]*cobra.Command{
 		Use:   "upgrade",
 		Short: "Sub-commands for upgrade operations",
 		Long:  "Sub-commands for upgrade operations",
+	},
+	check: {
+		Use:   "check",
+		Short: "Performs pre and post installation checks",
 	},
 }
 
