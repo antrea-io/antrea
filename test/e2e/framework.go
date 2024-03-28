@@ -3120,6 +3120,7 @@ func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP st
 		fmt.Sprintf("ip link set dev %s up", linkInHost),
 		fmt.Sprintf("ip netns exec %s ip addr add %s/%d dev %s", netns, externalIP, prefixLength, linkInNetns),
 		fmt.Sprintf("ip netns exec %s ip link set dev %s up", netns, linkInNetns),
+		fmt.Sprintf("ip netns exec %s ip link set dev lo up", netns),
 		fmt.Sprintf("ip netns exec %s ip route replace default via %s", netns, localIP),
 	}
 	for _, ip := range otherLocalIPs {

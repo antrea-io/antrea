@@ -40,7 +40,7 @@ FROM antrea/openvswitch-ubi:${BUILD_TAG}
 ARG SURICATA_VERSION
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="An UBI8 based Docker base image for Antrea."
+LABEL description="An UBI9 based Docker base image for Antrea."
 
 USER root
 
