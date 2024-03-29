@@ -42,6 +42,7 @@ import (
 	clockutils "k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var loopbackAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}
@@ -256,7 +257,7 @@ func (p *selfSignedCertProvider) rotateSelfSignedCertificate() error {
 	}
 	if p.shouldRotateCertificate(cert) {
 		klog.InfoS("Generating self-signed cert")
-		if cert, key, err = p.generateSelfSignedCertKey(p.caConfig.ServiceName, loopbackAddresses, GetAntreaServerNames(p.caConfig.ServiceName)); err != nil {
+		if cert, key, err = p.generateSelfSignedCertKey(p.caConfig.ServiceName, loopbackAddresses, k8s.GetServiceDNSNames(env.GetPodNamespace(), p.caConfig.ServiceName)); err != nil {
 			return fmt.Errorf("unable to generate self-signed cert: %v", err)
 		}
 		// If Secret is specified, we should save the new certificate and key to it.

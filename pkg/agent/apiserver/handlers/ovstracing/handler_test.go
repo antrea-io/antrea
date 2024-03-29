@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
@@ -39,7 +40,7 @@ import (
 
 var (
 	testTraceResult = "tracing result"
-	testResponse    = Response{testTraceResult}
+	testResponse    = apis.OVSTracingResponse{Result: testTraceResult}
 
 	tunnelVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	gatewayMAC, _       = net.ParseMAC("00:00:00:00:00:01")
@@ -287,7 +288,7 @@ func runHTTPTest(t *testing.T, tc *testCase, aq querier.AgentQuerier) {
 	assert.Equal(t, tc.expectedStatus, recorder.Code, tc.test)
 
 	if tc.expectedStatus == http.StatusOK {
-		var received Response
+		var received apis.OVSTracingResponse
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)
 		assert.Nil(t, err)
 		assert.Equal(t, testResponse, received)

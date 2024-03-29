@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -44,15 +45,9 @@ type fakeAgentAPIServer struct {
 }
 
 func newFakeAPIServer(t *testing.T) *fakeAgentAPIServer {
-	kubeConfigFile, err := os.CreateTemp("", "kubeconfig")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		kubeConfigFile.Close()
-		os.Remove(kubeConfigFile.Name())
-	}()
-	if _, err := kubeConfigFile.Write([]byte(`
+	tempDir := t.TempDir()
+	kubeConfigPath := filepath.Join(tempDir, "kubeconfig")
+	kubeConfigContent := `
 apiVersion: v1
 kind: Config
 clusters:
@@ -64,18 +59,11 @@ contexts:
     cluster: cluster
   name: cluster
 current-context: cluster
-`)); err != nil {
+`
+	if err := os.WriteFile(kubeConfigPath, []byte(kubeConfigContent), 0600); err != nil {
 		t.Fatal(err)
 	}
-	originalTokenPath := TokenPath
-	tokenFile, err := os.CreateTemp("", "token")
-	require.NoError(t, err)
-	TokenPath = tokenFile.Name()
-	defer func() {
-		TokenPath = originalTokenPath
-		tokenFile.Close()
-		os.Remove(tokenFile.Name())
-	}()
+	tokenPath := filepath.Join(tempDir, "token")
 	version.Version = "v1.2.3"
 	ctrl := gomock.NewController(t)
 	agentQuerier := aqtest.NewMockAgentQuerier(ctrl)
@@ -91,7 +79,7 @@ current-context: cluster
 	// InClusterLookup is skipped when testing, otherwise it would always fail as there is no real cluster.
 	authentication.SkipInClusterLookup = true
 	authorization := options.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
-	apiServer, err := New(agentQuerier, npQuerier, nil, nil, secureServing, authentication, authorization, true, kubeConfigFile.Name(), true, true)
+	apiServer, err := New(agentQuerier, npQuerier, nil, nil, secureServing, authentication, authorization, true, kubeConfigPath, tokenPath, true, true)
 	require.NoError(t, err)
 	fakeAPIServer := &fakeAgentAPIServer{
 		agentAPIServer: apiServer,

@@ -60,8 +60,6 @@ const CertPairName = "antrea-agent-api"
 var (
 	scheme = runtime.NewScheme()
 	codecs = serializer.NewCodecFactory(scheme)
-	// #nosec G101: false positive triggered by variable name which includes "token"
-	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 
 func init() {
@@ -121,10 +119,11 @@ func New(aq agentquerier.AgentQuerier,
 	authorization *genericoptions.DelegatingAuthorizationOptions,
 	enableMetrics bool,
 	kubeconfig string,
+	loopbackClientTokenPath string,
 	v4Enabled,
 	v6Enabled bool,
 ) (*agentAPIServer, error) {
-	cfg, err := newConfig(aq, npq, secureServing, authentication, authorization, enableMetrics, kubeconfig)
+	cfg, err := newConfig(aq, npq, secureServing, authentication, authorization, enableMetrics, kubeconfig, loopbackClientTokenPath)
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +145,7 @@ func newConfig(aq agentquerier.AgentQuerier,
 	authorization *genericoptions.DelegatingAuthorizationOptions,
 	enableMetrics bool,
 	kubeconfig string,
+	loopbackClientTokenPath string,
 ) (*genericapiserver.CompletedConfig, error) {
 	// kubeconfig file is useful when antrea-agent isn't running as a Pod.
 	if len(kubeconfig) > 0 {
@@ -170,10 +170,10 @@ func newConfig(aq agentquerier.AgentQuerier,
 	if err := authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(path.Dir(TokenPath), os.ModeDir); err != nil {
+	if err := os.MkdirAll(path.Dir(loopbackClientTokenPath), os.ModeDir); err != nil {
 		return nil, fmt.Errorf("error when creating dirs of token file: %v", err)
 	}
-	if err := os.WriteFile(TokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
+	if err := os.WriteFile(loopbackClientTokenPath, []byte(serverConfig.LoopbackClientConfig.BearerToken), 0600); err != nil {
 		return nil, fmt.Errorf("error when writing loopback access token to file: %v", err)
 	}
 	v := antreaversion.GetVersion()

@@ -16,28 +16,25 @@ package flowrecords
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
-	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
+	"github.com/vmware/go-ipfix/pkg/intermediate"
 
+	"antrea.io/antrea/pkg/flowaggregator/apis"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 )
-
-// Response is the response struct of flowrecords command.
-type Response map[string]interface{}
 
 // HandleFunc returns the function which can handle the /flowrecords API request.
 func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var resps []Response
+		var resps []apis.FlowRecordsResponse
 		sourceAddress := r.URL.Query().Get("srcip")
 		destinationAddress := r.URL.Query().Get("dstip")
 		protocol := r.URL.Query().Get("proto")
 		sourcePort := r.URL.Query().Get("srcport")
 		destinationPort := r.URL.Query().Get("dstport")
-		var flowKey *ipfixintermediate.FlowKey
+		var flowKey *intermediate.FlowKey
 		if sourceAddress == "" && destinationAddress == "" && protocol == "" && sourcePort == "" && destinationPort == "" {
 			flowKey = nil
 		} else {
@@ -62,7 +59,7 @@ func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 				}
 			}
 
-			flowKey = &ipfixintermediate.FlowKey{
+			flowKey = &intermediate.FlowKey{
 				SourceAddress:      sourceAddress,
 				DestinationAddress: destinationAddress,
 				Protocol:           uint8(protocolNum),
@@ -79,35 +76,4 @@ func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}
 	}
-}
-
-func (r Response) GetTableHeader() []string {
-	return []string{"SRC_IP", "DST_IP", "SPORT", "DPORT", "PROTO", "SRC_POD", "DST_POD", "SRC_NS", "DST_NS", "SERVICE"}
-}
-
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	var sourceAddress, destinationAddress interface{}
-	if r["sourceIPv4Address"] != nil {
-		sourceAddress = r["sourceIPv4Address"]
-		destinationAddress = r["destinationIPv4Address"]
-	} else {
-		sourceAddress = r["sourceIPv6Address"]
-		destinationAddress = r["destinationIPv6Address"]
-	}
-	return []string{
-		fmt.Sprintf("%v", sourceAddress),
-		fmt.Sprintf("%v", destinationAddress),
-		fmt.Sprintf("%v", r["sourceTransportPort"]),
-		fmt.Sprintf("%v", r["destinationTransportPort"]),
-		fmt.Sprintf("%v", r["protocolIdentifier"]),
-		fmt.Sprintf("%v", r["sourcePodName"]),
-		fmt.Sprintf("%v", r["destinationPodName"]),
-		fmt.Sprintf("%v", r["sourcePodNamespace"]),
-		fmt.Sprintf("%v", r["destinationPodNamespace"]),
-		fmt.Sprintf("%v", r["destinationServicePortName"]),
-	}
-}
-
-func (r Response) SortRows() bool {
-	return false
 }

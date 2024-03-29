@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"antrea.io/antrea/pkg/features"
@@ -1142,7 +1142,7 @@ func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditi
 		if err != nil {
 			return false, nil
 		}
-		var agentInfo agentinfo.AntreaAgentInfoResponse
+		var agentInfo apis.AntreaAgentInfoResponse
 		err = json.Unmarshal([]byte(stdout), &agentInfo)
 		if err != nil {
 			return true, err

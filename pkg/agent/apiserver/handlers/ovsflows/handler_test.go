@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
@@ -41,8 +42,8 @@ var (
 	testDumpFlows      = []string{"flow1", "flow2"}
 	testGroupIDs       = []binding.GroupIDType{1, 2}
 	testDumpGroups     = []string{"group1", "group2"}
-	testResponses      = []Response{{"flow1"}, {"flow2"}}
-	testGroupResponses = []Response{{"group1"}, {"group2"}}
+	testResponses      = []apis.OVSFlowResponse{{Flow: "flow1"}, {Flow: "flow2"}}
+	testGroupResponses = []apis.OVSFlowResponse{{Flow: "group1"}, {Flow: "group2"}}
 )
 
 type testCase struct {
@@ -51,7 +52,7 @@ type testCase struct {
 	namespace      string
 	query          string
 	expectedStatus int
-	resps          []Response
+	resps          []apis.OVSFlowResponse
 }
 
 func TestBadRequests(t *testing.T) {
@@ -247,7 +248,7 @@ func TestTableNamesOnly(t *testing.T) {
 		test:           "Get table names only",
 		query:          "?table-names-only",
 		expectedStatus: http.StatusOK,
-		resps:          []Response{{"table0"}, {"table1"}},
+		resps:          []apis.OVSFlowResponse{{Flow: "table0"}, {Flow: "table1"}},
 	}
 	q := aqtest.NewMockAgentQuerier(ctrl)
 	runHTTPTest(t, &tc, q)
@@ -295,7 +296,7 @@ func TestGroups(t *testing.T) {
 				test:           "Group 1234",
 				query:          "?groups=1234",
 				expectedStatus: http.StatusOK,
-				resps:          []Response{{"group1234"}},
+				resps:          []apis.OVSFlowResponse{{Flow: "group1234"}},
 			},
 			groupIDs:     []uint32{1234},
 			dumpedGroups: []string{"group1234"},
@@ -305,7 +306,7 @@ func TestGroups(t *testing.T) {
 				test:           "Non-existing group 1234",
 				query:          "?groups=1234",
 				expectedStatus: http.StatusOK,
-				resps:          []Response{},
+				resps:          []apis.OVSFlowResponse{},
 			},
 			groupIDs:     []uint32{1234},
 			dumpedGroups: []string{""},
@@ -315,7 +316,7 @@ func TestGroups(t *testing.T) {
 				test:           "Group 10, 100, and 1000",
 				query:          "?groups=10,100,1000",
 				expectedStatus: http.StatusOK,
-				resps:          []Response{{"group10"}, {"group1000"}},
+				resps:          []apis.OVSFlowResponse{{Flow: "group10"}, {Flow: "group1000"}},
 			},
 			groupIDs:     []uint32{10, 100, 1000},
 			dumpedGroups: []string{"group10", "", "group1000"},
@@ -350,7 +351,7 @@ func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 	assert.Equal(t, tc.expectedStatus, recorder.Code, tc.test)
 
 	if tc.expectedStatus == http.StatusOK {
-		var received []Response
+		var received []apis.OVSFlowResponse
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)
 		assert.Nil(t, err)
 		if tc.resps != nil {

@@ -17,6 +17,7 @@ package controllerinfo
 import (
 	"encoding/json"
 	"io"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -86,10 +87,10 @@ func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{r.PodRef.Namespace + "/" + r.PodRef.Name,
 		r.NodeRef.Name,
 		r.GetControllerConditionStr(),
-		common.Int32ToString(r.NetworkPolicyControllerInfo.NetworkPolicyNum),
-		common.Int32ToString(r.NetworkPolicyControllerInfo.AddressGroupNum),
-		common.Int32ToString(r.NetworkPolicyControllerInfo.AppliedToGroupNum),
-		common.Int32ToString(r.ConnectedAgentNum)}
+		strconv.Itoa(int(r.NetworkPolicyControllerInfo.NetworkPolicyNum)),
+		strconv.Itoa(int(r.NetworkPolicyControllerInfo.AddressGroupNum)),
+		strconv.Itoa(int(r.NetworkPolicyControllerInfo.AppliedToGroupNum)),
+		strconv.Itoa(int(r.ConnectedAgentNum))}
 }
 
 func (r Response) SortRows() bool {

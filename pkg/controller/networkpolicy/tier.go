@@ -33,12 +33,7 @@ var (
 	// maxSupportedTiers is the soft limit on the maximum number of supported
 	// Tiers.
 	maxSupportedTiers = 20
-	// DefaultTierPriority maintains the priority for the system generated default Tier.
-	// This is the lowest priority for tiers that will be enforced before K8s NetworkPolicies.
-	DefaultTierPriority = int32(250)
-	// BaselineTierPriority maintains the priority for the system generated baseline Tier.
-	// This is the tier that will be enforced after K8s NetworkPolicies.
-	BaselineTierPriority = int32(253)
+
 	// defaultTierName maintains the name of the default Tier in Antrea.
 	defaultTierName = "application"
 	// emergencyTierName maintains the name of the Emergency Tier in Antrea.
@@ -50,8 +45,8 @@ var (
 	// priorityMap maintains the Tier priority associated with system generated
 	// Tier names.
 	priorityMap = map[string]int32{
-		baselineTierName:    BaselineTierPriority,
-		defaultTierName:     DefaultTierPriority,
+		baselineTierName:    secv1beta1.BaselineTierPriority,
+		defaultTierName:     secv1beta1.DefaultTierPriority,
 		platformTierName:    int32(200),
 		networkOpsTierName:  int32(150),
 		securityOpsTierName: int32(100),

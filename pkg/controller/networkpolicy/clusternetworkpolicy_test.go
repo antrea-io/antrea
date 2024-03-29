@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
@@ -163,7 +164,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidA",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -247,7 +248,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidB",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -367,7 +368,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidD",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -421,7 +422,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidE",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -495,7 +496,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidH",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction:       controlplane.DirectionIn,
@@ -587,7 +588,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidI",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -680,7 +681,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidI",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction:       controlplane.DirectionIn,
@@ -771,7 +772,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidI",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction:       controlplane.DirectionIn,
@@ -906,7 +907,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidJ",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction:       controlplane.DirectionIn,
@@ -1003,7 +1004,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidS",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -1067,7 +1068,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidK",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1120,7 +1121,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidM",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1177,7 +1178,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidL",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1233,7 +1234,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidP",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1284,7 +1285,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidQ",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1347,7 +1348,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidR",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1426,7 +1427,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidL",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -1515,7 +1516,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-icmp",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -1584,7 +1585,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidL",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -1643,7 +1644,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidL",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionOut,
@@ -1707,7 +1708,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidM",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction:       controlplane.DirectionIn,
@@ -1773,7 +1774,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidN",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -1849,7 +1850,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uidZ",
 				},
 				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
@@ -1957,7 +1958,7 @@ func TestGetTierPriority(t *testing.T) {
 		{
 			name:      "empty-tier-name",
 			inputTier: nil,
-			expPrio:   DefaultTierPriority,
+			expPrio:   crdv1beta1.DefaultTierPriority,
 		},
 		{
 			name: "tier10",

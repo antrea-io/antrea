@@ -17,12 +17,7 @@ package antctl
 import (
 	"reflect"
 
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
+	agentapis "antrea.io/antrea/pkg/agent/apis"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
@@ -38,12 +33,11 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/ovstracing"
 	"antrea.io/antrea/pkg/antctl/transform/version"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	endpointserver "antrea.io/antrea/pkg/apiserver/handlers/endpoint"
-	controllerinforest "antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
+	controllerapis "antrea.io/antrea/pkg/apiserver/apis"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
+	aggregatorapis "antrea.io/antrea/pkg/flowaggregator/apis"
 )
 
 // CommandList defines all commands that could be used in the antctl for agents，
@@ -58,7 +52,7 @@ var CommandList = &commandList{
 			commandGroup: flat,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					resourceName:         controllerinforest.ControllerInfoResourceName,
+					resourceName:         crdv1b1.AntreaControllerInfoResourceName,
 					groupVersionResource: &systemv1beta1.ControllerInfoVersionResource,
 				},
 				addonTransform: version.ControllerTransform,
@@ -111,7 +105,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 
-			transformedResponse: reflect.TypeOf(multicast.Response{}),
+			transformedResponse: reflect.TypeOf(agentapis.MulticastResponse{}),
 		},
 		{
 			use:   "log-level",
@@ -305,7 +299,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 			long:    "Print Antrea controller's basic information including version, deployment, NetworkPolicy controller, ControllerConditions, etc.",
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					resourceName:         controllerinforest.ControllerInfoResourceName,
+					resourceName:         crdv1b1.AntreaControllerInfoResourceName,
 					groupVersionResource: &systemv1beta1.ControllerInfoVersionResource,
 				},
 				addonTransform: controllerinfo.Transform,
@@ -325,7 +319,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 			commandGroup:        get,
-			transformedResponse: reflect.TypeOf(agentinfo.AntreaAgentInfoResponse{}),
+			transformedResponse: reflect.TypeOf(agentapis.AntreaAgentInfoResponse{}),
 		},
 		{
 			use:     "podinterface",
@@ -359,7 +353,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 			commandGroup:        get,
-			transformedResponse: reflect.TypeOf(podinterface.Response{}),
+			transformedResponse: reflect.TypeOf(agentapis.PodInterfaceResponse{}),
 		},
 		{
 			use:     "ovsflows",
@@ -426,7 +420,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 				},
 			},
 			commandGroup:        get,
-			transformedResponse: reflect.TypeOf(ovsflows.Response{}),
+			transformedResponse: reflect.TypeOf(agentapis.OVSFlowResponse{}),
 		},
 		{
 			use:   "trace-packet",
@@ -510,7 +504,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 					outputType: single,
 				},
 			},
-			transformedResponse: reflect.TypeOf(endpointserver.EndpointQueryResponse{}),
+			transformedResponse: reflect.TypeOf(controllerapis.EndpointQueryResponse{}),
 		},
 		{
 			use:     "networkpolicyevaluation",
@@ -582,7 +576,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 					outputType: multiple,
 				},
 			},
-			transformedResponse: reflect.TypeOf(flowrecords.Response{}),
+			transformedResponse: reflect.TypeOf(aggregatorapis.FlowRecordsResponse{}),
 		},
 		{
 			use:          "recordmetrics",
@@ -595,7 +589,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 					outputType: single,
 				},
 			},
-			transformedResponse: reflect.TypeOf(recordmetrics.Response{}),
+			transformedResponse: reflect.TypeOf(aggregatorapis.RecordMetricsResponse{}),
 		},
 		{
 			use:          "serviceexternalip",
@@ -621,7 +615,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 					outputType: multiple,
 				},
 			},
-			transformedResponse: reflect.TypeOf(serviceexternalip.Response{}),
+			transformedResponse: reflect.TypeOf(agentapis.ServiceExternalIPInfo{}),
 		},
 		{
 			use:          "memberlist",
@@ -635,7 +629,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 					outputType: multiple,
 				},
 			},
-			transformedResponse: reflect.TypeOf(memberlist.Response{}),
+			transformedResponse: reflect.TypeOf(agentapis.MemberlistResponse{}),
 		},
 	},
 	rawCommands: []rawCommand{

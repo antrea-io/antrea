@@ -21,9 +21,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
+	"github.com/vmware/go-ipfix/pkg/intermediate"
 	"go.uber.org/mock/gomock"
 
+	"antrea.io/antrea/pkg/flowaggregator/apis"
 	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
 )
 
@@ -79,9 +80,9 @@ type testCase struct {
 	name              string
 	records           []map[string]interface{}
 	query             string
-	flowKey           *ipfixintermediate.FlowKey
+	flowKey           *intermediate.FlowKey
 	expectedStatus    int
-	expectedResponse  []Response
+	expectedResponse  []apis.FlowRecordsResponse
 	expectedTableRows [][]string
 }
 
@@ -93,36 +94,36 @@ func TestGetFlowRecordsQuery(t *testing.T) {
 			query:             "",
 			flowKey:           nil,
 			expectedStatus:    http.StatusOK,
-			expectedResponse:  []Response{record1, record2, record3},
+			expectedResponse:  []apis.FlowRecordsResponse{record1, record2, record3},
 			expectedTableRows: [][]string{recordTableRows1, recordTableRows2, recordTableRows3},
 		},
 		{
 			name:    "Get records by IP address",
 			records: []map[string]interface{}{record2},
 			query:   "?srcip=10.0.0.2&&dstip=10.0.0.1",
-			flowKey: &ipfixintermediate.FlowKey{
+			flowKey: &intermediate.FlowKey{
 				SourceAddress:      "10.0.0.2",
 				DestinationAddress: "10.0.0.1",
 			},
 			expectedStatus:    http.StatusOK,
-			expectedResponse:  []Response{record2},
+			expectedResponse:  []apis.FlowRecordsResponse{record2},
 			expectedTableRows: [][]string{recordTableRows2},
 		},
 		{
 			name:    "Get records by ports",
 			records: []map[string]interface{}{record1, record3},
 			query:   "?srcport=8080",
-			flowKey: &ipfixintermediate.FlowKey{
+			flowKey: &intermediate.FlowKey{
 				SourcePort: 8080,
 			},
 			expectedStatus:    http.StatusOK,
-			expectedResponse:  []Response{record1, record3},
+			expectedResponse:  []apis.FlowRecordsResponse{record1, record3},
 			expectedTableRows: [][]string{recordTableRows1, recordTableRows3},
 		},
 		{
 			name:  "Records not found",
 			query: "?srcip=10.0.0.10",
-			flowKey: &ipfixintermediate.FlowKey{
+			flowKey: &intermediate.FlowKey{
 				SourceAddress: "10.0.0.10",
 			},
 			expectedStatus: http.StatusOK,
@@ -158,7 +159,7 @@ func TestGetFlowRecordsQuery(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, recorder.Code)
 
 			if tc.expectedStatus == http.StatusOK {
-				var received []Response
+				var received []apis.FlowRecordsResponse
 				err = json.Unmarshal(recorder.Body.Bytes(), &received)
 				assert.Nil(t, err)
 				assert.ElementsMatch(t, tc.expectedResponse, received)

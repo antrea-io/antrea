@@ -24,9 +24,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/memberlist"
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	agentapis "antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
 	"antrea.io/antrea/pkg/antctl/transform/common"
@@ -34,7 +32,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	endpointserver "antrea.io/antrea/pkg/apiserver/handlers/endpoint"
+	"antrea.io/antrea/pkg/apiserver/apis"
 )
 
 type Foobar struct {
@@ -89,7 +87,7 @@ kube-system/antrea-controller-55b9bcd59f-h9ll4 node-control-plane Healthy 1     
 		},
 		{
 			name: "StructureData-AgentInfo-Single",
-			rawResponseData: agentinfo.AntreaAgentInfoResponse{
+			rawResponseData: agentapis.AntreaAgentInfoResponse{
 				Version: "v0.4.0",
 				PodRef: v1.ObjectReference{
 					Kind:      "Pod",
@@ -283,7 +281,7 @@ GroupName <NONE>
 		},
 		{
 			name: "StructureData-PodInterface-List",
-			rawResponseData: []podinterface.Response{
+			rawResponseData: []agentapis.PodInterfaceResponse{
 				{
 					PodName:       "nginx-6db489d4b7-vgv7v",
 					PodNamespace:  "default",
@@ -312,7 +310,7 @@ default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 port
 		},
 		{
 			name: "StructuredData-Memberlist-State",
-			rawResponseData: []memberlist.Response{
+			rawResponseData: []agentapis.MemberlistResponse{
 				{
 					NodeName: "node1",
 					IP:       "192.168.1.2",
@@ -350,9 +348,9 @@ func TestTableOutputForQueryEndpoint(t *testing.T) {
 	}{
 		{
 			name: "Pod selected by no policy",
-			rawResponseData: &endpointserver.EndpointQueryResponse{
-				Endpoints: []endpointserver.Endpoint{
-					{Namespace: "testNamespace", Name: "podA", AppliedPolicies: []cpv1beta.NetworkPolicyReference{}, EgressDstRules: []endpointserver.Rule{}, IngressSrcRules: []endpointserver.Rule{}},
+			rawResponseData: &apis.EndpointQueryResponse{
+				Endpoints: []apis.Endpoint{
+					{Namespace: "testNamespace", Name: "podA", AppliedPolicies: []cpv1beta.NetworkPolicyReference{}, EgressDstRules: []apis.Rule{}, IngressSrcRules: []apis.Rule{}},
 				},
 			},
 			expected: `Endpoint testNamespace/podA
@@ -366,16 +364,16 @@ Ingress Rules Referencing Endpoint as Source: None
 		},
 		{
 			name: "Pod selected by 1 policy",
-			rawResponseData: &endpointserver.EndpointQueryResponse{
-				Endpoints: []endpointserver.Endpoint{
+			rawResponseData: &apis.EndpointQueryResponse{
+				Endpoints: []apis.Endpoint{
 					{
 						Namespace:       "testNamespace",
 						Name:            "podA",
 						AppliedPolicies: []cpv1beta.NetworkPolicyReference{policyRef0},
-						EgressDstRules: []endpointserver.Rule{
+						EgressDstRules: []apis.Rule{
 							{PolicyRef: policyRef0, Direction: cpv1beta.DirectionOut, RuleIndex: 0},
 						},
-						IngressSrcRules: []endpointserver.Rule{
+						IngressSrcRules: []apis.Rule{
 							{PolicyRef: policyRef0, Direction: cpv1beta.DirectionIn, RuleIndex: 0},
 						},
 					},
@@ -398,18 +396,18 @@ test-ingress-egress testNamespace 0     uid-1
 		},
 		{
 			name: "Pod selected by 2 different policies",
-			rawResponseData: &endpointserver.EndpointQueryResponse{
-				Endpoints: []endpointserver.Endpoint{
+			rawResponseData: &apis.EndpointQueryResponse{
+				Endpoints: []apis.Endpoint{
 					{
 						Namespace: "testNamespace",
 						Name:      "podA",
 						AppliedPolicies: []cpv1beta.NetworkPolicyReference{
 							policyRef0, policyRef1,
 						},
-						EgressDstRules: []endpointserver.Rule{
+						EgressDstRules: []apis.Rule{
 							{PolicyRef: policyRef0, Direction: cpv1beta.DirectionOut, RuleIndex: 0},
 						},
-						IngressSrcRules: []endpointserver.Rule{
+						IngressSrcRules: []apis.Rule{
 							{PolicyRef: policyRef0, Direction: cpv1beta.DirectionIn, RuleIndex: 0},
 						},
 					},

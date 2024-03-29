@@ -29,10 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
-	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
 	"antrea.io/antrea/pkg/apis"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/test/e2e/utils/portforwarder"
 )
@@ -57,7 +55,7 @@ func testSupportBundle(name string, t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	var podName, tokenPath string
+	var podName string
 	var podPort int
 	if name == "controller" {
 		var pod *v1.Pod
@@ -65,15 +63,13 @@ func testSupportBundle(name string, t *testing.T) {
 		require.NoError(t, err)
 		podName = pod.Name
 		podPort = apis.AntreaControllerAPIPort
-		tokenPath = controllerapiserver.TokenPath
 	} else {
 		podName, err = data.getAntreaPodOnNode(controlPlaneNodeName())
 		require.NoError(t, err)
 		podPort = apis.AntreaAgentAPIPort
-		tokenPath = agentapiserver.TokenPath
 	}
 	// Acquire token.
-	token, err := getAccessToken(podName, fmt.Sprintf("antrea-%s", name), tokenPath, data)
+	token, err := getAccessToken(podName, fmt.Sprintf("antrea-%s", name), apis.APIServerLoopbackTokenPath, data)
 	require.NoError(t, err)
 	podIP, err := data.podWaitForIPs(defaultTimeout, podName, metav1.NamespaceSystem)
 	require.NoError(t, err)
