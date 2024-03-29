@@ -534,6 +534,8 @@ jobs:
     - name: Load Antrea image
       run: |
         docker load -i antrea-ubuntu.tar
+        docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+        docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
     - name: Install Kind
       run: |
         KIND_VERSION=$(head -n1 ./ci/kind/version)
