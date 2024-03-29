@@ -231,7 +231,7 @@ func predictEndpointsRules(srcEndpointRules, dstEndpointRules *antreatypes.Endpo
 
 	// sort the common rules based on multiple closures, the top rule has the highest precedence
 	tierPriority := func(r1, r2 *antreatypes.RuleInfo) int {
-		effectiveTierPriorityK8sNP := (DefaultTierPriority + BaselineTierPriority) / 2
+		effectiveTierPriorityK8sNP := (crdv1beta1.DefaultTierPriority + crdv1beta1.BaselineTierPriority) / 2
 		r1Priority, r2Priority := effectiveTierPriorityK8sNP, effectiveTierPriorityK8sNP
 		if r1.Policy.TierPriority != nil {
 			r1Priority = *r1.Policy.TierPriority
@@ -282,7 +282,7 @@ func predictEndpointsRules(srcEndpointRules, dstEndpointRules *antreatypes.Endpo
 		if isPass(commonRule.Rule) {
 			for _, rule := range commonRules[1:] {
 				if rule.Policy.SourceRef.Type == controlplane.K8sNetworkPolicy ||
-					(rule.Policy.TierPriority != nil && *rule.Policy.TierPriority == BaselineTierPriority && !isPass(rule.Rule)) {
+					(rule.Policy.TierPriority != nil && *rule.Policy.TierPriority == crdv1beta1.BaselineTierPriority && !isPass(rule.Rule)) {
 					commonRule = rule
 					break
 				}

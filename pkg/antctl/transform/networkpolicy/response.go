@@ -29,7 +29,8 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/util/printers"
 )
 
 const sortByEffectivePriority = "effectivePriority"
@@ -40,7 +41,7 @@ type Response struct {
 
 // Compute a tierPriority value in between the application tier and the baseline tier,
 // which can be used to sort all policies by tier.
-var effectiveTierPriorityK8sNP = (networkpolicy.DefaultTierPriority + networkpolicy.BaselineTierPriority) / 2
+var effectiveTierPriorityK8sNP = (v1beta1.DefaultTierPriority + v1beta1.BaselineTierPriority) / 2
 
 type NPSorter struct {
 	networkPolicies []cpv1beta.NetworkPolicy
@@ -153,7 +154,7 @@ func (r Response) GetTableHeader() []string {
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
 	return []string{
-		r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength),
+		r.Name, printers.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength),
 		strconv.Itoa(len(r.Rules)), r.SourceRef.ToString(),
 		priorityToString(r.TierPriority), priorityToString(r.Priority),
 	}
@@ -189,7 +190,7 @@ func (r EvaluationResponse) GetTableRow(_ int) []string {
 			r.Response.NetworkPolicy.Name,
 			r.Response.NetworkPolicy.Namespace,
 			string(r.Response.NetworkPolicy.Type),
-			common.Int32ToString(r.Response.RuleIndex),
+			strconv.Itoa(int(r.Response.RuleIndex)),
 			string(r.Response.Rule.Direction),
 		}
 	}

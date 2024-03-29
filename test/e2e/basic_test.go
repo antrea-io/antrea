@@ -32,7 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -129,7 +129,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		t.Fatalf("Error when running antctl: %v", err)
 	}
 
-	var podInterfaces []podinterface.Response
+	var podInterfaces []apis.PodInterfaceResponse
 	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
 		t.Fatalf("Error when querying the pod interface: %v", err)
 	}

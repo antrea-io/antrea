@@ -28,8 +28,11 @@ import (
 	"k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/apis"
 	cert "antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 // AntreaClientProvider provides a method to get Antrea client.
@@ -57,8 +60,8 @@ func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeCl
 	antreaCAProvider, _ := dynamiccertificates.NewDynamicCAFromConfigMapController(
 		"antrea-ca",
 		cert.GetCAConfigMapNamespace(),
-		cert.AntreaCAConfigMapName,
-		cert.CAConfigMapKey,
+		apis.AntreaCAConfigMapName,
+		apis.CAConfigMapKey,
 		kubeClient)
 	antreaClientProvider := &antreaClientProvider{
 		config:            config,
@@ -154,7 +157,7 @@ func inClusterConfig(caBundle []byte) (*rest.Config, error) {
 
 	tlsClientConfig := rest.TLSClientConfig{
 		CAData:     caBundle,
-		ServerName: cert.GetAntreaServerNames(cert.AntreaServiceName)[0],
+		ServerName: k8s.GetServiceDNSNames(env.GetAntreaNamespace(), apis.AntreaServiceName)[0],
 	}
 
 	return &rest.Config{

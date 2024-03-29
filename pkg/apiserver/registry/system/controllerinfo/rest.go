@@ -34,9 +34,6 @@ type REST struct {
 	controllerQuerier querier.ControllerQuerier
 }
 
-// Name of the AntreaControllerInfo resource.
-const ControllerInfoResourceName = "antrea-controller"
-
 var (
 	_ rest.Scoper               = &REST{}
 	_ rest.Getter               = &REST{}
@@ -60,7 +57,7 @@ func (r *REST) getControllerInfo() *crdv1beta1.AntreaControllerInfo {
 	// Now AntreaControllerInfo has a single instance.
 	info := new(crdv1beta1.AntreaControllerInfo)
 	r.controllerQuerier.GetControllerInfo(info, false)
-	info.Name = ControllerInfoResourceName
+	info.Name = crdv1beta1.AntreaControllerInfoResourceName
 	return info
 }
 

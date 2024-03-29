@@ -24,10 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/multicast"
 	"antrea.io/antrea/pkg/features"
-
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
@@ -40,7 +40,7 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 		name                   string
 		namespace              string
 		expectedStatus         int
-		expectedContent        []Response
+		expectedContent        []apis.MulticastResponse
 		getPodStatsResult      *multicast.PodTrafficStats
 		gettAllPodsStatsResult map[*interfacestore.InterfaceConfig]*multicast.PodTrafficStats
 	}{
@@ -48,7 +48,7 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 			name:           "pod1",
 			namespace:      "namespaceA",
 			expectedStatus: http.StatusOK,
-			expectedContent: []Response{
+			expectedContent: []apis.MulticastResponse{
 				{
 					PodName:      "pod1",
 					PodNamespace: "namespaceA",
@@ -77,7 +77,7 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 				{ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "test1"}}:      {Inbound: 22, Outbound: 33},
 				{ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod2", PodNamespace: "namespaceA"}}: {Inbound: 44, Outbound: 69},
 			},
-			expectedContent: []Response{
+			expectedContent: []apis.MulticastResponse{
 				{
 					PodName:      "pod2",
 					PodNamespace: "namespaceA",
@@ -94,7 +94,7 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 				{ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "test1"}}: {Inbound: 22, Outbound: 33},
 				{ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod2", PodNamespace: "test2"}}: {Inbound: 44, Outbound: 66},
 			},
-			expectedContent: []Response{
+			expectedContent: []apis.MulticastResponse{
 				{
 					PodName:      "pod1",
 					PodNamespace: "test1",
@@ -125,7 +125,7 @@ func TestPodMulticastStatsQuery(t *testing.T) {
 		assert.Equal(t, tc.expectedStatus, recorder.Code, k)
 
 		if tc.expectedStatus == http.StatusOK {
-			var received []Response
+			var received []apis.MulticastResponse
 			err = json.Unmarshal(recorder.Body.Bytes(), &received)
 			assert.Nil(t, err)
 			assert.ElementsMatch(t, tc.expectedContent, received)

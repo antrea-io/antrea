@@ -25,6 +25,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/printers"
 )
 
 type Response struct {
@@ -91,7 +92,7 @@ func (r Response) GetPodIPs(maxColumnLength int) string {
 	for i, pod := range r.Pods {
 		list[i] = pod.IP
 	}
-	return common.GenerateTableElementWithSummary(list, maxColumnLength)
+	return printers.GenerateTableElementWithSummary(list, maxColumnLength)
 }
 
 func (r Response) GetNodeIPs(maxColumnLength int) string {
@@ -99,7 +100,7 @@ func (r Response) GetNodeIPs(maxColumnLength int) string {
 	for i, node := range r.Nodes {
 		list[i] = node.IP
 	}
-	return common.GenerateTableElementWithSummary(list, maxColumnLength)
+	return printers.GenerateTableElementWithSummary(list, maxColumnLength)
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {

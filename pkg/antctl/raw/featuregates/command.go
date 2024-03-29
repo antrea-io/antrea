@@ -28,6 +28,7 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apiserver/apis"
 	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 )
@@ -82,13 +83,13 @@ func featureGateRequest(cmd *cobra.Command, mode string) error {
 		return err
 	}
 
-	var resp []featuregates.Response
+	var resp []apis.FeatureGateResponse
 	if resp, err = getFeatureGatesRequest(client); err != nil {
 		return err
 	}
-	var agentGates []featuregates.Response
-	var agentWindowsGates []featuregates.Response
-	var controllerGates []featuregates.Response
+	var agentGates []apis.FeatureGateResponse
+	var agentWindowsGates []apis.FeatureGateResponse
+	var controllerGates []apis.FeatureGateResponse
 	for _, v := range resp {
 		switch v.Component {
 		case featuregates.AgentMode:
@@ -156,8 +157,8 @@ func getControllerClient(ctx context.Context, k8sClientset kubernetes.Interface,
 	return controllerClient, nil
 }
 
-func getFeatureGatesRequest(client *rest.RESTClient) ([]featuregates.Response, error) {
-	var resp []featuregates.Response
+func getFeatureGatesRequest(client *rest.RESTClient) ([]apis.FeatureGateResponse, error) {
+	var resp []apis.FeatureGateResponse
 	u := url.URL{Path: "/featuregates"}
 	getter := client.Get().RequestURI(u.RequestURI())
 	rawResp, err := getter.DoRaw(context.TODO())
@@ -171,7 +172,7 @@ func getFeatureGatesRequest(client *rest.RESTClient) ([]featuregates.Response, e
 	return resp, nil
 }
 
-func output(resps []featuregates.Response, component string, output io.Writer) {
+func output(resps []apis.FeatureGateResponse, component string, output io.Writer) {
 	switch component {
 	case featuregates.AgentMode:
 		output.Write([]byte("Antrea Agent Feature Gates\n"))

@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+	"antrea.io/antrea/pkg/flowaggregator/apis"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
 )
@@ -48,10 +49,10 @@ func TestRecordMetricsQuery(t *testing.T) {
 	handler.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
-	var received Response
+	var received apis.RecordMetricsResponse
 	err = json.Unmarshal(recorder.Body.Bytes(), &received)
 	assert.Nil(t, err)
-	assert.Equal(t, Response{
+	assert.Equal(t, apis.RecordMetricsResponse{
 		NumRecordsExported:     20,
 		NumRecordsReceived:     15,
 		NumFlows:               30,

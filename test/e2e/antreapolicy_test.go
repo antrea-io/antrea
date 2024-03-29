@@ -36,7 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/apis"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/features"
@@ -4085,7 +4085,7 @@ func generatePacketCaptureCmd(t *testing.T, data *TestData, timeout int, hostIP,
 	agentPodName := getAntreaPodName(t, data, nodeName)
 	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
 	stdout, stderr, err := runAntctl(agentPodName, cmds, data)
-	var podInterfaceInfo []podinterface.Response
+	var podInterfaceInfo []apis.PodInterfaceResponse
 	if err := json.Unmarshal([]byte(stdout), &podInterfaceInfo); err != nil {
 		return "", err
 	}
