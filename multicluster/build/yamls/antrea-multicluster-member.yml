@@ -2,8 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     app: antrea
   name: clusterinfoimports.multicluster.crd.antrea.io
@@ -33,14 +32,19 @@ spec:
       openAPIV3Schema:
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -114,8 +118,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     app: antrea
   name: clustersets.multicluster.crd.antrea.io
@@ -150,14 +153,19 @@ spec:
         description: ClusterSet represents a ClusterSet.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -188,7 +196,8 @@ spec:
                 minItems: 1
                 type: array
               members:
-                description: Members include member clusters known to the leader clusters.
+                description: |-
+                  Members include member clusters known to the leader clusters.
                   Used in leader cluster.
                 items:
                   description: MemberCluster defines member cluster information.
@@ -210,8 +219,9 @@ spec:
                   type: object
                 type: array
               namespace:
-                description: The leader cluster Namespace in which the ClusterSet
-                  is defined. Used in member cluster.
+                description: |-
+                  The leader cluster Namespace in which the ClusterSet is defined.
+                  Used in member cluster.
                 type: string
             required:
             - leaders
@@ -320,14 +330,19 @@ spec:
         description: ClusterSet represents a ClusterSet.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -347,21 +362,23 @@ spec:
                       description: Identify a leader cluster in the ClusterSet.
                       type: string
                     secret:
-                      description: Name of the Secret resource in the member cluster,
-                        which stores the token to access the leader cluster's API
-                        server.
+                      description: |-
+                        Name of the Secret resource in the member cluster, which stores
+                        the token to access the leader cluster's API server.
                       type: string
                     server:
-                      description: API server endpoint of the leader cluster. E.g.
-                        "https://172.18.0.1:6443", "https://example.com:6443".
+                      description: |-
+                        API server endpoint of the leader cluster.
+                        E.g. "https://172.18.0.1:6443", "https://example.com:6443".
                       type: string
                   type: object
                 maxItems: 1
                 minItems: 1
                 type: array
               namespace:
-                description: The leader cluster Namespace in which the ClusterSet
-                  is defined. Used in a member cluster.
+                description: |-
+                  The leader cluster Namespace in which the ClusterSet is defined.
+                  Used in a member cluster.
                 type: string
             required:
             - clusterID
@@ -454,8 +471,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     app: antrea
   name: gateways.multicluster.crd.antrea.io
@@ -486,9 +502,11 @@ spec:
         description: Gateway includes information of a Multi-cluster Gateway.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           gatewayIP:
             description: Cross-cluster tunnel IP of the Gateway.
@@ -497,9 +515,12 @@ spec:
             description: In-cluster tunnel IP of the Gateway.
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -523,8 +544,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     app: antrea
   name: labelidentities.multicluster.crd.antrea.io
@@ -552,19 +572,24 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: LabelIdentity is an imported label identity from the ClusterSet.
-          For each unique label identity, a LabelIdentity will be created in the member
-          cluster.
+        description: |-
+          LabelIdentity is an imported label identity from the ClusterSet.
+          For each unique label identity, a LabelIdentity will be created in the member cluster.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -576,8 +601,9 @@ spec:
                 format: int32
                 type: integer
               label:
-                description: Label is the normalized string of a label identity. The
-                  format of normalized label identity is `ns:(?P<nslabels>(.)*)&pod:(?P<podlabels>(.)*)`
+                description: |-
+                  Label is the normalized string of a label identity.
+                  The format of normalized label identity is `ns:(?P<nslabels>(.)*)&pod:(?P<podlabels>(.)*)`
                   E.g., `ns:kubernetes.io/metadata.name=kube-system&pod:app=db`
                 type: string
             type: object
