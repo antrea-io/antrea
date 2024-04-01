@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
 	clocktesting "k8s.io/utils/clock/testing"
 
@@ -124,6 +125,9 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 	}, gotSecret, "Secret doesn't match")
 
 	go p.Run(ctx, 1)
+	// Wait for cache to have synced to make sure that no event is lost in case the Secret
+	// update happens between the List and Watch operations in the informer.
+	cache.WaitForCacheSync(ctx.Done(), p.secretInformer.HasSynced)
 
 	// Update the Secret, it should update the serving one.
 	gotSecret.Data[corev1.TLSCertKey] = testOneYearCert
@@ -135,7 +139,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 		keyInFile, _ := os.ReadFile(p.secureServing.ServerCert.CertKey.KeyFile)
 		assert.Equal(c, testOneYearCert, certInFile)
 		assert.Equal(c, testOneYearKey, keyInFile)
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 
 	// Trigger a resync, nothing should change.
 	p.enqueue()
@@ -161,7 +165,7 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 			corev1.TLSCertKey:       testOneYearCert,
 			corev1.TLSPrivateKeyKey: testOneYearKey,
 		}, gotSecret.Data, "Secret should not match")
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSelfSignedCertProviderRun(t *testing.T) {
@@ -276,6 +280,9 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 			}
 			p := newTestSelfSignedCertProvider(t, client, tt.tlsSecretName, tt.minValidDuration, withGenerateSelfSignedCertKeyFn(generateSelfSignedCertKey))
 			go p.Run(ctx, 1)
+			if tt.tlsSecretName != "" {
+				cache.WaitForCacheSync(ctx.Done(), p.secretInformer.HasSynced)
+			}
 			if tt.updatedSecret != nil {
 				client.CoreV1().Secrets(tt.updatedSecret.Namespace).Update(ctx, tt.updatedSecret, metav1.UpdateOptions{})
 			}
@@ -289,7 +296,7 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 				keyInFile, _ := os.ReadFile(p.secureServing.ServerCert.CertKey.KeyFile)
 				assert.Equal(c, tt.expectedCert, certInFile)
 				assert.Equal(c, tt.expectedKey, keyInFile)
-			}, 2*time.Second, 50*time.Millisecond)
+			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
 }
