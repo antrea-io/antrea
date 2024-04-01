@@ -150,6 +150,7 @@ func (p *selfSignedCertProvider) Run(ctx context.Context, workers int) {
 
 	if p.secretInformer != nil {
 		go p.secretInformer.Run(ctx.Done())
+		cache.WaitForCacheSync(ctx.Done(), p.secretInformer.HasSynced)
 	}
 
 	// doesn't matter what workers say, only start one.
