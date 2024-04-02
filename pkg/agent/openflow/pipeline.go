@@ -139,7 +139,7 @@ var (
 	// Tables in stagePreRouting:
 	// When proxy is enabled.
 	PreRoutingClassifierTable = newTable("PreRoutingClassifier", stagePreRouting, pipelineIP)
-	NodePortMarkTable         = newTable("NodePortMark", stagePreRouting, pipelineIP)
+	ServiceMarkTable          = newTable("ServiceMark", stagePreRouting, pipelineIP)
 	SessionAffinityTable      = newTable("SessionAffinity", stagePreRouting, pipelineIP)
 	ServiceLBTable            = newTable("ServiceLB", stagePreRouting, pipelineIP)
 	DSRServiceMarkTable       = newTable("DSRServiceMark", stagePreRouting, pipelineIP)
@@ -391,6 +391,7 @@ type flowCategoryCache struct {
 type client struct {
 	enableProxy                bool
 	proxyAll                   bool
+	proxyLoadBalancerIPs       bool
 	enableDSR                  bool
 	enableAntreaPolicy         bool
 	enableL7NetworkPolicy      bool
@@ -2288,7 +2289,7 @@ func (f *featureService) nodePortMarkFlows() []binding.Flow {
 				continue
 			}
 			flows = append(flows,
-				NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
+				ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
 					Cookie(cookieID).
 					MatchProtocol(ipProtocol).
 					MatchDstIP(nodePortAddresses[i]).
@@ -2298,7 +2299,7 @@ func (f *featureService) nodePortMarkFlows() []binding.Flow {
 		// This generates the flow for the virtual NodePort DNAT IP. The flow is used to mark the first packet of NodePort
 		// connection sourced from the Antrea gateway (the connection is performed DNAT with the virtual IP in host netns).
 		flows = append(flows,
-			NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
+			ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchDstIP(f.virtualNodePortDNATIPs[ipProtocol]).
@@ -2380,6 +2381,9 @@ func (f *featureService) serviceLBFlows(config *types.ServiceConfig) []binding.F
 			flowBuilder = flowBuilder.MatchRegMark(ToNodePortAddressRegMark)
 		} else {
 			flowBuilder = flowBuilder.MatchDstIP(config.ServiceIP)
+		}
+		if len(config.LoadBalancerSourceRanges) != 0 {
+			flowBuilder = flowBuilder.MatchRegMark(LoadBalancerSourceRangesAllowRegMark)
 		}
 		if extraMatcher != nil {
 			flowBuilder = extraMatcher(flowBuilder)
@@ -2827,6 +2831,7 @@ func NewClient(bridgeName string,
 	enableDenyTracking bool,
 	proxyAll bool,
 	enableDSR bool,
+	proxyLoadBalancerIPs bool,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	enableTrafficControl bool,
@@ -2843,6 +2848,7 @@ func NewClient(bridgeName string,
 		enableProxy:                enableProxy,
 		proxyAll:                   proxyAll,
 		enableDSR:                  enableDSR,
+		proxyLoadBalancerIPs:       proxyLoadBalancerIPs,
 		enableAntreaPolicy:         enableAntreaPolicy,
 		enableL7NetworkPolicy:      enableL7NetworkPolicy,
 		enableDenyTracking:         enableDenyTracking,
@@ -3013,7 +3019,7 @@ func (f *featureService) preRoutingClassifierFlows() []binding.Flow {
 
 	targetTables := []uint8{SessionAffinityTable.GetID(), ServiceLBTable.GetID()}
 	if f.proxyAll {
-		targetTables = append([]uint8{NodePortMarkTable.GetID()}, targetTables...)
+		targetTables = append([]uint8{ServiceMarkTable.GetID()}, targetTables...)
 	}
 	for _, ipProtocol := range f.ipProtocols {
 		flows = append(flows,
@@ -3103,6 +3109,34 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 		}
 	}
 
+	return flows
+}
+
+func (f *featureService) loadBalancerSourceRangesMarkFlows(config *types.ServiceConfig) []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	protocol := config.Protocol
+	ingressIP := config.ServiceIP
+	port := config.ServicePort
+	var flows []binding.Flow
+	for _, srcRange := range config.LoadBalancerSourceRanges {
+		_, srcIPNet, _ := net.ParseCIDR(srcRange)
+		flows = append(flows, ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchProtocol(protocol).
+			MatchSrcIPNet(*srcIPNet).
+			MatchDstIP(ingressIP).
+			MatchDstPort(port, nil).
+			Action().LoadRegMark(LoadBalancerSourceRangesAllowRegMark).
+			Done(),
+		)
+	}
+	flows = append(flows, ServiceMarkTable.ofTable.BuildFlow(priorityLow).
+		Cookie(cookieID).
+		MatchProtocol(protocol).
+		MatchDstIP(ingressIP).
+		MatchDstPort(port, nil).
+		Action().LoadRegMark(LoadBalancerSourceRangesDropRegMark).
+		Done())
 	return flows
 }
 

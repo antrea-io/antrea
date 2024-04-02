@@ -149,6 +149,11 @@ var (
 	FromExternalRegMark = binding.NewOneBitRegMark(4, 27)
 	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
 	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
+	// reg4[29..30]: Field to store how to do with the traffic of LoadBalancer Services configured with
+	// `loadBalancerSourceRanges`. Marks in this field include:
+	LoadBalancerSourceRangesActionField  = binding.NewRegField(4, 29, 30)
+	LoadBalancerSourceRangesAllowRegMark = binding.NewRegMark(LoadBalancerSourceRangesActionField, 0b01)
+	LoadBalancerSourceRangesDropRegMark  = binding.NewRegMark(LoadBalancerSourceRangesActionField, 0b10)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

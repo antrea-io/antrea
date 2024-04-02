@@ -501,7 +501,8 @@ func serviceIdentityChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
 func serviceExternalAddressesChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
 	return svcInfo.NodePort() != pSvcInfo.NodePort() ||
 		!slices.Equal(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings()) ||
-		!slices.Equal(svcInfo.ExternalIPStrings(), pSvcInfo.ExternalIPStrings())
+		!slices.Equal(svcInfo.ExternalIPStrings(), pSvcInfo.ExternalIPStrings()) ||
+		!slices.Equal(svcInfo.LoadBalancerSourceRanges(), pSvcInfo.LoadBalancerSourceRanges())
 }
 
 // smallSliceDifference builds a slice which includes all the strings from s1
@@ -636,6 +637,7 @@ func (p *proxier) uninstallExternalIPService(svcInfoStr string, externalIPString
 func (p *proxier) installLoadBalancerService(svcInfoStr string,
 	localGroupID,
 	clusterGroupID binding.GroupIDType,
+	loadBalancerSourceRanges []string,
 	loadBalancerIPStrings []string,
 	svcPort uint16,
 	protocol binding.Protocol,
@@ -646,17 +648,18 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 		if ingress != "" {
 			ip := net.ParseIP(ingress)
 			if err := p.ofClient.InstallServiceFlows(&agenttypes.ServiceConfig{
-				ServiceIP:          ip,
-				ServicePort:        svcPort,
-				Protocol:           protocol,
-				TrafficPolicyLocal: trafficPolicyLocal,
-				LocalGroupID:       localGroupID,
-				ClusterGroupID:     clusterGroupID,
-				AffinityTimeout:    affinityTimeout,
-				IsExternal:         true,
-				IsNodePort:         false,
-				IsNested:           false, // Unsupported for LoadBalancerIP
-				IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+				ServiceIP:                ip,
+				ServicePort:              svcPort,
+				Protocol:                 protocol,
+				TrafficPolicyLocal:       trafficPolicyLocal,
+				LocalGroupID:             localGroupID,
+				ClusterGroupID:           clusterGroupID,
+				AffinityTimeout:          affinityTimeout,
+				IsExternal:               true,
+				IsNodePort:               false,
+				IsNested:                 false, // Unsupported for LoadBalancerIP
+				IsDSR:                    features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
+				LoadBalancerSourceRanges: loadBalancerSourceRanges,
 			}); err != nil {
 				return fmt.Errorf("failed to install LoadBalancerIP load balancing OVS flows: %w", err)
 			}
@@ -895,7 +898,7 @@ func (p *proxier) installServiceFlows(svcInfo *types.ServiceInfo, localGroupID, 
 	}
 	// Install LoadBalancer flows and configurations.
 	if p.proxyLoadBalancerIPs {
-		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.LoadBalancerIPStrings(), svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
+		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.LoadBalancerSourceRanges(), svcInfo.LoadBalancerIPStrings(), svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
 			klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
@@ -937,13 +940,19 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 		}
 	}
 	if p.proxyLoadBalancerIPs {
-		deletedLoadBalancerIPs := smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
-		addedLoadBalancerIPs := smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+		var deletedLoadBalancerIPs, addedLoadBalancerIPs []string
+		if !slices.Equal(svcInfo.LoadBalancerSourceRanges(), pSvcInfo.LoadBalancerSourceRanges()) {
+			deletedLoadBalancerIPs = pSvcInfo.LoadBalancerIPStrings()
+			addedLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
+		} else {
+			deletedLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+			addedLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+		}
 		if err := p.uninstallLoadBalancerService(pSvcInfoStr, deletedLoadBalancerIPs, pSvcPort, pSvcProto); err != nil {
 			klog.ErrorS(err, "Error when uninstalling LoadBalancer flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 			return false
 		}
-		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, addedLoadBalancerIPs, svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
+		if err := p.installLoadBalancerService(svcInfoStr, localGroupID, clusterGroupID, svcInfo.LoadBalancerSourceRanges(), addedLoadBalancerIPs, svcPort, svcProto, svcInfo.ExternalPolicyLocal(), affinityTimeout, loadBalancerMode); err != nil {
 			klog.ErrorS(err, "Error when installing LoadBalancer flows and configurations for Service", "ServiceInfo", svcInfoStr)
 			return false
 		}
