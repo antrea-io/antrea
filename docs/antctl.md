@@ -42,10 +42,11 @@ running in three different modes:
 
 ## Installation
 
-The antctl binary is included in the Antrea Docker image
-(`antrea/antrea-ubuntu`) which means that there is no need to install anything
-to connect to the Antrea Agent. Simply exec into the antrea-agent container for
-the appropriate antrea-agent Pod and run `antctl`:
+The antctl binary is included in the Antrea Docker images
+(`antrea/antrea-agent-ubuntu`, `antrea/antrea-controller-ubuntu`) which means
+that there is no need to install anything to connect to the Antrea Agent. Simply
+exec into the antrea-agent container for the appropriate antrea-agent Pod and
+run `antctl`:
 
 ```bash
 kubectl exec -it ANTREA-AGENT_POD_NAME -n kube-system -c antrea-agent -- bash

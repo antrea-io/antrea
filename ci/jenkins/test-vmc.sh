@@ -457,22 +457,36 @@ function deliver_antrea {
     fi
 
     echo "====== Pulling old Antrea images ======"
-    if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    # Old Antrea versions can either use a unified image (pre v1.15) or split images.
+    local old_agent_image=""
+    if version_lt "$OLD_ANTREA_VERSION" v1.15; then
+        if [[ ${DOCKER_REGISTRY} != "" ]]; then
+            docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+            docker tag ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+        else
+            docker pull antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+        fi
+        old_agent_image="antrea/antrea-ubuntu:$OLD_ANTREA_VERSION"
+        agent_image="docker.io/antrea/antrea-ubuntu"
     else
-        docker pull antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+        if [[ ${DOCKER_REGISTRY} != "" ]]; then
+            docker pull ${DOCKER_REGISTRY}/antrea/antrea-agent-ubuntu:$OLD_ANTREA_VERSION
+            docker tag ${DOCKER_REGISTRY}/antrea/antrea-agent-ubuntu:$OLD_ANTREA_VERSION antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+        else
+            docker pull antrea/antrea-agent-ubuntu:$OLD_ANTREA_VERSION
+        fi
+        old_agent_image="antrea/antrea-agent-ubuntu:$OLD_ANTREA_VERSION"
     fi
 
     echo "====== Delivering old Antrea images to all the Nodes ======"
-    docker save -o antrea-ubuntu-old.tar antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    docker save -o antrea-ubuntu-old.tar $old_agent_image
     node_num=$(kubectl get nodes --no-headers=true | wc -l)
-    antrea_image="antrea-ubuntu"
     for i in "${!IPs[@]}"
     do
         # We want old-versioned Antrea agents to be more than half in cluster
         if [[ $i -ge $((${node_num}/2)) ]]; then
             # Tag old image to latest if we want Antrea agent to be old-versioned
-            copy_image antrea-ubuntu-old.tar docker.io/antrea/antrea-ubuntu ${IPs[$i]} $OLD_ANTREA_VERSION false
+            copy_image antrea-ubuntu-old.tar docker.io/antrea/antrea-agent-ubuntu ${IPs[$i]} $OLD_ANTREA_VERSION false
         fi
     done
 }

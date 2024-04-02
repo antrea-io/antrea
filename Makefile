@@ -335,11 +335,17 @@ mockgen:
 
 ### Docker images ###
 
+# This target is for development only. It assumes that "make bin" has been run previously and will
+# copy the local binaries to the Docker image, instead of building the binaries inside the image as
+# part of the Docker build.
+
 .PHONY: ubuntu
 ubuntu:
-	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
-	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu $(DOCKER_BUILD_ARGS) .
-	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
+	@echo "===> Building antrea/antrea-agent-ubuntu and antrea/antrea-controller-ubuntu development Docker images <==="
+	docker build -t antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.agent.ubuntu $(DOCKER_BUILD_ARGS) .
+	docker tag antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-agent-ubuntu
+	docker build -t antrea/antrea-controller-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.controller.ubuntu $(DOCKER_BUILD_ARGS) .
+	docker tag antrea/antrea-controller-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-controller-ubuntu
 
 .PHONY: build-controller-ubuntu
 build-controller-ubuntu:
@@ -353,19 +359,14 @@ build-agent-ubuntu:
 	docker build -t antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.agent.ubuntu $(DOCKER_BUILD_ARGS) .
 	docker tag antrea/antrea-agent-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-agent-ubuntu
 
-# Build bins in a golang container, and build the antrea-ubuntu Docker image.
-.PHONY: build-ubuntu
-build-ubuntu:
-	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
-	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu $(DOCKER_BUILD_ARGS) .
-	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
+# These 2 targets are here for "backwards-compatibility". They will build the agent and controller
+# images for the requested distribution.
 
-# Build bins in a golang container, and build the antrea-ubi Docker image.
+.PHONY: build-ubuntu
+build-ubuntu: build-agent-ubuntu build-controller-ubuntu
+
 .PHONY: build-ubi
-build-ubi:
-	@echo "===> Building Antrea bins and antrea/antrea-ubi Docker image <==="
-	docker build -t antrea/antrea-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubi $(DOCKER_BUILD_ARGS) .
-	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-ubi
+build-ubi: build-agent-ubi build-controller-ubi
 
 .PHONY: build-agent-ubi
 build-agent-ubi:
@@ -386,10 +387,7 @@ build-windows:
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 
 .PHONY: build-ubuntu-coverage
-build-ubuntu-coverage:
-	@echo "===> Building Antrea bins and antrea/antrea-ubuntu-coverage Docker image <==="
-	docker build -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .
-	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-coverage
+build-ubuntu-coverage: build-controller-ubuntu-coverage build-agent-ubuntu-coverage
 
 .PHONY: build-controller-ubuntu-coverage
 build-controller-ubuntu-coverage:
