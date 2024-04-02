@@ -789,7 +789,9 @@ func run(o *Options) error {
 			o.igmpQueryVersions,
 			validator,
 			networkConfig.TrafficEncapMode.SupportsEncap(),
-			informerFactory)
+			informerFactory,
+			v4Enabled,
+			v6Enabled)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}
