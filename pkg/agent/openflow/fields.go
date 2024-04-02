@@ -72,8 +72,8 @@ var (
 	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
 	// reg0[13]: Mark to indicate the packet is a generated reject response packet-out.
 	GeneratedRejectPacketOutRegMark = binding.NewOneBitRegMark(0, 13)
-	// reg0[14]: Mark to indicate a Service without any Endpoints (used by Proxy)
-	SvcNoEpRegMark = binding.NewOneBitRegMark(0, 14)
+	// reg0[14]: Mark to indicate a Service connection should be rejected.
+	SvcRejectRegMark = binding.NewOneBitRegMark(0, 14)
 	// reg0[19]: Mark to indicate remote SNAT for Egress.
 	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 19)
 	// reg0[20]: Field to indicate redirect action of layer 7 NetworkPolicy.
@@ -149,6 +149,8 @@ var (
 	FromExternalRegMark = binding.NewOneBitRegMark(4, 27)
 	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
 	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
+	// reg4[29]: Mark to indicate that whether the LoadBalancer Service traffic's source is included in the Service loadBalancerSourceRanges.
+	LoadBalancerSourceRangesRegMark = binding.NewOneBitRegMark(4, 29)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

@@ -36,7 +36,8 @@ type ServiceConfig struct {
 	// IsNested indicates the whether Service's Endpoints are ClusterIPs of other Services. It's used in multi-cluster.
 	IsNested bool
 	// IsDSR indicates that whether the Service works in Direct Server Return mode.
-	IsDSR bool
+	IsDSR                    bool
+	LoadBalancerSourceRanges []string
 }
 
 func (c *ServiceConfig) TrafficPolicyGroupID() openflow.GroupIDType {

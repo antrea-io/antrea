@@ -407,7 +407,7 @@ func TestBuildPipeline(t *testing.T) {
 			},
 		},
 		{
-			name:    "K8s Node, IPv4 only, with proxyAll enabled",
+			name:    "K8s Node, IPv4 only, with AntreaProxy enabled",
 			ipStack: ipv4Only,
 			features: []feature{
 				newTestFeaturePodConnectivity(ipStackMap[ipv4Only]),
@@ -426,7 +426,7 @@ func TestBuildPipeline(t *testing.T) {
 					ConntrackTable,
 					ConntrackStateTable,
 					PreRoutingClassifierTable,
-					NodePortMarkTable,
+					ServiceMarkTable,
 					SessionAffinityTable,
 					ServiceLBTable,
 					EndpointDNATTable,

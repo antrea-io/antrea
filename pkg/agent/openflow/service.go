@@ -135,7 +135,7 @@ func newFeatureService(
 func (f *featureService) serviceNoEndpointFlow() binding.Flow {
 	return EndpointDNATTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchRegMark(SvcNoEpRegMark).
+		MatchRegMark(SvcRejectRegMark).
 		Action().SendToController([]byte{uint8(PacketInCategorySvcReject)}, false).
 		Done()
 }
