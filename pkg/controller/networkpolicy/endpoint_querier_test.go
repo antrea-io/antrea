@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -395,7 +396,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 		for i := 0; i < len(policy.Rules); i++ {
 			ruleInfoMatches[i] = &antreatypes.RuleInfo{
 				Policy: policy,
-				Index:  i,
+				Index:  int32(i),
 				Rule:   &controlplane.NetworkPolicyRule{Direction: policy.Rules[i].Direction, Name: policy.Rules[i].Name, Action: policy.Rules[i].Action},
 			}
 		}
@@ -529,7 +530,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
 				NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: namespace, Name: "Policy111", UID: uid1},
-				RuleIndex:     -1,
+				RuleIndex:     math.MaxInt32,
 				Rule:          controlplane.RuleRef{Direction: controlplane.DirectionOut, Name: "Policy111Rule0"},
 			},
 		},
@@ -542,7 +543,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
 				NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: namespace, Name: "Policy222", UID: uid2},
-				RuleIndex:     -1,
+				RuleIndex:     math.MaxInt32,
 				Rule:          controlplane.RuleRef{Direction: controlplane.DirectionIn, Name: "Policy222Rule0"},
 			},
 		},

@@ -21,7 +21,6 @@ import (
 	"io"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -322,7 +321,7 @@ func TableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
 	toStringRep := func(effectiveRules []apis.Rule) [][]string {
 		ruleStrings := make([][]string, 0)
 		for _, rule := range effectiveRules {
-			ruleStrings = append(ruleStrings, []string{rule.PolicyRef.Name, rule.PolicyRef.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.PolicyRef.UID)})
+			ruleStrings = append(ruleStrings, []string{rule.PolicyRef.Name, rule.PolicyRef.Namespace, fmt.Sprint(rule.RuleIndex), string(rule.PolicyRef.UID)})
 		}
 		return ruleStrings
 	}

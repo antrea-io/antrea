@@ -139,7 +139,7 @@ func (p *NetworkPolicy) GetAppliedToGroups() sets.Set[string] {
 // corresponding ingress/egress rules, and the original rule info.
 type RuleInfo struct {
 	Policy *NetworkPolicy
-	Index  int
+	Index  int32
 	Rule   *controlplane.NetworkPolicyRule
 }
 
