@@ -24,12 +24,12 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
+	checkinstallation "antrea.io/antrea/pkg/antctl/raw/check/installation"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
 	"antrea.io/antrea/pkg/antctl/raw/set"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
-	"antrea.io/antrea/pkg/antctl/raw/test"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
 	"antrea.io/antrea/pkg/antctl/raw/upgrade/apistorage"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
@@ -641,7 +641,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 	},
 	rawCommands: []rawCommand{
 		{
-			cobraCommand:      test.Command(),
+			cobraCommand:      checkinstallation.Command(),
 			supportAgent:      false,
 			supportController: false,
 			commandGroup:      check,
