@@ -473,7 +473,7 @@ metadata:
 spec:
   ipVersion: 6
   ipRanges:
-  # 256 different IPs can be allocated from this pool: 0x200 - 0x100.
+  # 257 different IPs can be allocated from this pool: 0x200 - 0x100 + 1.
   - start: "3ffe:ffff:1:01ff::0100"
     end: "3ffe:ffff:1:01ff::0200"
     gateway: "3ffe:ffff:1:01ff::1"
