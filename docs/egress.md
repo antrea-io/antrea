@@ -205,7 +205,7 @@ because when the CIDR represents a traditional subnet, the first IP is typically
 the "network IP". Additionally, for IPv4, the last IP in the CIDR, which
 traditionally represents the "broadcast IP", will also be excluded. As a result,
 providing a /32 CIDR or a /31 CIDR will yield an empty pool of IP addresses. A
-/28 CIDR will yield 14 allocatable IP ddresses. In the future we may make this
+/28 CIDR will yield 14 allocatable IP addresses. In the future we may make this
 behavior configurable, so that the full CIDR can be used if desired.
 
 ### SubnetInfo
