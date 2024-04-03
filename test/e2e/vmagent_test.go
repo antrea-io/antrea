@@ -236,7 +236,8 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 		vms := strings.Split(testOptions.linuxVMs, " ")
 		for _, vm := range vms {
 			t.Logf("Get info for Linux VM: %s", vm)
-			tempVM := getVMInfo(t, data, vm)
+			tempVM, err := getVMInfo(t, data, vm)
+			require.NoError(t, err)
 			vmList = append(vmList, tempVM)
 		}
 	}
@@ -244,7 +245,8 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 		vms := strings.Split(testOptions.windowsVMs, " ")
 		for _, vm := range vms {
 			t.Logf("Get info for Windows VM: %s", vm)
-			tempVM := getWindowsVMInfo(t, data, vm)
+			tempVM, err := getWindowsVMInfo(t, data, vm)
+			require.NoError(t, err)
 			vmList = append(vmList, tempVM)
 		}
 	}
@@ -267,11 +269,13 @@ func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyUpLinkAfterCleanup := func(vm vmInfo) {
 		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
 			var tempVM vmInfo
+			var getVMErr error
 			if vm.osType == linuxOS {
-				tempVM = getVMInfo(t, data, vm.nodeName)
+				tempVM, getVMErr = getVMInfo(t, data, vm.nodeName)
 			} else {
-				tempVM = getWindowsVMInfo(t, data, vm.nodeName)
+				tempVM, getVMErr = getWindowsVMInfo(t, data, vm.nodeName)
 			}
+			require.NoError(t, getVMErr)
 			if vm.ifName != tempVM.ifName {
 				t.Logf("Retry, unexpected uplink interface name, expected %s, got %s", vm.ifName, tempVM.ifName)
 				return false, nil
@@ -330,14 +334,26 @@ func testExternalNode(t *testing.T, data *TestData, vmList []vmInfo) {
 			exists, err := verifyInterfaceIsInOVS(t, data, vm)
 			return exists, err
 		})
-		assert.NoError(t, err, "Failed to verify host interface in OVS, vmInfo %+v", vm)
+		require.NoError(t, err, "Failed to verify host interface in OVS, vmInfo %+v", vm)
 
 		var tempVM vmInfo
-		if vm.osType == windowsOS {
-			tempVM = getWindowsVMInfo(t, data, vm.nodeName)
-		} else {
-			tempVM = getVMInfo(t, data, vm.nodeName)
-		}
+		err = wait.PollImmediate(2*time.Second, 20*time.Second, func() (done bool, err error) {
+			var getVMErr error
+			if vm.osType == windowsOS {
+				tempVM, getVMErr = getWindowsVMInfo(t, data, vm.nodeName)
+			} else {
+				tempVM, getVMErr = getVMInfo(t, data, vm.nodeName)
+			}
+			if getVMErr != nil {
+				return false, getVMErr
+			}
+			vmIFs := strings.Split(tempVM.ifName, "\n")
+			if len(vmIFs) > 1 {
+				return false, nil
+			}
+			return true, nil
+		})
+		require.NoError(t, err)
 		assert.Equal(t, vm.ifName, tempVM.ifName, "Failed to verify uplink interface")
 		assert.Equal(t, vm.ip, tempVM.ip, "Failed to verify uplink IP")
 	}
@@ -349,50 +365,70 @@ func testExternalNode(t *testing.T, data *TestData, vmList []vmInfo) {
 	}
 }
 
-func getVMInfo(t *testing.T, data *TestData, nodeName string) (info vmInfo) {
-	var vm vmInfo
-	vm.nodeName = nodeName
-	var cmd string
-	cmd = "ip -o -4 route show to default | awk '{print $5}'"
-	vm.osType = linuxOS
+func getVMInfo(t *testing.T, data *TestData, nodeName string) (vmInfo, error) {
+	vm := vmInfo{nodeName: nodeName, osType: linuxOS}
+	cmd := "ip -o -4 route show to default | awk '{print $5}'"
 	rc, ifName, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
-	require.Equal(t, 0, rc, "Failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifName, stderr)
-
+	if err != nil {
+		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
+		return vm, err
+	}
+	if rc != 0 {
+		return vm, fmt.Errorf("failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifName, stderr)
+	}
 	vm.ifName = strings.TrimSpace(ifName)
+
 	cmd = fmt.Sprintf("ifconfig %s | awk '/inet / {print $2}'| sed 's/addr://'", vm.ifName)
 	rc, ifIP, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
-	require.Equal(t, 0, rc, "Failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifIP, stderr)
-
+	if err != nil {
+		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
+		return vm, err
+	}
+	if rc != 0 {
+		return vm, fmt.Errorf("failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifIP, stderr)
+	}
 	vm.ip = strings.TrimSpace(ifIP)
-	return vm
+
+	return vm, nil
 }
 
-func getWindowsVMInfo(t *testing.T, data *TestData, nodeName string) (vm vmInfo) {
+func getWindowsVMInfo(t *testing.T, data *TestData, nodeName string) (vmInfo, error) {
 	var err error
-	vm.nodeName = nodeName
-	vm.osType = windowsOS
+	vm := vmInfo{nodeName: nodeName, osType: windowsOS}
 	cmd := fmt.Sprintf("powershell 'Get-WmiObject -Class Win32_IP4RouteTable | Where { $_.destination -eq \"0.0.0.0\" -and $_.mask -eq \"0.0.0.0\"} | Sort-Object metric1 | select interfaceindex | ft -HideTableHeaders'")
 	rc, ifIndex, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
-	require.Equal(t, 0, rc, "Failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifIndex, stderr)
-
+	if err != nil {
+		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
+		return vm, err
+	}
+	if rc != 0 {
+		return vm, fmt.Errorf("failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifIndex, stderr)
+	}
 	vm.ifIndex = strings.TrimSpace(ifIndex)
+
 	cmd = fmt.Sprintf("powershell 'Get-NetAdapter -IfIndex %s | select name | ft -HideTableHeaders'", vm.ifIndex)
 	rc, ifName, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
-	require.Equal(t, 0, rc, "Failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifName, stderr)
-
+	if err != nil {
+		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
+		return vm, err
+	}
+	if rc != 0 {
+		return vm, fmt.Errorf("failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifName, stderr)
+	}
 	vm.ifName = strings.TrimSpace(ifName)
+
 	cmd = fmt.Sprintf("powershell 'Get-NetIPAddress -AddressFamily IPv4 -ifIndex %s| select IPAddress| ft -HideTableHeaders'", vm.ifIndex)
 	rc, ifIP, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
-	require.Equal(t, 0, rc, "Failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifIP, stderr)
-
+	if err != nil {
+		t.Logf("Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
+		return vm, err
+	}
+	if rc != 0 {
+		return vm, fmt.Errorf("failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifIP, stderr)
+	}
 	vm.ip = strings.TrimSpace(ifIP)
-	return vm
 
+	return vm, nil
 }
 
 func startAntreaAgent(t *testing.T, data *TestData, vm vmInfo) {
