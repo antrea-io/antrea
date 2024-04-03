@@ -199,6 +199,15 @@ The `ipRanges` field contains a list of IP ranges representing the available IPs
 of this IP pool. Each IP range may consist of a `cidr` or a pair of `start` and
 `end` IPs (which are themselves included in the range).
 
+When using a CIDR to define an IP range, it is important to keep in mind that
+the first IP in the CIDR will be excluded and will never be allocated. This is
+because when the CIDR represents a traditional subnet, the first IP is typically
+the "network IP". Additionally, for IPv4, the last IP in the CIDR, which
+traditionally represents the "broadcast IP", will also be excluded. As a result,
+providing a /32 CIDR or a /31 CIDR will yield an empty pool of IP addresses. A
+/28 CIDR will yield 14 allocatable IP addresses. In the future we may make this
+behavior configurable, so that the full CIDR can be used if desired.
+
 ### SubnetInfo
 
 By default, it's assumed that the IPs allocated from an ExternalIPPool are in

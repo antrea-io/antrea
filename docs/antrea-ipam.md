@@ -439,7 +439,17 @@ spec:
 ## `IPPool` CRD
 
 Antrea IP pools are defined with the `IPPool` CRD. The following two examples
-define an IPv4 and an IPv6 IP pool respectively.
+define an IPv4 and an IPv6 IP pool respectively. The first example (IPv4) uses a
+CIDR to define the range of allocatable IPs, while the second example uses a
+"range", with a start and end IP address. When using a CIDR, it is important to
+keep in mind that the first IP in the CIDR will be excluded and will never be
+allocated. When the CIDR represents a traditional subnet, the first IP is
+typically the "network IP". Additionally, for IPv4, when the `prefixLength`
+matches the CIDR mask size, the last IP in the CIDR, which traditionally
+represents the "broadcast IP", will also be excluded. The provided gateway IP
+will of course always be excluded. On the other hand, when using a range with a
+start and end IP address, both of these IPs will be allocatable (except if one
+of them corresponds to the gateway).
 
 ```yaml
 apiVersion: "crd.antrea.io/v1alpha2"
@@ -449,9 +459,10 @@ metadata:
 spec:
   ipVersion: 4
   ipRanges:
+  # 61 different IPs can be allocated from this pool: 64 (2^6) - 3 (network IP, broadcast IP, gateway IP).
   - cidr: "10.10.1.0/26"
     gateway: "10.10.1.1"
-    prefixLength: 24
+    prefixLength: 26
 ```
 
 ```yaml
@@ -462,6 +473,7 @@ metadata:
 spec:
   ipVersion: 6
   ipRanges:
+  # 257 different IPs can be allocated from this pool: 0x200 - 0x100 + 1.
   - start: "3ffe:ffff:1:01ff::0100"
     end: "3ffe:ffff:1:01ff::0200"
     gateway: "3ffe:ffff:1:01ff::1"
