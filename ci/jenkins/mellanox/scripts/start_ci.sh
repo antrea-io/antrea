@@ -111,7 +111,6 @@ EOF
         return $status
     fi
 
-    sudo docker tag antrea/antrea-ubuntu "$ANTREA_CNI_HARBOR_IMAGE"
     sudo docker tag antrea/antrea-agent-ubuntu "$ANTREA_AGENT_CNI_HARBOR_IMAGE"
     sudo docker tag antrea/antrea-controller-ubuntu "$ANTREA_CONTROLLER_CNI_HARBOR_IMAGE"
 

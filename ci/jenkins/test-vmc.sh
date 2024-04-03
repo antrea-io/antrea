@@ -467,7 +467,6 @@ function deliver_antrea {
             docker pull antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
         fi
         old_agent_image="antrea/antrea-ubuntu:$OLD_ANTREA_VERSION"
-        agent_image="docker.io/antrea/antrea-ubuntu"
     else
         if [[ ${DOCKER_REGISTRY} != "" ]]; then
             docker pull ${DOCKER_REGISTRY}/antrea/antrea-agent-ubuntu:$OLD_ANTREA_VERSION
