@@ -932,7 +932,7 @@ func run(o *Options) error {
 	}
 
 	// Start the node latency monitor.
-	if features.DefaultFeatureGate.Enabled(features.PingMonitoringTool) {
+	if features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) {
 		pingInterval, err := time.ParseDuration(o.config.PingMonitoringTool.PingInterval)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse ping interval")

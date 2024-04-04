@@ -2687,6 +2687,77 @@ spec:
       - anp
 
 ---
+# Source: crds/nodelatencymonitor.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nodelatencymonitors.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - pingInterval
+                - pingTimeout
+                - pingConcurrentLimit
+              properties:
+                pingInterval:
+                  type: string
+                  pattern: '^[1-9][0-9]*[smh]$'
+                  # Explanation: At least one second ("1s") or higher, optionally followed by "m" (minutes) or "h" (hours)
+                pingTimeout:
+                  type: string
+                  pattern: '^[1-9][0-9]*[smh]$'
+                  # Explanation: Same as above
+                pingConcurrentLimit:
+                  type: integer
+                  minimum: 1
+                  # Explanation: Must be a positive integer
+      additionalPrinterColumns:
+        - description: Specifies the interval between pings.
+          jsonPath: .spec.pingInterval
+          name: PingInterval
+          type: string
+        - description: Specifies the timeout for each ping.
+          jsonPath: .spec.pingTimeout
+          name: PingTimeout
+          type: string
+        - description: Specifies the concurrent limit for pings.
+          jsonPath: .spec.pingConcurrentLimit
+          name: ConcurrentLimit
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      subresources:
+        status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        metadata:
+          properties:
+            name:
+              type: string
+              pattern: '^default$'
+  scope: Cluster
+  names:
+    # plural: nodelatencymonitors
+    singular: nodelatencymonitor
+    kind: NodeLatencyMonitor
+    shortNames:
+      - nlm
+
+---
 # Source: crds/supportbundlecollection.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3636,6 +3707,9 @@ data:
 
     # Enable L7FlowExporter on Pods and Namespaces to export the application layer flows such as HTTP flows.
     #  L7FlowExporter: false
+
+    # Enable NodeLatencyMonitor to monitor the latency between Nodes.
+    #  NodeLatencyMonitor: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -4933,7 +5007,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 50f2864cf09e4732327b963130bd59a9fc06c560784b161c94e813c000367615
+        checksum/config: ce4457f4d8a5bda332dbdd877c15ad152e3bbbcb0c9626c57ccd17518e407562
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5215,7 +5289,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 50f2864cf09e4732327b963130bd59a9fc06c560784b161c94e813c000367615
+        checksum/config: ce4457f4d8a5bda332dbdd877c15ad152e3bbbcb0c9626c57ccd17518e407562
       labels:
         app: antrea
         component: antrea-controller
