@@ -28,6 +28,7 @@ type CrdV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	ExternalEntitiesGetter
 	IPPoolsGetter
+	NodeLatencyMonitorsGetter
 	TrafficControlsGetter
 }
 
@@ -42,6 +43,10 @@ func (c *CrdV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInt
 
 func (c *CrdV1alpha2Client) IPPools() IPPoolInterface {
 	return newIPPools(c)
+}
+
+func (c *CrdV1alpha2Client) NodeLatencyMonitors() NodeLatencyMonitorInterface {
+	return newNodeLatencyMonitors(c)
 }
 
 func (c *CrdV1alpha2Client) TrafficControls() TrafficControlInterface {

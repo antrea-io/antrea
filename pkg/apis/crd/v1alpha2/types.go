@@ -372,3 +372,12 @@ type NodeLatencyMonitorSpec struct {
 	// Defaults to 10. Valid range is unsigned integer.
 	PingConcurrentLimit int `json:"pingConcurrentLimit"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type NodeLatencyMonitorList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []NodeLatencyMonitor `json:"items"`
+}

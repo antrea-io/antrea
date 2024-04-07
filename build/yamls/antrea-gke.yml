@@ -2723,6 +2723,12 @@ spec:
                   type: integer
                   minimum: 1
                   # Explanation: Must be a positive integer
+            metadata:
+              type: object
+              properties:
+                name:
+                  type: string
+                  pattern: '^default$'
       additionalPrinterColumns:
         - description: Specifies the interval between pings.
           jsonPath: .spec.pingInterval
@@ -2741,17 +2747,9 @@ spec:
           type: date
       subresources:
         status: {}
-  validation:
-    openAPIV3Schema:
-      properties:
-        metadata:
-          properties:
-            name:
-              type: string
-              pattern: '^default$'
   scope: Cluster
   names:
-    # plural: nodelatencymonitors
+    plural: nodelatencymonitors
     singular: nodelatencymonitor
     kind: NodeLatencyMonitor
     shortNames:
@@ -4333,6 +4331,7 @@ rules:
       - externalippools
       - ippools
       - trafficcontrols
+      - nodelatencymonitors
     verbs:
       - get
       - watch

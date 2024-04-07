@@ -20,4 +20,6 @@ type ExternalEntityExpansion interface{}
 
 type IPPoolExpansion interface{}
 
+type NodeLatencyMonitorExpansion interface{}
+
 type TrafficControlExpansion interface{}

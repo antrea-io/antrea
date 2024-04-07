@@ -29,9 +29,12 @@ type LatencyStore struct {
 	// Maybe we need to use small lock for the map
 	mutex sync.RWMutex
 
-	nodeInformer  coreinformers.NodeInformer
+	// The map of node name to node info, it will changed to gw0 watcher
+	nodeInformer coreinformers.NodeInformer
+	// The map of node ip to connection
 	connectionMap map[string]*Connection
-	nodeInfoMap   map[string]*corev1.Node
+	// The map of node ip to node name
+	nodeIPMap map[string]string
 }
 
 // TODO1: use LRU cache to store the latency of the connection?
@@ -54,13 +57,13 @@ type Connection struct {
 func NewLatencyStore(nodeInformer coreinformers.NodeInformer) *LatencyStore {
 	store := &LatencyStore{
 		connectionMap: make(map[string]*Connection),
-		nodeInfoMap:   make(map[string]*corev1.Node),
+		nodeIPMap:     make(map[string]string),
 		nodeInformer:  nodeInformer,
 	}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    store.OnNodeAdd,
-		UpdateFunc: store.OnNodeUpdate,
-		DeleteFunc: store.OnNodeDelete,
+		AddFunc:    store.onNodeAdd,
+		UpdateFunc: store.onNodeUpdate,
+		DeleteFunc: store.onNodeDelete,
 	})
 
 	return store
@@ -70,20 +73,25 @@ func (l *LatencyStore) Run(stopCh <-chan struct{}) {
 	l.nodeInformer.Informer().Run(stopCh)
 }
 
-func (l *LatencyStore) OnNodeAdd(obj interface{}) {
+func (l *LatencyStore) onNodeAdd(obj interface{}) {
 	node := obj.(*corev1.Node)
-	l.AddNodeToMap(node)
+	l.addNode(node)
 }
 
-func (l *LatencyStore) OnNodeUpdate(oldObj, newObj interface{}) {
+func (l *LatencyStore) onNodeUpdate(oldObj, newObj interface{}) {
 	oldNode := oldObj.(*corev1.Node)
 	node := newObj.(*corev1.Node)
-	l.UpdateNodeByKey(oldNode.Name, node)
+	l.updateNode(oldNode, node)
 }
 
-func (l *LatencyStore) OnNodeDelete(obj interface{}) {
-	node := obj.(*corev1.Node)
-	l.DeleteNodeByKey(node.Name)
+func (l *LatencyStore) onNodeDelete(obj interface{}) {
+	// Check if the object is a not a node
+	node, ok := obj.(*corev1.Node)
+	if !ok {
+		return
+	}
+
+	l.deleteNode(node)
 }
 
 func (l *LatencyStore) GetConnByKey(connKey string) (*Connection, bool) {
@@ -122,61 +130,60 @@ func (l *LatencyStore) ListConns() map[string]*Connection {
 	return l.connectionMap
 }
 
-func (l *LatencyStore) AddNodeToMap(node *corev1.Node) {
-	l.nodeInfoMap[node.Name] = node
-}
-
-func (l *LatencyStore) GetNodeByKey(nodeKey string) (*corev1.Node, bool) {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
-
-	node, found := l.nodeInfoMap[nodeKey]
-
-	return node, found
-}
-
-func (l *LatencyStore) DeleteNodeByKey(nodeKey string) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	// Delete the node from the node info map
-	delete(l.nodeInfoMap, nodeKey)
-	// Delete the node from the connection map
-	delete(l.connectionMap, nodeKey)
-}
-
-func (l *LatencyStore) UpdateNodeByKey(nodeKey string, node *corev1.Node) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	l.nodeInfoMap[nodeKey] = node
-}
-
-func (l *LatencyStore) ListNodes() []corev1.Node {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
-
-	nodes := make([]corev1.Node, 0, len(l.nodeInfoMap))
-	for _, node := range l.nodeInfoMap {
-		nodes = append(nodes, *node)
+func (l *LatencyStore) addNode(node *corev1.Node) {
+	// Add first ip address to the map
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
+			if net.ParseIP(addr.Address) != nil {
+				l.nodeIPMap[addr.Address] = node.Name
+				break
+			}
+		}
 	}
-
-	return nodes
 }
 
-func (l *LatencyStore) ListNodeIPs() map[string]string {
-	nodes := l.ListNodes()
-	nodeIPs := make(map[string]string)
+func (l *LatencyStore) deleteNode(node *corev1.Node) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 
-	for _, node := range nodes {
-		for _, addr := range node.Status.Addresses {
-			if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
-				if net.ParseIP(addr.Address) != nil {
-					nodeIPs[addr.Address] = node.Name
-				}
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
+			if net.ParseIP(addr.Address) != nil {
+				// Delete the node from the node IP map
+				delete(l.nodeIPMap, addr.Address)
+				// Delete the node from the connection map
+				delete(l.connectionMap, addr.Address)
+			}
+		}
+	}
+}
+
+func (l *LatencyStore) updateNode(old *corev1.Node, new *corev1.Node) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	// Delete the old node from the node IP map
+	for _, addr := range old.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
+			if net.ParseIP(addr.Address) != nil {
+				delete(l.nodeIPMap, addr.Address)
 			}
 		}
 	}
 
-	return nodeIPs
+	// Add the new node to the node IP map
+	for _, addr := range new.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
+			if net.ParseIP(addr.Address) != nil {
+				l.nodeIPMap[addr.Address] = new.Name
+			}
+		}
+	}
+}
+
+func (l *LatencyStore) ListNodeIPs() map[string]string {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	return l.nodeIPMap
 }
