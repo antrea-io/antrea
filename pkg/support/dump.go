@@ -43,6 +43,8 @@ import (
 type AgentDumper interface {
 	// DumpFlows should create files that contains flows under the basedir.
 	DumpFlows(basedir string) error
+	// DumpGroups should create files that contains groups under the basedir
+	DumpGroups(basedir string) error
 	// DumpHostNetworkInfo should create files that contains host network
 	// information under the basedir. Host network information should include
 	// links, routes, addresses and etc.
@@ -328,6 +330,14 @@ func (d *agentDumper) DumpFlows(basedir string) error {
 		return fmt.Errorf("error when dumping flows: %w", err)
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "flows"), "flows", []byte(strings.Join(flows, "\n")))
+}
+
+func (d *agentDumper) DumpGroups(basedir string) error {
+	groups, err := d.ovsCtlClient.DumpGroups()
+	if err != nil {
+		return fmt.Errorf("error when dumping groups: %w", err)
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "groups"), "groups", []byte(strings.Join(groups, "\n")))
 }
 
 func (d *agentDumper) DumpHeapPprof(basedir string) error {

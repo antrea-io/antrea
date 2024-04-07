@@ -266,6 +266,7 @@ func (r *supportBundleREST) collectAgent(ctx context.Context, since string) (*sy
 		dumper.DumpLog,
 		dumper.DumpHostNetworkInfo,
 		dumper.DumpFlows,
+		dumper.DumpGroups,
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpAgentInfo,
 		dumper.DumpHeapPprof,
