@@ -92,6 +92,6 @@ func (monitor *agentMonitor) getAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
 func (monitor *agentMonitor) updateAgentCRD(partial bool) (*v1beta1.AntreaAgentInfo, error) {
 	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
 	monitor.agentCRD.APICABundle = monitor.apiCertData
-	klog.V(2).Infof("Updating agent monitoring CRD %+v, partial: %t", monitor.agentCRD, partial)
+	klog.V(2).InfoS("Updating agent monitoring CRD", "name", klog.KObj(monitor.agentCRD), "partial", partial)
 	return monitor.client.CrdV1beta1().AntreaAgentInfos().Update(context.TODO(), monitor.agentCRD, metav1.UpdateOptions{})
 }
