@@ -256,6 +256,9 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 	if err = agentDumper.DumpFlows(basedir); err != nil {
 		return err
 	}
+	if err = agentDumper.DumpGroups(basedir); err != nil {
+		return err
+	}
 	if err = agentDumper.DumpNetworkPolicyResources(basedir); err != nil {
 		return err
 	}
