@@ -159,7 +159,7 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			name:                    "SupportBundleCollection failed to dump groups",
 			supportBundleCollection: generateSupportbundleCollection("supportBundle13", "sftp://10.220.175.92:22/root/supportbundle"),
 			expectedCompleted:       false,
-			agentDumper:             &mockAgentDumper{dumpGoroutinePprofErr: fmt.Errorf("failed to dump groups")},
+			agentDumper:             &mockAgentDumper{dumpGroupsErr: fmt.Errorf("failed to dump groups")},
 			uploader:                &testUploader{},
 		},
 	}
