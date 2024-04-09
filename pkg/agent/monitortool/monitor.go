@@ -32,6 +32,7 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
+	config "antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 )
@@ -62,6 +63,8 @@ func getICMPSeq() uint16 {
 
 // MonitorTool is a tool to monitor the latency of the node.
 type MonitorTool struct {
+	// Gateway config
+	gatewayConfig *config.GatewayConfig
 	// latencyStore is the cache to store the latency of each nodes.
 	latencyStore *LatencyStore
 	// latencyConfig is the config for the latency monitor.
@@ -86,8 +89,10 @@ type LatencyConfig struct {
 }
 
 func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
-	nlmInformer crdinformers.NodeLatencyMonitorInformer) *MonitorTool {
+	nlmInformer crdinformers.NodeLatencyMonitorInformer,
+	gatewayConfig *config.GatewayConfig) *MonitorTool {
 	m := &MonitorTool{
+		gatewayConfig:              gatewayConfig,
 		latencyStore:               NewLatencyStore(nodeInformer),
 		latencyConfig:              &LatencyConfig{Enable: false},
 		latencyConfigChanged:       make(chan struct{}, 1),
@@ -188,7 +193,12 @@ func (m *MonitorTool) pingAll() {
 	nodeIPs := m.latencyStore.ListNodeIPs()
 
 	// TODO: Get current node internal/external IP.
-	fromIP := ""
+	var fromIP string
+	if m.gatewayConfig.IPv4 != nil {
+		fromIP = m.gatewayConfig.IPv4.String()
+	} else {
+		fromIP = m.gatewayConfig.IPv6.String()
+	}
 
 	// A simple rate limiter
 	limiter := getRate(len(nodeIPs), m.latencyConfig.Interval, m.latencyConfig.Limit)
@@ -196,7 +206,7 @@ func (m *MonitorTool) pingAll() {
 
 	klog.InfoS("Start to ping all nodes")
 	wg := sync.WaitGroup{}
-	for toIP, name := range nodeIPs {
+	for name, toIP := range nodeIPs {
 		limitGroup <- true
 		limiter.Wait(context.Background())
 		wg.Add(1)

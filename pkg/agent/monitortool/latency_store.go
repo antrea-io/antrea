@@ -15,12 +15,15 @@
 package monitortool
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/containernetworking/plugins/pkg/ip"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	coreinformers "k8s.io/client-go/informers/core/v1"
 )
@@ -34,11 +37,10 @@ type LatencyStore struct {
 	// The map of node ip to connection
 	connectionMap map[string]*Connection
 	// The map of node ip to node name
-	nodeIPMap map[string]string
+	nodeGW0Map map[string]string
 }
 
 // TODO1: use LRU cache to store the latency of the connection?
-// TODO2: we only support ipv4 now
 type Connection struct {
 	// The source IP of the connection
 	FromIP string
@@ -57,7 +59,7 @@ type Connection struct {
 func NewLatencyStore(nodeInformer coreinformers.NodeInformer) *LatencyStore {
 	store := &LatencyStore{
 		connectionMap: make(map[string]*Connection),
-		nodeIPMap:     make(map[string]string),
+		nodeGW0Map:    make(map[string]string),
 		nodeInformer:  nodeInformer,
 	}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -131,59 +133,86 @@ func (l *LatencyStore) ListConns() map[string]*Connection {
 }
 
 func (l *LatencyStore) addNode(node *corev1.Node) {
-	// Add first ip address to the map
-	for _, addr := range node.Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
-			if net.ParseIP(addr.Address) != nil {
-				l.nodeIPMap[addr.Address] = node.Name
-				break
-			}
-		}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	gw0IP, err := getGW0IP(node)
+	if err != nil {
+		return
 	}
+
+	// Add the node to the node IP map
+	l.nodeGW0Map[node.Name] = gw0IP
 }
 
 func (l *LatencyStore) deleteNode(node *corev1.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	for _, addr := range node.Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
-			if net.ParseIP(addr.Address) != nil {
-				// Delete the node from the node IP map
-				delete(l.nodeIPMap, addr.Address)
-				// Delete the node from the connection map
-				delete(l.connectionMap, addr.Address)
-			}
-		}
-	}
+	// Delete the node from the node IP map
+	delete(l.nodeGW0Map, node.Name)
+	// Delete the node from the connection map
+	delete(l.connectionMap, node.Name)
 }
 
 func (l *LatencyStore) updateNode(old *corev1.Node, new *corev1.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	// Delete the old node from the node IP map
-	for _, addr := range old.Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
-			if net.ParseIP(addr.Address) != nil {
-				delete(l.nodeIPMap, addr.Address)
-			}
+	gw0IP, err := getGW0IP(new)
+	if err != nil {
+		return
+	}
+
+	// Update the new node to the node IP map
+	l.nodeGW0Map[new.Name] = gw0IP
+}
+
+func getGW0IP(node *corev1.Node) (string, error) {
+	podCIDRStrs := getPodCIDRsOnNode(node)
+	if len(podCIDRStrs) == 0 {
+		// Skip the node if it does not have a PodCIDR.
+		klog.Warningf("Node %s does not have a PodCIDR", node.Name)
+		return "", errors.New("node does not have a PodCIDR")
+	}
+
+	for _, podCIDR := range podCIDRStrs {
+		if podCIDR == "" {
+			klog.Errorf("PodCIDR is empty for Node %s", node.Name)
+		}
+
+		peerPodCIDRAddr, _, err := net.ParseCIDR(podCIDR)
+		if err != nil {
+			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, node.Name)
+			continue
+		}
+
+		// Add first ip in CIDR to the map
+		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
+		if peerGatewayIP.To4() != nil && peerGatewayIP.To16() != nil {
+			return peerGatewayIP.String(), nil
 		}
 	}
 
-	// Add the new node to the node IP map
-	for _, addr := range new.Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
-			if net.ParseIP(addr.Address) != nil {
-				l.nodeIPMap[addr.Address] = new.Name
-			}
-		}
+	klog.Warningf("Node %s does not have a valid PodCIDR", node.Name)
+	return "", errors.New("node does not have a valid PodCIDR")
+}
+
+func getPodCIDRsOnNode(node *corev1.Node) []string {
+	if node.Spec.PodCIDRs != nil {
+		return node.Spec.PodCIDRs
 	}
+
+	if node.Spec.PodCIDR == "" {
+		// Does not help to return an error and trigger controller retries.
+		return nil
+	}
+	return []string{node.Spec.PodCIDR}
 }
 
 func (l *LatencyStore) ListNodeIPs() map[string]string {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	return l.nodeIPMap
+	return l.nodeGW0Map
 }

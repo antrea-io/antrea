@@ -47,12 +47,8 @@ var (
 	connectionMap = map[string]*Connection{
 		"127.0.0.1": conn,
 	}
-	nodeIPMap = map[string]string{
+	nodeGW0Map = map[string]string{
 		"127.0.0.1": "TestNode",
-	}
-	latencyStore = &LatencyStore{
-		connectionMap: connectionMap,
-		nodeIPMap:     nodeIPMap,
 	}
 )
 
@@ -60,7 +56,7 @@ func TestNewLatencyStore(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	latencyStore = NewLatencyStore(nodeInformer)
+	_ = NewLatencyStore(nodeInformer)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -93,6 +89,10 @@ func TestNewLatencyStore(t *testing.T) {
 }
 
 func TestLatencyStore_GetConnByKey(t *testing.T) {
+	latencyStore := &LatencyStore{
+		connectionMap: connectionMap,
+		nodeGW0Map:    nodeGW0Map,
+	}
 	tests := []struct {
 		key          string
 		expectedConn *Connection
@@ -120,6 +120,10 @@ func TestLatencyStore_GetConnByKey(t *testing.T) {
 }
 
 func TestLatencyStore_DeleteConnByKey(t *testing.T) {
+	latencyStore := &LatencyStore{
+		connectionMap: connectionMap,
+		nodeGW0Map:    nodeGW0Map,
+	}
 	tests := []struct {
 		key          string
 		expectedConn *Connection
@@ -143,6 +147,10 @@ func TestLatencyStore_DeleteConnByKey(t *testing.T) {
 }
 
 func TestLatencyStore_UpdateConnByKey(t *testing.T) {
+	latencyStore := &LatencyStore{
+		connectionMap: connectionMap,
+		nodeGW0Map:    nodeGW0Map,
+	}
 	tests := []struct {
 		key          string
 		updatedConn  *Connection
@@ -164,11 +172,21 @@ func TestLatencyStore_UpdateConnByKey(t *testing.T) {
 }
 
 func TestLatencyStore_ListConns(t *testing.T) {
+	latencyStore := &LatencyStore{
+		connectionMap: connectionMap,
+		nodeGW0Map:    nodeGW0Map,
+	}
+
 	conns := latencyStore.ListConns()
 	assert.Equal(t, connectionMap, conns)
 }
 
 func TestLatencyStore_ListNodeIPs(t *testing.T) {
+	latencyStore := &LatencyStore{
+		connectionMap: connectionMap,
+		nodeGW0Map:    nodeGW0Map,
+	}
+
 	nodeIPs := latencyStore.ListNodeIPs()
-	assert.Equal(t, nodeIPMap, nodeIPs)
+	assert.Equal(t, nodeGW0Map, nodeIPs)
 }

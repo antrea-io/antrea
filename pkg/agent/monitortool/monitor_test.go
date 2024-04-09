@@ -53,14 +53,14 @@ var (
 	latencyConfig3 = &LatencyConfig{
 		Enable: false,
 	}
-	monitorTool = &MonitorTool{
+)
+
+func TestMonitorTool_onNodeLatencyMonitorAdd(t *testing.T) {
+	monitorTool := &MonitorTool{
 		// Buffer size is 10 to avoid blocking
 		latencyConfigChanged: make(chan struct{}, 10),
 		latencyConfig:        latencyConfig1,
 	}
-)
-
-func TestMonitorTool_onNodeLatencyMonitorAdd(t *testing.T) {
 	tests := []struct {
 		nodeLatencyMonitor *v1alpha2.NodeLatencyMonitor
 		expected           *LatencyConfig
@@ -82,6 +82,11 @@ func TestMonitorTool_onNodeLatencyMonitorAdd(t *testing.T) {
 }
 
 func TestMonitorTool_onNodeLatencyMonitorUpdate(t *testing.T) {
+	monitorTool := &MonitorTool{
+		// Buffer size is 10 to avoid blocking
+		latencyConfigChanged: make(chan struct{}, 10),
+		latencyConfig:        latencyConfig1,
+	}
 	tests := []struct {
 		oldNodeLatencyMonitor *v1alpha2.NodeLatencyMonitor
 		newNodeLatencyMonitor *v1alpha2.NodeLatencyMonitor
@@ -101,6 +106,11 @@ func TestMonitorTool_onNodeLatencyMonitorUpdate(t *testing.T) {
 }
 
 func TestMonitorTool_onNodeLatencyMonitorDelete(t *testing.T) {
+	monitorTool := &MonitorTool{
+		// Buffer size is 10 to avoid blocking
+		latencyConfigChanged: make(chan struct{}, 10),
+		latencyConfig:        latencyConfig1,
+	}
 	tests := []struct {
 		nodeLatencyMonitor *v1alpha2.NodeLatencyMonitor
 		expected           *LatencyConfig
