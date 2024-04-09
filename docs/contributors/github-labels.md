@@ -79,6 +79,7 @@ The labels in this list originated within Kubernetes at
 | area/transit/ipv6                  | Issues or PRs related to IPv6 | Any |
 | area/transit/qos                   | Issues or PRs related to transit qos or policing | Any |
 | area/transit/routing               | Issues or PRs related to routing and forwarding | Any |
+| area/transit/bgp                   | Issues or PRs related to BGP support | Any |
 | kind/api-change                    | Categorizes issue or PR as related to adding, removing, or otherwise changing an API. | Any |
 | kind/bug                           | Categorizes issue or PR as related to a bug.              | Any                |
 | kind/cherry-pick                   | Categorizes issue or PR as related to the cherry-pick of a bug fix from the main branch to a release branch | Any |
