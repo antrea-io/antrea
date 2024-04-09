@@ -60,17 +60,15 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 	}
 	datapathID := "0000" + strings.Replace(macAddr.String(), ":", "", -1)
 	nodeConfig := &config.NodeConfig{
-		UplinkNetConfig: new(config.AdapterNetConfig),
+		UplinkNetConfig: &config.AdapterNetConfig{},
 		NodeIPv4Addr:    nodeIPNet,
 	}
 
 	tests := []struct {
-		name                        string
-		connectUplinkToBridge       bool
-		expectedCalls               func(m *ovsconfigtest.MockOVSBridgeClient)
-		expectedHostInterfaceOFPort uint32
-		expectedUplinkOFPort        uint32
-		expectedErr                 string
+		name                  string
+		connectUplinkToBridge bool
+		expectedCalls         func(m *ovsconfigtest.MockOVSBridgeClient)
+		expectedErr           string
 	}{
 		{
 			name: "connectUplinkToBridge is false, do nothing",
@@ -84,27 +82,23 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			expectedErr: fmt.Sprintf("failed to set datapath_id %s: err=unable to set datapath_id", datapathID),
 		},
 		{
-			name:                  "local port does not exist, allocate it",
+			name:                  "local port does not exist",
 			connectUplinkToBridge: true,
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().SetDatapathID(datapathID).Return(nil)
 				m.EXPECT().GetOFPort(ipDevice.Name, false).Return(int32(0), ovsconfig.InvalidArgumentsError("interface not found"))
-				m.EXPECT().AllocateOFPort(config.UplinkOFPort).Return(int32(2), nil)
-				m.EXPECT().AllocateOFPort(config.UplinkOFPort).Return(int32(3), nil)
 			},
-			expectedUplinkOFPort:        2,
-			expectedHostInterfaceOFPort: 3,
 		},
 		{
 			name:                  "uplink interface found",
 			connectUplinkToBridge: true,
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().SetDatapathID(datapathID).Return(nil)
-				m.EXPECT().GetOFPort(ipDevice.Name, false).Return(int32(2), nil)
-				m.EXPECT().GetOFPort(ipDevice.Name+"~", false).Return(int32(3), nil)
+				mock.InOrder(
+					m.EXPECT().GetOFPort(ipDevice.Name, false).Return(int32(config.DefaultHostInterfaceOFPort), nil),
+					m.EXPECT().GetOFPort(ipDevice.Name+"~", false).Return(int32(config.DefaultUplinkOFPort), nil),
+				)
 			},
-			expectedHostInterfaceOFPort: 2,
-			expectedUplinkOFPort:        3,
 		},
 	}
 
@@ -129,8 +123,8 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				if tt.connectUplinkToBridge {
-					assert.Equal(t, tt.expectedUplinkOFPort, initializer.nodeConfig.UplinkNetConfig.OFPort)
-					assert.Equal(t, tt.expectedHostInterfaceOFPort, initializer.nodeConfig.HostInterfaceOFPort)
+					assert.EqualValues(t, config.DefaultUplinkOFPort, initializer.nodeConfig.UplinkNetConfig.OFPort)
+					assert.EqualValues(t, config.DefaultHostInterfaceOFPort, initializer.nodeConfig.HostInterfaceOFPort)
 				}
 			}
 		})

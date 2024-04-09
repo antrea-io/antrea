@@ -197,6 +197,7 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 			PodIPv4CIDR: &net.IPNet{
 				IP: net.ParseIP("10.10.0.0"),
 			},
+			TunnelOFPort: config.DefaultTunOFPort,
 		},
 		networkConfig,
 		agent.WireGuardConfig{},
@@ -223,7 +224,7 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 			&gateway4, metav1.CreateOptions{})
 		c.wireGuardClient.EXPECT().CleanUp().AnyTimes()
 		c.wireGuardClient.EXPECT().Init(net.ParseIP("10.100.0.0"), nil)
-		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), true).Times(1)
+		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(config.DefaultTunOFPort), true).Times(1)
 		c.processNextWorkItem()
 		c.processNextWorkItem()
 
@@ -256,7 +257,10 @@ func TestMCRouteControllerAsWireGuardGateway(t *testing.T) {
 func TestMCRouteControllerAsGateway(t *testing.T) {
 	c := newMCDefaultRouteController(
 		t,
-		&config.NodeConfig{Name: "node-1"},
+		&config.NodeConfig{
+			Name:         "node-1",
+			TunnelOFPort: config.DefaultTunOFPort,
+		},
 		&config.NetworkConfig{},
 		agent.WireGuardConfig{},
 		nil,
@@ -277,7 +281,7 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 		// Create Gateway1
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway1.GetNamespace()).Create(context.TODO(),
 			&gateway1, metav1.CreateOptions{})
-		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), true).Times(1)
+		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(config.DefaultTunOFPort), true).Times(1)
 		c.processNextWorkItem()
 
 		// Create two ClusterInfoImports
@@ -335,7 +339,7 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 		// Create Gateway2 as active Gateway
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway2.GetNamespace()).Create(context.TODO(),
 			&gateway2, metav1.CreateOptions{})
-		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), false).Times(1)
+		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(config.DefaultTunOFPort), false).Times(1)
 		c.ofClient.EXPECT().InstallMulticlusterNodeFlows(clusterInfoImport1.Name, gomock.Any(), gw2InternalIP, true).Times(1)
 		c.processNextWorkItem()
 	}()
@@ -349,7 +353,10 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 func TestMCRouteControllerAsRegularNode(t *testing.T) {
 	c := newMCDefaultRouteController(
 		t,
-		&config.NodeConfig{Name: "node-3"},
+		&config.NodeConfig{
+			Name:         "node-3",
+			TunnelOFPort: config.DefaultTunOFPort,
+		},
 		&config.NetworkConfig{},
 		agent.WireGuardConfig{},
 		nil,
@@ -372,7 +379,7 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 		// Create Gateway1
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway1.GetNamespace()).Create(context.TODO(),
 			&gateway1, metav1.CreateOptions{})
-		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), false).Times(1)
+		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(config.DefaultTunOFPort), false).Times(1)
 		c.processNextWorkItem()
 
 		// Create two ClusterInfoImports
@@ -428,7 +435,7 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 		// Create Gateway2 as the active Gateway
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway2.GetNamespace()).Create(context.TODO(),
 			&gateway2, metav1.CreateOptions{})
-		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), false).Times(1)
+		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(config.DefaultTunOFPort), false).Times(1)
 		c.ofClient.EXPECT().InstallMulticlusterNodeFlows(clusterInfoImport1.Name, gomock.Any(), peerNodeIP2, true).Times(1)
 		c.processNextWorkItem()
 	}()

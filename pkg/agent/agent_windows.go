@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
@@ -232,44 +233,36 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	if _, err = i.ovsBridgeClient.GetOFPort(brName, false); err == nil {
 		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
 	} else {
-		// OVS does not receive "ofport_request" param when creating local port, so here use config.AutoAssignedOFPort=0
-		// to ignore this param.
+		// OVS does not receive "ofport_request" param when creating local port, so here use
+		// ovsconfig.AutoAssignedOFPort (0).
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 		}
-		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, "", externalIDs); err != nil {
+		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, ovsconfig.AutoAssignedOFPort, "", externalIDs); err != nil {
 			return err
 		}
 	}
 
-	// If uplink is already exists, return.
+	// If uplink already exists, return.
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
 	if ofport, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
-		klog.InfoS("Uplink already exists, skip the configuration", "uplink", uplink, "port", ofport)
+		klog.InfoS("Uplink already exists, skip the configuration", "uplink", uplink, "ofPort", ofport)
 		i.nodeConfig.UplinkNetConfig.OFPort = uint32(ofport)
-		i.nodeConfig.HostInterfaceOFPort = config.BridgeOFPort
+		i.nodeConfig.HostInterfaceOFPort = ovsconfig.BridgeOFPort
 		return nil
 	}
 	// Create uplink port.
-	freePort, err := i.ovsBridgeClient.AllocateOFPort(config.UplinkOFPort)
-	if err != nil {
-		klog.ErrorS(err, "Failed to find a free port on OVS")
-		return err
-	}
+	const uplinkOFPort = config.DefaultUplinkOFPort
 	var uplinkPortUUID string
-	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, freePort, nil)
+	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, uplinkOFPort, nil)
 	if err != nil {
 		klog.Errorf("Failed to add uplink port %s: %v", uplink, err)
 		return err
 	}
-	uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(uplink, false)
-	if err != nil {
-		return fmt.Errorf("failed to get uplink ofport %s: err=%w", uplink, err)
-	}
 	klog.InfoS("Allocated OpenFlow port for uplink interface", "port", uplink, "ofPort", uplinkOFPort)
 	i.nodeConfig.UplinkNetConfig.OFPort = uint32(uplinkOFPort)
-	i.nodeConfig.HostInterfaceOFPort = config.BridgeOFPort
+	i.nodeConfig.HostInterfaceOFPort = ovsconfig.BridgeOFPort
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
 	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUID, uplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)

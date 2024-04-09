@@ -156,7 +156,10 @@ func run(o *Options) error {
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
-	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
+	// WithRequiredPortExternalIDs will ensure that whenever we create a port, the required
+	// external ID (interface type) is provided. This is a sanity check to ensure code
+	// correctness.
+	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection, ovsconfig.WithRequiredPortExternalIDs(interfacestore.AntreaInterfaceTypeKey))
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	multicastEnabled := features.DefaultFeatureGate.Enabled(features.Multicast) && o.config.Multicast.Enable

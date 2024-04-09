@@ -464,7 +464,6 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=201,reg1=0x2 actions=conjunction(13,2/3)",
 				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=100,reg1=0x3 actions=conjunction(11,2/3)",
 				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=200,ip,nw_src=192.168.1.40 actions=conjunction(12,1/3)",
-
 				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=100,tcp,tp_src=32800 actions=conjunction(14,3/3)",
 				"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x1,tun_id=16777215 actions=drop",
 				"cookie=0x1020000000000, table=IngressDefaultRule, priority=200,reg1=0x2,tun_id=16777215 actions=drop",

@@ -39,6 +39,8 @@ var UDSAddress string
 var bridgeName string
 
 type testData struct {
+	requiredPortExternalIDs []string
+
 	ovsdb *ovsdb.OVSDB
 	br    *ovsconfig.OVSBridge
 }
@@ -60,10 +62,14 @@ func (data *testData) setup(t *testing.T) {
 		t.Fatalf("Could not establish connection to %s after %s", UDSAddress, defaultConnectTimeout)
 	}
 
+	brOptions := []ovsconfig.OVSBridgeOption{}
+	if len(data.requiredPortExternalIDs) > 0 {
+		brOptions = append(brOptions, ovsconfig.WithRequiredPortExternalIDs(data.requiredPortExternalIDs...))
+	}
 	// using the netdev datapath type does not impact test coverage but
 	// ensures that the integration tests can be run with Docker Desktop on
 	// macOS.
-	brClient := ovsconfig.NewOVSBridge(bridgeName, "netdev", data.ovsdb)
+	brClient := ovsconfig.NewOVSBridge(bridgeName, "netdev", data.ovsdb, brOptions...)
 	data.br = brClient.(*ovsconfig.OVSBridge)
 	err = data.br.Create()
 	require.Nil(t, err, "Failed to create bridge %s", bridgeName)
@@ -142,6 +148,29 @@ func TestOVSBridge(t *testing.T) {
 	deleteAllPorts(t, data.br)
 
 	checkPorts(0)
+}
+
+// TestOVSCreatePortRequiredExternalIDs verifies that port creation fails when a required externalID
+// (the list is provided when creating the bridge client) is missing.
+func TestOVSCreatePortRequiredExternalIDs(t *testing.T) {
+	data := &testData{
+		requiredPortExternalIDs: []string{"k1"},
+	}
+	data.setup(t)
+	defer data.teardown(t)
+
+	deleteAllPorts(t, data.br)
+
+	name := "p1"
+	externalIDs := map[string]interface{}{}
+	_, err := data.br.CreatePort(name, name, externalIDs)
+	require.ErrorContains(t, err, "missing required externalID")
+
+	externalIDs["k1"] = "v1"
+	_, err = data.br.CreatePort(name, name, externalIDs)
+	assert.NoError(t, err)
+
+	deleteAllPorts(t, data.br)
 }
 
 // TestOVSDeletePortIdempotent verifies that calling DeletePort on a non-existent port does not
