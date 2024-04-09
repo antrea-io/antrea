@@ -213,6 +213,10 @@ func (f *fakeAgentDumper) DumpFlows(basedir string) error {
 	return f.returnErr
 }
 
+func (f *fakeAgentDumper) DumpGroups(basedir string) error {
+	return f.returnErr
+}
+
 func (f *fakeAgentDumper) DumpHostNetworkInfo(basedir string) error {
 	return f.returnErr
 }
