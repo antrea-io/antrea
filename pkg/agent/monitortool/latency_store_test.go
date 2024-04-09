@@ -16,6 +16,7 @@ package monitortool
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -29,26 +30,24 @@ import (
 
 var (
 	conn = &Connection{
-		FromIP:      "127.0.0.1",
-		ToIP:        "127.0.0.1",
+		ToIP:        net.ParseIP("10.244.2.1"),
 		Latency:     1 * time.Second,
 		Status:      true,
 		LastUpdated: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 	conn2 = &Connection{
-		FromIP:      "127.0.0.2",
-		ToIP:        "127.0.0.2",
-		Latency:     1 * time.Second,
+		ToIP:        net.ParseIP("10.244.2.1"),
+		Latency:     2 * time.Second,
 		Status:      true,
 		LastUpdated: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	connectionMap = map[string]*Connection{
-		"127.0.0.1": conn,
+	connectionMap = map[string][]*Connection{
+		"node1": {conn},
 	}
-	nodeGW0Map = map[string]string{
-		"127.0.0.1": "TestNode",
+	nodeGW0Map = map[string][]net.IP{
+		"node1": {net.ParseIP("10.244.2.1")},
 	}
 )
 
@@ -56,7 +55,7 @@ func TestNewLatencyStore(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	_ = NewLatencyStore(nodeInformer)
+	_ = NewLatencyStore(nodeInformer, false)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -95,27 +94,28 @@ func TestLatencyStore_GetConnByKey(t *testing.T) {
 	}
 	tests := []struct {
 		key          string
-		expectedConn *Connection
+		expectedConn []*Connection
 	}{
 		{
-			key:          "127.0.0.1",
-			expectedConn: conn,
+			key:          "node1",
+			expectedConn: []*Connection{conn},
 		},
 		{
-			key:          "127.0.0.2",
+			key:          "node2",
 			expectedConn: nil,
 		},
 	}
 
 	for _, tt := range tests {
-		conn, found := latencyStore.GetConnByKey(tt.key)
-		assert.Equal(t, tt.expectedConn, conn)
-
-		if tt.expectedConn == nil {
-			assert.False(t, found)
-		} else {
-			assert.True(t, found)
-		}
+		t.Run(tt.key, func(t *testing.T) {
+			conns, found := latencyStore.GetConnsByKey(tt.key)
+			assert.Equal(t, tt.expectedConn, conns)
+			if tt.expectedConn == nil {
+				assert.False(t, found)
+			} else {
+				assert.True(t, found)
+			}
+		})
 	}
 }
 
@@ -129,20 +129,22 @@ func TestLatencyStore_DeleteConnByKey(t *testing.T) {
 		expectedConn *Connection
 	}{
 		{
-			key:          "127.0.0.1",
+			key:          "node1",
 			expectedConn: conn,
 		},
 		{
-			key:          "127.0.0.2",
+			key:          "node2",
 			expectedConn: nil,
 		},
 	}
 
 	for _, tt := range tests {
-		latencyStore.DeleteConnByKey(tt.key)
-		conn, found := latencyStore.GetConnByKey(tt.key)
-		assert.Nil(t, conn)
-		assert.False(t, found)
+		t.Run(tt.key, func(t *testing.T) {
+			latencyStore.DeleteConnsByKey(tt.key)
+			conn, found := latencyStore.GetConnsByKey(tt.key)
+			assert.Nil(t, conn)
+			assert.False(t, found)
+		})
 	}
 }
 
@@ -154,20 +156,22 @@ func TestLatencyStore_UpdateConnByKey(t *testing.T) {
 	tests := []struct {
 		key          string
 		updatedConn  *Connection
-		expectedConn *Connection
+		expectedConn []*Connection
 	}{
 		{
-			key:          "127.0.0.1",
+			key:          "node1",
 			updatedConn:  conn2,
-			expectedConn: conn2,
+			expectedConn: []*Connection{conn2},
 		},
 	}
 
 	for _, tt := range tests {
-		latencyStore.UpdateConnByKey(tt.key, tt.updatedConn)
-		conn, found := latencyStore.GetConnByKey(tt.key)
-		assert.Equal(t, tt.updatedConn, conn)
-		assert.True(t, found)
+		t.Run(tt.key, func(t *testing.T) {
+			latencyStore.UpdateConnByKey(tt.key, tt.updatedConn)
+			conns, found := latencyStore.GetConnsByKey(tt.key)
+			assert.Equal(t, tt.expectedConn, conns)
+			assert.True(t, found)
+		})
 	}
 }
 

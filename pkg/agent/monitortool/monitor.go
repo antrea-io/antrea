@@ -40,7 +40,6 @@ import (
 var (
 	icmpSeq      uint16
 	icmpSeqMutex sync.Mutex
-	srcIP        = net.ParseIP("0.0.0.0")
 )
 
 const (
@@ -90,10 +89,11 @@ type LatencyConfig struct {
 
 func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	nlmInformer crdinformers.NodeLatencyMonitorInformer,
-	gatewayConfig *config.GatewayConfig) *MonitorTool {
+	gatewayConfig *config.GatewayConfig,
+	isNetworkPolicyOnly bool) *MonitorTool {
 	m := &MonitorTool{
 		gatewayConfig:              gatewayConfig,
-		latencyStore:               NewLatencyStore(nodeInformer),
+		latencyStore:               NewLatencyStore(nodeInformer, isNetworkPolicyOnly),
 		latencyConfig:              &LatencyConfig{Enable: false},
 		latencyConfigChanged:       make(chan struct{}, 1),
 		nodeLatencyMonitorInformer: nlmInformer,
@@ -114,28 +114,9 @@ func (m *MonitorTool) onNodeLatencyMonitorAdd(obj interface{}) {
 	nlm := obj.(*v1alpha2.NodeLatencyMonitor)
 	klog.InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 
-	// Parse the ping interval and timeout
-	pingInterval, err := time.ParseDuration(nlm.Spec.PingInterval)
-	if err != nil {
-		klog.ErrorS(err, "Failed to parse ping interval")
-		return
+	if err := m.updateLatencyConfig(nlm); err != nil {
+		klog.ErrorS(err, "Failed to update latency config")
 	}
-	pingTimeout, err := time.ParseDuration(nlm.Spec.PingTimeout)
-	if err != nil {
-		klog.ErrorS(err, "Failed to parse ping timeout")
-		return
-	}
-
-	// Update the latency config
-	m.latencyConfig = &LatencyConfig{
-		Enable:   true,
-		Interval: pingInterval,
-		Timeout:  pingTimeout,
-		Limit:    nlm.Spec.PingConcurrentLimit,
-	}
-
-	// Notify the latency config changed
-	m.latencyConfigChanged <- struct{}{}
 }
 
 // onNodeLatencyMonitorUpdate is the event handler for updating NodeLatencyMonitor.
@@ -148,16 +129,20 @@ func (m *MonitorTool) onNodeLatencyMonitorUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	// Parse the ping interval and timeout
-	pingInterval, err := time.ParseDuration(newNLM.Spec.PingInterval)
-	if err != nil {
-		klog.ErrorS(err, "Failed to parse ping interval")
-		return
+	if err := m.updateLatencyConfig(newNLM); err != nil {
+		klog.ErrorS(err, "Failed to update latency config")
 	}
-	pingTimeout, err := time.ParseDuration(newNLM.Spec.PingTimeout)
+}
+
+func (m *MonitorTool) updateLatencyConfig(nlm *v1alpha2.NodeLatencyMonitor) error {
+	// Parse the ping interval and timeout
+	pingInterval, err := time.ParseDuration(nlm.Spec.PingInterval)
 	if err != nil {
-		klog.ErrorS(err, "Failed to parse ping timeout")
-		return
+		return err
+	}
+	pingTimeout, err := time.ParseDuration(nlm.Spec.PingTimeout)
+	if err != nil {
+		return err
 	}
 
 	// Update the latency config
@@ -165,11 +150,13 @@ func (m *MonitorTool) onNodeLatencyMonitorUpdate(oldObj, newObj interface{}) {
 		Enable:   true,
 		Interval: pingInterval,
 		Timeout:  pingTimeout,
-		Limit:    newNLM.Spec.PingConcurrentLimit,
+		Limit:    nlm.Spec.PingConcurrentLimit,
 	}
 
 	// Notify the latency config changed
 	m.latencyConfigChanged <- struct{}{}
+
+	return nil
 }
 
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
@@ -192,52 +179,44 @@ func (m *MonitorTool) pingAll() {
 	// Get all node internal/external IP.
 	nodeIPs := m.latencyStore.ListNodeIPs()
 
-	// TODO: Get current node internal/external IP.
-	var fromIP string
-	if m.gatewayConfig.IPv4 != nil {
-		fromIP = m.gatewayConfig.IPv4.String()
-	} else {
-		fromIP = m.gatewayConfig.IPv6.String()
-	}
-
 	// A simple rate limiter
 	limiter := getRate(len(nodeIPs), m.latencyConfig.Interval, m.latencyConfig.Limit)
 	limitGroup := make(chan bool, int(m.latencyConfig.Limit))
 
 	klog.InfoS("Start to ping all nodes")
 	wg := sync.WaitGroup{}
-	for name, toIP := range nodeIPs {
-		limitGroup <- true
-		limiter.Wait(context.Background())
-		wg.Add(1)
+	for name, toIPs := range nodeIPs {
+		for _, toIP := range toIPs {
+			limitGroup <- true
+			limiter.Wait(context.Background())
+			wg.Add(1)
 
-		go func(toIP string, name string) {
-			ctx, cancel := context.WithTimeout(context.Background(), m.latencyConfig.Timeout)
-			defer cancel()
-			defer wg.Done()
+			go func(toIP net.IP, name string) {
+				ctx, cancel := context.WithTimeout(context.Background(), m.latencyConfig.Timeout)
+				defer cancel()
+				defer wg.Done()
 
-			ok, rtt := m.pingNode(ctx, toIP)
-			if ok {
-				m.latencyStore.UpdateConnByKey(name, &Connection{
-					FromIP:      fromIP,
-					ToIP:        toIP,
-					Latency:     rtt,
-					Status:      true,
-					LastUpdated: time.Now(),
-				})
-			} else {
-				m.latencyStore.UpdateConnByKey(name, &Connection{
-					FromIP:      fromIP,
-					ToIP:        toIP,
-					Latency:     0,
-					Status:      false,
-					LastUpdated: time.Now(),
-				})
-			}
+				ok, rtt := m.pingNode(ctx, toIP)
+				if ok {
+					m.latencyStore.UpdateConnByKey(name, &Connection{
+						ToIP:        toIP,
+						Latency:     rtt,
+						Status:      true,
+						LastUpdated: time.Now(),
+					})
+				} else {
+					m.latencyStore.UpdateConnByKey(name, &Connection{
+						ToIP:        toIP,
+						Latency:     0,
+						Status:      false,
+						LastUpdated: time.Now(),
+					})
+				}
 
-			<-limitGroup
+				<-limitGroup
 
-		}(toIP, name)
+			}(toIP, name)
+		}
 	}
 
 	wg.Wait()
@@ -250,23 +229,20 @@ func (m *MonitorTool) pingAll() {
 	}
 }
 
-func (m *MonitorTool) pingNode(ctx context.Context, addr string) (bool, time.Duration) {
+func (m *MonitorTool) pingNode(ctx context.Context, addr net.IP) (bool, time.Duration) {
 	var (
 		socket      net.PacketConn
 		requestType icmp.Type
 		replyType   icmp.Type
+		srcIP       net.IP
+		err         error
 	)
 
 	// Resolve the IP address
-	ip, err := net.ResolveIPAddr(IPProtocol, addr)
-	if err != nil {
-		klog.ErrorS(err, "Failed to resolve IP address")
-
-		return false, 0
-	}
+	ip := &net.IPAddr{IP: addr}
 
 	// Create a new ICMP packet connection
-	if ip.IP.To4() == nil {
+	if addr.To4() == nil {
 		requestType = ipv6.ICMPTypeEchoRequest
 		replyType = ipv6.ICMPTypeEchoReply
 
@@ -281,6 +257,8 @@ func (m *MonitorTool) pingNode(ctx context.Context, addr string) (bool, time.Dur
 	} else {
 		requestType = ipv4.ICMPTypeEcho
 		replyType = ipv4.ICMPTypeEchoReply
+
+		srcIP = net.ParseIP("0.0.0.0")
 
 		socket, err = icmp.ListenPacket(IPv4ProtocolICMPRaw, srcIP.String())
 		if err != nil {
@@ -398,6 +376,9 @@ func (m *MonitorTool) monitorLoop(ctx context.Context) {
 				innerStopCh = make(chan struct{})
 				cancelInnerStopCh = func() {
 					close(innerStopCh)
+
+					// Clean up the latency store
+					m.latencyStore.CleanUp()
 				}
 
 				// Start new pingAll goroutine

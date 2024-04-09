@@ -938,6 +938,7 @@ func run(o *Options) error {
 			nodeInformer,
 			nodeLatencyMonitorInformer,
 			nodeConfig.GatewayConfig,
+			networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(),
 		)
 		go nodeLatencyMonitor.Run(stopCh)
 	}

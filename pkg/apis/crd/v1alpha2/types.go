@@ -352,18 +352,16 @@ type NodeLatencyMonitor struct {
 }
 
 type NodeLatencyMonitorSpec struct {
-	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*[smh]$`
+	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*[s]$`
 	// PingInterval specifies the interval between ping requests.
 	// Ping interval should be greater than or equal to 1s(one second).
-	// Defaults to "10s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// Defaults to "10s". Valid time units are "s".
 	PingInterval string `json:"pingInterval"`
 
-	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*[smh]$`
+	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*[s]$`
 	// PingTimeout specifies the timeout for each ping request.
 	// Ping timeout should be greater than or equal to 1s(one second).
-	// Defaults to "5s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// Defaults to "5s". Valid time units are "s".
 	PingTimeout string `json:"pingTimeout"`
 
 	// +kubebuilder:validation:Minimum=1

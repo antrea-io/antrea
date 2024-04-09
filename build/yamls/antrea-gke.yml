@@ -2713,11 +2713,11 @@ spec:
               properties:
                 pingInterval:
                   type: string
-                  pattern: '^[1-9][0-9]*[smh]$'
-                  # Explanation: At least one second ("1s") or higher, optionally followed by "m" (minutes) or "h" (hours)
+                  pattern: '^[1-9][0-9]*[s]$'
+                  # Explanation: At least one second ("1s") or higher
                 pingTimeout:
                   type: string
-                  pattern: '^[1-9][0-9]*[smh]$'
+                  pattern: '^[1-9][0-9]*[s]$'
                   # Explanation: Same as above
                 pingConcurrentLimit:
                   type: integer
