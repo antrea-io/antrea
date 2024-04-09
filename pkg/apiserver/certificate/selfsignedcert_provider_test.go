@@ -168,6 +168,12 @@ func TestSelfSignedCertProviderRotate(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 }
 
+func copyAndMutateSecret(secret *corev1.Secret, mutator func(_ *corev1.Secret)) *corev1.Secret {
+	s := secret.DeepCopy()
+	mutator(s)
+	return s
+}
+
 func TestSelfSignedCertProviderRun(t *testing.T) {
 	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
 	testSecret := &corev1.Secret{
@@ -220,6 +226,19 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 			tlsSecretName:    testSecretName,
 			existingSecret:   testSecret,
 			expectedSecret:   testSecret2,
+			minValidDuration: time.Hour * 24 * 370,
+			expectedCert:     testOneYearCert2,
+			expectedKey:      testOneYearKey2,
+		},
+		{
+			name:          "should not update secret type when secret is opaque",
+			tlsSecretName: testSecretName,
+			existingSecret: copyAndMutateSecret(testSecret, func(s *corev1.Secret) {
+				s.Type = corev1.SecretTypeOpaque
+			}),
+			expectedSecret: copyAndMutateSecret(testSecret2, func(s *corev1.Secret) {
+				s.Type = corev1.SecretTypeOpaque
+			}),
 			minValidDuration: time.Hour * 24 * 370,
 			expectedCert:     testOneYearCert2,
 			expectedKey:      testOneYearKey2,
