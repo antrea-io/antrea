@@ -86,6 +86,13 @@ const AntreaCNIVersion = "1.0.0-beta.1"
 var withClient = rpcClient
 
 func rpcClient(f func(client cnipb.CniClient) error) error {
+	// When using a custom dialer, it makes more sense to use the deprecated grpc.Dial function
+	// instead of grpc.NewClient, as grpc.Dial will default to the "dns" resolver (instead of
+	// the legacy "passthrough" resolver). Using grpc.NewClient would require us to explicitly
+	// add the "passthrough" scheme to the target address. Note that grpc.Dial will stay
+	// supported throughout gRPC 1.x.
+	// A custom dialer is required for Windows named-pipe support.
+	//nolint: staticcheck
 	conn, err := grpc.Dial(
 		AntreaCNISocketAddr,
 		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
