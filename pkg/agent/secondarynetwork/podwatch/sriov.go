@@ -38,7 +38,7 @@ import (
 const (
 	kubeletPodResourcesPath = "/var/lib/kubelet/pod-resources"
 	kubeletSocket           = "kubelet.sock"
-	connectionTimeout       = 10 * time.Second
+	listTimeout             = 10 * time.Second
 )
 
 var (
@@ -59,11 +59,7 @@ type podSriovVFDeviceIDInfo struct {
 
 // getPodContainerDeviceIDs returns the device IDs assigned to a Pod's containers.
 func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
-	defer cancel()
-
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		path.Join(kubeletPodResourcesPath, kubeletSocket),
 		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
@@ -79,6 +75,9 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 	if client == nil {
 		return []string{}, fmt.Errorf("error getting the lister client for Pod resources")
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
+	defer cancel()
 
 	podResources, err := client.List(ctx, &podresourcesv1alpha1.ListPodResourcesRequest{})
 	if err != nil {
