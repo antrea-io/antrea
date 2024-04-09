@@ -308,7 +308,13 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 
 // PacketRcvd is a callback when a packetIn is received on ofctrl.OFSwitch.
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
-	klog.V(2).InfoS("Received packetIn", "packet", packet)
+	// Correspond to MessageStream.outbound log level.
+	if klog.V(7).Enabled() {
+		klog.InfoS("Received packetIn", "packet", packet)
+	} else {
+		klog.V(4).InfoS("Received packetIn")
+	}
+
 	if len(packet.UserData) == 0 {
 		klog.Info("Received packetIn without packetIn category in userdata")
 		return
