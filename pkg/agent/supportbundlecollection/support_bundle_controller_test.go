@@ -155,6 +155,13 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			agentDumper:             &mockAgentDumper{dumpGoroutinePprofErr: fmt.Errorf("failed to dump goroutine Pprof")},
 			uploader:                &testUploader{},
 		},
+		{
+			name:                    "SupportBundleCollection failed to dump groups",
+			supportBundleCollection: generateSupportbundleCollection("supportBundle13", "sftp://10.220.175.92:22/root/supportbundle"),
+			expectedCompleted:       false,
+			agentDumper:             &mockAgentDumper{dumpGroupsErr: fmt.Errorf("failed to dump groups")},
+			uploader:                &testUploader{},
+		},
 	}
 
 	for _, tt := range testcases {
@@ -225,6 +232,7 @@ func generateSupportbundleCollection(name string, url string) *cpv1b2.SupportBun
 type mockAgentDumper struct {
 	dumpLogErr                    error
 	dumpFlowsErr                  error
+	dumpGroupsErr                 error
 	dumpHostNetworkInfoErr        error
 	dumpAgentInfoErr              error
 	dumpNetworkPolicyResourcesErr error
@@ -240,6 +248,10 @@ func (d *mockAgentDumper) DumpLog(basedir string) error {
 
 func (d *mockAgentDumper) DumpFlows(basedir string) error {
 	return d.dumpFlowsErr
+}
+
+func (d *mockAgentDumper) DumpGroups(basedir string) error {
+	return d.dumpGroupsErr
 }
 
 func (d *mockAgentDumper) DumpHostNetworkInfo(basedir string) error {
