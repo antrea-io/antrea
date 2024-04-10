@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: sftp
-        image: projects.registry.vmware.com/antrea/sftp
+        image: antrea/sftp
         imagePullPolicy: IfNotPresent
         args: ["foo:pass:::upload"]
 
