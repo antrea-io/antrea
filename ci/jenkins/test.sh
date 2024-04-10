@@ -1172,7 +1172,10 @@ EOF
     done
 }
 
-export KUBECONFIG=${KUBECONFIG_PATH}
+# Check and install kubectl to a specific version.
+export KUBECONFIG=$KUBECONFIG_PATH
+bash $(dirname "$0")/install-kubectl.sh
+
 if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
     ./hack/generate-manifest.sh --flexible-ipam --multicast --verbose-log > build/yamls/antrea.yml
 fi

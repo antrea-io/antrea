@@ -147,6 +147,10 @@ if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECO
     KUBECONFIG_PATH=$WORKDIR/.kube/config
 fi
 
+# Check and install kubectl to a specific version.
+export KUBECONFIG=$KUBECONFIG_PATH
+bash $(dirname "$0")/install-kubectl.sh
+
 # If DOCKER_REGISTRY is non null, we ensure that "make" commands never pull from docker.io.
 NO_PULL=
 if [[ ${DOCKER_REGISTRY} != "" ]]; then
@@ -189,7 +193,7 @@ function release_static_ip() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.28.0
+      export K8S_VERSION=$(head -n1 ./k8s-version)
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-2004

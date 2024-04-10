@@ -418,7 +418,7 @@ function run_multicluster_e2e {
         done
     else
         for kubeconfig in "${membercluster_kubeconfigs[@]}"; do
-            kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
+            kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
             if ${IS_CONTAINERD};then
@@ -492,6 +492,11 @@ if [[ ${KIND} == "true" ]]; then
         set -e
     done
 fi
+
+# All clusters in one testing ClusterSet should be the same K8s version, so
+# set KUBECONFIG with the leader config file to check and install kubectl.
+export KUBECONFIG=${LEADER_CLUSTER_CONFIG}
+bash $(dirname "$0")/install-kubectl.sh
 
 # We assume all clusters in one testing ClusterSet are using the same runtime,
 # so check leader cluster only to set IS_CONTAINERD.
