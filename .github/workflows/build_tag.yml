@@ -34,10 +34,8 @@ jobs:
       run: |
         ./hack/build-antrea-linux-all.sh --pull
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker tag antrea/antrea-ubuntu:"${VERSION}" antrea/antrea-ubuntu-amd64:"${VERSION}"
         docker tag antrea/antrea-agent-ubuntu:"${VERSION}" antrea/antrea-agent-ubuntu-amd64:"${VERSION}"
         docker tag antrea/antrea-controller-ubuntu:"${VERSION}" antrea/antrea-controller-ubuntu-amd64:"${VERSION}"
-        docker push antrea/antrea-ubuntu-amd64:"${VERSION}"
         docker push antrea/antrea-agent-ubuntu-amd64:"${VERSION}"
         docker push antrea/antrea-controller-ubuntu-amd64:"${VERSION}"
     - name: Trigger Antrea arm builds and multi-arch manifest update
@@ -64,7 +62,6 @@ jobs:
         run: |
           ./hack/build-antrea-linux-all.sh --pull --distro ubi
           echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          docker push antrea/antrea-ubi:"${VERSION}"
           docker push antrea/antrea-agent-ubi:"${VERSION}"
           docker push antrea/antrea-controller-ubi:"${VERSION}"
 

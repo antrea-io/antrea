@@ -18,7 +18,6 @@ jobs:
     if: github.repository == 'antrea-io/antrea'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
     - name: Find greatest Antrea version
       id: find-antrea-greatest-version
       env:
@@ -32,33 +31,56 @@ jobs:
     - name: Pull Antrea Docker images
       id: pull
       run: |
-        docker pull antrea/antrea-ubuntu:latest
-        docker pull antrea/antrea-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
-    - name: Run Trivy vulnerability scanner on latest Antrea Docker image
+        docker pull antrea/antrea-agent-ubuntu:latest
+        docker pull antrea/antrea-agent-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
+        docker pull antrea/antrea-controller-ubuntu:latest
+        docker pull antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}
+    - name: Run Trivy vulnerability scanner on latest antrea-agent Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: aquasecurity/trivy-action@0.19.0
       # we cannot use .trivy.yml as we need to override some config parameters
       # and that is not supported by aquasecurity/trivy-action
       with:
         scan-type: 'image'
-        image-ref: 'antrea/antrea-ubuntu:latest'
+        image-ref: 'antrea/antrea-agent-ubuntu:latest'
         exit-code: '1'
         ignore-unfixed: true
         severity: 'CRITICAL,HIGH'
-        # whereabouts project doesn't upgrade dependencies frequently
-        skip-files: '/opt/cni/bin/whereabouts'
         format: 'table'
         output: 'trivy.latest.txt'
-    - name: Run Trivy vulnerability scanner on Antrea Docker image for latest released version
+    - name: Run Trivy vulnerability scanner on latest antrea-controller Docker image
+      if: ${{ always() && steps.pull.conclusion == 'success' }}
+      uses: aquasecurity/trivy-action@0.19.0
+      # we cannot use .trivy.yml as we need to override some config parameters
+      # and that is not supported by aquasecurity/trivy-action
+      with:
+        scan-type: 'image'
+        image-ref: 'antrea/antrea-controller-ubuntu:latest'
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
+        format: 'table'
+        output: 'trivy.latest.txt'
+    - name: Run Trivy vulnerability scanner on antrea-agent Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
       uses: aquasecurity/trivy-action@0.19.0
       with:
         scan-type: 'image'
-        image-ref: 'antrea/antrea-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
+        image-ref: 'antrea/antrea-agent-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
         exit-code: '1'
         ignore-unfixed: true
         severity: 'CRITICAL,HIGH'
-        skip-files: '/opt/cni/bin/whereabouts'
+        format: 'table'
+        output: 'trivy.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt'
+    - name: Run Trivy vulnerability scanner on antrea-controller Docker image for latest released version
+      if: ${{ always() && steps.pull.conclusion == 'success' }}
+      uses: aquasecurity/trivy-action@0.19.0
+      with:
+        scan-type: 'image'
+        image-ref: 'antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
         format: 'table'
         output: 'trivy.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt'
     - name: Upload Trivy scan reports

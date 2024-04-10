@@ -1,4 +1,4 @@
-name: Scan Antrea Docker image for vulnerabilities before release
+name: Scan Antrea Docker images for vulnerabilities before release
 
 on:
   pull_request:
@@ -14,12 +14,6 @@ jobs:
     - name: Build Antrea Docker image
       run: |
         ./hack/build-antrea-linux-all.sh --pull
-    - name: Run Trivy vulnerability scanner on Antrea unified Docker image
-      uses: aquasecurity/trivy-action@0.19.0
-      with:
-        scan-type: 'image'
-        image-ref: 'antrea/antrea-ubuntu:latest'
-        trivy-config: '.trivy.yml'
     - name: Run Trivy vulnerability scanner on the antrea-agent Docker image
       uses: aquasecurity/trivy-action@0.19.0
       with:

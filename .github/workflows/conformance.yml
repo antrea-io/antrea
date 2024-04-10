@@ -74,6 +74,8 @@ jobs:
           sudo mv kind /usr/local/bin
       - name: Create K8s cluster
         run: |
+          # If an image does not exist (unified vs split), a warning will be printed, but the script
+          # execution will not fail.
           images=()
           images+=(antrea/antrea-controller-${{ inputs.antrea-image-distro }}:${{ steps.check-release.outputs.image-tag }})
           images+=(antrea/antrea-agent-${{ inputs.antrea-image-distro }}:${{ steps.check-release.outputs.image-tag }})
