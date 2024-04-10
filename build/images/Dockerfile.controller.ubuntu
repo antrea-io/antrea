@@ -1,4 +1,4 @@
-# Copyright 2022 Antrea Authors
+# Copyright 2024 Antrea Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BUILD_TAG
-FROM antrea/base-ubuntu:${BUILD_TAG}
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="The Docker image to deploy the Antrea CNI."
+LABEL description="The development Docker image to deploy the antrea-controller."
 
 USER root
 
-COPY build/images/scripts/* /usr/local/bin/
-COPY bin/* /usr/local/bin/
+COPY bin/antrea-controller /usr/local/bin/
+COPY bin/antctl /usr/local/bin/
