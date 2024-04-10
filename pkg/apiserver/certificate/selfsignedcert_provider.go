@@ -315,9 +315,11 @@ func (p *selfSignedCertProvider) saveCertKeyToSecret(secret *corev1.Secret, cert
 		if bytes.Equal(cert, secret.Data[corev1.TLSCertKey]) && bytes.Equal(key, secret.Data[corev1.TLSPrivateKeyKey]) {
 			return nil
 		}
-		secret.Type = corev1.SecretTypeTLS
+		// Do not update the existing Secret's type. Otherwise, the update would fail if it's not of type
+		// "kubernetes.io/tls" as the type field is immutable.
 		secret.Data[corev1.TLSCertKey] = cert
 		secret.Data[corev1.TLSPrivateKeyKey] = key
+		klog.InfoS("Updating Secret to persist self-signed cert", "secret", klog.KObj(secret))
 		_, err := p.client.CoreV1().Secrets(p.secretNamespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
 		return err
 	}
@@ -329,6 +331,7 @@ func (p *selfSignedCertProvider) saveCertKeyToSecret(secret *corev1.Secret, cert
 			corev1.TLSPrivateKeyKey: key,
 		},
 	}
+	klog.InfoS("Creating Secret to persist self-signed cert", "secret", klog.KObj(secret))
 	_, err := p.client.CoreV1().Secrets(p.secretNamespace).Create(context.TODO(), caSecret, metav1.CreateOptions{})
 	return err
 }
