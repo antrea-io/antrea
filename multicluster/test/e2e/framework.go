@@ -50,7 +50,7 @@ const (
 	gatewayNodeClientSuffix string = "gateway-client"
 	regularNodeClientSuffix string = "regular-client"
 
-	nginxImage   = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
+	nginxImage   = "antrea/nginx:1.21.6-alpine"
 	agnhostImage = "registry.k8s.io/e2e-test-images/agnhost:2.29"
 )
 

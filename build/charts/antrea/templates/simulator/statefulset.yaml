@@ -32,7 +32,7 @@ spec:
       serviceAccountName: antrea-agent
       initContainers:
       - name: init-inotify-limit
-        image: projects.registry.vmware.com/library/busybox:latest
+        image: antrea/ubuntu:22.04
         command: ['sysctl', '-w', 'fs.inotify.max_user_instances=200']
         securityContext:
           privileged: true
@@ -68,7 +68,7 @@ spec:
         - name: logs-volume
           mountPath: /var/log
       - name: hollow-kubelet
-        image: projects.registry.vmware.com/antrea/kubemark:v1.18.4
+        image: antrea/kubemark:v1.18.4
         ports:
         - containerPort: 4194
         - containerPort: 10250
@@ -106,7 +106,7 @@ spec:
         securityContext:
           privileged: true
       - name: hollow-proxy
-        image: projects.registry.vmware.com/antrea/kubemark:v1.18.4
+        image: antrea/kubemark:v1.18.4
         env:
         - name: CONTENT_TYPE
           valueFrom:
