@@ -186,14 +186,13 @@ if $flow_visibility; then
 fi
 
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.29" \
-                    "projects.registry.vmware.com/antrea/busybox"  \
-                    "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
-                    "projects.registry.vmware.com/antrea/toolbox:1.3-0")
+                    "antrea/nginx:1.21.6-alpine" \
+                    "antrea/toolbox:1.3-0")
 
-FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.6.2" \
-                            "projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0" \
-                            "projects.registry.vmware.com/antrea/metrics-exporter:0.21.0" \
-                            "projects.registry.vmware.com/antrea/clickhouse-server:23.4")
+FLOW_VISIBILITY_IMAGE_LIST=("antrea/ipfix-collector:v0.9.0" \
+                            "antrea/clickhouse-operator:0.21.0" \
+                            "antrea/metrics-exporter:0.21.0" \
+                            "antrea/clickhouse-server:23.4")
 if $proxy_all; then
     COMMON_IMAGES_LIST+=("registry.k8s.io/echoserver:1.10")
 fi
@@ -272,9 +271,9 @@ function run_test {
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
 
       curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
-      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"projects.registry.vmware.com/antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: projects.registry.vmware.com/antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: projects.registry.vmware.com/antrea/metrics-exporter:0.21.0|g" $CH_OPERATOR_YML
+      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
+      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
+      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" $CH_OPERATOR_YML
       cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
   fi
 
