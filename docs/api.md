@@ -81,3 +81,4 @@ These are the API group versions which are currently available when using Antrea
 | CRD | CRD version | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|
 | `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | v2.0.0 |
+| `ExternalEntity` | v1alpha1 | v0.10.0 | v0.11.0 | v2.0.0 |

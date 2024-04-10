@@ -2384,12 +2384,6 @@ spec:
                         type: string
                 externalNode:
                   type: string
-    - name: v1alpha1
-      served: false
-      storage: false
-      schema:
-        openAPIV3Schema:
-          type: object
   scope: Namespaced
   names:
     plural: externalentities
