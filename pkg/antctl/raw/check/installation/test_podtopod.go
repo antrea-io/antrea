@@ -19,21 +19,21 @@ import (
 	"fmt"
 )
 
-type PodtoPodConnectivityTest struct{}
+type PodToPodConnectivityTest struct{}
 
-func (t *PodtoPodConnectivityTest) Run(ctx context.Context, testContext *TestContext) error {
-	for _, clientPod := range testContext.client.clientPods.Items {
-		for echoName, echoIP := range testContext.client.echoPods {
+func (t *PodToPodConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
+	for _, clientPod := range testContext.clientPods.Items {
+		for echoName, echoIP := range testContext.echoPods {
 			var (
-				srcPod = testContext.client.namespace + "/" + clientPod.Name
-				dstPod = testContext.client.namespace + "/" + echoName
+				srcPod = testContext.namespace + "/" + clientPod.Name
+				dstPod = testContext.namespace + "/" + echoName
 			)
-			testContext.client.Header("Validating from pod %s to pod %s...", srcPod, dstPod)
-			_, err := testContext.client.client.ExecInPod(ctx, testContext.client.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
+			testContext.Log("Validating from pod %s to pod %s...", srcPod, dstPod)
+			_, _, err := testContext.client.ExecInPod(ctx, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
 			if err != nil {
 				return fmt.Errorf("client pod %s was not able to communicate with echo pod %s (%s): %w", clientPod.Name, echoName, echoIP, err)
 			}
-			testContext.client.Log("client pod %s was able to communicate with echo pod %s (%s)", clientPod.Name, echoName, echoIP)
+			testContext.Log("client pod %s was able to communicate with echo pod %s (%s)", clientPod.Name, echoName, echoIP)
 		}
 	}
 	return nil

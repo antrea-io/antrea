@@ -37,31 +37,24 @@ type Client struct {
 
 func NewClient() (*Client, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-
 	nonInteractiveClient := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
-
 	config, err := nonInteractiveClient.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
-
 	rawConfig, err := nonInteractiveClient.RawConfig()
 	if err != nil {
 		return nil, err
 	}
-
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
-
 	contextName := rawConfig.CurrentContext
-
 	clusterName := ""
 	if context, ok := rawConfig.Contexts[contextName]; ok {
 		clusterName = context.Cluster
 	}
-
 	return &Client{
 		clientSet:   clientset,
 		config:      config,
@@ -82,7 +75,6 @@ func (c *Client) DeploymentIsReady(ctx context.Context, namespace, deploymentNam
 	if err != nil {
 		return false, err
 	}
-
 	if deployment.Generation <= deployment.Status.ObservedGeneration {
 		for _, cond := range deployment.Status.Conditions {
 			if cond.Type == appsv1.DeploymentProgressing && cond.Reason == "ProgressDeadlineExceeded" {
@@ -103,7 +95,7 @@ func (c *Client) DeploymentIsReady(ctx context.Context, namespace, deploymentNam
 	return false, nil
 }
 
-func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string, command []string) (bytes.Buffer, error) {
+func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string, command []string) (string, string, error) {
 	req := c.clientSet.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(&corev1.PodExecOptions{
 		Command:   command,
@@ -115,7 +107,7 @@ func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string
 	}, scheme.ParameterCodec)
 	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
 	if err != nil {
-		return bytes.Buffer{}, fmt.Errorf("error while creating executor: %w", err)
+		return "", "", fmt.Errorf("error while creating executor: %w", err)
 	}
 	var stdout, stderr bytes.Buffer
 	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
@@ -125,8 +117,7 @@ func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string
 		Tty:    false,
 	})
 	if err != nil {
-		return bytes.Buffer{}, fmt.Errorf("error in stream: %w", err)
+		return "", "", fmt.Errorf("error in stream: %w", err)
 	}
-	fmt.Fprint(&stdout, stderr.String())
-	return stdout, nil
+	return stdout.String(), stderr.String(), nil
 }

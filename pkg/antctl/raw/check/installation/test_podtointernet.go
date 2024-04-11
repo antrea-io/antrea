@@ -19,19 +19,19 @@ import (
 	"fmt"
 )
 
-type PodtoInternetConnectivityTest struct{}
+type PodToInternetConnectivityTest struct{}
 
-func (t *PodtoInternetConnectivityTest) Run(ctx context.Context, testContext *TestContext) error {
-	for _, clientPod := range testContext.client.clientPods.Items {
+func (t *PodToInternetConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
+	for _, clientPod := range testContext.clientPods.Items {
 		var (
-			srcPod = testContext.client.namespace + "/" + clientPod.Name
+			srcPod = testContext.namespace + "/" + clientPod.Name
 		)
-		testContext.client.Header("Validating connectivity from pod %s to the world (google.com)...", srcPod)
-		_, err := testContext.client.client.ExecInPod(ctx, testContext.client.namespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
+		testContext.Log("Validating connectivity from pod %s to the world (google.com)...", srcPod)
+		_, _, err := testContext.client.ExecInPod(ctx, testContext.namespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
 		if err != nil {
 			return fmt.Errorf("pod %s was not able to connect to google.com: %w", srcPod, err)
 		}
-		testContext.client.Log("Pod %s was able to connect to google.com", srcPod)
+		testContext.Log("Pod %s was able to connect to google.com", srcPod)
 	}
 	return nil
 }

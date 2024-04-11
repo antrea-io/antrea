@@ -739,7 +739,7 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
-  conduct-connectivity-test:
+  run-post-installation-checks:
     name: Test connectivity using 'antctl check' command
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
