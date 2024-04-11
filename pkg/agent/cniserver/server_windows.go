@@ -18,6 +18,7 @@
 package cniserver
 
 import (
+	"fmt"
 	"strings"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
@@ -62,6 +63,15 @@ func isInfraContainer(netNS string) bool {
 //   - Workload container: "container:$infra_container_id"
 func isDockerContainer(netNS string) bool {
 	return netNS == dockerInfraContainerNetNS || strings.Contains(netNS, ":")
+}
+
+// validateRuntime returns error if a container is created by Docker with the provided network namespace
+// because the Docker support has been removed since Antrea 2.0.
+func validateRuntime(netNS string) error {
+	if isDockerContainer(netNS) {
+		return fmt.Errorf("Docker runtime is not supported after Antrea 2.0 for Windows Nodes")
+	}
+	return nil
 }
 
 func getInfraContainer(containerID, netNS string) string {

@@ -37,6 +37,12 @@ func isInfraContainer(netNS string) bool {
 	return true
 }
 
+// validateRuntime returns nil if the container runtime is supported by Antrea.
+// Always return nil on Linux platform, because all container runtimes are supported.
+func validateRuntime(netNS string) error {
+	return nil
+}
+
 // getInfraContainer returns the sandbox container ID of a Pod.
 // On Linux, it's always the ContainerID in the request.
 func (c *CNIConfig) getInfraContainer() string {

@@ -25,7 +25,6 @@ Generate a YAML manifest to run Antrea on Windows Nodes, using Kustomize, and pr
         --mode (dev|release)            Choose the configuration variant that you need (default is 'dev')
         --keep                          Debug flag which will preserve the generated kustomization.yml
         --help, -h                      Print this message and exit
-        --containerd                    Support for containerd runtime. 
         --include-ovs                   Run Windows OVS processes inside antrea-ovs container in antrea-agent pod
                                         on Windows host with containerd runtime.
 
@@ -44,7 +43,6 @@ function print_help {
     echoerr "Try '$0 --help' for more information."
 }
 
-RUNTIME=""
 MODE="dev"
 KEEP=false
 INCLUDE_OVS=false
@@ -60,10 +58,6 @@ case $key in
     ;;
     --keep)
     KEEP=true
-    shift
-    ;;
-    --containerd)
-    RUNTIME="containerd"
     shift
     ;;
     --include-ovs)
@@ -117,13 +111,9 @@ TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
 
 pushd $TMP_DIR > /dev/null
 
-BASE=../../default
-if [ "$RUNTIME" == "containerd" ]; then
-    if $INCLUDE_OVS; then
-        BASE=../../containerd-with-ovs
-    else 
-        BASE=../../containerd
-    fi
+BASE=../../containerd
+if $INCLUDE_OVS; then
+    BASE=../../containerd-with-ovs
 fi
 
 mkdir $MODE && cd $MODE

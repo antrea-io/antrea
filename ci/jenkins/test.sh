@@ -375,171 +375,6 @@ function revert_snapshot_windows {
     sleep 5
 }
 
-function deliver_antrea_linux {
-    set -e
-
-    echo "==== Start building and delivering Linux Docker images ===="
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
-    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
-        make windows-bin
-    fi
-
-    echo "====== Delivering Antrea to all Nodes ======"
-    export_govc_env_var
-
-    # Enable verbose log for troubleshooting.
-    sed -i "s/--v=0/--v=4/g" build/yamls/antrea-windows.yml
-
-    if [[ "${PROXY_ALL}" == false && ${TESTCASE} =~ "windows-e2e" ]]; then
-        sed -i "s|.*proxyAll: true|      proxyAll: false|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
-    else
-        echo "====== Updating yaml files to enable proxyAll ======"
-        KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
-        KUBERNETES_SVC_EP_PORT=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].ports[0].port}')
-        KUBERNETES_SVC_EP_ADDR="${KUBERNETES_SVC_EP_IP}:${KUBERNETES_SVC_EP_PORT}"
-        sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
-    fi
-
-    cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
-
-    echo "===== Pull necessary images on Control-Plane node ====="
-    harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
-    antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
-    common_images=("registry.k8s.io/e2e-test-images/agnhost:2.29")
-    for i in "${!harbor_images[@]}"; do
-        docker pull -q "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}"
-        docker tag "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}" "${antrea_images[i]}"
-    done
-    echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 !~ /win/ {print $6}' | while read IP; do
-        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
-        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
-
-        for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
-        done
-        # Pull necessary images in advance to avoid transient error
-        for image in "${common_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${image}" || true
-        done
-    done
-    echo "==== Finish building and delivering Linux Docker images ===="
-}
-
-function deliver_antrea_windows {
-    echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
-    rm -f antrea-windows.tar.gz
-    sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
-        revert_snapshot_windows ${WORKER_NAME}
-
-        # Use a script to run antrea agent in windows Network Policy cases
-        if [ "$TESTCASE" == "windows-networkpolicy-process" ]; then
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service kubelet"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service docker"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell rm C:\ProgramData\docker\docker.pid" || true
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service docker"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service kubelet"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovsdb-server"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovs-vswitchd"
-            echo "===== Use script to startup antrea agent ====="
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf /cygdrive/c/k/antrea && mkdir -p /cygdrive/c/k/antrea/bin && mkdir -p /cygdrive/c/k/antrea/etc && rm -rf /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/etc/cni/net.d"
-            scp -o StrictHostKeyChecking=no -T $KUBECONFIG Administrator@${IP}:/cygdrive/c/k/config
-            scp -o StrictHostKeyChecking=no -T bin/antrea-agent.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/
-            scp -o StrictHostKeyChecking=no -T bin/antctl.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/antctl.exe
-            scp -o StrictHostKeyChecking=no -T bin/antrea-cni.exe Administrator@${IP}:/cygdrive/c/opt/cni/bin/antrea.exe
-            scp -o StrictHostKeyChecking=no -T hack/windows/Start-AntreaAgent.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
-            scp -o StrictHostKeyChecking=no -T hack/windows/Stop-AntreaAgent.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
-            scp -o StrictHostKeyChecking=no -T hack/windows/Helper.psm1 Administrator@${IP}:/cygdrive/c/k/antrea/
-            scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-cni.conflist Administrator@${IP}:/cygdrive/c/etc/cni/net.d/10-antrea.conflist
-            scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-agent.conf Administrator@${IP}:/cygdrive/c/k/antrea/etc
-        else
-            if ! (test -f antrea-windows.tar.gz); then
-                # Compress antrea repo and copy it to a Windows node
-                mkdir -p jenkins
-                tar --exclude='./jenkins' -czf jenkins/antrea_repo.tar.gz -C "$(pwd)" .
-                for i in `seq 2`; do
-                    timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
-                done
-                echo "=== Build Windows on Windows Node==="
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver && docker tag ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver golang:${GO_VERSION}-nanoserver"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && NO_PULL=${NO_PULL}; DOCKER_NETWORK=host make build-windows && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
-                for i in `seq 2`; do
-                    timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
-                done
-            else
-                for i in `seq 2`; do
-                    timeout 2m scp -o StrictHostKeyChecking=no -T antrea-windows.tar.gz Administrator@${IP}: && break
-                done
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker load -i antrea-windows.tar.gz"
-            fi
-        fi
-        # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
-        # Use e2eteam/agnhost:2.13 instead
-        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2" "e2eteam-pause:3.2" "e2eteam-pause:3.2")
-        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.13" "k8s.gcr.io/e2e-test-images/agnhost:2.29" "registry.k8s.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "gcr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.0" "e2eteam/pause:3.2" "k8s.gcr.io/pause:3.2" "registry.k8s.io/pause:3.2")
-        common_images=("mcr.microsoft.com/windows/servercore/iis:latest")
-        # Pull necessary images in advance to avoid transient error
-        for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
-        done
-        for image in "${common_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${image}" || true
-        done
-    done
-    rm -f antrea-windows.tar.gz
-    echo "==== Finish building and delivering Windows Docker images ===="
-}
-
-function build_and_deliver_antrea_windows_and_linux_docker_images {
-    echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows and Antrea Linux Docker Images ====="
-    clean_antrea
-    kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
-    kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
-    kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
-    kubectl delete -f ${WORKDIR}/antrea.yml --ignore-not-found=true || true
-
-    prepare_env
-    ${CLEAN_STALE_IMAGES}
-    ${PRINT_DOCKER_STATUS}
-    chmod -R g-w build/images/ovs
-    chmod -R g-w build/images/base
-  
-    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
-        make windows-bin
-    fi
-
-    export_govc_env_var
-
-    # Enable verbose log for troubleshooting.
-    sed -i "s/--v=0/--v=4/g" build/yamls/antrea-windows.yml
-
-    if [[ "${PROXY_ALL}" == true ]]; then
-        echo "====== Updating yaml files to enable proxyAll ======"
-        KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
-        KUBERNETES_SVC_EP_PORT=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].ports[0].port}')
-        KUBERNETES_SVC_EP_ADDR="${KUBERNETES_SVC_EP_IP}:${KUBERNETES_SVC_EP_PORT}"
-        sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
-        sed -i "s|.*proxyAll: false|      proxyAll: true|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
-    fi
-
-    cp -f build/yamls/*.yml $WORKDIR
-    echo "====== Delivering Antrea to all Nodes ======"
-    set +e
-    deliver_antrea_windows &> deliver_antrea_windows.log &
-    deliver_antrea_windows_pid=$!
-    deliver_antrea_linux
-    linux_result=$?
-    wait $deliver_antrea_windows_pid
-    windows_result=$?
-    cat deliver_antrea_windows.log
-    if [ $windows_result -ne 0 ] || [ $linux_result -ne 0 ]; then
-        exit 1
-    fi
-    set -e
-}
-
 function  build_and_deliver_antrea_windows_and_linux_containerd_images {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea Windows and Antrea Linux containerd Images ====="
     clean_antrea
@@ -725,6 +560,14 @@ function deliver_antrea {
         fi
     done
 
+    if [[ "${PROXY_ALL}" == true ]]; then
+        echo "====== Updating yaml files to enable proxyAll ======"
+        KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
+        KUBERNETES_SVC_EP_PORT=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].ports[0].port}')
+        KUBERNETES_SVC_EP_ADDR="${KUBERNETES_SVC_EP_IP}:${KUBERNETES_SVC_EP_PORT}"
+        sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml
+        sed -i "s|.*proxyAll: false|      proxyAll: true|g" build/yamls/antrea.yml
+    fi
     echo  "=== Append antrea-prometheus.yml to antrea.yml ==="
     echo "---" >> build/yamls/antrea.yml
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
@@ -890,41 +733,6 @@ function run_e2e_windows {
     set -e
 
     tar -zcf antrea-test-logs.tar.gz antrea-test-logs
-}
-
-function run_conformance_windows {
-    echo "====== Running Antrea Conformance Tests ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export GOCACHE=${WORKDIR}/.cache/go-build
-    export PATH=$GOROOT/bin:$PATH
-
-    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
-        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
-        wait_for_antrea_windows_processes_ready
-    else
-        # Antrea Windows agent Pods are deployed for Windows Conformance test
-        clean_for_windows_install_cni
-        wait_for_antrea_windows_pods_ready
-    fi
-
-    echo "====== Run test with conformance test ======"
-    export KUBE_TEST_REPO_LIST=${WORKDIR}/repo_list
-    if [ "$TESTCASE" == "windows-networkpolicy" ]; then
-        # Allow LinuxOnly mark in windows-networkpolicy because Antrea Windows supports NP functions.
-        ginkgo --noColor $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus="$WINDOWS_NETWORKPOLICY_FOCUS" --ginkgo.skip="$WINDOWS_NETWORKPOLICY_SKIP" > windows_conformance_result_no_color.txt || true
-    else
-        ginkgo --noColor $E2ETEST_PATH -- --provider=skeleton --node-os-distro=windows --ginkgo.focus="$WINDOWS_CONFORMANCE_FOCUS" --ginkgo.skip="$WINDOWS_CONFORMANCE_SKIP" > windows_conformance_result_no_color.txt || true
-    fi
-
-    if grep -Fxq "Test Suite Failed" windows_conformance_result_no_color.txt; then
-        echo "=== Failed cases exist ==="
-        TEST_FAILURE=true
-        collect_windows_network_info_and_logs
-    else
-        echo "All tests passed."
-    fi
 }
 
 function run_conformance_windows_containerd {
@@ -1201,13 +1009,6 @@ if [[ ${TESTCASE} =~ "windows" ]]; then
             run_e2e_windows
         else
             run_conformance_windows_containerd
-        fi
-    else
-        build_and_deliver_antrea_windows_and_linux_docker_images
-        if [[ ${TESTCASE} =~ "e2e" ]]; then
-            run_e2e_windows
-        else
-            run_conformance_windows
         fi
     fi
 elif [[ ${TESTCASE} =~ "e2e" ]]; then
