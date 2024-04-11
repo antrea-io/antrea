@@ -81,7 +81,7 @@ spec:
   - name: web
     port: 80
     protocol: TCP
-    targetPort: 80
+    targetPort: 8080
   selector:
     app: nginx
 ---
