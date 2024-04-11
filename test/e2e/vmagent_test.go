@@ -216,13 +216,17 @@ func testExternalNodeSupportBundleCollection(t *testing.T, data *TestData, vmLis
 		require.NoError(t, err)
 		var expectedInfoEntries []string
 		if vm.osType == linuxOS {
-			expectedInfoEntries = []string{"address", "addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "iptables", "link", "logs", "memprofile", "networkpolicies", "ovsports", "route"}
+			expectedInfoEntries = []string{"address", "addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "groups", "iptables", "link", "logs", "memprofile", "networkpolicies", "ovsports", "route"}
 		} else if vm.osType == windowsOS {
-			expectedInfoEntries = []string{"addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "ipconfig", "logs\\ovs\\ovs-vswitchd.log", "logs\\ovs\\ovsdb-server.log", "memprofile", "network-adapters", "networkpolicies", "ovsports", "routes"}
+			expectedInfoEntries = []string{"addressgroups", "agentinfo", "appliedtogroups", "flows", "goroutinestacks", "groups", "ipconfig", "logs\\ovs\\ovs-vswitchd.log", "logs\\ovs\\ovsdb-server.log", "memprofile", "network-adapters", "networkpolicies", "ovsports", "routes"}
 		}
-		actualExpectedInfoEntries := strings.Split(strings.Trim(stdout, "\n"), "\n")
-		t.Logf("Actual files after extracting SupportBundleCollection tarball %s_%s: %v", vm.nodeName, bundleName, actualExpectedInfoEntries)
-		assert.ElementsMatch(t, expectedInfoEntries, actualExpectedInfoEntries)
+		actualInfoEntries := strings.Split(strings.Trim(stdout, "\n"), "\n")
+		t.Logf("Actual files after extracting SupportBundleCollection tarball %s_%s: %v", vm.nodeName, bundleName, actualInfoEntries)
+		// We validate that actualInfoEntries contains expectedInfoEntries instead
+		// of checking for an exact match, which would make the test too easy to break. It
+		// is recommended to update expectedInfoEntries when new elements are added to the
+		// supportbundle, but it is not a strict requirement.
+		assert.Subset(t, actualInfoEntries, expectedInfoEntries)
 	}
 }
 
