@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	componentbaseconfig "k8s.io/component-base/config"
@@ -48,7 +48,7 @@ func Initialize(
 	nodeName string,
 	podUpdateSubscriber channel.Subscriber,
 	stopCh <-chan struct{},
-	config *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB) error {
+	config *agentconfig.SecondaryNetworkConfig, ovsdb libovsdbclient.Client) error {
 
 	ovsBridgeClient, err := createOVSBridge(config.OVSBridges, ovsdb)
 	if err != nil {
@@ -75,7 +75,7 @@ func Initialize(
 }
 
 // TODO: check and update bridge configuration.
-func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) (ovsconfig.OVSBridgeClient, error) {
+func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb libovsdbclient.Client) (ovsconfig.OVSBridgeClient, error) {
 	if len(bridges) == 0 {
 		return nil, nil
 	}

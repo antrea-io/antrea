@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -39,7 +39,7 @@ var UDSAddress string
 var bridgeName string
 
 type testData struct {
-	ovsdb *ovsdb.OVSDB
+	ovsdb libovsdbclient.Client
 	br    *ovsconfig.OVSBridge
 }
 
