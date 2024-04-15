@@ -37,37 +37,30 @@ type LatencyStore struct {
 
 	// isNetworkPolicyOnly is the flag to indicate if the Antrea Agent is running in network policy only mode.
 	isNetworkPolicyOnly bool
-	// The map of node name to node info, it will changed to gw0 watcher
+	// The map of node name to node info, it will changed by node watcher
 	nodeInformer coreinformers.NodeInformer
-	// The map of node ip to connection
-	connectionMap map[string][]*Connection
-	// The map of node ip to node name, it will be changed to gw0 watcher
-	nodeGW0Map map[string][]net.IP
+	// The map of node ip to latency entry, it will be changed by latency monitor
+	nodeIPLatencyMap map[string]*NodeIPLatencyEntry
+	// The map of node ip to node name, it will be changed by node watcher
+	nodeGatewayMap map[string][]net.IP
 }
 
-// TODO1: use LRU cache to store the latency of the connection?
-type Connection struct {
-	// The destination IP of the connection
-	ToIP net.IP
-	// The latency of the connection
-	Latency time.Duration
-	// The status of the connection
-	Status bool
-	// The last time the connection was updated
-	LastUpdated time.Time
-	// The time the connection was created.
-	CreatedAt time.Time
-}
-
-// Key returns the key of the connection.
-func (c *Connection) Key() net.IP {
-	return c.ToIP
+// NodeIPLatencyEntry is the entry of the latency map.
+type NodeIPLatencyEntry struct {
+	// The latest sequence ID of the connection
+	SeqID uint32
+	// The timestamp of the last send packet
+	LastSendTime time.Time
+	// The timestamp of the last receive packet
+	LastRecvTime time.Time
+	// The last valid rtt of the connection
+	LastMeasuredRTT time.Duration
 }
 
 func NewLatencyStore(nodeInformer coreinformers.NodeInformer, isNetworkPolicyOnly bool) *LatencyStore {
 	store := &LatencyStore{
-		connectionMap:       make(map[string][]*Connection),
-		nodeGW0Map:          make(map[string][]net.IP),
+		nodeIPLatencyMap:    make(map[string]*NodeIPLatencyEntry),
+		nodeGatewayMap:      make(map[string][]net.IP),
 		nodeInformer:        nodeInformer,
 		isNetworkPolicyOnly: isNetworkPolicyOnly,
 	}
@@ -105,72 +98,43 @@ func (l *LatencyStore) onNodeDelete(obj interface{}) {
 	l.deleteNode(node)
 }
 
-func (l *LatencyStore) GetConnsByKey(connKey string) ([]*Connection, bool) {
+func (l *LatencyStore) GetNodeIPLatencyEntryByKey(key string) (*NodeIPLatencyEntry, bool) {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	conn, found := l.connectionMap[connKey]
+	entry, found := l.nodeIPLatencyMap[key]
 
-	return conn, found
+	return entry, found
 }
 
-func (l *LatencyStore) DeleteConnsByKey(connKey string) {
+func (l *LatencyStore) DeleteNodeIPLatencyEntryByKey(key string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	delete(l.connectionMap, connKey)
+	delete(l.nodeIPLatencyMap, key)
 }
 
-func (l *LatencyStore) UpdateConnByKey(connKey string, conn *Connection) {
+func (l *LatencyStore) UpdateNodeIPLatencyEntryByKey(key string, entry *NodeIPLatencyEntry) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
 	// Judge if the connection is already in the map
-	conns, found := l.connectionMap[connKey]
+	e, found := l.nodeIPLatencyMap[key]
 	if !found {
 		// Add the connection to the map
-		l.connectionMap[connKey] = []*Connection{conn}
+		l.nodeIPLatencyMap[key] = e
 		return
 	}
 
-	// Update the connection in the map, make sure ip is not changed
-	updated := false
-	for i, c := range conns {
-		if c.ToIP.Equal(conn.ToIP) {
-			conns[i] = conn
-			updated = true
-			break
-		}
-	}
-
-	if !updated {
-		conns = append(conns, conn)
-	}
-
 	// Update the connection map
-	l.connectionMap[connKey] = conns
+	l.nodeIPLatencyMap[key] = entry
 }
 
-func (l *LatencyStore) GetConnByIP(ip net.IP) (*Connection, bool) {
+func (l *LatencyStore) ListLatencies() map[string]*NodeIPLatencyEntry {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	for _, conn := range l.connectionMap {
-		for _, c := range conn {
-			if c.ToIP.Equal(ip) {
-				return c, true
-			}
-		}
-	}
-
-	return nil, false
-}
-
-func (l *LatencyStore) ListConns() map[string][]*Connection {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
-
-	return l.connectionMap
+	return l.nodeIPLatencyMap
 }
 
 func (l *LatencyStore) addNode(node *corev1.Node) {
@@ -185,9 +149,9 @@ func (l *LatencyStore) deleteNode(node *corev1.Node) {
 	defer l.mutex.Unlock()
 
 	// Delete the node from the node IP map
-	delete(l.nodeGW0Map, node.Name)
-	// Delete the node from the connection map
-	delete(l.connectionMap, node.Name)
+	delete(l.nodeGatewayMap, node.Name)
+	// Delete the node from the NodeIPLatencyEntry map
+	delete(l.nodeIPLatencyMap, node.Name)
 }
 
 func (l *LatencyStore) updateNode(old *corev1.Node, new *corev1.Node) {
@@ -205,16 +169,16 @@ func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
 			return
 		}
 
-		// Add the node to the connection map
-		l.nodeGW0Map[node.Name] = transportIPs
+		// Add the node to the gateway map
+		l.nodeGatewayMap[node.Name] = transportIPs
 	} else {
-		gw0IPs, err := getGW0IPs(node)
+		gw0IPs, err := getGWIPs(node)
 		if err != nil {
 			return
 		}
 
 		// Add the node to the node IP map
-		l.nodeGW0Map[node.Name] = gw0IPs
+		l.nodeGatewayMap[node.Name] = gw0IPs
 	}
 }
 
@@ -235,14 +199,14 @@ func getTransportIPs(node *corev1.Node) ([]net.IP, error) {
 	return transportIPs, nil
 }
 
-func getGW0IPs(node *corev1.Node) ([]net.IP, error) {
-	var gw0IPs []net.IP
+func getGWIPs(node *corev1.Node) ([]net.IP, error) {
+	var gwIPs []net.IP
 
 	podCIDRStrs := getPodCIDRsOnNode(node)
 	if len(podCIDRStrs) == 0 {
 		// Skip the node if it does not have a PodCIDR.
 		klog.Warningf("Node %s does not have a PodCIDR", node.Name)
-		return gw0IPs, errors.New("node does not have a PodCIDR")
+		return gwIPs, errors.New("node does not have a PodCIDR")
 	}
 
 	// the 0th entry must match the podCIDR field. It may contain at most 1 value for
@@ -263,11 +227,11 @@ func getGW0IPs(node *corev1.Node) ([]net.IP, error) {
 
 		// Only add the IP if it is an IPv4 or IPv6 address.
 		if peerGatewayIP.To4() != nil || peerGatewayIP.To16() != nil {
-			gw0IPs = append(gw0IPs, peerGatewayIP)
+			gwIPs = append(gwIPs, peerGatewayIP)
 		}
 	}
 
-	return gw0IPs, nil
+	return gwIPs, nil
 }
 
 func getPodCIDRsOnNode(node *corev1.Node) []string {
@@ -286,13 +250,13 @@ func (l *LatencyStore) ListNodeIPs() map[string][]net.IP {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	return l.nodeGW0Map
+	return l.nodeGatewayMap
 }
 
 func (l *LatencyStore) CleanUp() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	l.connectionMap = make(map[string][]*Connection)
-	l.nodeGW0Map = make(map[string][]net.IP)
+	l.nodeIPLatencyMap = make(map[string]*NodeIPLatencyEntry)
+	l.nodeGatewayMap = make(map[string][]net.IP)
 }

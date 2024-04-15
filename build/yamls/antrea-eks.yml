@@ -2708,21 +2708,11 @@ spec:
               type: object
               required:
                 - pingInterval
-                - pingTimeout
-                - pingConcurrentLimit
               properties:
                 pingInterval:
-                  type: string
-                  pattern: '^[1-9][0-9]*[s]$'
-                  # Explanation: At least one second ("1s") or higher
-                pingTimeout:
-                  type: string
-                  pattern: '^[1-9][0-9]*[s]$'
-                  # Explanation: Same as above
-                pingConcurrentLimit:
                   type: integer
                   minimum: 1
-                  # Explanation: Must be a positive integer
+                  # Explanation: At least one second ("1") or higher in seconds.
             metadata:
               type: object
               properties:
@@ -2734,14 +2724,6 @@ spec:
           jsonPath: .spec.pingInterval
           name: PingInterval
           type: string
-        - description: Specifies the timeout for each ping.
-          jsonPath: .spec.pingTimeout
-          name: PingTimeout
-          type: string
-        - description: Specifies the concurrent limit for pings.
-          jsonPath: .spec.pingConcurrentLimit
-          name: ConcurrentLimit
-          type: integer
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date

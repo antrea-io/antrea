@@ -340,7 +340,6 @@ type TrafficControlList struct {
 // +genclient:nonNamespaced
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default'",message="Only one NodeLatencyMonitor with metadata.name=\"default\" can be created in the cluster"
 
 // NodeLatencyMonitor is used to monitor the latency between nodes in a Kubernetes cluster. It is a singleton resource,
 // meaning only one instance of it can exist in the cluster.
@@ -352,23 +351,10 @@ type NodeLatencyMonitor struct {
 }
 
 type NodeLatencyMonitorSpec struct {
-	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*[s]$`
 	// PingInterval specifies the interval between ping requests.
 	// Ping interval should be greater than or equal to 1s(one second).
-	// Defaults to "10s". Valid time units are "s".
-	PingInterval string `json:"pingInterval"`
-
-	// +kubebuilder:validation:Pattern=`^[1-9][0-9]*[s]$`
-	// PingTimeout specifies the timeout for each ping request.
-	// Ping timeout should be greater than or equal to 1s(one second).
-	// Defaults to "5s". Valid time units are "s".
-	PingTimeout string `json:"pingTimeout"`
-
-	// +kubebuilder:validation:Minimum=1
-	// PingConcurrentLimit specifies the maximum number of concurrent ping requests.
-	// Concurrency should be greater than or equal to 1.
-	// Defaults to 10. Valid range is unsigned integer.
-	PingConcurrentLimit int `json:"pingConcurrentLimit"`
+	// Defaults to "10". Valid time units are "s".
+	PingInterval int `json:"pingInterval"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
