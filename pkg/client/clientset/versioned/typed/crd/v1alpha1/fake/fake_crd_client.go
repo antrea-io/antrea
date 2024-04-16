@@ -26,16 +26,8 @@ type FakeCrdV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeCrdV1alpha1) ClusterNetworkPolicies() v1alpha1.ClusterNetworkPolicyInterface {
-	return &FakeClusterNetworkPolicies{c}
-}
-
 func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeInterface {
 	return &FakeExternalNodes{c, namespace}
-}
-
-func (c *FakeCrdV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPolicyInterface {
-	return &FakeNetworkPolicies{c, namespace}
 }
 
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {

@@ -16,11 +16,7 @@
 
 package v1alpha1
 
-type ClusterNetworkPolicyExpansion interface{}
-
 type ExternalNodeExpansion interface{}
-
-type NetworkPolicyExpansion interface{}
 
 type SupportBundleCollectionExpansion interface{}
 

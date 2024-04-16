@@ -16,10 +16,6 @@
 
 package v1alpha1
 
-// ClusterNetworkPolicyListerExpansion allows custom methods to be added to
-// ClusterNetworkPolicyLister.
-type ClusterNetworkPolicyListerExpansion interface{}
-
 // ExternalNodeListerExpansion allows custom methods to be added to
 // ExternalNodeLister.
 type ExternalNodeListerExpansion interface{}
@@ -27,14 +23,6 @@ type ExternalNodeListerExpansion interface{}
 // ExternalNodeNamespaceListerExpansion allows custom methods to be added to
 // ExternalNodeNamespaceLister.
 type ExternalNodeNamespaceListerExpansion interface{}
-
-// NetworkPolicyListerExpansion allows custom methods to be added to
-// NetworkPolicyLister.
-type NetworkPolicyListerExpansion interface{}
-
-// NetworkPolicyNamespaceListerExpansion allows custom methods to be added to
-// NetworkPolicyNamespaceLister.
-type NetworkPolicyNamespaceListerExpansion interface{}
 
 // SupportBundleCollectionListerExpansion allows custom methods to be added to
 // SupportBundleCollectionLister.
