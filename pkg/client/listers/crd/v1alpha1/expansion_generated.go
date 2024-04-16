@@ -27,7 +27,3 @@ type ExternalNodeNamespaceListerExpansion interface{}
 // SupportBundleCollectionListerExpansion allows custom methods to be added to
 // SupportBundleCollectionLister.
 type SupportBundleCollectionListerExpansion interface{}
-
-// TraceflowListerExpansion allows custom methods to be added to
-// TraceflowLister.
-type TraceflowListerExpansion interface{}

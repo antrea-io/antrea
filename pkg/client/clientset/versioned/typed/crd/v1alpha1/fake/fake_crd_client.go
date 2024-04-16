@@ -34,10 +34,6 @@ func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleColle
 	return &FakeSupportBundleCollections{c}
 }
 
-func (c *FakeCrdV1alpha1) Traceflows() v1alpha1.TraceflowInterface {
-	return &FakeTraceflows{c}
-}
-
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeCrdV1alpha1) RESTClient() rest.Interface {

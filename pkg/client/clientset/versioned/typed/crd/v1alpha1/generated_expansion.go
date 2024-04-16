@@ -19,5 +19,3 @@ package v1alpha1
 type ExternalNodeExpansion interface{}
 
 type SupportBundleCollectionExpansion interface{}
-
-type TraceflowExpansion interface{}

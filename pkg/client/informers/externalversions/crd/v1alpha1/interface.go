@@ -26,8 +26,6 @@ type Interface interface {
 	ExternalNodes() ExternalNodeInformer
 	// SupportBundleCollections returns a SupportBundleCollectionInformer.
 	SupportBundleCollections() SupportBundleCollectionInformer
-	// Traceflows returns a TraceflowInformer.
-	Traceflows() TraceflowInformer
 }
 
 type version struct {
@@ -49,9 +47,4 @@ func (v *version) ExternalNodes() ExternalNodeInformer {
 // SupportBundleCollections returns a SupportBundleCollectionInformer.
 func (v *version) SupportBundleCollections() SupportBundleCollectionInformer {
 	return &supportBundleCollectionInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
-// Traceflows returns a TraceflowInformer.
-func (v *version) Traceflows() TraceflowInformer {
-	return &traceflowInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

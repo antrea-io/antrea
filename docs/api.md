@@ -43,7 +43,6 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `NetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
 | `SupportBundleCollection` | v1alpha1 | v1.10.0 | N/A | N/A |
 | `Tier` | v1beta1 | v1.13.0 | N/A | N/A |
-| `Traceflow` | v1alpha1 | v1.0.0 | v1.13.0 | N/A |
 | `Traceflow` | v1beta1 | v1.13.0 | N/A | N/A |
 
 ### Other API groups
@@ -82,3 +81,4 @@ These are the API group versions which are currently available when using Antrea
 | `ExternalEntity` | v1alpha1 | v0.10.0 | v0.11.0 | v2.0.0 |
 | `NetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
 | `Tier` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
+| `Traceflow` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |

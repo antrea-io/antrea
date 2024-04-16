@@ -28,7 +28,6 @@ type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ExternalNodesGetter
 	SupportBundleCollectionsGetter
-	TraceflowsGetter
 }
 
 // CrdV1alpha1Client is used to interact with features provided by the crd.antrea.io group.
@@ -42,10 +41,6 @@ func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterfac
 
 func (c *CrdV1alpha1Client) SupportBundleCollections() SupportBundleCollectionInterface {
 	return newSupportBundleCollections(c)
-}
-
-func (c *CrdV1alpha1Client) Traceflows() TraceflowInterface {
-	return newTraceflows(c)
 }
 
 // NewForConfig creates a new CrdV1alpha1Client for the given config.
