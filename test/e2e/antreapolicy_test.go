@@ -4344,7 +4344,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CreateInvalidANNP", func(t *testing.T) { testCreateValidationInvalidANNP(t) })
 
 		t.Log("============================= start tier create")
-		_, err := k8sUtils.CreateTier("tier-prio-20", 20)
+		tr, err := k8sUtils.CreateTier("tier-prio-20", 20)
 		if err != nil {
 			failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
 		}
@@ -4355,6 +4355,7 @@ func TestAntreaPolicy(t *testing.T) {
 			t.Log("============================= unexpected success, return")
 			return
 		} else {
+			failOnError(k8sUtils.DeleteTier(tr.Name), t)
 			t.Log("xxxxxxxxxxxxxx err", err)
 		}
 		t.Log("============================= test tier ok")
