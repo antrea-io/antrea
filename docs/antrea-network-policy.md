@@ -1366,6 +1366,13 @@ Antrea will only program datapath rules for actual egress traffic towards these 
 on DNS results. It will not interfere with DNS packets, unless there is a separate policy
 dropping/rejecting communication between the DNS components and the Pods selected.
 
+Antrea respects the TTL of DNS records, expiring stale IPs that are absent in more recent
+records according to their TTL. Therefore, Pods employing FQDN based policies ought to refrain
+from caching a DNS record for a duration exceeding its TTL. Otherwise, FQDN based policies may
+intermittently fail to function as intended. Typically, the Java virtual machine (JVM) caches
+DNS records for a fixed period of time, controlled by `networkaddress.cache.ttl`. In this
+case, it’s crucial to set the JVM’s TTL to 0 so that FQDN based policies can work properly.
+
 Note that FQDN based policies do not work for [Service DNS names created by
 Kubernetes](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#services)
 (e.g. `kubernetes.default.svc` or `antrea.kube-system.svc`), except for headless
