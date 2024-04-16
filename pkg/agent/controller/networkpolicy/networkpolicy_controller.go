@@ -934,10 +934,10 @@ func (w *watcher) fallback() {
 	if w.fullSynced {
 		return
 	}
-	klog.InfoS("Getting init events for %s from fallback", w.objectType)
+	klog.InfoS("Getting init events from fallback", "objectType", w.objectType)
 	objects, err := w.FallbackFunc()
 	if err != nil {
-		klog.ErrorS(err, "Failed to get init events for %s from fallback", w.objectType)
+		klog.ErrorS(err, "Failed to get init events from fallback", "objectType", w.objectType)
 		return
 	}
 	if err := w.ReplaceFunc(objects); err != nil {

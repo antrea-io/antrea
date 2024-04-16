@@ -157,17 +157,16 @@ func allocatePodSecondaryIfaceName(usedIFNames sets.Set[string]) (string, error)
 }
 
 func (pc *podController) enqueuePod(obj interface{}) {
-	var err error
 	pod, isPod := obj.(*corev1.Pod)
 	if !isPod {
 		podDeletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.ErrorS(err, "Unexpected object received:", obj)
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
-		pod, ok := podDeletedState.Obj.(*corev1.Pod)
+		pod, ok = podDeletedState.Obj.(*corev1.Pod)
 		if !ok {
-			klog.ErrorS(err, "DeletedFinalStateUnknown object is not of type Pod: ", podDeletedState.Obj, pod)
+			klog.ErrorS(nil, "DeletedFinalStateUnknown object is not of type Pod", "obj", podDeletedState.Obj)
 			return
 		}
 	}
@@ -346,7 +345,7 @@ func (pc *podController) configureSecondaryInterface(
 			if ifConfigErr != nil {
 				// Interface creation failed. Free allocated IP address
 				if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
-					klog.ErrorS(err, "IPAM de-allocation failed: ", err)
+					klog.ErrorS(err, "IPAM de-allocation failed", "podOwner", podOwner)
 				}
 			}
 		}()

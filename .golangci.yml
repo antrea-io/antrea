@@ -32,3 +32,4 @@ linters:
     - goimports
     - vet
     - revive
+    - loggercheck
