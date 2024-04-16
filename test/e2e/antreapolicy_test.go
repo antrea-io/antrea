@@ -4342,8 +4342,9 @@ func TestAntreaPolicy(t *testing.T) {
 		// For creation.
 		t.Run("Case=CreateInvalidACNP", func(t *testing.T) { testCreateValidationInvalidACNP(t) })
 		t.Run("Case=CreateInvalidANNP", func(t *testing.T) { testCreateValidationInvalidANNP(t) })
-
-		t.Log("============================= start tier create")
+		for i := 0; i < 50; i++ {
+			
+		t.Log("============================= start tier create, test ", i)
 		tr, err := k8sUtils.CreateTier("tier-prio-20", 20)
 		if err != nil {
 			failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
@@ -4359,6 +4360,8 @@ func TestAntreaPolicy(t *testing.T) {
 			t.Log("xxxxxxxxxxxxxx err", err)
 		}
 		t.Log("============================= test tier ok")
+			time.Sleep(time.Second)
+			}
 
 		t.Run("Case=CreateInvalidTier", func(t *testing.T) { testCreateValidationInvalidTier(t) })
 		t.Run("Case=CreateInvalidClusterGroup", func(t *testing.T) { testCreateValidationInvalidCG(t) })
