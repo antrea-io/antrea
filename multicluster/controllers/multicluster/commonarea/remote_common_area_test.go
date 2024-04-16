@@ -26,7 +26,6 @@ import (
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -68,12 +67,12 @@ func TestMemberAnnounce(t *testing.T) {
 
 			err := fakeRemoteClient.List(ctx, memberAnnounceList, client.InNamespace("cluster-a-ns"))
 			if err != nil {
-				klog.InfoS("member announce not written to remote cluster %v yet", err)
+				t.Logf("member announce not written to remote cluster yet: %v", err)
 				continue
 			}
 
 			if !remoteCommonAreaUnderTest.IsConnected() {
-				klog.InfoS("Remote cluster not marked as connected yet")
+				t.Log("Remote cluster not marked as connected yet")
 				continue
 			}
 			done <- true
@@ -133,12 +132,12 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 
 			err := fakeRemoteClient.List(ctx, memberAnnounceList, client.InNamespace("cluster-a-ns"))
 			if err != nil {
-				klog.InfoS("member announce not written to remote cluster %v yet", err)
+				t.Logf("member announce not written to remote cluster yet: %v", err)
 				continue
 			}
 
 			if !remoteCommonAreaUnderTest.IsConnected() {
-				klog.InfoS("Remote cluster not marked as connected yet")
+				t.Log("Remote cluster not marked as connected yet")
 				continue
 			}
 			done <- true

@@ -104,7 +104,7 @@ func (l *L7Listener) listenAndAcceptConn() {
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(l.suricataEventSocketPath), 0750); err != nil {
-		klog.ErrorS(err, "Failed to create directory %s", filepath.Dir(l.suricataEventSocketPath))
+		klog.ErrorS(err, "Failed to create directory", "dir", filepath.Dir(l.suricataEventSocketPath))
 		return
 	}
 	listener, err := net.Listen("unix", l.suricataEventSocketPath)
