@@ -4343,6 +4343,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CreateInvalidACNP", func(t *testing.T) { testCreateValidationInvalidACNP(t) })
 		t.Run("Case=CreateInvalidANNP", func(t *testing.T) { testCreateValidationInvalidANNP(t) })
 
+		t.Log("============================= start tier create")
 		_, err := k8sUtils.CreateTier("tier-prio-20", 20)
 		if err != nil {
 			failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
@@ -4351,8 +4352,12 @@ func TestAntreaPolicy(t *testing.T) {
 		if _, err = k8sUtils.CreateTier("another-tier-prio-20", 20); err == nil {
 			// Above creation of Tier must fail as it is an invalid spec.
 			skip = true
-			goto end
+			t.Log("============================= unexpected success, return")
+			return
+		} else {
+			t.Log("xxxxxxxxxxxxxx err", err)
 		}
+		t.Log("============================= test tier ok")
 
 		t.Run("Case=CreateInvalidTier", func(t *testing.T) { testCreateValidationInvalidTier(t) })
 		t.Run("Case=CreateInvalidClusterGroup", func(t *testing.T) { testCreateValidationInvalidCG(t) })
@@ -4367,8 +4372,6 @@ func TestAntreaPolicy(t *testing.T) {
 
 		// For deletion. ACNP, ANNP, ClusterGroup and Group don't have deletion validation.
 		t.Run("Case=DeleteReferencedTier", func(t *testing.T) { testDeleteValidationReferencedTier(t) })
-	end:
-		k8sUtils.Cleanup(namespaces)
 	})
 
 	// This test group only provides one case for each CR, including ACNP and ANNP to
