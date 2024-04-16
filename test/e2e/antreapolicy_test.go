@@ -4332,6 +4332,7 @@ func TestAntreaPolicy(t *testing.T) {
 	defer teardownTest(t, data)
 
 	initialize(t, data, nil)
+	var skip bool
 
 	// This test group only provides one case for each CR, including ACNP, ANNP, Tier,
 	// ClusterGroup and Group to make sure the corresponding validation webhooks is
@@ -4341,28 +4342,40 @@ func TestAntreaPolicy(t *testing.T) {
 		// For creation.
 		t.Run("Case=CreateInvalidACNP", func(t *testing.T) { testCreateValidationInvalidACNP(t) })
 		t.Run("Case=CreateInvalidANNP", func(t *testing.T) { testCreateValidationInvalidANNP(t) })
+
+		_, err := k8sUtils.CreateTier("tier-prio-20", 20)
+		if err != nil {
+			failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
+		}
+		// Attempt to create Tier with same priority.
+		if _, err = k8sUtils.CreateTier("another-tier-prio-20", 20); err == nil {
+			// Above creation of Tier must fail as it is an invalid spec.
+			skip = true
+			goto end
+		}
+
 		t.Run("Case=CreateInvalidTier", func(t *testing.T) { testCreateValidationInvalidTier(t) })
 		t.Run("Case=CreateInvalidClusterGroup", func(t *testing.T) { testCreateValidationInvalidCG(t) })
 		t.Run("Case=CreateInvalidGroup", func(t *testing.T) { testCreateValidationInvalidGroup(t) })
 
-		/*
-			// For update.
-			t.Run("Case=UpdateInvalidACNP", func(t *testing.T) { testUpdateValidationInvalidACNP(t) })
-			t.Run("Case=UpdateInvalidANNP", func(t *testing.T) { testUpdateValidationInvalidANNP(t) })
-			t.Run("Case=UpdateInvalidTier", func(t *testing.T) { testUpdateValidationInvalidTier(t) })
-			t.Run("Case=UpdateInvalidClusterGroup", func(t *testing.T) { testUpdateValidationInvalidCG(t) })
-			t.Run("Case=UpdateInvalidGroup", func(t *testing.T) { testUpdateValidationInvalidGroup(t) })
+		// For update.
+		t.Run("Case=UpdateInvalidACNP", func(t *testing.T) { testUpdateValidationInvalidACNP(t) })
+		t.Run("Case=UpdateInvalidANNP", func(t *testing.T) { testUpdateValidationInvalidANNP(t) })
+		t.Run("Case=UpdateInvalidTier", func(t *testing.T) { testUpdateValidationInvalidTier(t) })
+		t.Run("Case=UpdateInvalidClusterGroup", func(t *testing.T) { testUpdateValidationInvalidCG(t) })
+		t.Run("Case=UpdateInvalidGroup", func(t *testing.T) { testUpdateValidationInvalidGroup(t) })
 
-			// For deletion. ACNP, ANNP, ClusterGroup and Group don't have deletion validation.
-			t.Run("Case=DeleteReferencedTier", func(t *testing.T) { testDeleteValidationReferencedTier(t) })
-
-		*/
+		// For deletion. ACNP, ANNP, ClusterGroup and Group don't have deletion validation.
+		t.Run("Case=DeleteReferencedTier", func(t *testing.T) { testDeleteValidationReferencedTier(t) })
+	end:
+		k8sUtils.Cleanup(namespaces)
 	})
-	/*
-		// This test group only provides one case for each CR, including ACNP and ANNP to
-		// make sure the corresponding mutation webhooks is called. And for all specific
-		// cases/branches inside the mutation webhook, we just use UTs to cover them to
-		// reduce the pressure on E2E tests.
+
+	// This test group only provides one case for each CR, including ACNP and ANNP to
+	// make sure the corresponding mutation webhooks is called. And for all specific
+	// cases/branches inside the mutation webhook, we just use UTs to cover them to
+	// reduce the pressure on E2E tests.
+	if !skip {
 		t.Run("TestGroupMutationWebhook", func(t *testing.T) {
 			t.Run("Case=MutateACNPNoTier", func(t *testing.T) { testMutateACNPNoTier(t) })
 			t.Run("Case=MutateANNPNoTier", func(t *testing.T) { testMutateANNPNoTier(t) })
@@ -4455,9 +4468,8 @@ func TestAntreaPolicy(t *testing.T) {
 			skipIfMulticastDisabled(t, data)
 			testMulticastNP(t, data, data.testNamespace)
 		})
-
-	*/
-	k8sUtils.Cleanup(namespaces)
+		k8sUtils.Cleanup(namespaces)
+	}
 }
 
 func testMulticastNP(t *testing.T, data *TestData, testNamespace string) {
