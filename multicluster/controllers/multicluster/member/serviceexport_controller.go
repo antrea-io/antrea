@@ -214,7 +214,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return ctrl.Result{}, nil
 		}
-		klog.ErrorS(err, "Failed to get Service", req.String())
+		klog.ErrorS(err, "Failed to get Service", "service", req.String())
 		return ctrl.Result{}, err
 	}
 
@@ -259,7 +259,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	} else {
 		newSubsets, hasReadyEndpoints, err = r.checkSubsetsFromEndpoint(ctx, req, eps)
 		if err != nil {
-			klog.ErrorS(err, "Failed to get Endpoints", req.String())
+			klog.ErrorS(err, "Failed to get Endpoints", "endpoints", req.String())
 			return ctrl.Result{}, err
 		}
 	}
