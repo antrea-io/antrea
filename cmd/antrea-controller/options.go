@@ -31,6 +31,13 @@ import (
 )
 
 const (
+	// Use higher QPS and Burst rather than the default settings (QPS: 5, Burst: 10), otherwise synchronizing resources
+	// like ClusterNetworkPolicies and Egresses would be rather slow when they are created in bulk.
+	// The following values are recommended by RecommendedDefaultClientConnectionConfiguration.
+	// https://github.com/kubernetes/kubernetes/blob/b722d017a34b300a2284b890448e5a605f21d01e/staging/src/k8s.io/component-base/config/v1alpha1/defaults.go#L65-L75
+	defaultClientQPS   = 50
+	defaultClientBurst = 100
+
 	ipamIPv4MaskLo      = 16
 	ipamIPv4MaskHi      = 30
 	ipamIPv4MaskDefault = 24
@@ -193,6 +200,12 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.IPsecCSRSignerConfig.AutoApprove == nil {
 		o.config.IPsecCSRSignerConfig.AutoApprove = ptrBool(true)
+	}
+	if o.config.ClientConnection.QPS == 0.0 {
+		o.config.ClientConnection.QPS = defaultClientQPS
+	}
+	if o.config.ClientConnection.Burst == 0 {
+		o.config.ClientConnection.Burst = defaultClientBurst
 	}
 }
 
