@@ -29,49 +29,31 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-type Client struct {
-	clientSet   kubernetes.Interface
-	config      *rest.Config
-	clusterName string
-}
-
-func NewClient() (*Client, error) {
+func NewClient() (client kubernetes.Interface, config *rest.Config, clusterName string, err error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	nonInteractiveClient := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{})
-	config, err := nonInteractiveClient.ClientConfig()
+	config, err = nonInteractiveClient.ClientConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	rawConfig, err := nonInteractiveClient.RawConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	contextName := rawConfig.CurrentContext
-	clusterName := ""
+	clusterName = ""
 	if context, ok := rawConfig.Contexts[contextName]; ok {
 		clusterName = context.Cluster
 	}
-	return &Client{
-		clientSet:   clientset,
-		config:      config,
-		clusterName: clusterName,
-	}, nil
+	return clientset, config, clusterName, nil
 }
 
-func (c *Client) GetClientSet() kubernetes.Interface {
-	return c.clientSet
-}
-
-func (c *Client) ClusterName() (name string) {
-	return c.clusterName
-}
-
-func (c *Client) DeploymentIsReady(ctx context.Context, namespace, deploymentName string) (bool, error) {
-	deployment, err := c.clientSet.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+func DeploymentIsReady(ctx context.Context, client kubernetes.Interface, namespace, deploymentName string) (bool, error) {
+	deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -95,8 +77,8 @@ func (c *Client) DeploymentIsReady(ctx context.Context, namespace, deploymentNam
 	return false, nil
 }
 
-func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string, command []string) (string, string, error) {
-	req := c.clientSet.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
+func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Config, namespace, pod, container string, command []string) (string, string, error) {
+	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(&corev1.PodExecOptions{
 		Command:   command,
 		Container: container,
@@ -105,7 +87,7 @@ func (c *Client) ExecInPod(ctx context.Context, namespace, pod, container string
 		Stderr:    true,
 		TTY:       false,
 	}, scheme.ParameterCodec)
-	exec, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return "", "", fmt.Errorf("error while creating executor: %w", err)
 	}

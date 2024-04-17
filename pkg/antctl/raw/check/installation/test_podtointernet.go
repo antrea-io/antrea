@@ -17,6 +17,8 @@ package installation
 import (
 	"context"
 	"fmt"
+
+	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
 type PodToInternetConnectivityTest struct{}
@@ -27,7 +29,7 @@ func (t *PodToInternetConnectivityTest) Run(ctx context.Context, testContext *te
 			srcPod = testContext.namespace + "/" + clientPod.Name
 		)
 		testContext.Log("Validating connectivity from pod %s to the world (google.com)...", srcPod)
-		_, _, err := testContext.client.ExecInPod(ctx, testContext.namespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
+		_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
 		if err != nil {
 			return fmt.Errorf("pod %s was not able to connect to google.com: %w", srcPod, err)
 		}

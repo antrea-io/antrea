@@ -17,6 +17,8 @@ package installation
 import (
 	"context"
 	"fmt"
+
+	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
 type PodToPodConnectivityTest struct{}
@@ -29,7 +31,7 @@ func (t *PodToPodConnectivityTest) Run(ctx context.Context, testContext *testCon
 				dstPod = testContext.namespace + "/" + echoName
 			)
 			testContext.Log("Validating from pod %s to pod %s...", srcPod, dstPod)
-			_, _, err := testContext.client.ExecInPod(ctx, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
+			_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
 			if err != nil {
 				return fmt.Errorf("client pod %s was not able to communicate with echo pod %s (%s): %w", clientPod.Name, echoName, echoIP, err)
 			}
