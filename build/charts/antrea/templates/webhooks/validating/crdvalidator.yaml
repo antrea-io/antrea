@@ -15,7 +15,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE", "DELETE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha1", "v1beta1"]
+        apiVersions: ["v1beta1"]
         resources: ["tiers"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]

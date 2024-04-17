@@ -30,7 +30,6 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `AntreaControllerInfo` | v1beta1 | v1.0.0 | N/A | N/A |
 | `ClusterGroup` | v1alpha3 | v1.1.0 | v1.13.0 | N/A |
 | `ClusterGroup` | v1beta1 | v1.13.0 | N/A | N/A |
-| `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | N/A |
 | `ClusterNetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
 | `Egress` | v1alpha2 | v1.0.0 | N/A | N/A |
 | `Egress` | v1beta1 | v1.13.0 | N/A | N/A |
@@ -41,12 +40,9 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `IPPool`| v1alpha2 | v1.4.0 | N/A | N/A |
 | `Group` | v1alpha3 | v1.8.0 | v1.13.0 | N/A |
 | `Group` | v1beta1 | v1.13.0 | N/A | N/A |
-| `NetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | N/A |
 | `NetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
 | `SupportBundleCollection` | v1alpha1 | v1.10.0 | N/A | N/A |
-| `Tier` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
 | `Tier` | v1beta1 | v1.13.0 | N/A | N/A |
-| `Traceflow` | v1alpha1 | v1.0.0 | v1.13.0 | N/A |
 | `Traceflow` | v1beta1 | v1.13.0 | N/A | N/A |
 
 ### Other API groups
@@ -81,4 +77,8 @@ These are the API group versions which are currently available when using Antrea
 | CRD | CRD version | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|
 | `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | v2.0.0 |
+| `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
 | `ExternalEntity` | v1alpha1 | v0.10.0 | v0.11.0 | v2.0.0 |
+| `NetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
+| `Tier` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
+| `Traceflow` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |

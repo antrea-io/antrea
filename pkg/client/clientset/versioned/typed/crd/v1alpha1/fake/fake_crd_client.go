@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,28 +26,12 @@ type FakeCrdV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeCrdV1alpha1) ClusterNetworkPolicies() v1alpha1.ClusterNetworkPolicyInterface {
-	return &FakeClusterNetworkPolicies{c}
-}
-
 func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeInterface {
 	return &FakeExternalNodes{c, namespace}
 }
 
-func (c *FakeCrdV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPolicyInterface {
-	return &FakeNetworkPolicies{c, namespace}
-}
-
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {
 	return &FakeSupportBundleCollections{c}
-}
-
-func (c *FakeCrdV1alpha1) Tiers() v1alpha1.TierInterface {
-	return &FakeTiers{c}
-}
-
-func (c *FakeCrdV1alpha1) Traceflows() v1alpha1.TraceflowInterface {
-	return &FakeTraceflows{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
