@@ -73,7 +73,7 @@ Kubernetes: `>= 1.16.0-0`
 | controller.antreaController.extraEnv | object | `{}` | Extra environment variables to be injected into antrea-controller. |
 | controller.antreaController.logFileMaxNum | int | `4` | Max number of log files. |
 | controller.antreaController.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
-| controller.antreaController.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-controller container. |
+| controller.antreaController.resources | object | `{"requests":{"cpu":"200m","memory":"100Mi"}}` | Resource requests and limits for the antrea-controller container. |
 | controller.apiNodePort | int | `0` | NodePort for the antrea-controller APIServer to server on. |
 | controller.apiPort | int | `10349` | Port for the antrea-controller APIServer to serve on. |
 | controller.enablePrometheusMetrics | bool | `true` | Enable metrics exposure via Prometheus. |
