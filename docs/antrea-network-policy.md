@@ -769,16 +769,18 @@ be enforced in the order in which they are written.
 
 **enableLogging** and **logLabel**: Antrea-native policy ingress or egress rules
 can be audited by setting its logging fields. When the `enableLogging` field is set
-to `true`, the first packet of any connection that matches this rule will be
+to `true`, the first packet of any traffic flow that matches this rule will be
 logged to a file (`/var/log/antrea/networkpolicy/np.log`) on the Node on which the
 rule is enforced. The log files can then be used for further analysis. If `logLabel`
 is provided, the label will be added in the log. For example, in the
 [ACNP with log settings](#acnp-with-log-settings), traffic that hits the
 "AllowFromFrontend" rule will be logged with log label "frontend-allowed".
 
-We do not recommend enabling policy logging for older Antrea versions (all
-versions prior to v1.12, as well as v1.12.0 and v1.12.1). See this
-[section](#limitations-of-antrea-policy-logging) for more information.
+The logging feature is best-effort, and as such there is no guarantee that all
+the flows which match the policy rule will be logged. Additionally, we do not
+recommend enabling policy logging for older Antrea versions (all versions prior
+to v1.12, as well as v1.12.0 and v1.12.1). See this [section](#limitations-of-antrea-policy-logging)
+for more information.
 
 For drop and reject rules, deduplication is applied to reduce duplicated
 log messages, and the duplication buffer length is set to 1 second. When a rule
@@ -803,7 +805,7 @@ The rules are logged in the following format:
 Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
 (`/var/log/antrea/networkpolicy/np.log`). Add Annotation
 `networkpolicy.antrea.io/enable-logging: "true"` on a Namespace to enable logging
-for all NetworkPolicies in the Namespace. Packets of any connection that match
+for all NetworkPolicies in the Namespace. Packets of any network flow that match
 a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
 but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
 will only be logged with consistent name `K8sNetworkPolicy` for reference. When
