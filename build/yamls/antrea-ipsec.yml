@@ -4467,32 +4467,6 @@ metadata:
 spec:
   group: crd.antrea.io
   versions:
-    - name: v1alpha1
-      served: true
-      storage: false
-      additionalPrinterColumns:
-        - name: Priority
-          type: integer
-          description: The Priority of this Tier relative to other Tiers.
-          jsonPath: .spec.priority
-        - name: Age
-          type: date
-          jsonPath: .metadata.creationTimestamp
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              required:
-                - priority
-              type: object
-              properties:
-                priority:
-                  type: integer
-                  minimum: 0
-                  maximum: 255
-                description:
-                  type: string
     - name: v1beta1
       served: true
       storage: true
@@ -7313,7 +7287,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE", "DELETE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha1", "v1beta1"]
+        apiVersions: ["v1beta1"]
         resources: ["tiers"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]

@@ -7,32 +7,6 @@ metadata:
 spec:
   group: crd.antrea.io
   versions:
-    - name: v1alpha1
-      served: true
-      storage: false
-      additionalPrinterColumns:
-        - name: Priority
-          type: integer
-          description: The Priority of this Tier relative to other Tiers.
-          jsonPath: .spec.priority
-        - name: Age
-          type: date
-          jsonPath: .metadata.creationTimestamp
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              required:
-                - priority
-              type: object
-              properties:
-                priority:
-                  type: integer
-                  minimum: 0
-                  maximum: 255
-                description:
-                  type: string
     - name: v1beta1
       served: true
       storage: true

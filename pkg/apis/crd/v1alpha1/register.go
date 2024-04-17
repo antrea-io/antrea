@@ -49,14 +49,6 @@ func Resource(resource string) schema.GroupResource {
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
-		&Traceflow{},
-		&TraceflowList{},
-		&NetworkPolicy{},
-		&NetworkPolicyList{},
-		&ClusterNetworkPolicy{},
-		&ClusterNetworkPolicyList{},
-		&Tier{},
-		&TierList{},
 		&ExternalNode{},
 		&ExternalNodeList{},
 		&SupportBundleCollection{},
