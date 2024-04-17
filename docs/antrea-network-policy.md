@@ -53,6 +53,8 @@
   - [<em>kubectl</em> commands for Group](#kubectl-commands-for-group)
 - [RBAC](#rbac)
 - [Notes and constraints](#notes-and-constraints)
+  - [Limitations of Antrea policy logging](#limitations-of-antrea-policy-logging)
+    - [Logging prior to Antrea v1.13](#logging-prior-to-antrea-v113)
 <!-- /toc -->
 
 ## Summary
@@ -767,12 +769,18 @@ be enforced in the order in which they are written.
 
 **enableLogging** and **logLabel**: Antrea-native policy ingress or egress rules
 can be audited by setting its logging fields. When the `enableLogging` field is set
-to `true`, the first packet of any connection that matches this rule will be
+to `true`, the first packet of any traffic flow that matches this rule will be
 logged to a file (`/var/log/antrea/networkpolicy/np.log`) on the Node on which the
 rule is enforced. The log files can then be used for further analysis. If `logLabel`
 is provided, the label will be added in the log. For example, in the
 [ACNP with log settings](#acnp-with-log-settings), traffic that hits the
 "AllowFromFrontend" rule will be logged with log label "frontend-allowed".
+
+The logging feature is best-effort, and as such there is no guarantee that all
+the flows which match the policy rule will be logged. Additionally, we do not
+recommend enabling policy logging for older Antrea versions (all versions prior
+to v1.12, as well as v1.12.0 and v1.12.1). See this [section](#limitations-of-antrea-policy-logging)
+for more information.
 
 For drop and reject rules, deduplication is applied to reduce duplicated
 log messages, and the duplication buffer length is set to 1 second. When a rule
@@ -797,7 +805,7 @@ The rules are logged in the following format:
 Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
 (`/var/log/antrea/networkpolicy/np.log`). Add Annotation
 `networkpolicy.antrea.io/enable-logging: "true"` on a Namespace to enable logging
-for all NetworkPolicies in the Namespace. Packets of any connection that match
+for all NetworkPolicies in the Namespace. Packets of any network flow that match
 a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
 but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
 will only be logged with consistent name `K8sNetworkPolicy` for reference. When
@@ -1850,3 +1858,63 @@ Similar RBAC is applied to the ClusterGroup resource.
   This is due to kube-proxy performing SNAT, which conceals the original source IP from
   Antrea. Consequently, NetworkPolicies are unable to differentiate between hairpin
   Service traffic and external traffic in this scenario.
+
+### Limitations of Antrea policy logging
+
+Antrea policy logging is enabled by setting `enableLogging` to true for specific
+policy rules (or by using the `networkpolicy.antrea.io/enable-logging: "true"`
+annotation for K8s NetworkPolicies). Starting with Antrea v1.13, logging is
+"best-effort": if too much traffic needs to be logged, we will skip logging
+rather than start dropping packets or rather than risking to overrun the Antrea
+Agent, which could impact cluster health or other workloads. This behavior
+cannot be changed, and the logging feature is therefore not meant to be used for
+compliance purposes. By default, the Antrea datapath will send up to 500 packets
+per second (with a burst size of 1000 packets) to the Agent for logging. This
+rate applies to all the traffic that needs to be logged, and is enforced at the
+level of each Node. A rate of 500 packets per second roughly translates to 500
+new TCP connections per second, or 500 UDP requests per second. While it is
+possible to adjust the rate and burst size by modifying the `packetInRate`
+parameter in the antrea-agent configuration, we do not recommend doing so. The
+default value was set to 500 after careful consideration.
+
+#### Logging prior to Antrea v1.13
+
+Prior to Antrea v1.13, policy logging was not best-effort. While we did have a
+rate limit for the number of packets that could be sent to the Agent for
+logging, the datapath behavior was to drop all packets that exceeded the rate
+limit, as opposed to skipping the logging and applying the specified policy rule
+action. This meant that the logging feature was more suited for audit /
+compliance applications, however, we ultimately decided that the behavior was
+too aggressive and that it was too easy to disrupt application workloads by
+enabling logging - the rate limit was also lower than the default one we use
+today (100 packets per second instead of 500). For example, the following policy
+which allows ingress DNS traffic for coreDNS Pods, and has logging enabled,
+would drastically restrict the number of possible DNS requests in the cluster,
+which in turn would cause a lot of errors in applications which rely on DNS:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ClusterNetworkPolicy
+metadata:
+  name: allow-core-dns-access
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector: {}
+  ingress:
+    - name: allow-dns
+      enableLogging: true
+      action: Allow
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+```
+
+**For this reason, we do NOT recommend enabling logging for Antrea versions
+  prior to v1.13**, especially when the policy rule uses the `Allow` action.
+
+Note that v1.12 patch versions starting with v1.12.2 also do not suffer from
+this issue, as we backported the fix to the v1.12 release.
