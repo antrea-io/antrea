@@ -118,14 +118,6 @@ func (l *LatencyStore) UpdateNodeIPLatencyEntryByKey(key string, entry *NodeIPLa
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	// Judge if the connection is already in the map
-	e, found := l.nodeIPLatencyMap[key]
-	if !found {
-		// Add the connection to the map
-		l.nodeIPLatencyMap[key] = e
-		return
-	}
-
 	// Update the connection map
 	l.nodeIPLatencyMap[key] = entry
 }

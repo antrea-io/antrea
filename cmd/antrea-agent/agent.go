@@ -141,7 +141,6 @@ func run(o *Options) error {
 		return fmt.Errorf("error connecting OVSDB: %v", err)
 	}
 	defer ovsdbConnection.Close()
-	klog.InfoS("Connected to OVSDB", "address", ovsdbAddress)
 
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
@@ -933,15 +932,15 @@ func run(o *Options) error {
 	}
 
 	// Start the node latency monitor.
-	// if features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) {
-	nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(
-		nodeInformer,
-		nodeLatencyMonitorInformer,
-		nodeConfig.GatewayConfig,
-		networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(),
-	)
-	go nodeLatencyMonitor.Run(stopCh)
-	// }
+	if features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) {
+		nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(
+			nodeInformer,
+			nodeLatencyMonitorInformer,
+			nodeConfig.GatewayConfig,
+			networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(),
+		)
+		go nodeLatencyMonitor.Run(stopCh)
+	}
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent")

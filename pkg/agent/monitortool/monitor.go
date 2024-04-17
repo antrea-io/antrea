@@ -251,8 +251,14 @@ func (m *MonitorTool) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan
 				}
 			}
 
+			echo, ok := msg.Body.(*icmp.Echo)
+			if !ok {
+				klog.ErrorS(nil, "Failed to assert type as *icmp.Echo")
+				continue
+			}
+
 			// Parse the ICMP data
-			if entry.SeqID != uint32(msg.Body.(*icmp.Echo).Seq) {
+			if entry.SeqID != uint32(echo.Seq) {
 				klog.ErrorS(err, "Failed to match seqID")
 				continue
 			}
@@ -321,11 +327,12 @@ func (m *MonitorTool) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 }
 
 func (m *MonitorTool) testPrint() {
-	// TODO: Print all connection status for debug
+	// Print all connection status for debug
+	// It will be removed when collector is ready
 	klog.InfoS("Finish to ping all nodes")
 	entries := m.latencyStore.ListLatencies()
-	for _, entry := range entries {
-		klog.InfoS("Connection status", "Connection", entry)
+	for key, entry := range entries {
+		klog.InfoS("NodeIPLatency status", "Key", key, "Entry", entry)
 	}
 }
 
