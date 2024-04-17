@@ -33,6 +33,8 @@ func TestNewOptions(t *testing.T) {
 	assert.Equal(t, ipamIPv6MaskDefault, op.config.NodeIPAM.NodeCIDRMaskSizeIPv6)
 	assert.Equal(t, true, *op.config.IPsecCSRSignerConfig.SelfSignedCA)
 	assert.Equal(t, true, *op.config.IPsecCSRSignerConfig.AutoApprove)
+	assert.EqualValues(t, defaultClientQPS, op.config.ClientConnection.QPS)
+	assert.EqualValues(t, defaultClientBurst, op.config.ClientConnection.Burst)
 }
 
 func TestValidateNodeIPAMControllerOptions(t *testing.T) {
