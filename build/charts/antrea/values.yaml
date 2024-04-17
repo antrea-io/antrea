@@ -373,6 +373,7 @@ controller:
     resources:
       requests:
         cpu: "200m"
+        memory: "100Mi"
 
 flowExporter:
   # -- Enable the flow exporter feature.
