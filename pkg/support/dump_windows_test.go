@@ -38,10 +38,11 @@ func TestDumpLog(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	logDir := logdir.GetLogDir()
 
+	agentLogFileName := "antrea-agent.exe.INFO"
 	fs.MkdirAll(logDir, os.ModePerm)
 	fs.MkdirAll(antreaWindowsOVSLogDir, os.ModePerm)
 	fs.MkdirAll(antreaWindowsKubeletLogDir, os.ModePerm)
-	fs.Create(filepath.Join(logDir, "rancher-wins-antrea-agent.log"))
+	fs.Create(filepath.Join(logDir, agentLogFileName))
 	fs.Create(filepath.Join(antreaWindowsOVSLogDir, "ovs.log"))
 	fs.Create(filepath.Join(antreaWindowsKubeletLogDir, "kubelet.log"))
 
@@ -49,7 +50,7 @@ func TestDumpLog(t *testing.T) {
 	err := dumper.DumpLog(baseDir)
 	require.NoError(t, err)
 
-	ok, err := afero.Exists(fs, filepath.Join(baseDir, "logs", "agent", "rancher-wins-antrea-agent.log"))
+	ok, err := afero.Exists(fs, filepath.Join(baseDir, "logs", "agent", agentLogFileName))
 	require.NoError(t, err)
 	assert.True(t, ok)
 	ok, err = afero.Exists(fs, filepath.Join(baseDir, "logs", "ovs", "ovs.log"))

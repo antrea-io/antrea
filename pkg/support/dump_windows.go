@@ -37,7 +37,7 @@ func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
 	timeFilter := timestampFilter(d.since)
 
-	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "rancher-wins-antrea-agent", timeFilter); err != nil {
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
 	// Dump OVS logs.
@@ -106,6 +106,6 @@ func (d *agentDumper) dumpHNSResources(basedir string) error {
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
-	// memberlist never runs on windows.
+	// memberlist never runs on Windows.
 	return nil
 }
