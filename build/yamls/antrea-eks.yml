@@ -7071,6 +7071,7 @@ spec:
           resources:
             requests:
               cpu: 200m
+              memory: 100Mi
           command: ["antrea-controller"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
           args:
