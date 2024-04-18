@@ -30,7 +30,6 @@ These are the CRDs currently available in `crd.antrea.io`.
 | `AntreaControllerInfo` | v1beta1 | v1.0.0 | N/A | N/A |
 | `ClusterGroup` | v1beta1 | v1.13.0 | N/A | N/A |
 | `ClusterNetworkPolicy` | v1beta1 | v1.13.0 | N/A | N/A |
-| `Egress` | v1alpha2 | v1.0.0 | N/A | N/A |
 | `Egress` | v1beta1 | v1.13.0 | N/A | N/A |
 | `ExternalEntity` | v1alpha2 | v1.0.0 | N/A | N/A |
 | `ExternalIPPool` | v1beta1 | v1.13.0 | N/A | N/A |
@@ -76,6 +75,7 @@ These are the API group versions which are currently available when using Antrea
 | `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | v2.0.0 |
 | `ClusterGroup` | v1alpha3 | v1.1.0 | v1.13.0 | v2.0.0 |
 | `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | v1.13.0 | v2.0.0 |
+| `Egress` | v1alpha2 | v1.0.0 | v1.13.0 | v2.0.0 |
 | `ExternalEntity` | v1alpha1 | v0.10.0 | v0.11.0 | v2.0.0 |
 | `ExternalIPPool` | v1alpha2 | v1.2.0 | v1.13.0 | v2.0.0 |
 | `Group` | v1alpha3 | v1.8.0 | v1.13.0 | v2.0.0 |

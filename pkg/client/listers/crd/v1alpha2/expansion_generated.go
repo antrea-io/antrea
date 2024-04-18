@@ -16,10 +16,6 @@
 
 package v1alpha2
 
-// EgressListerExpansion allows custom methods to be added to
-// EgressLister.
-type EgressListerExpansion interface{}
-
 // ExternalEntityListerExpansion allows custom methods to be added to
 // ExternalEntityLister.
 type ExternalEntityListerExpansion interface{}

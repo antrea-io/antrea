@@ -46,8 +46,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&ExternalEntity{},
 		&ExternalEntityList{},
-		&Egress{},
-		&EgressList{},
 		&IPPool{},
 		&IPPoolList{},
 		&TrafficControl{},

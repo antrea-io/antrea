@@ -16,8 +16,6 @@
 
 package v1alpha2
 
-type EgressExpansion interface{}
-
 type ExternalEntityExpansion interface{}
 
 type IPPoolExpansion interface{}

@@ -26,7 +26,6 @@ import (
 
 type CrdV1alpha2Interface interface {
 	RESTClient() rest.Interface
-	EgressesGetter
 	ExternalEntitiesGetter
 	IPPoolsGetter
 	TrafficControlsGetter
@@ -35,10 +34,6 @@ type CrdV1alpha2Interface interface {
 // CrdV1alpha2Client is used to interact with features provided by the crd.antrea.io group.
 type CrdV1alpha2Client struct {
 	restClient rest.Interface
-}
-
-func (c *CrdV1alpha2Client) Egresses() EgressInterface {
-	return newEgresses(c)
 }
 
 func (c *CrdV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInterface {
