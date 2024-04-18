@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
-	crdv1alpha3 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha3"
 	crdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
 	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
 	systemv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
@@ -37,7 +36,6 @@ type Interface interface {
 	ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface
 	CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface
 	CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface
-	CrdV1alpha3() crdv1alpha3.CrdV1alpha3Interface
 	CrdV1beta1() crdv1beta1.CrdV1beta1Interface
 	StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface
 	SystemV1beta1() systemv1beta1.SystemV1beta1Interface
@@ -49,7 +47,6 @@ type Clientset struct {
 	controlplaneV1beta2 *controlplanev1beta2.ControlplaneV1beta2Client
 	crdV1alpha1         *crdv1alpha1.CrdV1alpha1Client
 	crdV1alpha2         *crdv1alpha2.CrdV1alpha2Client
-	crdV1alpha3         *crdv1alpha3.CrdV1alpha3Client
 	crdV1beta1          *crdv1beta1.CrdV1beta1Client
 	statsV1alpha1       *statsv1alpha1.StatsV1alpha1Client
 	systemV1beta1       *systemv1beta1.SystemV1beta1Client
@@ -68,11 +65,6 @@ func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
 // CrdV1alpha2 retrieves the CrdV1alpha2Client
 func (c *Clientset) CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface {
 	return c.crdV1alpha2
-}
-
-// CrdV1alpha3 retrieves the CrdV1alpha3Client
-func (c *Clientset) CrdV1alpha3() crdv1alpha3.CrdV1alpha3Interface {
-	return c.crdV1alpha3
 }
 
 // CrdV1beta1 retrieves the CrdV1beta1Client
@@ -146,10 +138,6 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
-	cs.crdV1alpha3, err = crdv1alpha3.NewForConfigAndClient(&configShallowCopy, httpClient)
-	if err != nil {
-		return nil, err
-	}
 	cs.crdV1beta1, err = crdv1beta1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
@@ -186,7 +174,6 @@ func New(c rest.Interface) *Clientset {
 	cs.controlplaneV1beta2 = controlplanev1beta2.New(c)
 	cs.crdV1alpha1 = crdv1alpha1.New(c)
 	cs.crdV1alpha2 = crdv1alpha2.New(c)
-	cs.crdV1alpha3 = crdv1alpha3.New(c)
 	cs.crdV1beta1 = crdv1beta1.New(c)
 	cs.statsV1alpha1 = statsv1alpha1.New(c)
 	cs.systemV1beta1 = systemv1beta1.New(c)

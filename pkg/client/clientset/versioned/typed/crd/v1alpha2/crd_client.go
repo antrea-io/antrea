@@ -28,7 +28,6 @@ type CrdV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	EgressesGetter
 	ExternalEntitiesGetter
-	ExternalIPPoolsGetter
 	IPPoolsGetter
 	TrafficControlsGetter
 }
@@ -44,10 +43,6 @@ func (c *CrdV1alpha2Client) Egresses() EgressInterface {
 
 func (c *CrdV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInterface {
 	return newExternalEntities(c, namespace)
-}
-
-func (c *CrdV1alpha2Client) ExternalIPPools() ExternalIPPoolInterface {
-	return newExternalIPPools(c)
 }
 
 func (c *CrdV1alpha2Client) IPPools() IPPoolInterface {

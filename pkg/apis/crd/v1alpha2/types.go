@@ -177,55 +177,6 @@ type EgressList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExternalIPPool defines one or multiple IP sets that can be used in the external network. For instance, the IPs can be
-// allocated to the Egress resources as the Egress IPs.
-type ExternalIPPool struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard metadata of the object.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	// Specification of the ExternalIPPool.
-	Spec ExternalIPPoolSpec `json:"spec"`
-
-	// The current status of the ExternalIPPool.
-	Status ExternalIPPoolStatus `json:"status"`
-}
-
-type ExternalIPPoolSpec struct {
-	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.
-	IPRanges []IPRange `json:"ipRanges"`
-	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
-	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
-}
-
-// IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
-type IPRange struct {
-	// The CIDR of this range, e.g. 10.10.10.0/24.
-	CIDR string `json:"cidr,omitempty"`
-	// The start IP of the range, e.g. 10.10.20.5, inclusive.
-	Start string `json:"start,omitempty"`
-	// The end IP of the range, e.g. 10.10.20.20, inclusive.
-	End string `json:"end,omitempty"`
-}
-
-type ExternalIPPoolStatus struct {
-	Usage IPPoolUsage `json:"usage,omitempty"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type ExternalIPPoolList struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ListMeta `json:"metadata,omitempty"`
-
-	Items []ExternalIPPool `json:"items"`
-}
-
-// +genclient
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // IPPool defines one or multiple IP sets that can be used for flexible IPAM feature. For instance, the IPs can be
 // allocated to Pods according to IP pool specified in Deployment annotation.
 type IPPool struct {
@@ -246,6 +197,16 @@ const (
 	IPv4 = IPVersion(4)
 	IPv6 = IPVersion(6)
 )
+
+// IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
+type IPRange struct {
+	// The CIDR of this range, e.g. 10.10.10.0/24.
+	CIDR string `json:"cidr,omitempty"`
+	// The start IP of the range, e.g. 10.10.20.5, inclusive.
+	Start string `json:"start,omitempty"`
+	// The end IP of the range, e.g. 10.10.20.20, inclusive.
+	End string `json:"end,omitempty"`
+}
 
 type IPPoolSpec struct {
 	// IP Version for this IP pool - either 4 or 6

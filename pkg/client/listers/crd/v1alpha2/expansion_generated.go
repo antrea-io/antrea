@@ -28,10 +28,6 @@ type ExternalEntityListerExpansion interface{}
 // ExternalEntityNamespaceLister.
 type ExternalEntityNamespaceListerExpansion interface{}
 
-// ExternalIPPoolListerExpansion allows custom methods to be added to
-// ExternalIPPoolLister.
-type ExternalIPPoolListerExpansion interface{}
-
 // IPPoolListerExpansion allows custom methods to be added to
 // IPPoolLister.
 type IPPoolListerExpansion interface{}

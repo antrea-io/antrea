@@ -34,10 +34,6 @@ func (c *FakeCrdV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEn
 	return &FakeExternalEntities{c, namespace}
 }
 
-func (c *FakeCrdV1alpha2) ExternalIPPools() v1alpha2.ExternalIPPoolInterface {
-	return &FakeExternalIPPools{c}
-}
-
 func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {
 	return &FakeIPPools{c}
 }

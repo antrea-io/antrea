@@ -26,8 +26,6 @@ type Interface interface {
 	Egresses() EgressInformer
 	// ExternalEntities returns a ExternalEntityInformer.
 	ExternalEntities() ExternalEntityInformer
-	// ExternalIPPools returns a ExternalIPPoolInformer.
-	ExternalIPPools() ExternalIPPoolInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
 	// TrafficControls returns a TrafficControlInformer.
@@ -53,11 +51,6 @@ func (v *version) Egresses() EgressInformer {
 // ExternalEntities returns a ExternalEntityInformer.
 func (v *version) ExternalEntities() ExternalEntityInformer {
 	return &externalEntityInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// ExternalIPPools returns a ExternalIPPoolInformer.
-func (v *version) ExternalIPPools() ExternalIPPoolInformer {
-	return &externalIPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IPPools returns a IPPoolInformer.
