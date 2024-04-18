@@ -157,6 +157,12 @@ Write-Host "Registering kubelet service"
 nssm install kubelet $global:Powershell $global:PowershellArgs $global:StartKubeletScript
 
 nssm set kubelet DependOnService $ContainerRuntime
+nssm set kubelet AppStdout C:\var\log\kubelet\kubelet.log
+# Replace kubelet.log on every service restart
+nssm set kubelet AppStdoutCreationDisposition 2
+nssm set kubelet AppStderr C:\var\log\kubelet\kubelet.err.log
+# Replace kubelet.err.log on every service restart
+nssm set kubelet AppStderrCreationDisposition 2
 
 New-NetFirewallRule -Name kubelet -DisplayName 'kubelet' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 10250
 

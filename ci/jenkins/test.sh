@@ -245,14 +245,11 @@ function collect_windows_network_info_and_logs {
         ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe Get-HNSNetwork" > "${NODE_NETWORK_INFO_PATH}/hns_network"
         ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe Get-HNSEndpoint" > "${NODE_NETWORK_INFO_PATH}/hns_endpoint"
 
-        echo "=== Collecting '${NODENAME}' kubelet and docker logs after failure ==="
+        echo "=== Collecting '${NODENAME}' kubelet logs after failure ==="
         KUBELET_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/kubelet"
         mkdir "${KUBELET_LOG_PATH}"
         scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:/cygdrive/c/var/log/kubelet/* "${KUBELET_LOG_PATH}"
 
-        DOCKER_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/docker"
-        mkdir "${DOCKER_LOG_PATH}"
-        scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:'/cygdrive/c/"Program Files"/Docker/dockerd.log*' "${DOCKER_LOG_PATH}"
     done
     set -e
     tar zcf debug_logs.tar.gz "${DEBUG_LOG_PATH}"
