@@ -663,7 +663,7 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.logsExportOnSuccess, "logs-export-on-success", false, "Export logs even when a test is successful")
 	flag.BoolVar(&testOptions.withBench, "benchtest", false, "Run tests include benchmark tests")
 	flag.BoolVar(&testOptions.enableCoverage, "coverage", false, "Run tests and measure coverage")
-	flag.BoolVar(&testOptions.enableAntreaIPAM, "antrea-ipam", false, "Run tests with AntreaIPAM")
+	flag.BoolVar(&testOptions.enableAntreaIPAM, "antrea-ipam", true, "Run tests with AntreaIPAM")
 	flag.BoolVar(&testOptions.flowVisibility, "flow-visibility", false, "Run flow visibility tests")
 	flag.BoolVar(&testOptions.deployAntrea, "deploy-antrea", true, "Deploy Antrea before running tests")
 	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
