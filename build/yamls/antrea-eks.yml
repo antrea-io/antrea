@@ -5655,7 +5655,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha1"]
+        apiVersions: ["v1beta1"]
         resources: ["clusternetworkpolicies"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
@@ -5670,7 +5670,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha1"]
+        apiVersions: ["v1beta1"]
         resources: ["networkpolicies"]
         scope: "Namespaced"
     admissionReviewVersions: ["v1", "v1beta1"]
@@ -5858,7 +5858,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha1"]
+        apiVersions: ["v1beta1"]
         resources: ["traceflows"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
