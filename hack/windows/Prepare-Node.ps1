@@ -17,7 +17,7 @@ script from the sig-windows-tools repo release page: https://github.com/kubernet
 Kubernetes version to download and use
 
 .PARAMETER InstallKubeProxy
-Install kube-proxy
+[DEPRECATED] Install kube-proxy
 
 .PARAMETER InstallOVS
 Install OVS
@@ -26,11 +26,12 @@ Install OVS
 The node ip used by kubelet
 
 .PARAMETER ContainerRuntime
-Container runtime that Kubernetes will use. (docker or containerd)
+[DEPRECATED] Container runtime that Kubernetes will use (docker or containerd).
+Starting with Antrea v2, only containerd is supported.
 
 .PARAMETER InstallOVSUserspace
-Specifies whether OVS userspace processes are included in the installation. If false, these processes will not 
-be installed as a Windows service on the host.
+Specifies whether OVS userspace processes are included in the installation. If false, these
+processes will not be installed as a Windows service on the host.
 
 .EXAMPLE
 PS> .\Prepare-Node.ps1 -KubernetesVersion v1.27.0 -NodeIP 192.168.1.10 -ContainerRuntime containerd 
@@ -43,8 +44,8 @@ Param(
     [parameter(Mandatory = $false)] [switch] $InstallKubeProxy = $false,
     [parameter(Mandatory = $false)] [switch] $InstallOVS = $false,
     [parameter(Mandatory = $false, HelpMessage="Kubernetes download")] [string] $KubernetesURL="dl.k8s.io",
-    [parameter(HelpMessage="Container runtime that Kubernets will use")] [ValidateSet("containerd", "docker")] [string] $ContainerRuntime = "containerd",
-    [parameter(Mandatory = $false)] [bool] $InstallOVSUserspace = $true 
+    [parameter(Mandatory = $false)] [ValidateSet("containerd", "docker")] [string] $ContainerRuntime = "containerd",
+    [parameter(Mandatory = $false)] [bool] $InstallOVSUserspace = $true
 )
 $ErrorActionPreference = 'Stop'
 
@@ -64,15 +65,13 @@ If (Get-Service kubelet -ErrorAction SilentlyContinue) {
 }
 
 if ($ContainerRuntime -eq "docker") {
-    if (-not(Test-Path "//./pipe/docker_engine")) {
-        Write-Error "Docker service was not detected - please install and start Docker before calling Prepare-Node.ps1 with -ContainerRuntime docker"
-        exit 1
-    }
-} elseif ($ContainerRuntime -eq "containerd") {
-    if (-not(Test-Path "//./pipe/containerd-containerd")) {
-        Write-Error "Containerd service was not detected - please install and start Containerd before calling Prepare-Node.ps1 with -ContainerRuntime containerd"
-        exit 1
-    }
+    Write-Error "Docker container runtime is no longer supported"
+    exit 1
+}
+
+if (-not(Test-Path "//./pipe/containerd-containerd")) {
+    Write-Error "Containerd service was not detected - please install and start Containerd before calling Prepare-Node.ps1"
+    exit 1
 }
 
 if (!$KubernetesVersion.StartsWith("v")) {
@@ -94,13 +93,6 @@ $env:Path += ";$global:KubernetesPath"
 DownloadFile $kubeletBinPath "https:/$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kubelet.exe"
 DownloadFile "$global:KubernetesPath\kubeadm.exe" "https:/$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kubeadm.exe"
 
-if ($ContainerRuntime -eq "docker") {
-    Write-Host "Registering wins service"
-    DownloadFile "$global:KubernetesPath\wins.exe" https://github.com/rancher/wins/releases/download/v0.0.4/wins.exe
-    wins.exe srv app run --register
-    start-service rancher-wins
-}
-
 
 mkdir -force C:\var\log\kubelet
 mkdir -force C:\var\lib\kubelet\etc\kubernetes
@@ -111,15 +103,8 @@ New-Item -path C:\var\lib\kubelet\etc\kubernetes\pki -type SymbolicLink -value C
 $StartKubeletFileContent = '$FileContent = Get-Content -Path "/var/lib/kubelet/kubeadm-flags.env"
 $global:KubeletArgs = $FileContent.Trim("KUBELET_KUBEADM_ARGS=`"")'+ [Environment]::NewLine
 
-if ($ContainerRuntime -eq "docker") {
-    $StartKubeletFileContent +=[Environment]::NewLine +'$netId = docker network ls -f name=host --format "{{ .ID }}"
-
-if ($netId.Length -lt 1) {
-    docker network create -d nat host
-}' + [Environment]::NewLine
-}
-
 if ($InstallKubeProxy) {
+    Write-Host "Running Antrea with kube-proxy is no longer supported, this parameter will be removed soon"
     $StartKubeletFileContent += [Environment]::NewLine + '& C:\k\Prepare-ServiceInterface.ps1 -InterfaceAlias "HNS Internal NIC"' + [Environment]::NewLine
 }
 
