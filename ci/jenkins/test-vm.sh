@@ -53,9 +53,6 @@ declare -a WIN_HOSTNAMES=("vmbmtest0-win-0")
 declare -A LINUX_HOSTS_TO_USERNAME=(["vmbmtest0-1"]="ubuntu" ["vmbmtest0-redhat-0"]="root")
 declare -A WINDOWS_HOSTS_TO_USERNAME=(["vmbmtest0-win-0"]="Administrator")
 
-# To run kubectl cmds
-export KUBECONFIG=${KUBECONFIG_PATH}
-
 function print_usage {
     echoerr "$_usage"
 }
@@ -95,6 +92,11 @@ done
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
     KUBECONFIG_PATH=${WORKDIR}/.kube/config
 fi
+
+# To run kubectl cmds.
+export KUBECONFIG=${KUBECONFIG_PATH}
+# Check and install kubectl with a specific version.
+bash $(dirname "$0")/install-kubectl.sh
 
 function export_govc_env_var {
     # This should be coming from jenkins configuration

@@ -128,6 +128,9 @@ function deliver_antrea {
     fetch_kubeconfig $KUBECONFIG_PATH
     export KUBECONFIG=$KUBECONFIG_PATH
 
+    echo "======  Check and install kubectl with a specific version ======"
+    bash $(dirname "$0")/install-kubectl.sh
+
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
