@@ -80,5 +80,6 @@ type OVSBridgeClient interface {
 	GetOVSDatapathType() OVSDatapathType
 	SetInterfaceType(name, ifType string) Error
 	SetPortExternalIDs(portName string, externalIDs map[string]interface{}) Error
+	GetPortExternalIDs(portName string) (map[string]string, Error)
 	SetInterfaceMAC(name string, mac net.HardwareAddr) Error
 }

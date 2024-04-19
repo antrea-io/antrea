@@ -159,8 +159,6 @@ func TestOVSCreatePortRequiredExternalIDs(t *testing.T) {
 	data.setup(t)
 	defer data.teardown(t)
 
-	deleteAllPorts(t, data.br)
-
 	name := "p1"
 	externalIDs := map[string]interface{}{}
 	_, err := data.br.CreatePort(name, name, externalIDs)
@@ -169,6 +167,39 @@ func TestOVSCreatePortRequiredExternalIDs(t *testing.T) {
 	externalIDs["k1"] = "v1"
 	_, err = data.br.CreatePort(name, name, externalIDs)
 	assert.NoError(t, err)
+
+	deleteAllPorts(t, data.br)
+}
+
+// TestOVSPortExternalIDs tests getting and setting external IDs of OVS ports.
+func TestOVSPortExternalIDs(t *testing.T) {
+	data := &testData{}
+	data.setup(t)
+	defer data.teardown(t)
+
+	name := "p1"
+	externalIDs := map[string]interface{}{
+		"k1": "v1",
+	}
+	_, err := data.br.CreatePort(name, name, externalIDs)
+	require.NoError(t, err)
+
+	actualExternalIDs, err := data.br.GetPortExternalIDs(name)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{
+		"k1": "v1",
+	}, actualExternalIDs)
+
+	externalIDs["k2"] = "v2"
+
+	require.NoError(t, data.br.SetPortExternalIDs(name, externalIDs))
+
+	actualExternalIDs, err = data.br.GetPortExternalIDs(name)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{
+		"k1": "v1",
+		"k2": "v2",
+	}, actualExternalIDs)
 
 	deleteAllPorts(t, data.br)
 }

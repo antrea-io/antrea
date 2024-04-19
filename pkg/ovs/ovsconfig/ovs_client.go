@@ -1068,6 +1068,22 @@ func (br *OVSBridge) SetPortExternalIDs(portName string, externalIDs map[string]
 	return nil
 }
 
+func (br *OVSBridge) GetPortExternalIDs(portName string) (map[string]string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Port",
+		Columns: []string{"external_ids"},
+		Where:   [][]interface{}{{"name", "==", portName}},
+	})
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed", err)
+		return nil, NewTransactionError(err, temporary)
+	}
+	extIDRes := res[0].Rows[0].(map[string]interface{})["external_ids"].([]interface{})
+	return buildMapFromOVSDBMap(extIDRes), nil
+}
+
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 

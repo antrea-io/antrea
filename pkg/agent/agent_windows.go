@@ -231,7 +231,7 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
 	if _, err = i.ovsBridgeClient.GetOFPort(brName, false); err == nil {
-		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
+		klog.InfoS("OVS bridge local port already exists, skip the configuration", "name", brName)
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use
 		// ovsconfig.AutoAssignedOFPort (0).
@@ -243,21 +243,46 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 		}
 	}
 
-	// If uplink already exists, return.
+	// If uplink already exists, return early.
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
 	if ofport, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
 		klog.InfoS("Uplink already exists, skip the configuration", "uplink", uplink, "ofPort", ofport)
 		i.nodeConfig.UplinkNetConfig.OFPort = uint32(ofport)
 		i.nodeConfig.HostInterfaceOFPort = ovsconfig.BridgeOFPort
+
+		// We check if the antrea-type external ID, which is used to store the interface
+		// type is present. If it is missing, we add it. Prior to Antrea v2.0, this external
+		// ID was not set for the uplink port, which was a bug. We need this code for
+		// backwards-compatibility, as other parts of the code may assume this external ID
+		// always exist. This code can be removed in Antrea v2.3.
+		externalIDs, err := i.ovsBridgeClient.GetPortExternalIDs(uplink)
+		if err != nil {
+			return fmt.Errorf("error when getting external IDs for uplink: %w", err)
+		}
+		if _, ok := externalIDs[interfacestore.AntreaInterfaceTypeKey]; ok {
+			// Nothing to do, external ID already exists
+			return nil
+		}
+		// Add missing external ID.
+		// A copy is required because of the type mismatch.
+		updatedExternalIDs := make(map[string]interface{})
+		for k, v := range externalIDs {
+			updatedExternalIDs[k] = v
+		}
+		updatedExternalIDs[interfacestore.AntreaInterfaceTypeKey] = interfacestore.AntreaUplink
+		if err := i.ovsBridgeClient.SetPortExternalIDs(uplink, updatedExternalIDs); err != nil {
+			return fmt.Errorf("failed to set external ID for Antrea interface type on uplink port: %w", err)
+		}
 		return nil
 	}
+
 	// Create uplink port.
 	const uplinkOFPort = config.DefaultUplinkOFPort
 	var uplinkPortUUID string
-	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, uplinkOFPort, nil)
+	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, uplinkOFPort, map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
 	if err != nil {
-		klog.Errorf("Failed to add uplink port %s: %v", uplink, err)
+		klog.ErrorS(err, "Failed to add uplink port", "uplink", uplink)
 		return err
 	}
 	klog.InfoS("Allocated OpenFlow port for uplink interface", "port", uplink, "ofPort", uplinkOFPort)
