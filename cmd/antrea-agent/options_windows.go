@@ -64,8 +64,24 @@ func (o *Options) checkUnsupportedFeatures() error {
 		return fmt.Errorf("unsupported features on Windows: {%s}", strings.Join(unsupported, ", "))
 	}
 
+	return nil
+}
+
+func (o *Options) validateConfigForPlatform() error {
+	// AntreaProxy with proxyAll is required on Windows.
+	// The userspace kube-proxy mode (only mode compatible with the Antrea Agent on Windows) was
+	// removed in K8s v1.26, hence the requirement for proxyAll.
+	// Even prior to that, AntreaProxy was required for correct NetworkPolicy enforcement for
+	// Service traffic.
+	// While we do not fail initialization at the moment, there should be no valid use case for
+	// Antrea on Windows without AntreaProxy + proxyAll.
 	if !o.enableAntreaProxy {
-		klog.Warning("AntreaProxy is not enabled. NetworkPolicies might not be enforced correctly for Service traffic!")
+		klog.ErrorS(nil, "AntreaProxy is disabled, Service traffic is unlikely to work as expected")
+		return nil
+	}
+	if !o.config.AntreaProxy.ProxyAll {
+		klog.ErrorS(nil, "AntreaProxy proxyAll is disabled, Service traffic is unlikely to work as expected")
+		return nil
 	}
 	return nil
 }
