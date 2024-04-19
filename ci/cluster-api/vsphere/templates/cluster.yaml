@@ -66,54 +66,6 @@ metadata:
   namespace: CLUSTERNAMESPACE
 spec:
   kubeadmConfigSpec:
-    files:
-    - content: |
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          creationTimestamp: null
-          name: kube-vip
-          namespace: kube-system
-        spec:
-          containers:
-          - args:
-            - start
-            env:
-            - name: vip_arp
-              value: "true"
-            - name: vip_leaderelection
-              value: "true"
-            - name: vip_address
-              value: CONTROLVIP
-            - name: vip_interface
-              value: eth0
-            - name: vip_leaseduration
-              value: "15"
-            - name: vip_renewdeadline
-              value: "10"
-            - name: vip_retryperiod
-              value: "2"
-            image: ghcr.io/kube-vip/kube-vip:v0.3.5
-            imagePullPolicy: IfNotPresent
-            name: kube-vip
-            resources: {}
-            securityContext:
-              capabilities:
-                add:
-                - NET_ADMIN
-                - SYS_TIME
-            volumeMounts:
-            - mountPath: /etc/kubernetes/admin.conf
-              name: kubeconfig
-          hostNetwork: true
-          volumes:
-          - hostPath:
-              path: /etc/kubernetes/admin.conf
-              type: FileOrCreate
-            name: kubeconfig
-        status: {}
-      owner: root:root
-      path: /etc/kubernetes/manifests/kube-vip.yaml
     initConfiguration:
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
@@ -128,7 +80,10 @@ spec:
     - echo "127.0.0.1   localhost" >>/etc/hosts
     - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
     - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+    - ip addr add CONTROLVIP/32 dev eth0
     - ip link set eth0 mtu 1442
+    - ethtool -K eth0 tx-udp_tnl-segmentation off tx-udp_tnl-csum-segmentation off
+    # Work around tunnel checksum offloading issue in some problematic underlying network environments.
     useExperimentalRetryJoin: true
     users:
     - name: capv
@@ -140,6 +95,7 @@ spec:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
       kind: VSphereMachineTemplate
       name: CLUSTERNAME
+  # The replicas of the control plane must be set to 1 because kube-vip has been removed.
   replicas: 1
   version: K8SVERSION
 ---
@@ -162,6 +118,8 @@ spec:
       - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
       - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
       - ip link set eth0 mtu 1442
+      - ethtool -K eth0 tx-udp_tnl-segmentation off tx-udp_tnl-csum-segmentation off
+      # Work around tunnel checksum offloading issue in some problematic underlying network environments.
       users:
       - name: capv
         sshAuthorizedKeys:
