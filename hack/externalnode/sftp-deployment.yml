@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: sftp
-        image: antrea/sftp
+        image: ghcr.io/atmoz/sftp/debian:latest
         imagePullPolicy: IfNotPresent
         args: ["foo:pass:::upload"]
 
