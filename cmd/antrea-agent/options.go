@@ -604,6 +604,12 @@ func (o *Options) validateK8sNodeOptions() error {
 		return fmt.Errorf("failed to validate secondary network config: %v", err)
 	}
 
+	// Unlike checkUnsupportedFeatures, validateConfigForPlatform runs after all validations and
+	// after all fields in the Options struct have been initialized (e.g., enableProxy).
+	if err := o.validateConfigForPlatform(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
