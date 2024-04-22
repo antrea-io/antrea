@@ -22,12 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// Egresses returns a EgressInformer.
-	Egresses() EgressInformer
 	// ExternalEntities returns a ExternalEntityInformer.
 	ExternalEntities() ExternalEntityInformer
-	// ExternalIPPools returns a ExternalIPPoolInformer.
-	ExternalIPPools() ExternalIPPoolInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
 	// TrafficControls returns a TrafficControlInformer.
@@ -45,19 +41,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// Egresses returns a EgressInformer.
-func (v *version) Egresses() EgressInformer {
-	return &egressInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
 // ExternalEntities returns a ExternalEntityInformer.
 func (v *version) ExternalEntities() ExternalEntityInformer {
 	return &externalEntityInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// ExternalIPPools returns a ExternalIPPoolInformer.
-func (v *version) ExternalIPPools() ExternalIPPoolInformer {
-	return &externalIPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IPPools returns a IPPoolInformer.
