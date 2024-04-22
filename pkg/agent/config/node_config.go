@@ -22,15 +22,19 @@ import (
 )
 
 const (
-	// Invalid ofport_request number is in range 1 to 65,279. For ofport_request number not in the range, OVS
-	// ignore the it and automatically assign a port number.
-	// Here we use an invalid port number "0" to request for automatically port allocation.
-	AutoAssignedOFPort = 0
-	DefaultTunOFPort   = 1
-	HostGatewayOFPort  = 2
-	UplinkOFPort       = 3
-	// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
-	BridgeOFPort = 0xfffffffe
+	// Open vSwitch limits the port numbers that it automatically assigns to the range 1 through
+	// 32,767, inclusive. Controllers therefore have free use of ports 32,768 and up.
+	// When requesting a specific port number with ofport_request, it is better to use one of
+	// these "controller ports", to avoid unexpected ofport changes. The Antrea datapath assumes
+	// that once a port number has been assigned, it will stay the same throughout the lifetime
+	// of the port, but when using ofport_request it is not guaranteed.
+	// See https://github.com/antrea-io/antrea/issues/6192 for more details.
+	// We will request these default port values when initializing the agent, unless the ports
+	// already exist.
+	DefaultTunOFPort = ovsconfig.FirstControllerOFPort + iota
+	DefaultHostGatewayOFPort
+	DefaultUplinkOFPort
+	DefaultHostInterfaceOFPort
 )
 
 const (

@@ -158,7 +158,7 @@ func mockInterfaceByName(t *testing.T) {
 
 func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
 	prevFunc := newOVSBridgeFn
-	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb *ovsdb.OVSDB) ovsconfig.OVSBridgeClient {
+	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb *ovsdb.OVSDB, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
 		return brClient
 	}
 	t.Cleanup(func() { newOVSBridgeFn = prevFunc })

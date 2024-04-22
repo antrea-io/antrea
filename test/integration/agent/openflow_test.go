@@ -216,9 +216,9 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 		Gateway:    "",
 		DNSServers: "",
 		Routes:     nil,
-		OFPort:     uint32(agentconfig.UplinkOFPort),
+		OFPort:     uint32(agentconfig.DefaultUplinkOFPort),
 	}
-	config.nodeConfig.HostInterfaceOFPort = agentconfig.BridgeOFPort
+	config.nodeConfig.HostInterfaceOFPort = ovsconfig.BridgeOFPort
 	for _, f := range []func(t *testing.T, config *testConfig){
 		testInitialize,
 		testInstallGatewayFlows,
@@ -1066,7 +1066,7 @@ func prepareConfiguration(enableIPv4, enableIPv6, enableStretchedNetworkPolicy b
 	_, peerIPv4Subnet, _ := net.ParseCIDR("192.168.2.0/24")
 	_, peerIPv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:20::/64")
 
-	gatewayConfig := &agentconfig.GatewayConfig{MAC: gwMAC, OFPort: uint32(agentconfig.HostGatewayOFPort)}
+	gatewayConfig := &agentconfig.GatewayConfig{MAC: gwMAC, OFPort: uint32(agentconfig.DefaultHostGatewayOFPort)}
 	uplinkConfig := &agentconfig.AdapterNetConfig{MAC: uplinkMAC}
 	nodeConfig := &agentconfig.NodeConfig{GatewayConfig: gatewayConfig, UplinkNetConfig: uplinkConfig, TunnelOFPort: uint32(agentconfig.DefaultTunOFPort), Type: agentconfig.K8sNode}
 	podCfg := &testLocalPodConfig{
@@ -1164,7 +1164,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			"Classifier",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=210,ip,in_port=%d%s,dl_dst=%s", 3, matchVlanVIDString, podMAC.String()),
+					MatchStr: fmt.Sprintf("priority=210,ip,in_port=%d%s,dl_dst=%s", agentconfig.DefaultUplinkOFPort, matchVlanVIDString, podMAC.String()),
 					ActStr:   fmt.Sprintf("set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:%s/0xfff->reg8,goto_table:UnSNAT", vlanVIDString),
 				},
 			},
@@ -1184,7 +1184,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				"VLAN",
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=190,reg1=0x%x,in_port=%d", 3, podOFPort),
+						MatchStr: fmt.Sprintf("priority=190,reg1=0x%x,in_port=%d", agentconfig.DefaultUplinkOFPort, podOFPort),
 						ActStr:   fmt.Sprintf("push_vlan:0x8100,set_field:%d->vlan_vid,goto_table:Output", vlanID+4096),
 					},
 				},
@@ -1257,7 +1257,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			"Classifier",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,in_port=%d", agentconfig.HostGatewayOFPort),
+					MatchStr: fmt.Sprintf("priority=200,in_port=%d", agentconfig.DefaultHostGatewayOFPort),
 					ActStr:   "set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 				},
 			},
@@ -1267,7 +1267,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier", agentconfig.HostGatewayOFPort),
+					ActStr:   fmt.Sprintf("set_field:0x%x->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier", agentconfig.DefaultHostGatewayOFPort),
 				},
 			},
 		},
@@ -1289,7 +1289,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 					"SpoofGuard",
 					[]*ofTestUtils.ExpectFlow{
 						{
-							MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", agentconfig.HostGatewayOFPort),
+							MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", agentconfig.DefaultHostGatewayOFPort),
 							ActStr:   fmt.Sprintf("%sgoto_table:UnSNAT", actionSetCtZoneField),
 						},
 					},
@@ -1298,7 +1298,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 					"ARPSpoofGuard",
 					[]*ofTestUtils.ExpectFlow{
 						{
-							MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", agentconfig.HostGatewayOFPort, gwIP, gwMAC),
+							MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", agentconfig.DefaultHostGatewayOFPort, gwIP, gwMAC),
 							ActStr:   "goto_table:ARPResponder",
 						},
 					},
@@ -1314,7 +1314,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				"Classifier",
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=210,%s,in_port=%d,%s=%s", ipProtoStr, agentconfig.HostGatewayOFPort, nwSrcStr, gwIP),
+						MatchStr: fmt.Sprintf("priority=210,%s,in_port=%d,%s=%s", ipProtoStr, agentconfig.DefaultHostGatewayOFPort, nwSrcStr, gwIP),
 						ActStr:   "set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
 					},
 				},

@@ -234,10 +234,10 @@ should be performed for the packet in [L3ForwardingTable].
 If you dump the flows for this table, you may see the following:
 
 ```text
-1. table=0, priority=200,in_port=2 actions=set_field:0x1/0xf->reg0,resubmit(,10)
-2. table=0, priority=200,in_port=1 actions=set_field:0/0xf->reg0,load:0x1->NXM_NX_REG0[19],resubmit(,30)
+1. table=0, priority=200,in_port=32769 actions=set_field:0x1/0xf->reg0,resubmit(,10)
+2. table=0, priority=200,in_port=32768 actions=set_field:0/0xf->reg0,load:0x1->NXM_NX_REG0[19],resubmit(,30)
 3. table=0, priority=190,in_port=4 actions=set_field:0x2/0xf->reg0,resubmit(,10)
-4. table=0, priority=190,in_port=3 actions=set_field:0x2/0xf->reg0,resubmit(,10)
+4. table=0, priority=190,in_port=32770 actions=set_field:0x2/0xf->reg0,resubmit(,10)
 5. table=0, priority=0 actions=drop
 ```
 
@@ -275,12 +275,12 @@ the host to advertise a different MAC address on antrea-gw0.
 If you dump the flows for this table, you may see the following:
 
 ```text
-1. table=10, priority=200,ip,in_port=2 actions=resubmit(,23)
-2. table=10, priority=200,arp,in_port=2,arp_spa=10.10.0.1,arp_sha=3a:dd:79:0f:55:4c actions=resubmit(,20)
+1. table=10, priority=200,ip,in_port=32769 actions=resubmit(,23)
+2. table=10, priority=200,arp,in_port=32769,arp_spa=10.10.0.1,arp_sha=3a:dd:79:0f:55:4c actions=resubmit(,20)
 3. table=10, priority=200,arp,in_port=4,arp_spa=10.10.0.2,arp_sha=ce:99:ca:bd:62:c5 actions=resubmit(,20)
-4. table=10, priority=200,arp,in_port=3,arp_spa=10.10.0.3,arp_sha=3a:41:49:42:98:69 actions=resubmit(,20)
+4. table=10, priority=200,arp,in_port=32770,arp_spa=10.10.0.3,arp_sha=3a:41:49:42:98:69 actions=resubmit(,20)
 5. table=10, priority=200,ip,in_port=4,dl_src=ce:99:ca:bd:62:c5,nw_src=10.10.0.2 actions=resubmit(,23)
-6. table=10, priority=200,ip,in_port=3,dl_src=3a:41:49:42:98:69,nw_src=10.10.0.3 actions=resubmit(,23)
+6. table=10, priority=200,ip,in_port=32770,dl_src=3a:41:49:42:98:69,nw_src=10.10.0.3 actions=resubmit(,23)
 7. table=10, priority=0 actions=drop
 ```
 
@@ -891,10 +891,10 @@ port (tunnel port, gateway port, and local Pod ports), as you can see if you
 dump the flows:
 
 ```text
-1. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x10000/0x10000->reg0,goto_table:105
-2. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=set_field:0x2->reg1,set_field:0x10000/0x10000->reg0,goto_table:105
+1. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x8000->reg1,set_field:0x10000/0x10000->reg0,goto_table:105
+2. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=set_field:0x8001->reg1,set_field:0x10000/0x10000->reg0,goto_table:105
 3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=set_field:0x3->reg1,set_field:0x10000/0x10000->reg0,goto_table:90
-4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=set_field:0x4->reg1,set_field:0x10000/0x10000->reg0,goto_table:90
+4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=set_field:0x8002->reg1,set_field:0x10000/0x10000->reg0,goto_table:90
 5. table=80, priority=0 actions=goto_table:105
 ```
 
@@ -990,7 +990,7 @@ If you dump the flows for this table, you should see something like this:
 3. table=90, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(3,1/3)
 4. table=90, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(3,1/3)
 5. table=90, priority=200,ip,reg1=0x3 actions=conjunction(3,2/3)
-6. table=90, priority=200,ip,reg1=0x4 actions=conjunction(3,2/3)
+6. table=90, priority=200,ip,reg1=0x8002 actions=conjunction(3,2/3)
 7. table=90, priority=200,tcp,tp_dst=80 actions=conjunction(3,3/3)
 8. table=90, priority=190,conj_id=3,ip actions=load:0x3->NXM_NX_REG6[],ct(commit,table=101,zone=65520,exec(load:0x3->NXM_NX_CT_LABEL[0..31]))
 9. table=90, priority=0 actions=goto_table:100
@@ -1045,7 +1045,7 @@ the flows:
 
 ```text
 1. table=100, priority=200,ip,reg1=0x3 actions=drop
-2. table=100, priority=200,ip,reg1=0x4 actions=drop
+2. table=100, priority=200,ip,reg1=0x8002 actions=drop
 3. table=100, priority=0 actions=goto_table:105
 ```
 
@@ -1149,7 +1149,7 @@ across the different backends for each Service.
 If you dump the flows for this table, you should see something like this:
 
 ```text
-1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=set_field:0x2->reg1,load:0x1->NXM_NX_REG0[16],goto_table:105
+1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=set_field:0x8001->reg1,load:0x1->NXM_NX_REG0[16],goto_table:105
 2. table=40, priority=0 actions=goto_table:45
 ```
 

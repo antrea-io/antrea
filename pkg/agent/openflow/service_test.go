@@ -25,8 +25,8 @@ import (
 func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []string {
 	if !proxyEnabled {
 		return []string{
-			"cookie=0x1030000000000, table=DNAT, priority=200,ip,nw_dst=10.96.0.0/16 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:ConntrackCommit",
-			"cookie=0x1030000000000, table=DNAT, priority=200,ipv6,ipv6_dst=fec0:10:96::/64 actions=set_field:0x2->reg1,set_field:0x200000/0x600000->reg0,goto_table:ConntrackCommit",
+			"cookie=0x1030000000000, table=DNAT, priority=200,ip,nw_dst=10.96.0.0/16 actions=set_field:0x8001->reg1,set_field:0x200000/0x600000->reg0,goto_table:ConntrackCommit",
+			"cookie=0x1030000000000, table=DNAT, priority=200,ipv6,ipv6_dst=fec0:10:96::/64 actions=set_field:0x8001->reg1,set_field:0x200000/0x600000->reg0,goto_table:ConntrackCommit",
 		}
 	}
 	var flows []string

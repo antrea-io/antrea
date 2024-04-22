@@ -97,7 +97,7 @@ func newFeaturePodConnectivity(
 		}
 	}
 
-	gatewayPort := uint32(config.HostGatewayOFPort)
+	gatewayPort := uint32(config.DefaultHostGatewayOFPort)
 	if nodeConfig.GatewayConfig != nil {
 		gatewayPort = nodeConfig.GatewayConfig.OFPort
 	}

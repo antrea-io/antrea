@@ -457,7 +457,7 @@ func (c *MCDefaultRouteController) syncMCFlows() error {
 	}
 
 	if activeGW != nil {
-		if err := c.ofClient.InstallMulticlusterClassifierFlows(config.DefaultTunOFPort, activeGW.Name == c.nodeConfig.Name); err != nil {
+		if err := c.ofClient.InstallMulticlusterClassifierFlows(c.nodeConfig.TunnelOFPort, activeGW.Name == c.nodeConfig.Name); err != nil {
 			return err
 		}
 		c.installedActiveGW = activeGW

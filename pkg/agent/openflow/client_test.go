@@ -462,7 +462,7 @@ func newFakeClientWithBridge(
 		IPv4:   fakeGatewayIPv4,
 		IPv6:   fakeGatewayIPv6,
 		MAC:    fakeGatewayMAC,
-		OFPort: uint32(2),
+		OFPort: config.DefaultHostGatewayOFPort,
 	}
 	networkConfig := &config.NetworkConfig{
 		IPv4Enabled:           enableIPv4,
@@ -472,7 +472,7 @@ func newFakeClientWithBridge(
 	}
 	tunnelOFPort := uint32(0)
 	if networkConfig.NeedsTunnelInterface() {
-		tunnelOFPort = 1
+		tunnelOFPort = config.DefaultTunOFPort
 	}
 	nodeConfig := &config.NodeConfig{
 		GatewayConfig:         gatewayConfig,
@@ -485,10 +485,10 @@ func newFakeClientWithBridge(
 		NodeTransportIPv4Addr: fakeNodeIPv4Addr,
 		NodeTransportIPv6Addr: fakeNodeIPv6Addr,
 		Type:                  nodeType,
-		HostInterfaceOFPort:   uint32(4294967294),
+		HostInterfaceOFPort:   ovsconfig.BridgeOFPort,
 		UplinkNetConfig: &config.AdapterNetConfig{
 			MAC:    fakeUplinkMAC,
-			OFPort: uint32(4),
+			OFPort: uint32(config.DefaultUplinkOFPort),
 		},
 	}
 	egressConfig := &config.EgressConfig{
@@ -834,7 +834,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			expectedFlows: []string{
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=100,arp_spa=192.168.77.200,arp_sha=00:00:10:10:00:66 actions=goto_table:ARPResponder",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4,vlan_tci=0x0000/0x1000,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32770,vlan_tci=0x0000/0x1000,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4294967294,vlan_tci=0x0000/0x1000,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x5/0xf->reg0,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,set_field:0x100000/0x100000->reg4,set_field:0x200/0x200->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=192.168.77.200 actions=set_field:0x1000/0xf000->reg8,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
@@ -851,12 +851,12 @@ func Test_client_InstallPodFlows(t *testing.T) {
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			expectedFlows: []string{
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=100,arp_spa=192.168.77.200,arp_sha=00:00:10:10:00:66 actions=goto_table:ARPResponder",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4,dl_vlan=1,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:0x1/0xfff->reg8,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32770,dl_vlan=1,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:0x1/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,set_field:0x100000/0x100000->reg4,set_field:0x200/0x200->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=192.168.77.200 actions=set_field:0x1000/0xf000->reg8,set_field:0x1/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg8=0x1/0xfff,nw_dst=192.168.77.200 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=VLAN, priority=190,reg1=0x4,in_port=100 actions=push_vlan:0x8100,set_field:4097->vlan_vid,goto_table:Output",
+				"cookie=0x1010000000000, table=VLAN, priority=190,reg1=0x8002,in_port=100 actions=push_vlan:0x8100,set_field:4097->vlan_vid,goto_table:Output",
 			},
 		},
 	}
@@ -2300,7 +2300,7 @@ func Test_client_InstallMulticastRemoteReportFlows(t *testing.T) {
 
 	groupID := binding.GroupIDType(102)
 	expectedFlows := []string{
-		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=1,nw_dst=224.0.0.0/4 actions=set_field:0x1/0xf->reg0,goto_table:MulticastEgressRule",
+		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=32768,nw_dst=224.0.0.0/4 actions=set_field:0x1/0xf->reg0,goto_table:MulticastEgressRule",
 		"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,in_port=4294967293 actions=group:102",
 		"cookie=0x1050000000000, table=Classifier, priority=200,in_port=4294967293 actions=goto_table:PipelineIPClassifier",
 	}
@@ -2323,7 +2323,7 @@ func Test_client_InstallMulticasFlexibleIPAMFlows(t *testing.T) {
 	defer resetPipelines()
 
 	expectedFlows := []string{
-		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=4,nw_dst=224.0.0.0/4 actions=goto_table:MulticastEgressRule",
+		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=32770,nw_dst=224.0.0.0/4 actions=goto_table:MulticastEgressRule",
 		"cookie=0x1050000000000, table=Classifier, priority=210,ip,in_port=4294967294,nw_dst=224.0.0.0/4 actions=goto_table:MulticastEgressRule",
 	}
 
@@ -2522,8 +2522,8 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 			name:                "Remote Node Receivers",
 			remoteNodeReceivers: remoteNodeReceivers,
 			expectedGroup: "group_id=101,type=all," +
-				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
-				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
+				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x8000->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
+				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x8000->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
 		},
 		{
 			name:                "Local and Remote Node Receivers",
@@ -2532,8 +2532,8 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 			expectedGroup: "group_id=101,type=all," +
 				"bucket=bucket_id:0,actions=set_field:0x200000/0x600000->reg0,set_field:0x32->reg1,resubmit:MulticastIngressRule," +
 				"bucket=bucket_id:1,actions=set_field:0x200000/0x600000->reg0,set_field:0x64->reg1,resubmit:MulticastIngressRule," +
-				"bucket=bucket_id:2,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
-				"bucket=bucket_id:3,actions=set_field:0x200000/0x600000->reg0,set_field:0x1->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
+				"bucket=bucket_id:2,actions=set_field:0x200000/0x600000->reg0,set_field:0x8000->reg1,set_field:192.168.77.101->tun_dst,resubmit:MulticastOutput," +
+				"bucket=bucket_id:3,actions=set_field:0x200000/0x600000->reg0,set_field:0x8000->reg1,set_field:192.168.77.102->tun_dst,resubmit:MulticastOutput",
 		},
 		{
 			name:           "DeleteOFEntries Failed",

@@ -101,7 +101,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 		config.K8sNode,
 		true,
 		false,
-		config.HostGatewayOFPort,
+		config.DefaultHostGatewayOFPort,
 		config.DefaultTunOFPort,
 		&config.NodeConfig{},
 		wait.NewGroup(),
