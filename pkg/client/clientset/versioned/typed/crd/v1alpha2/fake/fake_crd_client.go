@@ -26,16 +26,8 @@ type FakeCrdV1alpha2 struct {
 	*testing.Fake
 }
 
-func (c *FakeCrdV1alpha2) Egresses() v1alpha2.EgressInterface {
-	return &FakeEgresses{c}
-}
-
 func (c *FakeCrdV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEntityInterface {
 	return &FakeExternalEntities{c, namespace}
-}
-
-func (c *FakeCrdV1alpha2) ExternalIPPools() v1alpha2.ExternalIPPoolInterface {
-	return &FakeExternalIPPools{c}
 }
 
 func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {

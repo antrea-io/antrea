@@ -21,7 +21,6 @@ import (
 
 	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	v1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -60,22 +59,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().SupportBundleCollections().Informer()}, nil
 
 		// Group=crd.antrea.io, Version=v1alpha2
-	case v1alpha2.SchemeGroupVersion.WithResource("egresses"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().Egresses().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("externalentities"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ExternalEntities().Informer()}, nil
-	case v1alpha2.SchemeGroupVersion.WithResource("externalippools"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ExternalIPPools().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("ippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().IPPools().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("trafficcontrols"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().TrafficControls().Informer()}, nil
-
-		// Group=crd.antrea.io, Version=v1alpha3
-	case v1alpha3.SchemeGroupVersion.WithResource("clustergroups"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha3().ClusterGroups().Informer()}, nil
-	case v1alpha3.SchemeGroupVersion.WithResource("groups"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha3().Groups().Informer()}, nil
 
 		// Group=crd.antrea.io, Version=v1beta1
 	case v1beta1.SchemeGroupVersion.WithResource("antreaagentinfos"):

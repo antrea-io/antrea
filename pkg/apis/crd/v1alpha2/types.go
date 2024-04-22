@@ -96,136 +96,6 @@ type AppliedTo struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Egress defines which egress (SNAT) IP the traffic from the selected Pods to
-// the external network should use.
-type Egress struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard metadata of the object.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	// Specification of the desired behavior of Egress.
-	Spec EgressSpec `json:"spec"`
-
-	// EgressStatus represents the current status of an Egress.
-	Status EgressStatus `json:"status"`
-}
-
-// EgressStatus represents the current status of an Egress.
-type EgressStatus struct {
-	// The name of the Node that holds the Egress IP.
-	EgressNode string `json:"egressNode"`
-	// EgressIP indicates the effective Egress IP for the selected workloads. It could be empty if the Egress IP in spec
-	// is not assigned to any Node. It's also useful when there are more than one Egress IP specified in spec.
-	EgressIP string `json:"egressIP"`
-
-	Conditions []EgressCondition `json:"conditions,omitempty"`
-}
-
-type EgressConditionType string
-
-const (
-	// IPAllocated means at least one IP has been allocated to the Egress from ExternalIPPool.
-	// It is not applicable for Egresses with empty ExternalIPPool.
-	IPAllocated EgressConditionType = "IPAllocated"
-	// IPAssigned means the Egress has been assigned to a Node.
-	// It is not applicable for Egresses with empty ExternalIPPool.
-	IPAssigned EgressConditionType = "IPAssigned"
-)
-
-type EgressCondition struct {
-	Type               EgressConditionType `json:"type"`
-	Status             v1.ConditionStatus  `json:"status"`
-	LastTransitionTime metav1.Time         `json:"lastTransitionTime"`
-	Reason             string              `json:"reason,omitempty"`
-	Message            string              `json:"message,omitempty"`
-}
-
-// EgressSpec defines the desired state for Egress.
-type EgressSpec struct {
-	// AppliedTo selects Pods to which the Egress will be applied.
-	AppliedTo AppliedTo `json:"appliedTo"`
-	// EgressIP specifies the SNAT IP address for the selected workloads.
-	// If ExternalIPPool is empty, it must be specified manually.
-	// If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically.
-	// If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.
-	EgressIP string `json:"egressIP,omitempty"`
-	// EgressIPs specifies multiple SNAT IP addresses for the selected workloads.
-	// Cannot be set with EgressIP.
-	EgressIPs []string `json:"egressIPs,omitempty"`
-	// ExternalIPPool specifies the IP Pool that the EgressIP should be allocated from.
-	// If it is empty, the specified EgressIP must be assigned to a Node manually.
-	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
-	// to a different Node when the Node becomes unreachable.
-	ExternalIPPool string `json:"externalIPPool,omitempty"`
-	// ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the
-	// same index in EgressIPs and ExternalIPPools are correlated.
-	// Cannot be set with ExternalIPPool.
-	ExternalIPPools []string `json:"externalIPPools,omitempty"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type EgressList struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ListMeta `json:"metadata,omitempty"`
-
-	Items []Egress `json:"items"`
-}
-
-// +genclient
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// ExternalIPPool defines one or multiple IP sets that can be used in the external network. For instance, the IPs can be
-// allocated to the Egress resources as the Egress IPs.
-type ExternalIPPool struct {
-	metav1.TypeMeta `json:",inline"`
-	// Standard metadata of the object.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	// Specification of the ExternalIPPool.
-	Spec ExternalIPPoolSpec `json:"spec"`
-
-	// The current status of the ExternalIPPool.
-	Status ExternalIPPoolStatus `json:"status"`
-}
-
-type ExternalIPPoolSpec struct {
-	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.
-	IPRanges []IPRange `json:"ipRanges"`
-	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
-	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
-}
-
-// IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
-type IPRange struct {
-	// The CIDR of this range, e.g. 10.10.10.0/24.
-	CIDR string `json:"cidr,omitempty"`
-	// The start IP of the range, e.g. 10.10.20.5, inclusive.
-	Start string `json:"start,omitempty"`
-	// The end IP of the range, e.g. 10.10.20.20, inclusive.
-	End string `json:"end,omitempty"`
-}
-
-type ExternalIPPoolStatus struct {
-	Usage IPPoolUsage `json:"usage,omitempty"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type ExternalIPPoolList struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ListMeta `json:"metadata,omitempty"`
-
-	Items []ExternalIPPool `json:"items"`
-}
-
-// +genclient
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // IPPool defines one or multiple IP sets that can be used for flexible IPAM feature. For instance, the IPs can be
 // allocated to Pods according to IP pool specified in Deployment annotation.
 type IPPool struct {
@@ -246,6 +116,16 @@ const (
 	IPv4 = IPVersion(4)
 	IPv6 = IPVersion(6)
 )
+
+// IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
+type IPRange struct {
+	// The CIDR of this range, e.g. 10.10.10.0/24.
+	CIDR string `json:"cidr,omitempty"`
+	// The start IP of the range, e.g. 10.10.20.5, inclusive.
+	Start string `json:"start,omitempty"`
+	// The end IP of the range, e.g. 10.10.20.20, inclusive.
+	End string `json:"end,omitempty"`
+}
 
 type IPPoolSpec struct {
 	// IP Version for this IP pool - either 4 or 6

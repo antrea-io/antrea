@@ -95,7 +95,6 @@ function generate_antrea_client_code {
     --input "system/v1beta1" \
     --input "crd/v1alpha1" \
     --input "crd/v1alpha2" \
-    --input "crd/v1alpha3" \
     --input "crd/v1beta1" \
     --input "stats/v1alpha1" \
     --output-package "${ANTREA_PKG}/pkg/client/clientset" \
@@ -110,7 +109,6 @@ function generate_antrea_client_code {
   $GOPATH/bin/lister-gen \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
     --output-package "${ANTREA_PKG}/pkg/client/listers" \
     --go-header-file hack/boilerplate/license_header.go.txt
@@ -119,7 +117,6 @@ function generate_antrea_client_code {
   $GOPATH/bin/informer-gen \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
     --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
     --listers-package "${ANTREA_PKG}/pkg/client/listers" \
@@ -132,7 +129,6 @@ function generate_antrea_client_code {
     --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/stats" \
     --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \

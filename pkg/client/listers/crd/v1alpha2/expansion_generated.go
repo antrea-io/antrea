@@ -16,10 +16,6 @@
 
 package v1alpha2
 
-// EgressListerExpansion allows custom methods to be added to
-// EgressLister.
-type EgressListerExpansion interface{}
-
 // ExternalEntityListerExpansion allows custom methods to be added to
 // ExternalEntityLister.
 type ExternalEntityListerExpansion interface{}
@@ -27,10 +23,6 @@ type ExternalEntityListerExpansion interface{}
 // ExternalEntityNamespaceListerExpansion allows custom methods to be added to
 // ExternalEntityNamespaceLister.
 type ExternalEntityNamespaceListerExpansion interface{}
-
-// ExternalIPPoolListerExpansion allows custom methods to be added to
-// ExternalIPPoolLister.
-type ExternalIPPoolListerExpansion interface{}
 
 // IPPoolListerExpansion allows custom methods to be added to
 // IPPoolLister.
