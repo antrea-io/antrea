@@ -661,13 +661,14 @@ Tiers or policy instances in the same Tier with lower priority number). If a "Re
 rule is matched, the client initiating the traffic will receive `ICMP host administratively
 prohibited` code for ICMP, UDP and SCTP request, or an explicit reject response for
 TCP request, instead of timeout. A "Pass" rule, on the other hand, skips this packet
-for further ACNP rule evaluations (all ACNP rules that has lower priority than the
-current "Pass" rule will be skipped, except for the Baseline Tier rules), and delegates
-the decision to developer created namespaced NetworkPolicies. If no NetworkPolicy
-matches this traffic, then the Baseline Tier rules will still be matched against.
+for further Antrea-native policy rule evaluations in regular Tiers, and delegates
+the decision to K8s namespaced NetworkPolicies (in networking.k8s.io API group).
+All ACNP/ANNP rules that have lower priority than the current "Pass" rule will be
+skipped (except for the Baseline Tier rules). If no K8s NetworkPolicy matches this
+traffic, then all Antrea-native policy Baseline Tier rules will be tested for a match.
 Note that the "Pass" action does not make sense when configured in Baseline Tier
 ACNP rules, and such configurations will be rejected by the admission controller.
-Note: "Pass" and "Reject" actions are not supported for rules applied to multicast
+Also, "Pass" and "Reject" actions are not supported for rules applied to multicast
 traffic.
 
 **ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered set of
