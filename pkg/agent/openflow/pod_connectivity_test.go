@@ -34,7 +34,7 @@ func podConnectivityInitFlows(
 		if !isIPv4 {
 			return []string{
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32768 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=32769,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=32769,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32769 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,ipv6_src=fe80::/10 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=32769 actions=goto_table:IPv6",
@@ -61,7 +61,7 @@ func podConnectivityInitFlows(
 		flows = []string{
 			"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=32769,arp_spa=10.10.0.1,arp_sha=0a:00:00:00:00:01 actions=goto_table:ARPResponder",
 			"cookie=0x1010000000000, table=ARPResponder, priority=190,arp actions=NORMAL",
-			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32769,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32769,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32769 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520,nat)",
 			"cookie=0x1010000000000, table=ConntrackState, priority=200,ct_state=+inv+trk,ip actions=drop",
@@ -123,7 +123,7 @@ func podConnectivityInitFlows(
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=135,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=136,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,ipv6,ipv6_dst=ff00::/8 actions=NORMAL",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=32769,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=32769,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32769 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=ConntrackZone, priority=200,ipv6 actions=ct(table=ConntrackState,zone=65510,nat)",
 				"cookie=0x1010000000000, table=ConntrackState, priority=200,ct_state=+inv+trk,ipv6 actions=drop",
@@ -144,7 +144,7 @@ func podConnectivityInitFlows(
 		flows = []string{
 			"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=32769,arp_spa=10.10.0.1,arp_sha=0a:00:00:00:00:01 actions=goto_table:ARPResponder",
 			"cookie=0x1010000000000, table=ARPResponder, priority=190,arp actions=NORMAL",
-			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32769,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32769,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32769 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=ConntrackState, priority=200,ct_state=+inv+trk,ip actions=drop",
 			"cookie=0x1010000000000, table=ConntrackState, priority=190,ct_state=-new+trk,ct_mark=0x0/0x10,ip actions=goto_table:AntreaPolicyEgressRule",
@@ -235,7 +235,7 @@ func podConnectivityInitFlows(
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=135,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,icmp6,icmp_type=136,icmp_code=0 actions=NORMAL",
 				"cookie=0x1010000000000, table=IPv6, priority=200,ipv6,ipv6_dst=ff00::/8 actions=NORMAL",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=32769,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ipv6,in_port=32769,ipv6_src=fec0:10:10::1 actions=set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32769 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=ConntrackZone, priority=200,ipv6 actions=ct(table=ConntrackState,zone=65510,nat)",
 				"cookie=0x1010000000000, table=ConntrackState, priority=200,ct_state=+inv+trk,ipv6 actions=drop",
@@ -257,7 +257,7 @@ func podConnectivityInitFlows(
 			"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=32769,arp_spa=10.10.0.1,arp_sha=0a:00:00:00:00:01 actions=goto_table:ARPResponder",
 			"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_TPA[]->NXM_NX_REG2[],move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],move:NXM_NX_REG2[]->NXM_OF_ARP_SPA[],IN_PORT",
 			"cookie=0x1010000000000, table=ARPResponder, priority=190,arp actions=NORMAL",
-			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32769,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+			"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=32769,nw_src=10.10.0.1 actions=set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32769 actions=set_field:0x2/0xf->reg0,set_field:0x8000000/0x8000000->reg4,goto_table:SpoofGuard",
 			"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=32769 actions=goto_table:UnSNAT",
 			"cookie=0x1010000000000, table=ConntrackZone, priority=200,ip actions=ct(table=ConntrackState,zone=65520,nat)",
