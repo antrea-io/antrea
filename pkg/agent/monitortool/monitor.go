@@ -24,11 +24,11 @@ import (
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
-	"k8s.io/klog/v2"
-
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	config "antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -76,6 +76,8 @@ type MonitorTool struct {
 	// latencyConfigChanged is the channel to notify the latency config changed.
 	latencyConfigChanged chan struct{}
 
+	// The map of node name to node info, it will changed by node watcher
+	nodeInformer coreinformers.NodeInformer
 	// nodeLatencyMonitorInformer is the informer for the NodeLatencyMonitor CRD.
 	nodeLatencyMonitorInformer crdinformers.NodeLatencyMonitorInformer
 }
@@ -94,11 +96,18 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	isNetworkPolicyOnly bool) *MonitorTool {
 	m := &MonitorTool{
 		gatewayConfig:              gatewayConfig,
-		latencyStore:               NewLatencyStore(nodeInformer, isNetworkPolicyOnly),
+		latencyStore:               NewLatencyStore(isNetworkPolicyOnly),
 		latencyConfig:              &LatencyConfig{Enable: false},
 		latencyConfigChanged:       make(chan struct{}, 1),
+		nodeInformer:               nodeInformer,
 		nodeLatencyMonitorInformer: nlmInformer,
 	}
+
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    m.onNodeAdd,
+		UpdateFunc: m.onNodeUpdate,
+		DeleteFunc: m.onNodeDelete,
+	})
 
 	// Add crd informer event handler for NodeLatencyMonitor
 	nlmInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -108,6 +117,30 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	})
 
 	return m
+}
+
+// onNodeAdd is the event handler for adding Node.
+func (m *MonitorTool) onNodeAdd(obj interface{}) {
+	node := obj.(*corev1.Node)
+	m.latencyStore.addNode(node)
+}
+
+// onNodeUpdate is the event handler for updating Node.
+func (m *MonitorTool) onNodeUpdate(oldObj, newObj interface{}) {
+	oldNode := oldObj.(*corev1.Node)
+	node := newObj.(*corev1.Node)
+	m.latencyStore.updateNode(oldNode, node)
+}
+
+// onNodeDelete is the event handler for deleting Node.
+func (m *MonitorTool) onNodeDelete(obj interface{}) {
+	// Check if the object is a not a node
+	node, ok := obj.(*corev1.Node)
+	if !ok {
+		return
+	}
+
+	m.latencyStore.deleteNode(node)
 }
 
 // onNodeLatencyMonitorAdd is the event handler for adding NodeLatencyMonitor.
@@ -347,6 +380,7 @@ func (m *MonitorTool) Run(stopCh <-chan struct{}) {
 
 	// Start the monitor loop
 	go m.nodeLatencyMonitorInformer.Informer().Run(stopCh)
+	go m.nodeInformer.Informer().Run(stopCh)
 	go m.monitorLoop(ctx)
 }
 
@@ -381,7 +415,6 @@ func (m *MonitorTool) monitorLoop(ctx context.Context) {
 				}
 
 				// Start new pingAll goroutine
-				go m.latencyStore.Run(innerStopCh)
 				go m.PingAll(innerStopCh)
 				go wait.Until(m.testPrint, m.latencyConfig.Interval, innerStopCh)
 			} else {

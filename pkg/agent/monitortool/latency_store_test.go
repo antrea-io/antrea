@@ -52,8 +52,7 @@ var (
 func TestNewLatencyStore(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-	nodeInformer := informerFactory.Core().V1().Nodes()
-	latencyStore := NewLatencyStore(nodeInformer, false)
+	latencyStore := NewLatencyStore(false)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)

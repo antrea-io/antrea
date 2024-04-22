@@ -22,23 +22,18 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/util/k8s"
-
-	coreinformers "k8s.io/client-go/informers/core/v1"
 )
 
 // LatencyStore is a store for latency information of connections between nodes.
 type LatencyStore struct {
-	// Maybe we need to use small lock for the map
+	// Lock for the latency store
 	mutex sync.RWMutex
 
 	// isNetworkPolicyOnly is the flag to indicate if the Antrea Agent is running in network policy only mode.
 	isNetworkPolicyOnly bool
-	// The map of node name to node info, it will changed by node watcher
-	nodeInformer coreinformers.NodeInformer
 	// The map of node ip to latency entry, it will be changed by latency monitor
 	nodeIPLatencyMap map[string]*NodeIPLatencyEntry
 	// The map of node ip to node name, it will be changed by node watcher
@@ -57,45 +52,14 @@ type NodeIPLatencyEntry struct {
 	LastMeasuredRTT time.Duration
 }
 
-func NewLatencyStore(nodeInformer coreinformers.NodeInformer, isNetworkPolicyOnly bool) *LatencyStore {
+func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 	store := &LatencyStore{
 		nodeIPLatencyMap:    make(map[string]*NodeIPLatencyEntry),
 		nodeGatewayMap:      make(map[string][]net.IP),
-		nodeInformer:        nodeInformer,
 		isNetworkPolicyOnly: isNetworkPolicyOnly,
 	}
-	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    store.onNodeAdd,
-		UpdateFunc: store.onNodeUpdate,
-		DeleteFunc: store.onNodeDelete,
-	})
 
 	return store
-}
-
-func (l *LatencyStore) Run(stopCh <-chan struct{}) {
-	l.nodeInformer.Informer().Run(stopCh)
-}
-
-func (l *LatencyStore) onNodeAdd(obj interface{}) {
-	node := obj.(*corev1.Node)
-	l.addNode(node)
-}
-
-func (l *LatencyStore) onNodeUpdate(oldObj, newObj interface{}) {
-	oldNode := oldObj.(*corev1.Node)
-	node := newObj.(*corev1.Node)
-	l.updateNode(oldNode, node)
-}
-
-func (l *LatencyStore) onNodeDelete(obj interface{}) {
-	// Check if the object is a not a node
-	node, ok := obj.(*corev1.Node)
-	if !ok {
-		return
-	}
-
-	l.deleteNode(node)
 }
 
 func (l *LatencyStore) GetNodeIPLatencyEntryByKey(key string) (*NodeIPLatencyEntry, bool) {
