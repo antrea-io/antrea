@@ -209,8 +209,8 @@ func getTestPacketBytes(dstIP string) []byte {
 		Protocol: uint8(8),
 		DSCP:     1,
 		Length:   20,
-		NWSrc:    net.IP(pod1IPv4),
-		NWDst:    net.IP(dstIP),
+		NWSrc:    net.ParseIP(pod1IPv4),
+		NWDst:    net.ParseIP(dstIP),
 	}
 	ethernetPkt := protocol.NewEthernet()
 	ethernetPkt.HWSrc = pod1MAC
@@ -236,6 +236,13 @@ func TestParsePacketIn(t *testing.T) {
 		Field: openflow15.NXM_NX_PKT_MARK,
 		Value: &openflow15.Uint32Message{
 			Data: 1,
+		},
+	}
+	matchCTSrc := &openflow15.MatchField{
+		Class: openflow15.OXM_CLASS_NXM_1,
+		Field: openflow15.NXM_NX_CT_NW_SRC,
+		Value: &openflow15.Ipv4SrcField{
+			Ipv4Src: net.ParseIP(pod1IPv4),
 		},
 	}
 	matchTunDst := openflow15.NewTunnelIpv4DstField(net.ParseIP(egressIP), nil)
@@ -298,7 +305,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark},
+						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark, *matchCTSrc},
 					},
 					Data: util.NewBuffer(pktBytesPodToIP),
 				},
@@ -329,6 +336,7 @@ func TestParsePacketIn(t *testing.T) {
 					{
 						Component: crdv1beta1.ComponentSpoofGuard,
 						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  pod1IPv4,
 					},
 					{
 						Component:  crdv1beta1.ComponentEgress,
@@ -365,6 +373,8 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.OutputTable.GetID(),
 					Match: openflow15.Match{
+						// We are omitting matchCTSrc intentionally here to test
+						// the case where there is no valid ct_nw_src match in the packet metadata.
 						Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
 					},
 					Data: util.NewBuffer(pktBytesPodToIP),
@@ -396,6 +406,7 @@ func TestParsePacketIn(t *testing.T) {
 					{
 						Component: crdv1beta1.ComponentSpoofGuard,
 						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  pod1IPv4,
 					},
 					{
 						Component:  crdv1beta1.ComponentEgress,
@@ -489,7 +500,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.EgressRuleTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchTFEgressConjID},
+						Fields: []openflow15.MatchField{*matchTFEgressConjID, *matchCTSrc},
 					},
 					Data: util.NewBuffer(pktBytesPodToPod),
 				},
@@ -531,6 +542,7 @@ func TestParsePacketIn(t *testing.T) {
 					{
 						Component: crdv1beta1.ComponentSpoofGuard,
 						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  pod1IPv4,
 					},
 					{
 						Component:         crdv1beta1.ComponentNetworkPolicy,
@@ -618,7 +630,7 @@ func TestParsePacketIn(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: openflow.EgressMetricTable.GetID(),
 					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchAPConjID},
+						Fields: []openflow15.MatchField{*matchAPConjID, *matchCTSrc},
 					},
 					Data: util.NewBuffer(pktBytesPodToPod),
 				},
@@ -658,6 +670,7 @@ func TestParsePacketIn(t *testing.T) {
 					{
 						Component: crdv1beta1.ComponentSpoofGuard,
 						Action:    crdv1beta1.ActionForwarded,
+						SrcPodIP:  pod1IPv4,
 					},
 					{
 						Component:         crdv1beta1.ComponentNetworkPolicy,

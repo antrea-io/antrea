@@ -173,6 +173,17 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		ob := new(crdv1beta1.Observation)
 		ob.Component = crdv1beta1.ComponentSpoofGuard
 		ob.Action = crdv1beta1.ActionForwarded
+		// For SNATed packet(hairpin), ipSrc and ctNwSrc are different.
+		// We noticed that ctNwSrc is invalid for ICMPv6 packets: it should contain
+		// the original src Pod IP but it is always empty due to an issue in OVS.
+		// https://github.com/openvswitch/ovs-issues/issues/327
+		if isValidCtNw(ctNwSrc) {
+			ob.SrcPodIP = ctNwSrc
+		} else {
+			// In the case of ICMPv6, since ctNwSrc is invalid, we can use ipSrc as
+			// hairpin is not applicable, so ipSrc always contains src pod IP.
+			ob.SrcPodIP = ipSrc
+		}
 		obs = append(obs, *ob)
 	} else {
 		ob := new(crdv1beta1.Observation)
@@ -461,10 +472,7 @@ func isValidCtNw(ipStr string) bool {
 	}
 	// Reserved by IETF [RFC3513][RFC4291]
 	_, cidr, _ := net.ParseCIDR("0000::/8")
-	if cidr.Contains(ip) {
-		return false
-	}
-	return true
+	return !cidr.Contains(ip)
 }
 
 func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1beta1.Packet {
