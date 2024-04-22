@@ -28,10 +28,6 @@ type ExternalEntityNamespaceListerExpansion interface{}
 // IPPoolLister.
 type IPPoolListerExpansion interface{}
 
-// NodeLatencyMonitorListerExpansion allows custom methods to be added to
-// NodeLatencyMonitorLister.
-type NodeLatencyMonitorListerExpansion interface{}
-
 // TrafficControlListerExpansion allows custom methods to be added to
 // TrafficControlLister.
 type TrafficControlListerExpansion interface{}

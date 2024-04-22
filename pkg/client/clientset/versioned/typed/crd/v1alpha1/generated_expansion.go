@@ -18,4 +18,6 @@ package v1alpha1
 
 type ExternalNodeExpansion interface{}
 
+type NodeLatencyMonitorExpansion interface{}
+
 type SupportBundleCollectionExpansion interface{}

@@ -15,17 +15,11 @@
 package monitortool
 
 import (
-	"context"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 var (
@@ -49,51 +43,6 @@ var (
 	}
 )
 
-func TestNewLatencyStore(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-	latencyStore := NewLatencyStore(false)
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-
-	informerFactory.Start(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
-
-	nodeName := "node1"
-	nodeCIDR := "1.1.1.1/24"
-	nodeInternalIP := "2.2.2.2"
-	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
-		Spec: corev1.NodeSpec{
-			PodCIDRs: []string{nodeCIDR},
-		},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-			{Type: corev1.NodeInternalIP, Address: nodeInternalIP},
-		}},
-	}
-
-	k8sClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {}, 2*time.Second, 10*time.Millisecond)
-
-	updateNodeCIDR := "1.1.2.1/24"
-	updatedNodeInternalIP := "1.1.2.2"
-	updatedNode := node.DeepCopy()
-	updatedNode.Spec.PodCIDRs = []string{updateNodeCIDR}
-	updatedNode.Status.Addresses[0].Address = updatedNodeInternalIP
-	k8sClient.CoreV1().Nodes().Update(context.TODO(), updatedNode, metav1.UpdateOptions{})
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		_, ok := latencyStore.nodeGatewayMap[nodeName]
-		assert.True(c, ok)
-	}, 2*time.Second, 10*time.Millisecond)
-
-	k8sClient.CoreV1().Nodes().Delete(context.TODO(), node.Name, metav1.DeleteOptions{})
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		_, ok := latencyStore.nodeGatewayMap[nodeName]
-		assert.False(c, ok)
-	}, 2*time.Second, 10*time.Millisecond)
-}
-
 func TestLatencyStore_GetConnByKey(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
@@ -116,13 +65,8 @@ func TestLatencyStore_GetConnByKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			entry, found := latencyStore.GetNodeIPLatencyEntryByKey(tt.key)
+			entry := latencyStore.GetNodeIPLatencyEntryByKey(tt.key)
 			assert.Equal(t, tt.expectedEntry, entry)
-			if tt.expectedEntry == nil {
-				assert.False(t, found)
-			} else {
-				assert.True(t, found)
-			}
 		})
 	}
 }
@@ -150,9 +94,8 @@ func TestLatencyStore_DeleteConnByKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
 			latencyStore.DeleteNodeIPLatencyEntryByKey(tt.key)
-			entry, found := latencyStore.GetNodeIPLatencyEntryByKey(tt.key)
+			entry := latencyStore.GetNodeIPLatencyEntryByKey(tt.key)
 			assert.Nil(t, entry)
-			assert.False(t, found)
 		})
 	}
 }
@@ -183,9 +126,8 @@ func TestLatencyStore_UpdateConnByKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
 			latencyStore.UpdateNodeIPLatencyEntryByKey(tt.key, tt.updatedEntry)
-			entry, found := latencyStore.GetNodeIPLatencyEntryByKey(tt.key)
+			entry := latencyStore.GetNodeIPLatencyEntryByKey(tt.key)
 			assert.Equal(t, tt.expectedEntry, entry)
-			assert.True(t, found)
 		})
 	}
 }

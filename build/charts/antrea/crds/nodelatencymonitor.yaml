@@ -5,7 +5,7 @@ metadata:
 spec:
   group: crd.antrea.io
   versions:
-    - name: v1alpha2
+    - name: v1alpha1
       served: true
       storage: true
       schema:
@@ -17,12 +17,14 @@ spec:
             spec:
               type: object
               required:
-                - pingInterval
+                - pingIntervalSeconds
               properties:
-                pingInterval:
+                pingIntervalSeconds:
                   type: integer
+                  format: int32
                   minimum: 1
-                  # Explanation: At least one second ("1") or higher in seconds.
+                  description: "Ping interval in seconds, must be at least 1."
+                  default: 10
             metadata:
               type: object
               properties:
@@ -31,8 +33,8 @@ spec:
                   pattern: '^default$'
       additionalPrinterColumns:
         - description: Specifies the interval between pings.
-          jsonPath: .spec.pingInterval
-          name: PingInterval
+          jsonPath: .spec.pingIntervalSeconds
+          name: PingIntervalSeconds
           type: string
         - jsonPath: .metadata.creationTimestamp
           name: Age

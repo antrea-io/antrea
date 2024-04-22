@@ -15,7 +15,6 @@
 package monitortool
 
 import (
-	"context"
 	"net"
 	"os"
 	"sync/atomic"
@@ -25,14 +24,13 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	config "antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 
 var (
@@ -65,8 +63,8 @@ func getICMPSeq() uint32 {
 	return newVal
 }
 
-// MonitorTool is a tool to monitor the latency of the node.
-type MonitorTool struct {
+// NodeLatencyMonitor is a tool to monitor the latency of the node.
+type NodeLatencyMonitor struct {
 	// Gateway config
 	gatewayConfig *config.GatewayConfig
 	// latencyStore is the cache to store the latency of each nodes.
@@ -93,8 +91,8 @@ type LatencyConfig struct {
 func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	nlmInformer crdinformers.NodeLatencyMonitorInformer,
 	gatewayConfig *config.GatewayConfig,
-	isNetworkPolicyOnly bool) *MonitorTool {
-	m := &MonitorTool{
+	isNetworkPolicyOnly bool) *NodeLatencyMonitor {
+	m := &NodeLatencyMonitor{
 		gatewayConfig:              gatewayConfig,
 		latencyStore:               NewLatencyStore(isNetworkPolicyOnly),
 		latencyConfig:              &LatencyConfig{Enable: false},
@@ -120,20 +118,24 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 }
 
 // onNodeAdd is the event handler for adding Node.
-func (m *MonitorTool) onNodeAdd(obj interface{}) {
+func (m *NodeLatencyMonitor) onNodeAdd(obj interface{}) {
 	node := obj.(*corev1.Node)
 	m.latencyStore.addNode(node)
+
+	klog.InfoS("Node added", "Node", klog.KObj(node))
 }
 
 // onNodeUpdate is the event handler for updating Node.
-func (m *MonitorTool) onNodeUpdate(oldObj, newObj interface{}) {
+func (m *NodeLatencyMonitor) onNodeUpdate(oldObj, newObj interface{}) {
 	oldNode := oldObj.(*corev1.Node)
 	node := newObj.(*corev1.Node)
 	m.latencyStore.updateNode(oldNode, node)
+
+	klog.InfoS("Node updated", "Node", klog.KObj(node))
 }
 
 // onNodeDelete is the event handler for deleting Node.
-func (m *MonitorTool) onNodeDelete(obj interface{}) {
+func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
 	// Check if the object is a not a node
 	node, ok := obj.(*corev1.Node)
 	if !ok {
@@ -144,8 +146,8 @@ func (m *MonitorTool) onNodeDelete(obj interface{}) {
 }
 
 // onNodeLatencyMonitorAdd is the event handler for adding NodeLatencyMonitor.
-func (m *MonitorTool) onNodeLatencyMonitorAdd(obj interface{}) {
-	nlm := obj.(*v1alpha2.NodeLatencyMonitor)
+func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
+	nlm := obj.(*v1alpha1.NodeLatencyMonitor)
 	klog.InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 
 	if err := m.updateLatencyConfig(nlm); err != nil {
@@ -154,9 +156,9 @@ func (m *MonitorTool) onNodeLatencyMonitorAdd(obj interface{}) {
 }
 
 // onNodeLatencyMonitorUpdate is the event handler for updating NodeLatencyMonitor.
-func (m *MonitorTool) onNodeLatencyMonitorUpdate(oldObj, newObj interface{}) {
-	oldNLM := oldObj.(*v1alpha2.NodeLatencyMonitor)
-	newNLM := newObj.(*v1alpha2.NodeLatencyMonitor)
+func (m *NodeLatencyMonitor) onNodeLatencyMonitorUpdate(oldObj, newObj interface{}) {
+	oldNLM := oldObj.(*v1alpha1.NodeLatencyMonitor)
+	newNLM := newObj.(*v1alpha1.NodeLatencyMonitor)
 	klog.InfoS("NodeLatencyMonitor updated", "NodeLatencyMonitor", klog.KObj(newNLM))
 
 	if oldNLM.GetGeneration() == newNLM.GetGeneration() {
@@ -168,9 +170,9 @@ func (m *MonitorTool) onNodeLatencyMonitorUpdate(oldObj, newObj interface{}) {
 	}
 }
 
-func (m *MonitorTool) updateLatencyConfig(nlm *v1alpha2.NodeLatencyMonitor) error {
+func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonitor) error {
 	// Parse the ping interval
-	pingInterval := time.Duration(nlm.Spec.PingInterval) * time.Second
+	pingInterval := time.Duration(nlm.Spec.PingIntervalSeconds) * time.Second
 
 	// Update the latency config
 	m.latencyConfig = &LatencyConfig{
@@ -185,7 +187,7 @@ func (m *MonitorTool) updateLatencyConfig(nlm *v1alpha2.NodeLatencyMonitor) erro
 }
 
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
-func (m *MonitorTool) onNodeLatencyMonitorDelete(obj interface{}) {
+func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
 	klog.InfoS("NodeLatencyMonitor deleted", "NodeLatencyMonitor")
 
 	// Update the latency config
@@ -195,7 +197,7 @@ func (m *MonitorTool) onNodeLatencyMonitorDelete(obj interface{}) {
 	m.latencyConfigChanged <- struct{}{}
 }
 
-func (m *MonitorTool) sendPing(socket net.PacketConn, addr net.IP) error {
+func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error {
 	var requestType icmp.Type
 
 	// Resolve the IP address
@@ -220,6 +222,7 @@ func (m *MonitorTool) sendPing(socket net.PacketConn, addr net.IP) error {
 		Code: 0,
 		Body: body,
 	}
+	klog.InfoS("Send ICMP message", "IP", ip, "SeqID", seqID, "body", body)
 
 	// Serialize the ICMP message
 	msgBytes, err := msg.Marshal(nil)
@@ -234,24 +237,35 @@ func (m *MonitorTool) sendPing(socket net.PacketConn, addr net.IP) error {
 	}
 
 	// Store current send info
-	m.latencyStore.UpdateNodeIPLatencyEntryByKey(addr.String(), &NodeIPLatencyEntry{
-		SeqID:           seqID,
-		LastSendTime:    timeStart,
-		LastRecvTime:    time.Time{},
-		LastMeasuredRTT: 0,
-	})
+	// Read the ICMP message
+	oldEntry := m.latencyStore.GetNodeIPLatencyEntryByKey(addr.String())
+	if oldEntry != nil {
+		// Update the latency store
+		oldEntry.LastSendTime = timeStart
+		oldEntry.SeqID = seqID
+		m.latencyStore.UpdateNodeIPLatencyEntryByKey(addr.String(), oldEntry)
+		return nil
+	} else {
+		// New entry
+		m.latencyStore.UpdateNodeIPLatencyEntryByKey(addr.String(), &NodeIPLatencyEntry{
+			SeqID:           seqID,
+			LastSendTime:    timeStart,
+			LastRecvTime:    time.Time{},
+			LastMeasuredRTT: 0,
+		})
+	}
 
 	return nil
 }
 
-func (m *MonitorTool) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan struct{}) {
+func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
 			return
 		default:
-			readBuffer := make([]byte, 1024)
-			_, peer, err := socket.ReadFrom(readBuffer)
+			readBuffer := make([]byte, 1500)
+			n, peer, err := socket.ReadFrom(readBuffer)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					klog.ErrorS(err, "Timeout reading ICMP message")
@@ -262,18 +276,22 @@ func (m *MonitorTool) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan
 
 			destIP := peer.String()
 			// Get the node name by destIP
-			entry, ok := m.latencyStore.GetNodeIPLatencyEntryByKey(destIP)
-			if !ok {
-				klog.ErrorS(err, "Failed to get node name by destIP")
+			entry := m.latencyStore.GetNodeIPLatencyEntryByKey(destIP)
+			if entry == nil {
+				klog.Warning("Failed to get node entry by destIP", "destIP", destIP)
 				continue
 			}
 
 			// Parse the ICMP message
 			var msg *icmp.Message
 			if isIPv4 {
-				msg, err = icmp.ParseMessage(ProtocolICMP, readBuffer)
+				msg, err = icmp.ParseMessage(ProtocolICMP, readBuffer[:n])
 				if err != nil {
 					klog.ErrorS(err, "Failed to parse ICMP message")
+					continue
+				}
+				if msg.Type != ipv4.ICMPTypeEchoReply {
+					klog.Warning("Failed to match ICMPTypeEchoReply")
 					continue
 				}
 			} else {
@@ -282,17 +300,23 @@ func (m *MonitorTool) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan
 					klog.ErrorS(err, "Failed to parse ICMP message")
 					continue
 				}
+				if msg.Type != ipv6.ICMPTypeEchoReply {
+					klog.Warning("Failed to match ICMPTypeEchoReply")
+					continue
+				}
 			}
 
 			echo, ok := msg.Body.(*icmp.Echo)
 			if !ok {
-				klog.ErrorS(nil, "Failed to assert type as *icmp.Echo")
+				klog.Warning(nil, "Failed to assert type as *icmp.Echo")
 				continue
 			}
 
+			klog.InfoS("Recv ICMP message", "IP", destIP, "SeqID", entry.SeqID, "echo", echo)
+
 			// Parse the ICMP data
 			if entry.SeqID != uint32(echo.Seq) {
-				klog.ErrorS(err, "Failed to match seqID")
+				klog.Warning("Failed to match seqID", "entry.SeqID", entry.SeqID, "echo.Seq", echo.Seq)
 				continue
 			}
 
@@ -311,55 +335,29 @@ func (m *MonitorTool) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan
 	}
 }
 
-func (m *MonitorTool) PingAll(stopCh <-chan struct{}) {
-	// Create a new socket for IPv4
-	ipv4Socket, err := icmp.ListenPacket(IPv4ProtocolICMPRaw, "0.0.0.0")
-	if err != nil {
-		klog.ErrorS(err, "Failed to create ICMP socket for IPv4")
-		return
-	}
-	defer ipv4Socket.Close()
-	// Create a new socket for IPv6
-	ipv6Socket, err := icmp.ListenPacket(IPv6ProtocolICMPRaw, "::")
-	if err != nil {
-		klog.ErrorS(err, "Failed to create ICMP socket for IPv6")
-		return
-	}
-	defer ipv6Socket.Close()
-
-	// Start the goroutine to receive ICMP messages
-	go m.recvPing(ipv4Socket, true, stopCh)
-	go m.recvPing(ipv6Socket, false, stopCh)
-
-	// Start to ping all nodes
-	pingAll := func() {
-		m.pingAll(ipv4Socket, ipv6Socket)
-	}
-	go wait.Until(pingAll, m.latencyConfig.Interval, stopCh)
-
-	<-stopCh
-}
-
-func (m *MonitorTool) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
+func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	// Get all node internal/external IP.
 	nodeIPs := m.latencyStore.ListNodeIPs()
 	klog.InfoS("Start to ping all nodes")
 	for name, toIPs := range nodeIPs {
 		for _, toIP := range toIPs {
-			if toIP.To4() != nil {
+			klog.InfoS("Start to ping node", "Node name", name, "Node IP", toIP)
+			if toIP.To4() != nil && ipv4Socket != nil {
 				if err := m.sendPing(ipv4Socket, toIP); err != nil {
-					klog.ErrorS(err, "Failed to send ICMP message to node", "Node", name)
+					klog.Warningf("Failed to send ICMP message to node, err: %#v, Node name: %#v, Node IP: %v", err, name, toIP)
+				}
+			} else if toIP.To16() != nil && ipv6Socket != nil {
+				if err := m.sendPing(ipv6Socket, toIP); err != nil {
+					klog.Warningf("Failed to send ICMP message to node, err: %#v, Node name: %#v, Node IP: %v", err, name, toIP)
 				}
 			} else {
-				if err := m.sendPing(ipv6Socket, toIP); err != nil {
-					klog.ErrorS(err, "Failed to send ICMP message to node", "Node", name)
-				}
+				klog.Warningf("Failed to send ICMP message to node, Node name: %#v, Node IP: %v", name, toIP)
 			}
 		}
 	}
 }
 
-func (m *MonitorTool) testPrint() {
+func (m *NodeLatencyMonitor) testPrint() {
 	// Print all connection status for debug
 	// It will be removed when collector is ready
 	klog.InfoS("Finish to ping all nodes")
@@ -369,60 +367,105 @@ func (m *MonitorTool) testPrint() {
 	}
 }
 
-func (m *MonitorTool) Run(stopCh <-chan struct{}) {
-	ctx, cancel := context.WithCancel(context.Background())
-
+func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 	// Top level goroutine to handle termination
 	go func() {
 		<-stopCh
-		cancel()
 	}()
 
 	// Start the monitor loop
 	go m.nodeLatencyMonitorInformer.Informer().Run(stopCh)
 	go m.nodeInformer.Informer().Run(stopCh)
-	go m.monitorLoop(ctx)
+	go m.monitorLoop(stopCh)
 }
 
-func (m *MonitorTool) monitorLoop(ctx context.Context) {
+func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	// Low level goroutine to handle ping loop
-	var innerStopCh chan struct{}
-	var cancelInnerStopCh func()
+	var currentTicker *time.Ticker
+	var tickerCh <-chan time.Time
+	var ipv4Socket, ipv6Socket net.PacketConn
+	var err error
+	tickerStopCh := make(chan struct{})
 
+	defer func() {
+		if ipv4Socket != nil {
+			ipv4Socket.Close()
+		}
+		if ipv6Socket != nil {
+			ipv6Socket.Close()
+		}
+		if currentTicker != nil {
+			currentTicker.Stop()
+		}
+		close(tickerStopCh)
+	}()
+
+	// Update current ticker based on the latencyConfig
+	updateTicker := func(interval time.Duration) {
+		if currentTicker != nil {
+			currentTicker.Stop() // Stop the current ticker
+		}
+		currentTicker = time.NewTicker(interval)
+		tickerCh = currentTicker.C
+	}
+
+	// Start the pingAll goroutine
 	for {
 		select {
-		case <-ctx.Done():
-			// Stop the inner ping loop
-			if cancelInnerStopCh != nil {
-				cancelInnerStopCh()
+		case <-tickerCh:
+			// Try to send pingAll signal
+			m.pingAll(ipv4Socket, ipv6Socket)
+			// Test print
+			m.testPrint()
+		case <-tickerStopCh:
+			// Close current sockets
+			if ipv4Socket != nil {
+				ipv4Socket.Close()
 			}
+			if ipv6Socket != nil {
+				ipv6Socket.Close()
+			}
+		case <-stopCh:
+			// Stop the ticker loop
+			if currentTicker != nil {
+				currentTicker.Stop()
+			}
+			close(tickerStopCh)
 			return
 		case <-m.latencyConfigChanged:
 			// Start or stop the pingAll goroutine based on the latencyConfig
 			if m.latencyConfig.Enable {
-				// Stop previous pingAll goroutine
-				if cancelInnerStopCh != nil {
-					cancelInnerStopCh()
+				// latencyConfig changed
+				updateTicker(m.latencyConfig.Interval)
+
+				// If the recvPing socket is closed, restart it
+				// In case of IPv4-only or IPv6-only, we need to check the socket status,
+				// and restart it if it is closed(CRD is deleted).
+				if ipv4Socket == nil && m.gatewayConfig.IPv4 != nil {
+					// Create a new socket for IPv4 when the gatewayConfig is IPv4-only
+					ipv4Socket, err = icmp.ListenPacket(IPv4ProtocolICMPRaw, "0.0.0.0")
+					if err != nil {
+						klog.ErrorS(err, "Failed to create ICMP socket for IPv4")
+						return
+					}
+					go m.recvPing(ipv4Socket, true, tickerStopCh)
 				}
-
-				// Create a new stop channel for the new pingAll goroutine
-				innerStopCh = make(chan struct{})
-				cancelInnerStopCh = func() {
-					close(innerStopCh)
-
-					// Clean up the latency store
-					m.latencyStore.CleanUp()
+				if ipv6Socket == nil && m.gatewayConfig.IPv6 != nil {
+					// Create a new socket for IPv6 when the gatewayConfig is IPv6-only
+					ipv6Socket, err = icmp.ListenPacket(IPv6ProtocolICMPRaw, "::")
+					if err != nil {
+						klog.ErrorS(err, "Failed to create ICMP socket for IPv6")
+						return
+					}
+					go m.recvPing(ipv6Socket, false, tickerStopCh)
 				}
-
-				// Start new pingAll goroutine
-				go m.PingAll(innerStopCh)
-				go wait.Until(m.testPrint, m.latencyConfig.Interval, innerStopCh)
 			} else {
-				// Stop current pingAll goroutine
-				if cancelInnerStopCh != nil {
-					cancelInnerStopCh()
-					cancelInnerStopCh = nil
+				// latencyConfig deleted
+				if currentTicker != nil {
+					currentTicker.Stop()
+					currentTicker = nil
 				}
+				close(tickerStopCh)
 			}
 		}
 	}

@@ -124,7 +124,7 @@ func run(o *Options) error {
 	endpointsInformer := informerFactory.Core().V1().Endpoints()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
-	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha2().NodeLatencyMonitors()
+	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)

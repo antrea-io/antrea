@@ -62,13 +62,11 @@ func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 	return store
 }
 
-func (l *LatencyStore) GetNodeIPLatencyEntryByKey(key string) (*NodeIPLatencyEntry, bool) {
+func (l *LatencyStore) GetNodeIPLatencyEntryByKey(key string) *NodeIPLatencyEntry {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	entry, found := l.nodeIPLatencyMap[key]
-
-	return entry, found
+	return l.nodeIPLatencyMap[key]
 }
 
 func (l *LatencyStore) DeleteNodeIPLatencyEntryByKey(key string) {
@@ -122,6 +120,7 @@ func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
 	if l.isNetworkPolicyOnly {
 		transportIPs, err := getTransportIPs(node)
 		if err != nil {
+			klog.Errorf("Failed to get transport IPs for Node %s: %v", node.Name, err)
 			return
 		}
 
@@ -130,12 +129,15 @@ func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
 	} else {
 		gw0IPs, err := getGWIPs(node)
 		if err != nil {
+			klog.Errorf("Failed to get gateway IPs for Node %s: %v", node.Name, err)
 			return
 		}
 
 		// Add the node to the node IP map
 		l.nodeGatewayMap[node.Name] = gw0IPs
 	}
+
+	klog.Infof("Node %s has gateway IPs %v", node.Name, l.nodeGatewayMap[node.Name])
 }
 
 func getTransportIPs(node *corev1.Node) ([]net.IP, error) {
@@ -161,21 +163,23 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	podCIDRStrs := getPodCIDRsOnNode(node)
 	if len(podCIDRStrs) == 0 {
 		// Skip the node if it does not have a PodCIDR.
-		klog.Warningf("Node %s does not have a PodCIDR", node.Name)
+		klog.Errorf("Node %s does not have a PodCIDR", node.Name)
 		return gwIPs, errors.New("node does not have a PodCIDR")
 	}
 
 	// the 0th entry must match the podCIDR field. It may contain at most 1 value for
 	// each of IPv4 and IPv6.
+	// Both podCIDRStrs need to be parsed to get the gateway IP.
 	for _, podCIDR := range podCIDRStrs {
 		if podCIDR == "" {
 			klog.Errorf("PodCIDR is empty for Node %s", node.Name)
+			return gwIPs, errors.New("PodCIDR is empty")
 		}
 
 		peerPodCIDRAddr, _, err := net.ParseCIDR(podCIDR)
 		if err != nil {
 			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, node.Name)
-			continue
+			return gwIPs, err
 		}
 
 		// Add first ip in CIDR to the map

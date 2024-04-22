@@ -34,10 +34,6 @@ func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {
 	return &FakeIPPools{c}
 }
 
-func (c *FakeCrdV1alpha2) NodeLatencyMonitors() v1alpha2.NodeLatencyMonitorInterface {
-	return &FakeNodeLatencyMonitors{c}
-}
-
 func (c *FakeCrdV1alpha2) TrafficControls() v1alpha2.TrafficControlInterface {
 	return &FakeTrafficControls{c}
 }
