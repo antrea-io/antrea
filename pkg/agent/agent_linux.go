@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
@@ -97,7 +98,7 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	}
 
 	if hostOFPort, err := i.ovsBridgeClient.GetOFPort(uplinkNetConfig.Name, false); err == nil {
-		klog.Infof("OVS bridge local port %s already exists", uplinkNetConfig.Name)
+		klog.InfoS("OVS bridge local port already exists", "name", uplinkNetConfig.Name)
 		i.nodeConfig.HostInterfaceOFPort = uint32(hostOFPort)
 		// If local port exists, get the real uplink interface.
 		// This branch is used when antrea-agent had a hard restart (e.g. SIGKILL)
@@ -112,20 +113,12 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 		} else {
 			uplinkNetConfig.Index = adapter.Index
 		}
-		klog.InfoS("Found uplink", "Name", adapter.Name, "Index", uplinkNetConfig.Index, "OFPort", uplinkNetConfig.OFPort)
+		klog.InfoS("Found uplink", "Name", adapter.Name, "Index", uplinkNetConfig.Index, "ofPort", uplinkNetConfig.OFPort)
 	} else {
-		freePort, err := i.ovsBridgeClient.AllocateOFPort(config.UplinkOFPort)
-		if err != nil {
-			return err
-		}
-		uplinkNetConfig.OFPort = uint32(freePort)
-		klog.InfoS("Set OpenFlow port in UplinkNetConfig", "ofport", uplinkNetConfig.OFPort)
-		freePort, err = i.ovsBridgeClient.AllocateOFPort(config.UplinkOFPort)
-		if err != nil {
-			return err
-		}
-		i.nodeConfig.HostInterfaceOFPort = uint32(freePort)
-		klog.InfoS("Set host interface", "ofport", i.nodeConfig.HostInterfaceOFPort)
+		klog.InfoS("Using default OpenFlow port for uplink", "ofPort", config.DefaultUplinkOFPort)
+		uplinkNetConfig.OFPort = config.DefaultUplinkOFPort
+		klog.InfoS("Using default OpenFlow port for host interface", "ofPort", config.DefaultHostInterfaceOFPort)
+		i.nodeConfig.HostInterfaceOFPort = config.DefaultHostInterfaceOFPort
 	}
 	return nil
 }
@@ -357,7 +350,7 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 		if exists {
 			continue
 		}
-		portUUID, err := i.ovsBridgeClient.CreateInternalPort(portName, 0, "", trafficControlPortExternalIDs)
+		portUUID, err := i.ovsBridgeClient.CreateInternalPort(portName, ovsconfig.AutoAssignedOFPort, "", trafficControlPortExternalIDs)
 		if err != nil {
 			return err
 		}

@@ -63,7 +63,7 @@ func convertExternalIDMap(in map[string]interface{}) map[string]string {
 	return out
 }
 
-func TestInitstore(t *testing.T) {
+func TestInitInterfaceStore(t *testing.T) {
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
@@ -119,23 +119,6 @@ func TestInitstore(t *testing.T) {
 	if !found2 {
 		t.Errorf("Failed to load OVS port into local store")
 	}
-
-	// OVS port external_ids should be updated to set AntreaInterfaceTypeKey if it doesn't exist in OVSPortData.
-	delete(ovsPort1.ExternalIDs, interfacestore.AntreaInterfaceTypeKey)
-	delete(ovsPort2.ExternalIDs, interfacestore.AntreaInterfaceTypeKey)
-	initOVSPorts2 := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
-	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts2, nil)
-	updateExtIDsFunc := func(p ovsconfig.OVSPortData) map[string]interface{} {
-		extIDs := make(map[string]interface{})
-		for k, v := range p.ExternalIDs {
-			extIDs[k] = v
-		}
-		extIDs[interfacestore.AntreaInterfaceTypeKey] = interfacestore.AntreaContainer
-		return extIDs
-	}
-	mockOVSBridgeClient.EXPECT().SetPortExternalIDs(ovsPort1.Name, updateExtIDsFunc(ovsPort1)).Return(nil)
-	mockOVSBridgeClient.EXPECT().SetPortExternalIDs(ovsPort2.Name, updateExtIDsFunc(ovsPort2)).Return(nil)
-	initializer.initInterfaceStore()
 }
 
 func TestPersistRoundNum(t *testing.T) {
@@ -552,14 +535,14 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 				TunnelType:       ovsconfig.GeneveTunnel,
 				TunnelCsum:       false,
 			},
-			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, true, &interfacestore.OVSPortConfig{OFPort: 1}),
+			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, true, &interfacestore.OVSPortConfig{OFPort: config.DefaultTunOFPort}),
 			expectedOVSCalls: func(client *ovsconfigtest.MockOVSBridgeClientMockRecorder) {
 				client.GetInterfaceOptions(defaultTunInterfaceName).Return(map[string]string{"csum": "true"}, nil)
 				client.SetInterfaceOptions(defaultTunInterfaceName, map[string]interface{}{"csum": "false"})
 			},
 		},
 		{
-			name: "update tunnel type and port",
+			name: "update tunnel type",
 			nodeConfig: &config.NodeConfig{
 				DefaultTunName:        defaultTunInterfaceName,
 				NodeTransportIPv4Addr: nodeIPNet,
@@ -571,7 +554,7 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 			},
 			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, true, &interfacestore.OVSPortConfig{
 				PortUUID: "foo",
-				OFPort:   1,
+				OFPort:   config.DefaultTunOFPort,
 			}),
 			expectedOVSCalls: func(client *ovsconfigtest.MockOVSBridgeClientMockRecorder) {
 				client.DeletePort("foo")
@@ -599,7 +582,23 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 				TunnelType:       ovsconfig.GeneveTunnel,
 				TunnelCsum:       false,
 			},
-			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, false, &interfacestore.OVSPortConfig{OFPort: 1}),
+			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, false, &interfacestore.OVSPortConfig{OFPort: config.DefaultTunOFPort}),
+			expectedOVSCalls:        func(client *ovsconfigtest.MockOVSBridgeClientMockRecorder) {},
+		},
+		{
+			name: "no change if ofport is not default",
+			nodeConfig: &config.NodeConfig{
+				DefaultTunName:        defaultTunInterfaceName,
+				NodeTransportIPv4Addr: nodeIPNet,
+			},
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				TunnelType:       ovsconfig.GeneveTunnel,
+				TunnelCsum:       false,
+			},
+			// port already exists with an ofport value (123) which is not the default
+			// (config.DefaultTunOFPort). In this case, we keep the port as is.
+			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, false, &interfacestore.OVSPortConfig{OFPort: 123}),
 			expectedOVSCalls:        func(client *ovsconfigtest.MockOVSBridgeClientMockRecorder) {},
 		},
 	}
@@ -667,7 +666,7 @@ func TestSetupGatewayInterface(t *testing.T) {
 	}
 	close(stopCh)
 	portUUID := "123456780a"
-	ofport := int32(config.HostGatewayOFPort)
+	ofport := int32(config.DefaultHostGatewayOFPort)
 	mockOVSBridgeClient.EXPECT().CreateInternalPort(initializer.hostGateway, ofport, mock.Any(), mock.Any()).Return(portUUID, nil)
 	mockOVSBridgeClient.EXPECT().SetInterfaceMAC(initializer.hostGateway, fakeMAC).Return(nil)
 	mockOVSBridgeClient.EXPECT().GetOFPort(initializer.hostGateway, false).Return(ofport, nil)

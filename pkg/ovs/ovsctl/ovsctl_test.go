@@ -46,15 +46,15 @@ port 2: gre_sys (gre)
 port 3: net2`)
 	testDumpFlows = []string{
 		"cookie=0xa000000000000, duration=13489003.061s, table=0, priority=200, n_packets=143, n_bytes=6006, idle_age=15512, hard_age=65534,arp actions=resubmit(,1)",
-		"cookie=0xa010000000000, duration=13489003.042s, table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=2,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
+		"cookie=0xa010000000000, duration=13489003.042s, table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=32769,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
 		"cookie=0xa000000000000, duration=13489003.061s, table=2, priority=0, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534, actions=drop",
-		"cookie=0xa010000000000, duration=13489003.042s, table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=2 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
-		"cookie=0xa010000000000, duration=13489003.042s, table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=1 actions=load:0x1->reg0",
+		"cookie=0xa010000000000, duration=13489003.042s, table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
+		"cookie=0xa010000000000, duration=13489003.042s, table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=32768 actions=load:0x1->reg0",
 	}
 	testDumpFlowsWithoutTableNames = []string{
 		"cookie=0xa000000000000, duration=13489003.061s, table=0, priority=200, n_packets=143, n_bytes=6006, idle_age=15512, hard_age=65534,arp actions=resubmit(,1)",
-		"cookie=0xa010000000000, duration=13489003.042s, table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=2,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
-		"cookie=0xa010000000000, duration=13489003.042s, table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=2 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
+		"cookie=0xa010000000000, duration=13489003.042s, table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=32769,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
+		"cookie=0xa010000000000, duration=13489003.042s, table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
 	}
 	testDumpGroups = []string{
 		"",
@@ -194,10 +194,10 @@ func TestTrace(t *testing.T) {
 				DstIP:               dstIP,
 				SrcMAC:              srcMAC,
 				DstMAC:              dstMAC,
-				Flow:                "in_port=3,tcp,tcp_dst=22,",
+				Flow:                "in_port=32770,tcp,tcp_dst=22,",
 				AllowOverrideInPort: true,
 			},
-			expectedFlow: "dl_src=11:11:11:11:11:11,dl_dst=11:11:11:11:11:22,in_port=3,tcp,tcp_dst=22,,nw_ttl=64,nw_src=1.1.1.2,nw_dst=2.2.2.2,",
+			expectedFlow: "dl_src=11:11:11:11:11:11,dl_dst=11:11:11:11:11:22,in_port=32770,tcp,tcp_dst=22,,nw_ttl=64,nw_src=1.1.1.2,nw_dst=2.2.2.2,",
 		},
 		{
 			name: "no-ops due to source and destination IP error for non-IP packet",
@@ -230,7 +230,7 @@ func TestTrace(t *testing.T) {
 			name: "no-ops due to duplicated in_port error",
 			req: &TracingRequest{
 				InPort:              "9",
-				Flow:                "in_port=3,tcp,tcp_dst=22,",
+				Flow:                "in_port=32770,tcp,tcp_dst=22,",
 				AllowOverrideInPort: false,
 			},
 			expectedError: "duplicated 'in_port' in flow",
@@ -301,10 +301,10 @@ func TestOfCtl(t *testing.T) {
 		require.NoError(err)
 		expectedFlows := []string{
 			"table=0, priority=200, n_packets=143, n_bytes=6006, idle_age=15512, hard_age=65534,arp actions=resubmit(,1)",
-			"table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=2,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
+			"table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=32769,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
 			"table=2, priority=0, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534, actions=drop",
-			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=2 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
-			"table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=1 actions=load:0x1->reg0",
+			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
+			"table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=32768 actions=load:0x1->reg0",
 		}
 		assert.Equal(expectedFlows, got)
 	})
@@ -323,8 +323,8 @@ func TestOfCtl(t *testing.T) {
 		require.NoError(err)
 		expectedFlows := []string{
 			"table=0, priority=200, n_packets=143, n_bytes=6006, idle_age=15512, hard_age=65534,arp actions=resubmit(,1)",
-			"table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=2,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
-			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=2 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
+			"table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=32769,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
+			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
 		}
 		assert.Equal(expectedFlows, got)
 	})
@@ -369,8 +369,8 @@ func TestOfCtl(t *testing.T) {
 		out, err := client.DumpTableFlows(uint8(3))
 		require.NoError(err)
 		expectedFlows := []string{
-			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=2 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
-			"table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=1 actions=load:0x1->reg0",
+			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
+			"table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=32768 actions=load:0x1->reg0",
 		}
 		assert.Equal(expectedFlows, out)
 	})

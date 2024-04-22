@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -80,21 +80,6 @@ func (m *MockOVSBridgeClient) AddOVSOtherConfig(arg0 map[string]any) ovsconfig.E
 func (mr *MockOVSBridgeClientMockRecorder) AddOVSOtherConfig(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddOVSOtherConfig), arg0)
-}
-
-// AllocateOFPort mocks base method.
-func (m *MockOVSBridgeClient) AllocateOFPort(arg0 int) (int32, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AllocateOFPort", arg0)
-	ret0, _ := ret[0].(int32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AllocateOFPort indicates an expected call of AllocateOFPort.
-func (mr *MockOVSBridgeClientMockRecorder) AllocateOFPort(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocateOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).AllocateOFPort), arg0)
 }
 
 // Create mocks base method.
@@ -388,6 +373,21 @@ func (m *MockOVSBridgeClient) GetPortData(arg0, arg1 string) (*ovsconfig.OVSPort
 func (mr *MockOVSBridgeClientMockRecorder) GetPortData(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortData", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortData), arg0, arg1)
+}
+
+// GetPortExternalIDs mocks base method.
+func (m *MockOVSBridgeClient) GetPortExternalIDs(arg0 string) (map[string]string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPortExternalIDs", arg0)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// GetPortExternalIDs indicates an expected call of GetPortExternalIDs.
+func (mr *MockOVSBridgeClientMockRecorder) GetPortExternalIDs(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetPortExternalIDs), arg0)
 }
 
 // GetPortList mocks base method.

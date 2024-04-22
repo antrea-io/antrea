@@ -197,7 +197,7 @@ func TestPodFlows(t *testing.T) {
 		},
 		{
 			test:           "Flow expression",
-			query:          "?flow=in_port=3,tcp,nw_src=192.0.2.2,tcp_dst=22",
+			query:          "?flow=in_port=32770,tcp,nw_src=192.0.2.2,tcp_dst=22",
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
 		},

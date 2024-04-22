@@ -373,11 +373,11 @@ local (coredns) Pod:
 ```bash
 $ antctl trace-packet -S default/web-client -D kube-system/coredns-6955765f44-zcbwj -f udp,udp_dst=53
 result: |
-  Flow: udp,in_port=1,vlan_tci=0x0000,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=53
+  Flow: udp,in_port=32768,vlan_tci=0x0000,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=53
 
   bridge("br-int")
   ----------------
-   0. in_port=1, priority 200, cookie 0x5e000000000000
+   0. in_port=32768, priority 200, cookie 0x5e000000000000
       load:0->NXM_NX_REG0[0..15]
       resubmit(,30)
   30. ip, priority 200, cookie 0x5e000000000000
@@ -387,14 +387,14 @@ result: |
        -> Sets the packet to an untracked state, and clears all the conntrack fields.
 
   Final flow: unchanged
-  Megaflow: recirc_id=0,eth,udp,in_port=1,nw_frag=no,tp_src=0x0/0xfc00
+  Megaflow: recirc_id=0,eth,udp,in_port=32768,nw_frag=no,tp_src=0x0/0xfc00
   Datapath actions: ct(zone=65520),recirc(0x53)
 
   ===============================================================================
   recirc(0x53) - resume conntrack with default ct_state=trk|new (use --ct-next to customize)
   ===============================================================================
 
-  Flow: recirc_id=0x53,ct_state=new|trk,ct_zone=65520,eth,udp,in_port=1,vlan_tci=0x0000,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=53
+  Flow: recirc_id=0x53,ct_state=new|trk,ct_zone=65520,eth,udp,in_port=32768,vlan_tci=0x0000,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=53
 
   bridge("br-int")
   ----------------
@@ -425,15 +425,15 @@ result: |
        -> A clone of the packet is forked to recirculate. The forked pipeline will be resumed at table 110.
        -> Sets the packet to an untracked state, and clears all the conntrack fields.
 
-  Final flow: recirc_id=0x53,eth,udp,reg0=0x10000,reg1=0x5,in_port=1,vlan_tci=0x0000,dl_src=62:39:b4:e8:05:76,dl_dst=52:bd:c6:e0:eb:c1,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=63,tp_src=0,tp_dst=53
-  Megaflow: recirc_id=0x53,ct_state=+new-est-inv+trk,ct_mark=0,eth,udp,in_port=1,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=192.0.0.0/2,nw_dst=172.100.1.7,nw_ttl=64,nw_frag=no,tp_dst=53
+  Final flow: recirc_id=0x53,eth,udp,reg0=0x10000,reg1=0x5,in_port=32768,vlan_tci=0x0000,dl_src=62:39:b4:e8:05:76,dl_dst=52:bd:c6:e0:eb:c1,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=63,tp_src=0,tp_dst=53
+  Megaflow: recirc_id=0x53,ct_state=+new-est-inv+trk,ct_mark=0,eth,udp,in_port=32768,dl_src=aa:bb:cc:dd:ee:ff,dl_dst=aa:bb:cc:dd:ee:ff,nw_src=192.0.0.0/2,nw_dst=172.100.1.7,nw_ttl=64,nw_frag=no,tp_dst=53
   Datapath actions: set(eth(src=62:39:b4:e8:05:76,dst=52:bd:c6:e0:eb:c1)),set(ipv4(ttl=63)),ct(commit,zone=65520),recirc(0x54)
 
   ===============================================================================
   recirc(0x54) - resume conntrack with default ct_state=trk|new (use --ct-next to customize)
   ===============================================================================
 
-  Flow: recirc_id=0x54,ct_state=new|trk,ct_zone=65520,eth,udp,reg0=0x10000,reg1=0x5,in_port=1,vlan_tci=0x0000,dl_src=62:39:b4:e8:05:76,dl_dst=52:bd:c6:e0:eb:c1,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=63,tp_src=0,tp_dst=53
+  Flow: recirc_id=0x54,ct_state=new|trk,ct_zone=65520,eth,udp,reg0=0x10000,reg1=0x5,in_port=32768,vlan_tci=0x0000,dl_src=62:39:b4:e8:05:76,dl_dst=52:bd:c6:e0:eb:c1,nw_src=172.100.2.11,nw_dst=172.100.1.7,nw_tos=0,nw_ecn=0,nw_ttl=63,tp_src=0,tp_dst=53
 
   bridge("br-int")
   ----------------
@@ -444,7 +444,7 @@ result: |
        -> output port is 5
 
   Final flow: unchanged
-  Megaflow: recirc_id=0x54,eth,ip,in_port=1,nw_frag=no
+  Megaflow: recirc_id=0x54,eth,ip,in_port=32768,nw_frag=no
   Datapath actions: 3
 ```
 

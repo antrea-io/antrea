@@ -1166,7 +1166,7 @@ func testRemoteReport(t *testing.T, mockController *Controller, groups []net.IP,
 				continue
 			}
 		}
-		mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), []uint32{config.HostGatewayOFPort}, gomock.Any())
+		mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), []uint32{config.DefaultHostGatewayOFPort}, gomock.Any())
 	}
 
 	processNextItem := func(stopStr string) {
@@ -1247,7 +1247,17 @@ func newMockMulticastController(t *testing.T, isEncap bool, enableFlexibleIPAM b
 	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
 	mockMulticastValidator = typestest.NewMockMcastNetworkPolicyController(controller)
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
-	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
+	nodeConfig := &config.NodeConfig{
+		GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0", OFPort: config.DefaultHostGatewayOFPort},
+		NodeIPv4Addr:  addr,
+	}
+	if enableFlexibleIPAM {
+		// These ofPort numbers are required to configure Multicast Group member ports.
+		nodeConfig.UplinkNetConfig = &config.AdapterNetConfig{
+			OFPort: config.DefaultUplinkOFPort,
+		}
+		nodeConfig.HostInterfaceOFPort = config.DefaultHostInterfaceOFPort
+	}
 	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).Times(1)
 	groupAllocator := openflow.NewGroupAllocator()
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)

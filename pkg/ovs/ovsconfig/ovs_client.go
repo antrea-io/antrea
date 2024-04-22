@@ -23,7 +23,6 @@ import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/helpers"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 )
 
@@ -35,7 +34,7 @@ type OVSBridge struct {
 	datapathType             OVSDatapathType
 	uuid                     string
 	isHardwareOffloadEnabled bool
-	allocatedOFPorts         []int32
+	requiredPortExternalIDs  []string
 }
 
 type OVSPortData struct {
@@ -97,9 +96,25 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	return db, nil
 }
 
+type OVSBridgeOption func(*OVSBridge)
+
+func WithRequiredPortExternalIDs(keys ...string) OVSBridgeOption {
+	return func(br *OVSBridge) {
+		br.requiredPortExternalIDs = append(br.requiredPortExternalIDs, keys...)
+	}
+}
+
 // NewOVSBridge creates and returns a new OVSBridge struct.
-func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB) OVSBridgeClient {
-	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, "", false, []int32{}}
+func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB, options ...OVSBridgeOption) OVSBridgeClient {
+	br := &OVSBridge{
+		ovsdb:        ovsdb,
+		name:         bridgeName,
+		datapathType: ovsDatapathType,
+	}
+	for _, option := range options {
+		option(br)
+	}
+	return br
 }
 
 // Create looks up or creates the bridge. If the bridge with name bridgeName
@@ -564,6 +579,12 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 		optionMap = helpers.MakeOVSDBMap(options)
 	}
 
+	for _, id := range br.requiredPortExternalIDs {
+		if _, ok := externalIDs[id]; !ok {
+			return "", newInvalidArgumentsError(fmt.Sprintf("missing required externalID '%s' for port '%s'", id, name))
+		}
+	}
+
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
 	interf := Interface{
@@ -817,31 +838,6 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	return portList, nil
 }
 
-// AllocateOFPort returns an OpenFlow port number which is not allocated or used by any existing OVS port. Note that,
-// the returned port number is cached locally but not saved in OVSDB yet before the real port is created, so it might
-// introduce an issue of conflict if the OFPort is occupied by another port creation.
-func (br *OVSBridge) AllocateOFPort(startPort int) (int32, error) {
-	existingOFPorts := sets.New[int32]()
-	for _, allocatedOFPort := range br.allocatedOFPorts {
-		existingOFPorts.Insert(allocatedOFPort)
-	}
-	ports, err := br.GetPortList()
-	if err != nil {
-		return 0, err
-	}
-	for _, p := range ports {
-		existingOFPorts.Insert(p.OFPort)
-	}
-	port := int32(startPort)
-	for ; ; port++ {
-		if !existingOFPorts.Has(port) {
-			break
-		}
-	}
-	br.allocatedOFPorts = append(br.allocatedOFPorts, port)
-	return port, nil
-}
-
 // GetOVSVersion either returns the version of OVS, or an error.
 func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
@@ -1070,6 +1066,22 @@ func (br *OVSBridge) SetPortExternalIDs(portName string, externalIDs map[string]
 		return NewTransactionError(err, temporary)
 	}
 	return nil
+}
+
+func (br *OVSBridge) GetPortExternalIDs(portName string) (map[string]string, Error) {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Select(dbtransaction.Select{
+		Table:   "Port",
+		Columns: []string{"external_ids"},
+		Where:   [][]interface{}{{"name", "==", portName}},
+	})
+	res, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed", err)
+		return nil, NewTransactionError(err, temporary)
+	}
+	extIDRes := res[0].Rows[0].(map[string]interface{})["external_ids"].([]interface{})
+	return buildMapFromOVSDBMap(extIDRes), nil
 }
 
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {

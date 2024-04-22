@@ -267,7 +267,7 @@ func (i *Initializer) validateSupportedDPFeatures() error {
 func (i *Initializer) initInterfaceStore() error {
 	ovsPorts, err := i.ovsBridgeClient.GetPortList()
 	if err != nil {
-		klog.Errorf("Failed to list OVS ports: %v", err)
+		klog.ErrorS(err, "Failed to list OVS ports")
 		return err
 	}
 
@@ -278,8 +278,7 @@ func (i *Initializer) initInterfaceStore() error {
 			MAC:           port.MAC,
 			OVSPortConfig: ovsPort}
 		if intf.InterfaceName != i.hostGateway {
-			klog.Warningf("The discovered gateway interface name %s is different from the configured value: %s",
-				intf.InterfaceName, i.hostGateway)
+			klog.InfoS("The discovered gateway interface name is different from the configured value", "discovered", intf.InterfaceName, "configured", i.hostGateway)
 			// Set the gateway interface name to the discovered name.
 			i.hostGateway = intf.InterfaceName
 		}
@@ -294,10 +293,10 @@ func (i *Initializer) initInterfaceStore() error {
 	}
 	parseTunnelInterfaceFunc := func(port *ovsconfig.OVSPortData, ovsPort *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
 		intf := noderoute.ParseTunnelInterfaceConfig(port, ovsPort)
-		if intf != nil && port.OFPort == config.DefaultTunOFPort &&
-			intf.InterfaceName != i.nodeConfig.DefaultTunName {
-			klog.Infof("The discovered default tunnel interface name %s is different from the default value: %s",
-				intf.InterfaceName, i.nodeConfig.DefaultTunName)
+		// This function can be called for both the "regular" tunnel port or an IPsec tunnel
+		// port, but the rest of the function only applies to the "regular" tunnel port.
+		if intf != nil && intf.Type == interfacestore.TunnelInterface && intf.InterfaceName != i.nodeConfig.DefaultTunName {
+			klog.InfoS("The discovered default tunnel interface name is different from the default value", "discovered", intf.InterfaceName, "default", i.nodeConfig.DefaultTunName)
 			// Set the default tunnel interface name to the discovered name.
 			i.nodeConfig.DefaultTunName = intf.InterfaceName
 		}
@@ -312,78 +311,36 @@ func (i *Initializer) initInterfaceStore() error {
 		var intf *interfacestore.InterfaceConfig
 		interfaceType, ok := port.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
 		if !ok {
-			interfaceType = interfacestore.AntreaUnset
+			klog.ErrorS(nil, "Interface type is not set, you may be trying to upgrade from an Antrea version which is too old", "interfaceName", intf.InterfaceName)
+			continue
 		}
-		if interfaceType != interfacestore.AntreaUnset {
-			switch interfaceType {
-			case interfacestore.AntreaGateway:
-				intf = parseGatewayInterfaceFunc(port, ovsPort)
-			case interfacestore.AntreaUplink:
-				intf = parseUplinkInterfaceFunc(port, ovsPort)
-			case interfacestore.AntreaTunnel:
-				fallthrough
-			case interfacestore.AntreaIPsecTunnel:
-				intf = parseTunnelInterfaceFunc(port, ovsPort)
-			case interfacestore.AntreaHost:
-				if port.Name == i.ovsBridge {
-					// Need not to load the OVS bridge port to the interfaceStore
-					intf = nil
-				} else {
-					var err error
-					intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
-					if err != nil {
-						return fmt.Errorf("failed to get interfaceConfig by port %s: %v", port.Name, err)
-					}
-				}
-			case interfacestore.AntreaContainer:
-				// The port should be for a container interface.
-				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
-			case interfacestore.AntreaTrafficControl:
-				intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
-			default:
-				klog.InfoS("Unknown Antrea interface type", "type", interfaceType)
-			}
-		} else {
-			// Antrea Interface type is not saved in OVS port external_ids in earlier Antrea versions, so we use
-			// the old way to decide the interface type for the upgrade case.
-			uplinkIfName := i.nodeConfig.UplinkNetConfig.Name
-			var antreaIFType string
-			switch {
-			case port.OFPort == config.HostGatewayOFPort:
-				intf = parseGatewayInterfaceFunc(port, ovsPort)
-				antreaIFType = interfacestore.AntreaGateway
-			case port.Name == uplinkIfName:
-				intf = parseUplinkInterfaceFunc(port, ovsPort)
-				antreaIFType = interfacestore.AntreaUplink
-			case port.IFType == ovsconfig.GeneveTunnel:
-				fallthrough
-			case port.IFType == ovsconfig.VXLANTunnel:
-				fallthrough
-			case port.IFType == ovsconfig.GRETunnel:
-				fallthrough
-			case port.IFType == ovsconfig.STTTunnel:
-				intf = parseTunnelInterfaceFunc(port, ovsPort)
-				if intf.Type == interfacestore.IPSecTunnelInterface {
-					antreaIFType = interfacestore.AntreaIPsecTunnel
-				} else {
-					antreaIFType = interfacestore.AntreaTunnel
-				}
-			case port.Name == i.ovsBridge:
+		switch interfaceType {
+		case interfacestore.AntreaGateway:
+			intf = parseGatewayInterfaceFunc(port, ovsPort)
+		case interfacestore.AntreaUplink:
+			intf = parseUplinkInterfaceFunc(port, ovsPort)
+		case interfacestore.AntreaTunnel:
+			fallthrough
+		case interfacestore.AntreaIPsecTunnel:
+			intf = parseTunnelInterfaceFunc(port, ovsPort)
+		case interfacestore.AntreaHost:
+			if port.Name == i.ovsBridge {
+				// Need not to load the OVS bridge port to the interfaceStore
 				intf = nil
-				antreaIFType = interfacestore.AntreaHost
-			default:
-				// The port should be for a container interface.
-				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
-				antreaIFType = interfacestore.AntreaContainer
+			} else {
+				var err error
+				intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
+				if err != nil {
+					return fmt.Errorf("failed to get interfaceConfig by port %s: %v", port.Name, err)
+				}
 			}
-			updatedExtIDs := make(map[string]interface{})
-			for k, v := range port.ExternalIDs {
-				updatedExtIDs[k] = v
-			}
-			updatedExtIDs[interfacestore.AntreaInterfaceTypeKey] = antreaIFType
-			if err := i.ovsBridgeClient.SetPortExternalIDs(port.Name, updatedExtIDs); err != nil {
-				klog.ErrorS(err, "Failed to set Antrea interface type on OVS port", "port", port.Name)
-			}
+		case interfacestore.AntreaContainer:
+			// The port should be for a container interface.
+			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
+		case interfacestore.AntreaTrafficControl:
+			intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
+		default:
+			klog.InfoS("Unknown Antrea interface type", "type", interfaceType)
 		}
 		if intf != nil {
 			klog.V(2).InfoS("Adding interface to cache", "interfaceName", intf.InterfaceName)
@@ -699,7 +656,7 @@ func (i *Initializer) setupGatewayInterface() error {
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaGateway,
 		}
 		mac := util.GenerateRandomMAC()
-		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, mac.String(), externalIDs)
+		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.DefaultHostGatewayOFPort, mac.String(), externalIDs)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create gateway port on OVS bridge", "port", i.hostGateway)
 			return err
@@ -714,7 +671,7 @@ func (i *Initializer) setupGatewayInterface() error {
 		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: gwPortUUID, OFPort: gwPort}
 		i.ifaceStore.AddInterface(gatewayIface)
 	} else {
-		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
+		klog.V(2).InfoS("Gateway port already exists on OVS bridge", "name", i.hostGateway, "ofPort", gatewayIface.OFPort)
 	}
 
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
@@ -839,7 +796,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType &&
 			tunnelIface.TunnelInterfaceConfig.DestinationPort == i.networkConfig.TunnelPort &&
 			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
-			klog.V(2).Infof("Tunnel port %s already exists on OVS bridge", tunnelPortName)
+			klog.V(2).InfoS("Tunnel port already exists on OVS bridge", "name", tunnelPortName, "ofPort", tunnelIface.OFPort)
 			if shouldEnableCsum != tunnelIface.TunnelInterfaceConfig.Csum {
 				klog.InfoS("Updating csum for tunnel port", "port", tunnelPortName, "csum", shouldEnableCsum)
 				if err := i.setTunnelCsum(tunnelPortName, shouldEnableCsum); err != nil {

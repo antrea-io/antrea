@@ -460,9 +460,9 @@ func (c *Controller) syncGroup(groupKey string) error {
 	status := obj.(*GroupMemberStatus)
 	memberPorts := make([]uint32, 0, len(status.localMembers)+1)
 	if c.flexibleIPAMEnabled {
-		memberPorts = append(memberPorts, config.UplinkOFPort, c.nodeConfig.HostInterfaceOFPort)
+		memberPorts = append(memberPorts, c.nodeConfig.UplinkNetConfig.OFPort, c.nodeConfig.HostInterfaceOFPort)
 	} else {
-		memberPorts = append(memberPorts, config.HostGatewayOFPort)
+		memberPorts = append(memberPorts, c.nodeConfig.GatewayConfig.OFPort)
 	}
 	for memberInterfaceName := range status.localMembers {
 		obj, found := c.ifaceStore.GetInterfaceByName(memberInterfaceName)
