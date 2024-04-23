@@ -46,7 +46,6 @@ COPY --from=antrea-build-windows  /antrea/bin/antctl.exe /k/antrea/bin/antctl.ex
 COPY --from=antrea-build-windows  /antrea/bin/antrea-cni.exe /k/antrea/cni/antrea.exe
 
 RUN mkdir C:\k\antrea\utils
-COPY --from=antrea-build-windows /wins/wins.exe /k/antrea/utils/wins.exe
 
 COPY --from=windows-ovs /Windows/System32/vcruntime140.dll /Windows/System32/
 COPY --from=windows-ovs /Windows/System32/libeay32.dll /Windows/System32/

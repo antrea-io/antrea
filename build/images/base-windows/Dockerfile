@@ -15,7 +15,9 @@
 ARG GO_VERSION
 ARG NANOSERVER_VERSION
 
-FROM mcr.microsoft.com/windows/servercore:${NANOSERVER_VERSION} as windows-utility-base
+FROM golang:${GO_VERSION}-nanoserver as windows-golang
+
+FROM mcr.microsoft.com/windows/servercore:${NANOSERVER_VERSION}
 
 ARG CNI_BINARIES_VERSION
 
@@ -26,38 +28,24 @@ ENV CNI_PLUGINS="./host-local.exe"
 
 WORKDIR /
 
-RUN mkdir -Force C:\opt\cni\bin
-
-RUN Invoke-WebRequest -UseBasicParsing -Uri https://github.com/containernetworking/plugins/releases/download/${env:CNI_BINARIES_VERSION}/cni-plugins-windows-amd64-${env:CNI_BINARIES_VERSION}.tgz -OutFile cni-plugins-windows-amd64-${env:CNI_BINARIES_VERSION}.tgz; \
+RUN mkdir -Force C:\opt\cni\bin ; \
+    curl.exe -L --output cni-plugins-windows-amd64-${env:CNI_BINARIES_VERSION}.tgz https://github.com/containernetworking/plugins/releases/download/${env:CNI_BINARIES_VERSION}/cni-plugins-windows-amd64-${env:CNI_BINARIES_VERSION}.tgz ; \
     tar -xzf cni-plugins-windows-amd64-${env:CNI_BINARIES_VERSION}.tgz  -C C:\opt\cni\bin ${env:CNI_PLUGINS}; \
     rm cni-plugins-windows-amd64-${env:CNI_BINARIES_VERSION}.tgz
 
 # Install 7zip, git-for-windows, mingw64 to support "make tool"
-RUN Invoke-WebRequest -UseBasicParsing -Uri https://www.7-zip.org/a/7z2107-x64.exe -OutFile 7z2107-x64.exe; \
+RUN curl.exe -L --output 7z2107-x64.exe https://www.7-zip.org/a/7z2107-x64.exe ; \
     cmd /c start /wait 7z2107-x64.exe /S; \
     del 7z2107-x64.exe;  $env:Path = $env:Path+';C:/Program Files/7-Zip'; \
-    Invoke-WebRequest -UseBasicParsing -Uri https://cfhcable.dl.sourceforge.net/project/mingw-w64/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z -OutFile mingw.7z; \
+    curl.exe -L --output mingw.7z https://cfhcable.dl.sourceforge.net/project/mingw-w64/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z ; \
     7z x mingw.7z; cp c:/mingw64/bin/mingw32-make.exe c:/mingw64/bin/make.exe; \
-    Invoke-WebRequest -UseBasicParsing -Uri https://github.com/git-for-windows/git/releases/download/v2.35.1.windows.2/PortableGit-2.35.1.2-64-bit.7z.exe -OutFile git.exe; \
-    7z x git.exe -oC:\git; \
-    mkdir C:\wins; \
-    Invoke-WebRequest -UseBasicParsing -Uri https://github.com/rancher/wins/releases/download/v0.0.4/wins.exe -OutFile C:/wins/wins.exe
-
-FROM golang:${GO_VERSION}-nanoserver as windows-golang
-
-FROM mcr.microsoft.com/windows/nanoserver:${NANOSERVER_VERSION}
+    curl.exe -L --output git.exe https://github.com/git-for-windows/git/releases/download/v2.35.1.windows.2/PortableGit-2.35.1.2-64-bit.7z.exe ; \
+    7z x git.exe -oC:\git ; del git.exe
 
 SHELL ["cmd", "/S", "/C"]
 
 ENV GOPATH="C:\go"
 
-USER ContainerAdministrator
-
-COPY --from=windows-utility-base ["C:\\\\opt\\\\cni\\\\bin","C:\\\\opt\\\\cni\\\\bin"]
-COPY --from=windows-utility-base ["C:\\\\Program Files\\\\7-Zip","C:\\\\Program Files\\\\7-Zip"]
-COPY --from=windows-utility-base ["C:\\\\git","C:\\\\git"]
-COPY --from=windows-utility-base ["C:\\\\mingw64","C:\\\\mingw64"]
-COPY --from=windows-utility-base ["C:\\\\wins","C:\\\\wins"]
 COPY --from=windows-golang ["C:\\\\Program Files\\\\Go", "C:\\\\Program Files\\\\Go"]
 
 RUN setx /m PATH "C:\Program Files\7-Zip;C:\git\bin;C:\git\usr\bin;C:\mingw64\bin;C:\Program Files\Go\bin;%GOPATH\bin%;%PATH%"
