@@ -430,12 +430,38 @@ func (k *KubernetesUtils) probeAndDecideConnectivity(fromPod, toPod v1.Pod,
 	fromPodName, toPodName string, port int32, protocol utils.AntreaPolicyProtocol, expectedResult *PodConnectivityMark) (PodConnectivityMark, error) {
 	// Both IPv4 and IPv6 address should be tested.
 	connectivity := Unknown
-	for _, eachIP := range toPod.Status.PodIPs {
-		toIP := eachIP.IP
-		// If it's an IPv6 address, add "[]" around it.
-		if strings.Contains(toIP, ":") {
-			toIP = fmt.Sprintf("[%s]", toIP)
+	var toIPs []string
+	if toPod.Spec.HostNetwork {
+		// When probing UDP or SCTP from a non-hostNetwork Pod to a hostNetwork Pod within the same Node, the local
+		// Antrea gateway IPs should be used as the destination IP, rather than the Node external IPs. If using the Node
+		// external IPs as destination IPs when probing, the UDP or SCTP reply traffic from hostNetwork Pod will choose
+		// a source IP address based on the routing decision or outgoing interface, which means that the local Antrea
+		// gateway IPs will be chosen as the source IP address. As a result, the probing will get a failure because the
+		// source IP address of reply traffic is unexpected. To accommodate with this case, when the target Pod is a
+		// hostNetwork Pod, the local Antrea gateway IPs are used.
+		nodeInfo := getNodeByName(toPod.Spec.NodeName)
+		if nodeInfo == nil {
+			return connectivity, fmt.Errorf("failed to get Node information by name %s", toPod.Spec.NodeName)
 		}
+		gwIPv4, gwIPv6 := nodeGatewayIPs(nodeInfo.idx)
+		if gwIPv4 != "" {
+			toIPs = append(toIPs, gwIPv4)
+		}
+		if gwIPv6 != "" {
+			toIPs = append(toIPs, fmt.Sprintf("[%s]", gwIPv6))
+		}
+	} else {
+		for _, eachIP := range toPod.Status.PodIPs {
+			toIP := eachIP.IP
+			// If it's an IPv6 address, add "[]" around it.
+			if strings.Contains(toIP, ":") {
+				toIP = fmt.Sprintf("[%s]", toIP)
+			}
+			toIPs = append(toIPs, toIP)
+		}
+	}
+
+	for _, toIP := range toIPs {
 		// HACK: inferring container name as c80, c81 etc., for simplicity.
 		containerName := fmt.Sprintf("c%v", port)
 		curConnectivity := k.probe(&fromPod, fromPodName, containerName, toIP, toPodName, port, protocol, expectedResult)
