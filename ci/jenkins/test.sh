@@ -274,6 +274,10 @@ function wait_for_antrea_windows_pods_ready {
         kubectl apply -f "${WORKDIR}/kube-proxy-${WINDOWS_YAML_SUFFIX}.yml"
     fi
     kubectl apply -f "${WORKDIR}/antrea-${WINDOWS_YAML_SUFFIX}.yml"
+
+    # Set trap to catch any errors from subsequent commands
+    trap collect_windows_network_info_and_logs ERR
+
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status deployment/coredns -n kube-system
     kubectl rollout status deployment.apps/antrea-controller -n kube-system
