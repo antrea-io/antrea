@@ -27,7 +27,7 @@ The node ip used by kubelet
 
 .PARAMETER ContainerRuntime
 [DEPRECATED] Container runtime that Kubernetes will use (docker or containerd).
-Starting with Antrea v2, only containerd is supported.
+Starting with Antrea v2.0, only containerd is supported.
 
 .PARAMETER InstallOVSUserspace
 Specifies whether OVS userspace processes are included in the installation. If false, these
@@ -70,7 +70,7 @@ if ($ContainerRuntime -eq "docker") {
 }
 
 if (-not(Test-Path "//./pipe/containerd-containerd")) {
-    Write-Error "Containerd service was not detected - please install and start Containerd before calling Prepare-Node.ps1"
+    Write-Error "Containerd service was not detected - please install and start containerd before calling Prepare-Node.ps1"
     exit 1
 }
 

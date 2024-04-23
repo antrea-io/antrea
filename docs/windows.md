@@ -35,6 +35,15 @@ Node to an existing Kubernetes cluster.
 For the detailed design of how antrea-agent works on Windows, please refer to
 the [design doc](design/windows-design.md).
 
+**Note: Docker support on Windows Nodes was dropped completely in Antrea v2.0,
+  making containerd the only supported container runtime. As part of this
+  change, we renamed the `antrea-windows-containerd.yml` manifest to
+  `antrea-windows.yml`, and the `antrea-windows-containerd-with-ovs.yml`
+  manifest to `antrea-windows-with-ovs.yml`. Prior to the Antrea v2.0 release,
+  the `antrea-windows.yml` manifest was used to support Windows Nodes with
+  Docker. For the best experience, make sure that you refer to the version of
+  the documentation that matches the Antrea version you are deploying.**
+
 ### Components that run on Windows
 
 The following components should be configured and run on the Windows Node.
@@ -43,7 +52,15 @@ The following components should be configured and run on the Windows Node.
 * OVS daemons
 * antrea-agent
 
-antrea-agent and the OVS daemons can either run as Pods or as Windows services.
+antrea-agent and the OVS daemons can either run as Pods (containerized) or as
+Windows services, and the following configurations are supported:
+
+| OVS daemons      | antrea-agent     | Supported         | Refer to |
+| ---------------- | ---------------- | ----------------- | -------- |
+| Containerized    | Containerized    | Yes (recommended) | [Installation as a Pod](#installation-as-a-pod) |
+| Containerized    | Windows Service  | No                | N/A |
+| Windows Services | Containerized    | Yes               | [Installation as a Pod](#installation-as-a-pod) |
+| Windows Services | Windows Services | Yes               | [Installation as a Service](#installation-as-a-service) |
 
 ### Antrea Windows demo
 
@@ -77,13 +94,13 @@ Service](#installation-as-a-service) method.
 
 ### Installation as a Pod
 
-This installation method requires Antrea 1.10 or higher, and containerd 1.6 or
+This installation method requires Antrea v1.10 or higher, and containerd 1.6 or
 higher (containerd 1.7 or higher is recommended). It relies on support for
 [Windows HostProcess Pods](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/),
 which is generally available starting with K8s 1.26.
 
 Starting with Antrea v1.13, Antrea takes over all the responsibilities of
-kube-proxy for Windows nodes by default, and kube-proxy should not be deployed
+kube-proxy for Windows Nodes by default, and kube-proxy should not be deployed
 on Windows Nodes with Antrea.
 
 #### Download & Configure Antrea for Linux
@@ -97,9 +114,8 @@ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/ant
 
 #### Add Windows antrea-agent DaemonSet
 
-Starting from Antrea 1.13, you need to manually set the `kubeAPIServerOverride`
-field in the YAML configuration file as the Antrea Proxy `proxyAll` mode is
-enabled by default.
+You need to manually set the `kubeAPIServerOverride` field in the YAML
+configuration file as the Antrea Proxy `proxyAll` mode is enabled by default.
 
 ```yaml
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
@@ -115,13 +131,10 @@ enabled by default.
       proxyAll: true
 ```
 
-For earlier versions of Antrea, you will need to enable `proxyAll` manually.
-
-Starting with Antrea 1.13, you can run both the Antrea Agent and the OVS daemons
-on Windows Nodes using a single DaemonSet, by applying the file
-`antrea-windows-with-ovs.yml`. This is the recommended installation
-method. The following commands download the manifest, set
-`kubeAPIServerOverride`, and create the DaemonSet:
+You can run both the Antrea Agent and the OVS daemons on Windows Nodes using a
+single DaemonSet, by applying the file `antrea-windows-with-ovs.yml`. This is
+the recommended installation method. The following commands download the
+manifest, set `kubeAPIServerOverride`, and create the DaemonSet:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
@@ -131,8 +144,7 @@ kubectl apply -f -
 ```
 
 Alternatively, to deploy the antrea-agent Windows DaemonSet without the OVS
-daemons, apply the file `antrea-windows.yml` with the following
-commands:
+daemons, apply the file `antrea-windows.yml` with the following commands:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
@@ -225,7 +237,7 @@ Run the following commands to prepare the Node environment needed by antrea-agen
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-$TAG="v1.15.1"
+$TAG="v2.0.0"
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Clean-AntreaNetwork.ps1
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Prepare-AntreaAgent.ps1
 # use -RunOVSServices $false for containerized OVS!
@@ -306,8 +318,8 @@ antrea-agent-windows-6hvkw                             1/1     Running     0    
 
 ### Installation as a Service
 
-Install Antrea (v0.13.0+ is required for containerd) as usual. The following
-command deploys Antrea with the version specified by `<TAG>`:
+Install Antrea as usual. The following command deploys Antrea with the version
+specified by `<TAG>`:
 
 ```bash
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
@@ -333,7 +345,7 @@ $KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
 ```
 
 ```powershell
-$TAG="v1.15.0"
+$TAG="v2.0.0"
 $KubernetesVersion="<KubernetesVersion>"
 $KubeConfig="<KubeconfigPath>"
 $KubeletKubeconfigPath="<KubeletKubeconfigPath>"
