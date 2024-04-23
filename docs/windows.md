@@ -119,29 +119,29 @@ For earlier versions of Antrea, you will need to enable `proxyAll` manually.
 
 Starting with Antrea 1.13, you can run both the Antrea Agent and the OVS daemons
 on Windows Nodes using a single DaemonSet, by applying the file
-`antrea-windows-containerd-with-ovs.yml`. This is the recommended installation
+`antrea-windows-with-ovs.yml`. This is the recommended installation
 method. The following commands download the manifest, set
 `kubeAPIServerOverride`, and create the DaemonSet:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
-curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows-containerd-with-ovs.yml | \
+curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows-with-ovs.yml | \
 sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERVER}\"|g" | \
 kubectl apply -f -
 ```
 
 Alternatively, to deploy the antrea-agent Windows DaemonSet without the OVS
-daemons, apply the file `antrea-windows-containerd.yml` with the following
+daemons, apply the file `antrea-windows.yml` with the following
 commands:
 
 ```bash
 KUBE_APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}') && \
-curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows-containerd.yml | \
+curl -sL https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows.yml | \
 sed "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBE_APISERVER}\"|g" | \
 kubectl apply -f -
 ```
 
-When using `antrea-windows-containerd.yml`, you will need to install OVS
+When using `antrea-windows.yml`, you will need to install OVS
 userspace daemons as services when you prepare your Windows worker Nodes, in the
 next section.
 
@@ -161,7 +161,7 @@ you will need to invoke the `Install-OVS.ps1` script differently (or not at all)
 | No                         | Yes                     | `.\Install-OVS.ps1` |
 | No                         | No                      | `.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>` |
 
-If you used `antrea-windows-containerd-with-ovs.yml` to create the antrea-agent
+If you used `antrea-windows-with-ovs.yml` to create the antrea-agent
 Windows DaemonSet, then you are using "Containerized OVS daemons". For all other
 methods, you are *not* using "Containerized OVS daemons".
 
@@ -178,7 +178,7 @@ Restart-Computer
 ```
 
 As an example, if you are using containerized OVS
-(`antrea-windows-containerd-with-ovs.yml`), and you want to use the test-signed
+(`antrea-windows-with-ovs.yml`), and you want to use the test-signed
 OVS kernel driver provided by Antrea (not recommended for production), you would
 run the following commands:
 

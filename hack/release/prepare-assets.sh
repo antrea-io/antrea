@@ -110,8 +110,8 @@ export CONTROLLER_IMG_NAME=antrea/antrea-controller-ubuntu
 ./hack/generate-standard-manifests.sh --mode release --out "$OUTPUT_DIR"
 
 export IMG_NAME=antrea/antrea-windows
-./hack/generate-manifest-windows.sh --mode release > "$OUTPUT_DIR"/antrea-windows-containerd.yml
-./hack/generate-manifest-windows.sh --mode release --include-ovs > "$OUTPUT_DIR"/antrea-windows-containerd-with-ovs.yml
+./hack/generate-manifest-windows.sh --mode release > "$OUTPUT_DIR"/antrea-windows.yml
+./hack/generate-manifest-windows.sh --mode release --include-ovs > "$OUTPUT_DIR"/antrea-windows-with-ovs.yml
 
 export IMG_NAME=antrea/flow-aggregator
 ./hack/generate-manifest-flow-aggregator.sh --mode release > "$OUTPUT_DIR"/flow-aggregator.yml
