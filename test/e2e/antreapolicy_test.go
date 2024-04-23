@@ -1657,33 +1657,42 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": getNS("x")}}})
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, []metav1.LabelSelectorRequirement{nsExpOtherThanX}, nil,
+		nil, nil, nil, []metav1.LabelSelectorRequirement{nsExpOtherThanX},
 		nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
 
-	// create a K8s NetworkPolicy for Pods in namespace x to allow ingress traffic from Pods in the same namespace,
-	// as well as from the y/a Pod. It should open up ingress from y/a since it's evaluated before the baseline tier.
+	reachability := NewReachability(allPods, Connected)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("x"), getNS("y"), Dropped)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("x"), getNS("z"), Dropped)
+
+	// create a K8s NetworkPolicy for the x/a Pod to allow ingress traffic from the y/a Pod.
+	// It should open up ingress from y/a and additionally deny ingress from x/b and x/c based on
+	// Kubernetes NetworkPolicy default isolation model, since it's evaluated before the baseline tier.
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
-	k8sNPBuilder = k8sNPBuilder.SetName(getNS("x"), "allow-ns-x-and-y-a").
+	k8sNPBuilder = k8sNPBuilder.SetName(getNS("x"), "allow-y-a-to-x-a").
+		SetPodSelector(map[string]string{"pod": "a"}).
 		SetTypeIngress().
-		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
-			nil, map[string]string{"ns": getNS("x")}, nil, nil).
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
 			map[string]string{"pod": "a"}, map[string]string{"ns": getNS("y")}, nil, nil)
 
-	reachability := NewReachability(allPods, Connected)
-	reachability.Expect(getPod("y", "b"), getPod("x", "a"), Dropped)
-	reachability.Expect(getPod("y", "c"), getPod("x", "a"), Dropped)
-	reachability.ExpectIngressFromNamespace(getPod("x", "a"), getNS("z"), Dropped)
-	reachability.Expect(getPod("y", "b"), getPod("x", "b"), Dropped)
-	reachability.Expect(getPod("y", "c"), getPod("x", "b"), Dropped)
-	reachability.ExpectIngressFromNamespace(getPod("x", "b"), getNS("z"), Dropped)
-	reachability.Expect(getPod("y", "b"), getPod("x", "c"), Dropped)
-	reachability.Expect(getPod("y", "c"), getPod("x", "c"), Dropped)
-	reachability.ExpectIngressFromNamespace(getPod("x", "c"), getNS("z"), Dropped)
+	reachabilityUpdated := NewReachability(allPods, Connected)
+	reachabilityUpdated.Expect(getPod("x", "b"), getPod("x", "a"), Dropped)
+	reachabilityUpdated.Expect(getPod("x", "c"), getPod("x", "a"), Dropped)
+	reachabilityUpdated.Expect(getPod("y", "a"), getPod("x", "b"), Dropped)
+	reachabilityUpdated.Expect(getPod("y", "a"), getPod("x", "c"), Dropped)
+	reachabilityUpdated.ExpectEgressToNamespace(getPod("y", "b"), getNS("x"), Dropped)
+	reachabilityUpdated.ExpectEgressToNamespace(getPod("y", "c"), getNS("x"), Dropped)
+	reachabilityUpdated.ExpectNamespaceIngressFromNamespace(getNS("x"), getNS("z"), Dropped)
 	testStep := []*TestStep{
 		{
-			Name:          "Port 80",
+			Name:          "Baseline ACNP",
 			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+		},
+		{
+			Name:          "Baseline ACNP with KNP",
+			Reachability:  reachabilityUpdated,
 			TestResources: []metav1.Object{builder.Get(), k8sNPBuilder.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
