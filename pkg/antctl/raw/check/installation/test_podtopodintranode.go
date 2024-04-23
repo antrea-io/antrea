@@ -21,15 +21,17 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
-type PodToPodConnectivityTest struct{}
+type PodToPodIntraNodeConnectivityTest struct{}
 
-func (t *PodToPodConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
+func init() {
+	RegisterTest("pod-to-pod-intranode-connectivity", &PodToPodIntraNodeConnectivityTest{})
+}
+
+func (t *PodToPodIntraNodeConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
 	for _, clientPod := range testContext.clientPods.Items {
-		for echoName, echoIP := range testContext.echoPods {
-			var (
-				srcPod = testContext.namespace + "/" + clientPod.Name
-				dstPod = testContext.namespace + "/" + echoName
-			)
+		for echoName, echoIP := range testContext.echoSameNodePod {
+			srcPod := testContext.namespace + "/" + clientPod.Name
+			dstPod := testContext.namespace + "/" + echoName
 			testContext.Log("Validating from pod %s to pod %s...", srcPod, dstPod)
 			_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
 			if err != nil {

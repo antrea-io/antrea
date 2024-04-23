@@ -45,11 +45,6 @@ func Command() *cobra.Command {
 	return command
 }
 
-func init() {
-	RegisterTest("Pod-to-Pod Connectivity", &PodToPodConnectivityTest{})
-	RegisterTest("Pod-to-Internet Connectivity", &PodToInternetConnectivityTest{})
-}
-
 type options struct {
 	antreaNamespace string
 }
@@ -61,15 +56,15 @@ func newOptions() *options {
 }
 
 const (
-	postInstallationTestsNamespace = "antrea-test"
-	clientDeploymentName           = "test-client"
-	echoSameNodeDeploymentName     = "echo-same-node"
-	echoOtherNodeDeploymentName    = "echo-other-node"
-	kindEchoName                   = "echo"
-	kindClientName                 = "client"
-	agentDaemonSetName             = "antrea-agent"
-	deploymentImage                = "registry.k8s.io/e2e-test-images/agnhost:2.29"
-	podReadyTimeout                = 5 * time.Minute
+	testNamespacePrefix         = "antrea-test"
+	clientDeploymentName        = "test-client"
+	echoSameNodeDeploymentName  = "echo-same-node"
+	echoOtherNodeDeploymentName = "echo-other-node"
+	kindEchoName                = "echo"
+	kindClientName              = "client"
+	agentDaemonSetName          = "antrea-agent"
+	deploymentImage             = "registry.k8s.io/e2e-test-images/agnhost:2.29"
+	podReadyTimeout             = 1 * time.Minute
 )
 
 type Test interface {
@@ -83,19 +78,20 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
-	client          kubernetes.Interface
-	config          *rest.Config
-	clusterName     string
-	antreaNamespace string
-	clientPods      *corev1.PodList
-	echoPods        map[string]string
-	namespace       string
+	client           kubernetes.Interface
+	config           *rest.Config
+	clusterName      string
+	antreaNamespace  string
+	clientPods       *corev1.PodList
+	echoSameNodePod  map[string]string
+	echoOtherNodePod map[string]string
+	namespace        string
 }
 
 func Run(o *options) error {
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create Kubernetes client: %s", err)
+		return fmt.Errorf("unable to create Kubernetes client: %s", err)
 	}
 	ctx := context.Background()
 	testContext := NewTestContext(client, config, clusterName, o)
@@ -136,7 +132,7 @@ func newService(name string, selector map[string]string, port int) *corev1.Servi
 
 type deploymentParameters struct {
 	Name        string
-	Kind        string
+	Role        string
 	Image       string
 	Replicas    int
 	Port        int
@@ -156,7 +152,7 @@ func newDeployment(p deploymentParameters) *appsv1.Deployment {
 			Name: p.Name,
 			Labels: map[string]string{
 				"name": p.Name,
-				"kind": p.Kind,
+				"kind": p.Role,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -165,7 +161,7 @@ func newDeployment(p deploymentParameters) *appsv1.Deployment {
 					Name: p.Name,
 					Labels: map[string]string{
 						"name": p.Name,
-						"kind": p.Kind,
+						"kind": p.Role,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -190,7 +186,7 @@ func newDeployment(p deploymentParameters) *appsv1.Deployment {
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"name": p.Name,
-					"kind": p.Kind,
+					"kind": p.Role,
 				},
 			},
 		},
@@ -203,7 +199,7 @@ func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterNam
 		config:          config,
 		clusterName:     clusterName,
 		antreaNamespace: o.antreaNamespace,
-		namespace:       generateRandomNamespace(postInstallationTestsNamespace),
+		namespace:       generateRandomNamespace(testNamespacePrefix),
 	}
 }
 
@@ -232,9 +228,9 @@ func (t *testContext) teardown(ctx context.Context) {
 		return false, nil
 	})
 	if err != nil {
-		t.Log("setup deletion failed")
+		t.Log("Setup deletion failed")
 	} else {
-		t.Log("setup deletion successful")
+		t.Log("Setup deletion successful")
 	}
 }
 
@@ -257,7 +253,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	echoDeployment := newDeployment(deploymentParameters{
 		Name:    echoSameNodeDeploymentName,
-		Kind:    kindEchoName,
+		Role:    kindEchoName,
 		Port:    80,
 		Image:   deploymentImage,
 		Command: []string{"/agnhost", "netexec", "--http-port=80"},
@@ -288,7 +284,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Deploying client Deployment...")
 	clientDeployment := newDeployment(deploymentParameters{
 		Name:    clientDeploymentName,
-		Kind:    kindClientName,
+		Role:    kindClientName,
 		Image:   deploymentImage,
 		Command: []string{"/agnhost", "pause"},
 		Port:    80,
@@ -307,7 +303,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	echoOtherNodeDeployment := newDeployment(deploymentParameters{
 		Name:    echoOtherNodeDeploymentName,
-		Kind:    kindEchoName,
+		Role:    kindEchoName,
 		Port:    80,
 		Image:   deploymentImage,
 		Command: []string{"/agnhost", "netexec", "--http-port=80"},
@@ -327,36 +323,49 @@ func (t *testContext) setup(ctx context.Context) error {
 		},
 		Labels: map[string]string{"app": echoOtherNodeDeploymentName},
 	})
-	_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, echoOtherNodeDeployment, metav1.CreateOptions{})
+	nodes, err := t.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("unable to create Deployment %s: %s", echoOtherNodeDeploymentName, err)
+		return fmt.Errorf("unable to list Nodes: %s", err)
 	}
-
-	srcDeployments := []string{clientDeploymentName, echoSameNodeDeploymentName}
-	dstDeployments := []string{echoOtherNodeDeploymentName}
-	if err := t.waitForDeploymentsReady(ctx, srcDeployments, time.Second, podReadyTimeout); err != nil {
-		return err
-	}
-	if err := t.waitForDeploymentsReady(ctx, dstDeployments, time.Second, podReadyTimeout); err != nil {
-		return err
+	if len(nodes.Items) > 2 {
+		_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, echoOtherNodeDeployment, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to create Deployment %s: %s", echoOtherNodeDeploymentName, err)
+		}
+		if err := t.waitForDeploymentsReady(ctx, time.Second, podReadyTimeout, clientDeploymentName, echoSameNodeDeploymentName, echoOtherNodeDeploymentName); err != nil {
+			return err
+		}
+		t.echoOtherNodePod = map[string]string{}
+		echoOtherNodePod, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=" + echoOtherNodeDeploymentName})
+		if err != nil {
+			return fmt.Errorf("unable to list Echo Other Node Pod: %s", err)
+		}
+		for _, echoOtherNodePod := range echoOtherNodePod.Items {
+			t.echoOtherNodePod[echoOtherNodePod.Name] = echoOtherNodePod.Status.PodIP
+		}
+	} else {
+		t.Log("Skipping other node Deployments as multiple nodes are not available")
+		if err := t.waitForDeploymentsReady(ctx, time.Second, podReadyTimeout, clientDeploymentName, echoSameNodeDeploymentName); err != nil {
+			return err
+		}
 	}
 	t.clientPods, err = t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "kind=" + kindClientName})
 	if err != nil {
 		return fmt.Errorf("unable to list Client Pods: %s", err)
 	}
-	t.echoPods = map[string]string{}
-	echoPods, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "kind=" + kindEchoName})
+	t.echoSameNodePod = map[string]string{}
+	echoSameNodePod, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=" + echoSameNodeDeploymentName})
 	if err != nil {
-		return fmt.Errorf("unable to list Echo Pods: %s", err)
+		return fmt.Errorf("unable to list Echo same node Pod: %s", err)
 	}
-	for _, echoPod := range echoPods.Items {
-		t.echoPods[echoPod.Name] = echoPod.Status.PodIP
+	for _, echoSameNodePod := range echoSameNodePod.Items {
+		t.echoSameNodePod[echoSameNodePod.Name] = echoSameNodePod.Status.PodIP
 	}
 	t.Log("Deployment is validated successfully")
 	return nil
 }
 
-func (t *testContext) waitForDeploymentsReady(ctx context.Context, deployments []string, interval, timeout time.Duration) error {
+func (t *testContext) waitForDeploymentsReady(ctx context.Context, interval, timeout time.Duration, deployments ...string) error {
 	for _, deployment := range deployments {
 		t.Log("Waiting for Deployment %s to become ready...", deployment)
 		err := wait.PollUntilContextTimeout(ctx, interval, timeout, false, func(ctx context.Context) (bool, error) {
