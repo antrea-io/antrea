@@ -22,6 +22,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"antrea.io/antrea/pkg/agent/config"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
@@ -45,17 +46,17 @@ func initializeAntreaNodeNetworkPolicy(t *testing.T, data *TestData, toHostNetwo
 		}
 	}
 	nodes = make(map[string]string)
-	nodes["x"] = controlPlaneNodeName()
-	nodes["y"] = workerNodeName(1)
+	nodes["x"] = nodeName(0)
+	nodes["y"] = nodeName(1)
+	nodes["z"] = nodeName(0)
 	hostNetworks := make(map[string]bool)
 	hostNetworks["x"] = true
 	if toHostNetworkPod {
 		hostNetworks["y"] = true
 	} else {
 		hostNetworks["y"] = false
-		nodes["z"] = workerNodeName(1)
-		hostNetworks["z"] = false
 	}
+	hostNetworks["z"] = false
 	allPods = []Pod{}
 
 	for _, podName := range podsPerNamespace {
@@ -88,6 +89,7 @@ func TestAntreaNodeNetworkPolicy(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
 
 	initializeAntreaNodeNetworkPolicy(t, data, true)
 
