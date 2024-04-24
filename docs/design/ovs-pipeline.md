@@ -473,7 +473,7 @@ document.
 
 This ACNP is applied to all Pods with the label `app: web` in all Namespaces. It allows only HTTP ingress traffic on
 port 8080 from Pods with the label `app: client`, limited to the `GET` method and `/api/v2/*` path. Any other HTTP
-ingress traffic on port 8080 from Pods the label `app: client` will be dropped.
+ingress traffic on port 8080 from Pods with the label `app: client` will be dropped.
 
 ```yaml
 apiVersion: crd.antrea.io/v1beta1
@@ -509,8 +509,10 @@ spec:
 Antrea creates a dedicated table [TrafficControl] to implement feature `TrafficControl`. We will use the following
 TrafficControls as examples for the remainder of this document.
 
+### TrafficControl for Packet Redirecting
+
 This is a TrafficControl applied to Pods with the label `app: web`. For these Pods, both ingress and egress traffic will
-be redirected to port `antrea-tc-tap0`, and returned back through port `antrea-tc-tap1`.
+be redirected to port `antrea-tc-tap0`, and returned through port `antrea-tc-tap1`.
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha2
@@ -531,6 +533,8 @@ spec:
     ovsInternal:
       name: antrea-tc-tap1
 ```
+
+### TrafficControl for Packet Mirroring
 
 This is a TrafficControl applied to Pods with the label `app: db`. For these Pods, both ingress and egress will be
 mirrored (duplicated) to port `antrea-tc-tap2`.
@@ -558,8 +562,14 @@ Table [EgressMark] is dedicated to the implementation of feature `Egress`.
 
 Consider the following Egresses as examples for the remainder of this document.
 
-This is an Egress applied to Pods with the label `app: web`. For these Pods, all egress traffic will be SNAT'd on the
-Node `k8s-node-control-plane` from which we dumped flows in the document with the Egress IP `192.168.77.112`.
+### Egress Applied to Web Pods
+
+This is an Egress applied to Pods with the label `app: web`. For these Pods, all egress traffic (traffic leaving the
+cluster) will be SNAT'd on the Node `k8s-node-control-plane` using Egress IP `192.168.77.112`. In this context,
+`k8s-node-control-plane` is known as the "Egress Node" for this Egress resource. Note that the flows presented in the
+rest of this document were dumped on Node `k8s-node-control-plane`. Egress flows are different on the "source Node"
+(Node running a workload Pod to which the Egress resource is applied) and on the "Egress Node" (Node enforcing the
+SNAT policy).
 
 ```yaml
 apiVersion: crd.antrea.io/v1beta1
@@ -576,8 +586,10 @@ status:
   egressNode: k8s-node-control-plane
 ```
 
+### Egress Applied to Client Pods
+
 This is an Egress applied to Pods with the label `app: client`. For these Pods, all egress traffic will be SNAT'd on the
-Node `k8s-node-worker-1` with the Egress IP `192.168.77.113`.
+Node `k8s-node-worker-1` using Egress IP `192.168.77.113`.
 
 ```yaml
 apiVersion: crd.antrea.io/v1beta1
@@ -657,7 +669,7 @@ If you dump the flows of this table, you may see the following:
 
 Flow 1 is designed for case 1, matching ARP request packets for the MAC address of a remote Antrea gateway with IP address
 `10.10.1.1`. It programs an ARP reply packet and sends it back to the port where the request packet was received. Note
-that both the source hardware address and the source MAC address in the ARP reply packet are set with the *Global Virtual
+that both the source hardware address and the source MAC address in the ARP reply packet are set to the *Global Virtual
 MAC* `aa:bb:cc:dd:ee:ff`, not the actual MAC address of the remote Antrea gateway. This ensures that once the traffic is
 received by the remote OVS bridge, it can be directly forwarded to the appropriate Pod without actually going through
 the local Antrea gateway. The *Global Virtual MAC* is used as the destination MAC address for all the traffic being
@@ -672,7 +684,7 @@ at the routing table for the local Node, we would find the following "onlink" ro
 
 A similar route is installed on the local Antrea gateway (antrea-gw0) interface every time the Antrea *Node Route Controller*
 is notified that a new Node has joined the cluster. The route must be marked as "onlink" since the kernel does not have
-a route to the peer gateway `10.10.1.1`. we trick the kernel into believing that `10.10.1.1` is directly connected to
+a route to the peer gateway `10.10.1.1`. We "trick" the kernel into believing that `10.10.1.1` is directly connected to
 the local Node, even though it is on the other side of the tunnel.
 
 Flow 2 is designed for case 2, ensuring that OVS handles the remainder of ARP traffic as a regular L2 learning switch
@@ -682,15 +694,15 @@ Flow 3 is the table-miss flow, which should never be used since ARP packets will
 
 ### Classifier
 
-This table is designed to determine the "category" of packets by matching the ingress port of the packets. It
-addresses specific cases:
+This table is designed to determine the "category" of IP packets by matching on their ingress port. It addresses
+specific cases:
 
 1. Packets originating from the local Node through the local Antrea gateway port, requiring IP spoof legitimacy
    verification.
 2. Packets originating from the external network through the Antrea gateway port.
 3. Packets received through an overlay tunnel.
 4. Packets received through a return port defined in a user-provided TrafficControl CR (for feature `TrafficControl`).
-5. Packets returned back from an application-aware engine through a specific port (for feature `L7NetworkPolicy`).
+5. Packets returned from an application-aware engine through a specific port (for feature `L7NetworkPolicy`).
 6. Packets originating from local Pods, requiring IP spoof legitimacy verification.
 
 If you dump the flows of this table, you may see the following:
@@ -731,16 +743,17 @@ packets from the tunnel should be seamlessly forwarded to table [UnSNAT]. The fo
   and consumed in table [L3Forwarding].
 
 Flow 4 is for case 4, matching packets from a TrafficControl return port and forwarding them to table [L3Forwarding]
-to decide the egress port. It's important to note that both the source and destination MAC addresses of the packets have
-been set to the expected state before redirecting the packets to the TrafficControl target port in table [Output]. The
-only purpose of forwarding the packets to table [L3Forwarding] is to load tunnel destination IP for packets destined for
-remote Nodes. This ensures that the returned packets destined for remote Nodes are forwarded through the tunnel.
-`FromTCReturnRegMark` that will be used in table [TrafficControl] is loaded to mark the packet source.
+to decide the egress port. It's important to note that a forwarding decision for these packets was already made before
+redirecting them to the TrafficControl target port in table [Output], and at this point, the source and destination MAC
+addresses of these packets have already been set to the correct values. The only purpose of forwarding the packets to
+table [L3Forwarding] is to load the tunnel destination IP for packets destined for remote Nodes. This ensures that the
+returned packets destined for remote Nodes are forwarded through the tunnel. `FromTCReturnRegMark`, which will be used
+in table [TrafficControl], is loaded to mark the packet source.
 
-Flow 5 is for case 5, matching packets sent back from an application-aware engine through a specific port and forwarding
-them to table [L3Forwarding] to decide the egress port. Like flow 4, the purpose of forwarding the packets to table
-[L3Forwarding] is to load tunnel destination IP for packets destined for remote Nodes. `FromTCReturnRegMark` that will
-be used in table [TrafficControl] is also loaded to mark the packet source.
+Flow 5 is for case 5, matching packets returned back from an application-aware engine through a specific port, stripping
+the VLAN ID used by the application-aware engine, and forwarding them to table [L3Forwarding] to decide the egress port.
+Like flow 4, the purpose of forwarding the packets to table [L3Forwarding] is to load the tunnel destination IP for
+packets destined for remote Nodes, and `FromTCReturnRegMark` is also loaded.
 
 Flows 6-8 are for case 6, matching packets from local Pods and forwarding them to table [SpoofGuard] to do legitimacy
 verification. The following reg marks are loaded:
@@ -753,10 +766,11 @@ Flow 9 is the table-miss flow to drop packets that are not matched by flows 1-8.
 
 ### SpoofGuard
 
-This table is crafted to drop IP [spoofing](https://en.wikipedia.org/wiki/Spoofing_attack) from local Pods. It addresses
-specific cases:
+This table is crafted to prevent IP [spoofing](https://en.wikipedia.org/wiki/Spoofing_attack) from local Pods. It
+addresses specific cases:
 
-1. Allowing packets from the local Antrea gateway, where checks are not currently performed.
+1. Allowing all packets from the local Antrea gateway. We do not perform checks for this interface as we need to accept
+   external traffic with a source IP address that does not match the gateway IP.
 2. Ensuring that the source IP and MAC addresses are correct, i.e., matching the values configured on the interface when
    Antrea sets up networking for a Pod.
 
@@ -770,17 +784,19 @@ If you dump the flows of this table, you may see the following:
 5. table=SpoofGuard, priority=0 actions=drop
 ```
 
-Flow 1 is for case 1, matching packets received from the local Antrea gateway port without checking the source IP and MAC
-address. There are some cases where the source IP of the packets through the local Antrea gateway port is not the local
-Antrea gateway IP:
+Flow 1 is for case 1, matching packets received on the local Antrea gateway port without checking the source IP and MAC
+addresses. There are some cases where the source IP of the packets through the local Antrea gateway port is not the local
+Antrea gateway IP address:
 
 - When Antrea is deployed with kube-proxy, and `AntreaProxy` is not enabled, packets from local Pods destined for Services
-  will first go through the gateway, get load-balanced by the kube-proxy data path (DNAT) then re-enter through the
-  gateway. Then the packets are received on the gateway port with a source IP belonging to a local Pod.
+  will first go through the gateway port, get load-balanced by the kube-proxy data path (undergo DNAT with a local Endpoint
+  selected by the kube-proxy) then re-enter through the gateway port. Then the packets are received on the gateway port
+  with a source IP belonging to a local Pod.
 - When Antrea is deployed without kube-proxy, and both `AntreaProxy` and `proxyAll` are enabled, packets from the external
-  network destined for Services will be routed to OVS through the gateway without changing the source IP.
-- When Antrea is deployed with kube-proxy, and `AntreaProxy` is enabled, packets from the external network destined for
-  Services will get load-balanced by the kube-proxy data path (DNAT) and then routed to OVS through the gateway without SNAT.
+  network destined for Services will be routed to OVS through the gateway port without changing the source IP.
+- When Antrea is deployed with kube-proxy, packets from the external network destined for Services whose
+  `externalTrafficPolicy` is set to `Local` will get load-balanced by the kube-proxy data path (undergo DNAT with a
+  local Endpoint selected by the kube-proxy) and then routed to OVS through the gateway without SNAT.
 
 Flows 2-4 are for case 2, matching legitimate IP packets from local Pods.
 
@@ -788,9 +804,9 @@ Flow 5 is the table-miss flow to drop IP spoofing packets.
 
 ### UnSNAT
 
-This table is used to perform `de-SNAT` on reply packets by invoking action `ct` on them. The packets are from SNAT'd
-Service connections that have been committed with `SNATCtZone` in table [SNAT]. After invoking action `ct`, the packets
-will be in a "tracked" state, restoring all [connection tracking
+This table is used to undo SNAT on reply packets by invoking action `ct` on them. The packets are from SNAT'd Service
+connections that have been committed to `SNATCtZone` in table [SNAT]. After invoking action `ct`, the packets will be
+in a "tracked" state, restoring all [connection tracking
 fields](https://www.openvswitch.org/support/dist-docs/ovs-fields.7.txt) (such as `ct_state`, `ct_mark`, `ct_label`, etc.)
 to their original values. The packets with a "tracked" state are then forwarded to table [ConntrackZone].
 
@@ -802,20 +818,19 @@ If you dump the flows of this table, you may see the following:
 3. table=UnSNAT, priority=0 actions=goto_table:ConntrackZone
 ```
 
-Flow 1 matches reply packets for Service connections where they were SNAT'd with the *Virtual Service IP* `169.254.0.253`
-and invokes action `ct` on them. For the packets, the destination IP of them is the *Virtual Service IP*.
+Flow 1 matches reply packets for Service connections which were SNAT'd with the *Virtual Service IP* `169.254.0.253`
+and invokes action `ct` on them.
 
-Flow 2 matches packets for Service connections where they were SNAT'd with the local Antrea gateway IP `10.10.0.1` and
-invokes action `ct` on them. For the packets, the destination IP of them is the local Antrea gateway IP. This flow also
-matches request packets destined for the local Antrea gateway IP from local Pods by accident. However, this is harmless
-since such connections will never be committed with `SNATCtZone`, and therefore, connection tracking fields for the
-packets are unset.
+Flow 2 matches packets for Service connections which were SNAT'd with the local Antrea gateway IP `10.10.0.1` and
+invokes action `ct` on them. This flow also matches request packets destined for the local Antrea gateway IP from
+local Pods by accident. However, this is harmless since such connections will never be committed to `SNATCtZone`, and
+therefore, connection tracking fields for the packets are unset.
 
 Flow 3 is the table-miss flow.
 
 For reply packets from SNAT'd connections, whose destination IP is the translated SNAT IP, after invoking action `ct`,
-the destination IP of the packets will be restored to the original IP before SNAT is stored in the connection tracking
-field `ct_nw_dst`.
+the destination IP of the packets will be restored to the original IP stored in the connection tracking field `ct_nw_dst`
+before SNAT.
 
 ### ConntrackZone
 
@@ -845,9 +860,9 @@ This table handles packets from the connections that have a "tracked" state asso
 specific cases:
 
 1. Dropping invalid packets reported by conntrack.
-2. Forwarding tracked sequencing packets from all connections to table [AntreaPolicyEgressRule] directly, bypassing the
-   tables like [PreRoutingClassifier], [NodePortMark], [SessionAffinity], [ServiceLB], and [EndpointDNAT] for Service
-   Endpoint selection.
+2. Forwarding tracked packets from all connections to table [AntreaPolicyEgressRule] directly, bypassing the tables
+   like [PreRoutingClassifier], [NodePortMark], [SessionAffinity], [ServiceLB], and [EndpointDNAT] for Service Endpoint
+   selection.
 3. Forwarding packets from new connections to table [PreRoutingClassifier] to start Service Endpoint selection since
    Service connections are not identified at this stage.
 
@@ -888,7 +903,7 @@ If you dump the flows of this table, you may see the following:
 ```
 
 Flow 1 sequentially resubmits packets to tables [NodePortMark], [SessionAffinity], and [ServiceLB]. Note that packets
-are forwarded to table [ServiceLB] finally. In tables [NodePortMark] and [SessionAffinity], only reg marks are loaded.
+are ultimately forwarded to table [ServiceLB]. In tables [NodePortMark] and [SessionAffinity], only reg marks are loaded.
 
 Flow 2 is the table-miss flow that should remain unused.
 
@@ -900,19 +915,20 @@ enabled.
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=NodePortMark, priority=200,ip,nw_dst=10.176.25.100 actions=set_field:0x80000/0x80000->reg4
-2. table=NodePortMark, priority=200,ip,nw_dst=192.168.77.102 actions=set_field:0x80000/0x80000->reg4
-3. table=NodePortMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4
-4. table=NodePortMark, priority=0 actions=goto_table:SessionAffinity
+1. table=NodePortMark, priority=200,ip,nw_dst=192.168.77.102 actions=set_field:0x80000/0x80000->reg4
+2. table=NodePortMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4
+3. table=NodePortMark, priority=0 actions=goto_table:SessionAffinity
 ```
 
-Flows 1-2 match packets destined for the local Node from local Pods. `NodePortRegMark` is loaded, indicating that the
-packets are potentially destined for NodePort Services.
+Flow 1 matches packets destined for the local Node from local Pods. `NodePortRegMark` is loaded, indicating that the
+packets are potentially destined for NodePort Services. We assume only one valid IP address, `192.168.77.102`, can serve
+as the host IP address for NodePort based on the option `antreaProxy.nodePortAddresses`. If there are multiple valid IP
+addresses specified in the option, a flow similar to flow 1 will be installed for each IP address.
 
-Flow 3 match packets destined for the *Virtual NodePort DNAT IP*. Packets destined for NodePort Services from the local
+Flow 2 match packets destined for the *Virtual NodePort DNAT IP*. Packets destined for NodePort Services from the local
 Node or the external network is DNAT'd to the *Virtual NodePort DNAT IP* by iptables before entering the pipeline.
 
-Flow 4 is the table-miss flow.
+Flow 3 is the table-miss flow.
 
 Note that packets of NodePort Services have not been identified in this table by matching destination IP address. The
 identification of NodePort Services will be done finally in table [ServiceLB] by matching `NodePortRegMark` and the
@@ -934,14 +950,15 @@ If you dump the flows of this table, you may see the following:
 Flow 1 is a learned flow generated by flow 3 in table [ServiceLB], designed for the sample Service [ClusterIP with
 Session Affinity], to implement Service session affinity. Here are some details about the flow:
 
-- The hard timeout of the learned flow should be equal to the value of
-  `service.spec.sessionAffinityConfig.clientIP.timeoutSeconds` defined in the Service. This means that during the hard
-  timeout, this flow is present in the pipeline, and the session affinity of the Service takes effect during the timeout.
-- Source IP address, destination IP address, destination port, and transparent protocol are used to match packets of
-  connections sourced from the same client and destined for the Service during the timeout.
+- The "hard timeout" of the learned flow should be equal to the value of
+  `service.spec.sessionAffinityConfig.clientIP.timeoutSeconds` defined in the Service. This means that until the hard
+  timeout expires, this flow is present in the pipeline, and the session affinity of the Service takes effect. Unlike an
+  "idle timeout", the "hard timeout" does not reset whenever the flow is matched.
+- Source IP address, destination IP address, destination port, and transport protocol are used to match packets of
+  connections sourced from the same client and destined for the Service during the affinity time window.
 - Endpoint IP address and Endpoint port are loaded into `EndpointIPField` and `EndpointPortField` respectively.
-- `EpSelectedRegMark` is loaded, indicating that the Service Endpoint selection is done, and then the packets will
-  be only matched by the last flow in table [ServiceLB].
+- `EpSelectedRegMark` is loaded, indicating that the Service Endpoint selection is done, and ensuring that the packets
+  will only match the last flow in table [ServiceLB].
 - `RewriteMACRegMark`, which will be consumed in table [L3Forwarding], is loaded here, indicating that the source and
   destination MAC addresses of the packets should be rewritten.
 
@@ -957,7 +974,7 @@ This table is used to implement Service Endpoint selection. It addresses specifi
 2. NodePort, as demonstrated in the example [NodePort].
 3. LoadBalancer, as demonstrated in the example [LoadBalancer].
 4. Service configured with external IPs, as demonstrated in the example [Service with ExternalIP].
-5. Service configured with session affinity, as demonstrated in the example [Service with Session Affinity].
+5. Service configured with session affinity, as demonstrated in the example [Service with session affinity].
 6. Service configured with externalTrafficPolicy to `Local`, as demonstrated in the example [Service with
    ExternalTrafficPolicy Local].
 
@@ -978,15 +995,13 @@ If you dump the flows of this table, you may see the following:
 10. table=ServiceLB, priority=0 actions=goto_table:EndpointDNAT
 ```
 
-Flow 1 or flow 2 is designed for case 1, matching the first packet of connections destined for the sample [ClusterIP
+Flow 1 and flow 2 are designed for case 1, matching the first packet of connections destined for the sample [ClusterIP
 without Endpoint] or [ClusterIP]. This is achieved by matching `EpToSelectRegMark` loaded in table [SessionAffinity],
 clusterIP, and port. The target of the packet matched by the flow is an OVS group where the Endpoint will be selected.
-Before forwarding the packet to the OVS group, `RewriteMACRegMark` that will be consumed in table [L3Forwarding] is
+Before forwarding the packet to the OVS group, `RewriteMACRegMark`, which will be consumed in table [L3Forwarding], is
 loaded, indicating that the source and destination MAC addresses of the packets should be rewritten. `EpSelectedRegMark`
-that will be consumed in table [EndpointDNAT] is also loaded, indicating that the Endpoint is selected. Note that the
-Service Endpoint selection is not completed yet, as it will be done in the target OVS group. The action is set here to
-support more Endpoints in an OVS group. Refer to PR [#2101](https://github.com/antrea-io/antrea/pull/2101) for more
-information.
+, which will be consumed in table [EndpointDNAT], is also loaded, indicating that the Endpoint is selected. Note that the
+Service Endpoint selection is not completed yet, as it will be done in the target OVS group.
 
 Flow 3 is for case 2, matching the first packet of connections destined for the sample [NodePort]. This is achieved by
 matching `EpToSelectRegMark` loaded in table [SessionAffinity], `NodePortRegMark` loaded in table [NodePortMark], and
@@ -1003,23 +1018,23 @@ Session Affinity]. This is achieved by matching the conditions similar to flow 1
 also an OVS group, and `RewriteMACRegMark` is loaded. The difference is that `EpToLearnRegMark` is loaded, rather than
 `EpSelectedRegMark`, indicating that the selected Endpoint needs to be cached.
 
-Flow 7 is the final process for case 5, matching the packet previously matched by flow 6, sent back from the target OVS
+Flow 7 is the final process for case 5, matching the packet previously matched by flow 6, resubmitted back from the target OVS
 group after selecting an Endpoint. Then a learned flow will be generated in table [SessionAffinity] to match the packets
 of the subsequent connections from the same client IP, ensuring that the packets are always forwarded to the same Endpoint
-selected the first time. `EpSelectedRegMark` that will be consumed in table [EndpointDNAT] is loaded, indicating that
+selected the first time. `EpSelectedRegMark`, which will be consumed in table [EndpointDNAT], is loaded, indicating that
 Service Endpoint selection has been done.
 
-Flow 8 and flow 9 are for case 6. Flow 8 has the higher priority than that of flow 9, prioritizing matching the first
-packet of connection sourced from a local Pod or the local Node with `FromLocalRegMark` loaded in table [Classifier]
+Flow 8 and flow 9 are for case 6. Flow 8 has higher priority than flow 9, prioritizing matching the first
+packet of connections sourced from a local Pod or the local Node with `FromLocalRegMark` loaded in table [Classifier]
 and destined for the sample [Service with ExternalTrafficPolicy Local]. The target of flow 8 is an OVS group that has
 all the Endpoints across the cluster, ensuring accessibility for Service connections originating from local Pods or
-Nodes, regardless that `externalTrafficPolicy` of the Service is `Local`. Due to the existence of flow 8, consequently,
+Nodes, even though `externalTrafficPolicy` is set to `Local` for the Service. Due to the existence of flow 8, consequently,
 flow 9 exclusively matches packets sourced from the external network, resembling the pattern of flow 1. The target of
 flow 9 is an OVS group that has only the local Endpoints since `externalTrafficPolicy` of the Service is `Local`.
 
 Flow 10 is the table-miss flow.
 
-As mentioned above, the Service Endpoint selection is performed within OVS groups. 3 typical OVS groups are list below:
+As mentioned above, the Service Endpoint selection is performed within OVS groups. 3 typical OVS groups are listed below:
 
 ```text
 1. group_id=9,type=select,\
@@ -1041,16 +1056,16 @@ Endpoints. The group has 2 buckets, indicating the availability of 2 selectable 
 chance of being chosen since they have the same weights. For every bucket, the Endpoint IP and Endpoint port are loaded
 into `EndpointIPField` and `EndpointPortField`, respectively. These loaded values will be consumed in table
 [EndpointDNAT] to which the packets are forwarded and in which DNAT will be performed. `RemoteEndpointRegMark` is loaded
-for remote Endpoints, like bucket with `bucket_id` 1 in this group.
+for remote Endpoints, like the bucket with `bucket_id` 1 in this group.
 
 The third group with `group_id` 11 is the destination of packets matched by flow 6, designed for a Service that has
 Endpoints and is configured with session affinity. The group closely resembles the group with `group_id` 10, except that
-the destination of the packets is table [ServiceLB], rather than table [EndpointDNAT]. After being sent back to table
+the destination of the packets is table [ServiceLB], rather than table [EndpointDNAT]. After being resubmitted back to table
 [ServiceLB], they will be matched by flow 7.
 
 ### EndpointDNAT
 
-The table implements DNAT for Service connection after Endpoint selection is performed in table [ServiceLB].
+The table implements DNAT for Service connections after Endpoint selection is performed in table [ServiceLB].
 
 If you dump the flows of this table, you may see the following::
 
@@ -1064,7 +1079,7 @@ If you dump the flows of this table, you may see the following::
 
 Flow 1 is designed for Services without Endpoints. It identifies the first packet of connections destined for such Service
 by matching `SvcNoEpRegMark`. Subsequently, the packet is forwarded to the OpenFlow controller (Antrea Agent). For TCP
-Service traffic, the controller will send a TCP RST, and for all other cases the controller will an ICMP Destination
+Service traffic, the controller will send a TCP RST, and for all other cases the controller will send an ICMP Destination
 Unreachable message.
 
 Flows 2-3 are designed for Services that have selected an Endpoint. These flows identify the first packet of connections
@@ -1078,6 +1093,10 @@ Some bits of ct mark are persisted:
 - The value of `PktSourceField` is persisted to `ConnSourceCTMarkField`, storing the source of the connection for the
   current packet and subsequent packets of the connection.
 
+Flow 4 is to resubmit the packets which are not matched by flows 1-3 back to table [ServiceLB] to select Endpoint again.
+
+Flow 5 is the table-miss flow to match non-Service packets.
+
 ### AntreaPolicyEgressRule
 
 This table is used to implement the egress rules across all Antrea-native NetworkPolicies, except for NetworkPolicies
@@ -1085,8 +1104,8 @@ that are created in the Baseline Tier. Antrea-native NetworkPolicies created in 
 K8s NetworkPolicies and their egress rules are installed in tables [EgressDefaultRule] and [EgressRule] respectively, i.e.
 
 ```text
-K8s NetworkPolicy                          ->  EgressRule
 Antrea-native NetworkPolicy other Tiers    ->  AntreaPolicyEgressRule
+K8s NetworkPolicy                          ->  EgressRule
 Antrea-native NetworkPolicy Baseline Tier  ->  EgressDefaultRule
 ```
 
@@ -1101,7 +1120,7 @@ custom allocator, which is common to all tables that can have NetworkPolicy flow
 
 For this table, you will need to keep in mind the Antrea-native NetworkPolicy
 [specification](#antrea-native-networkpolicy-implementation). Since the sample egress policy resides in the Application
-Tier. If you dump the flows of this table, you may see the following:
+Tie, if you dump the flows of this table, you may see the following:
 
 ```text
 1. table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:EgressMetric
@@ -1116,8 +1135,8 @@ Tier. If you dump the flows of this table, you may see the following:
 10. table=AntreaPolicyEgressRule, priority=0 actions=goto_table:EgressRule
 ```
 
-Flows 1-2, which are installed by default with the highest priority, matching non-new and "tracked" packets and
-forwarding them to table [EgressMetric] to bypass the check from egress rules. This means that if a connection is
+Flows 1-2, which are installed by default with the highest priority, match non-new and "tracked" packets and
+forward them to table [EgressMetric] to bypass the check from egress rules. This means that if a connection is
 established, its packets go straight to table [EgressMetric], with no other match required. In particular, this ensures
 that reply traffic is never dropped because of an Antrea-native NetworkPolicy or K8s NetworkPolicy rule. However, this
 also means that ongoing connections are not affected if the Antrea-native NetworkPolicy or the K8s NetworkPolicy is
@@ -1141,16 +1160,18 @@ flows are described as follows:
 - Flow 5 is used to match packets with the destination TCP port in set {3306} specified in the rule, constituting the
   third dimension for `conjunction` with `conj_id` 7.
 - Flow 6 is used to match packets meeting all the three dimensions of `conjunction` with `conj_id` 7 and forward them
-  to table [EgressMetric], persisting `conj_id` to `EgressRuleCTLabel` that is consumed in table [EgressMetric].
+  to table [EgressMetric], persisting `conj_id` to `EgressRuleCTLabel` that will be consumed in table [EgressMetric].
 
 Flows 7-9, whose priorities are all 14499, are installed for the egress rule with a `Drop` action defined after the rule
-`AllowToDB` in the sample policy, serves as a default rule. Unlike the default of K8s NetworkPolicy, Antrea-native
-NetworkPolicy has no default rule, and all rules should be explicitly defined. Hence, they are evaluated as-is, and
-there is no need for a table [AntreaPolicyEgressDefaultRule]. These flows are described as follows:
+`AllowToDB` in the sample policy, and serves as a default rule. Antrea-native NetworkPolicy does not have the same
+default isolated behavior as K8s NetworkPolicy (implemented in the [EgressDefaultRule] table). As soon as a rule is
+matched, we apply the corresponding action. If no rule is matched, there is no implicit drop for Pods to which an
+Antrea-native NetworkPolicy applies. These flows are described as follows:
 
 - Flow 7 is used to match packets with the source IP address in set {10.10.0.24}, which is from the Pods selected
   by the label `app: web`, constituting the first dimension for `conjunction` with `conj_id` 5.
-- Flow 8 is used to match any packets, constituting the second dimension for `conjunction` with `conj_id` 5.
+- Flow 8 is used to match any IP packets, constituting the second dimension for `conjunction` with `conj_id` 5. This
+  flow, which matches all IP packets, exists because we need at least 2 dimensions for a conjunctive match.
 - Flow 9 is used to match packets meeting both dimensions of `conjunction` with `conj_id` 5. `APDenyRegMark` is
   loaded and will be consumed in table [EgressMetric] to which the packets are forwarded.
 
@@ -1175,9 +1196,9 @@ you may see the following:
 Flows 1-4 are installed for the egress rule in the sample K8s NetworkPolicy. These flows are described as follows:
 
 - Flow 1 is to match packets with the source IP address in set {10.10.0.24}, which has all IP addresses of the Pods
-  selected by the label `app: web`, constituting the first dimension for `conjunction` with `conj_id` 2.
+  selected by the label `app: web` in the `default` Namespace, constituting the first dimension for `conjunction` with `conj_id` 2.
 - Flow 2 is to match packets with the destination IP address in set {10.10.0.25}, which has all IP addresses of the Pods
-  selected by the label `app: db`, constituting the second dimension for `conjunction` with `conj_id` 2.
+  selected by the label `app: db` in the `default` Namespace, constituting the second dimension for `conjunction` with `conj_id` 2.
 - Flow 3 is to match packets with the destination TCP port in set {3306} specified in the rule, constituting the third
   dimension for `conjunction` with `conj_id` 2.
 - Flow 4 is to match packets meeting all the three dimensions of `conjunction` with `conj_id` 2 and forward them to
@@ -1188,10 +1209,10 @@ Flow 5 is the table-miss flow to forward packets not matched by other flows to t
 ### EgressDefaultRule
 
 This table complements table [EgressRule] for K8s NetworkPolicy egress rule implementation. When a NetworkPolicy is
-applied to a set of Pods, and the default behavior for these Pods becomes "deny" (they become [isolated
+applied to a set of Pods, then the default behavior for egress connections for these Pods becomes "deny" (they become [isolated
 Pods](https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)).
 This table is in charge of dropping traffic originating from Pods to which a NetworkPolicy (with an egress rule) is
-applied, and which did not match any of the allowed list rules.
+applied, and which did not match any of the "allowed" list rules.
 
 If you dump the flows of this table, you may see the following:
 
@@ -1209,7 +1230,7 @@ Flow 2 is the table-miss flow to forward packets to table [EgressMetric].
 This table is also used to implement Antrea-native NetworkPolicy egress rules that are created in the Baseline Tier.
 Since the Baseline Tier is meant to be enforced after K8s NetworkPolicies, the corresponding flows will be created at a
 lower priority than K8s NetworkPolicy default drop flows. These flows are similar to flows 3-9 in table
-[AntreaPolicyEgressRule].
+[AntreaPolicyEgressRule]. For the sake of simplicity, we have not defined any example Baseline policies in this document.
 
 ### EgressMetric
 
@@ -1236,6 +1257,9 @@ egress rule.
 Flow 5 serves as the drop rule for the sample Antrea-native NetworkPolicy egress rule. It drops the packets by matching
 `APDenyRegMark` loaded in table [AntreaPolicyEgressRule] flow 9 and `APConjIDField` set to 5 which is the `conj_id`
 allocated the egress rule and loaded in table [AntreaPolicyEgressRule] flow 9.
+
+These flows have no explicit action besides the `goto_table` action. This is because we rely on the "implicit" flow
+counters to keep track of connection / packet statistics.
 
 Ct label is used in flows 1-4, while reg is used in flow 5. The distinction lies in the fact that the value persisted in
 the ct label can be read throughout the entire lifecycle of a connection, but the reg mark is only valid for the current
@@ -1276,13 +1300,13 @@ Flow 2 matches reply packets with corresponding ct "tracked" states and `FromGat
 through the local Antrea gateway. In other words, these are connections for which the first packet of the connection
 (SYN packet for TCP) was received through the local Antrea gateway. It rewrites the destination MAC address to
 that of the local Antrea gateway, loads `ToGatewayRegMark`, and forwards them to table [L3DecTTL]. This ensures that
-reply packets can be forwarded back to the local Antrea gateway in subsequent tables, guaranteeing the availability
-of the connection. This flow is required to handle the following cases when AntreaProxy is not enabled:
+reply packets can be forwarded back to the local Antrea gateway in subsequent tables. This flow is required to handle
+the following cases when AntreaProxy is not enabled:
 
 - Reply traffic for connections from a local Pod to a ClusterIP Service, which are handled by kube-proxy and go through
   DNAT. In this case, the destination IP address of the reply traffic is the Pod which initiated the connection to the
-  Service (no SNAT by kube-proxy). These packets should sent back to the local Antrea gateway to the third-party module
-  to complete the DNAT processes, e.g., kube-proxy. The destination MAC of the packets are rewritten in the table to
+  Service (no SNAT by kube-proxy). These packets should be forwarded back to the local Antrea gateway to the third-party module
+  to complete the DNAT processes, e.g., kube-proxy. The destination MAC of the packets is rewritten in the table to
   avoid it is forwarded to the original client Pod by mistake.
 - When hairpin is involved, i.e. connections between 2 local Pods, for which NAT is performed. One example is a
   Pod accessing a NodePort Service for which externalTrafficPolicy is set to `Local` using the local Node's IP address,
@@ -1296,15 +1320,15 @@ not traversing any router device or undergoing NAT process. For packets from Ser
 `RewriteMACRegMark`, mutually exclusive with `NotRewriteMACRegMark`, is loaded. Therefore, the packets will not be
 matched by the flow.
 
-Flow 4 is designed to match packets destined for remote Pod CIDR. This involves installing a separate flow for each remote
+Flow 4 is designed to match packets destined for a remote Pod CIDR. This involves installing a separate flow for each remote
 Node, with each flow matching the destination IP address of the packets against the Pod subnet for the respective Node.
 For the matched packets, the source MAC address is set to that of the local Antrea gateway MAC, and the destination
 MAC address is set to the *Global Virtual MAC*. The Openflow `tun_dst` field is set to the appropriate value (i.e.
-the IP address of the remote Node IP). Additionally, `ToTunnelRegMark` is loaded, signifying that the packets will be
+the IP address of the remote Node). Additionally, `ToTunnelRegMark` is loaded, signifying that the packets will be
 forwarded to remote Nodes through a tunnel. The matched packets are then forwarded to table [L3DecTTL] to decrease the TTL
 value.
 
-Flow 5-7 matches packets destined for local Pods and marked by `RewriteMACRegMark` that signifies that the packets may
+Flow 5-7 matches packets destined for local Pods and marked by `RewriteMACRegMark`, which signifies that the packets may
 originate from Service or inter-Node connections. For the matched packets, the source MAC address is set to that of the
 local Antrea gateway MAC, and the destination MAC address is set to the associated local Pod MAC address. The matched
 packets are then forwarded to table [L3DecTTL] to decrease the TTL value.
@@ -1312,7 +1336,7 @@ packets are then forwarded to table [L3DecTTL] to decrease the TTL value.
 Flow 8 matches request packets originating from local Pods and destined for the external network, and then forwards them
 to table [EgressMark] dedicated to feature `Egress`. In table [EgressMark], SNAT IPs for Egress are looked up for the packets.
 To match the expected packets, `FromPodRegMark` is used to exclude packets that are not from local Pods.
-Additionally, `NotAntreaFlexibleIPAMRegMark`, mutually exclusive with `AntreaFlexibleIPAMRegMark` that is used to mark
+Additionally, `NotAntreaFlexibleIPAMRegMark`, mutually exclusive with `AntreaFlexibleIPAMRegMark` which is used to mark
 packets from Antrea IPAM Pods, is used since Egress can only be applied to Node IPAM Pods.
 
 Flow 9 matches request packets originating from remote Pods and destined for the external network, and then forwards them
@@ -1323,11 +1347,11 @@ MAC address of the local Antrea gateway.
 
 Flow 10 matches packets from Service connections that are originating from the local Antrea gateway and destined for the
 external network. This is accomplished by matching `RewriteMACRegMark`, `FromGatewayRegMark`, and `ServiceCTMark`. The
-destination MAC address is then set to that of the local Antrea gateway. Additionally, `ToGatewayRegMark` that will be
-used with `FromGatewayRegMark` together to identify hairpin connections in table [SNATMark] is loaded. Finally,
+destination MAC address is then set to that of the local Antrea gateway. Additionally, `ToGatewayRegMark`, which will be
+used with `FromGatewayRegMark` together to identify hairpin connections in table [SNATMark], is loaded. Finally,
 the packets are forwarded to table [L3DecTTL].
 
-Flow 11 is the table-miss flow, matching packets originating from local Pods and destined for the external network, and
+Flow 11 is the table-miss flow, and is used for packets originating from local Pods and destined for the external network, and
 then forwarding them to table [L2ForwardingCalc]. `ToGatewayRegMark` is loaded as the matched packets traverse the
 local Antrea gateway.
 
@@ -1350,30 +1374,31 @@ If you dump the flows of this table, you may see the following:
 ```
 
 Flows 1-2 match packets originating from local Pods and destined for the transport IP of remote Nodes, and then forward
-them to table [L2ForwardingCalc] to skip Egress SNAT. `ToGatewayRegMark` is loaded, indicating that the output port of
-the packets is the local Antrea gateway.
+them to table [L2ForwardingCalc] to bypass the Pod-to-Node traffic from Egress SNAT. `ToGatewayRegMark` is loaded,
+indicating that the output port of the packets is the local Antrea gateway.
 
 Flow 3 matches packets originating from local Pods and destined for the Service CIDR, and then forwards them to table
-[L2ForwardingCalc] to skip Egress SNAT. Similar to flows 1-2, `ToGatewayRegMark` is also loaded.
+[L2ForwardingCalc] to bypass the Pod-to-Service traffic from Egress SNAT. Similar to flows 1-2, `ToGatewayRegMark` is
+also loaded.
 
-Flow 4 match packets originating from local Pods selected by the sample Egress `egress-client`, whose SNAT IP is configured
+Flow 4 match packets originating from local Pods selected by the sample [Egress egress-client], whose SNAT IP is configured
 on a remote Node, which means that the matched packets should be forwarded to the remote Node through a tunnel. Before
 sending the packets to the tunnel, the source and destination MAC addresses are set to the local Antrea gateway MAC
 and the *Global Virtual MAC* respectively. Additionally, `ToTunnelRegMark`, indicating that the output port is a tunnel,
 and `EgressSNATRegMark`, indicating that packets should undergo SNAT on a remote Node, are loaded. Finally, the packets
 are forwarded to table [L2ForwardingCalc].
 
-Flow 5 matches the first packet of connections originating from remote Pods selected by the sample Egress `egress-web`
+Flow 5 matches the first packet of connections originating from remote Pods selected by the sample [Egress egress-web]
 whose SNAT IP is configured on the local Node, and then loads an 8-bit ID allocated for the associated SNAT IP defined
-in the sample Egress to the `pkt_mark`, which will be identified by iptables on the local Node to perform SNAT with the
+in the sample Egress to the `pkt_mark`, which will be consumed by iptables on the local Node to perform SNAT with the
 SNAT IP. Subsequently, `ToGatewayRegMark`, indicating that the output port is the local Antrea gateway, is loaded.
 Finally, the packets are forwarded to table [L2ForwardingCalc].
 
-Flow 6 matches the first packet of connections originating from local Pods selected by the sample Egress `egress-web`,
+Flow 6 matches the first packet of connections originating from local Pods selected by the sample [Egress egress-web],
 whose SNAT IP is configured on the local Node. Similar to flow 4, the 8-bit ID allocated for the SNAT IP is loaded to
 `pkt_mark`, `ToGatewayRegMark` is loaded, and the packets are forwarded to table [L2ForwardingCalc] finally.
 
-Flow 7 drops packets tunneled from remote Nodes (identified with `FromTunnelRegMark`, indicating that the packets are
+Flow 7 drops all other packets tunneled from remote Nodes (identified with `FromTunnelRegMark`, indicating that the packets are
 from remote Pods through a tunnel). The packets are not matched by any flows 1-6, which means that they are here
 unexpected and should be dropped.
 
@@ -1427,8 +1452,11 @@ packets to table [SNAT], `ToExternalAddressRegMark` and `NotDSRServiceRegMark` a
 are destined for a Service's external IP, like NodePort, LoadBalancerIP or ExternalIP, but it is not DSR mode.
 Additionally, `ConnSNATCTMark`, indicating that the connection requires SNAT, is persisted to mark the connections.
 
-Flow 3-4 match the first packet of hairpin Service connections, identified by the same source and destination IP
-addresses. Such hairpin connections will undergo with the IP address of the local Antrea gateway in table [SNAT].
+It's worthy to note that flows 1-2 are specific to `proxyAll`, but it is harmless when `proxyAll` is disabled since
+these flows should be never matched by in-cluster Service traffic.
+
+Flow 3-4 match the first packet of hairpin Service connections, identified by the same source and destination Pod IP
+addresses. Such hairpin connections will undergo SNAT with the IP address of the local Antrea gateway in table [SNAT].
 Similar to flow 1, `ConnSNATCTMark` and `HairpinCTMark` are persisted to mark the connections.
 
 Flow 5 is the table-miss flow.
@@ -1458,8 +1486,8 @@ Flow 2 matches the first packet of hairpin Service connection originating from l
 and `FromPodRegMark`. It performs SNAT with the IP address of the local Antrea gateway and forwards the SNAT'd packets
 to table [L2ForwardingCalc]. Similar to flow 1, `ServiceCTMark` and `HairpinCTMark` are persisted in `SNATCtZone`.
 
-Flow 3 matches the subsequent request packets of connection whose first request packet has been performed SNAT and then
-invoke `ct` action on the packets again to restore the "tracked" state in `SNATCtZone`. The packets with the appropriate
+Flow 3 matches the subsequent request packets of connections for which SNAT was performed for the first packet, and then
+invokes `ct` action on the packets again to restore the "tracked" state in `SNATCtZone`. The packets with the appropriate
 "tracked" state are forwarded to table [L2ForwardingCalc].
 
 Flow 4 matches the first packet of Service connections requiring SNAT, identified by `ConnSNATCTMark` and
@@ -1488,14 +1516,14 @@ If you dump the flows of this table, you may see the following:
 
 Flow 1 matches packets destined for the local Antrea gateway, identified by the destination MAC address being that of
 the local Antrea gateway. It loads `OutputToOFPortRegMark`, indicating that the packets should output to an OVS port,
-and also loads port number of the local Antrea gateway to `TargetOFPortField`. Both of these two values will be consumed
+and also loads the port number of the local Antrea gateway to `TargetOFPortField`. Both of these two values will be consumed
 in table [Output].
 
 Flow 2 matches packets destined for a tunnel, identified by the destination MAC address being that of the *Global Virtual
 MAC*. Similar to flow 1, `OutputToOFPortRegMark` is loaded, and the port number of the tunnel is loaded to
 `TargetOFPortField`.
 
-Flows 3-5 match packets destined for local Pods, identified by the destination MAC address being that of the local
+Flows 3-5 match packets destined for local Pods, identified by the destination MAC address being that of one of the local
 Pods. Similar to flow 1, `OutputToOFPortRegMark` is loaded, and the port number of the local Pods is loaded to
 `TargetOFPortField`.
 
@@ -1519,23 +1547,17 @@ If you dump the flows of this table, you may see the following:
 Flow 1 matches packets returned from TrafficControl return ports and forwards them to table [Output], where the packets
 are output to the port to which they are destined. To identify such packets, `OutputToOFPortRegMark`, indicating that
 the packets should be output to an OVS port, and `FromTCReturnRegMark` loaded in table [Classifier], indicating that
-the packets are from a TrafficControl return port, are utilized.
+the packets are from a TrafficControl return port, are used.
 
-Flow 2 is installed for the sample TrafficControl `redirect-web-to-local`, which marks the packets destined for the Pods
-labeled by `app: web` with `TrafficControlRedirectRegMark`, indicating the packets should be redirected to a
-TrafficControl target port whose number is loaded to `TrafficControlTargetOFPortField`.
+Flows 2-3 are installed for the sample [TrafficControl redirect-web-to-local] to mark the packets associated with the
+Pods labeled by `app: web` using `TrafficControlRedirectRegMark`. Flow 2 handles the ingress direction, while flow 3
+handles the egress direction. In table [Output], these packets will be redirected to a TrafficControl target port
+specified in `TrafficControlTargetOFPortField`, of which value is loaded in these 2 flows.
 
-Flow 3 is also installed for the sample TrafficControl `redirect-web-to-local`. Similar to flow 2,
-`TrafficControlRedirectRegMark` is loaded and the TrafficControl target port whose number is loaded to
-`TrafficControlTargetOFPortField`.
-
-Flow 4 is installed for the sample TrafficControl `mirror-db-to-local`, which marks the packets destined for the Pods
-labeled by `app: db` with `TrafficControlMirrorRegMark`, indicating the packets should be mirrored to a
-TrafficControl target port whose number is loaded to `TrafficControlTargetOFPortField`.
-
-Flow 5 is also installed for the sample TrafficControl `redirect-web-to-local`. Similar to flow 2,
-`TrafficControlRedirectRegMark` is loaded and the TrafficControl target port whose number is loaded to
-`TrafficControlTargetOFPortField`.
+Flows 4-5 are installed for the sample [TrafficControl mirror-db-to-local] to mark the packets associated with the Pods
+labeled by `app: db` using `TrafficControlMirrorRegMark`. Similar to flows 2-3, flows 4-5 also handles the two directions.
+In table [Output], these packets will be mirrored (duplicated) to a TrafficControl target port specified in
+`TrafficControlTargetOFPortField`, of which value is loaded in these 2 flows.
 
 Flow 6 is the table-miss flow.
 
@@ -1555,8 +1577,9 @@ If you dump the flows of this table, you may see the following:
 7. table=IngressSecurityClassifier, priority=0 actions=goto_table:AntreaPolicyIngressRule
 ```
 
-Flow 1 matches locally generated request packets, identified by `pkt_mark` which is set by iptables in the host network
-namespace. It forwards the packets to table [ConntrackCommit] directly to bypass all tables for ingress security.
+Flow 1 matches locally generated request packets for liveness/readiness probes from kubelet, identified by `pkt_mark`
+which is set by iptables in the host network namespace. It forwards the packets to table [ConntrackCommit] directly to
+bypass all tables for ingress security.
 
 Flow 2 matches packets destined for NodePort Services and forwards them to table [AntreaPolicyIngressRule] to enforce
 Antrea-native NetworkPolicies applied to NodePort Services. Without this flow, if the selected Endpoint is not a local
@@ -1579,8 +1602,8 @@ NetworkPolicies. Depending on the tier to which the policy belongs, the rules wi
 to that tier. The ingress table to tier mappings is as follows:
 
 ```text
-K8s NetworkPolicy                          ->  IngressRule
 Antrea-native NetworkPolicy other Tiers    ->  AntreaPolicyIngressRule
+K8s NetworkPolicy                          ->  IngressRule
 Antrea-native NetworkPolicy Baseline Tier  ->  IngressDefaultRule
 ```
 
@@ -1606,8 +1629,8 @@ ingress policies reside in the Application Tier, if you dump the flows for this 
 14. table=AntreaPolicyIngressRule, priority=0 actions=goto_table:IngressRule
 ```
 
-Flows 1-2, which are installed by default with the highest priority, matching non-new and "tracked" packets and
-forwarding them to table [IngressMetric] to bypass the check from egress rules. This means that if a connection is
+Flows 1-2, which are installed by default with the highest priority, match non-new and "tracked" packets and
+forward them to table [IngressMetric] to bypass the check from egress rules. This means that if a connection is
 established, its packets go straight to table [IngressMetric], with no other match required. In particular, this ensures
 that reply traffic is never dropped because of an Antrea-native NetworkPolicy or K8s NetworkPolicy rule. However, this
 also means that ongoing connections are not affected if the Antrea-native NetworkPolicy or the K8s NetworkPolicy is
@@ -1656,7 +1679,8 @@ rule `AllowFromClient` in the sample policy, serves as a default rule. Unlike th
 Antrea-native NetworkPolicy has no default rule, and all rules should be explicitly defined. Hence, they are evaluated
 as-is, and there is no need for a table [AntreaPolicyIngressDefaultRule]. These flows are described as follows:
 
-- Flow 11 is used to match any packets, constituting the second dimension for `conjunction` with `conj_id` 4.
+- Flow 11 is used to match any IP packets, constituting the second dimension for `conjunction` with `conj_id` 4. This
+  flow, which matches all IP packets, exists because we need at least 2 dimensions for a conjunctive match.
 - Flow 12 is used to match packets with the output OVS port in set {0x25},  which has all the ports of the Pods
   selected by the label `app: web`, constituting the first dimension for `conjunction` with `conj_id` 4.
 - Flow 13 is used to match packets meeting both dimensions of `conjunction` with `conj_id` 4. `APDenyRegMark` that
@@ -1683,9 +1707,9 @@ If you dump the flows of this table, you should see something like this:
 Flows 1-4 are installed for the ingress rule in the sample K8s NetworkPolicy. These flows are described as follows:
 
 - Flow 1 is used to match packets with the source IP address in set {10.10.0.26}, which is from the Pods selected
-  by the label `app: client`, constituting the first dimension for `conjunction` with `conj_id` 3.
+  by the label `app: client` in the `default` Namespace, constituting the first dimension for `conjunction` with `conj_id` 3.
 - Flow 2 is used to match packets with the output port OVS in set {0x25}, which has all ports of the Pods selected
-  by the label `app: web`, constituting the second dimension for `conjunction` with `conj_id` 3.
+  by the label `app: web` in the `default` Namespace, constituting the second dimension for `conjunction` with `conj_id` 3.
 - Flow 3 is used to match packets with the destination TCP port in set {80} specified in the rule, constituting
   the third dimension for `conjunction` with `conj_id` 3.
 - Flow 4 is used to match packets meeting all the three dimensions of `conjunction` with `conj_id` 3 and forward
@@ -1696,11 +1720,11 @@ Flow 5 is the table-miss flow to forward packets not matched by other flows to t
 ### IngressDefaultRule
 
 This table is similar in its purpose to table [EgressDefaultRule], and it complements table [IngressRule] for K8s
-NetworkPolicy ingress rule implementation. In Kubernetes, when a NetworkPolicy is applied to a set of Pods, the default
-behavior for these Pods becomes "deny" (they become [isolated
+NetworkPolicy ingress rule implementation. In Kubernetes, when a NetworkPolicy is applied to a set of Pods, then the default
+behavior for ingress connections for these Pods becomes "deny" (they become [isolated
 Pods](https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)). This
 table is in charge of dropping traffic destined for Pods to which a NetworkPolicy (with an ingress rule) is applied,
-and which did not match any of the allow list rules.
+and which did not match any of the "allow" list rules.
 
 If you dump the flows of this table, you may see the following:
 
@@ -1793,10 +1817,12 @@ If you dump the flows of this table, you may see the following:
 Flow 1 is for case 1. It matches packets with `L7NPRedirectCTMark` and `OutputToOFPortRegMark`, and then outputs them to
 the port `antrea-l7-tap0` specifically created for connecting to an application-aware engine. Notably, these packets are pushed
 with an 802.1Q header and loaded with the VLAN ID value persisted in `L7NPRuleVlanIDCTLabel` before being output, due to
-the implementation of `L7NetworkPolicy`.
+the implementation of Antrea-native L7 NetworkPolicy. The application-aware engine enforcing L7 policies (e.g., Suricata)
+can leverage the VLAN ID to determine which set of rules to apply to the packet.
 
 Flow 2 is for case 2. It matches packets with `TrafficControlMirrorRegMark` and `OutputToOFPortRegMark`, and then
 outputs them to the port specified in `TargetOFPortField` and the port specified in `TrafficControlTargetOFPortField`.
+Unlike the `Redirect` action, the `Mirror` action creates an additional copy of the packet.
 
 Flow 3 is for case 3. It matches packets with `TrafficControlRedirectRegMark` and `OutputToOFPortRegMark`, and then
 outputs them to the port specified in `TrafficControlTargetOFPortField`.
@@ -1810,6 +1836,10 @@ the value stored in `TargetOFPortField`.
 Flows 6-7 are for case 6. They match packets by matching `OutputToControllerRegMark` and the value stored in
 `PacketInOperationField`, then output them to the OpenFlow controller (Antrea Agent) with corresponding user data.
 
+In practice, you will see additional flows similar to these ones to accommodate different scenarios (different
+PacketInOperationField values). Note that packets sent to controller are metered to avoid overrunning the antrea-agent
+and using too many resources.
+
 Flow 8 is the table-miss flow for case 7. It drops packets that do not match any of the flows in this table.
 
 [ARPSpoofGuard]: #arpspoofguard
@@ -1818,6 +1848,7 @@ Flow 8 is the table-miss flow for case 7. It drops packets that do not match any
 [Classifier]: #classifier
 [ClusterIP without Endpoint]: #clusterip-without-endpoint
 [ClusterIP]: #clusterip
+[ConntrackCommit]: #conntrackcommit
 [ConntrackState]: #conntrackstate
 [ConntrackZone]: #conntrackzone
 [Ct Labels]: #ovs-ct-label
@@ -1827,6 +1858,8 @@ Flow 8 is the table-miss flow for case 7. It drops packets that do not match any
 [EgressMark]: #egressmark
 [EgressMetric]: #egressmetric
 [EgressRule]: #egressrule
+[Egress egress-client]: #egress-applied-to-client-pods
+[Egress egress-web]: #egress-applied-to-web-pods
 [EndpointDNAT]: #endpointdnat
 [IngressDefaultRule]: #ingressdefaultrule
 [IngressMetric]: #ingressmetric
@@ -1844,9 +1877,11 @@ Flow 8 is the table-miss flow for case 7. It drops packets that do not match any
 [SNAT]: #snat
 [Service with ExternalIP]: #service-with-externalip
 [Service with ExternalTrafficPolicy Local]: #service-with-externaltrafficpolicy-local
-[Service with Session Affinity]: #service-with-session-affinity
+[Service with session affinity]: #service-with-session-affinity
 [ServiceLB]: #servicelb
 [SessionAffinity]: #sessionaffinity
 [SpoofGuard]: #spoofguard
 [TrafficControl]: #trafficcontrol
+[TrafficControl mirror-db-to-local]: #trafficcontrol-for-packet-mirroring
+[TrafficControl redirect-web-to-local]: #trafficcontrol-for-packet-redirecting
 [UnSNAT]: #unsnat
