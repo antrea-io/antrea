@@ -641,7 +641,7 @@ func (f *featurePodConnectivity) gatewayClassifierFlows() []binding.Flow {
 			MatchInPort(f.gatewayPort).
 			MatchProtocol(ipProtocol).
 			MatchSrcIP(gatewayIP).
-			Action().LoadRegMark(FromGatewayRegMark).
+			Action().LoadRegMark(FromGatewayRegMark, FromLocalRegMark).
 			Action().GotoStage(stageValidation).
 			Done())
 	}
@@ -658,7 +658,7 @@ func (f *featurePodConnectivity) gatewayClassifierFlows() []binding.Flow {
 // podClassifierFlow generates the flow to mark the packets from a local Pod port.
 // If multi-cluster is enabled, also load podLabelID into LabelIDField.
 func (f *featurePodConnectivity) podClassifierFlow(podOFPort uint32, isAntreaFlexibleIPAM bool, podLabelID *uint32) binding.Flow {
-	regMarksToLoad := []*binding.RegMark{FromLocalRegMark}
+	regMarksToLoad := []*binding.RegMark{FromPodRegMark, FromLocalRegMark}
 	if isAntreaFlexibleIPAM {
 		regMarksToLoad = append(regMarksToLoad, AntreaFlexibleIPAMRegMark, RewriteMACRegMark)
 	}
@@ -877,7 +877,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromLocalRegMark).
+				MatchRegMark(FromPodRegMark).
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
@@ -2488,9 +2488,9 @@ func (f *featureService) serviceLBFlows(config *types.ServiceConfig) []binding.F
 		buildFlow(priorityNormal, config.TrafficPolicyGroupID(), nil),
 	}
 	if config.IsExternal && config.TrafficPolicyLocal {
-		// For short-circuiting flow, an extra match condition matching packet from local Pod CIDR is added.
+		// For short-circuiting flow, an extra match condition matching packet from a local Pod or the Node is added.
 		flows = append(flows, buildFlow(priorityHigh, config.ClusterGroupID, func(b binding.FlowBuilder) binding.FlowBuilder {
-			return b.MatchSrcIPNet(f.localCIDRs[getIPProtocol(config.ServiceIP)])
+			return b.MatchRegMark(FromLocalRegMark)
 		}))
 	}
 	if config.IsDSR {
@@ -2703,7 +2703,7 @@ func (f *featureEgress) externalFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateRpl(false).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromLocalRegMark, NotAntreaFlexibleIPAMRegMark).
+				MatchRegMark(FromPodRegMark, NotAntreaFlexibleIPAMRegMark).
 				Action().GotoTable(EgressMarkTable.GetID()).
 				Done(),
 			// This generates the flow to match the packets sourced from tunnel and destined for external network, then
@@ -2827,7 +2827,7 @@ func (f *featureMulticast) igmpEgressFlow() binding.Flow {
 	return MulticastEgressRuleTable.ofTable.BuildFlow(priorityTopAntreaPolicy).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(binding.ProtocolIGMP).
-		MatchRegMark(FromLocalRegMark).
+		MatchRegMark(FromPodRegMark).
 		Action().GotoStage(stageRouting).
 		Done()
 }
@@ -2836,7 +2836,7 @@ func (f *featureMulticast) igmpEgressFlow() binding.Flow {
 // and sends it to antrea-agent.
 func (f *featureMulticast) igmpPktInFlows() []binding.Flow {
 	var flows []binding.Flow
-	sourceMarks := []*binding.RegMark{FromLocalRegMark}
+	sourceMarks := []*binding.RegMark{FromPodRegMark}
 	if f.encapEnabled {
 		sourceMarks = append(sourceMarks, FromTunnelRegMark)
 	}
