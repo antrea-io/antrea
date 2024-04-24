@@ -36,5 +36,5 @@ for file in ${MANIFESTS[@]}; do
     sed -i.bak "s/windows-config-checksum-placeholder/${checksum_windows_config}/g" ${file}
 done
 
-sed -i.bak "s/agent-windows-checksum-placeholder/${checksum_containerd}/g" ${YAMLS_DIR}/antrea-windows-containerd.yml
-sed -i.bak "s/agent-windows-checksum-placeholder/${checksum_containerd_with_ovs}/g" ${YAMLS_DIR}/antrea-windows-containerd-with-ovs.yml
+sed -i.bak "s/agent-windows-checksum-placeholder/${checksum_containerd}/g" ${YAMLS_DIR}/antrea-windows.yml
+sed -i.bak "s/agent-windows-checksum-placeholder/${checksum_containerd_with_ovs}/g" ${YAMLS_DIR}/antrea-windows-with-ovs.yml

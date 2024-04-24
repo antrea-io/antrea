@@ -76,6 +76,7 @@ if ($LastExitCode) {
 }
 
 if ($StartKubeProxy) {
+    Write-Host "Running Antrea with kube-proxy is no longer supported, this parameter will be removed soon"
     Write-Host "Starting kube-proxy..."
     if (!(Start-KubeProxy -KubeProxy $KubernetesHome\kube-proxy.exe -KubeConfig $KubeConfig)) {
         Write-Host "Failed to start kube-proxy, exit"
