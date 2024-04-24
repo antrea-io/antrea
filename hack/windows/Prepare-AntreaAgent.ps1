@@ -9,11 +9,13 @@ This script prepares environment needed by antrea-agent which includes:
   provide the proxy for Kubernetes Services.
 
 .PARAMETER InstallKubeProxy
-Specifies whether kube-proxy interface is included in the installation. If false, this interface will not
-be installed on the host.
+[DEPRECATED] Specifies whether kube-proxy interface is included in the installation.
+
+.PARAMETER RunOVSServices
+Specifies whether the OVS userspace daemons should be started as Windows services.
 #>
 Param(
-    [parameter(Mandatory = $false)] [bool] $InstallKubeProxy = $true,
+    [parameter(Mandatory = $false)] [bool] $InstallKubeProxy = $false,
     [parameter(Mandatory = $false)] [bool] $RunOVSServices= $true
 )
 
@@ -48,6 +50,7 @@ if ($RunOVSServices -eq $true) {
 }
 # Prepare service network interface for kube-proxy.
 if ($InstallKubeProxy -eq $true) {
+    Write-Host "Running Antrea with kube-proxy is no longer supported, this parameter will be removed soon"
     Write-Host "Preparing service network interface for kube-proxy..."
     & $PrepareServiceInterfaceScript
 }
