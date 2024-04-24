@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -111,8 +112,9 @@ func Run(o *options) error {
 	return nil
 }
 
-func agnhostConnectCommand(target string) []string {
-	return []string{"/agnhost", "connect", target, "--timeout=5s"}
+func agnhostConnectCommand(ip string, port string) []string {
+	hostPort := net.JoinHostPort(ip, port)
+	return []string{"/agnhost", "connect", hostPort, "--timeout=5s"}
 }
 
 func newService(name string, selector map[string]string, port int) *corev1.Service {

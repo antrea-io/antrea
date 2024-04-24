@@ -34,10 +34,10 @@ func (t *PodToPodInterNodeConnectivityTest) Run(ctx context.Context, testContext
 	for _, clientPod := range testContext.clientPods {
 		srcPod := testContext.namespace + "/" + clientPod.Name
 		dstPod := testContext.namespace + "/" + testContext.echoOtherNodePod.Name
-		for _, ipInfo := range testContext.echoOtherNodePod.Status.PodIPs {
-			echoIP := ipInfo.IP
-			testContext.Log("Validating from Pod %s to Pod %s...", srcPod, dstPod)
-			_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
+		for _, podIP := range testContext.echoOtherNodePod.Status.PodIPs {
+			echoIP := podIP.IP
+			testContext.Log("Validating from Pod %s to Pod %s at IP %s...", srcPod, dstPod, echoIP)
+			_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP, "80"))
 			if err != nil {
 				return fmt.Errorf("client Pod %s was not able to communicate with echo Pod %s (%s): %w", clientPod.Name, testContext.echoOtherNodePod.Name, echoIP, err)
 			}
