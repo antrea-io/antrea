@@ -28,16 +28,17 @@ func init() {
 }
 
 func (t *PodToPodIntraNodeConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
-	for _, clientPod := range testContext.clientPods.Items {
-		for echoName, echoIP := range testContext.echoSameNodePod {
-			srcPod := testContext.namespace + "/" + clientPod.Name
-			dstPod := testContext.namespace + "/" + echoName
-			testContext.Log("Validating from pod %s to pod %s...", srcPod, dstPod)
+	for _, clientPod := range testContext.clientPods {
+		srcPod := testContext.namespace + "/" + clientPod.Name
+		dstPod := testContext.namespace + "/" + testContext.echoSameNodePod.Name
+		for _, ipInfo := range testContext.echoSameNodePod.Status.PodIPs {
+			echoIP := ipInfo.IP
+			testContext.Log("Validating from Pod %s to Pod %s...", srcPod, dstPod)
 			_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(echoIP+":80"))
 			if err != nil {
-				return fmt.Errorf("client pod %s was not able to communicate with echo pod %s (%s): %w", clientPod.Name, echoName, echoIP, err)
+				return fmt.Errorf("client Pod %s was not able to communicate with echo Pod %s (%s): %w", clientPod.Name, testContext.echoSameNodePod.Name, echoIP, err)
 			}
-			testContext.Log("client pod %s was able to communicate with echo pod %s (%s)", clientPod.Name, echoName, echoIP)
+			testContext.Log("client Pod %s was able to communicate with echo Pod %s (%s)", clientPod.Name, testContext.echoSameNodePod.Name, echoIP)
 		}
 	}
 	return nil

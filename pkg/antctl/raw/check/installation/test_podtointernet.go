@@ -28,12 +28,12 @@ func init() {
 }
 
 func (t *PodToInternetConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
-	for _, clientPod := range testContext.clientPods.Items {
+	for _, clientPod := range testContext.clientPods {
 		srcPod := testContext.namespace + "/" + clientPod.Name
-		testContext.Log("Validating connectivity from pod %s to the world (google.com)...", srcPod)
+		testContext.Log("Validating connectivity from Pod %s to the world (google.com)...", srcPod)
 		_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, clientDeploymentName, agnhostConnectCommand("google.com:80"))
 		if err != nil {
-			return fmt.Errorf("pod %s was not able to connect to google.com: %w", srcPod, err)
+			return fmt.Errorf("Pod %s was not able to connect to google.com: %w", srcPod, err)
 		}
 		testContext.Log("Pod %s was able to connect to google.com", srcPod)
 	}
