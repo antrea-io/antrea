@@ -1000,7 +1000,7 @@ fi
 trap clean_antrea EXIT
 if [[ ${TESTCASE} =~ "windows" ]]; then
     if [[ ${TESTCASE} =~ "containerd" ]]; then
-        WINDOWS_YAML_SUFFIX="windows-containerd-with-ovs"
+        WINDOWS_YAML_SUFFIX="windows-with-ovs"
         build_and_deliver_antrea_windows_and_linux_containerd_images
         if [[ ${TESTCASE} =~ "e2e" ]]; then
             run_e2e_windows
