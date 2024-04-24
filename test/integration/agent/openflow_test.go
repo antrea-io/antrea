@@ -1131,7 +1131,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=190,in_port=%d", podOFPort),
-					ActStr:   fmt.Sprintf("set_field:0x3/0xf->reg0%s%s,goto_table:SpoofGuard", actionNotAntreaFlexibleIPAMString, actionNotMulticlusterString),
+					ActStr:   fmt.Sprintf("set_field:0x3/0xf->reg0,set_field:0x10000000/0x10000000->reg4%s%s,goto_table:SpoofGuard", actionNotAntreaFlexibleIPAMString, actionNotMulticlusterString),
 				},
 			},
 		},
@@ -1315,7 +1315,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=210,%s,in_port=%d,%s=%s", ipProtoStr, agentconfig.HostGatewayOFPort, nwSrcStr, gwIP),
-						ActStr:   "set_field:0x2/0xf->reg0,goto_table:SpoofGuard",
+						ActStr:   "set_field:0x2/0xf->reg0,set_field:0x10000000/0x10000000->reg4,goto_table:SpoofGuard",
 					},
 				},
 			},

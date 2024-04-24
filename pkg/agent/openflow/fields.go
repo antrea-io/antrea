@@ -41,7 +41,7 @@ var (
 	PktSourceField      = binding.NewRegField(0, 0, 3)
 	FromTunnelRegMark   = binding.NewRegMark(PktSourceField, tunnelVal)
 	FromGatewayRegMark  = binding.NewRegMark(PktSourceField, gatewayVal)
-	FromLocalRegMark    = binding.NewRegMark(PktSourceField, localVal)
+	FromPodRegMark      = binding.NewRegMark(PktSourceField, localVal)
 	FromUplinkRegMark   = binding.NewRegMark(PktSourceField, uplinkVal)
 	FromBridgeRegMark   = binding.NewRegMark(PktSourceField, bridgeVal)
 	FromTCReturnRegMark = binding.NewRegMark(PktSourceField, tcReturnVal)
@@ -147,6 +147,8 @@ var (
 	// the Node's traffic is forwarded to OVS. And even if there is no masquerade rule, there should be no problem to
 	// consider the packet external sourced as the other IPs are routable externally anyway.
 	FromExternalRegMark = binding.NewOneBitRegMark(4, 27)
+	// reg4[28]: Mark to indicate that whether the traffic's source is a local Pod or the Node.
+	FromLocalRegMark = binding.NewOneBitRegMark(4, 28)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
