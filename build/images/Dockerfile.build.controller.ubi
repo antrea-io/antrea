@@ -54,7 +54,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
     make antrea-controller
 
-FROM ubuntu:22.04
+FROM registry.access.redhat.com/ubi8
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The Docker image to deploy the antrea-controller."
