@@ -35,6 +35,7 @@ import (
 
 	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 var (
@@ -240,8 +241,9 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	return netlinkUtil.LinkSetHardwareAddr(link, *macConfig)
 }
 
-// DeleteOVSPort deletes specific OVS port. This function calls ovs-vsctl command to bypass OVS bridge client to work when agent exiting.
-func DeleteOVSPort(brName, portName string) error {
+// deleteOVSPort deletes specific OVS port. This function calls ovs-vsctl command to bypass
+// OVS bridge client to work when agent exiting.
+func deleteOVSPort(brName, portName string) error {
 	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
 	return cmd.Run()
 }
@@ -375,4 +377,153 @@ func renameHostInterface(oriName string, newName string) error {
 		return err
 	}
 	return nil
+}
+
+func interfaceExists(name string) (bool, error) {
+	intfs, err := netInterfaces()
+	if err != nil {
+		return false, err
+	}
+	for _, intf := range intfs {
+		if intf.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// PrepareHostInterfaceConnection prepares host interface connection to the OVS bridge client by:
+// 1. Renaming the host interface (a bridged suffix will be added to it).
+// 2. Creating an internal port (original name of the host interface will be used here).
+// 3. Moving IPs of host interface to this new link/internal-port.
+// 4. Moving routes of host interface to the new link/internal-port.
+// and returns the bridged name, true if it already exists, and error.
+func PrepareHostInterfaceConnection(
+	bridge ovsconfig.OVSBridgeClient,
+	ifaceName string,
+	ifaceOFPort int32,
+	externalIDs map[string]interface{},
+) (string, bool, error) {
+	bridgedName := GenerateUplinkInterfaceName(ifaceName)
+	// If the port already exists, just return.
+	if ofPort, err := bridge.GetOFPort(bridgedName, false); err == nil {
+		klog.InfoS("Port already exists, skip the configuration", "port", bridgedName, "ofPort", ofPort)
+		return "", true, nil
+	}
+
+	iface, ifaceIPs, ifaceRoutes, err := GetInterfaceConfig(ifaceName)
+	if err != nil {
+		return "", false, nil
+	}
+
+	if err = RenameInterface(ifaceName, bridgedName); err != nil {
+		return "", false, err
+	}
+	if _, err = bridge.CreateInternalPort(ifaceName, ifaceOFPort, iface.HardwareAddr.String(), externalIDs); err != nil {
+		return "", false, fmt.Errorf("failed to create internal port: %v", err)
+	}
+
+	// Wait a few seconds for OVS bridge local port.
+	if err = wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+		link, err := netlink.LinkByName(ifaceName)
+		if err != nil {
+			klog.V(4).InfoS("OVS bridge local port is not ready", "port", ifaceName, "err", err)
+			return false, nil
+		}
+		klog.InfoS("OVS bridge local port is ready", "type", link.Type(), "attrs", link.Attrs())
+		return true, nil
+	}); err != nil {
+		return "", false, fmt.Errorf("failed waiting for internal port to show up: %v", err)
+	}
+
+	localLink, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		return "", false, err
+	}
+	if _, _, err = SetLinkUp(ifaceName); err != nil {
+		return "", false, fmt.Errorf("failed to set link up: %v", err)
+	}
+
+	// Check if interface is configured with an IPv6 address: if it is, we need to ensure that IPv6
+	// is enabled on the OVS internal port as we need to move all IP addresses over.
+	for _, ip := range ifaceIPs {
+		if ip.IP.To4() == nil {
+			klog.InfoS("Interface has IPv6 address, ensuring that IPv6 is enabled on bridge local port", "port", ifaceName)
+			if err := EnsureIPv6EnabledOnInterface(ifaceName); err != nil {
+				klog.ErrorS(err, "Failed to ensure that IPv6 is enabled on bridge local port, moving uplink IPs to bridge is likely to fail", "port", ifaceName)
+			}
+			break
+		}
+	}
+
+	if err = ConfigureLinkAddresses(localLink.Attrs().Index, ifaceIPs); err != nil {
+		return "", false, err
+	}
+	if err = ConfigureLinkAddresses(iface.Index, nil); err != nil {
+		return "", false, err
+	}
+	// Restore the host routes which are lost when moving the network configuration of the
+	// host interface to OVS bridge interface.
+	if err = ConfigureLinkRoutes(localLink, ifaceRoutes); err != nil {
+		return "", false, err
+	}
+	return bridgedName, false, nil
+}
+
+// RestoreHostInterfaceConfiguration restore the configuration from bridge back to host interface, reverting the
+// actions taken in PrepareHostInterfaceConnection.
+func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
+	klog.V(4).InfoS("Restoring bridge config to host interface")
+	bridgedName := GenerateUplinkInterfaceName(interfaceName)
+	// restore if interface eth0~ exists
+	if exists, err := interfaceExists(bridgedName); err != nil {
+		klog.ErrorS(err, "Failed to check if interface exists", "interface", bridgedName)
+		return
+	} else if exists {
+		// get interface config
+		var interfaceIPs []*net.IPNet
+		var interfaceRoutes []interface{}
+		if exists, err = interfaceExists(interfaceName); err != nil {
+			klog.ErrorS(err, "Failed to check if interface exists", "interface", interfaceName)
+		} else if exists {
+			_, interfaceIPs, interfaceRoutes, err = GetInterfaceConfig(interfaceName)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get interface config", "interface", interfaceName)
+			}
+
+			// delete internal port (eth0)
+			if err = deleteOVSPort(brName, interfaceName); err != nil {
+				klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
+			}
+		}
+		// remove host interface (eth0~) from bridge
+		if err = deleteOVSPort(brName, bridgedName); err != nil {
+			klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
+			return
+		}
+
+		// rename host interface(eth0~ -> eth0)
+		if err = RenameInterface(bridgedName, interfaceName); err != nil {
+			klog.ErrorS(err, "Restore host interface name failed", "from", bridgedName, "to", interfaceName)
+		} else {
+			var link netlink.Link
+			if link, err = netlink.LinkByName(interfaceName); err != nil {
+				klog.ErrorS(err, "Failed to get link", "interface", interfaceName)
+			} else {
+				if len(interfaceIPs) > 0 {
+					// restore IPs to eth0
+					if err = ConfigureLinkAddresses(link.Attrs().Index, interfaceIPs); err != nil {
+						klog.ErrorS(err, "Restore IPs to host interface failed", "interface", interfaceName)
+					}
+				}
+				if len(interfaceRoutes) > 0 {
+					// restore routes to eth0
+					if err = ConfigureLinkRoutes(link, interfaceRoutes); err != nil {
+						klog.ErrorS(err, "Restore routes to host interface failed", "interface", interfaceName)
+					}
+				}
+			}
+		}
+		klog.V(4).InfoS("Finished restoring bridge config to host interface", "interface", interfaceName, "bridge", brName)
+	}
 }

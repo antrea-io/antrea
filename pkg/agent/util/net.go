@@ -441,7 +441,7 @@ func GetIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
 	}
 	var addrs []*net.IPNet
 	for _, a := range addrList {
-		if ipNet, ok := a.(*net.IPNet); ok {
+		if ipNet, ok := a.(*net.IPNet); ok && !ipNet.IP.IsLinkLocalUnicast() {
 			addrs = append(addrs, ipNet)
 		}
 	}
