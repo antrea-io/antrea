@@ -4,12 +4,15 @@ metadata:
   name: ippools.crd.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: crd.antrea.io
   versions:
     - name: v1alpha2
       served: true
-      storage: true
+      storage: false
+      deprecated: true
+      deprecationWarning: "crd.antrea.io/v1alpha2 IPPool is deprecated; use crd.antrea.io/v1beta1 IPPool"
       schema:
         openAPIV3Schema:
           type: object
@@ -122,6 +125,129 @@ spec:
           type: date
       subresources:
         status: {}
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              required:
+                - ipRanges
+                - subnetInfo
+              type: object
+              properties:
+                ipRanges:
+                  items:
+                    oneOf:
+                      - required:
+                          - cidr
+                      - required:
+                          - start
+                          - end
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                      start:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      end:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                    type: object
+                  type: array
+                subnetInfo:
+                  type: object
+                  required:
+                    - gateway
+                    - prefixLength
+                  properties:
+                    gateway:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                    prefixLength:
+                      type: integer
+                      minimum: 1
+                      maximum: 127
+                    vlan:
+                      type: integer
+                      minimum: 0
+                      maximum: 4094
+            status:
+              properties:
+                ipAddresses:
+                  items:
+                    properties:
+                      ipAddress:
+                        type: string
+                      owner:
+                        properties:
+                          pod:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                              containerID:
+                                type: string
+                              ifName:
+                                type: string
+                            type: object
+                          statefulSet:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                              index:
+                                type: integer
+                            type: object
+                        type: object
+                      phase:
+                        type: string
+                    type: object
+                  type: array
+                usage:
+                  properties:
+                    used:
+                      type: integer
+                    total:
+                      type: integer
+                  type: object
+              type: object
+      additionalPrinterColumns:
+        - description: The number of total IPs
+          jsonPath: .status.usage.total
+          name: Total
+          type: integer
+        - description: The number of allocated IPs
+          jsonPath: .status.usage.used
+          name: Used
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      subresources:
+        status: {}
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions: ["v1", "v1beta1"]
+      clientConfig:
+        service:
+          name: "antrea"
+          namespace: "kube-system"
+          path: "/convert/ippool"
   scope: Cluster
   names:
     plural: ippools

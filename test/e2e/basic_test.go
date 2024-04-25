@@ -35,7 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/clusteridentity"
 )
 
@@ -197,7 +197,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 			if err != nil {
 				t.Fatalf("Cannot check IPPool allocation: %v", err)
 			}
-			return err == nil && ipAddressState != nil && ipAddressState.Phase == crdv1alpha2.IPAddressPhaseAllocated
+			return err == nil && ipAddressState != nil && ipAddressState.Phase == crdv1beta1.IPAddressPhaseAllocated
 		}
 	}
 

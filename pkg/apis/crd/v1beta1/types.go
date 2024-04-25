@@ -276,6 +276,87 @@ type IPPoolUsage struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// IPPool defines one or multiple IP sets that can be used for flexible IPAM feature. For instance, the IPs can be
+// allocated to Pods according to IP pool specified in the Deployment annotation.
+type IPPool struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the IPPool.
+	Spec IPPoolSpec `json:"spec"`
+
+	// Most recently observed status of the pool.
+	Status IPPoolStatus `json:"status"`
+}
+
+type IPPoolSpec struct {
+	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.
+	IPRanges []IPRange `json:"ipRanges"`
+	// The Subnet info of this IP pool. All the IP ranges in the IP pool should share the same subnet attributes.
+	SubnetInfo SubnetInfo `json:"subnetInfo"`
+}
+
+type IPPoolStatus struct {
+	IPAddresses []IPAddressState `json:"ipAddresses,omitempty"`
+	Usage       IPPoolUsage      `json:"usage,omitempty"`
+}
+
+type IPAddressPhase string
+
+const (
+	IPAddressPhaseAllocated    IPAddressPhase = "Allocated"
+	IPAddressPhasePreallocated IPAddressPhase = "Preallocated"
+	IPAddressPhaseReserved     IPAddressPhase = "Reserved"
+)
+
+type IPAddressState struct {
+	// IP Address this entry is tracking
+	IPAddress string `json:"ipAddress"`
+	// Allocation state - either Allocated or Preallocated
+	Phase IPAddressPhase `json:"phase"`
+	// Owner this IP Address is allocated to
+	Owner IPAddressOwner `json:"owner"`
+	// TODO: add usage statistics (consistent with ExternalIPPool status)
+}
+
+type IPAddressOwner struct {
+	Pod         *PodOwner         `json:"pod,omitempty"`
+	StatefulSet *StatefulSetOwner `json:"statefulSet,omitempty"`
+}
+
+// Pod owner
+type PodOwner struct {
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	ContainerID string `json:"containerID"`
+	// Network interface name. Used when the IP is allocated for a secondary network interface
+	// of the Pod.
+	IFName string `json:"ifName,omitempty"`
+}
+
+// StatefulSet owner
+type StatefulSetOwner struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Index     int    `json:"index"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type IPPoolList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []IPPool `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type ClusterGroup struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard metadata of the object.

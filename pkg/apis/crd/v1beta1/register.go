@@ -62,6 +62,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EgressList{},
 		&Traceflow{},
 		&TraceflowList{},
+		&IPPool{},
+		&IPPoolList{},
 	)
 
 	metav1.AddToGroupVersion(

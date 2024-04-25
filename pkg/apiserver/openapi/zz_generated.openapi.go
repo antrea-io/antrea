@@ -111,8 +111,14 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader":                      schema_pkg_apis_crd_v1beta1_ICMPEchoRequestHeader(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol":                               schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol":                               schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner":                             schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState":                             schema_pkg_apis_crd_v1beta1_IPAddressState(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock":                                    schema_pkg_apis_crd_v1beta1_IPBlock(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader":                                   schema_pkg_apis_crd_v1beta1_IPHeader(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool":                                     schema_pkg_apis_crd_v1beta1_IPPool(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolList":                                 schema_pkg_apis_crd_v1beta1_IPPoolList(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec":                                 schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus":                               schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header":                                 schema_pkg_apis_crd_v1beta1_IPv6Header(ref),
@@ -133,8 +139,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Packet":                                     schema_pkg_apis_crd_v1beta1_Packet(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces":                             schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService":                                schema_pkg_apis_crd_v1beta1_PeerService(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner":                                   schema_pkg_apis_crd_v1beta1_PodOwner(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Rule":                                       schema_pkg_apis_crd_v1beta1_Rule(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.Source":                                     schema_pkg_apis_crd_v1beta1_Source(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner":                           schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo":                                 schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader":                                  schema_pkg_apis_crd_v1beta1_TCPHeader(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol":                                schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
@@ -4307,6 +4315,68 @@ func schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref common.ReferenceCallback) comm
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner"),
+						},
+					},
+					"statefulSet": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner", "antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPAddressState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipAddress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IP Address this entry is tracking",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Allocation state - either Allocated or Preallocated",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"owner": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Owner this IP Address is allocated to",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner"),
+						},
+					},
+				},
+				Required: []string{"ipAddress", "phase", "owner"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner"},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_IPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4360,6 +4430,174 @@ func schema_pkg_apis_crd_v1beta1_IPHeader(ref common.ReferenceCallback) common.O
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPPool(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPPool defines one or multiple IP sets that can be used for flexible IPAM feature. For instance, the IPs can be allocated to Pods according to IP pool specified in the Deployment annotation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard metadata of the object.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the IPPool.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Most recently observed status of the pool.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus"),
+						},
+					},
+				},
+				Required: []string{"spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPPoolList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipRanges": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange"),
+									},
+								},
+							},
+						},
+					},
+					"subnetInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Subnet info of this IP pool. All the IP ranges in the IP pool should share the same subnet attributes.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"),
+						},
+					},
+				},
+				Required: []string{"ipRanges", "subnetInfo"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipAddresses": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState"),
+									},
+								},
+							},
+						},
+					},
+					"usage": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
 	}
 }
 
@@ -5285,6 +5523,48 @@ func schema_pkg_apis_crd_v1beta1_PeerService(ref common.ReferenceCallback) commo
 	}
 }
 
+func schema_pkg_apis_crd_v1beta1_PodOwner(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Pod owner",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"containerID": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"ifName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Network interface name. Used when the IP is allocated for a secondary network interface of the Pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name", "namespace", "containerID"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -5457,6 +5737,41 @@ func schema_pkg_apis_crd_v1beta1_Source(ref common.ReferenceCallback) common.Ope
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "StatefulSet owner",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"index": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+				},
+				Required: []string{"name", "namespace", "index"},
 			},
 		},
 	}

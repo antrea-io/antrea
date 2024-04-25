@@ -160,18 +160,18 @@ enableBridgingMode=true,featureGates.AntreaIPAM=true,trafficEncapMode=noEncap,no
 The following example YAML manifest creates an IPPool CR.
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: pool1
 spec:
-  ipVersion: 4
   ipRanges:
   - start: "10.2.0.12"
     end: "10.2.0.20"
+  subnetInfo:
     gateway: "10.2.0.1"
     prefixLength: 24
-    vlan: 2              # Default is 0 (untagged). Valid value is 0~4095.
+    vlan: 2              # Default is 0 (untagged). Valid value is 0~4094.
 ```
 
 #### IPPool Annotations on Namespace
@@ -452,30 +452,30 @@ start and end IP address, both of these IPs will be allocatable (except if one
 of them corresponds to the gateway).
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: ipv4-pool-1
 spec:
-  ipVersion: 4
   ipRanges:
   # 61 different IPs can be allocated from this pool: 64 (2^6) - 3 (network IP, broadcast IP, gateway IP).
   - cidr: "10.10.1.0/26"
+  subnetInfo:
     gateway: "10.10.1.1"
     prefixLength: 26
 ```
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: ipv6-pool-1
 spec:
-  ipVersion: 6
   ipRanges:
   # 257 different IPs can be allocated from this pool: 0x200 - 0x100 + 1.
   - start: "3ffe:ffff:1:01ff::0100"
     end: "3ffe:ffff:1:01ff::0200"
+  subnetInfo:
     gateway: "3ffe:ffff:1:01ff::1"
     prefixLength: 64
 ```
@@ -484,14 +484,14 @@ When used for Antrea secondary VLAN network, the VLAN set in an `IPPool` IP
 range will be passed to the VLAN interface configuration. For example:
 
 ```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: ipv4-pool-1
 spec:
-  ipVersion: 4
   ipRanges:
   - cidr: "10.10.1.0/26"
+  subnetInfo:
     gateway: "10.10.1.1"
     prefixLength: 24
     vlan: 100

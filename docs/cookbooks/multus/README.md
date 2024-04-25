@@ -118,15 +118,15 @@ secondary network, please refer to the [Antrea IPAM documentation](../../antrea-
 
 ```bash
 cat <<EOF | kubectl create -f -
-apiVersion: "crd.antrea.io/v1alpha2"
+apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
   name: macvlan-ippool
 spec:
-  ipVersion: 4
   ipRanges:
   - start: "192.168.78.200"
     end: "192.168.78.250"
+  subnetInfo:
     gateway: "192.168.78.1"
     prefixLength: 24
 EOF

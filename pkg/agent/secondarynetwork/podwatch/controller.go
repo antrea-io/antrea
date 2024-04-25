@@ -41,7 +41,7 @@ import (
 	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -73,8 +73,8 @@ type InterfaceConfigurator interface {
 }
 
 type IPAMAllocator interface {
-	SecondaryNetworkAllocate(podOwner *crdv1a2.PodOwner, networkConfig *cnitypes.NetworkConfig) (*ipam.IPAMResult, error)
-	SecondaryNetworkRelease(podOwner *crdv1a2.PodOwner) error
+	SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networkConfig *cnitypes.NetworkConfig) (*ipam.IPAMResult, error)
+	SecondaryNetworkRelease(podOwner *crdv1b1.PodOwner) error
 }
 
 type podCNIInfo struct {
@@ -245,7 +245,7 @@ func (pc *podController) removeInterfaces(interfaces []*interfacestore.Interface
 			continue
 		}
 
-		podOwner := &crdv1a2.PodOwner{
+		podOwner := &crdv1b1.PodOwner{
 			Name:        interfaceConfig.PodName,
 			Namespace:   interfaceConfig.PodNamespace,
 			ContainerID: interfaceConfig.ContainerID,
@@ -331,7 +331,7 @@ func (pc *podController) configureSecondaryInterface(
 	var ifConfigErr error
 	if networkConfig.IPAM != nil {
 		var err error
-		podOwner := &crdv1a2.PodOwner{
+		podOwner := &crdv1b1.PodOwner{
 			Name:        pod.Name,
 			Namespace:   pod.Namespace,
 			ContainerID: podCNIInfo.containerID,

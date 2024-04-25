@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,10 @@ func (c *FakeCrdV1beta1) ExternalIPPools() v1beta1.ExternalIPPoolInterface {
 
 func (c *FakeCrdV1beta1) Groups(namespace string) v1beta1.GroupInterface {
 	return &FakeGroups{c, namespace}
+}
+
+func (c *FakeCrdV1beta1) IPPools() v1beta1.IPPoolInterface {
+	return &FakeIPPools{c}
 }
 
 func (c *FakeCrdV1beta1) NetworkPolicies(namespace string) v1beta1.NetworkPolicyInterface {

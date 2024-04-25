@@ -117,7 +117,7 @@ func run(o *Options) error {
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	trafficControlInformer := crdInformerFactory.Crd().V1alpha2().TrafficControls()
-	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	serviceInformer := informerFactory.Core().V1().Services()
 	endpointsInformer := informerFactory.Core().V1().Endpoints()
