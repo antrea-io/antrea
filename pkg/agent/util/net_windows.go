@@ -43,6 +43,7 @@ import (
 	ps "antrea.io/antrea/pkg/agent/util/powershell"
 	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	iputil "antrea.io/antrea/pkg/util/ip"
 )
 
@@ -1325,3 +1326,9 @@ func adapterAddresses() ([]*windows.IpAdapterAddresses, error) {
 	}
 	return aas, nil
 }
+
+func PrepareHostInterfaceConnection(_ ovsconfig.OVSBridgeClient, ifaceName string, _ int32, _ map[string]interface{}) (string, bool, error) {
+	return ifaceName, false, nil
+}
+
+func RestoreHostInterfaceConfiguration(_ string, _ string) {}
