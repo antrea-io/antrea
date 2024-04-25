@@ -48,7 +48,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	podwatchtesting "antrea.io/antrea/pkg/agent/secondarynetwork/podwatch/testing"
 	"antrea.io/antrea/pkg/agent/types"
-	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 const (
@@ -230,7 +230,7 @@ func TestPodControllerRun(t *testing.T) {
 	podKey := podKeyGet(pod.Name, pod.Namespace)
 	network := testNetwork(networkName, sriovNetworkType)
 	ipamResult := testIPAMResult("148.14.24.100/24", 0)
-	podOwner := &crdv1a2.PodOwner{
+	podOwner := &crdv1beta1.PodOwner{
 		Name:        pod.Name,
 		Namespace:   pod.Namespace,
 		ContainerID: containerID,
@@ -352,7 +352,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		Namespace:        testNamespace,
 		InterfaceRequest: interfaceName,
 	}
-	podOwner := &crdv1a2.PodOwner{
+	podOwner := &crdv1beta1.PodOwner{
 		Name:        podName,
 		Namespace:   testNamespace,
 		ContainerID: containerID,
@@ -626,9 +626,9 @@ func TestPodControllerAddPod(t *testing.T) {
 		testVLAN := 100
 		network2 := testNetworkExt("net2", "", "", string(vlanNetworkType), "", defaultMTU, testVLAN, false)
 
-		podOwner1 := &crdv1a2.PodOwner{Name: podName, Namespace: testNamespace,
+		podOwner1 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth10"}
-		podOwner2 := &crdv1a2.PodOwner{Name: podName, Namespace: testNamespace,
+		podOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: containerID, IFName: "eth11"}
 		containerConfig1 := interfacestore.NewContainerInterface("interface1", containerID,
 			pod.Name, pod.Namespace, "eth10", nil, nil, 0)
@@ -638,9 +638,9 @@ func TestPodControllerAddPod(t *testing.T) {
 		containerConfig2.OVSPortConfig = &interfacestore.OVSPortConfig{}
 
 		staleContainerID := containerID + "-stale"
-		stalePodOwner1 := &crdv1a2.PodOwner{Name: podName, Namespace: testNamespace,
+		stalePodOwner1 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: staleContainerID, IFName: "eth1"}
-		stalePodOwner2 := &crdv1a2.PodOwner{Name: podName, Namespace: testNamespace,
+		stalePodOwner2 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
 			ContainerID: staleContainerID, IFName: "eth2"}
 		staleConfig1 := interfacestore.NewContainerInterface("interface1", staleContainerID,
 			pod.Name, pod.Namespace, "eth1", nil, nil, 0)
