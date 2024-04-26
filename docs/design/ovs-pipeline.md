@@ -831,7 +831,7 @@ Flow 3 is the table-miss flow.
 
 For reply packets from SNAT'd connections, whose destination IP is the translated SNAT IP, after invoking action `ct`,
 the destination IP of the packets will be restored to the original IP before SNAT, stored in the connection tracking
-field `ct_nw_dst` before SNAT.
+field `ct_nw_dst`.
 
 ### ConntrackZone
 
