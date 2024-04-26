@@ -182,7 +182,7 @@ func TestEvaluationResponseTransform(t *testing.T) {
 	assert.Equal(t, []string{"NAME", "NAMESPACE", "POLICY-TYPE", "RULE-INDEX", "DIRECTION", "ACTION"}, test.GetTableHeader())
 	assert.False(t, test.SortRows())
 	assert.Equal(t, []string{"", "", "", "", "", ""}, test.GetTableRow(32))
-	testDropAction := crdv1beta1.RuleActionDrop
+	testDropAction, testAllowAction := crdv1beta1.RuleActionDrop, crdv1beta1.RuleActionAllow
 
 	tests := []struct {
 		name           string
@@ -198,7 +198,7 @@ func TestEvaluationResponseTransform(t *testing.T) {
 					Name:      "testK8s",
 				},
 				RuleIndex: 10,
-				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
+				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn, Action: &testAllowAction},
 			},
 			expectedOutput: []string{"testK8s", "ns", "K8sNetworkPolicy", "10", "In", "Allow"},
 		},
@@ -227,6 +227,19 @@ func TestEvaluationResponseTransform(t *testing.T) {
 				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
 			},
 			expectedOutput: []string{"testK8s", "ns", "K8sNetworkPolicy", fmt.Sprint(math.MaxInt32), "In", "Isolate"},
+		},
+		{
+			name: "Unknown action in response",
+			testResponse: &cpv1beta.NetworkPolicyEvaluationResponse{
+				NetworkPolicy: cpv1beta.NetworkPolicyReference{
+					Type:      cpv1beta.AntreaNetworkPolicy,
+					Namespace: "ns",
+					Name:      "testError",
+				},
+				RuleIndex: 10,
+				Rule:      cpv1beta.RuleRef{Direction: cpv1beta.DirectionIn},
+			},
+			expectedOutput: []string{"testError", "ns", "AntreaNetworkPolicy", "10", "In", "Unknown"},
 		},
 	}
 

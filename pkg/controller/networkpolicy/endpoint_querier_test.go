@@ -264,10 +264,10 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 					{SourceRef: &policyRef},
 				},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn, Action: &allowAction}},
 				},
 				EndpointAsEgressDstRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
+					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut, Action: &allowAction}},
 				},
 			},
 		},
@@ -284,10 +284,10 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 					{SourceRef: &policyRef1},
 				},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn, Action: &allowAction}},
 				},
 				EndpointAsEgressDstRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut}},
+					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef}, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionOut, Action: &allowAction}},
 				},
 			},
 		},
@@ -303,7 +303,7 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 					{SourceRef: &policyRef2},
 				},
 				EndpointAsIngressSrcRules: []*antreatypes.RuleInfo{
-					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef2}, Index: 1, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn}},
+					{Policy: &antreatypes.NetworkPolicy{SourceRef: &policyRef2}, Index: 1, Rule: &controlplane.NetworkPolicyRule{Direction: controlplane.DirectionIn, Action: &allowAction}},
 				},
 			},
 		},
@@ -313,6 +313,7 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 		assert.Equal(t, len(expectedRules), len(responseRules))
 		for idx := range expectedRules {
 			assert.EqualValues(t, expectedRules[idx].Rule.Direction, responseRules[idx].Rule.Direction)
+			assert.EqualValues(t, expectedRules[idx].Rule.Action, responseRules[idx].Rule.Action)
 			assert.Equal(t, expectedRules[idx].Index, responseRules[idx].Index)
 			assert.Equal(t, expectedRules[idx].Policy.SourceRef, responseRules[idx].Policy.SourceRef)
 		}
@@ -377,9 +378,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 				Direction: direction,
 				Name:      fmt.Sprintf("Policy%sRule%d", policyUID, i),
 				Priority:  int32(i),
-			}
-			if action != nil {
-				rules[i].Action = action
+				Action:    action,
 			}
 		}
 		return []*antreatypes.NetworkPolicy{{
@@ -497,35 +496,35 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
 				{response: generateResponse(1, generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.BaselineTierPriority), nil, 1, &allowAction),
-					generateRuleInfo(generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, nil)[0]))},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, nil),
+					generateRuleInfo(generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, &allowAction)[0]))},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, &allowAction),
 					generateRuleInfo(generatePolicies(uid1, controlplane.AntreaNetworkPolicy, controlplane.DirectionOut, ptr.To(crdv1beta1.BaselineTierPriority), nil, 1, &allowAction)[0]))},
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
 				NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: namespace, Name: "Policy222", UID: uid2},
 				RuleIndex:     0,
-				Rule:          controlplane.RuleRef{Direction: controlplane.DirectionIn, Name: "Policy222Rule0"},
+				Rule:          controlplane.RuleRef{Direction: controlplane.DirectionIn, Name: "Policy222Rule0", Action: &allowAction},
 			},
 		},
 		{
 			name:    "KNP and default isolation",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.K8sNetworkPolicy, controlplane.DirectionOut, nil, &defaultPriority, 1, nil), nil)},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, nil),
-					generateRuleInfo(generatePolicies(uid1, controlplane.K8sNetworkPolicy, controlplane.DirectionOut, nil, &defaultPriority, 1, nil)[0]))},
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.K8sNetworkPolicy, controlplane.DirectionOut, nil, &defaultPriority, 1, &allowAction), nil)},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, &allowAction),
+					generateRuleInfo(generatePolicies(uid1, controlplane.K8sNetworkPolicy, controlplane.DirectionOut, nil, &defaultPriority, 1, &allowAction)[0]))},
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
 				NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: namespace, Name: "Policy111", UID: uid1},
 				RuleIndex:     0,
-				Rule:          controlplane.RuleRef{Direction: controlplane.DirectionOut, Name: "Policy111Rule0"},
+				Rule:          controlplane.RuleRef{Direction: controlplane.DirectionOut, Name: "Policy111Rule0", Action: &allowAction},
 			},
 		},
 		{
 			name:    "KNP egress default isolation",
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
-				{response: generateResponse(1, generatePolicies(uid1, controlplane.K8sNetworkPolicy, controlplane.DirectionOut, nil, &defaultPriority, 1, nil), nil)},
+				{response: generateResponse(1, generatePolicies(uid1, controlplane.K8sNetworkPolicy, controlplane.DirectionOut, nil, &defaultPriority, 1, &allowAction), nil)},
 				{response: generateResponse(2, nil, nil)},
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
@@ -539,7 +538,7 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 			request: accessRequest,
 			mockQueryResponse: []mockResponse{
 				{response: generateResponse(1, nil, nil)},
-				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, nil), nil)},
+				{response: generateResponse(2, generatePolicies(uid2, controlplane.K8sNetworkPolicy, controlplane.DirectionIn, nil, &defaultPriority, 1, &allowAction), nil)},
 			},
 			expectedResult: &controlplane.NetworkPolicyEvaluationResponse{
 				NetworkPolicy: controlplane.NetworkPolicyReference{Type: controlplane.K8sNetworkPolicy, Namespace: namespace, Name: "Policy222", UID: uid2},
