@@ -112,8 +112,8 @@ if $PULL; then
             docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
         fi
     elif [ "$DISTRO" == "ubi" ]; then
-        docker pull $PLATFORM_ARG centos:centos7
-        docker pull $PLATFORM_ARG registry.access.redhat.com/ubi8
+        docker pull $PLATFORM_ARG quay.io/centos/centos:stream9
+        docker pull $PLATFORM_ARG registry.access.redhat.com/ubi9
     fi
 fi
 
