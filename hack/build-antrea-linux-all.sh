@@ -69,7 +69,7 @@ case $key in
     ;;
     --skip-unified-image)
     UNIFIED=false
-    shift 2
+    shift
     ;;
     -h|--help)
     print_usage
