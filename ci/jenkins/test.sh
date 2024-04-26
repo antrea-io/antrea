@@ -38,6 +38,7 @@ IP_MODE=""
 K8S_VERSION="1.28.2-00"
 WINDOWS_YAML_SUFFIX="windows"
 WIN_IMAGE_NODE=""
+PULL_MASK=0
 echo "" > WIN_DHCP
 GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
@@ -461,7 +462,23 @@ function deliver_antrea_linux_containerd {
     echo "==== Finish building and delivering Linux containerd images ===="
 }
 
+# Function to check file changes using git
+check_file_change() {
+    local file=$1
+    local bit=$2
+    # Check if the file has been modified
+    if git diff --name-only HEAD | grep -q "$file"; then
+        # Set the corresponding bit in PULL_MASK if the file is modified
+        PULL_MASK=$((PULL_MASK | $bit))
+    fi
+}
+
 function deliver_antrea_windows_containerd {
+    echo "=====Check each base image file and update PULL_MASK accordingly====="
+    check_file_change "build/images/base-windows/Dockerfile" 1  # Corresponds to 0x1
+    check_file_change "build/images/base-windows/Dockerfile" 2  # Corresponds to 0x2
+    check_file_change "build/images/base-windows/Dockerfile" 4  # Corresponds to 0x4
+    check_file_change "build/images/ovs/Dockerfile.windows" 8  # Corresponds to 0x8
     echo "===== Build Antrea Windows on Windows Jumper Node ====="
     echo "==== Reverting Windows VM ${WIN_IMAGE_NODE} ====="
     revert_snapshot_windows ${WIN_IMAGE_NODE}
@@ -473,7 +490,7 @@ function deliver_antrea_windows_containerd {
         timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
     done
     ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver && docker tag ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver golang:${GO_VERSION}-nanoserver"
-    ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && NO_PULL=${NO_PULL}; DOCKER_NETWORK=host make build-windows && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+    ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && NO_PULL=${NO_PULL}; ./hack/build-windows-all.sh --pull-mask $PULL_MASK --network host && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
     for i in `seq 2`; do
         timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
     done

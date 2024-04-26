@@ -27,7 +27,12 @@ _usage="Usage: $0 [--pull] [--push-base-images]
 Build the antrea/antrea-windows image, as well as all the base images in the build chain. This is
 typically used in CI to build the image with the latest version of all dependencies, taking into
 account changes to all Dockerfiles.
-        --pull                  Always attempt to pull a newer version of the base images.
+        --pull                  Always attempt to pull a newer version of the base images, ignoring pull-mask.
+        --pull-mask=mask        Binary mask to determine which base images to pull.
+                                  0x1 - antrea/windows-utility-base
+                                  0x2 - antrea/windows-golang
+                                  0x4 - antrea/base-windows
+                                  0x8 - antrea/windows-ovs
         --push-base-images      Push built images to the registry. Only base images will be pushed.
 This script must run on a Windows machine!"
 
@@ -37,6 +42,7 @@ function print_usage {
 
 PULL=false
 PUSH=false
+NETWORK="default"
 
 while [[ $# -gt 0 ]]
 do
@@ -45,6 +51,14 @@ key="$1"
 case $key in
     --pull)
     PULL=true
+    shift
+    ;;
+    --network)
+    NETWORK="$2"
+    shift
+    ;;
+    --pull-mask=*)
+    PULL_MASK=$((0x${key#*=}))
     shift
     ;;
     --push-base-images)
@@ -75,15 +89,30 @@ WIN_BUILD_TAG=$(echo $GO_VERSION $CNI_BINARIES_VERSION $NANOSERVER_VERSION| md5s
 
 echo "WIN_BUILD_TAG=$WIN_BUILD_TAG"
 
+docker pull mcr.microsoft.com/windows/servercore:$NANOSERVER_VERSION
+docker pull golang:$GO_VERSION-nanoserver
+docker pull mcr.microsoft.com/windows/nanoserver:$NANOSERVER_VERSION
+docker pull mcr.microsoft.com/powershell:lts-nanoserver-$NANOSERVER_VERSION
+
+# Pull all images if --pull is specified, otherwise check individual bits for --pull-mask
 if $PULL; then
-    docker pull mcr.microsoft.com/windows/servercore:$NANOSERVER_VERSION
-    docker pull golang:$GO_VERSION-nanoserver
-    docker pull mcr.microsoft.com/windows/nanoserver:$NANOSERVER_VERSION
-    docker pull mcr.microsoft.com/powershell:lts-nanoserver-$NANOSERVER_VERSION
     docker pull antrea/windows-utility-base:$WIN_BUILD_TAG || true
     docker pull antrea/windows-golang:$WIN_BUILD_TAG || true
     docker pull antrea/base-windows:$WIN_BUILD_TAG || true
     docker pull antrea/windows-ovs:$WIN_BUILD_OVS_TAG || true
+elif [[ $PULL_MASK -ne 0 ]]; then
+    if (( $PULL_MASK & 0x1 )); then
+        docker pull antrea/windows-utility-base:$WIN_BUILD_TAG || true
+    fi
+    if (( $PULL_MASK & 0x2 )); then
+        docker pull antrea/windows-golang:$WIN_BUILD_TAG || true
+    fi
+    if (( $PULL_MASK & 0x4 )); then
+        docker pull antrea/base-windows:$WIN_BUILD_TAG || true
+    fi
+    if (( $PULL_MASK & 0x8 )); then
+        docker pull antrea/windows-ovs:$WIN_BUILD_OVS_TAG || true
+    fi
 fi
 
 cd build/images/base-windows
@@ -92,12 +121,14 @@ docker build --target windows-utility-base \
        -t antrea/windows-utility-base:$WIN_BUILD_TAG \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
+       --network $NETWORK
 docker build --target windows-golang \
        --cache-from antrea/windows-golang:$WIN_BUILD_TAG \
        -t antrea/windows-golang:$WIN_BUILD_TAG \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg GO_VERSION=$GO_VERSION \
        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
+       --network $NETWORK
 docker build \
        --cache-from antrea/windows-utility-base:$WIN_BUILD_TAG \
        --cache-from antrea/windows-golang:$WIN_BUILD_TAG \
@@ -106,6 +137,7 @@ docker build \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg GO_VERSION=$GO_VERSION \
        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
+       --network $NETWORK
 cd -
 
 cd build/images/ovs

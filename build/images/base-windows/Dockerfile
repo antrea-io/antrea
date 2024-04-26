@@ -39,9 +39,7 @@ RUN Invoke-WebRequest -UseBasicParsing -Uri https://www.7-zip.org/a/7z2107-x64.e
     Invoke-WebRequest -UseBasicParsing -Uri https://cfhcable.dl.sourceforge.net/project/mingw-w64/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z -OutFile mingw.7z; \
     7z x mingw.7z; cp c:/mingw64/bin/mingw32-make.exe c:/mingw64/bin/make.exe; \
     Invoke-WebRequest -UseBasicParsing -Uri https://github.com/git-for-windows/git/releases/download/v2.35.1.windows.2/PortableGit-2.35.1.2-64-bit.7z.exe -OutFile git.exe; \
-    7z x git.exe -oC:\git; \
-    mkdir C:\wins; \
-    Invoke-WebRequest -UseBasicParsing -Uri https://github.com/rancher/wins/releases/download/v0.0.4/wins.exe -OutFile C:/wins/wins.exe
+    7z x git.exe -oC:\git;
 
 FROM golang:${GO_VERSION}-nanoserver as windows-golang
 
@@ -57,7 +55,6 @@ COPY --from=windows-utility-base ["C:\\\\opt\\\\cni\\\\bin","C:\\\\opt\\\\cni\\\
 COPY --from=windows-utility-base ["C:\\\\Program Files\\\\7-Zip","C:\\\\Program Files\\\\7-Zip"]
 COPY --from=windows-utility-base ["C:\\\\git","C:\\\\git"]
 COPY --from=windows-utility-base ["C:\\\\mingw64","C:\\\\mingw64"]
-COPY --from=windows-utility-base ["C:\\\\wins","C:\\\\wins"]
 COPY --from=windows-golang ["C:\\\\Program Files\\\\Go", "C:\\\\Program Files\\\\Go"]
 
 RUN setx /m PATH "C:\Program Files\7-Zip;C:\git\bin;C:\git\usr\bin;C:\mingw64\bin;C:\Program Files\Go\bin;%GOPATH\bin%;%PATH%"
