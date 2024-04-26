@@ -789,14 +789,15 @@ addresses. There are some cases where the source IP of the packets through the l
 Antrea gateway IP address:
 
 - When Antrea is deployed with kube-proxy, and `AntreaProxy` is not enabled, packets from local Pods destined for Services
-  will first go through the gateway port, get load-balanced by the kube-proxy data path (undergo DNAT with a local Endpoint
-  selected by the kube-proxy) then re-enter through the gateway port. Then the packets are received on the gateway port
-  with a source IP belonging to a local Pod.
+  will first go through the gateway port, get load-balanced by the kube-proxy data path (undergoes DNAT) then re-enter
+  the OVS pipeline through the gateway port (through an "onlink" route, installed by Antrea, directing the DNAT'd packets
+  to the gateway port), resulting in the source IP being that of a local Pod.
 - When Antrea is deployed without kube-proxy, and both `AntreaProxy` and `proxyAll` are enabled, packets from the external
-  network destined for Services will be routed to OVS through the gateway port without changing the source IP.
+  network destined for Services will be routed to OVS through the gateway port without masquerading source IP.
 - When Antrea is deployed with kube-proxy, packets from the external network destined for Services whose
-  `externalTrafficPolicy` is set to `Local` will get load-balanced by the kube-proxy data path (undergo DNAT with a
-  local Endpoint selected by the kube-proxy) and then routed to OVS through the gateway without SNAT.
+  `externalTrafficPolicy` is set to `Local` will get load-balanced by the kube-proxy data path (undergoes DNAT with a
+  local Endpoint selected by the kube-proxy) and then enter the OVS pipeline through the gateway (through a "onlink"
+  route, installed by Antrea, directing the DNAT'd packets to the gateway port) without masquerading source IP.
 
 Flows 2-4 are for case 2, matching legitimate IP packets from local Pods.
 
@@ -829,8 +830,8 @@ therefore, connection tracking fields for the packets are unset.
 Flow 3 is the table-miss flow.
 
 For reply packets from SNAT'd connections, whose destination IP is the translated SNAT IP, after invoking action `ct`,
-the destination IP of the packets will be restored to the original IP stored in the connection tracking field `ct_nw_dst`
-before SNAT.
+the destination IP of the packets will be restored to the original IP before SNAT, stored in the connection tracking
+field `ct_nw_dst` before SNAT.
 
 ### ConntrackZone
 
@@ -921,9 +922,10 @@ If you dump the flows of this table, you may see the following:
 ```
 
 Flow 1 matches packets destined for the local Node from local Pods. `NodePortRegMark` is loaded, indicating that the
-packets are potentially destined for NodePort Services. We assume only one valid IP address, `192.168.77.102`, can serve
-as the host IP address for NodePort based on the option `antreaProxy.nodePortAddresses`. If there are multiple valid IP
-addresses specified in the option, a flow similar to flow 1 will be installed for each IP address.
+packets are potentially destined for NodePort Services. We assume only one valid IP address, `192.168.77.102` (the
+Node's transport IP), can serve as the host IP address for NodePort based on the option `antreaProxy.nodePortAddresses`.
+If there are multiple valid IP addresses specified in the option, a flow similar to flow 1 will be installed for each
+IP address.
 
 Flow 2 match packets destined for the *Virtual NodePort DNAT IP*. Packets destined for NodePort Services from the local
 Node or the external network is DNAT'd to the *Virtual NodePort DNAT IP* by iptables before entering the pipeline.
@@ -1160,7 +1162,7 @@ flows are described as follows:
 - Flow 5 is used to match packets with the destination TCP port in set {3306} specified in the rule, constituting the
   third dimension for `conjunction` with `conj_id` 7.
 - Flow 6 is used to match packets meeting all the three dimensions of `conjunction` with `conj_id` 7 and forward them
-  to table [EgressMetric], persisting `conj_id` to `EgressRuleCTLabel` that will be consumed in table [EgressMetric].
+  to table [EgressMetric], persisting `conj_id` to `EgressRuleCTLabel`, which will be consumed in table [EgressMetric].
 
 Flows 7-9, whose priorities are all 14499, are installed for the egress rule with a `Drop` action defined after the rule
 `AllowToDB` in the sample policy, and serves as a default rule. Antrea-native NetworkPolicy does not have the same
@@ -1339,11 +1341,11 @@ To match the expected packets, `FromPodRegMark` is used to exclude packets that 
 Additionally, `NotAntreaFlexibleIPAMRegMark`, mutually exclusive with `AntreaFlexibleIPAMRegMark` which is used to mark
 packets from Antrea IPAM Pods, is used since Egress can only be applied to Node IPAM Pods.
 
-It's worthy to note that packets sourced from local Pods and destined for the Services listed in the option
-`antreaProxy.skipServices` are unexpectedly matched by flow 8. This occurs due to that there is no flow in [ServiceLB]
+It's worth noting that packets sourced from local Pods and destined for the Services listed in the option
+`antreaProxy.skipServices` are unexpectedly matched by flow 8 due to the fact that there is no flow in [ServiceLB]
 to handle these Services. Consequently, the destination IP address of the packets, allocated from the Service CIDR,
 is considered part of the "external network". No need to worry about the mismatch, as flow 3 in table [EgressMark]
-is designed to match these packets and bypass them from undergoing SNAT by Egress.
+is designed to match these packets and prevent them from undergoing SNAT by Egress.
 
 Flow 9 matches request packets originating from remote Pods and destined for the external network, and then forwards them
 to table [EgressMark] dedicated to feature `Egress`. To match the expected packets, `FromTunnelRegMark` is used to
@@ -1387,7 +1389,7 @@ Flow 3 matches packets originating from local Pods and destined for the Services
 `antreaProxy.skipServices`, and then forwards them to table [L2ForwardingCalc] to bypass Egress SNAT. Similar to flows
 1-2, `ToGatewayRegMark` is also loaded.
 
-The packets, matched by flows 1-3, are forwared to this table by flow 8 in table [L3Forwarding], as they are classified
+The packets, matched by flows 1-3, are forwarded to this table by flow 8 in table [L3Forwarding], as they are classified
 as part of traffic destined for the external network. However, these packets are not intended to undergo Egress SNAT.
 Consequently, flows 1-3 are used to bypass Egress SNAT for these packets.
 
@@ -1462,7 +1464,7 @@ packets to table [SNAT], `ToExternalAddressRegMark` and `NotDSRServiceRegMark` a
 are destined for a Service's external IP, like NodePort, LoadBalancerIP or ExternalIP, but it is not DSR mode.
 Additionally, `ConnSNATCTMark`, indicating that the connection requires SNAT, is persisted to mark the connections.
 
-It's worthy to note that flows 1-2 are specific to `proxyAll`, but it is harmless when `proxyAll` is disabled since
+It's worth noting that flows 1-2 are specific to `proxyAll`, but they are harmless when `proxyAll` is disabled since
 these flows should be never matched by in-cluster Service traffic.
 
 Flow 3-4 match the first packet of hairpin Service connections, identified by the same source and destination Pod IP
