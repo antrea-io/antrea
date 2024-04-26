@@ -14,6 +14,13 @@
   - [APIs deprecation policy](#apis-deprecation-policy)
 - [Introducing new API resources](#introducing-new-api-resources)
   - [Introducing new CRDs](#introducing-new-crds)
+- [Upgrading from Antrea v1 to Antrea v2](#upgrading-from-antrea-v1-to-antrea-v2)
+  - [Required upgrade steps because of API removal](#required-upgrade-steps-because-of-api-removal)
+    - [Case 1: upgrading from Antrea v1.13-v1.15 with kubectl](#case-1-upgrading-from-antrea-v113-v115-with-kubectl)
+    - [Case 2: upgrading from Antrea v1.13-v1.15 with Helm](#case-2-upgrading-from-antrea-v113-v115-with-helm)
+    - [Case 3: upgrading from Antrea v1.12 (or older) with kubectl](#case-3-upgrading-from-antrea-v112-or-older-with-kubectl)
+    - [Case 4: upgrading from Antrea v1.12 (or older) with Helm](#case-4-upgrading-from-antrea-v112-or-older-with-helm)
+  - [Other upgrade considerations](#other-upgrade-considerations)
 <!-- /toc -->
 
 ## Versioning scheme
@@ -253,6 +260,195 @@ If a new CRD does not have dependencies and is not closely related to an
 existing CRD, it will typically be defined in `v1alpha1`. In some rare cases, a
 CRD can be defined in `v1beta1` directly if there is enough confidence in the
 stability of the API.
+
+## Upgrading from Antrea v1 to Antrea v2
+
+### Required upgrade steps because of API removal
+
+Several CRD API Alpha versions were removed as part of the major version bump to
+Antrea v2, following the introduction of Beta versions in earlier minor
+releases. For more details, refer to this [list](api.md#previously-supported-crds).
+Because of these CRD version removals, you will need to make sure that you
+upgrade your existing CRs (for the affected CRDs) to the new (storage) version,
+*before* trying to upgrade to Antrea v2.0. You will also need to ensure that the
+`status.storedVersions` field for the affected CRDs is patched, with the old
+versions being removed. To simplify your upgrade process, we provide an antctl
+command which will automatically handle these steps for you: `antctl upgrade
+api-storage`.
+
+There are 3 possible scenarios:
+
+1) You never installed an Antrea minor version older than v1.13 in your
+   cluster. In this case you can directly upgrade to Antrea v2.0.
+2) Your cluster is currently running Antrea v1.13 through v1.15 (included), but
+   you previously ran an Antrea minor version older than v1.13. In this case,
+   you will need to run `antctl upgrade api-storage` prior to upgrading to
+   Antrea v2.0, regardless of whether you have created Antrea CRs or not.
+3) Your cluster is currently running an Antrea minor version older than
+   v1.13. In this case, you will first need to upgrade to Antrea v1.15.1, then
+   run `antctl upgrade api-storage`, before being able to upgrade to Antrea
+   v2.0.
+
+Even for scenario 1, feel free to run `antctl upgrade api-storage`. It is not
+strictly required, but it will not cause any harm either.
+
+In the sub-sections below, we give some detailed instructions for upgrade, based
+on your current Antrea version and installation method.
+
+For more information about CRD versioning, refer to the K8s
+[documentation](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/).
+The `antctl upgrade api-storage` command aims at automating that process for our
+users.
+
+#### Case 1: upgrading from Antrea v1.13-v1.15 with kubectl
+
+```text
+# Download antctl from release assets. You can use the antctl version that
+# matches your current Antrea version.
+$ antctl version
+antctlVersion: v1.13.4
+controllerVersion: v1.13.4
+
+# Even if you didn't create any CR using the CRD API versions which have been
+# removed in Antrea v2.0, you will still need to run the antctl command, or the
+# upgrade will fail.
+
+# Upgrade API storage for all CRDs.
+# For usage information run: antctl upgrade api-storage --help
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1) if needed. If you never installed a minor
+# version of Antrea older than v1.13 in your cluster, you may not see any CRD
+# upgrade.
+$ antctl upgrade api-storage
+Skip upgrading CRD "externalnodes.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "trafficcontrols.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "externalentities.crd.antrea.io" since all stored objects are in the storage version.
+Skip upgrading CRD "supportbundlecollections.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreaagentinfos.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "ippools.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreacontrollerinfos.crd.antrea.io" since it only has one version.
+Upgrading 6 objects of CRD "tiers.crd.antrea.io".
+Successfully upgraded 6 objects of CRD "tiers.crd.antrea.io".
+
+# You can now upgrade to Antrea v2.0 successfully.
+$ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v2.0.0/antrea.yml
+```
+
+#### Case 2: upgrading from Antrea v1.13-v1.15 with Helm
+
+```text
+# Download antctl from release assets. You can use the antctl version that
+# matches your current Antrea version.
+$ antctl version
+antctlVersion: v1.13.4
+controllerVersion: v1.13.4
+
+# Even if you didn't create any CR using the CRD API versions which have been
+# removed in Antrea v2.0, you will still need to run the antctl command, or the
+# upgrade will fail.
+
+# Upgrade API storage for all CRDs.
+# For usage information run: antctl upgrade api-storage --help
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1) if needed. If you never installed a minor
+# version of Antrea older than v1.13 in your cluster, you may not see any CRD
+# upgrade.
+$ antctl upgrade api-storage
+Skip upgrading CRD "externalnodes.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "trafficcontrols.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "externalentities.crd.antrea.io" since all stored objects are in the storage version.
+Skip upgrading CRD "supportbundlecollections.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreaagentinfos.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "ippools.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreacontrollerinfos.crd.antrea.io" since it only has one version.
+Upgrading 6 objects of CRD "tiers.crd.antrea.io".
+Successfully upgraded 6 objects of CRD "tiers.crd.antrea.io".
+
+# You can now upgrade to Antrea v2.0 successfully, starting with CRDs.
+$ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v2.0.0/antrea-crds.yml
+$ helm upgrade antrea antrea/antrea --namespace kube-system --version 2.0.0
+```
+
+#### Case 3: upgrading from Antrea v1.12 (or older) with kubectl
+
+```text
+# Start by upgrading to Antrea v1.15.1.
+$ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v1.15.1/antrea.yml
+
+# Download antctl from the v1.15.1 release assets.
+$ antctl version
+antctlVersion: v1.15.1
+controllerVersion: v1.15.1
+
+# Upgrade API storage for all CRDs.
+# For usage information run: antctl upgrade api-storage --help
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1).
+$ antctl upgrade api-storage
+Skip upgrading CRD "externalnodes.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "trafficcontrols.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "externalentities.crd.antrea.io" since all stored objects are in the storage version.
+Skip upgrading CRD "supportbundlecollections.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreaagentinfos.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "ippools.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreacontrollerinfos.crd.antrea.io" since it only has one version.
+Upgrading 6 objects of CRD "tiers.crd.antrea.io".
+Successfully upgraded 6 objects of CRD "tiers.crd.antrea.io".
+
+# You can now upgrade to Antrea v2.0 successfully.
+$ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v2.0.0/antrea.yml
+```
+
+#### Case 4: upgrading from Antrea v1.12 (or older) with Helm
+
+```text
+# Start by upgrading to Antrea v1.15.1, starting with CRDs.
+$ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v1.15.1/antrea-crds.yml
+$ helm upgrade antrea antrea/antrea --namespace kube-system --version 1.15.1
+
+# Download antctl from the v1.15.1 release assets.
+$ antctl version
+antctlVersion: v1.15.1
+controllerVersion: v1.15.1
+
+# Upgrade API storage for all CRDs.
+# For usage information run: antctl upgrade api-storage --help
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1).
+$ antctl upgrade api-storage
+Skip upgrading CRD "externalnodes.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "trafficcontrols.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "externalentities.crd.antrea.io" since all stored objects are in the storage version.
+Skip upgrading CRD "supportbundlecollections.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreaagentinfos.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "ippools.crd.antrea.io" since it only has one version.
+Skip upgrading CRD "antreacontrollerinfos.crd.antrea.io" since it only has one version.
+Upgrading 6 objects of CRD "tiers.crd.antrea.io".
+Successfully upgraded 6 objects of CRD "tiers.crd.antrea.io".
+
+# You can now upgrade to Antrea v2.0 successfully, starting with CRDs.
+$ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v2.0.0/antrea-crds.yml
+$ helm upgrade antrea antrea/antrea --namespace kube-system --version 2.0.0
+```
+
+### Other upgrade considerations
+
+Some deprecated options have been removed from the Antrea configuration:
+
+* `nplPortRange` has been removed from the Agent configuration, use
+  `nodePortLocal.portRange` instead.
+* `enableIPSecTunnel` has been removed from the Agent configuration, use
+  `trafficEncryptionMode` instead.
+* `multicastInterfaces` has been removed from the Agent configuration, use
+  `multicast.multicastInterfaces` instead.
+* `multicluster.enable` has been removed from the Agent configuration, as the
+  Multicluster functionality is no longer gated by a boolean parameter.
+* `legacyCRDMirroring` has been removed from the Controller configuration, as it
+  dates back to the v1 major version bump, and it has been ignored for years.
+
+If you are porting your old Antrea configuration to Antrea v2, please make sure
+that you are no longer using these parameters. Unknown parameters will be
+ignored by Antrea, and the behavior may not be what you expect.
 
 [Semantic Versioning]: https://semver.org/
 [CHANGELOG]: ../CHANGELOG.md
