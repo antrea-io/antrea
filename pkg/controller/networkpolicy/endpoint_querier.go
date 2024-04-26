@@ -115,7 +115,7 @@ func (eq *EndpointQuerierImpl) QueryNetworkPolicyRules(namespace, podName string
 	appliedToGroupKeys := groups[appliedToGroupType]
 	// We iterate over all AppliedToGroups (same for AddressGroups below). This is acceptable
 	// since this implementation only supports user queries (in particular through antctl) and
-	// should resturn within a reasonable amount of time. We experimented with adding Pod
+	// should return within a reasonable amount of time. We experimented with adding Pod
 	// Indexers to the AppliedToGroup and AddressGroup stores, but we felt that this use case
 	// did not justify the memory overhead. If we can find another use for the Indexers as part
 	// of the NetworkPolicy Controller implementation, we may consider adding them back.
@@ -192,10 +192,10 @@ func processEndpointAppliedRules(appliedPolicies []*antreatypes.NetworkPolicy, i
 			for _, rule := range internalPolicy.Rules {
 				if rule.Direction == controlplane.DirectionIn && !isSourceEndpoint {
 					isolationRules = append(isolationRules, &antreatypes.RuleInfo{Policy: internalPolicy, Index: math.MaxInt32,
-						Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
+						Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name}})
 				} else if rule.Direction == controlplane.DirectionOut && isSourceEndpoint {
 					isolationRules = append(isolationRules, &antreatypes.RuleInfo{Policy: internalPolicy, Index: math.MaxInt32,
-						Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name, Action: rule.Action}})
+						Rule: &controlplane.NetworkPolicyRule{Direction: rule.Direction, Name: rule.Name}})
 				}
 			}
 		}

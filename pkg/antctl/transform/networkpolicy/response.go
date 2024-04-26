@@ -187,14 +187,18 @@ func (r EvaluationResponse) GetTableHeader() []string {
 
 func (r EvaluationResponse) GetTableRow(_ int) []string {
 	if r.NetworkPolicyEvaluation != nil && r.Response != nil {
-		// Handle K8s NPs empty action field. "Allow" corresponds to a K8s NP
-		// allow action, and "Isolate" corresponds to a drop action because of the
-		// default isolation model. Otherwise, display the action field content.
-		action := "Allow"
+		action := ""
 		if r.Response.Rule.Action != nil {
 			action = string(*r.Response.Rule.Action)
 		} else if r.Response.RuleIndex == math.MaxInt32 {
+			// Responses from endpoint query with original rules will always have
+			// valid action fields, except for the synthetic isolation rules,
+			// identified by a MaxInt32 rule index. "Isolate" corresponds to
+			// a drop action because of the default isolation model of K8s NPs.
 			action = "Isolate"
+		} else {
+			// Should not be possible.
+			action = "Unknown"
 		}
 		return []string{
 			r.Response.NetworkPolicy.Name,
