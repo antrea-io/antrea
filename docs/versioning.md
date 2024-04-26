@@ -310,13 +310,13 @@ antctlVersion: v1.13.4
 controllerVersion: v1.13.4
 
 # Even if you didn't create any CR using the CRD API versions which have been
-# removed in Antrea v2.0, you will still need to run the antctl command, or you
-# the upgrade will fail.
+# removed in Antrea v2.0, you will still need to run the antctl command, or the
+# upgrade will fail.
 
 # Upgrade API storage for all CRDs.
 # For usage information run: antctl upgrade api-storage --help
-# In particular, the script will upgrade the default Tiers managed by Antrea to
-# the new stored version (v1beta1) if needed. If you never installed a minor
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1) if needed. If you never installed a minor
 # version of Antrea older than v1.13 in your cluster, you may not see any CRD
 # upgrade.
 $ antctl upgrade api-storage
@@ -344,13 +344,13 @@ antctlVersion: v1.13.4
 controllerVersion: v1.13.4
 
 # Even if you didn't create any CR using the CRD API versions which have been
-# removed in Antrea v2.0, you will still need to run the antctl command, or you
-# the upgrade will fail.
+# removed in Antrea v2.0, you will still need to run the antctl command, or the
+# upgrade will fail.
 
 # Upgrade API storage for all CRDs.
 # For usage information run: antctl upgrade api-storage --help
-# In particular, the script will upgrade the default Tiers managed by Antrea to
-# the new stored version (v1beta1) if needed. If you never installed a minor
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1) if needed. If you never installed a minor
 # version of Antrea older than v1.13 in your cluster, you may not see any CRD
 # upgrade.
 $ antctl upgrade api-storage
@@ -382,8 +382,8 @@ controllerVersion: v1.15.1
 
 # Upgrade API storage for all CRDs.
 # For usage information run: antctl upgrade api-storage --help
-# In particular, the script will upgrade the default Tiers managed by Antrea to
-# the new stored version (v1beta1).
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1).
 $ antctl upgrade api-storage
 Skip upgrading CRD "externalnodes.crd.antrea.io" since it only has one version.
 Skip upgrading CRD "trafficcontrols.crd.antrea.io" since it only has one version.
@@ -413,8 +413,8 @@ controllerVersion: v1.15.1
 
 # Upgrade API storage for all CRDs.
 # For usage information run: antctl upgrade api-storage --help
-# In particular, the script will upgrade the default Tiers managed by Antrea to
-# the new stored version (v1beta1).
+# In particular, the script will upgrade the system Tier CRs managed by Antrea
+# to the new storage version (v1beta1).
 $ antctl upgrade api-storage
 Skip upgrading CRD "externalnodes.crd.antrea.io" since it only has one version.
 Skip upgrading CRD "trafficcontrols.crd.antrea.io" since it only has one version.
