@@ -109,12 +109,12 @@ var (
 	APConjIDField = binding.NewRegField(3, 0, 31)
 
 	// reg4(NXM_NX_REG4)
-	// reg4[0..15]: Field to store the selected Service Endpoint port.
+	// reg4[0..15]: Field to store the selected Service Endpoint port number.
 	EndpointPortField = binding.NewRegField(4, 0, 15)
 	// reg4[16..18]: Field to store the state of a packet accessing a Service. Marks in this field include:
-	//	- 0b001: packet need to do service selection.
-	//	- 0b010: packet has done service selection.
-	//	- 0b011: packet has done service selection and the selection result needs to be cached.
+	//	- 0b001: packet needs to do Endpoint selection.
+	//	- 0b010: packet has done Endpoint selection.
+	//	- 0b011: packet has done Endpoint selection and the selection result needs to be cached.
 	ServiceEPStateField = binding.NewRegField(4, 16, 18)
 	EpToSelectRegMark   = binding.NewRegMark(ServiceEPStateField, 0b001)
 	EpSelectedRegMark   = binding.NewRegMark(ServiceEPStateField, 0b010)
