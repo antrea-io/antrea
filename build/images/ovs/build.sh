@@ -117,6 +117,8 @@ if $PULL; then
         IMAGES_LIST=(
             "antrea/openvswitch-rpms:$BUILD_TAG"
             "antrea/openvswitch-ubi:$BUILD_TAG"
+            "quay.io/centos/centos:stream9"
+            "registry.access.redhat.com/ubi9"
         )
     fi
     for image in "${IMAGES_LIST[@]}"; do

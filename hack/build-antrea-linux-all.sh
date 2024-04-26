@@ -101,7 +101,7 @@ if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ]; then
 fi
 if [ "$DISTRO" == "ubi" ]; then
     if $COVERAGE ; then
-        echoerr "No coverage build for UBI8"
+        echoerr "No coverage build for UBI9"
         exit 1
     fi
     ARGS="$ARGS --distro ubi"
@@ -141,6 +141,8 @@ if $PULL; then
             "antrea/openvswitch-ubi:$BUILD_TAG"
             "antrea/cni-binaries:$CNI_BINARIES_VERSION"
             "antrea/base-ubi:$BUILD_TAG"
+            "quay.io/centos/centos:stream9"
+            "registry.access.redhat.com/ubi9"
         )
     fi
     for image in "${IMAGES_LIST[@]}"; do
