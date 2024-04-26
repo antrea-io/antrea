@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# OVS build scripts are only applicable for RHEL 7.x:
-# https://docs.openvswitch.org/en/latest/intro/install/fedora/
-FROM centos:centos7 as ovs-rpms
-
+FROM quay.io/centos/centos:stream9 as ovs-rpms
 # Some patches may not apply cleanly if a non-default version is provided.
 # See build/images/deps/ovs-version for the default version.
 ARG OVS_VERSION
 
 # Install RPM tools and generic build dependencies.
-RUN yum update -y && yum install wget git yum-utils python38 rpm-build epel-release -y
+RUN yum clean all -y && yum -y install wget git yum-utils python3 rpm-build && \
+    sed -i 's/enabled=.*/enabled=1/g' /etc/yum.repos.d/centos.repo
 
 COPY apply-patches.sh /
+COPY charon-logging.conf /tmp
+COPY CentOS.repo /tmp
 
 # Download OVS source code
-RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.tar.gz  | tar xz -C /tmp
+RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.tar.gz | tar xz -C /tmp
 RUN cd /tmp/openvswitch* && \
     /apply-patches.sh && \
     sed -e "s/@VERSION@/$OVS_VERSION/" rhel/openvswitch-fedora.spec.in > /tmp/ovs.spec && \
@@ -39,30 +39,30 @@ RUN cd /tmp/openvswitch* && \
     mv /tmp/openvswitch-$OVS_VERSION/rpm/rpmbuild/RPMS/*/*.rpm  /tmp/ovs-rpms && \
     rm -rf /tmp/openvswitch*
 
-
-FROM registry.access.redhat.com/ubi8
+FROM registry.access.redhat.com/ubi9
+ARG OVS_VERSION
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on UBI8 which includes Open vSwitch built from source."
+LABEL description="A Docker image based on UBI9 which includes Open vSwitch built from source."
 
-# Change Repository from UBI8’s to CentOS because UBI8's repository does not contain
-# enough packages required by OVS installation.
-# Using the official RHEL repository would be the best choice but it's not publicly accessible.
-COPY CentOS.repo /tmp/CentOS.repo
-COPY charon-logging.conf /tmp
-COPY --from=ovs-rpms /tmp/ovs-rpms/* /tmp/ovs-rpms/
-RUN rm -f /etc/yum.repos.d/* && mv /tmp/CentOS.repo /etc/yum.repos.d/CentOS.repo && \
-    curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official -o /etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial && \
+RUN --mount=type=bind,from=ovs-rpms,source=/tmp/,target=/tmp/build \
     # Disable the default redhat.repo. This substitutes `subscription-manager config --rhsm.manage_repos=0`
     # as subscription-manager is not supported running in containers.
     sed -i.bak "s/^manage_repos = .$/manage_repos = 0/g" /etc/rhsm/rhsm.conf && \
-    yum install /tmp/ovs-rpms/* -y && yum install epel-release -y && \
-    yum install iptables logrotate -y && \
+    # Change Repository from UBI to CentOS because UBI repository does not contain
+    # enough packages required by OVS installation.
+    # Using the official RHEL repository would be the best choice but it's not publicly accessible.
+    rm -f /etc/yum.repos.d/* && cp /tmp/build/CentOS.repo /etc/yum.repos.d/CentOS.repo && \
+    curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official -o /etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial && \
+    curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-SIG-Extras -o /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Extras && \
+    yum install iptables-nft logrotate epel-release -y && \
+    pushd /tmp/build/ovs-rpms && \
+    yum install openvswitch-${OVS_VERSION}-*.rpm openvswitch-ipsec-${OVS_VERSION}-*.rpm python3-openvswitch-${OVS_VERSION}-*.rpm -y && \
+    popd && \
     mv /etc/logrotate.d/openvswitch /etc/logrotate.d/openvswitch-switch && \
     sed -i "/rotate /a\    #size 100M" /etc/logrotate.d/openvswitch-switch && \
     # https://github.com/libreswan/libreswan/blob/main/programs/setup/setup.in
     # The init system is configured to systemd by default. Change it to namespaces
     # to spawn the ipsec process directly.
     sed -i 's/^initsystem=.*$/initsystem="namespaces"/' /usr/libexec/ipsec/setup && \
-    rm /etc/rhsm/rhsm.conf.bak && \
-    rm -rf /tmp/* && yum clean all
+    rm /etc/rhsm/rhsm.conf.bak && yum clean all

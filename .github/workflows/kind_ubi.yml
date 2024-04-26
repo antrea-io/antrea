@@ -45,7 +45,7 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
-    - name: Build Antrea UBI8 Docker image
+    - name: Build Antrea UBI9 Docker image
       run: |
         ./hack/build-antrea-linux-all.sh --pull --distro ubi
     - name: Clean up docker build cache

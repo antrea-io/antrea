@@ -82,11 +82,11 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
-    - name: Build Antrea UBI8 Docker image without pushing to registry
+    - name: Build Antrea UBI9 Docker image without pushing to registry
       if: ${{ github.repository != 'antrea-io/antrea' || github.event_name != 'push' || github.ref != 'refs/heads/main' }}
       run: |
         ./hack/build-antrea-linux-all.sh --pull --distro ubi
-    - name: Build and push Antrea UBI8 Docker image to registry
+    - name: Build and push Antrea UBI9 Docker image to registry
       if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
