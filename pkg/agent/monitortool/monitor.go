@@ -65,14 +65,21 @@ func getICMPSeq() uint32 {
 
 // NodeLatencyMonitor is a tool to monitor the latency of the node.
 type NodeLatencyMonitor struct {
-	// Gateway config
-	gatewayConfig *config.GatewayConfig
+	// Node config
+	nodeConfig *config.NodeConfig
 	// latencyStore is the cache to store the latency of each nodes.
 	latencyStore *LatencyStore
 	// latencyConfig is the config for the latency monitor.
 	latencyConfig *LatencyConfig
 	// latencyConfigChanged is the channel to notify the latency config changed.
 	latencyConfigChanged chan struct{}
+	// gatewayConfig is the traffic encap mode for the latency monitor,
+	// indicate if the Antrea Agent is running in network policy only mode.
+	trafficEncapMode config.TrafficEncapModeType
+	// isIPv4Enabled is the flag to indicate if the IPv4 is enabled.
+	isIPv4Enabled bool
+	// isIPv6Enabled is the flag to indicate if the IPv6 is enabled.
+	isIPv6Enabled bool
 
 	// The map of node name to node info, it will changed by node watcher
 	nodeInformer coreinformers.NodeInformer
@@ -90,17 +97,31 @@ type LatencyConfig struct {
 
 func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	nlmInformer crdinformers.NodeLatencyMonitorInformer,
-	gatewayConfig *config.GatewayConfig,
-	isNetworkPolicyOnly bool) *NodeLatencyMonitor {
+	nodeConfig *config.NodeConfig,
+	trafficEncapMode config.TrafficEncapModeType) *NodeLatencyMonitor {
 	m := &NodeLatencyMonitor{
-		gatewayConfig:              gatewayConfig,
-		latencyStore:               NewLatencyStore(isNetworkPolicyOnly),
+		nodeConfig:                 nodeConfig,
+		trafficEncapMode:           trafficEncapMode,
+		latencyStore:               NewLatencyStore(trafficEncapMode.IsNetworkPolicyOnly()),
 		latencyConfig:              &LatencyConfig{Enable: false},
 		latencyConfigChanged:       make(chan struct{}, 1),
 		nodeInformer:               nodeInformer,
 		nodeLatencyMonitorInformer: nlmInformer,
 	}
 
+	// Get the IPv4/IPv6 enabled status
+	isIPv4Enabled, err := config.IsIPv4Enabled(m.nodeConfig, m.trafficEncapMode)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get IPv4 enabled status")
+	}
+	isIPv6Enabled, err := config.IsIPv6Enabled(m.nodeConfig, m.trafficEncapMode)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get IPv6 enabled status")
+	}
+	m.isIPv4Enabled = isIPv4Enabled
+	m.isIPv6Enabled = isIPv6Enabled
+
+	// Add node informer event handler for Node
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    m.onNodeAdd,
 		UpdateFunc: m.onNodeUpdate,
@@ -188,8 +209,6 @@ func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonito
 
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
-	klog.InfoS("NodeLatencyMonitor deleted", "NodeLatencyMonitor")
-
 	// Update the latency config
 	m.latencyConfig = &LatencyConfig{Enable: false}
 
@@ -344,14 +363,14 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 			klog.InfoS("Start to ping node", "Node name", name, "Node IP", toIP)
 			if toIP.To4() != nil && ipv4Socket != nil {
 				if err := m.sendPing(ipv4Socket, toIP); err != nil {
-					klog.Warningf("Failed to send ICMP message to node, err: %#v, Node name: %#v, Node IP: %v", err, name, toIP)
+					klog.InfoS("Failed to send ICMP message to node", "Node name", name, "Node IP", toIP)
 				}
 			} else if toIP.To16() != nil && ipv6Socket != nil {
 				if err := m.sendPing(ipv6Socket, toIP); err != nil {
-					klog.Warningf("Failed to send ICMP message to node, err: %#v, Node name: %#v, Node IP: %v", err, name, toIP)
+					klog.InfoS("Failed to send ICMP message to node", "Node name", name, "Node IP", toIP)
 				}
 			} else {
-				klog.Warningf("Failed to send ICMP message to node, Node name: %#v, Node IP: %v", name, toIP)
+				klog.InfoS("Failed to send ICMP message to node", "Node name", name, "Node IP", toIP)
 			}
 		}
 	}
@@ -381,7 +400,7 @@ func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 
 func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	// Low level goroutine to handle ping loop
-	var currentTicker *time.Ticker
+	var ticker *time.Ticker
 	var tickerCh <-chan time.Time
 	var ipv4Socket, ipv6Socket net.PacketConn
 	var err error
@@ -394,19 +413,21 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		if ipv6Socket != nil {
 			ipv6Socket.Close()
 		}
-		if currentTicker != nil {
-			currentTicker.Stop()
+		if ticker != nil {
+			ticker.Stop()
 		}
-		close(tickerStopCh)
+		if tickerStopCh != nil {
+			close(tickerStopCh)
+		}
 	}()
 
 	// Update current ticker based on the latencyConfig
 	updateTicker := func(interval time.Duration) {
-		if currentTicker != nil {
-			currentTicker.Stop() // Stop the current ticker
+		if ticker != nil {
+			ticker.Stop() // Stop the current ticker
 		}
-		currentTicker = time.NewTicker(interval)
-		tickerCh = currentTicker.C
+		ticker = time.NewTicker(interval)
+		tickerCh = ticker.C
 	}
 
 	// Start the pingAll goroutine
@@ -427,10 +448,10 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			}
 		case <-stopCh:
 			// Stop the ticker loop
-			if currentTicker != nil {
-				currentTicker.Stop()
+			if ticker != nil {
+				ticker.Stop()
 			}
-			close(tickerStopCh)
+			tickerStopCh <- struct{}{}
 			return
 		case <-m.latencyConfigChanged:
 			// Start or stop the pingAll goroutine based on the latencyConfig
@@ -441,7 +462,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 				// If the recvPing socket is closed, restart it
 				// In case of IPv4-only or IPv6-only, we need to check the socket status,
 				// and restart it if it is closed(CRD is deleted).
-				if ipv4Socket == nil && m.gatewayConfig.IPv4 != nil {
+				if ipv4Socket == nil && m.isIPv4Enabled {
 					// Create a new socket for IPv4 when the gatewayConfig is IPv4-only
 					ipv4Socket, err = icmp.ListenPacket(IPv4ProtocolICMPRaw, "0.0.0.0")
 					if err != nil {
@@ -450,7 +471,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 					}
 					go m.recvPing(ipv4Socket, true, tickerStopCh)
 				}
-				if ipv6Socket == nil && m.gatewayConfig.IPv6 != nil {
+				if ipv6Socket == nil && m.isIPv6Enabled {
 					// Create a new socket for IPv6 when the gatewayConfig is IPv6-only
 					ipv6Socket, err = icmp.ListenPacket(IPv6ProtocolICMPRaw, "::")
 					if err != nil {
@@ -461,11 +482,11 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 				}
 			} else {
 				// latencyConfig deleted
-				if currentTicker != nil {
-					currentTicker.Stop()
-					currentTicker = nil
+				if ticker != nil {
+					ticker.Stop()
+					ticker = nil
 				}
-				close(tickerStopCh)
+				tickerStopCh <- struct{}{}
 			}
 		}
 	}

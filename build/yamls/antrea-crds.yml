@@ -2691,7 +2691,7 @@ spec:
                   format: int32
                   minimum: 1
                   description: "Ping interval in seconds, must be at least 1."
-                  default: 10
+                  default: 60
             metadata:
               type: object
               properties:

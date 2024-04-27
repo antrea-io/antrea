@@ -66,8 +66,8 @@ func TestNewNodeLatencyMonitor(t *testing.T) {
 	nodeLatencyMonitor := NewNodeLatencyMonitor(
 		nodeInformer,
 		nlmInformer,
-		&config.GatewayConfig{},
-		false,
+		&config.NodeConfig{},
+		config.TrafficEncapModeNetworkPolicyOnly,
 	)
 	assert.NotNil(t, nodeLatencyMonitor)
 
@@ -103,14 +103,14 @@ func TestNewNodeLatencyMonitor(t *testing.T) {
 	updatedNode.Status.Addresses[0].Address = updatedNodeInternalIP
 	k8sClient.CoreV1().Nodes().Update(context.TODO(), updatedNode, metav1.UpdateOptions{})
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		_, ok := nodeLatencyMonitor.latencyStore.nodeGatewayMap[nodeName]
-		assert.True(c, ok)
+		ips := nodeLatencyMonitor.latencyStore.GetNodeIPs(nodeName)
+		assert.Equal(c, 1, len(ips))
 	}, 2*time.Second, 10*time.Millisecond)
 
 	k8sClient.CoreV1().Nodes().Delete(context.TODO(), node.Name, metav1.DeleteOptions{})
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		_, ok := nodeLatencyMonitor.latencyStore.nodeGatewayMap[nodeName]
-		assert.False(c, ok)
+		ips := nodeLatencyMonitor.latencyStore.GetNodeIPs(nodeName)
+		assert.Equal(c, 0, len(ips))
 	}, 2*time.Second, 10*time.Millisecond)
 }
 

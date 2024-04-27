@@ -936,8 +936,8 @@ func run(o *Options) error {
 		nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(
 			nodeInformer,
 			nodeLatencyMonitorInformer,
-			nodeConfig.GatewayConfig,
-			networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(),
+			nodeConfig,
+			networkConfig.TrafficEncapMode,
 		)
 		go nodeLatencyMonitor.Run(stopCh)
 	}

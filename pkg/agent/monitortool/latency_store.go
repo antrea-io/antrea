@@ -32,7 +32,7 @@ type LatencyStore struct {
 	// Lock for the latency store
 	mutex sync.RWMutex
 
-	// isNetworkPolicyOnly is the flag to indicate if the Antrea Agent is running in network policy only mode.
+	// Whether the agent is running in network policy only mode
 	isNetworkPolicyOnly bool
 	// The map of node ip to latency entry, it will be changed by latency monitor
 	nodeIPLatencyMap map[string]*NodeIPLatencyEntry
@@ -120,7 +120,7 @@ func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
 	if l.isNetworkPolicyOnly {
 		transportIPs, err := getTransportIPs(node)
 		if err != nil {
-			klog.Errorf("Failed to get transport IPs for Node %s: %v", node.Name, err)
+			klog.ErrorS(err, "Failed to get transport IPs for Node", "nodeName", node.Name)
 			return
 		}
 
@@ -129,29 +129,27 @@ func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
 	} else {
 		gw0IPs, err := getGWIPs(node)
 		if err != nil {
-			klog.Errorf("Failed to get gateway IPs for Node %s: %v", node.Name, err)
+			klog.ErrorS(err, "Failed to get gateway IPs for Node", "nodeName", node.Name)
 			return
 		}
 
 		// Add the node to the node IP map
 		l.nodeGatewayMap[node.Name] = gw0IPs
 	}
-
-	klog.Infof("Node %s has gateway IPs %v", node.Name, l.nodeGatewayMap[node.Name])
 }
 
 func getTransportIPs(node *corev1.Node) ([]net.IP, error) {
 	var transportIPs []net.IP
-	dualIP, err := k8s.GetNodeTransportAddrs(node)
+	ips, err := k8s.GetNodeTransportAddrs(node)
 	if err != nil {
 		return transportIPs, err
 	}
 
-	if dualIP.IPv4 != nil {
-		transportIPs = append(transportIPs, dualIP.IPv4)
+	if ips.IPv4 != nil {
+		transportIPs = append(transportIPs, ips.IPv4)
 	}
-	if dualIP.IPv6 != nil {
-		transportIPs = append(transportIPs, dualIP.IPv6)
+	if ips.IPv6 != nil {
+		transportIPs = append(transportIPs, ips.IPv6)
 	}
 
 	return transportIPs, nil
@@ -163,8 +161,9 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	podCIDRStrs := getPodCIDRsOnNode(node)
 	if len(podCIDRStrs) == 0 {
 		// Skip the node if it does not have a PodCIDR.
-		klog.Errorf("Node %s does not have a PodCIDR", node.Name)
-		return gwIPs, errors.New("node does not have a PodCIDR")
+		err := errors.New("node does not have a PodCIDR")
+		klog.ErrorS(err, "Node does not have a PodCIDR", "nodeName", node.Name)
+		return gwIPs, err
 	}
 
 	// the 0th entry must match the podCIDR field. It may contain at most 1 value for
@@ -172,13 +171,14 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	// Both podCIDRStrs need to be parsed to get the gateway IP.
 	for _, podCIDR := range podCIDRStrs {
 		if podCIDR == "" {
-			klog.Errorf("PodCIDR is empty for Node %s", node.Name)
-			return gwIPs, errors.New("PodCIDR is empty")
+			err := errors.New("PodCIDR is empty")
+			klog.ErrorS(err, "PodCIDR is empty", "nodeName", node.Name)
+			return gwIPs, err
 		}
 
 		peerPodCIDRAddr, _, err := net.ParseCIDR(podCIDR)
 		if err != nil {
-			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, node.Name)
+			klog.ErrorS(err, "Failed to parse PodCIDR", "nodeName", node.Name)
 			return gwIPs, err
 		}
 
@@ -204,6 +204,13 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 		return nil
 	}
 	return []string{node.Spec.PodCIDR}
+}
+
+func (l *LatencyStore) GetNodeIPs(nodeName string) []net.IP {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	return l.nodeGatewayMap[nodeName]
 }
 
 func (l *LatencyStore) ListNodeIPs() map[string][]net.IP {

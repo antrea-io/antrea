@@ -314,6 +314,11 @@ type NodeLatencyMonitorSpec struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeLatencyMonitor is only a singleton resource, so it does not use a list type.
+// But current k8s client-gen does not support generating client for singleton informer resource,
+// so we have to define a list type for CRD Informer.
+// Maybe we will remove it in the future.
 type NodeLatencyMonitorList struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional

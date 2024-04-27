@@ -53,6 +53,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ExternalNodeList{},
 		&SupportBundleCollection{},
 		&SupportBundleCollectionList{},
+		&NodeLatencyMonitor{},
+		&NodeLatencyMonitorList{},
 	)
 
 	metav1.AddToGroupVersion(

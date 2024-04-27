@@ -159,7 +159,7 @@ const (
 	// Enable layer 7 flow export on Pods and Namespaces
 	L7FlowExporter featuregate.Feature = "L7FlowExporter"
 
-	// alpha: v2.0
+	// alpha: v2.1
 	// Enable the NodeLatencyMonitor feature.
 	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
 )
