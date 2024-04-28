@@ -627,7 +627,8 @@ function collect_coverage() {
         timestamp=$(date +%Y%m%d%H%M%S)
         cov_dir="${GIT_CHECKOUT_DIR}/conformance-coverage/$antrea_controller_pod_name-$timestamp"
         mkdir -p $cov_dir
-        kubectl cp kube-system/$antrea_controller_pod_name:/tmp/coverage/* $cov_dir/
+        sleep 1s
+        kubectl cp kube-system/$antrea_controller_pod_name:/tmp/coverage/* $cov_dir/ || true
         go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
         rm -rf "${cov_dir}"
 
@@ -639,7 +640,8 @@ function collect_coverage() {
             timestamp=$(date +%Y%m%d%H%M%S)
             cov_dir="${GIT_CHECKOUT_DIR}/conformance-coverage/$agent-$timestamp"
             mkdir -p $cov_dir
-            kubectl cp kube-system/$agent:/tmp/coverage/* -c antrea-agent $cov_dir/
+            sleep 1s
+            kubectl cp kube-system/$agent:/tmp/coverage/* -c antrea-agent $cov_dir/ || true
             go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
             rm -rf "${cov_dir}"
         done
