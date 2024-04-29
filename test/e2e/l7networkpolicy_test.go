@@ -16,8 +16,11 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"path"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
@@ -58,6 +62,9 @@ func TestL7NetworkPolicy(t *testing.T) {
 	})
 	t.Run("TLS", func(t *testing.T) {
 		testL7NetworkPolicyTLS(t, data)
+	})
+	t.Run("Logging", func(t *testing.T) {
+		testL7NetworkPolicyLogging(t, data)
 	})
 }
 
@@ -189,31 +196,19 @@ func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string,
 func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 	clientPodName := "test-l7-http-client-selected"
 	clientPodLabels := map[string]string{"test-l7-http-e2e": "client"}
-	cmd := []string{"bash", "-c", "sleep 3600"}
 
 	// Create a client Pod which will be selected by test L7 NetworkPolices.
-	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(clientPodLabels).Create(data))
-	if _, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace); err != nil {
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientPodName, err)
-	}
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithLabels(clientPodLabels).Create(data))
+	_, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", clientPodName)
 
 	serverPodName := "test-l7-http-server"
 	serverPodLabels := map[string]string{"test-l7-http-e2e": "server"}
-	cmd = []string{"bash", "-c", "/agnhost netexec --http-port=8080"}
+	cmd := []string{"/agnhost", "netexec", "--http-port=8080"}
 	require.NoError(t, NewPodBuilder(serverPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(serverPodLabels).Create(data))
 	podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, data.testNamespace)
-	if err != nil {
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", serverPodName, err)
-	}
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, serverPodName, data.testNamespace))
-	var serverIPs []*net.IP
-	if podIPs.IPv4 != nil {
-		serverIPs = append(serverIPs, podIPs.IPv4)
-	}
-	if podIPs.IPv6 != nil {
-		serverIPs = append(serverIPs, podIPs.IPv6)
-	}
+	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
+	serverIPs := podIPs.AsSlice()
 
 	l7ProtocolAllowsPathHostname := []crdv1beta1.L7Protocol{
 		{
@@ -238,8 +233,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// Create two L7 NetworkPolicies, one allows HTTP path 'hostname', the other allows any HTTP path. Note that,
 		// the priority of the first one is higher than the second one, and they have the same appliedTo labels and Pod
 		// selector labels.
-		createL7NetworkPolicy(t, data, true, policyAllowPathHostname, 1, clientPodLabels, serverPodLabels, ProtocolTCP, 8080, l7ProtocolAllowsPathHostname)
-		createL7NetworkPolicy(t, data, true, policyAllowAnyPath, 2, clientPodLabels, serverPodLabels, ProtocolTCP, 8080, l7ProtocolAllowsAnyPath)
+		createL7NetworkPolicy(t, data, true, policyAllowPathHostname, 1, clientPodLabels, serverPodLabels, ProtocolTCP, p8080, l7ProtocolAllowsPathHostname)
+		createL7NetworkPolicy(t, data, true, policyAllowAnyPath, 2, clientPodLabels, serverPodLabels, ProtocolTCP, p8080, l7ProtocolAllowsAnyPath)
 		time.Sleep(networkPolicyDelay)
 
 		// HTTP path 'hostname' is allowed by the first L7 NetworkPolicy, and the priority of the second L7 NetworkPolicy
@@ -265,8 +260,8 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		// Create two L7 NetworkPolicies, one allows HTTP path 'hostname', the other allows any HTTP path. Note that,
 		// the priority of the first one is higher than the second one, and they have the same appliedTo labels and Pod
 		// selector labels.
-		createL7NetworkPolicy(t, data, false, policyAllowPathHostname, 1, serverPodLabels, clientPodLabels, ProtocolTCP, 8080, l7ProtocolAllowsPathHostname)
-		createL7NetworkPolicy(t, data, false, policyAllowAnyPath, 2, serverPodLabels, clientPodLabels, ProtocolTCP, 8080, l7ProtocolAllowsAnyPath)
+		createL7NetworkPolicy(t, data, false, policyAllowPathHostname, 1, serverPodLabels, clientPodLabels, ProtocolTCP, p8080, l7ProtocolAllowsPathHostname)
+		createL7NetworkPolicy(t, data, false, policyAllowAnyPath, 2, serverPodLabels, clientPodLabels, ProtocolTCP, p8080, l7ProtocolAllowsAnyPath)
 		time.Sleep(networkPolicyDelay)
 
 		// HTTP path 'hostname' is allowed by the first L7 NetworkPolicy, and the priority of the second L7 NetworkPolicy
@@ -289,14 +284,11 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	clientPodName := "test-l7-tls-client-selected"
 	clientPodLabels := map[string]string{"test-l7-tls-e2e": "client"}
-	cmd := []string{"bash", "-c", "sleep 3600"}
 
 	// Create a client Pod which will be selected by test L7 NetworkPolices.
-	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(clientPodLabels).Create(data))
-	if _, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace); err != nil {
-		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientPodName, err)
-	}
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithLabels(clientPodLabels).Create(data))
+	_, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", clientPodName)
 
 	l7ProtocolAllowsGoogle := []crdv1beta1.L7Protocol{
 		{
@@ -332,4 +324,92 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", false)
 	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", true)
+}
+
+func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
+	l7LoggingNode := nodeName(0)
+
+	clientPodName := "test-l7-logging-client-selected"
+	clientPodLabels := map[string]string{"test-l7-logging-e2e": "client"}
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, agnhostImage).OnNode(l7LoggingNode).WithLabels(clientPodLabels).Create(data))
+	_, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", clientPodName)
+
+	serverPodName := "test-l7-logging-server"
+	serverPodLabels := map[string]string{"test-l7-logging-e2e": "server"}
+	cmd := []string{"/agnhost", "netexec", "--http-port=8080"}
+	require.NoError(t, NewPodBuilder(serverPodName, data.testNamespace, agnhostImage).OnNode(l7LoggingNode).WithCommand(cmd).WithLabels(serverPodLabels).Create(data))
+	podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
+	serverIPs := podIPs.AsSlice()
+
+	policyAllowPathHostname := "test-l7-http-allow-path-hostname"
+	l7ProtocolAllowsPathHostname := []crdv1beta1.L7Protocol{
+		{
+			HTTP: &crdv1beta1.HTTPProtocol{
+				Method: "GET",
+				Path:   "/host*",
+			},
+		},
+	}
+	// Create one L7 NetworkPolicy that allows HTTP path 'hostname', and probe twice
+	// where HTTP path 'hostname' is allowed yet 'clientip' will be rejected.
+	createL7NetworkPolicy(t, data, true, policyAllowPathHostname, 1, clientPodLabels, serverPodLabels, ProtocolTCP, p8080, l7ProtocolAllowsPathHostname)
+	time.Sleep(networkPolicyDelay)
+	probeL7NetworkPolicyHTTP(t, data, serverPodName, clientPodName, serverIPs, true, false)
+
+	// Define log matchers for expected L7 NetworkPolicies log entries.
+	var l7LogMatchers []L7LogEntry
+	for _, ip := range serverIPs {
+		clientMatcher := L7LogEntry{EventType: "alert", Protocol: "TCP", Http: L7LogHttpEntry{Hostname: ip.String(), Port: 8080, Url: "/clientip"}}
+		hostMatcher := L7LogEntry{EventType: "http", Protocol: "TCP", Http: L7LogHttpEntry{Hostname: ip.String(), Port: 8080, Url: "/hostname"}}
+		l7LogMatchers = append(l7LogMatchers, clientMatcher, hostMatcher)
+	}
+
+	checkL7LoggingResult(t, data, l7LoggingNode, l7LogMatchers)
+}
+
+// Partial entries of L7 NetworkPolicy logging necessary for testing.
+type L7LogHttpEntry struct {
+	Hostname string `json:"hostname"`
+	Port     int32  `json:"http_port"`
+	Url      string `json:"url"`
+}
+
+type L7LogEntry struct {
+	EventType string         `json:"event_type"`
+	Protocol  string         `json:"proto"`
+	Http      L7LogHttpEntry `json:"http"`
+}
+
+func checkL7LoggingResult(t *testing.T, data *TestData, nodeName string, matchers []L7LogEntry) {
+	// Filename base on generated Suricata config [https://github.com/antrea-io/antrea/blob/main/pkg/agent/controller/networkpolicy/l7engine/reconciler.go].
+	l7LogFile := path.Join(logDir, "l7engine", fmt.Sprintf("eve-%s.json", time.Now().Format(time.DateOnly)))
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	require.NoError(t, err, "Error occurred when trying to get the Antrea Agent Pod running on Node %s", nodeName)
+	cmd := []string{"cat", l7LogFile}
+
+	if err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+		stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+		if err != nil {
+			// file may not exist yet
+			return false, nil
+		}
+
+		var gotLogs []L7LogEntry
+		dec := json.NewDecoder(strings.NewReader(stdout))
+		for dec.More() {
+			var log L7LogEntry
+			if err := dec.Decode(&log); err != nil {
+				// log format error, fail immediately
+				return false, err
+			}
+			if slices.Contains(matchers, log) {
+				gotLogs = append(gotLogs, log)
+			}
+		}
+		return slices.Equal(gotLogs, matchers), nil
+	}); err != nil {
+		t.Errorf("Error when polling L7 audit log files for required entries: %v", err)
+	}
 }
