@@ -253,6 +253,26 @@ data:
       proxyLoadBalancerIPs: false
 ```
 
+With the above configuration, AntreaProxy will ignore all external `loadBalancerIP`s.
+Starting with K8s v1.29, feature [LoadBalancerIPMode](https://kubernetes.io/docs/concepts/services-networking/service/#load-balancer-ip-mode)
+was introduced, providing users with a more fine-grained mechanism to control how
+every external `loadBalancerIP` behaves in a LoadBalancer Service.
+
+- If the value of `LoadBalancerIPMode` is `LoadBalancerIPModeVIP` or nil, the
+  traffic destined for the corresponding external `loadBalancerIP` should follow
+  the default behavior and get load-balanced at the source Node.
+- If the value of `LoadBalancerIPMode` is `LoadBalancerIPModeProxy`, the traffic
+  destined for the corresponding external `loadBalancerIP` should be sent to the
+  external LoadBalancer.
+
+Starting with Antrea v2.0, AntreaProxy will respect `LoadBalancerIPMode` in LoadBalancer
+Services when the configuration option `proxyLoadBalancerIPs` is set to `true`
+(default). In this case, AntreaProxy will serve only the external `loadBalancerIP`s
+configured with `LoadBalancerIPModeVIP`, and those configured with
+`LoadBalancerIPModeProxy` will bypass AntreaProxy. If the configuration option
+`proxyLoadBalancerIPs` is set to `false`, AntreaProxy will ignore the external
+`loadBalancerIP`s even if configured with `LoadBalancerIPModeVIP`.
+
 There are two important prerequisites for this feature:
 
 * You must enable `proxyAll` and [remove kube-proxy](#removing-kube-proxy) from
