@@ -19,6 +19,7 @@ import (
 
 	agentapis "antrea.io/antrea/pkg/agent/apis"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
+	checkinstallation "antrea.io/antrea/pkg/antctl/raw/check/installation"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
@@ -633,6 +634,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 		},
 	},
 	rawCommands: []rawCommand{
+		{
+			cobraCommand:      checkinstallation.Command(),
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      check,
+		},
 		{
 			cobraCommand:      supportbundle.Command,
 			supportAgent:      true,
