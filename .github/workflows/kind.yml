@@ -741,6 +741,48 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
+  run-post-installation-checks:
+    name: Test connectivity using 'antctl check' command
+    needs: [ build-antrea-coverage-image ]
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - name: Free disk space
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v4
+        with:
+          show-progress: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v4
+        with:
+          name: antrea-ubuntu-cov
+      - name: Load Antrea image
+        run: |
+          docker load -i antrea-ubuntu.tar
+      - name: Install Kind
+        run: |
+          KIND_VERSION=$(head -n1 ./ci/kind/version)
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Create Kind Cluster
+        run: |
+          kind create cluster --config ci/kind/config-3nodes.yml
+      - name: Load Docker images and deploy Antrea
+        run: |
+          kind load docker-image antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-agent-ubuntu-coverage:latest
+          kubectl apply -f build/yamls/antrea.yml
+      - name: Build antctl binary
+        run: |
+          make antctl-linux
+      - name: Run antctl command
+        run: |
+          ./bin/antctl-linux check installation
+
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
     needs: build-antrea-coverage-image
