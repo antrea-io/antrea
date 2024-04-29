@@ -18,10 +18,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -102,4 +105,90 @@ func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Co
 		return "", "", fmt.Errorf("error in stream: %w", err)
 	}
 	return stdout.String(), stderr.String(), nil
+}
+
+func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
+	if p.Replicas == 0 {
+		p.Replicas = 1
+	}
+	replicas32 := int32(p.Replicas)
+	labels := map[string]string{
+		"name": p.Name,
+		"kind": p.Role,
+	}
+	var ports []corev1.ContainerPort
+	if p.Port > 0 {
+		ports = append(ports, corev1.ContainerPort{ContainerPort: int32(p.Port)})
+	}
+	var env []corev1.EnvVar
+	if p.Port > 0 {
+		env = append(env, corev1.EnvVar{Name: "PORT", Value: fmt.Sprintf("%d", p.Port)})
+	}
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   p.Name,
+			Labels: labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas32,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					HostNetwork: p.HostNetwork,
+					Containers: []corev1.Container{
+						{
+							Name:            p.Name,
+							Image:           p.Image,
+							Ports:           ports,
+							Env:             env,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         p.Command,
+							VolumeMounts:    p.VolumeMounts,
+						},
+					},
+					Tolerations: p.Tolerations,
+					Volumes:     p.Volumes,
+					Affinity:    p.Affinity,
+				},
+			},
+		},
+	}
+}
+
+type DeploymentParameters struct {
+	Name         string
+	Role         string
+	Image        string
+	Replicas     int
+	Port         int
+	Command      []string
+	Affinity     *corev1.Affinity
+	Tolerations  []corev1.Toleration
+	Labels       map[string]string
+	VolumeMounts []corev1.VolumeMount
+	Volumes      []corev1.Volume
+	HostNetwork  bool
+}
+
+func WaitForDeploymentsReady(ctx context.Context, interval, timeout time.Duration, client kubernetes.Interface, antreaNamespace string, clusterName string, deployments ...string) error {
+	for _, deployment := range deployments {
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Deployment %s to become ready..."+"\n", deployment)
+		err := wait.PollUntilContextTimeout(ctx, interval, timeout, false, func(ctx context.Context) (bool, error) {
+			ready, err := DeploymentIsReady(ctx, client, antreaNamespace, deployment)
+			if err != nil {
+				return false, fmt.Errorf("error checking readiness of Deployment %s: %w", deployment, err)
+			}
+			return ready, nil
+		})
+		if err != nil {
+			return fmt.Errorf("waiting for Deployment %s to become ready has been interrupted: %w", deployment, err)
+		}
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deployment %s is ready."+"\n", deployment)
+	}
+	return nil
 }
