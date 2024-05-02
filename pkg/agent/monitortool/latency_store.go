@@ -62,26 +62,39 @@ func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 	return store
 }
 
-func (l *LatencyStore) GetNodeIPLatencyEntryByKey(key string) *NodeIPLatencyEntry {
+func (l *LatencyStore) GetNodeIPLatencyEntry(key string) (NodeIPLatencyEntry, bool) {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	return l.nodeIPLatencyMap[key]
+	// Return a copy of the connection entry
+	entry, ok := l.nodeIPLatencyMap[key]
+	if !ok {
+		return NodeIPLatencyEntry{}, ok
+	}
+
+	return *entry, ok
 }
 
-func (l *LatencyStore) DeleteNodeIPLatencyEntryByKey(key string) {
+func (l *LatencyStore) DeleteNodeIPLatencyEntry(key string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
 	delete(l.nodeIPLatencyMap, key)
 }
 
-func (l *LatencyStore) UpdateNodeIPLatencyEntryByKey(key string, entry *NodeIPLatencyEntry) {
+func (l *LatencyStore) SetNodeIPLatencyEntry(key string, mutator func(entry *NodeIPLatencyEntry)) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	// Update the connection map
-	l.nodeIPLatencyMap[key] = entry
+	entry, ok := l.nodeIPLatencyMap[key]
+	if !ok {
+		// Init the connection entry
+		entry = &NodeIPLatencyEntry{}
+		l.nodeIPLatencyMap[key] = entry
+	}
+
+	// Update the connection entry
+	mutator(entry)
 }
 
 func (l *LatencyStore) ListLatencies() map[string]*NodeIPLatencyEntry {
