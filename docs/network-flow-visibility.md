@@ -624,6 +624,8 @@ export.
 To achieve L7 (Layer 7) network flow export, the `L7FlowExporter` feature gate
 must be enabled.
 
+Note: L7 flow-visibility support for Theia is not yet implemented.
+
 ### Usage
 
 To export layer 7 flows of a Pod or a Namespace, user can annotate Pods or
