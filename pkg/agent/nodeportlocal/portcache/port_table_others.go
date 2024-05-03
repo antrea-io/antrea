@@ -26,18 +26,6 @@ import (
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
-const (
-	// stateOpen means that a listening socket has been opened for the
-	// protocol (as a means to reserve the port for this protocol), but no
-	// NPL rule has been installed for it.
-	stateOpen protocolSocketState = iota
-	// stateInUse means that a listening socket has been opened AND a NPL
-	// rule has been installed.
-	stateInUse
-	// stateClosed means that the socket has been closed.
-	stateClosed
-)
-
 func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol string) (ProtocolSocketData, error) {
 	// Port only needs to be available for the protocol used by the NPL rule.
 	// We don't need to allocate the same nodePort for all protocols anymore.
@@ -48,7 +36,6 @@ func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol stri
 	}
 	protocolData := ProtocolSocketData{
 		Protocol: protocol,
-		State:    stateInUse,
 		socket:   socket,
 	}
 	return protocolData, nil
@@ -83,28 +70,6 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 	return 0, ProtocolSocketData{}, fmt.Errorf("no free port found")
 }
 
-func (d *NodePortData) CloseSockets() error {
-	if d.Protocol.Protocol != "" {
-		protocolSocketData := &d.Protocol
-		switch protocolSocketData.State {
-		case stateClosed:
-			// already closed
-			return nil
-		case stateInUse:
-			// should not happen
-			return fmt.Errorf("protocol %s is still in use, cannot release socket", protocolSocketData.Protocol)
-		case stateOpen:
-			if err := protocolSocketData.socket.Close(); err != nil {
-				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", d.NodePort, protocolSocketData.Protocol, err)
-			}
-			protocolSocketData.State = stateClosed
-		default:
-			return fmt.Errorf("invalid protocol socket state")
-		}
-	}
-	return nil
-}
-
 func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
@@ -128,9 +93,36 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 		pt.addPortTableCache(npData)
 	} else {
 		// Only add rules if the entry does not exist.
-		return 0, fmt.Errorf("existed Linux Nodeport entry for %s:%d:%s", podIP, podPort, protocol)
+		return 0, fmt.Errorf("existing Linux Nodeport entry for %s:%d:%s", podIP, podPort, protocol)
 	}
 	return npData.NodePort, nil
+}
+
+func (pt *PortTable) deleteRule(data *NodePortData) error {
+	protocolSocketData := &data.Protocol
+	protocol := protocolSocketData.Protocol
+
+	// In theory, we should not be modifying a cache item in-place. However, the field we are
+	// modifying (defunct) does NOT participate in indexing and the modification is thread-safe
+	// because of pt.tableLock.
+	// TODO: stop modifying cache items in-place.
+	// We could set defunct after the call to DeleteRule, because a failed call to DeleteRule
+	// should mean that the rule is still present and valid, but there is no harm in being more
+	// conservative.
+	data.defunct = true
+
+	// Calling DeleteRule is idempotent.
+	if err := pt.PodPortRules.DeleteRule(data.NodePort, data.PodIP, data.PodPort, protocol); err != nil {
+		return err
+	}
+	if err := protocolSocketData.socket.Close(); err != nil {
+		return fmt.Errorf("error when releasing local port %d with protocol %s: %w", data.NodePort, protocol, err)
+	}
+	// We don't need to delete cache from different indexes repeatedly because they map to the same entry.
+	// Deletion errors are not possible because our Index functions cannot return errors.
+	// See https://github.com/kubernetes/client-go/blob/3aa45779f2e5592d52edf68da66abfbd0805e413/tools/cache/store.go#L189-L196
+	pt.deletePortTableCache(data)
+	return nil
 }
 
 func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) error {
@@ -141,15 +133,7 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 		// Delete not required when the PortTable entry does not exist
 		return nil
 	}
-	if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort, protocol); err != nil {
-		return err
-	}
-	if err := data.CloseSockets(); err != nil {
-		return err
-	}
-	// We don't need to delete cache from different indexes repeatedly because they map to the same entry.
-	pt.deletePortTableCache(data)
-	return nil
+	return pt.deleteRule(data)
 }
 
 func (pt *PortTable) DeleteRulesForPod(podIP string) error {
@@ -157,14 +141,7 @@ func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 	defer pt.tableLock.Unlock()
 	podEntries := pt.getDataForPodIP(podIP)
 	for _, podEntry := range podEntries {
-		protocolSocketData := podEntry.Protocol
-		if err := pt.PodPortRules.DeleteRule(podEntry.NodePort, podIP, podEntry.PodPort, protocolSocketData.Protocol); err != nil {
-			return err
-		}
-		if err := protocolSocketData.socket.Close(); err != nil {
-			return fmt.Errorf("error when releasing local port %d with protocol %s: %v", podEntry.NodePort, protocolSocketData.Protocol, err)
-		}
-		pt.deletePortTableCache(podEntry)
+		return pt.deleteRule(podEntry)
 	}
 	return nil
 }
@@ -177,16 +154,11 @@ func (pt *PortTable) syncRules() error {
 	nplPorts := make([]rules.PodNodePort, 0, len(objs))
 	for _, obj := range objs {
 		npData := obj.(*NodePortData)
-		protocols := make([]string, 0, 1)
-		protocol := npData.Protocol
-		if protocol.State == stateInUse {
-			protocols = append(protocols, protocol.Protocol)
-		}
 		nplPorts = append(nplPorts, rules.PodNodePort{
 			NodePort: npData.NodePort,
 			PodPort:  npData.PodPort,
 			PodIP:    npData.PodIP,
-			Protocol: protocols[0],
+			Protocol: npData.Protocol.Protocol,
 		})
 	}
 	if err := pt.PodPortRules.AddAllRules(nplPorts); err != nil {
