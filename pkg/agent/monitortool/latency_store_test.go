@@ -24,13 +24,11 @@ import (
 
 var (
 	entry = &NodeIPLatencyEntry{
-		SeqID:           1,
 		LastSendTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastRecvTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastMeasuredRTT: 1 * time.Second,
 	}
 	entry2 = &NodeIPLatencyEntry{
-		SeqID:           2,
 		LastSendTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastRecvTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastMeasuredRTT: 2 * time.Second,
@@ -38,7 +36,7 @@ var (
 	nodeIPLatencyMap = map[string]*NodeIPLatencyEntry{
 		"10.244.2.1": entry,
 	}
-	nodeGatewayMap = map[string][]net.IP{
+	nodeTargetIPsMap = map[string][]net.IP{
 		"node1": {net.ParseIP("10.244.2.1")},
 	}
 )
@@ -47,7 +45,7 @@ func TestLatencyStore_GetConnByKey(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeGatewayMap:      nodeGatewayMap,
+		nodeTargetIPsMap:    nodeTargetIPsMap,
 	}
 	tests := []struct {
 		key           string
@@ -75,7 +73,7 @@ func TestLatencyStore_DeleteConnByKey(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeGatewayMap:      nodeGatewayMap,
+		nodeTargetIPsMap:    nodeTargetIPsMap,
 	}
 	tests := []struct {
 		key           string
@@ -105,7 +103,7 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeGatewayMap:      nodeGatewayMap,
+		nodeTargetIPsMap:    nodeTargetIPsMap,
 	}
 	tests := []struct {
 		key           string
@@ -127,7 +125,6 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
 			mutator := func(entry *NodeIPLatencyEntry) {
-				entry.SeqID = tt.updatedEntry.SeqID
 				entry.LastSendTime = tt.updatedEntry.LastSendTime
 				entry.LastRecvTime = tt.updatedEntry.LastRecvTime
 				entry.LastMeasuredRTT = tt.updatedEntry.LastMeasuredRTT
@@ -144,7 +141,7 @@ func TestLatencyStore_ListLatencies(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeGatewayMap:      nodeGatewayMap,
+		nodeTargetIPsMap:    nodeTargetIPsMap,
 	}
 
 	latencyMaps := latencyStore.ListLatencies()
@@ -155,9 +152,9 @@ func TestLatencyStore_ListNodeIPs(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeGatewayMap:      nodeGatewayMap,
+		nodeTargetIPsMap:    nodeTargetIPsMap,
 	}
 
 	nodeIPs := latencyStore.ListNodeIPs()
-	assert.Equal(t, nodeGatewayMap, nodeIPs)
+	assert.Equal(t, nodeTargetIPsMap, nodeIPs)
 }
