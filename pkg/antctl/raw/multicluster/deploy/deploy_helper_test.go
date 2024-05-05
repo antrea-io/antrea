@@ -85,6 +85,22 @@ func TestGenerateManifests(t *testing.T) {
 			},
 		},
 		{
+			name:    "generate versioned leader manifests without the prefix v in the version",
+			role:    "leader",
+			version: "1.14.0",
+			expectedManifests: []string{
+				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-leader.yml",
+			},
+		},
+		{
+			name:    "generate versioned member manifests without the prefix v in the version",
+			role:    "member",
+			version: "1.14.0",
+			expectedManifests: []string{
+				"https://github.com/antrea-io/antrea/releases/download/v1.14.0/antrea-multicluster-member.yml",
+			},
+		},
+		{
 			name:        "invalid role",
 			role:        "member1",
 			version:     "latest",
