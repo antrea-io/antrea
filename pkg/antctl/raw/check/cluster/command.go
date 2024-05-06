@@ -21,11 +21,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
@@ -58,7 +55,8 @@ func newOptions() *options {
 
 const (
 	antreaNamespace = "kube-system"
-	deploymentName  = "cluster-check"
+	testNamespace   = "antrea-test"
+	deploymentName  = "check-cluster"
 	podReadyTimeout = 1 * time.Minute
 )
 
@@ -77,6 +75,7 @@ type testContext struct {
 	config          *rest.Config
 	clusterName     string
 	antreaNamespace string
+	namespace       string
 }
 
 func Run(o *options) error {
@@ -98,17 +97,22 @@ func Run(o *options) error {
 		}
 	}
 	testContext.Log("Test finished")
-	testContext.teardown(ctx, deploymentName, antreaNamespace)
+	check.Teardown(ctx, testContext.client, testContext.namespace, testContext.clusterName)
 	return nil
 }
 
 func (t *testContext) setup(ctx context.Context) error {
+	t.Log("Creating Namespace %s for pre installation tests...", t.namespace)
+	_, err := t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace}}, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to create Namespace %s: %s", t.namespace, err)
+	}
 	deployment := check.NewDeployment(check.DeploymentParameters{
 		Name:        deploymentName,
 		Image:       "antrea/antrea-agent-ubuntu:latest",
 		Replicas:    1,
 		Command:     []string{"sleep", "infinity"},
-		Labels:      map[string]string{"app": "cluster-check"},
+		Labels:      map[string]string{"app": "check-cluster"},
 		HostNetwork: true,
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "cni-conf", MountPath: "/etc/cni/net.d"},
@@ -153,13 +157,13 @@ func (t *testContext) setup(ctx context.Context) error {
 	})
 
 	t.Log("Creating Deployment")
-	_, err := t.client.AppsV1().Deployments(antreaNamespace).Create(ctx, deployment, metav1.CreateOptions{})
+	_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, deployment, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Deployment: %w", err)
 	}
 
 	t.Log("Waiting for Deployment to become ready")
-	check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.antreaNamespace, t.clusterName, deploymentName)
+	check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.namespace, t.clusterName, deploymentName)
 	if err != nil {
 		return fmt.Errorf("error while waiting for Deployment to become ready: %w", err)
 	}
@@ -172,30 +176,8 @@ func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterNam
 		config:          config,
 		clusterName:     clusterName,
 		antreaNamespace: o.antreaNamespace,
+		namespace:       check.GenerateRandomNamespace(testNamespace),
 	}
-}
-
-func (t *testContext) teardown(ctx context.Context, deploymentName, namespace string) error {
-	err := t.client.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{})
-	if err != nil {
-		return err
-	}
-	t.Log("Waiting for the deletion of Deployment %s in Namespace %s...", deploymentName, namespace)
-	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := t.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
-		if errors.IsNotFound(err) {
-			return true, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return fmt.Errorf("error waiting for Deployment %s to be deleted in Namespace %s: %w", deploymentName, namespace, err)
-	}
-	t.Log("Deployment %s successfully deleted from Namespace %s", deploymentName, namespace)
-	return nil
 }
 
 func (t *testContext) Log(format string, a ...interface{}) {

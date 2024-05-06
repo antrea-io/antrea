@@ -741,7 +741,7 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
-  run-post-installation-checks:
+  run-installation-checks:
     name: Test connectivity using 'antctl check' command
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
@@ -775,14 +775,14 @@ jobs:
       - name: Build antctl binary
         run: |
           make antctl-linux
-      - name: Run Pre-installation checks
+      - name: Run Pre checks
         run: |
           ./bin/antctl-linux check cluster
       - name: Load Docker images and deploy Antrea
         run: |
           kind load docker-image antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-agent-ubuntu-coverage:latest
           kubectl apply -f build/yamls/antrea.yml
-      - name: Run antctl command
+      - name: Run Post checks
         run: |
           ./bin/antctl-linux check installation
 

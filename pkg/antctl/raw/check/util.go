@@ -17,6 +17,7 @@ package check
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"os"
 	"time"
@@ -175,9 +176,14 @@ type DeploymentParameters struct {
 	HostNetwork  bool
 }
 
-func WaitForDeploymentsReady(ctx context.Context, interval, timeout time.Duration, client kubernetes.Interface, antreaNamespace string, clusterName string, deployments ...string) error {
+func WaitForDeploymentsReady(ctx context.Context,
+	interval, timeout time.Duration,
+	client kubernetes.Interface,
+	antreaNamespace string,
+	clusterName string,
+	deployments ...string) error {
 	for _, deployment := range deployments {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Deployment %s to become ready..."+"\n", deployment)
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Deployment %s to become ready...\n", deployment)
 		err := wait.PollUntilContextTimeout(ctx, interval, timeout, false, func(ctx context.Context) (bool, error) {
 			ready, err := DeploymentIsReady(ctx, client, antreaNamespace, deployment)
 			if err != nil {
@@ -188,7 +194,38 @@ func WaitForDeploymentsReady(ctx context.Context, interval, timeout time.Duratio
 		if err != nil {
 			return fmt.Errorf("waiting for Deployment %s to become ready has been interrupted: %w", deployment, err)
 		}
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deployment %s is ready."+"\n", deployment)
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deployment %s is ready.\n", deployment)
 	}
 	return nil
+}
+
+func GenerateRandomNamespace(baseName string) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	bytes := make([]byte, 5)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+	for i, b := range bytes {
+		bytes[i] = letters[b%byte(len(letters))]
+	}
+	return fmt.Sprintf("%s-%s", baseName, string(bytes))
+}
+
+func Teardown(ctx context.Context, client kubernetes.Interface, namespace string, clusterName string) {
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deleting post installation tests setup...\n")
+	client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Namespace %s to disappear \n", namespace)
+	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+		if err != nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion failed \n")
+	} else {
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion successful \n")
+	}
 }

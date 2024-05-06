@@ -16,7 +16,6 @@ package installation
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"net"
 	"os"
@@ -25,7 +24,6 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -107,7 +105,7 @@ func Run(o *options) error {
 		}
 	}
 	testContext.Log("Test finished")
-	testContext.teardown(ctx)
+	check.Teardown(ctx, testContext.client, testContext.namespace, testContext.clusterName)
 	return nil
 }
 
@@ -137,38 +135,7 @@ func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterNam
 		config:          config,
 		clusterName:     clusterName,
 		antreaNamespace: o.antreaNamespace,
-		namespace:       generateRandomNamespace(testNamespacePrefix),
-	}
-}
-
-func generateRandomNamespace(baseName string) string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	bytes := make([]byte, 5)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		panic(err)
-	}
-	for i, b := range bytes {
-		bytes[i] = letters[b%byte(len(letters))]
-	}
-	return fmt.Sprintf("%s-%s", baseName, string(bytes))
-}
-
-func (t *testContext) teardown(ctx context.Context) {
-	t.Log("Deleting post installation tests setup...")
-	t.client.CoreV1().Namespaces().Delete(ctx, t.namespace, metav1.DeleteOptions{})
-	t.Log("Waiting for Namespace %s to disappear", t.namespace)
-	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := t.client.CoreV1().Namespaces().Get(ctx, t.namespace, metav1.GetOptions{})
-		if err != nil {
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		t.Log("Setup deletion failed")
-	} else {
-		t.Log("Setup deletion successful")
+		namespace:       check.GenerateRandomNamespace(testNamespacePrefix),
 	}
 }
 

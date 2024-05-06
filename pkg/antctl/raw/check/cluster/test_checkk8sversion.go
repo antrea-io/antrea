@@ -25,7 +25,7 @@ import (
 type checkK8sVersion struct{}
 
 func init() {
-	RegisterTest("Check K8s Version", &checkK8sVersion{})
+	RegisterTest("Check K8s version", &checkK8sVersion{})
 }
 
 func (t *checkK8sVersion) Run(ctx context.Context, testContext *testContext) error {
