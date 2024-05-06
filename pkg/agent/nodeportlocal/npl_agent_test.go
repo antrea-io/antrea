@@ -314,7 +314,7 @@ func conditionMatchAll([]types.NPLAnnotation) bool {
 }
 
 // If conditionFn is nil, we will assume you are looking for a non-existing annotation.
-// If you want to match all, conditionMatchAll as the conditionFn.
+// If you want to match all, use conditionMatchAll as the conditionFn.
 func (t *testData) pollForPodAnnotationWithCondition(podName string, conditionFn func([]types.NPLAnnotation) bool) ([]types.NPLAnnotation, error) {
 	var nplValue []types.NPLAnnotation
 	// do not use PollImmediate: 1 second is reserved for the controller to do his job and
