@@ -771,7 +771,7 @@ jobs:
           sudo mv kind /usr/local/bin
       - name: Create Kind Cluster
         run: |
-          kind create cluster --config ci/kind/config-3nodes.yml
+          ./ci/kind/kind-setup.sh create kind --ip-family dual
       - name: Load Docker images and deploy Antrea
         run: |
           kind load docker-image antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-agent-ubuntu-coverage:latest
