@@ -191,7 +191,7 @@ function deliver_antrea_to_aks() {
     fi
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
-    docker image prune -f --filter "until=2h" > /dev/null
+    docker image prune -af --filter "until=2h" > /dev/null
     docker system df -v
     check_and_cleanup_docker_build_cache
 
