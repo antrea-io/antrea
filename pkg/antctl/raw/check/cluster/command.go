@@ -39,7 +39,7 @@ func Command() *cobra.Command {
 			return Run(o)
 		},
 	}
-	command.Flags().StringVarP(&o.antreaNamespace, "Namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
+	command.Flags().StringVarP(&o.antreaNamespace, "namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
 	return command
 }
 
@@ -97,7 +97,7 @@ func Run(o *options) error {
 		}
 	}
 	testContext.Log("Test finished")
-	check.Teardown(ctx, testContext.client, testContext.namespace, testContext.clusterName)
+	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	return nil
 }
 
@@ -163,7 +163,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 
 	t.Log("Waiting for Deployment to become ready")
-	check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.namespace, t.clusterName, deploymentName)
+	check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("error while waiting for Deployment to become ready: %w", err)
 	}

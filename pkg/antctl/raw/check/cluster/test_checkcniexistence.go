@@ -49,9 +49,9 @@ func (t *checkCNIExistence) Run(ctx context.Context, testContext *testContext) e
 		sort.Strings(files)
 		if len(files) > 0 {
 			if files[0] < "10-antrea.conflist" {
-				testContext.Log("Warning: Another CNI configuration file with higher priority than Antrea's CNI configuration file found: %s", files[0])
+				testContext.Log("Another CNI configuration file with higher priority than Antrea's CNI configuration file found: %s", files[0])
 			} else if files[0] != "10-antrea.conflist" {
-				testContext.Log("Warning: Another CNI configuration file found: %s", files[0])
+				testContext.Log("Another CNI configuration file found: %s with Antrea having higher precedence", files[0])
 			} else {
 				testContext.Log("Antrea's CNI configuration file already present: %s", files[0])
 			}

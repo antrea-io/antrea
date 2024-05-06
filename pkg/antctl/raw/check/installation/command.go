@@ -105,7 +105,7 @@ func Run(o *options) error {
 		}
 	}
 	testContext.Log("Test finished")
-	check.Teardown(ctx, testContext.client, testContext.namespace, testContext.clusterName)
+	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	return nil
 }
 
@@ -247,7 +247,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("unable to create Deployment %s: %s", echoOtherNodeDeploymentName, err)
 		}
-		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.namespace, t.clusterName, clientDeploymentName, echoSameNodeDeploymentName, echoOtherNodeDeploymentName); err != nil {
+		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, clientDeploymentName, echoSameNodeDeploymentName, echoOtherNodeDeploymentName); err != nil {
 			return err
 		}
 		podList, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=" + echoOtherNodeDeploymentName})
@@ -259,7 +259,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		}
 	} else {
 		t.Log("skipping other Node Deployments as multiple Nodes are not available")
-		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.namespace, t.clusterName, clientDeploymentName, echoSameNodeDeploymentName); err != nil {
+		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, clientDeploymentName, echoSameNodeDeploymentName); err != nil {
 			return err
 		}
 	}
