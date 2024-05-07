@@ -16,11 +16,13 @@ package installation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,7 +67,21 @@ const (
 	podReadyTimeout             = 1 * time.Minute
 )
 
+type notRunnableError struct {
+	reason string
+}
+
+func (e notRunnableError) Error() string {
+	return fmt.Sprintf("test is not runnable: %s", e.reason)
+}
+
+func newNotRunnableError(reason string) notRunnableError {
+	return notRunnableError{reason: reason}
+}
+
 type Test interface {
+	// Run executes the test using the provided testContext. It returns a non-nil error when the test doesn't succeed.
+	// If a test is not runnable, notRunnableError should be wrapped in the returned error.
 	Run(ctx context.Context, testContext *testContext) error
 }
 
@@ -96,16 +112,27 @@ func Run(o *options) error {
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
+	var numSuccess, numFailure, numSkipped int
 	for name, test := range testsRegistry {
 		testContext.Header("Running test: %s", name)
 		if err := test.Run(ctx, testContext); err != nil {
-			testContext.Header("Test %s failed: %s", name, err)
+			if errors.As(err, new(notRunnableError)) {
+				testContext.Warning("Test %s was skipped: %v", name, err)
+				numSkipped++
+			} else {
+				testContext.Fail("Test %s failed: %v", name, err)
+				numFailure++
+			}
 		} else {
-			testContext.Header("Test %s passed", name)
+			testContext.Success("Test %s passed", name)
+			numSuccess++
 		}
 	}
-	testContext.Log("Test finished")
+	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", numSuccess, numFailure, numSkipped)
 	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
+	if numFailure > 0 {
+		return fmt.Errorf("%v/%v tests failed", numFailure, len(testsRegistry))
+	}
 	return nil
 }
 
@@ -281,6 +308,18 @@ func (t *testContext) setup(ctx context.Context) error {
 
 func (t *testContext) Log(format string, a ...interface{}) {
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+format+"\n", a...)
+}
+
+func (t *testContext) Success(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.GreenString(format, a...)+"\n")
+}
+
+func (t *testContext) Fail(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
+}
+
+func (t *testContext) Warning(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

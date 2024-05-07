@@ -7,7 +7,24 @@ on:
     branches: [ "main" ]
 
 jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        show-progress: false
+    - uses: antrea-io/has-changes@v2
+      id: check_diff
+      with:
+        paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
   analyze-on-linux:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Analyze on Linux
     runs-on: ubuntu-latest
     permissions:
@@ -50,6 +67,8 @@ jobs:
         category: "/language:${{matrix.language}}"
 
   analyze-on-windows:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Analyze on Windows
     runs-on: windows-latest
     permissions:

@@ -39,6 +39,7 @@
     - [K8s clusters with version 1.21 and above](#k8s-clusters-with-version-121-and-above)
     - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
   - [Selecting Pods in the same Namespace with Self](#selecting-pods-in-the-same-namespace-with-self)
+  - [Selecting Namespaces with the same label values using SameLabels](#selecting-namespaces-with-the-same-label-values-using-samelabels)
   - [FQDN based filtering](#fqdn-based-filtering)
   - [Node Selector](#node-selector)
   - [toServices egress rules](#toservices-egress-rules)
@@ -1301,7 +1302,7 @@ spec:
 ```
 
 The policy above ensures that x/a, x/b and x/c can communicate with each other, but nothing else
-(unless there are higher precedenced policies which say otherwise). Same for Namespaces y and z.
+(unless there are higher precedence policies that say otherwise). Same for Namespaces y and z.
 
 ```yaml
 apiVersion: crd.antrea.io/v1beta1
@@ -1333,6 +1334,97 @@ the only other Pod that x/a can reach in the cluster will be Pod x/c.
 These two policies shown above are for demonstration purposes only. For more realistic usage of the
 `namespaces` field, refer to this [sample](#acnp-for-strict-namespace-isolation) YAML in the previous
 section.
+
+### Selecting Namespaces with the same label values using SameLabels
+
+Starting from Antrea v2.0, Antrea ClusterNetworkPolicy supports creating policy rules between groups
+of Namespaces that share common label values. The most prominent use case of this feature is to provide
+isolation between Namespaces that have different values for some pre-defined labels, e.g. "org", by
+applying a single ACNP in the cluster.
+
+Consider a minimalistic cluster with the following Namespaces:
+
+```text
+NAME            LABELS
+kube-system     kubernetes.io/metadata.name=kube-system
+accounting1     kubernetes.io/metadata.name=accounting1, org=accounting, region=us-west
+accounting2     kubernetes.io/metadata.name=accounting2, org=accounting, region=us-east
+sales1          kubernetes.io/metadata.name=sales1, org=sales, region=us-west
+sales2          kubernetes.io/metadata.name=sales2, org=sales, region=us-east
+```
+
+An administrator of such cluster typically would want to enforce some boundaries between the "tenants"
+in the cluster (the accounting team and the sales team in this case, who each own two Namespaces).
+This can be easily achieved by the following ACNP:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ClusterNetworkPolicy
+metadata:
+  name: isolation-based-on-org
+spec:
+  priority: 1
+  tier: securityops
+  appliedTo:
+    - namespaceSelector:
+        matchExpressions:
+          - { key: org, operator: Exists }
+  ingress:
+    - action: Allow
+      from:
+        - namespaces:
+            sameLabels: [org]
+    - action: Deny
+  egress:
+    - action: Allow
+      to:
+        - namespaces:
+            sameLabels: [org]
+    - action: Deny
+```
+
+The above policy will also automatically adapt to the changes in the cluster, i.e., any new Namespace
+created in the cluster with a different "org" label value will be automatically isolated from both the
+accounting and the sales Namespaces. In addition, the Namespace grouping criteria can be easily extended
+to match more than one label keys, and Namespaces will be grouped together ONLY IF ALL the values of the
+label keys listed in the `sameLabels` field have the same value. For example, if we change the `sameLabels`
+list to `[org, region]` in the example above, then this ACNP will create four Namespace groups instead of
+two, which are all isolated from each other. The reason is that individual Namespaces for the accounting
+or sales organizations have different values for the "region" label, even though they share the same value
+for the "org" label.
+
+Another important note is that such policy is a no-op on Namespaces that do not have all the labels listed
+in the `sameLabels` field, even if such Namespaces are selected in `appliedTo`. In other words, we can
+rewrite the `appliedTo` in the policy above to `- namespaceSelector: {}` and it will work exactly the same.
+There will be no effective rules created for the `kube-system` Namespace since it does not have the "org"
+label. On the other hand, if the following policy (alone) is applied in this cluster:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ClusterNetworkPolicy
+metadata:
+  name: isolation-based-on-org-and-env
+spec:
+  priority: 1
+  tier: securityops
+  appliedTo:
+    - namespaceSelector: {}
+  ingress:
+    - action: Allow
+      from:
+        - namespaces:
+            sameLabels: [org, env]
+    - action: Deny
+      from:
+        - namespaceSelector: {}
+```
+
+it will have no effect whatsoever because no Namespace has both the "org" and "env" label keys.
+To take the example further, if we now add another Namespace `dev` with labels "org=dev, env=test" the end
+result is that only the `dev` Namespace will be selected by the `isolation-based-on-org-and-env` ACNP, which
+denies ingress from all other Namespaces in the cluster since they don't have the same values for labels
+"org" and "env" compared to `dev` (in fact, there is no other Namespace with the "env" label key). All the
+other Namespaces, on the other hand, will not have effective ingress rules created by this policy.
 
 ### FQDN based filtering
 
