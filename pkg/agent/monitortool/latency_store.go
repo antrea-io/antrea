@@ -34,9 +34,9 @@ type LatencyStore struct {
 
 	// Whether the agent is running in networkPolicyOnly mode
 	isNetworkPolicyOnly bool
-	// The map of Node ip to latency entry, it will be changed by latency monitor
+	// The map of Node IP to latency entry, it will be changed by latency monitor
 	nodeIPLatencyMap map[string]*NodeIPLatencyEntry
-	// The map of Node name to Node ip, it will be changed by Node watcher
+	// The map of Node name to Node IP, it will be changed by Node watcher
 	// If the agent is running in networkPolicyOnly mode, the value will be the transport IP of the Node
 	// If the agent is running in normal mode, the value will be the gateway IP of the Node
 	nodeTargetIPsMap map[string][]net.IP
@@ -52,6 +52,7 @@ type NodeIPLatencyEntry struct {
 	LastMeasuredRTT time.Duration
 }
 
+// NewLatencyStore creates a new LatencyStore.
 func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 	store := &LatencyStore{
 		nodeIPLatencyMap:    make(map[string]*NodeIPLatencyEntry),
@@ -62,19 +63,16 @@ func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 	return store
 }
 
-func (l *LatencyStore) GetNodeIPLatencyEntry(key string) (NodeIPLatencyEntry, bool) {
+// getNodeIPLatencyEntry returns the NodeIPLatencyEntry for the given Node IP
+// Now it used for testing purpose and it is not exported, so we just return a pointer
+func (l *LatencyStore) getNodeIPLatencyEntry(key string) (*NodeIPLatencyEntry, bool) {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
-
-	// Return a copy of the connection entry
 	entry, ok := l.nodeIPLatencyMap[key]
-	if !ok {
-		return NodeIPLatencyEntry{}, ok
-	}
-
-	return *entry, ok
+	return entry, ok
 }
 
+// DeleteNodeIPLatencyEntry deletes the NodeIPLatencyEntry for the given Node IP
 func (l *LatencyStore) DeleteNodeIPLatencyEntry(key string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -82,6 +80,7 @@ func (l *LatencyStore) DeleteNodeIPLatencyEntry(key string) {
 	delete(l.nodeIPLatencyMap, key)
 }
 
+// SetNodeIPLatencyEntry sets the NodeIPLatencyEntry for the given Node IP
 func (l *LatencyStore) SetNodeIPLatencyEntry(key string, mutator func(entry *NodeIPLatencyEntry)) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -97,6 +96,7 @@ func (l *LatencyStore) SetNodeIPLatencyEntry(key string, mutator func(entry *Nod
 	mutator(entry)
 }
 
+// ListLatencies returns the map of Node IP to latency entry
 func (l *LatencyStore) ListLatencies() map[string]*NodeIPLatencyEntry {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
@@ -104,6 +104,7 @@ func (l *LatencyStore) ListLatencies() map[string]*NodeIPLatencyEntry {
 	return l.nodeIPLatencyMap
 }
 
+// addNode adds a Node to the latency store
 func (l *LatencyStore) addNode(node *corev1.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -111,16 +112,27 @@ func (l *LatencyStore) addNode(node *corev1.Node) {
 	l.updateNodeMap(node)
 }
 
+// deleteNode deletes a Node from the latency store
 func (l *LatencyStore) deleteNode(node *corev1.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
 	// Delete from the node IP map
 	delete(l.nodeTargetIPsMap, node.Name)
+
 	// Delete from the NodeIPLatencyEntry map
-	delete(l.nodeIPLatencyMap, node.Name)
+	getNodeIPs, err := l.getNodeIPs(node)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get IPs for Node", "nodeName", node.Name)
+		return
+	}
+
+	for _, ip := range getNodeIPs {
+		delete(l.nodeIPLatencyMap, ip.String())
+	}
 }
 
+// updateNode updates a Node in the latency store
 func (l *LatencyStore) updateNode(old *corev1.Node, new *corev1.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -132,26 +144,37 @@ func (l *LatencyStore) updateNode(old *corev1.Node, new *corev1.Node) {
 	l.updateNodeMap(new)
 }
 
+// updateNodeMap updates the nodeTargetIPsMap with the IPs of the given Node.
 func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
+	nodeIPs, err := l.getNodeIPs(node)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get IPs for Node", "nodeName", node.Name)
+		return
+	}
+
+	l.nodeTargetIPsMap[node.Name] = nodeIPs
+}
+
+// getNodeIPs returns the target IPs of the given Node based on the agent mode.
+func (l *LatencyStore) getNodeIPs(node *corev1.Node) ([]net.IP, error) {
 	if l.isNetworkPolicyOnly {
 		transportIPs, err := getTransportIPs(node)
 		if err != nil {
-			klog.ErrorS(err, "Failed to get transport IPs for Node", "nodeName", node.Name)
-			return
+			return nil, err
 		}
 
-		l.nodeTargetIPsMap[node.Name] = transportIPs
+		return transportIPs, nil
 	} else {
 		gw0IPs, err := getGWIPs(node)
 		if err != nil {
-			klog.ErrorS(err, "Failed to get gateway IPs for Node", "nodeName", node.Name)
-			return
+			return nil, err
 		}
 
-		l.nodeTargetIPsMap[node.Name] = gw0IPs
+		return gw0IPs, nil
 	}
 }
 
+// getTransportIPs returns the transport IPs of the given Node.
 func getTransportIPs(node *corev1.Node) ([]net.IP, error) {
 	var transportIPs []net.IP
 	ips, err := k8s.GetNodeTransportAddrs(node)
@@ -169,6 +192,7 @@ func getTransportIPs(node *corev1.Node) ([]net.IP, error) {
 	return transportIPs, nil
 }
 
+// getGWIPs returns the gateway IPs of the given Node.
 func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	var gwIPs []net.IP
 
@@ -196,7 +220,7 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 			return gwIPs, err
 		}
 
-		// Add first ip in CIDR to the map
+		// Add first IP in CIDR to the map
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 		// Only add the IP if it is an IPv4 or IPv6 address.
@@ -208,6 +232,7 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	return gwIPs, nil
 }
 
+// getPodCIDRsOnNode returns the PodCIDRs of the given Node.
 func getPodCIDRsOnNode(node *corev1.Node) []string {
 	if node.Spec.PodCIDRs != nil {
 		return node.Spec.PodCIDRs
@@ -220,6 +245,7 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 	return []string{node.Spec.PodCIDR}
 }
 
+// GetNodeIPs returns the target IPs of the given Node.
 func (l *LatencyStore) GetNodeIPs(nodeName string) []net.IP {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
@@ -227,6 +253,7 @@ func (l *LatencyStore) GetNodeIPs(nodeName string) []net.IP {
 	return l.nodeTargetIPsMap[nodeName]
 }
 
+// ListNodeIPs returns the map of Node name to target IPs.
 func (l *LatencyStore) ListNodeIPs() map[string][]net.IP {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
@@ -234,6 +261,7 @@ func (l *LatencyStore) ListNodeIPs() map[string][]net.IP {
 	return l.nodeTargetIPsMap
 }
 
+// CleanUp cleans up the latency store.
 func (l *LatencyStore) CleanUp() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()

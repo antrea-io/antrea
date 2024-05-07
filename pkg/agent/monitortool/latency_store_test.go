@@ -49,21 +49,21 @@ func TestLatencyStore_GetConnByKey(t *testing.T) {
 	}
 	tests := []struct {
 		key           string
-		expectedEntry NodeIPLatencyEntry
+		expectedEntry *NodeIPLatencyEntry
 	}{
 		{
 			key:           "10.244.2.1",
-			expectedEntry: *entry,
+			expectedEntry: entry,
 		},
 		{
 			key:           "10.244.2.2",
-			expectedEntry: NodeIPLatencyEntry{},
+			expectedEntry: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			entry, _ := latencyStore.GetNodeIPLatencyEntry(tt.key)
+			entry, _ := latencyStore.getNodeIPLatencyEntry(tt.key)
 			assert.Equal(t, tt.expectedEntry, entry)
 		})
 	}
@@ -76,24 +76,29 @@ func TestLatencyStore_DeleteConnByKey(t *testing.T) {
 		nodeTargetIPsMap:    nodeTargetIPsMap,
 	}
 	tests := []struct {
-		key           string
-		expectedEntry NodeIPLatencyEntry
+		key               string
+		prevExpectedEntry *NodeIPLatencyEntry
+		expectedEntry     *NodeIPLatencyEntry
 	}{
 		{
-			key:           "10.244.2.1",
-			expectedEntry: *entry,
+			key:               "10.244.2.1",
+			prevExpectedEntry: entry,
+			expectedEntry:     nil,
 		},
 		{
-			key:           "10.244.2.2",
-			expectedEntry: NodeIPLatencyEntry{},
+			key:               "10.244.2.2",
+			prevExpectedEntry: nil,
+			expectedEntry:     nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
+			entry, _ := latencyStore.getNodeIPLatencyEntry(tt.key)
+			assert.Equal(t, tt.prevExpectedEntry, entry)
 			latencyStore.DeleteNodeIPLatencyEntry(tt.key)
-			entry, ok := latencyStore.GetNodeIPLatencyEntry(tt.key)
-			assert.Equal(t, entry, NodeIPLatencyEntry{})
+			entry, ok := latencyStore.getNodeIPLatencyEntry(tt.key)
+			assert.Equal(t, entry, tt.expectedEntry)
 			assert.False(t, ok)
 		})
 	}
@@ -107,18 +112,18 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 	}
 	tests := []struct {
 		key           string
-		updatedEntry  NodeIPLatencyEntry
-		expectedEntry NodeIPLatencyEntry
+		updatedEntry  *NodeIPLatencyEntry
+		expectedEntry *NodeIPLatencyEntry
 	}{
 		{
 			key:           "10.244.2.1",
-			updatedEntry:  *entry,
-			expectedEntry: *entry,
+			updatedEntry:  entry,
+			expectedEntry: entry,
 		},
 		{
 			key:           "10.244.2.1",
-			updatedEntry:  *entry2,
-			expectedEntry: *entry2,
+			updatedEntry:  entry2,
+			expectedEntry: entry2,
 		},
 	}
 
@@ -130,7 +135,7 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 				entry.LastMeasuredRTT = tt.updatedEntry.LastMeasuredRTT
 			}
 			latencyStore.SetNodeIPLatencyEntry(tt.key, mutator)
-			entry, ok := latencyStore.GetNodeIPLatencyEntry(tt.key)
+			entry, ok := latencyStore.getNodeIPLatencyEntry(tt.key)
 			assert.Equal(t, tt.expectedEntry, entry)
 			assert.True(t, ok)
 		})

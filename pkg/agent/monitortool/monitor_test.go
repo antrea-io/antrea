@@ -74,7 +74,7 @@ func TestNewNodeLatencyMonitor(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	nodeLatencyMonitor.Run(stopCh)
+	go nodeLatencyMonitor.Run(stopCh)
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
 	crdInformerFactory.Start(stopCh)

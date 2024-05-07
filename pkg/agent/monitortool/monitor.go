@@ -87,6 +87,7 @@ type LatencyConfig struct {
 	Interval time.Duration
 }
 
+// NewNodeLatencyMonitor creates a new NodeLatencyMonitor.
 func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	nlmInformer crdinformers.NodeLatencyMonitorInformer,
 	nodeConfig *config.NodeConfig,
@@ -172,9 +173,8 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
 	nlm := obj.(*v1alpha1.NodeLatencyMonitor)
 	klog.V(4).InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 
-	if err := m.updateLatencyConfig(nlm); err != nil {
-		klog.ErrorS(err, "Failed to update latency config")
-	}
+	// Update the latency config
+	m.updateLatencyConfig(nlm)
 }
 
 // onNodeLatencyMonitorUpdate is the event handler for updating NodeLatencyMonitor.
@@ -187,12 +187,12 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorUpdate(oldObj, newObj interface
 		return
 	}
 
-	if err := m.updateLatencyConfig(newNLM); err != nil {
-		klog.ErrorS(err, "Failed to update latency config")
-	}
+	// Update the latency config
+	m.updateLatencyConfig(newNLM)
 }
 
-func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonitor) error {
+// updateLatencyConfig updates the latency config based on the NodeLatencyMonitor CRD.
+func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonitor) {
 	// Parse the ping interval
 	pingInterval := time.Duration(nlm.Spec.PingIntervalSeconds) * time.Second
 
@@ -204,8 +204,6 @@ func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonito
 
 	// Notify the latency config changed
 	m.latencyConfigChanged <- struct{}{}
-
-	return nil
 }
 
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
@@ -217,6 +215,7 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
 	m.latencyConfigChanged <- struct{}{}
 }
 
+// sendPing sends an ICMP message to the target IP address.
 func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error {
 	var requestType icmp.Type
 
@@ -265,6 +264,7 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 	return nil
 }
 
+// recvPing receives an ICMP message from the target IP address.
 func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan struct{}) {
 	for {
 		select {
@@ -338,6 +338,7 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool, stopCh
 	}
 }
 
+// pingAll sends ICMP messages to all the Nodes.
 func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	nodeIPs := m.latencyStore.ListNodeIPs()
 	for name, toIPs := range nodeIPs {
@@ -358,6 +359,7 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	}
 }
 
+// Run starts the NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 	// Start the monitor loop
 	go m.nodeLatencyMonitorInformer.Informer().Run(stopCh)
@@ -367,6 +369,7 @@ func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
+// monitorLoop is the main loop to monitor the latency of the Node.
 func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	// Low level goroutine to handle ping loop
 	var ticker *time.Ticker
