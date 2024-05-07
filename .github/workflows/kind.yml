@@ -741,8 +741,8 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
-  run-post-installation-checks:
-    name: Test connectivity using 'antctl check' command
+  run-installation-checks:
+    name: Test installation using 'antctl check' command
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
@@ -772,13 +772,16 @@ jobs:
       - name: Create Kind Cluster
         run: |
           ./ci/kind/kind-setup.sh create kind --ip-family dual
-      - name: Deploy Antrea
-        run: |
-          kubectl apply -f build/yamls/antrea.yml
       - name: Build antctl binary
         run: |
           make antctl-linux
-      - name: Run antctl command
+      - name: Run Pre checks
+        run: |
+          /bin/antctl-linux check cluster
+      - name: Deploy Antrea
+        run: |
+          kubectl apply -f build/yamls/antrea.yml
+      - name: Run Post checks
         run: |
           ./bin/antctl-linux check installation
 
