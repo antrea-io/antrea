@@ -493,9 +493,13 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 		podPorts[targetPortProto] = struct{}{}
 		portData := c.portTable.GetEntry(podIP, port, protocol)
-		if portData != nil && !portData.ProtocolInUse(protocol) {
-			// If the PortTable has an entry for the Pod but does not have an
-			// entry with protocol, we enforce AddRule for the missing Protocol.
+		// Special handling for a rule that was previously marked for deletion but could not
+		// be deleted properly: we have to retry now.
+		if portData != nil && portData.Defunct() {
+			klog.InfoS("Deleting defunct rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
+			if err := c.portTable.DeleteRule(podIP, port, protocol); err != nil {
+				return fmt.Errorf("failed to delete defunct rule for Pod IP %s, Pod Port %d, Protocol %s: %w", podIP, port, protocol, err)
+			}
 			portData = nil
 		}
 		if portData == nil {
@@ -526,13 +530,11 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	// second, delete any existing rule that is not needed based on the current Pod
 	// specification.
 	entries := c.portTable.GetDataForPodIP(podIP)
-	if nplExists {
-		for _, data := range entries {
-			proto := data.Protocol
-			if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)]; !exists {
-				if err := c.portTable.DeleteRule(podIP, int(data.PodPort), proto.Protocol); err != nil {
-					return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d, Protocol %s: %v", podIP, data.PodPort, proto.Protocol, err)
-				}
+	for _, data := range entries {
+		proto := data.Protocol
+		if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)]; !exists {
+			if err := c.portTable.DeleteRule(podIP, int(data.PodPort), proto.Protocol); err != nil {
+				return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d, Protocol %s: %w", podIP, data.PodPort, proto.Protocol, err)
 			}
 		}
 	}
