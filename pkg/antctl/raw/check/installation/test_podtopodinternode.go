@@ -29,7 +29,7 @@ func init() {
 
 func (t *PodToPodInterNodeConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
 	if testContext.echoOtherNodePod == nil {
-		return fmt.Errorf("Skipping Inter-Node test because multiple Nodes are not available")
+		return newNotRunnableError("Inter-Node test requires multiple Nodes")
 	}
 	for _, clientPod := range testContext.clientPods {
 		srcPod := testContext.namespace + "/" + clientPod.Name
