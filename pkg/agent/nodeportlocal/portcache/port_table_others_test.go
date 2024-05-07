@@ -18,10 +18,13 @@
 package portcache
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
@@ -75,4 +78,57 @@ func TestRestoreRules(t *testing.T) {
 		// which should be acceptable.
 		t.Fatalf("Rule restoration not complete after %v", timeout)
 	}
+}
+
+type mockCloser struct {
+	closeErr error
+}
+
+func (m *mockCloser) Close() error {
+	return m.closeErr
+}
+
+func TestDeleteRule(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+	portTable := newPortTable(mockIPTables, mockPortOpener)
+
+	const (
+		podPort  = 1001
+		protocol = "tcp"
+	)
+
+	closer := &mockCloser{}
+
+	data := &NodePortData{
+		NodePort: nodePort1,
+		PodPort:  podPort,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{
+			Protocol: protocol,
+			socket:   closer,
+		},
+	}
+
+	require.NoError(t, portTable.addPortTableCache(data))
+	assert.False(t, data.Defunct())
+
+	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol).Return(fmt.Errorf("iptables error"))
+	require.ErrorContains(t, portTable.DeleteRule(podIP, podPort, protocol), "iptables error")
+
+	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
+	closer.closeErr = fmt.Errorf("close error")
+	require.ErrorContains(t, portTable.DeleteRule(podIP, podPort, protocol), "close error")
+	assert.True(t, data.Defunct())
+
+	closer.closeErr = nil
+
+	// First successful call to DeleteRule.
+	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
+	assert.NoError(t, portTable.DeleteRule(podIP, podPort, protocol))
+
+	// Calling DeleteRule again will return immediately as the NodePortData entry has been
+	// removed from the cache.
+	assert.NoError(t, portTable.DeleteRule(podIP, podPort, protocol))
 }
