@@ -25,11 +25,6 @@ import (
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
-const (
-	// stateInUse means that the NPL rule has been installed.
-	stateInUse protocolSocketState = 1
-)
-
 func addRuleForPort(podPortRules rules.PodPortRules, port int, podIP string, podPort int, protocol string) (ProtocolSocketData, error) {
 	// Only the protocol used here should be returned if NetNatStaticMapping rule
 	// can be inserted to an unused protocol port.
@@ -40,7 +35,6 @@ func addRuleForPort(podPortRules rules.PodPortRules, port int, podIP string, pod
 	}
 	protocolData := ProtocolSocketData{
 		Protocol: protocol,
-		State:    stateInUse,
 		socket:   nil,
 	}
 	return protocolData, nil
@@ -137,6 +131,8 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 		return nil
 	}
 
+	data.defunct = true
+	// Calling DeleteRule is idempotent.
 	if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort, protocol); err != nil {
 		return err
 	}

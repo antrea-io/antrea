@@ -95,7 +95,7 @@ func TestNodePortLocal(t *testing.T) {
 	t.Run("testNPLChangePortRangeAgentRestart", func(t *testing.T) { testNPLChangePortRangeAgentRestart(t, data) })
 }
 
-func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, testPodName string, conditionFn func(types.NPLAnnotation) bool) ([]types.NPLAnnotation, string) {
+func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, testPodName string, conditionFn func([]types.NPLAnnotation) bool) ([]types.NPLAnnotation, string) {
 	var nplAnnotations []types.NPLAnnotation
 	var testPodIP *PodIPs
 
@@ -135,12 +135,8 @@ func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, test
 				return false, nil
 			}
 			json.Unmarshal([]byte(nplAnn), &nplAnnotations)
-			if conditionFn != nil {
-				for _, annotation := range nplAnnotations {
-					if !conditionFn(annotation) {
-						return false, nil
-					}
-				}
+			if conditionFn != nil && !conditionFn(nplAnnotations) {
+				return false, nil
 			}
 			return found, nil
 		})
@@ -495,13 +491,11 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 		Add(nil, 8080, "tcp").Add(nil, 8080, "udp")
 
 	// Creating a Pod using agnhost image to support multiple protocols, instead of nginx.
-	cmd := []string{"/bin/bash", "-c"}
-	args := []string{
-		fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port %d & /agnhost serve-hostname --tcp --http=false --port %d", 8080, 8080),
-	}
+
+	args := []string{"serve-hostname", "--tcp", "--udp", "--http=false", "--port=8080"}
 	port := corev1.ContainerPort{ContainerPort: 8080}
 	containerName := fmt.Sprintf("c%v", 8080)
-	err := NewPodBuilder(testPodName, data.testNamespace, agnhostImage).OnNode(serverNode).WithContainerName(containerName).WithCommand(cmd).WithArgs(args).WithPorts([]corev1.ContainerPort{port}).WithLabels(selector).Create(testData)
+	err := NewPodBuilder(testPodName, data.testNamespace, agnhostImage).OnNode(serverNode).WithContainerName(containerName).WithArgs(args).WithPorts([]corev1.ContainerPort{port}).WithLabels(selector).Create(testData)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName, nil)
@@ -517,14 +511,26 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	checkNPLRules(t, testData, r, nplAnnotations, antreaPod, testPodIP, serverNode, true)
+	expectedAnnotations.Check(t, nplAnnotations)
+	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
+	// We now delete one of the Services, and we expect the corresponding NPL rule to be deleted.
+	testData.DeleteService(data.testNamespace, "agnhost2")
+	expectedAnnotations = newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
+		Add(nil, 8080, "tcp")
+	// Wait until we have only one NPL rule annotation.
+	conditionFn := func(annotations []types.NPLAnnotation) bool {
+		return len(annotations) == 1
+	}
+	nplAnnotations, testPodIP = getNPLAnnotations(t, testData, r, testPodName, conditionFn)
+
+	checkNPLRules(t, testData, r, nplAnnotations, antreaPod, testPodIP, serverNode, true)
 	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.DeletePod(data.testNamespace, clientName)
 	testData.DeletePod(data.testNamespace, testPodName)
 	testData.DeleteService(data.testNamespace, "agnhost1")
-	testData.DeleteService(data.testNamespace, "agnhost2")
 	checkNPLRules(t, testData, r, nplAnnotations, antreaPod, testPodIP, serverNode, false)
 }
 
@@ -697,8 +703,11 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	}
 
 	for _, testPodName := range testPods {
-		conditionFn := func(ann types.NPLAnnotation) bool {
-			return ann.NodePort >= updatedStartPort
+		conditionFn := func(annotations []types.NPLAnnotation) bool {
+			for idx := range annotations {
+				return annotations[idx].NodePort >= updatedStartPort
+			}
+			return true
 		}
 		nplAnnotations, testPodIP := getNPLAnnotations(t, data, r, testPodName, conditionFn)
 
