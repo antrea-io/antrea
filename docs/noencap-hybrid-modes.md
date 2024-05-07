@@ -87,7 +87,7 @@ network is able to route Pod traffic between Nodes. This Route Controller
 functionality is supported by the Cloud Provider implementations of the major
 clouds, including: [AWS](https://github.com/kubernetes/cloud-provider-aws),
 [Azure](https://github.com/kubernetes-sigs/cloud-provider-azure),
-[GCE](https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/legacy-cloud-providers/gce),
+[GCP](https://github.com/kubernetes/cloud-provider-gcp),
 and [vSphere (with NSX-T)](https://github.com/kubernetes/cloud-provider-vsphere).
 
 * Run a routing protocol or even manually configure routers to add routes to
