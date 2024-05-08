@@ -113,10 +113,6 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 		p.Replicas = 1
 	}
 	replicas32 := int32(p.Replicas)
-	labels := map[string]string{
-		"name": p.Name,
-		"kind": p.Role,
-	}
 	var ports []corev1.ContainerPort
 	if p.Port > 0 {
 		ports = append(ports, corev1.ContainerPort{ContainerPort: int32(p.Port)})
@@ -125,19 +121,23 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 	if p.Port > 0 {
 		env = append(env, corev1.EnvVar{Name: "PORT", Value: fmt.Sprintf("%d", p.Port)})
 	}
+	if p.Labels == nil {
+		p.Labels = make(map[string]string)
+		p.Labels["name"] = p.Name
+	}
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   p.Name,
-			Labels: labels,
+			Labels: p.Labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas32,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: p.Labels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels: p.Labels,
 				},
 				Spec: corev1.PodSpec{
 					HostNetwork: p.HostNetwork,
@@ -149,6 +149,7 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 							Env:             env,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         p.Command,
+							Args:            p.Args,
 							VolumeMounts:    p.VolumeMounts,
 						},
 					},
@@ -168,6 +169,7 @@ type DeploymentParameters struct {
 	Replicas     int
 	Port         int
 	Command      []string
+	Args         []string
 	Affinity     *corev1.Affinity
 	Tolerations  []corev1.Toleration
 	Labels       map[string]string
@@ -215,7 +217,7 @@ func GenerateRandomNamespace(baseName string) string {
 func Teardown(ctx context.Context, client kubernetes.Interface, clusterName string, namespace string) {
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deleting post installation tests setup...\n")
 	client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Namespace %s to disappear \n", namespace)
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Namespace %s to be deleted\n", namespace)
 	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 		if err != nil {
@@ -224,8 +226,8 @@ func Teardown(ctx context.Context, client kubernetes.Interface, clusterName stri
 		return false, nil
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion failed \n")
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion failed\n")
 	} else {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion successful \n")
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Setup deletion successful\n")
 	}
 }

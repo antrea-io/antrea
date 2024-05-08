@@ -29,35 +29,23 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/antctl/raw/check"
+	"antrea.io/antrea/pkg/version"
 )
 
 func Command() *cobra.Command {
-	o := newOptions()
 	command := &cobra.Command{
 		Use:   "cluster",
 		Short: "Runs pre installation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Run(o)
+			return Run()
 		},
 	}
-	command.Flags().StringVarP(&o.antreaNamespace, "namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
 	return command
 }
 
-type options struct {
-	antreaNamespace string
-}
-
-func newOptions() *options {
-	return &options{
-		antreaNamespace: "kube-system",
-	}
-}
-
 const (
-	antreaNamespace = "kube-system"
 	testNamespace   = "antrea-test"
-	deploymentName  = "check-cluster"
+	deploymentName  = "cluster-checker"
 	podReadyTimeout = 1 * time.Minute
 )
 
@@ -72,20 +60,20 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
-	client          kubernetes.Interface
-	config          *rest.Config
-	clusterName     string
-	antreaNamespace string
-	namespace       string
+	client      kubernetes.Interface
+	config      *rest.Config
+	clusterName string
+	namespace   string
+	testPod     *corev1.Pod
 }
 
-func Run(o *options) error {
+func Run() error {
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %s", err)
 	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName, o)
+	testContext := NewTestContext(client, config, clusterName)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
@@ -116,10 +104,11 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	deployment := check.NewDeployment(check.DeploymentParameters{
 		Name:        deploymentName,
-		Image:       "antrea/antrea-agent-ubuntu:latest",
+		Image:       getImageVersion(),
 		Replicas:    1,
-		Command:     []string{"sleep", "infinity"},
-		Labels:      map[string]string{"app": "check-cluster"},
+		Command:     []string{"bash", "-c"},
+		Args:        []string{"trap 'exit 0' SIGTERM; sleep infinity & pid=$!; wait $pid"},
+		Labels:      map[string]string{"app": "antrea", "component": "cluster-checker"},
 		HostNetwork: true,
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "cni-conf", MountPath: "/etc/cni/net.d"},
@@ -170,20 +159,35 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 
 	t.Log("Waiting for Deployment to become ready")
-	check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, deploymentName)
+	err = check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("error while waiting for Deployment to become ready: %w", err)
+	}
+	testPods, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "component=cluster-checker"})
+	if err != nil {
+		return fmt.Errorf("unable to list test Pod: %s", err)
+	}
+	if len(testPods.Items) > 0 {
+		t.testPod = &testPods.Items[0]
 	}
 	return nil
 }
 
-func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName string, o *options) *testContext {
+func getImageVersion() string {
+	if version.ReleaseStatus == "unreleased" {
+		return "antrea/antrea-agent-ubuntu:latest"
+	} else if version.ReleaseStatus == "released" {
+		return fmt.Sprintf("antrea/antrea-agent-ubuntu:%s", version.GetVersion())
+	}
+	return ""
+}
+
+func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName string) *testContext {
 	return &testContext{
-		client:          client,
-		config:          config,
-		clusterName:     clusterName,
-		antreaNamespace: o.antreaNamespace,
-		namespace:       check.GenerateRandomNamespace(testNamespace),
+		client:      client,
+		config:      config,
+		clusterName: clusterName,
+		namespace:   check.GenerateRandomNamespace(testNamespace),
 	}
 }
 
@@ -197,10 +201,6 @@ func (t *testContext) Success(format string, a ...interface{}) {
 
 func (t *testContext) Fail(format string, a ...interface{}) {
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
-}
-
-func (t *testContext) Warning(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

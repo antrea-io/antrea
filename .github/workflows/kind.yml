@@ -777,7 +777,7 @@ jobs:
           make antctl-linux
       - name: Run Pre checks
         run: |
-          /bin/antctl-linux check cluster
+          ./bin/antctl-linux check cluster
       - name: Deploy Antrea
         run: |
           kubectl apply -f build/yamls/antrea.yml

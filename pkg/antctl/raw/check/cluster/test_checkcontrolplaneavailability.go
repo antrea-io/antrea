@@ -25,7 +25,7 @@ import (
 type checkControlPlaneAvailability struct{}
 
 func init() {
-	RegisterTest("Check control plane Nodes availability", &checkControlPlaneAvailability{})
+	RegisterTest("check-control-plane-nodes-availability", &checkControlPlaneAvailability{})
 }
 
 func (t *checkControlPlaneAvailability) Run(ctx context.Context, testContext *testContext) error {
@@ -41,11 +41,9 @@ func (t *checkControlPlaneAvailability) Run(ctx context.Context, testContext *te
 		}
 	}
 	if controlPlaneNodes.Len() == 0 {
-		testContext.Log("No control-plane or master Nodes were found; if installing Antrea in encap mode, some K8s functionalities (API aggregation, apiserver proxy, admission controllers) may be impacted.")
+		testContext.Log("No control-plane Nodes were found; if installing Antrea in encap mode, some K8s functionalities (API aggregation, apiserver proxy, admission controllers) may be impacted.")
 	} else {
-		for _, node := range controlPlaneNodes.UnsortedList() {
-			testContext.Log("Nodes found : %s", node)
-		}
+		testContext.Log("control-plane Nodes were found in the cluster.")
 	}
 	return nil
 }

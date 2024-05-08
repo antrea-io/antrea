@@ -25,7 +25,7 @@ import (
 type checkK8sVersion struct{}
 
 func init() {
-	RegisterTest("Check K8s version", &checkK8sVersion{})
+	RegisterTest("check-k8s-version", &checkK8sVersion{})
 }
 
 func (t *checkK8sVersion) Run(ctx context.Context, testContext *testContext) error {
@@ -42,7 +42,7 @@ func (t *checkK8sVersion) Run(ctx context.Context, testContext *testContext) err
 	if currentVersion.GTE(minVersion) {
 		testContext.Log("Kubernetes server version is compatible with Antrea. Kubernetes version: %s", serverVersion.GitVersion)
 	} else {
-		testContext.Log("Kubernetes min version required: 1.19")
+		return fmt.Errorf("Kubernetes min version required: 1.19")
 	}
 	return nil
 }

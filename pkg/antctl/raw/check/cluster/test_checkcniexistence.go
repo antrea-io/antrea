@@ -20,36 +20,30 @@ import (
 	"sort"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
 type checkCNIExistence struct{}
 
 func init() {
-	RegisterTest("Check if another CNI is present", &checkCNIExistence{})
+	RegisterTest("check-cni-existence", &checkCNIExistence{})
 }
 
 func (t *checkCNIExistence) Run(ctx context.Context, testContext *testContext) error {
-	pods, err := testContext.client.CoreV1().Pods(testContext.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=check-cluster"})
-	if err != nil {
-		return fmt.Errorf("failed to list Pods: %v", err)
-	}
 	command := []string{"ls", "-1", "/etc/cni/net.d"}
-	output, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, pods.Items[0].Name, "", command)
+	output, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
 	if err != nil {
-		testContext.Log("Failed to execute command in Pod: %s, error: %v", pods.Items[0].Name, err)
+		return fmt.Errorf("Failed to execute command in Pod %s, error: %v", testContext.testPod.Name, err)
 	}
 	outputStr := strings.TrimSpace(output)
 	if outputStr == "" {
-		testContext.Log("No files present in /etc/cni/net.d in Pod: %s", pods.Items[0].Name)
+		testContext.Log("No files present in /etc/cni/net.d in Node %s", testContext.testPod.Spec.NodeName)
 	} else {
 		files := strings.Split(outputStr, "\n")
 		sort.Strings(files)
 		if len(files) > 0 {
 			if files[0] < "10-antrea.conflist" {
-				testContext.Log("Another CNI configuration file with higher priority than Antrea's CNI configuration file found: %s", files[0])
+				return fmt.Errorf("Another CNI configuration file with higher priority than Antrea's CNI configuration file found: %s. Ignore this if PolicyOnly mode is enabled.", files[0])
 			} else if files[0] != "10-antrea.conflist" {
 				testContext.Log("Another CNI configuration file found: %s with Antrea having higher precedence", files[0])
 			} else {
