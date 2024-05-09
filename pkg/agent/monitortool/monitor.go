@@ -49,15 +49,15 @@ const (
 	ProtocolICMPv6 = 58
 )
 
-// getICMPSeq returns the next sequence number as uint32,
-// wrapping around to 0 after reaching the maximum value of uint32.
-func getICMPSeq() uint32 {
+// getICMPSeq returns the next sequence number as uint16,
+// wrapping around to 0 after reaching the maximum value of uint16.
+func getICMPSeq() uint16 {
 	// Increment the sequence number atomically and get the new value.
 	// We use atomic.AddUint32 and pass 1 as the increment.
 	// The returned value is the new value post-increment.
 	newVal := atomic.AddUint32(&icmpSeq, 1)
 
-	return newVal
+	return uint16(newVal)
 }
 
 // NodeLatencyMonitor is a tool to monitor the latency of the Node.
@@ -68,14 +68,12 @@ type NodeLatencyMonitor struct {
 	latencyConfig *LatencyConfig
 	// latencyConfigChanged is the channel to notify the latency config changed.
 	latencyConfigChanged chan struct{}
-	// isIPv4Enabled is the flag to indicate if the IPv4 is enabled.
+	// isIPv4Enabled is the flag to indicate whether the IPv4 is enabled.
 	isIPv4Enabled bool
-	// isIPv6Enabled is the flag to indicate if the IPv6 is enabled.
+	// isIPv6Enabled is the flag to indicate whether the IPv6 is enabled.
 	isIPv6Enabled bool
 
-	// The informer of Nodes, it will changed by Node watcher
-	nodeInformer coreinformers.NodeInformer
-	// nodeLatencyMonitorInformer is the informer for the NodeLatencyMonitor CRD.
+	nodeInformer               coreinformers.NodeInformer
 	nodeLatencyMonitorInformer crdinformers.NodeLatencyMonitorInformer
 }
 
@@ -100,7 +98,6 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 		nodeLatencyMonitorInformer: nlmInformer,
 	}
 
-	// Get the IPv4/IPv6 enabled status
 	isIPv4Enabled, err := config.IsIPv4Enabled(nodeConfig, trafficEncapMode)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get IPv4 enabled status")
@@ -112,14 +109,12 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	m.isIPv4Enabled = isIPv4Enabled
 	m.isIPv6Enabled = isIPv6Enabled
 
-	// Add Node informer event handler for Node
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    m.onNodeAdd,
 		UpdateFunc: m.onNodeUpdate,
 		DeleteFunc: m.onNodeDelete,
 	})
 
-	// Add crd informer event handler for NodeLatencyMonitor
 	nlmInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    m.onNodeLatencyMonitorAdd,
 		UpdateFunc: m.onNodeLatencyMonitorUpdate,
@@ -148,16 +143,13 @@ func (m *NodeLatencyMonitor) onNodeUpdate(oldObj, newObj interface{}) {
 
 // onNodeDelete is the event handler for deleting Node.
 func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
-	// Check if the object is a not a Node
 	node, ok := obj.(*corev1.Node)
 	if !ok {
-		// Check if the object is a DeletedFinalStateUnknown in k8s
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
-		// Convert the DeletedFinalStateUnknown to a Node
 		node, ok = deletedState.Obj.(*corev1.Node)
 		if !ok {
 			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Node object", "obj", deletedState.Obj)
@@ -173,7 +165,6 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
 	nlm := obj.(*v1alpha1.NodeLatencyMonitor)
 	klog.V(4).InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 
-	// Update the latency config
 	m.updateLatencyConfig(nlm)
 }
 
@@ -187,31 +178,25 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorUpdate(oldObj, newObj interface
 		return
 	}
 
-	// Update the latency config
 	m.updateLatencyConfig(newNLM)
 }
 
 // updateLatencyConfig updates the latency config based on the NodeLatencyMonitor CRD.
 func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonitor) {
-	// Parse the ping interval
 	pingInterval := time.Duration(nlm.Spec.PingIntervalSeconds) * time.Second
 
-	// Update the latency config
 	m.latencyConfig = &LatencyConfig{
 		Enable:   true,
 		Interval: pingInterval,
 	}
 
-	// Notify the latency config changed
 	m.latencyConfigChanged <- struct{}{}
 }
 
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
-	// Update the latency config
 	m.latencyConfig = &LatencyConfig{Enable: false}
 
-	// Notify the latency config changed
 	m.latencyConfigChanged <- struct{}{}
 }
 
@@ -219,10 +204,8 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
 func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error {
 	var requestType icmp.Type
 
-	// Resolve the IP address
 	ip := &net.IPAddr{IP: addr}
 
-	// Create a new ICMP packet
 	if addr.To4() == nil {
 		requestType = ipv6.ICMPTypeEchoRequest
 	} else {
@@ -241,7 +224,7 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 		Code: 0,
 		Body: body,
 	}
-	klog.V(4).InfoS("Send ICMP message", "IP", ip, "SeqID", seqID, "body", body)
+	klog.V(4).InfoS("Sending ICMP message", "IP", ip, "SeqID", seqID, "body", body)
 
 	// Serialize the ICMP message
 	msgBytes, err := msg.Marshal(nil)
@@ -266,13 +249,13 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 
 // recvPing receives an ICMP message from the target IP address.
 func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool, stopCh <-chan struct{}) {
+	// We only expect small packets, if we receive a larger packet, we will drop the extra data.
+	readBuffer := make([]byte, 128)
 	for {
 		select {
 		case <-stopCh:
 			return
 		default:
-			// max size of the ICMP message is 1500 bytes, which is the maximum size of an Ethernet frame.
-			readBuffer := make([]byte, 1500)
 			n, peer, err := socket.ReadFrom(readBuffer)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -310,7 +293,7 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool, stopCh
 
 			echo, ok := msg.Body.(*icmp.Echo)
 			if !ok {
-				klog.V(4).Info("Failed to assert type as *icmp.Echo")
+				klog.ErrorS(nil, "Failed to assert type as *icmp.Echo")
 				continue
 			}
 
@@ -343,17 +326,16 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	nodeIPs := m.latencyStore.ListNodeIPs()
 	for name, toIPs := range nodeIPs {
 		for _, toIP := range toIPs {
-			klog.V(4).InfoS("Start to ping Node", "Node name", name, "Node IP", toIP)
 			if toIP.To4() != nil && ipv4Socket != nil {
 				if err := m.sendPing(ipv4Socket, toIP); err != nil {
 					klog.V(4).InfoS("Failed to send ICMP message to Node", "Node name", name, "Node IP", toIP)
 				}
 			} else if toIP.To16() != nil && ipv6Socket != nil {
 				if err := m.sendPing(ipv6Socket, toIP); err != nil {
-					klog.V(4).InfoS("Failed to send ICMP message to Node", "Node name", name, "Node IP", toIP)
+					klog.ErrorS(err, "Failed to send ICMP message to Node")
 				}
 			} else {
-				klog.V(4).InfoS("Failed to send ICMP message to Node", "Node name", name, "Node IP", toIP)
+				klog.ErrorS(nil, "Failed to send ICMP message to Node")
 			}
 		}
 	}
@@ -361,7 +343,6 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 
 // Run starts the NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
-	// Start the monitor loop
 	go m.nodeLatencyMonitorInformer.Informer().Run(stopCh)
 	go m.nodeInformer.Informer().Run(stopCh)
 	go m.monitorLoop(stopCh)
@@ -457,6 +438,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 					ticker = nil
 				}
 				tickerStopCh <- struct{}{}
+				m.latencyStore.CleanUp()
 			}
 		}
 	}

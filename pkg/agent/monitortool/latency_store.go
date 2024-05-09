@@ -37,16 +37,16 @@ type LatencyStore struct {
 	// The map of Node IP to latency entry, it will be changed by latency monitor
 	nodeIPLatencyMap map[string]*NodeIPLatencyEntry
 	// The map of Node name to Node IP, it will be changed by Node watcher
-	// If the agent is running in networkPolicyOnly mode, the value will be the transport IP of the Node
-	// If the agent is running in normal mode, the value will be the gateway IP of the Node
+	// If the agent is running in networkPolicyOnly mode, the value will be the transport IP of the Node.
+	// Otherwise, the value will be the gateway IP of the Node
 	nodeTargetIPsMap map[string][]net.IP
 }
 
 // NodeIPLatencyEntry is the entry of the latency map.
 type NodeIPLatencyEntry struct {
-	// The timestamp of the last send packet
+	// The timestamp of the last sent packet
 	LastSendTime time.Time
-	// The timestamp of the last receive packet
+	// The timestamp of the last received packet
 	LastRecvTime time.Time
 	// The last valid rtt of the connection
 	LastMeasuredRTT time.Duration
@@ -64,35 +64,33 @@ func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 }
 
 // getNodeIPLatencyEntry returns the NodeIPLatencyEntry for the given Node IP
-// Now it used for testing purpose and it is not exported, so we just return a pointer
-func (l *LatencyStore) getNodeIPLatencyEntry(key string) (*NodeIPLatencyEntry, bool) {
+// For now, it is only used for testing purposes.
+func (l *LatencyStore) getNodeIPLatencyEntry(nodeIP string) (*NodeIPLatencyEntry, bool) {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
-	entry, ok := l.nodeIPLatencyMap[key]
+	entry, ok := l.nodeIPLatencyMap[nodeIP]
 	return entry, ok
 }
 
 // DeleteNodeIPLatencyEntry deletes the NodeIPLatencyEntry for the given Node IP
-func (l *LatencyStore) DeleteNodeIPLatencyEntry(key string) {
+func (l *LatencyStore) DeleteNodeIPLatencyEntry(nodeIP string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	delete(l.nodeIPLatencyMap, key)
+	delete(l.nodeIPLatencyMap, nodeIP)
 }
 
 // SetNodeIPLatencyEntry sets the NodeIPLatencyEntry for the given Node IP
-func (l *LatencyStore) SetNodeIPLatencyEntry(key string, mutator func(entry *NodeIPLatencyEntry)) {
+func (l *LatencyStore) SetNodeIPLatencyEntry(nodeIP string, mutator func(entry *NodeIPLatencyEntry)) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	entry, ok := l.nodeIPLatencyMap[key]
+	entry, ok := l.nodeIPLatencyMap[nodeIP]
 	if !ok {
-		// Init the connection entry
 		entry = &NodeIPLatencyEntry{}
-		l.nodeIPLatencyMap[key] = entry
+		l.nodeIPLatencyMap[nodeIP] = entry
 	}
 
-	// Update the connection entry
 	mutator(entry)
 }
 
@@ -117,19 +115,17 @@ func (l *LatencyStore) deleteNode(node *corev1.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	// Delete from the node IP map
-	delete(l.nodeTargetIPsMap, node.Name)
-
-	// Delete from the NodeIPLatencyEntry map
-	getNodeIPs, err := l.getNodeIPs(node)
-	if err != nil {
-		klog.ErrorS(err, "Failed to get IPs for Node", "nodeName", node.Name)
+	nodeIPs, ok := l.nodeTargetIPsMap[node.Name]
+	if !ok {
+		klog.ErrorS(nil, "Failed to get IPs for Node", "nodeName", node.Name)
 		return
 	}
 
-	for _, ip := range getNodeIPs {
+	for _, ip := range nodeIPs {
 		delete(l.nodeIPLatencyMap, ip.String())
 	}
+
+	delete(l.nodeTargetIPsMap, node.Name)
 }
 
 // updateNode updates a Node in the latency store
@@ -200,7 +196,6 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	if len(podCIDRStrs) == 0 {
 		// Skip the Node if it does not have a PodCIDR.
 		err := errors.New("node does not have a PodCIDR")
-		klog.ErrorS(err, "Node does not have a PodCIDR", "Node name", node.Name)
 		return gwIPs, err
 	}
 
@@ -210,13 +205,11 @@ func getGWIPs(node *corev1.Node) ([]net.IP, error) {
 	for _, podCIDR := range podCIDRStrs {
 		if podCIDR == "" {
 			err := errors.New("PodCIDR is empty")
-			klog.ErrorS(err, "PodCIDR is empty", "Node name", node.Name)
 			return gwIPs, err
 		}
 
 		peerPodCIDRAddr, _, err := net.ParseCIDR(podCIDR)
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse PodCIDR", "Node name", node.Name)
 			return gwIPs, err
 		}
 
@@ -239,7 +232,6 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 	}
 
 	if node.Spec.PodCIDR == "" {
-		// Does not help to return an error and trigger controller retries.
 		return nil
 	}
 	return []string{node.Spec.PodCIDR}
