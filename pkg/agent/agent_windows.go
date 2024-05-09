@@ -37,9 +37,10 @@ import (
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
-var winnetUtil winnet.Interface = &winnet.Handle{}
-
 var (
+	winnetUtil winnet.Interface = &winnet.Handle{}
+	// setInterfaceMTU is meant to be overridden for testing
+	setInterfaceMTU = winnetUtil.SetNetAdapterMTU
 
 	// setInterfaceARPAnnounce is meant to be overridden for testing.
 	setInterfaceARPAnnounce = func(ifaceName string, value int) error { return nil }
@@ -452,7 +453,7 @@ func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	if err := i.ovsBridgeClient.SetInterfaceMTU(iface, mtu); err != nil {
 		return err
 	}
-	return winnetUtil.SetNetAdapterMTU(iface, mtu)
+	return setInterfaceMTU(iface, mtu)
 }
 
 func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string) error {

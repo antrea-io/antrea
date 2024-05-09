@@ -630,6 +630,7 @@ func TestSetupGatewayInterface(t *testing.T) {
 	fakeMAC, _ := net.ParseMAC("12:34:56:78:76:54")
 	mockSetLinkUp(t, fakeMAC, 10, nil)
 	mockConfigureLinkAddress(t, nil)
+	mockSetInterfaceMTU(t, nil)
 	mockSetInterfaceARPAnnounce(t, nil)
 
 	controller := mock.NewController(t)
@@ -666,7 +667,6 @@ func TestSetupGatewayInterface(t *testing.T) {
 	close(stopCh)
 	portUUID := "123456780a"
 	ofport := int32(config.DefaultHostGatewayOFPort)
-	defer mockSetInterfaceMTU(controller, initializer.hostGateway, networkConfig.InterfaceMTU)()
 	mockOVSBridgeClient.EXPECT().CreateInternalPort(initializer.hostGateway, ofport, mock.Any(), mock.Any()).Return(portUUID, nil)
 	mockOVSBridgeClient.EXPECT().SetInterfaceMAC(initializer.hostGateway, fakeMAC).Return(nil)
 	mockOVSBridgeClient.EXPECT().GetOFPort(initializer.hostGateway, false).Return(ofport, nil)
