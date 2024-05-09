@@ -29,14 +29,15 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --run                         Run only tests matching the regexp.
         --proxy-all                   Enables Antrea proxy with all Service support.
         --load-balancer-mode          LoadBalancer mode.
-        --node-ipam                   Enables Antrea NodeIPAN.
+        --node-ipam                   Enables Antrea NodeIPAM.
         --multicast                   Enables Multicast.
         --flow-visibility             Only run flow visibility related e2e tests.
+        --networkpolicy-evaluation    Configures additional NetworkPolicy evaluation level when running e2e tests.
         --extra-network               Creates an extra network that worker Nodes will connect to. Cannot be specified with the hybrid mode.
         --extra-vlan                  Creates an subnet-based VLAN that worker Nodes will connect to.
         --deploy-external-server      Deploy a container running as an external server for the cluster.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
-        --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
+        --coverage                    Enables measure Antrea code coverage when running e2e tests on kind.
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
         --test-only                   Only run test on current cluster. Not set up/clean up the cluster.
@@ -76,6 +77,7 @@ load_balancer_mode=""
 node_ipam=false
 multicast=false
 flow_visibility=false
+np_evaluation=false
 extra_network=false
 extra_vlan=false
 deploy_external_server=false
@@ -124,6 +126,10 @@ case $key in
     ;;
     --flow-visibility)
     flow_visibility=true
+    shift
+    ;;
+    --networkpolicy-evaluation)
+    np_evaluation=true
     shift
     ;;
     --encap-mode)
@@ -368,11 +374,16 @@ function run_test {
     RUN_OPT="-run $run"
   fi
 
+  np_evaluation_flag=""
+  if $np_evaluation; then
+    np_evaluation_flag="--networkpolicy-evaluation"
+  fi
+
   external_server_cid=$(docker ps -f name="^antrea-external-server" --format '{{.ID}}')
   external_server_ips=$(docker inspect $external_server_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
   EXTRA_ARGS="$vlan_args --external-server-ips $external_server_ips"
 
-  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
+  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then

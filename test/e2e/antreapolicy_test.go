@@ -72,9 +72,11 @@ const (
 	// Verification of deleting/creating resources timed out.
 	timeout = 10 * time.Second
 	// audit log directory on Antrea Agent
-	logDir          = "/var/log/antrea/networkpolicy/"
-	logfileName     = "np.log"
-	defaultTierName = "application"
+	logDir              = "/var/log/antrea/networkpolicy/"
+	logfileName         = "np.log"
+	npEvaluationPodName = "antctl"
+	defaultTierName     = "application"
+	defaultDenyKNPName  = "default-deny-namespace"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -157,7 +159,7 @@ func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces map[string
 	}
 	for _, ns := range namespaces {
 		builder := &NetworkPolicySpecBuilder{}
-		builder = builder.SetName(ns.Name, "default-deny-namespace")
+		builder = builder.SetName(ns.Name, defaultDenyKNPName)
 		builder.SetTypeIngress()
 		if _, err := k8s.CreateOrUpdateNetworkPolicy(builder.Get()); err != nil {
 			return err
@@ -469,37 +471,25 @@ func testACNPSourcePort(t *testing.T) {
 
 	testSteps := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
-			nil,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port 81",
-			updatedReachability,
-			[]metav1.Object{builder2.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
-			nil,
-			nil,
+			Name:          "Port 81",
+			Reachability:  updatedReachability,
+			TestResources: []metav1.Object{builder2.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port range 80-81",
-			reachability,
-			[]metav1.Object{builder3.Get()},
-			[]int32{80, 81},
-			ProtocolTCP,
-			0,
-			nil,
-			nil,
-			nil,
+			Name:          "Port range 80-81",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder3.Get()},
+			Ports:         []int32{80, 81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -541,7 +531,7 @@ func testACNPAllowXBtoYA(t *testing.T) {
 // testACNPPriorityOverrideDefaultDeny tests priority override in ACNP. It applies a higher priority ACNP to drop
 // traffic from namespace Z to X/A, and in the meantime applies a lower priority ACNP to allow traffic from Z to X.
 // It is tested with default deny k8s NetworkPolicies in all namespaces.
-func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
+func testACNPPriorityOverrideDefaultDeny(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("acnp-priority2").
 		SetPriority(2).
@@ -566,10 +556,16 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 	reachabilityBothACNP.Expect(getPod("z", "c"), getPod("x", "c"), Connected)
 	reachabilityBothACNP.ExpectSelf(allPods, Connected)
 
+	evaluationBothACNPs := NewNPEvaluation(allPods).
+		Expect(getPod("y", "a"), getPod("x", "a"), defaultDenyKNPName, NPEvalIsolate).
+		Expect(getPod("z", "b"), getPod("x", "a"), builder2.Name, NPEvalDrop).
+		Expect(getPod("z", "b"), getPod("x", "b"), builder1.Name, NPEvalAllow)
+
 	testStep := []*TestStep{
 		{
 			Name:          "Both ACNP",
 			Reachability:  reachabilityBothACNP,
+			NPEvaluation:  evaluationBothACNPs,
 			TestResources: []metav1.Object{builder1.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -578,7 +574,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP PriorityOverride Default Deny", testStep},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testACNPAllowNoDefaultIsolation tests that no default isolation rules are created for Policies.
@@ -1645,7 +1641,7 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 
 // testBaselineNamespaceIsolation tests that an ACNP in the baseline Tier is able to enforce default namespace isolation,
 // which can be later overridden by developer K8s NetworkPolicies.
-func testBaselineNamespaceIsolation(t *testing.T) {
+func testBaselineNamespaceIsolation(t *testing.T, data *TestData) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	nsExpOtherThanX := metav1.LabelSelectorRequirement{
 		Key:      "ns",
@@ -1663,6 +1659,13 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 	reachability := NewReachability(allPods, Connected)
 	reachability.ExpectNamespaceIngressFromNamespace(getNS("x"), getNS("y"), Dropped)
 	reachability.ExpectNamespaceIngressFromNamespace(getNS("x"), getNS("z"), Dropped)
+
+	evaluation := NewNPEvaluation(allPods).
+		Expect(getPod("y", "a"), getPod("x", "a"), builder.Name, NPEvalDrop).
+		Expect(getPod("y", "b"), getPod("x", "a"), builder.Name, NPEvalDrop).
+		Expect(getPod("z", "a"), getPod("x", "a"), builder.Name, NPEvalDrop).
+		ExpectNone(getPod("x", "b"), getPod("x", "a")).
+		ExpectNone(getPod("z", "b"), getPod("y", "b"))
 
 	// create a K8s NetworkPolicy for the x/a Pod to allow ingress traffic from the y/a Pod.
 	// It should open up ingress from y/a and additionally deny ingress from x/b and x/c based on
@@ -1682,10 +1685,19 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 	reachabilityUpdated.ExpectEgressToNamespace(getPod("y", "b"), getNS("x"), Dropped)
 	reachabilityUpdated.ExpectEgressToNamespace(getPod("y", "c"), getNS("x"), Dropped)
 	reachabilityUpdated.ExpectNamespaceIngressFromNamespace(getNS("x"), getNS("z"), Dropped)
+
+	evaluationUpdated := NewNPEvaluation(allPods).
+		Expect(getPod("y", "a"), getPod("x", "a"), k8sNPBuilder.Name, NPEvalAllow).
+		Expect(getPod("y", "b"), getPod("x", "a"), k8sNPBuilder.Name, NPEvalIsolate).
+		Expect(getPod("z", "a"), getPod("x", "a"), k8sNPBuilder.Name, NPEvalIsolate).
+		Expect(getPod("x", "b"), getPod("x", "a"), k8sNPBuilder.Name, NPEvalIsolate).
+		ExpectNone(getPod("z", "b"), getPod("y", "b"))
+
 	testStep := []*TestStep{
 		{
 			Name:          "Baseline ACNP",
 			Reachability:  reachability,
+			NPEvaluation:  evaluation,
 			TestResources: []metav1.Object{builder.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1693,6 +1705,7 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 		{
 			Name:          "Baseline ACNP with KNP",
 			Reachability:  reachabilityUpdated,
+			NPEvaluation:  evaluationUpdated,
 			TestResources: []metav1.Object{builder.Get(), k8sNPBuilder.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1701,7 +1714,7 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP baseline tier namespace isolation", testStep},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 	// Cleanup the K8s NetworkPolicy created for this test.
 	failOnError(k8sUtils.CleanNetworkPolicies(map[string]TestNamespaceMeta{"x": {Name: getNS("x")}}), t)
 	time.Sleep(networkPolicyDelay)
@@ -1709,7 +1722,7 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 
 // testACNPPriorityOverride tests priority overriding in three ACNPs. Those three ACNPs are applied in a specific order to
 // test priority reassignment, and each controls a smaller set of traffic patterns as priority increases.
-func testACNPPriorityOverride(t *testing.T) {
+func testACNPPriorityOverride(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("acnp-priority1").
 		SetPriority(1.001).
@@ -1751,10 +1764,22 @@ func testACNPPriorityOverride(t *testing.T) {
 	reachabilityAllACNPs.Expect(getPod("z", "c"), getPod("x", "b"), Dropped)
 	reachabilityAllACNPs.Expect(getPod("z", "c"), getPod("x", "c"), Dropped)
 
+	evaluationTwoACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("y", "a"), getPod("x", "a")).
+		Expect(getPod("z", "b"), getPod("x", "a"), builder2.Name, NPEvalAllow).
+		Expect(getPod("z", "b"), getPod("x", "b"), builder3.Name, NPEvalDrop)
+
+	evaluationAllACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("y", "a"), getPod("x", "a")).
+		Expect(getPod("z", "a"), getPod("x", "a"), builder2.Name, NPEvalAllow).
+		Expect(getPod("z", "a"), getPod("x", "b"), builder3.Name, NPEvalDrop).
+		Expect(getPod("z", "b"), getPod("x", "a"), builder1.Name, NPEvalDrop)
+
 	testStepTwoACNP := []*TestStep{
 		{
 			Name:          "Two Policies with different priorities",
 			Reachability:  reachabilityTwoACNPs,
+			NPEvaluation:  evaluationTwoACNPs,
 			TestResources: []metav1.Object{builder3.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1765,6 +1790,7 @@ func testACNPPriorityOverride(t *testing.T) {
 		{
 			Name:          "All three Policies",
 			Reachability:  reachabilityAllACNPs,
+			NPEvaluation:  evaluationAllACNPs,
 			TestResources: []metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1774,12 +1800,12 @@ func testACNPPriorityOverride(t *testing.T) {
 		{"ACNP PriorityOverride Intermediate", testStepTwoACNP},
 		{"ACNP PriorityOverride All", testStepAll},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testACNPTierOverride tests tier priority overriding in three ACNPs. Each ACNP controls a smaller set of traffic patterns
 // as tier priority increases.
-func testACNPTierOverride(t *testing.T) {
+func testACNPTierOverride(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("acnp-tier-emergency").
 		SetTier("emergency").
@@ -1824,10 +1850,22 @@ func testACNPTierOverride(t *testing.T) {
 	reachabilityAllACNPs.Expect(getPod("z", "c"), getPod("x", "b"), Dropped)
 	reachabilityAllACNPs.Expect(getPod("z", "c"), getPod("x", "c"), Dropped)
 
+	evaluationTwoACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("y", "a"), getPod("x", "a")).
+		Expect(getPod("z", "b"), getPod("x", "a"), builder2.Name, NPEvalAllow).
+		Expect(getPod("z", "b"), getPod("x", "b"), builder3.Name, NPEvalDrop)
+
+	evaluationAllACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("y", "a"), getPod("x", "a")).
+		Expect(getPod("z", "a"), getPod("x", "a"), builder2.Name, NPEvalAllow).
+		Expect(getPod("z", "a"), getPod("x", "b"), builder3.Name, NPEvalDrop).
+		Expect(getPod("z", "b"), getPod("x", "a"), builder1.Name, NPEvalDrop)
+
 	testStepTwoACNP := []*TestStep{
 		{
 			Name:          "Two Policies in different tiers",
 			Reachability:  reachabilityTwoACNPs,
+			NPEvaluation:  evaluationTwoACNPs,
 			TestResources: []metav1.Object{builder3.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1837,6 +1875,7 @@ func testACNPTierOverride(t *testing.T) {
 		{
 			Name:          "All three Policies in different tiers",
 			Reachability:  reachabilityAllACNPs,
+			NPEvaluation:  evaluationAllACNPs,
 			TestResources: []metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1846,12 +1885,12 @@ func testACNPTierOverride(t *testing.T) {
 		{"ACNP TierOverride Intermediate", testStepTwoACNP},
 		{"ACNP TierOverride All", testStepAll},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
-// testACNPTierOverride tests tier priority overriding in three ACNPs with custom created tiers. Each ACNP controls a
+// testACNPTierOverride tests tier priority overriding in two ACNPs with custom created tiers. Each ACNP controls a
 // smaller set of traffic patterns as tier priority increases.
-func testACNPCustomTiers(t *testing.T) {
+func testACNPCustomTiers(t *testing.T, data *TestData) {
 	k8sUtils.DeleteTier("high-priority")
 	k8sUtils.DeleteTier("low-priority")
 	// Create two custom tiers with tier priority immediately next to each other.
@@ -1885,10 +1924,17 @@ func testACNPCustomTiers(t *testing.T) {
 	reachabilityTwoACNPs.Expect(getPod("z", "b"), getPod("x", "c"), Dropped)
 	reachabilityTwoACNPs.Expect(getPod("z", "c"), getPod("x", "b"), Dropped)
 	reachabilityTwoACNPs.Expect(getPod("z", "c"), getPod("x", "c"), Dropped)
+
+	evaluationTwoACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("y", "a"), getPod("x", "a")).
+		Expect(getPod("z", "b"), getPod("x", "a"), builder1.Name, NPEvalAllow).
+		Expect(getPod("z", "b"), getPod("x", "b"), builder2.Name, NPEvalDrop)
+
 	testStepTwoACNP := []*TestStep{
 		{
 			Name:          "Two Policies in different tiers",
 			Reachability:  reachabilityTwoACNPs,
+			NPEvaluation:  evaluationTwoACNPs,
 			TestResources: []metav1.Object{builder2.Get(), builder1.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1897,7 +1943,7 @@ func testACNPCustomTiers(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Custom Tier priority", testStepTwoACNP},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 	// Cleanup customized tiers. ACNPs created in those tiers need to be deleted first.
 	failOnError(k8sUtils.CleanACNPs(), t)
 	failOnError(k8sUtils.DeleteTier("high-priority"), t)
@@ -1906,7 +1952,7 @@ func testACNPCustomTiers(t *testing.T) {
 
 // testACNPPriorityConflictingRule tests that if there are two Policies in the cluster with rules that conflicts with
 // each other, the ACNP with higher priority will prevail.
-func testACNPPriorityConflictingRule(t *testing.T) {
+func testACNPPriorityConflictingRule(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	builder1 = builder1.SetName("acnp-drop").
 		SetPriority(1).
@@ -1927,10 +1973,16 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 	reachabilityBothACNP.ExpectEgressToNamespace(getPod("z", "a"), getNS("x"), Dropped)
 	reachabilityBothACNP.ExpectEgressToNamespace(getPod("z", "b"), getNS("x"), Dropped)
 	reachabilityBothACNP.ExpectEgressToNamespace(getPod("z", "c"), getNS("x"), Dropped)
+
+	evaluationBothACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("y", "a"), getPod("x", "a")).
+		Expect(getPod("z", "a"), getPod("x", "a"), builder1.Name, NPEvalDrop)
+
 	testStep := []*TestStep{
 		{
 			Name:          "Both ACNP",
 			Reachability:  reachabilityBothACNP,
+			NPEvaluation:  evaluationBothACNPs,
 			TestResources: []metav1.Object{builder1.Get(), builder2.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1939,12 +1991,12 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Priority Conflicting Rule", testStep},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testACNPRulePriority tests that if there are two rules in the cluster that conflicts with each other, the rule with
 // higher precedence will prevail.
-func testACNPRulePriority(t *testing.T) {
+func testACNPRulePriority(t *testing.T, data *TestData) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	// acnp-deny will apply to all pods in namespace x
 	builder1 = builder1.SetName("acnp-deny").
@@ -1972,10 +2024,17 @@ func testACNPRulePriority(t *testing.T) {
 	reachabilityBothACNP.ExpectIngressFromNamespace(getPod("y", "a"), getNS("x"), Dropped)
 	reachabilityBothACNP.ExpectIngressFromNamespace(getPod("y", "b"), getNS("x"), Dropped)
 	reachabilityBothACNP.ExpectIngressFromNamespace(getPod("y", "c"), getNS("x"), Dropped)
+
+	evaluationBothACNPs := NewNPEvaluation(allPods).
+		ExpectNone(getPod("x", "b"), getPod("x", "a")).
+		Expect(getPod("x", "a"), getPod("y", "a"), builder1.Name, NPEvalDrop).
+		Expect(getPod("x", "a"), getPod("z", "a"), builder2.Name, NPEvalAllow)
+
 	testStep := []*TestStep{
 		{
 			Name:          "Both ACNP",
 			Reachability:  reachabilityBothACNP,
+			NPEvaluation:  evaluationBothACNPs,
 			TestResources: []metav1.Object{builder2.Get(), builder1.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -1984,7 +2043,7 @@ func testACNPRulePriority(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Rule Priority", testStep},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testACNPPortRange tests the port range in an ACNP can work.
@@ -2018,7 +2077,7 @@ func testACNPPortRange(t *testing.T) {
 }
 
 // testACNPRejectEgress tests that an ACNP is able to reject egress traffic from pods labelled A to namespace Z.
-func testACNPRejectEgress(t *testing.T) {
+func testACNPRejectEgress(t *testing.T, data *TestData) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-reject-a-to-z-egress").
 		SetPriority(1.0).
@@ -2031,10 +2090,16 @@ func testACNPRejectEgress(t *testing.T) {
 	reachability.ExpectEgressToNamespace(getPod("y", "a"), getNS("z"), Rejected)
 	reachability.Expect(getPod("z", "a"), getPod("z", "b"), Rejected)
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Rejected)
+
+	evaluation := NewNPEvaluation(allPods).
+		ExpectNone(getPod("x", "b"), getPod("z", "a")).
+		Expect(getPod("x", "a"), getPod("z", "a"), builder.Name, NPEvalReject)
+
 	testStep := []*TestStep{
 		{
 			Name:          "Port 80",
 			Reachability:  reachability,
+			NPEvaluation:  evaluation,
 			TestResources: []metav1.Object{builder.Get()},
 			Ports:         []int32{80},
 			Protocol:      ProtocolTCP,
@@ -2043,7 +2108,7 @@ func testACNPRejectEgress(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Reject egress From All Pod:a to NS:z", testStep},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testACNPRejectIngress tests that an ACNP is able to reject ingress traffic from pods labelled A to namespace Z.
@@ -2343,7 +2408,7 @@ func testANNPBasic(t *testing.T) {
 // update on the Antrea NetworkPolicy allows traffic from X/B to Y/A on port 80.
 func testANNPUpdate(t *testing.T, data *TestData) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName(getNS("y"), "np-before-update").
+	builder = builder.SetName(getNS("y"), "np-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": getNS("x")}, nil,
@@ -2351,6 +2416,9 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "b"), getPod("y", "a"), Dropped)
+	evaluation := NewNPEvaluation(allPods).
+		ExpectNone(getPod("x", "a"), getPod("y", "a")).
+		Expect(getPod("x", "b"), getPod("y", "a"), builder.Name, NPEvalDrop)
 	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
 	failOnError(err, t)
 	failOnError(data.waitForANNPRealized(t, annp.Namespace, annp.Name, policyRealizedTimeout), t)
@@ -2360,14 +2428,20 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
 	}
+	if testOptions.npEvaluation {
+		doEvaluation(t, data, evaluation)
+	}
 
 	updatedBuilder := &AntreaNetworkPolicySpecBuilder{}
-	updatedBuilder = updatedBuilder.SetName(getNS("y"), "np-before-update").
+	updatedBuilder = updatedBuilder.SetName(getNS("y"), "np-update").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	updatedBuilder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": getNS("x")}, nil,
 		nil, nil, nil, nil, crdv1beta1.RuleActionAllow, "", "")
 	updatedReachability := NewReachability(allPods, Connected)
+	updatedEvaluation := NewNPEvaluation(allPods).
+		ExpectNone(getPod("x", "a"), getPod("y", "a")).
+		Expect(getPod("x", "b"), getPod("y", "a"), builder.Name, NPEvalAllow)
 	annp, err = k8sUtils.CreateOrUpdateANNP(updatedBuilder.Get())
 	failOnError(err, t)
 	failOnError(data.waitForANNPRealized(t, annp.Namespace, annp.Name, policyRealizedTimeout), t)
@@ -2377,6 +2451,10 @@ func testANNPUpdate(t *testing.T, data *TestData) {
 		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
 	}
+	if testOptions.npEvaluation {
+		doEvaluation(t, data, updatedEvaluation)
+	}
+
 	failOnError(k8sUtils.DeleteANNP(annp.Namespace, annp.Name), t)
 }
 
@@ -2402,6 +2480,9 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "b"), getPod("y", "a"), Dropped)
+	evaluation := NewNPEvaluation(allPods).
+		ExpectNone(getPod("x", "b"), getPod("y", "c")).
+		Expect(getPod("x", "b"), getPod("y", "a"), builder.Name, NPEvalDrop)
 
 	annp, err := k8sUtils.CreateOrUpdateANNP(builder.Get())
 	failOnError(err, t)
@@ -2411,6 +2492,9 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	if wrong != 0 {
 		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
+	}
+	if testOptions.npEvaluation {
+		doEvaluation(t, data, evaluation)
 	}
 
 	t.Logf("Making the Policy apply to y/c by labeling it with the temporary label that matches the dummy AppliedTo")
@@ -2424,12 +2508,18 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability = NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "b"), getPod("y", "a"), Dropped)
 	reachability.Expect(getPod("x", "b"), getPod("y", "c"), Dropped)
+	updatedEvaluation := NewNPEvaluation(allPods).
+		Expect(getPod("x", "b"), getPod("y", "c"), builder.Name, NPEvalDrop).
+		Expect(getPod("x", "b"), getPod("y", "a"), builder.Name, NPEvalDrop)
 	time.Sleep(networkPolicyDelay)
 	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
+	}
+	if testOptions.npEvaluation {
+		doEvaluation(t, data, updatedEvaluation)
 	}
 
 	t.Logf("Making the Policy not apply to y/c by removing the temporary label")
@@ -2444,6 +2534,9 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	if wrong != 0 {
 		t.Errorf("Failure -- %d wrong results", wrong)
 		reachability.PrintSummary(true, true, true)
+	}
+	if testOptions.npEvaluation {
+		doEvaluation(t, data, evaluation)
 	}
 
 	failOnError(k8sUtils.DeleteANNP(builder.Namespace, builder.Name), t)
@@ -4127,9 +4220,9 @@ func executeTests(t *testing.T, testList []*TestCase) {
 
 func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 	for _, testCase := range testList {
-		log.Infof("running test case %s", testCase.Name)
+		log.Infof("Running test case %s", testCase.Name)
 		for _, step := range testCase.Steps {
-			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
+			log.Infof("Running step %s of test case %s", step.Name, testCase.Name)
 			applyTestStepResources(t, step)
 			if step.CustomSetup != nil {
 				step.CustomSetup()
@@ -4156,6 +4249,13 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			if step.CustomTeardown != nil {
 				step.CustomTeardown()
 			}
+			if step.NPEvaluation != nil {
+				if data == nil {
+					t.Errorf("test case %s with networkpolicyevaluation must set test data", testCase.Name)
+				} else if testOptions.npEvaluation {
+					doEvaluation(t, data, step.NPEvaluation)
+				}
+			}
 		}
 		log.Debug("Cleaning-up all policies and groups created by this Testcase")
 		cleanupTestCaseResources(t, testCase)
@@ -4177,6 +4277,43 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol AntreaPolicy
 	if connectivity != p.ExpectConnectivity {
 		t.Errorf("Failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v",
 			p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connectivity, p.ExpectConnectivity)
+	}
+}
+
+func doEvaluation(t *testing.T, data *TestData, npEvaluation *NPEvaluation) {
+	log.Infof("Running networkpolicyevaluation tests")
+	antreaController, err := data.getAntreaController()
+	require.NoError(t, err, "Error occurred when trying to get the Antrea Controller")
+	antctlArgs := []string{"antctl", "query", "networkpolicyevaluation"}
+	getRealizedPod := func(label Pod) string {
+		realizedPod, err := k8sUtils.GetPodByLabel(label.Namespace(), label.PodName())
+		require.NoError(t, err, "Failed to get Pod %s", label.String())
+		return realizedPod.Namespace + "/" + realizedPod.Name
+	}
+	processResponse := func(stdout string) map[string]string {
+		// the first row is the header row, the second row contains the actual value
+		rows := strings.Split(strings.TrimSpace(stdout), "\n")
+		require.Len(t, rows, 2)
+		headerFields := strings.Fields(rows[0])
+		valueFields := strings.Fields(rows[1])
+		require.Equal(t, len(headerFields), len(valueFields))
+		antctlData := make(map[string]string)
+		for idx, name := range headerFields {
+			antctlData[name] = valueFields[idx]
+		}
+		return antctlData
+	}
+
+	for _, eval := range npEvaluation.Assertions {
+		cmds := append(antctlArgs, "-S", getRealizedPod(eval.Source), "-D", getRealizedPod(eval.Destination))
+		log.Tracef("Running command: %s", strings.Join(cmds, " "))
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaController.Name, "antrea-controller", cmds)
+		if !assert.NoError(t, err, "Failure -- Command was not successful:\n%s", antctlOutput(stdout, stderr)) {
+			continue
+		}
+		gotEval := processResponse(stdout)
+		assert.Equal(t, eval.NPName, gotEval["NAME"], "Failure -- Policy name mismatch in NetworkPolicyEvaluation response")
+		assert.EqualValues(t, eval.Action, gotEval["ACTION"], "Failure -- Policy rule action mismatch in NetworkPolicyEvaluation response")
 	}
 }
 
@@ -4379,7 +4516,7 @@ func TestAntreaPolicy(t *testing.T) {
 		applyDefaultDenyToAllNamespaces(k8sUtils, namespaces)
 		t.Run("Case=ACNPAllowXBtoA", func(t *testing.T) { testACNPAllowXBtoA(t) })
 		t.Run("Case=ACNPAllowXBtoYA", func(t *testing.T) { testACNPAllowXBtoYA(t) })
-		t.Run("Case=ACNPPriorityOverrideDefaultDeny", func(t *testing.T) { testACNPPriorityOverrideDefaultDeny(t) })
+		t.Run("Case=ACNPPriorityOverrideDefaultDeny", func(t *testing.T) { testACNPPriorityOverrideDefaultDeny(t, data) }) // Includes evaluation.
 		cleanupDefaultDenyNPs(k8sUtils, namespaces)
 	})
 
@@ -4394,23 +4531,23 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPDropIngressInNamespace", func(t *testing.T) { testACNPDropIngressInSelectedNamespace(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
 		t.Run("Case=ACNPSourcePort", func(t *testing.T) { testACNPSourcePort(t) })
-		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
+		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t, data) }) // Includes evaluation.
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, ProtocolTCP) })
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, ProtocolUDP) })
 		t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data, data.testNamespace, data.testNamespace) })
 		t.Run("Case=RejectNoInfiniteLoop", func(t *testing.T) { testRejectNoInfiniteLoop(t, data, data.testNamespace, data.testNamespace) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
-		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
-		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
-		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })
-		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t) })
-		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t) })
-		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t) })
+		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t, data) })           // Includes evaluation.
+		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t, data) })               // Includes evaluation.
+		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t, data) })                       // Includes evaluation.
+		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t, data) })                         // Includes evaluation.
+		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t, data) }) // Includes evaluation.
+		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t, data) })                       // Includes evaluation.
 		t.Run("Case=ANNPPortRange", func(t *testing.T) { testANNPPortRange(t) })
 		t.Run("Case=ANNPBasic", func(t *testing.T) { testANNPBasic(t) })
-		t.Run("Case=ANNPUpdate", func(t *testing.T) { testANNPUpdate(t, data) })
-		t.Run("Case=testANNPMultipleAppliedToSingleRule", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true) })
-		t.Run("Case=testANNPMultipleAppliedToMultipleRules", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false) })
+		t.Run("Case=ANNPUpdate", func(t *testing.T) { testANNPUpdate(t, data) })                                               // Includes evaluation.
+		t.Run("Case=testANNPMultipleAppliedToSingleRule", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, true) })     // Includes evaluation.
+		t.Run("Case=testANNPMultipleAppliedToMultipleRules", func(t *testing.T) { testANNPMultipleAppliedTo(t, data, false) }) // Includes evaluation.
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
 		t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t) })
 		t.Run("Case=ACNPStrictNamespaceIsolation", func(t *testing.T) { testACNPStrictNamespacesIsolation(t) })
