@@ -35,20 +35,19 @@ func (t *checkCNIExistence) Run(ctx context.Context, testContext *testContext) e
 	if err != nil {
 		return fmt.Errorf("Failed to execute command in Pod %s, error: %v", testContext.testPod.Name, err)
 	}
-	outputStr := strings.TrimSpace(output)
-	if outputStr == "" {
+	files := strings.Fields(output)
+	if len(files) == 0 {
 		testContext.Log("No files present in /etc/cni/net.d in Node %s", testContext.testPod.Spec.NodeName)
-	} else {
-		files := strings.Split(outputStr, "\n")
-		sort.Strings(files)
-		if len(files) > 0 {
-			if files[0] < "10-antrea.conflist" {
-				return fmt.Errorf("Another CNI configuration file with higher priority than Antrea's CNI configuration file found: %s. Ignore this if PolicyOnly mode is enabled.", files[0])
-			} else if files[0] != "10-antrea.conflist" {
-				testContext.Log("Another CNI configuration file found: %s with Antrea having higher precedence", files[0])
-			} else {
-				testContext.Log("Antrea's CNI configuration file already present: %s", files[0])
-			}
+		return nil
+	}
+	sort.Strings(files)
+	if len(files) > 0 {
+		if files[0] < "10-antrea.conflist" {
+			return fmt.Errorf("Another CNI configuration file with higher priority than Antrea's CNI configuration file found: %s; this may be expected if networkPolicyOnly mode is enabled", files[0])
+		} else if files[0] != "10-antrea.conflist" {
+			testContext.Log("Another CNI configuration file found: %s with Antrea having higher precedence", files[0])
+		} else {
+			testContext.Log("Antrea's CNI configuration file already present: %s", files[0])
 		}
 	}
 	return nil

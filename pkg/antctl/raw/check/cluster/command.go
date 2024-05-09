@@ -104,7 +104,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	deployment := check.NewDeployment(check.DeploymentParameters{
 		Name:        deploymentName,
-		Image:       getImageVersion(),
+		Image:       getAntreaAgentImage(),
 		Replicas:    1,
 		Command:     []string{"bash", "-c"},
 		Args:        []string{"trap 'exit 0' SIGTERM; sleep infinity & pid=$!; wait $pid"},
@@ -150,6 +150,9 @@ func (t *testContext) setup(ctx context.Context) error {
 				},
 			},
 		},
+		NodeSelector: map[string]string{
+			"kubernetes.io/os": "linux",
+		},
 	})
 
 	t.Log("Creating Deployment")
@@ -167,19 +170,18 @@ func (t *testContext) setup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to list test Pod: %s", err)
 	}
-	if len(testPods.Items) > 0 {
-		t.testPod = &testPods.Items[0]
+	if len(testPods.Items) == 0 {
+		return fmt.Errorf("unable to list pods")
 	}
+	t.testPod = &testPods.Items[0]
 	return nil
 }
 
-func getImageVersion() string {
-	if version.ReleaseStatus == "unreleased" {
-		return "antrea/antrea-agent-ubuntu:latest"
-	} else if version.ReleaseStatus == "released" {
+func getAntreaAgentImage() string {
+	if version.ReleaseStatus == "released" {
 		return fmt.Sprintf("antrea/antrea-agent-ubuntu:%s", version.GetVersion())
 	}
-	return ""
+	return "antrea/antrea-agent-ubuntu:latest"
 }
 
 func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName string) *testContext {

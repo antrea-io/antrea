@@ -140,7 +140,8 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 					Labels: p.Labels,
 				},
 				Spec: corev1.PodSpec{
-					HostNetwork: p.HostNetwork,
+					HostNetwork:  p.HostNetwork,
+					NodeSelector: p.NodeSelector,
 					Containers: []corev1.Container{
 						{
 							Name:            p.Name,
@@ -176,6 +177,7 @@ type DeploymentParameters struct {
 	VolumeMounts []corev1.VolumeMount
 	Volumes      []corev1.Volume
 	HostNetwork  bool
+	NodeSelector map[string]string
 }
 
 func WaitForDeploymentsReady(ctx context.Context,
