@@ -10,16 +10,16 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["powershell", "-file", "$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1", "-VMSwitchExtension", "disable"]
+                command: ["powershell", "-file", "$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent.ps1", "-VMSwitchExtension", "disable"]
             postStart:
               exec:
-                command: ["powershell", "-file", "$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1", "-VMSwitchExtension", "enable"]
+                command: ["powershell", "-file", "$env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent.ps1", "-VMSwitchExtension", "enable"]
         - name: antrea-ovs
           image: antrea-windows
           imagePullPolicy: IfNotPresent
           args:
             - -file
-            - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaOVS-Containerd.ps1
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaOVS.ps1
           command:
           - powershell
           volumeMounts:
@@ -28,3 +28,15 @@ spec:
           - mountPath: /var/log/openvswitch
             name: var-log-antrea
             subPath: openvswitch
+      initContainers:
+      - args:
+        - -file
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-OVSDriver.ps1
+        command:
+        - powershell
+        image: antrea/antrea-windows:latest
+        imagePullPolicy: IfNotPresent
+        name: install-ovs-driver
+        volumeMounts:
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows

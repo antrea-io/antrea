@@ -1,6 +1,23 @@
 apiVersion: v1
 data:
-  Install-WindowsCNI-Containerd.ps1: |
+  Install-OVSDriver.ps1: |
+    $ErrorActionPreference = "Stop"
+    $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
+    $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
+    $OVSDriverDir = "$mountPath\openvswitch\driver"
+
+    # Check if OVSExt driver is already installed
+    $driverStatus = netcfg -q ovsext
+    if ($driverStatus -like '*not installed*') {
+      # Install OVS Driver
+      $result = netcfg -l $OVSDriverDir/ovsext.inf -c s -i OVSExt
+      if ($result -like '*failed*') {
+        Write-Host "Failed to install OVSExt driver: $result"
+        exit 1
+      }
+      Write-Host "OVSExt driver has been installed"
+    }
+  Install-WindowsCNI.ps1: |
     $ErrorActionPreference = "Stop";
     mkdir -force c:/var/log/antrea
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
@@ -34,25 +51,18 @@ data:
     cp $mountPath/etc/antrea/antrea-cni.conflist c:/etc/cni/net.d/10-antrea.conflist
     mkdir -force c:/k/antrea/bin
     cp $mountPath/k/antrea/bin/antctl.exe c:/k/antrea/bin/antctl.exe
-  Run-AntreaAgent-Containerd.ps1: |
+  Run-AntreaAgent.ps1: |
     $ErrorActionPreference = "Stop"
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
     $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/')
     $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/k/antrea/bin;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
     & antrea-agent --config=$mountPath/etc/antrea/antrea-agent.conf --logtostderr=false --log_dir=c:/var/log/antrea --alsologtostderr --log_file_max_size=100 --log_file_max_num=4 --v=0
-  Run-AntreaOVS-Containerd.ps1: |
+  Run-AntreaOVS.ps1: |
     $ErrorActionPreference = "Stop"
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
     $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
     $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
-    $OVSDriverDir="$mountPath\openvswitch\driver"
-
-    # Check if OVSExt driver is already installed
-    $driverStatus = netcfg -q ovsext
-    if ($driverStatus -like '*not installed*') {
-      # Install OVS Driver
-      netcfg -l $OVSDriverDir/ovsext.inf -c s -i OVSExt
-    }
+    $OVSDriverDir = "$mountPath\openvswitch\driver"
 
     # Configure OVS processes
     $OVS_DB_SCHEMA_PATH = "$mountPath/openvswitch/usr/share/openvswitch/vswitch.ovsschema"
@@ -87,7 +97,7 @@ data:
         }
         Start-Sleep -Seconds $SleepInterval
     }
-  VMSwitchExtension-AntreaAgent-Containerd.ps1: |
+  VMSwitchExtension-AntreaAgent.ps1: |
     Param(
         [parameter(Mandatory = $false)] [ValidateSet("enable", "disable")] [string] $VMSwitchExtension = "disable"
     )
@@ -293,7 +303,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: bb43d8d5840ffd71ff946d44052fefc5bd88ca5ad58ac5048d85a5cf26a7ef13
+        checksum/agent-windows: 3a8371fd1b923b1176641950074efc943c326c1638293f84ba16bbeec889ce2d
         checksum/windows-config: 6ff4f8bd0b310ebe4d4612bdd9697ffb3d79e0e0eab3936420417dd5a8fc128d
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
@@ -303,7 +313,7 @@ spec:
       containers:
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent.ps1
         command:
         - powershell
         env:
@@ -327,7 +337,7 @@ spec:
               command:
               - powershell
               - -file
-              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1
+              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent.ps1
               - -VMSwitchExtension
               - enable
           preStop:
@@ -335,7 +345,7 @@ spec:
               command:
               - powershell
               - -file
-              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent-Containerd.ps1
+              - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/VMSwitchExtension-AntreaAgent.ps1
               - -VMSwitchExtension
               - disable
         name: antrea-agent
@@ -348,7 +358,7 @@ spec:
           name: var-log-antrea
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaOVS-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaOVS.ps1
         command:
         - powershell
         image: antrea/antrea-windows:latest
@@ -364,7 +374,7 @@ spec:
       initContainers:
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI.ps1
         command:
         - powershell
         image: antrea/antrea-windows:latest
@@ -374,6 +384,17 @@ spec:
         - mountPath: /etc/antrea
           name: antrea-windows-config
           readOnly: true
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows
+      - args:
+        - -file
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-OVSDriver.ps1
+        command:
+        - powershell
+        image: antrea/antrea-windows:latest
+        imagePullPolicy: IfNotPresent
+        name: install-ovs-driver
+        volumeMounts:
         - mountPath: /var/lib/antrea-windows
           name: antrea-agent-windows
       nodeSelector:
