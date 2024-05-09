@@ -238,7 +238,8 @@ jobs:
             --proxy-all \
             --node-ipam \
             --extra-vlan \
-            --multicast
+            --multicast \
+            --networkpolicy-evaluation
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
       - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage

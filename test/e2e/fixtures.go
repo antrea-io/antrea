@@ -675,6 +675,7 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.enableCoverage, "coverage", false, "Run tests and measure coverage")
 	flag.BoolVar(&testOptions.enableAntreaIPAM, "antrea-ipam", false, "Run tests with AntreaIPAM")
 	flag.BoolVar(&testOptions.flowVisibility, "flow-visibility", false, "Run flow visibility tests")
+	flag.BoolVar(&testOptions.npEvaluation, "networkpolicy-evaluation", false, "Run NetworkPolicy evaluation tests")
 	flag.BoolVar(&testOptions.deployAntrea, "deploy-antrea", true, "Deploy Antrea before running tests")
 	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
 	flag.StringVar(&testOptions.skipCases, "skip-cases", "", "Key words to skip cases")
