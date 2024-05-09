@@ -17,7 +17,6 @@ package deploy
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,6 +54,9 @@ var getAPIGroupResources = getAPIGroupResourcesWrapper
 
 func generateManifests(role string, version string) ([]string, error) {
 	var manifests []string
+	if version != "latest" && !strings.HasPrefix(version, "v") {
+		version = fmt.Sprintf("v%s", version)
+	} 
 	switch role {
 	case leaderRole:
 		manifests = []string{
@@ -92,9 +94,6 @@ func createResources(cmd *cobra.Command, apiGroupResources []*restmapper.APIGrou
 
 		obj, gvk, err := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme).Decode(rawObj.Raw, nil, nil)
 		if err != nil {
-			if string(content) == "Not Found" {
-				return errors.New("specified version tag is not found")
-			}
 			return err
 		}
 		unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
@@ -173,11 +172,6 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 			return err
 		}
 	} else {
-		if version != "latest" {
-			if !strings.HasPrefix(version, "v") {
-				version = fmt.Sprintf("v%s", version)
-			}
-		} 
 		manifests, err := generateManifests(role, version)
 		if err != nil {
 			return err
@@ -185,6 +179,9 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 		for _, manifest := range manifests {
 			// #nosec G107
 			resp, err := httpGet(manifest)
+			if resp.StatusCode == 404 {
+				return fmt.Errorf("manifest %s not found", manifest)
+			}
 			if err != nil {
 				return err
 			}
