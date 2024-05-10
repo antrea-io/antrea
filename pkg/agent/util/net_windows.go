@@ -34,7 +34,6 @@ import (
 
 	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
 	"antrea.io/antrea/pkg/agent/util/winnet"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -436,9 +435,3 @@ func RenameInterface(from, to string) error {
 func GenHostInterfaceName(upLinkIfName string) string {
 	return strings.TrimSuffix(upLinkIfName, bridgedUplinkSuffix)
 }
-
-func PrepareHostInterfaceConnection(_ ovsconfig.OVSBridgeClient, ifaceName string, _ int32, _ map[string]interface{}) (string, bool, error) {
-	return ifaceName, false, nil
-}
-
-func RestoreHostInterfaceConfiguration(_ string, _ string) {}

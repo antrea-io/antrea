@@ -76,10 +76,8 @@ func TestSyncRoutes(t *testing.T) {
 	})
 
 	c := &Client{
-		winnet:        mockWinnet,
-		proxyAll:      true,
-		nodeRoutes:    sync.Map{},
-		serviceRoutes: sync.Map{},
+		winnet:   mockWinnet,
+		proxyAll: true,
 		nodeConfig: &config.NodeConfig{
 			GatewayConfig: &config.GatewayConfig{LinkIndex: 10, IPv4: net.ParseIP("192.168.0.1")},
 			PodIPv4CIDR:   ip.MustParseCIDR("192.168.0.0/24"),
@@ -97,7 +95,8 @@ func TestInitServiceIPRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	mockServiceCIDRProvider := servicecidrtesting.NewMockInterface(ctrl)
-	c := &Client{winnet: mockWinnet,
+	c := &Client{
+		winnet: mockWinnet,
 		networkConfig: &config.NetworkConfig{
 			TrafficEncapMode: config.TrafficEncapModeEncap,
 			IPv4Enabled:      true,
@@ -117,7 +116,8 @@ func TestInitServiceIPRoutes(t *testing.T) {
 func TestReconcile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
-	c := &Client{winnet: mockWinnet,
+	c := &Client{
+		winnet:        mockWinnet,
 		proxyAll:      true,
 		networkConfig: &config.NetworkConfig{},
 		nodeConfig: &config.NodeConfig{
@@ -230,7 +230,8 @@ func TestAddRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			netutil := winnettesting.NewMockInterface(ctrl)
-			c := &Client{winnet: netutil,
+			c := &Client{
+				winnet:        netutil,
 				networkConfig: tt.networkConfig,
 				nodeConfig:    tt.nodeConfig,
 			}
@@ -248,7 +249,8 @@ func TestDeleteRoutes(t *testing.T) {
 	podCIDR := ip.MustParseCIDR("192.168.10.0/24")
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
-	c := &Client{winnet: mockWinnet,
+	c := &Client{
+		winnet:     mockWinnet,
 		nodeRoutes: sync.Map{},
 	}
 	for podCIDRStr, nodeRoute := range existingNodeRoutes {
@@ -262,8 +264,7 @@ func TestAddNodePort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	c := &Client{
-		winnet:               mockWinnet,
-		netNatStaticMappings: sync.Map{},
+		winnet: mockWinnet,
 	}
 	mockWinnet.EXPECT().ReplaceNetNatStaticMapping(nodePortNetNatStaticMapping)
 	assert.NoError(t, c.AddNodePort(nil, nodePort, protocol))
@@ -273,8 +274,7 @@ func TestDeleteNodePort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
 	c := &Client{
-		winnet:               mockWinnet,
-		netNatStaticMappings: sync.Map{},
+		winnet: mockWinnet,
 	}
 	c.netNatStaticMappings.Store(fmt.Sprintf("%d-%s", nodePort, protocol), nodePortNetNatStaticMapping)
 	mockWinnet.EXPECT().RemoveNetNatStaticMapping(nodePortNetNatStaticMapping)
@@ -404,7 +404,8 @@ func TestAddExternalIPRoute(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
-	c := &Client{winnet: mockWinnet,
+	c := &Client{
+		winnet: mockWinnet,
 		nodeConfig: &config.NodeConfig{
 			GatewayConfig: &config.GatewayConfig{
 				LinkIndex: 10,
@@ -424,7 +425,9 @@ func TestDeleteExternalIPRoute(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockWinnet := winnettesting.NewMockInterface(ctrl)
-	c := &Client{winnet: mockWinnet}
+	c := &Client{
+		winnet: mockWinnet,
+	}
 	for ipStr, route := range map[string]*winnet.Route{externalIPv4Addr1: ipv4Route1, externalIPv4Addr2: ipv4Route2} {
 		c.serviceRoutes.Store(ipStr, route)
 	}

@@ -152,7 +152,7 @@ func (h *Handle) RemoveNetAdapterIPAddress(adapterName string, ipAddr net.IP) er
 func (h *Handle) EnableIPForwarding(adapterName string) error {
 	adapter, err := getAdapterInAllCompartmentsByName(adapterName)
 	if err != nil {
-		return fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %v", adapterName, err)
+		return fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %w", adapterName, err)
 	}
 	return adapter.setForwarding(true, antreasyscall.AF_INET)
 }
@@ -274,7 +274,7 @@ func (h *Handle) IsNetAdapterIPv4DHCPEnabled(adapterName string) (bool, error) {
 func (h *Handle) SetNetAdapterMTU(adapterName string, mtu int) error {
 	adapter, err := getAdapterInAllCompartmentsByName(adapterName)
 	if err != nil {
-		return fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %v", adapterName, err)
+		return fmt.Errorf("unable to find NetAdapter on host in all compartments with name %s: %w", adapterName, err)
 	}
 	return adapter.setMTU(mtu, antreasyscall.AF_INET)
 }
@@ -305,7 +305,7 @@ func (h *Handle) AddNetRoute(route *Route) error {
 	}
 	row := toMibIPForwardRow(route)
 	if err := antreaNetIO.CreateIPForwardEntry(row); err != nil {
-		return fmt.Errorf("failed to create new IPForward row: %v", err)
+		return fmt.Errorf("failed to create new IPForward row: %w", err)
 	}
 	return nil
 }
@@ -317,13 +317,13 @@ func (h *Handle) RemoveNetRoute(route *Route) error {
 	family := AddressFamilyByIP(route.DestinationSubnet.IP)
 	rows, err := antreaNetIO.ListIPForwardRows(family)
 	if err != nil {
-		return fmt.Errorf("unable to list Windows IPForward rows: %v", err)
+		return fmt.Errorf("unable to list Windows IPForward rows: %w", err)
 	}
 	for i := range rows {
 		row := rows[i]
 		if row.DestinationPrefix.EqualsTo(route.DestinationSubnet) && row.Index == uint32(route.LinkIndex) && row.NextHop.IP().Equal(route.GatewayAddress) {
 			if err := antreaNetIO.DeleteIPForwardEntry(&row); err != nil {
-				return fmt.Errorf("failed to delete existing route with nextHop %s: %v", route.GatewayAddress, err)
+				return fmt.Errorf("failed to delete existing route with nextHop %s: %w", route.GatewayAddress, err)
 			}
 		}
 	}
@@ -337,7 +337,7 @@ func (h *Handle) ReplaceNetRoute(route *Route) error {
 	family := AddressFamilyByIP(route.DestinationSubnet.IP)
 	rows, err := antreaNetIO.ListIPForwardRows(family)
 	if err != nil {
-		return fmt.Errorf("unable to list Windows IPForward rows: %v", err)
+		return fmt.Errorf("unable to list Windows IPForward rows: %w", err)
 	}
 	for i := range rows {
 		row := rows[i]
@@ -346,7 +346,7 @@ func (h *Handle) ReplaceNetRoute(route *Route) error {
 				return nil
 			} else {
 				if err := antreaNetIO.DeleteIPForwardEntry(&row); err != nil {
-					return fmt.Errorf("failed to delete existing route with nextHop %s: %v", route.GatewayAddress, err)
+					return fmt.Errorf("failed to delete existing route with nextHop %s: %w", route.GatewayAddress, err)
 				}
 			}
 		}
@@ -357,7 +357,7 @@ func (h *Handle) ReplaceNetRoute(route *Route) error {
 func (h *Handle) RouteListFiltered(family uint16, filter *Route, filterMask uint64) ([]Route, error) {
 	rows, err := antreaNetIO.ListIPForwardRows(family)
 	if err != nil {
-		return nil, fmt.Errorf("unable to list Windows IPForward rows: %v", err)
+		return nil, fmt.Errorf("unable to list Windows IPForward rows: %w", err)
 	}
 	rts := make([]Route, 0, len(rows))
 	for i := range rows {
@@ -399,8 +399,7 @@ func (h *Handle) AddNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 	cmd := fmt.Sprintf("Get-NetNat -Name %s | Select-Object InternalIPInterfaceAddressPrefix | Format-Table -HideTableHeaders", netNatName)
 	if internalNet, err := runCommand(cmd); err != nil {
 		if !strings.Contains(err.Error(), "No MSFT_NetNat objects found") {
-			klog.ErrorS(err, "Failed to check the existing netnat", "name", netNatName)
-			return err
+			return fmt.Errorf("failed to check the existing netnat '%s': %w", netNatName, err)
 		}
 	} else {
 		if strings.Contains(internalNet, subnetCIDR.String()) {
@@ -410,15 +409,13 @@ func (h *Handle) AddNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 		klog.InfoS("Removing the existing NetNat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
 		cmd = fmt.Sprintf("Remove-NetNat -Name %s -Confirm:$false", netNatName)
 		if _, err := runCommand(cmd); err != nil {
-			klog.ErrorS(err, "Failed to remove the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
-			return err
+			return fmt.Errorf("failed to remove the existing netnat '%s' with internalIPInterfaceAddressPrefix '%s': %w", netNatName, internalNet, err)
 		}
 	}
 	cmd = fmt.Sprintf("New-NetNat -Name %s -InternalIPInterfaceAddressPrefix %s", netNatName, subnetCIDR.String())
 	_, err := runCommand(cmd)
 	if err != nil {
-		klog.ErrorS(err, "Failed to add netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", subnetCIDR.String())
-		return err
+		return fmt.Errorf("failed to add netnat '%s' with internalIPInterfaceAddressPrefix '%s': %w", netNatName, subnetCIDR.String(), err)
 	}
 	return nil
 }
@@ -513,16 +510,16 @@ func getNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 	for _, items := range parsed {
 		idx, err := strconv.Atoi(items[0])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse the LinkIndex '%s': %v", items[0], err)
+			return nil, fmt.Errorf("failed to parse the LinkIndex '%s': %w", items[0], err)
 		}
 		dstIP := net.ParseIP(items[1])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse the DestinationIP '%s': %v", items[1], err)
+			return nil, fmt.Errorf("failed to parse the DestinationIP '%s': %w", items[1], err)
 		}
 		// Get-NetNeighbor returns LinkLayerAddress like "AA-BB-CC-DD-EE-FF".
 		mac, err := net.ParseMAC(strings.ReplaceAll(items[2], "-", ":"))
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse the Gateway MAC '%s': %v", items[2], err)
+			return nil, fmt.Errorf("failed to parse the Gateway MAC '%s': %w", items[2], err)
 		}
 		neighbor := Neighbor{
 			LinkIndex:        idx,
@@ -643,7 +640,7 @@ func (a *adapter) setMTU(mtu int, family uint16) error {
 		newEntry.NlMtu = uint32(mtu)
 		return &newEntry
 	}); err != nil {
-		return fmt.Errorf("unable to set IPInterface with MTU %d: %v", mtu, err)
+		return fmt.Errorf("unable to set IPInterface with MTU %d: %w", mtu, err)
 	}
 	return nil
 }
@@ -654,7 +651,7 @@ func (a *adapter) setForwarding(enabledForwarding bool, family uint16) error {
 		newEntry.ForwardingEnabled = enabledForwarding
 		return &newEntry
 	}); err != nil {
-		return fmt.Errorf("unable to enable IPForwarding on network adapter: %v", err)
+		return fmt.Errorf("unable to enable IPForwarding on network adapter: %w", err)
 	}
 	return nil
 }
@@ -667,13 +664,12 @@ func (a *adapter) setIPInterfaceEntry(family uint16, updateFunc updateIPInterfac
 			runtime.UnlockOSThread()
 		}()
 		if err := hcsshim.SetCurrentThreadCompartmentId(a.compartmentID); err != nil {
-			klog.ErrorS(err, "Failed to change current thread's compartment", "compartment", a.compartmentID)
-			return err
+			return fmt.Errorf("failed to change current thread's compartment '%d': %w", a.compartmentID, err)
 		}
 	}
 	ipInterfaceRow := &antreasyscall.MibIPInterfaceRow{Family: family, Index: uint32(a.Index)}
 	if err := antreaNetIO.GetIPInterfaceEntry(ipInterfaceRow); err != nil {
-		return fmt.Errorf("unable to get IPInterface entry with Index %d: %v", a.Index, err)
+		return fmt.Errorf("unable to get IPInterface entry with Index %d: %w", a.Index, err)
 	}
 	updatedRow := updateFunc(ipInterfaceRow)
 	updatedRow.SitePrefixLength = 0
