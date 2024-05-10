@@ -350,7 +350,7 @@ func (r *nodeReconciler) computeIPTRules(rule *CompletedRule) (map[iptables.Prot
 	} else {
 		coreIPTChain = config.NodeNetworkPolicyEgressRulesChain
 	}
-	coreIPTRuleComment := fmt.Sprintf("Antrea: for rule %s, policy %s", ruleID, rule.SourceRef.ToString())
+	coreIPTRuleComment := fmt.Sprintf("Antrea: for rule %s, policy %s", rule.Name, rule.SourceRef.ToString())
 	lastRealized.coreIPTChain = coreIPTChain
 
 	nodePolicyRules := make(map[iptables.Protocol]*types.NodePolicyRule)
