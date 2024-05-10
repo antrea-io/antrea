@@ -113,7 +113,6 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 	c.groupCache.Add(status)
 	c.queue.Add(e.group.String())
 	klog.InfoS("Added new multicast group to cache", "group", e.group, "interface", e.iface.InterfaceName)
-	return
 }
 
 // updateGroupMemberStatus updates the group status in groupCache. If a "join" message is sent from an existing member,
@@ -162,7 +161,6 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 			}
 		}
 	}
-	return
 }
 
 // checkLastMember sends out a query message on the group to check if there are still members in the group. If no new
@@ -295,7 +293,7 @@ func NewMulticastController(ofClient openflow.Client,
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
-	multicastRouteClient := newRouteClient(nodeConfig, groupCache, multicastSocket, multicastInterfaces, isEncap, enableFlexibleIPAM)
+	multicastRouteClient := newRouteClient(nodeConfig, groupCache, multicastSocket, multicastInterfaces, enableFlexibleIPAM)
 	c := &Controller{
 		ofClient:             ofClient,
 		ifaceStore:           ifaceStore,
@@ -497,7 +495,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 	deleteLocalMulticastGroup := func() error {
 		err := c.mRouteClient.deleteInboundMrouteEntryByGroup(status.group)
 		if err != nil {
-			klog.ErrorS(err, "Cannot delete multicast group", "group", groupKey)
+			klog.ErrorS(err, "Failed to delete multicast group", "group", groupKey)
 			return err
 		}
 		klog.InfoS("Removed multicast route entry", "group", status.group)

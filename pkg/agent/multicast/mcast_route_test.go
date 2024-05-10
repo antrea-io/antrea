@@ -109,20 +109,20 @@ func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
 			name:  "two entries matched",
 			group: net.ParseIP("224.3.4.5"),
 			currRouteEntries: []inboundMulticastRouteEntry{
-				{group: "224.3.4.5", src: "10.3.4.6", vif: 1},
-				{group: "224.3.4.5", src: "10.3.4.7", vif: 2},
-				{group: "224.3.4.7", src: "10.3.4.7", vif: 2},
+				{multicastRouteEntry: multicastRouteEntry{group: "224.3.4.5", src: "10.3.4.6"}, vif: 1},
+				{multicastRouteEntry: multicastRouteEntry{group: "224.3.4.5", src: "10.3.4.7"}, vif: 2},
+				{multicastRouteEntry: multicastRouteEntry{group: "224.3.4.7", src: "10.3.4.7"}, vif: 2},
 			},
 			deletedRouteEntries: []inboundMulticastRouteEntry{
-				{group: "224.3.4.5", src: "10.3.4.6", vif: 1},
-				{group: "224.3.4.5", src: "10.3.4.7", vif: 2},
+				{multicastRouteEntry: multicastRouteEntry{group: "224.3.4.5", src: "10.3.4.6"}, vif: 1},
+				{multicastRouteEntry: multicastRouteEntry{group: "224.3.4.5", src: "10.3.4.7"}, vif: 2},
 			},
 		},
 		{
 			name:  "no entry match",
 			group: net.ParseIP("224.3.4.6"),
 			currRouteEntries: []inboundMulticastRouteEntry{
-				{group: "224.3.4.5", src: "10.3.4.6", vif: 1},
+				{multicastRouteEntry: multicastRouteEntry{group: "224.3.4.5", src: "10.3.4.6"}, vif: 1},
 			},
 			deletedRouteEntries: []inboundMulticastRouteEntry{}},
 	} {
@@ -137,6 +137,131 @@ func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
 			mRoute.deleteInboundMrouteEntryByGroup(m.group)
 		})
 	}
+}
+
+func TestUpdateOutboundMrouteStats(t *testing.T) {
+	mRoute := newMockMulticastRouteClient(t)
+	err := mRoute.initialize(t)
+	require.NoError(t, err)
+	now := time.Now()
+	for _, m := range []struct {
+		isStale     bool
+		currStats   uint32
+		group       string
+		source      string
+		packetCount uint32
+		createdTime time.Time
+	}{
+		{
+			group:       "224.3.5.7",
+			source:      "10.1.2.3",
+			createdTime: now,
+			isStale:     false,
+			currStats:   0,
+		},
+		{
+			group:       "224.3.5.8",
+			source:      "10.1.2.4",
+			createdTime: now.Add(time.Duration(-mRouteTimeout)),
+			packetCount: 10,
+			isStale:     false,
+			currStats:   9,
+		},
+		{
+			group:       "224.3.5.9",
+			source:      "10.1.2.5",
+			createdTime: now.Add(time.Duration(-mRouteTimeout)),
+			packetCount: 0,
+			isStale:     true,
+			currStats:   0,
+		},
+	} {
+		outboundMrouteEntry := &outboundMulticastRouteEntry{
+			multicastRouteEntry: multicastRouteEntry{
+				src:         m.source,
+				group:       m.group,
+				pktCount:    m.packetCount,
+				updatedTime: m.createdTime,
+			},
+		}
+		mRoute.outboundRouteCache.Add(outboundMrouteEntry)
+		mockMulticastSocket.EXPECT().GetMroutePacketCount(net.ParseIP(m.source), net.ParseIP(m.group)).Times(1).Return(m.currStats, nil)
+		if m.isStale {
+			mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(m.source), net.ParseIP(m.group), uint16(0)).Times(1)
+		}
+		isStale := m.isStale
+		defer func() {
+			_, exist, _ := mRoute.outboundRouteCache.Get(outboundMrouteEntry)
+			require.Equal(t, !isStale, exist)
+		}()
+	}
+	mRoute.updateMrouteStats()
+}
+
+func TestUpdateInboundMrouteStats(t *testing.T) {
+	mRoute := newMockMulticastRouteClient(t)
+	err := mRoute.initialize(t)
+	require.NoError(t, err)
+	now := time.Now()
+	for _, m := range []struct {
+		isStale         bool
+		currPacketCount uint32
+		vif             uint16
+		group           string
+		source          string
+		packetCount     uint32
+		updatedTime     time.Time
+	}{
+		{
+			group:           "224.3.5.7",
+			source:          "192.168.50.60",
+			updatedTime:     now,
+			isStale:         false,
+			currPacketCount: 0,
+			vif:             3,
+		},
+		{
+			group:           "224.3.5.8",
+			source:          "192.168.50.61",
+			updatedTime:     now.Add(time.Duration(-mRouteTimeout)),
+			packetCount:     10,
+			isStale:         false,
+			currPacketCount: 9,
+			vif:             4,
+		},
+		{
+			group:           "224.3.5.9",
+			source:          "192.168.50.62",
+			updatedTime:     now.Add(time.Duration(-mRouteTimeout)),
+			packetCount:     5,
+			isStale:         true,
+			currPacketCount: 5,
+			vif:             5,
+		},
+	} {
+		inboundMrouteEntry := &inboundMulticastRouteEntry{
+			multicastRouteEntry: multicastRouteEntry{
+				src:         m.source,
+				group:       m.group,
+				pktCount:    m.packetCount,
+				updatedTime: m.updatedTime,
+			},
+			vif: m.vif,
+		}
+		mRoute.inboundRouteCache.Add(inboundMrouteEntry)
+		_, exist, _ := mRoute.inboundRouteCache.Get(inboundMrouteEntry)
+		require.True(t, exist)
+		mockMulticastSocket.EXPECT().GetMroutePacketCount(net.ParseIP(m.source), net.ParseIP(m.group)).Times(1).Return(m.currPacketCount, nil)
+		if m.isStale {
+			mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(m.source), net.ParseIP(m.group), m.vif).Times(1)
+		}
+		isStale := m.isStale
+		defer func() {
+			_, exist, _ := mRoute.inboundRouteCache.Get(inboundMrouteEntry)
+			require.Equal(t, !isStale, exist)
+		}()
+	}
+	mRoute.updateMrouteStats()
 }
 
 func TestProcessIGMPNocacheMsg(t *testing.T) {
@@ -236,7 +361,7 @@ func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
-	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false, false)
+	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false)
 }
 
 func (c *MRouteClient) initialize(t *testing.T) error {
