@@ -16,7 +16,7 @@ on Jenkins node. For each job build, a completely new workload cluster will be c
 by this management cluster. As soon as the build finishes, the cluster
 should be deleted. This ensures that all tests are run on a clean testbed.
 
-## List of Jenkins jobs
+## List of Jenkin jobs
 
 [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](https://jenkins.antrea.io/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-gke-conformance-net-policy/) [![Build Status](https://jenkins.antrea.io/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy&subject=AKS%20Conformance/NetworkPolicy%20)](https://jenkins.antrea.io/job/cloud-antrea-aks-conformance-net-policy/)
 
