@@ -33,9 +33,7 @@ func (t *PodToServiceInterNodeConnectivityTest) Run(ctx context.Context, testCon
 	}
 	service := echoOtherNodeDeploymentName
 	for _, clientPod := range testContext.clientPods {
-		srcPod := testContext.namespace + "/" + clientPod.Name
-		dstService := testContext.namespace + "/" + service
-		testContext.Log("Validating from Pod %s to Service %s...", srcPod, dstService)
+		testContext.Log("Validating from Pod %s to Service %s in Namespace %s...", clientPod.Name, service, testContext.namespace)
 		_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(service, "80"))
 		if err != nil {
 			return fmt.Errorf("client Pod %s was not able to communicate with Service %s", clientPod.Name, service)
