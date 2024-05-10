@@ -263,25 +263,6 @@ func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, lin
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 
-func GetAllIPNetsByName(ifaceName string) ([]*net.IPNet, error) {
-	ips := []*net.IPNet{}
-	adapter, err := netInterfaceByName(ifaceName)
-	if err != nil {
-		return nil, err
-	}
-	addrs, _ := netInterfaceAddrs(adapter)
-	for _, addr := range addrs {
-		if ip, ipNet, err := net.ParseCIDR(addr.String()); err != nil {
-			klog.Warningf("Unable to parse addr %+v, err=%+v", addr, err)
-		} else if !ip.IsLinkLocalUnicast() {
-			ipNet.IP = ip
-			ips = append(ips, ipNet)
-		}
-	}
-	klog.InfoS("Found IPs on interface", "IPs", ips, "interface", ifaceName)
-	return ips, nil
-}
-
 func GetIPv4Addr(ips []net.IP) net.IP {
 	for _, ip := range ips {
 		if ip.To4() != nil {
@@ -434,7 +415,7 @@ func GenerateRandomMAC() net.HardwareAddr {
 	return buf
 }
 
-func GetIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
+func getIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
 	addrList, err := netInterfaceAddrs(link)
 	if err != nil {
 		return nil, err
