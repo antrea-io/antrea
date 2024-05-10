@@ -41,7 +41,7 @@ func (t *checkControlPlaneAvailability) Run(ctx context.Context, testContext *te
 		}
 	}
 	if controlPlaneNodes.Len() == 0 {
-		testContext.Log("No control-plane Nodes were found; if installing Antrea in encap mode, some K8s functionalities (API aggregation, apiserver proxy, admission controllers) may be impacted.")
+		return newUncertainError("No control-plane Nodes were found; if installing Antrea in encap mode, some K8s functionalities (API aggregation, apiserver proxy, admission controllers) may be impacted.")
 	} else {
 		testContext.Log("control-plane Nodes were found in the cluster.")
 	}

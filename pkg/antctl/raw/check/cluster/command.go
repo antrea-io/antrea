@@ -16,6 +16,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -44,10 +45,22 @@ func Command() *cobra.Command {
 }
 
 const (
-	testNamespace   = "antrea-test"
-	deploymentName  = "cluster-checker"
-	podReadyTimeout = 1 * time.Minute
+	testNamespacePrefix = "antrea-test"
+	deploymentName      = "cluster-checker"
+	podReadyTimeout     = 1 * time.Minute
 )
+
+type uncertainError struct {
+	reason string
+}
+
+func (e uncertainError) Error() string {
+	return fmt.Sprintf("test results are uncertain: %s", e.reason)
+}
+
+func newUncertainError(reason string, a ...interface{}) uncertainError {
+	return uncertainError{reason: fmt.Sprintf(reason, a...)}
+}
 
 type Test interface {
 	Run(ctx context.Context, testContext *testContext) error
@@ -77,10 +90,14 @@ func Run() error {
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
-	var numSuccess, numFailure int
+	var numSuccess, numFailure, numSkipped int
 	for name, test := range testsRegistry {
 		testContext.Header("Running test: %s", name)
 		if err := test.Run(ctx, testContext); err != nil {
+			if errors.As(err, new(uncertainError)) {
+				testContext.Warning("Test %s was skipped: %v", name, err)
+				numSkipped++
+			}
 			testContext.Fail("Test %s failed: %v", name, err)
 			numFailure++
 		} else {
@@ -88,7 +105,7 @@ func Run() error {
 			numSuccess++
 		}
 	}
-	testContext.Log("Test finished: %v tests succeeded, %v tests failed ", numSuccess, numFailure)
+	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", numSuccess, numFailure, numSkipped)
 	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if numFailure > 0 {
 		return fmt.Errorf("%v/%v tests failed", numFailure, len(testsRegistry))
@@ -168,10 +185,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	testPods, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "component=cluster-checker"})
 	if err != nil {
-		return fmt.Errorf("unable to list test Pod: %s", err)
-	}
-	if len(testPods.Items) == 0 {
-		return fmt.Errorf("unable to list pods")
+		return fmt.Errorf("no pod found for test Deployment")
 	}
 	t.testPod = &testPods.Items[0]
 	return nil
@@ -189,7 +203,7 @@ func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterNam
 		client:      client,
 		config:      config,
 		clusterName: clusterName,
-		namespace:   check.GenerateRandomNamespace(testNamespace),
+		namespace:   check.GenerateRandomNamespace(testNamespacePrefix),
 	}
 }
 
@@ -203,6 +217,10 @@ func (t *testContext) Success(format string, a ...interface{}) {
 
 func (t *testContext) Fail(format string, a ...interface{}) {
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.RedString(format, a...)+"\n")
+}
+
+func (t *testContext) Warning(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", t.clusterName)+color.YellowString(format, a...)+"\n")
 }
 
 func (t *testContext) Header(format string, a ...interface{}) {

@@ -47,12 +47,12 @@ func (c *checkOVSLoadable) Run(ctx context.Context, testContext *testContext) er
 		if err != nil {
 			return fmt.Errorf("error executing modprobe command in Pod %s: %v", testContext.testPod.Name, err)
 		} else if stderr != "" {
-			return fmt.Errorf("failed to load the OVS kernel module from the container %s, try running 'modprobe openvswitch' on your Nodes", stderr)
+			return fmt.Errorf("failed to load the OVS kernel module: %s, try running 'modprobe openvswitch' on your Nodes", stderr)
 		} else {
 			testContext.Log("openvswitch kernel module loaded successfully")
 		}
 	} else {
-		return fmt.Errorf("error encountered while executing modprobe command %s", stderr)
+		return fmt.Errorf("error encountered while check if cni is existent - stderr: %s", stderr)
 	}
 	return nil
 }
