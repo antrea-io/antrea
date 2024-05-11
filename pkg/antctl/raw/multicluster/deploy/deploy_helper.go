@@ -56,7 +56,7 @@ func generateManifests(role string, version string) ([]string, error) {
 	var manifests []string
 	if version != "latest" && !strings.HasPrefix(version, "v") {
 		version = fmt.Sprintf("v%s", version)
-	} 
+	}
 	switch role {
 	case leaderRole:
 		manifests = []string{
