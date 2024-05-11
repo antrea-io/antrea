@@ -32,13 +32,8 @@ const (
 	PodIPIndex       = "podIPIndex"
 )
 
-// protocolSocketState represents the state of the socket corresponding to a
-// given (Node port, protocol) tuple.
-type protocolSocketState int
-
 type ProtocolSocketData struct {
 	Protocol string
-	State    protocolSocketState
 	socket   io.Closer
 }
 
@@ -47,14 +42,13 @@ type NodePortData struct {
 	PodPort  int
 	PodIP    string
 	Protocol ProtocolSocketData
+	// defunct is used to indicate that a rule has been partially deleted: it is no longer
+	// usable and deletion needs to be re-attempted.
+	defunct bool
 }
 
-func (d *NodePortData) ProtocolInUse(protocol string) bool {
-	protocolSocketData := d.Protocol
-	if protocolSocketData.Protocol == protocol {
-		return protocolSocketData.State == stateInUse
-	}
-	return false
+func (d *NodePortData) Defunct() bool {
+	return d.defunct
 }
 
 type LocalPortOpener interface {
@@ -204,8 +198,8 @@ func podIPPortProtoFormat(ip string, port int, protocol string) string {
 }
 
 func (pt *PortTable) getEntryByPodIPPortProto(ip string, port int, protocol string) *NodePortData {
-	data, exists := pt.getPortTableCacheFromPodEndpointIndex(podIPPortProtoFormat(ip, port, protocol))
-	if exists == false {
+	data, ok := pt.getPortTableCacheFromPodEndpointIndex(podIPPortProtoFormat(ip, port, protocol))
+	if !ok {
 		return nil
 	}
 	return data
@@ -214,10 +208,8 @@ func (pt *PortTable) getEntryByPodIPPortProto(ip string, port int, protocol stri
 func (pt *PortTable) RuleExists(podIP string, podPort int, protocol string) bool {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
-	if data := pt.getEntryByPodIPPortProto(podIP, podPort, protocol); data != nil {
-		return data.ProtocolInUse(protocol)
-	}
-	return false
+	data := pt.getEntryByPodIPPortProto(podIP, podPort, protocol)
+	return data != nil
 }
 
 // nodePortProtoFormat formats the nodeport, protocol to string port:protocol.
