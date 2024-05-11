@@ -254,6 +254,7 @@ func (f *featureService) getRequiredTables() []*Table {
 	tables := []*Table{
 		UnSNATTable,
 		PreRoutingClassifierTable,
+		ServiceMarkTable,
 		SessionAffinityTable,
 		ServiceLBTable,
 		EndpointDNATTable,
@@ -262,9 +263,6 @@ func (f *featureService) getRequiredTables() []*Table {
 		SNATTable,
 		ConntrackCommitTable,
 		OutputTable,
-	}
-	if f.proxyAll {
-		tables = append(tables, NodePortMarkTable)
 	}
 	if f.enableDSR {
 		tables = append(tables, DSRServiceMarkTable)

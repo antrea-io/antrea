@@ -108,63 +108,64 @@ where `<TABLE_NAME>` is the name of a table in the pipeline, and `<GROUP_ID>` is
 We use some OVS registers to carry information throughout the pipeline. To enhance usability, we assign friendly names
 to the registers we use.
 
-| Register      | Field Range | Field Name                      | Reg Mark Value | Reg Mark Name                   | Description                                                                                          |
-|---------------|-------------|---------------------------------|----------------|---------------------------------|------------------------------------------------------------------------------------------------------|
-| NXM_NX_REG0   | bits 0-3    | PktSourceField                  | 0x1            | FromTunnelRegMark               | Packet source is tunnel port.                                                                        |
-|               |             |                                 | 0x2            | FromGatewayRegMark              | Packet source is the local Antrea gateway port.                                                      |
-|               |             |                                 | 0x3            | FromPodRegMark                  | Packet source is local Pod port.                                                                     |
-|               |             |                                 | 0x4            | FromUplinkRegMark               | Packet source is uplink port.                                                                        |
-|               |             |                                 | 0x5            | FromBridgeRegMark               | Packet source is local bridge port.                                                                  |
-|               |             |                                 | 0x6            | FromTCReturnRegMark             | Packet source is TrafficControl return port.                                                         |
-|               | bits 4-7    | PktDestinationField             | 0x1            | ToTunnelRegMark                 | Packet destination is tunnel port.                                                                   |
-|               |             |                                 | 0x2            | ToGatewayRegMark                | Packet destination is the local Antrea gateway port.                                                 |
-|               |             |                                 | 0x3            | ToLocalRegMark                  | Packet destination is local Pod port.                                                                |
-|               |             |                                 | 0x4            | ToUplinkRegMark                 | Packet destination is uplink port.                                                                   |
-|               |             |                                 | 0x5            | ToBridgeRegMark                 | Packet destination is local bridge port.                                                             |
-|               | bit  9      |                                 | 0b0            | NotRewriteMACRegMark            | Packet's source/destination MAC address does not need to be rewritten.                               |
-|               |             |                                 | 0b1            | RewriteMACRegMark               | Packet's source/destination MAC address needs to be rewritten.                                       |
-|               | bit  10     |                                 | 0b1            | APDenyRegMark                   | Packet denied (Drop/Reject) by Antrea NetworkPolicy.                                                 |
-|               | bits 11-12  | APDispositionField              | 0b00           | DispositionAllowRegMark         | Indicates Antrea NetworkPolicy disposition: allow.                                                   |
-|               |             |                                 | 0b01           | DispositionDropRegMark          | Indicates Antrea NetworkPolicy disposition: drop.                                                    |
-|               |             |                                 | 0b11           | DispositionPassRegMark          | Indicates Antrea NetworkPolicy disposition: pass.                                                    |
-|               | bit  13     |                                 | 0b1            | GeneratedRejectPacketOutRegMark | Indicates packet is a generated reject response packet-out.                                          |
-|               | bit  14     |                                 | 0b1            | SvcNoEpRegMark                  | Indicates packet towards a Service without Endpoint.                                                 |
-|               | bit  19     |                                 | 0b1            | RemoteSNATRegMark               | Indicates packet needs SNAT on a remote Node.                                                        |
-|               | bit  22     |                                 | 0b1            | L7NPRedirectRegMark             | Indicates L7 Antrea NetworkPolicy disposition of redirect.                                           |
-|               | bits 21-22  | OutputRegField                  | 0b01           | OutputToOFPortRegMark           | Output packet to an OVS port.                                                                        |
-|               |             |                                 | 0b10           | OutputToControllerRegMark       | Send packet to Antrea Agent.                                                                         |
-|               | bits 25-32  | PacketInOperationField          |                |                                 | Field to store NetworkPolicy packetIn operation.                                                     |
-| NXM_NX_REG1   | bits 0-31   | TargetOFPortField               |                |                                 | Egress OVS port of packet.                                                                           |
-| NXM_NX_REG2   | bits 0-31   | SwapField                       |                |                                 | Swap values in flow fields in OpenFlow actions.                                                      |
-|               | bits 0-7    | PacketInTableField              |                |                                 | OVS table where it was decided to send packets to the controller (Antrea Agent).                     |
-| NXM_NX_REG3   | bits 0-31   | EndpointIPField                 |                |                                 | Field to store IPv4 address of the selected Service Endpoint.                                        |
-|               |             | APConjIDField                   |                |                                 | Field to store Conjunction ID for Antrea Policy.                                                     |
-| NXM_NX_REG4   | bits 0-15   | EndpointPortField               |                |                                 | Field store TCP/UDP/SCTP port of a Service's selected Endpoint.                                      |
-|               | bits 16-18  | ServiceEPStateField             | 0b001          | EpToSelectRegMark               | Packet needs to do Service Endpoint selection.                                                       |
-|               | bits 16-18  | ServiceEPStateField             | 0b010          | EpSelectedRegMark               | Packet has done Service Endpoint selection.                                                          |
-|               | bits 16-18  | ServiceEPStateField             | 0b011          | EpToLearnRegMark                | Packet has done Service Endpoint selection and the selected Endpoint needs to be cached.             |
-|               | bits 0-18   | EpUnionField                    |                |                                 | The union value of EndpointPortField and ServiceEPStateField.                                        |
-|               | bit  19     |                                 | 0b1            | ToNodePortAddressRegMark        | Packet is destined for a Service of type NodePort.                                                   |
-|               | bit  20     |                                 | 0b1            | AntreaFlexibleIPAMRegMark       | Packet is from local Antrea IPAM Pod.                                                                |
-|               | bit  20     |                                 | 0b0            | NotAntreaFlexibleIPAMRegMark    | Packet is not from local Antrea IPAM Pod.                                                            |
-|               | bit  21     |                                 | 0b1            | ToExternalAddressRegMark        | Packet is destined for a Service's external IP.                                                      |
-|               | bits 22-23  | TrafficControlActionField       | 0b01           | TrafficControlMirrorRegMark     | Indicates packet needs to be mirrored (used by TrafficControl).                                      |
-|               |             |                                 | 0b10           | TrafficControlRedirectRegMark   | Indicates packet needs to be redirected (used by TrafficControl).                                    |
-|               | bit 24      |                                 | 0b1            | NestedServiceRegMark            | Packet is destined for a Service using other Services as Endpoints.                                  |
-|               | bit 25      |                                 | 0b1            | DSRServiceRegMark               | Packet is destined for a Service working in DSR mode.                                                |
-|               |             |                                 | 0b0            | NotDSRServiceRegMark            | Packet is destined for a Service working in non-DSR mode.                                            |
-|               | bit 26      |                                 | 0b1            | RemoteEndpointRegMark           | Packet is destined for a Service selecting a remote non-hostNetwork Endpoint.                        |
-|               | bit 27      |                                 | 0b1            | FromExternalRegMark             | Packet is from Antrea gateway, but its source IP is not the gateway IP.                              |
-|               | bit 28      |                                 | 0b1            | FromLocalRegMark                | Packet is from a local Pod or the Node.                                                              |
-| NXM_NX_REG5   | bits 0-31   | TFEgressConjIDField             |                |                                 | Egress conjunction ID hit by TraceFlow packet.                                                       |
-| NXM_NX_REG6   | bits 0-31   | TFIngressConjIDField            |                |                                 | Ingress conjunction ID hit by TraceFlow packet.                                                      |
-| NXM_NX_REG7   | bits 0-31   | ServiceGroupIDField             |                |                                 | GroupID corresponding to the Service.                                                                |
-| NXM_NX_REG8   | bits 0-11   | VLANIDField                     |                |                                 | VLAN ID.                                                                                             |
-|               | bits 12-15  | CtZoneTypeField                 | 0b0001         | IPCtZoneTypeRegMark             | Ct zone type is IPv4.                                                                                |
-|               |             |                                 | 0b0011         | IPv6CtZoneTypeRegMark           | Ct zone type is IPv6.                                                                                |
-|               | bits 0-15   | CtZoneField                     |                |                                 | Ct zone ID is a combination of VLANIDField and CtZoneTypeField.                                      |
-| NXM_NX_REG9   | bits 0-31   | TrafficControlTargetOFPortField |                |                                 | Field to cache the OVS port to output packets to be mirrored or redirected (used by TrafficControl). |
-| NXM_NX_XXREG3 | bits 0-127  | EndpointIP6Field                |                |                                 | Field to store IPv6 address of the selected Service Endpoint.                                        |
+| Register      | Field Range | Field Name                      | Reg Mark Value | Reg Mark Name                   | Description                                                                                              |
+|---------------|-------------|---------------------------------|----------------|---------------------------------|----------------------------------------------------------------------------------------------------------|
+| NXM_NX_REG0   | bits 0-3    | PktSourceField                  | 0x1            | FromTunnelRegMark               | Packet source is tunnel port.                                                                            |
+|               |             |                                 | 0x2            | FromGatewayRegMark              | Packet source is the local Antrea gateway port.                                                          |
+|               |             |                                 | 0x3            | FromPodRegMark                  | Packet source is local Pod port.                                                                         |
+|               |             |                                 | 0x4            | FromUplinkRegMark               | Packet source is uplink port.                                                                            |
+|               |             |                                 | 0x5            | FromBridgeRegMark               | Packet source is local bridge port.                                                                      |
+|               |             |                                 | 0x6            | FromTCReturnRegMark             | Packet source is TrafficControl return port.                                                             |
+|               | bits 4-7    | PktDestinationField             | 0x1            | ToTunnelRegMark                 | Packet destination is tunnel port.                                                                       |
+|               |             |                                 | 0x2            | ToGatewayRegMark                | Packet destination is the local Antrea gateway port.                                                     |
+|               |             |                                 | 0x3            | ToLocalRegMark                  | Packet destination is local Pod port.                                                                    |
+|               |             |                                 | 0x4            | ToUplinkRegMark                 | Packet destination is uplink port.                                                                       |
+|               |             |                                 | 0x5            | ToBridgeRegMark                 | Packet destination is local bridge port.                                                                 |
+|               | bit  9      |                                 | 0b0            | NotRewriteMACRegMark            | Packet's source/destination MAC address does not need to be rewritten.                                   |
+|               |             |                                 | 0b1            | RewriteMACRegMark               | Packet's source/destination MAC address needs to be rewritten.                                           |
+|               | bit  10     |                                 | 0b1            | APDenyRegMark                   | Packet denied (Drop/Reject) by Antrea NetworkPolicy.                                                     |
+|               | bits 11-12  | APDispositionField              | 0b00           | DispositionAllowRegMark         | Indicates Antrea NetworkPolicy disposition: allow.                                                       |
+|               |             |                                 | 0b01           | DispositionDropRegMark          | Indicates Antrea NetworkPolicy disposition: drop.                                                        |
+|               |             |                                 | 0b11           | DispositionPassRegMark          | Indicates Antrea NetworkPolicy disposition: pass.                                                        |
+|               | bit  13     |                                 | 0b1            | GeneratedRejectPacketOutRegMark | Indicates packet is a generated reject response packet-out.                                              |
+|               | bit  14     |                                 | 0b1            | SvcRejectRegMark                | Indicates packet towards a Service should be rejected.                                                   |
+|               | bit  19     |                                 | 0b1            | RemoteSNATRegMark               | Indicates packet needs SNAT on a remote Node.                                                            |
+|               | bit  22     |                                 | 0b1            | L7NPRedirectRegMark             | Indicates L7 Antrea NetworkPolicy disposition of redirect.                                               |
+|               | bits 21-22  | OutputRegField                  | 0b01           | OutputToOFPortRegMark           | Output packet to an OVS port.                                                                            |
+|               |             |                                 | 0b10           | OutputToControllerRegMark       | Send packet to Antrea Agent.                                                                             |
+|               | bits 25-32  | PacketInOperationField          |                |                                 | Field to store NetworkPolicy packetIn operation.                                                         |
+| NXM_NX_REG1   | bits 0-31   | TargetOFPortField               |                |                                 | Egress OVS port of packet.                                                                               |
+| NXM_NX_REG2   | bits 0-31   | SwapField                       |                |                                 | Swap values in flow fields in OpenFlow actions.                                                          |
+|               | bits 0-7    | PacketInTableField              |                |                                 | OVS table where it was decided to send packets to the controller (Antrea Agent).                         |
+| NXM_NX_REG3   | bits 0-31   | EndpointIPField                 |                |                                 | Field to store IPv4 address of the selected Service Endpoint.                                            |
+|               |             | APConjIDField                   |                |                                 | Field to store Conjunction ID for Antrea Policy.                                                         |
+| NXM_NX_REG4   | bits 0-15   | EndpointPortField               |                |                                 | Field store TCP/UDP/SCTP port of a Service's selected Endpoint.                                          |
+|               | bits 16-18  | ServiceEPStateField             | 0b001          | EpToSelectRegMark               | Packet needs to do Service Endpoint selection.                                                           |
+|               | bits 16-18  | ServiceEPStateField             | 0b010          | EpSelectedRegMark               | Packet has done Service Endpoint selection.                                                              |
+|               | bits 16-18  | ServiceEPStateField             | 0b011          | EpToLearnRegMark                | Packet has done Service Endpoint selection and the selected Endpoint needs to be cached.                 |
+|               | bits 0-18   | EpUnionField                    |                |                                 | The union value of EndpointPortField and ServiceEPStateField.                                            |
+|               | bit  19     |                                 | 0b1            | ToNodePortAddressRegMark        | Packet is destined for a Service of type NodePort.                                                       |
+|               | bit  20     |                                 | 0b1            | AntreaFlexibleIPAMRegMark       | Packet is from local Antrea IPAM Pod.                                                                    |
+|               | bit  20     |                                 | 0b0            | NotAntreaFlexibleIPAMRegMark    | Packet is not from local Antrea IPAM Pod.                                                                |
+|               | bit  21     |                                 | 0b1            | ToExternalAddressRegMark        | Packet is destined for a Service's external IP.                                                          |
+|               | bits 22-23  | TrafficControlActionField       | 0b01           | TrafficControlMirrorRegMark     | Indicates packet needs to be mirrored (used by TrafficControl).                                          |
+|               |             |                                 | 0b10           | TrafficControlRedirectRegMark   | Indicates packet needs to be redirected (used by TrafficControl).                                        |
+|               | bit 24      |                                 | 0b1            | NestedServiceRegMark            | Packet is destined for a Service using other Services as Endpoints.                                      |
+|               | bit 25      |                                 | 0b1            | DSRServiceRegMark               | Packet is destined for a Service working in DSR mode.                                                    |
+|               |             |                                 | 0b0            | NotDSRServiceRegMark            | Packet is destined for a Service working in non-DSR mode.                                                |
+|               | bit 26      |                                 | 0b1            | RemoteEndpointRegMark           | Packet is destined for a Service selecting a remote non-hostNetwork Endpoint.                            |
+|               | bit 27      |                                 | 0b1            | FromExternalRegMark             | Packet is from Antrea gateway, but its source IP is not the gateway IP.                                  |
+|               | bit 28      |                                 | 0b1            | FromLocalRegMark                | Packet is from a local Pod or the Node.                                                                  |
+|               | bit 29      |                                 | 0b1            | LoadBalancerSourceRangesRegMark | Source of packet destined for a LoadBalancer Service is included in the Service LoadBalancerSourceRanges |
+| NXM_NX_REG5   | bits 0-31   | TFEgressConjIDField             |                |                                 | Egress conjunction ID hit by TraceFlow packet.                                                           |
+| NXM_NX_REG6   | bits 0-31   | TFIngressConjIDField            |                |                                 | Ingress conjunction ID hit by TraceFlow packet.                                                          |
+| NXM_NX_REG7   | bits 0-31   | ServiceGroupIDField             |                |                                 | GroupID corresponding to the Service.                                                                    |
+| NXM_NX_REG8   | bits 0-11   | VLANIDField                     |                |                                 | VLAN ID.                                                                                                 |
+|               | bits 12-15  | CtZoneTypeField                 | 0b0001         | IPCtZoneTypeRegMark             | Ct zone type is IPv4.                                                                                    |
+|               |             |                                 | 0b0011         | IPv6CtZoneTypeRegMark           | Ct zone type is IPv6.                                                                                    |
+|               | bits 0-15   | CtZoneField                     |                |                                 | Ct zone ID is a combination of VLANIDField and CtZoneTypeField.                                          |
+| NXM_NX_REG9   | bits 0-31   | TrafficControlTargetOFPortField |                |                                 | Field to cache the OVS port to output packets to be mirrored or redirected (used by TrafficControl).     |
+| NXM_NX_XXREG3 | bits 0-127  | EndpointIP6Field                |                |                                 | Field to store IPv6 address of the selected Service Endpoint.                                            |
 
 Note that reg marks that have overlapped bits will not be used at the same time, such as `SwapField` and `PacketInTableField`.
 
@@ -254,7 +255,7 @@ spec:
 ## Kubernetes Service Implementation
 
 Like K8s NetworkPolicy, several tables of the pipeline are dedicated to [Kubernetes
-Service](https://kubernetes.io/docs/concepts/services-networking/service/) implementation (tables [NodePortMark],
+Service](https://kubernetes.io/docs/concepts/services-networking/service/) implementation (tables [ServiceMark],
 [SessionAffinity], [ServiceLB], and [EndpointDNAT]).
 
 By enabling `proxyAll`, ClusterIP, NodePort, LoadBalancer, and ExternalIP are all handled by AntreaProxy. Otherwise,
@@ -406,6 +407,34 @@ status:
   loadBalancer:
     ingress:
       - ip: 192.168.77.151
+```
+
+### LoadBalancer with LoadBalancerSourceRanges
+
+A sample LoadBalancer Service, with ingress IP `192.168.77.150` assigned by an ingress controller, configured
+`loadBalancerSourceRanges` to a CIDR list and `externalTrafficPolicy` to `Local`.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-loadbalancer
+spec:
+  selector:
+    app: web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  loadBalancerSourceRanges:
+    - "192.168.77.0/24"
+    - "192.168.78.0/24"
+status:
+  loadBalancer:
+    ingress:
+      - ip: 192.168.77.152
 ```
 
 ## Antrea-native NetworkPolicy Implementation
@@ -862,7 +891,7 @@ specific cases:
 
 1. Dropping invalid packets reported by conntrack.
 2. Forwarding tracked packets from all connections to table [AntreaPolicyEgressRule] directly, bypassing the tables
-   like [PreRoutingClassifier], [NodePortMark], [SessionAffinity], [ServiceLB], and [EndpointDNAT] for Service Endpoint
+   like [PreRoutingClassifier], [ServiceMark], [SessionAffinity], [ServiceLB], and [EndpointDNAT] for Service Endpoint
    selection.
 3. Forwarding packets from new connections to table [PreRoutingClassifier] to start Service Endpoint selection since
    Service connections are not identified at this stage.
@@ -892,34 +921,41 @@ Flow 4 is the table-miss flow for case 3, matching packets from all new connecti
 ### PreRoutingClassifier
 
 This table handles the first packet from uncommitted Service connections before Service Endpoint selection. It
-sequentially resubmits the packets to tables [NodePortMark] and [SessionAffinity] to do some pre-processing, including
+sequentially resubmits the packets to tables [ServiceMark] and [SessionAffinity] to do some pre-processing, including
 the loading of specific reg marks. Subsequently, it forwards the packets to table [ServiceLB] to perform Service Endpoint
 selection.
 
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=PreRoutingClassifier, priority=200,ip actions=resubmit(,NodePortMark),resubmit(,SessionAffinity),resubmit(,ServiceLB)
-2. table=PreRoutingClassifier, priority=0 actions=goto_table:NodePortMark
+1. table=PreRoutingClassifier, priority=200,ip actions=resubmit(,ServiceMark),resubmit(,SessionAffinity),resubmit(,ServiceLB)
+2. table=PreRoutingClassifier, priority=0 actions=goto_table:ServiceMark
 ```
 
-Flow 1 sequentially resubmits packets to tables [NodePortMark], [SessionAffinity], and [ServiceLB]. Note that packets
-are ultimately forwarded to table [ServiceLB]. In tables [NodePortMark] and [SessionAffinity], only reg marks are loaded.
+Flow 1 sequentially resubmits packets to tables [ServiceMark], [SessionAffinity], and [ServiceLB]. Note that packets
+are ultimately forwarded to table [ServiceLB]. In tables [ServiceMark] and [SessionAffinity], only reg marks are loaded.
 
 Flow 2 is the table-miss flow that should remain unused.
 
-### NodePortMark
+### ServiceMark
 
-This table is designed to potentially mark packets destined for NodePort Services. It is only created when `proxyAll` is
-enabled.
+This table is designed to mark some patterns of Service traffic. It addresses specific cases:
+
+1. Packets potentially destined for NodePort Services.
+2. Packets destined for LoadBalancer Services configured with `loadBalancerSourceRanges`.
 
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=NodePortMark, priority=200,ip,nw_dst=192.168.77.102 actions=set_field:0x80000/0x80000->reg4
-2. table=NodePortMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4
-3. table=NodePortMark, priority=0 actions=goto_table:SessionAffinity
+1. table=ServiceMark, priority=200,ip,nw_dst=192.168.77.102 actions=set_field:0x80000/0x80000->reg4
+2. table=ServiceMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4
+3. table=ServiceMark, priority=200,tcp,nw_src=192.168.77.0/24,nw_dst=192.168.77.152,tp_dst=80 actions=set_field:0x20000000/0x20000000->reg4",
+4. table=ServiceMark, priority=200,tcp,nw_src=192.168.78.0/24,nw_dst=192.168.77.152,tp_dst=80 actions=set_field:0x20000000/0x20000000->reg4",
+5. table=ServiceMark, priority=190,tcp,nw_dst=192.168.77.152,tp_dst=80 actions=set_field:0x4000/0x4000->reg0",
+6. table=ServiceMark, priority=0 actions=goto_table:SessionAffinity
 ```
+
+Flows 1-2 are designed for case 1.
 
 Flow 1 matches packets destined for the local Node from local Pods. `NodePortRegMark` is loaded, indicating that the
 packets are potentially destined for NodePort Services. We assume only one valid IP address, `192.168.77.102` (the
@@ -930,7 +966,20 @@ IP address.
 Flow 2 match packets destined for the *Virtual NodePort DNAT IP*. Packets destined for NodePort Services from the local
 Node or the external network is DNAT'd to the *Virtual NodePort DNAT IP* by iptables before entering the pipeline.
 
-Flow 3 is the table-miss flow.
+Flows 3-5 are designed for case 2.
+
+Flow 3-4 are used to match the packets destined for the sample [LoadBalancer with LoadBalancerSourceRanges], and these
+packets are also from the CIDRs within the `loadBalancerSourceRanges` of the Services. `LoadBalancerSourceRangesRegMark`,
+which will be consumed in table [ServiceLB], is loaded to identify that the corresponding connections should get
+load-balanced in table [ServiceLB].
+
+Flow 5, having lower priority than flow 3-4, is used to match the packets destined for the sample [LoadBalancer with
+LoadBalancerSourceRanges], but these packets are not from any CIDRs within the `loadBalancerSourceRanges` of the Services.
+`SvcRejectRegMark`, which will be consumed in table [EndpointDNAT], is loaded to identify that the corresponding
+connections should be rejected. Since `LoadBalancerSourceRangesRegMark` is not loaded for the packets, the corresponding
+connections will not get load-balanced in table [ServiceLB].
+
+Flow 6 is the table-miss flow.
 
 Note that packets of NodePort Services have not been identified in this table by matching destination IP address. The
 identification of NodePort Services will be done finally in table [ServiceLB] by matching `NodePortRegMark` and the
@@ -977,8 +1026,10 @@ This table is used to implement Service Endpoint selection. It addresses specifi
 3. LoadBalancer, as demonstrated in the example [LoadBalancer].
 4. Service configured with external IPs, as demonstrated in the example [Service with ExternalIP].
 5. Service configured with session affinity, as demonstrated in the example [Service with session affinity].
-6. Service configured with externalTrafficPolicy to `Local`, as demonstrated in the example [Service with
+6. Service configured with `externalTrafficPolicy` to `Local`, as demonstrated in the example [Service with
    ExternalTrafficPolicy Local].
+7. LoadBalancer configured with `loadBalancerSourceRanges`, as demonstrated in the example [LoadBalancer with
+   LoadBalancerSourceRanges].
 
 If you dump the flows of this table, you may see the following:
 
@@ -993,8 +1044,10 @@ If you dump the flows of this table, you may see the following:
     eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),\
     set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT
 8. table=ServiceLB, priority=210,tcp,reg4=0x10010000/0x10070000,nw_dst=192.168.77.151,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x11->reg7,group:17
-9. table=ServiceLB, priority=200,tcp,nw_dst=192.168.77.151,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x12->reg7,group:18
-10. table=ServiceLB, priority=0 actions=goto_table:EndpointDNAT
+9. table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=192.168.77.151,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x12->reg7,group:18
+10. table=ServiceLB, priority=210,tcp,reg4=0x10010000/0x10070000,nw_dst=192.168.77.152,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x13->reg7,group:19
+11. table=ServiceLB, priority=200,tcp,reg4=0x20010000/0x20070000,nw_dst=192.168.77.152,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x14->reg7,group:20
+12. table=ServiceLB, priority=0 actions=goto_table:EndpointDNAT
 ```
 
 Flow 1 and flow 2 are designed for case 1, matching the first packet of connections destined for the sample [ClusterIP
@@ -1006,7 +1059,7 @@ loaded, indicating that the source and destination MAC addresses of the packets 
 Service Endpoint selection is not completed yet, as it will be done in the target OVS group.
 
 Flow 3 is for case 2, matching the first packet of connections destined for the sample [NodePort]. This is achieved by
-matching `EpToSelectRegMark` loaded in table [SessionAffinity], `NodePortRegMark` loaded in table [NodePortMark], and
+matching `EpToSelectRegMark` loaded in table [SessionAffinity], `NodePortRegMark` loaded in table [ServiceMark], and
 NodePort port. Similar to flows 1-2, `RewriteMACRegMark` and `EpSelectedRegMark` are also loaded.
 
 Flow 4 is for case 3, processing the first packet of connections destined for the ingress IP of the sample
@@ -1034,7 +1087,13 @@ Nodes, even though `externalTrafficPolicy` is set to `Local` for the Service. Du
 flow 9 exclusively matches packets sourced from the external network, resembling the pattern of flow 1. The target of
 flow 9 is an OVS group that has only the local Endpoints since `externalTrafficPolicy` of the Service is `Local`.
 
-Flow 10 is the table-miss flow.
+Flow 10 and flow 11 are for case 7. Flow 10 is similar to flow 8, while flow 11 diverges slightly from flow 9. The
+additional reg mark `LoadBalancerSourceRangesRegMark`, loaded in table [ServiceMark], is used to match the first
+packet destined for the sample [LoadBalancer with LoadBalancerSourceRanges], originating from a CIDR listed in the
+Service `loadBalancerSourceRanges`. It's worth noting that `loadBalancerSourceRanges` only exclusively influences the
+traffic from the external network as `LoadBalancerSourceRangesRegMark` is not used in flow 10.
+
+Flow 12 is the table-miss flow.
 
 As mentioned above, the Service Endpoint selection is performed within OVS groups. 3 typical OVS groups are listed below:
 
@@ -1050,7 +1109,7 @@ As mentioned above, the Service Endpoint selection is performed within OVS group
 ```
 
 The first group with `group_id` 9 is the destination of packets matched by flow 1, designed for a Service without
-Endpoints. The group only has a single bucket where `SvcNoEpRegMark` which will be used in table [EndpointDNAT] is
+Endpoints. The group only has a single bucket where `SvcRejectRegMark` which will be used in table [EndpointDNAT] is
 loaded, indicating that the Service has no Endpoint, and then packets are forwarded to table [EndpointDNAT].
 
 The second group with `group_id` 10 is the destination of packets matched by flow 2, designed for a Service with
@@ -1080,7 +1139,7 @@ If you dump the flows of this table, you may see the following::
 ```
 
 Flow 1 is designed for Services without Endpoints. It identifies the first packet of connections destined for such Service
-by matching `SvcNoEpRegMark`. Subsequently, the packet is forwarded to the OpenFlow controller (Antrea Agent). For TCP
+by matching `SvcRejectRegMark`. Subsequently, the packet is forwarded to the OpenFlow controller (Antrea Agent). For TCP
 Service traffic, the controller will send a TCP RST, and for all other cases the controller will send an ICMP Destination
 Unreachable message.
 
@@ -1311,7 +1370,7 @@ the following cases when AntreaProxy is not enabled:
   to complete the DNAT processes, e.g., kube-proxy. The destination MAC of the packets is rewritten in the table to
   avoid it is forwarded to the original client Pod by mistake.
 - When hairpin is involved, i.e. connections between 2 local Pods, for which NAT is performed. One example is a
-  Pod accessing a NodePort Service for which externalTrafficPolicy is set to `Local` using the local Node's IP address,
+  Pod accessing a NodePort Service for which `externalTrafficPolicy` is set to `Local` using the local Node's IP address,
   as there will be no SNAT for such traffic. Another example could be hostPort support, depending on how the feature
   is implemented.
 
@@ -1880,8 +1939,9 @@ Flow 8 is the table-miss flow for case 7. It drops packets that do not match any
 [L3DecTTL]: #l3decttl
 [L3Forwarding]: #l3forwarding
 [LoadBalancer]: #loadbalancer
+[LoadBalancer with LoadBalancerSourceRanges]: #loadbalancer-with-loadbalancersourceranges
 [NodePort]: #nodeport
-[NodePortMark]: #nodeportmark
+[ServiceMark]: #servicemark
 [OVS Registers]: #ovs-registers
 [Output]: #output
 [PreRoutingClassifier]: #preroutingclassifier

@@ -49,9 +49,9 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		}
 		if proxyAllEnabled {
 			flows = append(flows,
-				"cookie=0x1030000000000, table=PreRoutingClassifier, priority=200,ip actions=resubmit:NodePortMark,resubmit:SessionAffinity,resubmit:ServiceLB",
-				"cookie=0x1030000000000, table=NodePortMark, priority=200,ip,nw_dst=192.168.77.100 actions=set_field:0x80000/0x80000->reg4",
-				"cookie=0x1030000000000, table=NodePortMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4",
+				"cookie=0x1030000000000, table=PreRoutingClassifier, priority=200,ip actions=resubmit:ServiceMark,resubmit:SessionAffinity,resubmit:ServiceLB",
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,ip,nw_dst=192.168.77.100 actions=set_field:0x80000/0x80000->reg4",
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,ip,nw_dst=169.254.0.252 actions=set_field:0x80000/0x80000->reg4",
 			)
 		} else {
 			flows = append(flows,
@@ -82,9 +82,9 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 		}
 		if proxyAllEnabled {
 			flows = append(flows,
-				"cookie=0x1030000000000, table=PreRoutingClassifier, priority=200,ipv6 actions=resubmit:NodePortMark,resubmit:SessionAffinity,resubmit:ServiceLB",
-				"cookie=0x1030000000000, table=NodePortMark, priority=200,ipv6,ipv6_dst=fec0:192:168:77::100 actions=set_field:0x80000/0x80000->reg4",
-				"cookie=0x1030000000000, table=NodePortMark, priority=200,ipv6,ipv6_dst=fc01::aabb:ccdd:eefe actions=set_field:0x80000/0x80000->reg4",
+				"cookie=0x1030000000000, table=PreRoutingClassifier, priority=200,ipv6 actions=resubmit:ServiceMark,resubmit:SessionAffinity,resubmit:ServiceLB",
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,ipv6,ipv6_dst=fec0:192:168:77::100 actions=set_field:0x80000/0x80000->reg4",
+				"cookie=0x1030000000000, table=ServiceMark, priority=200,ipv6,ipv6_dst=fc01::aabb:ccdd:eefe actions=set_field:0x80000/0x80000->reg4",
 			)
 		} else {
 			flows = append(flows,

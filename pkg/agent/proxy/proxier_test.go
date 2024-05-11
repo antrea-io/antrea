@@ -54,23 +54,25 @@ import (
 )
 
 var (
-	svc1IPv4                    = net.ParseIP("10.20.30.41")
-	svc2IPv4                    = net.ParseIP("10.20.30.42")
-	svc1IPv6                    = net.ParseIP("2001::10:20:30:41")
-	ep1IPv4                     = net.ParseIP("10.180.0.1")
-	ep1IPv6                     = net.ParseIP("2001::10:180:0:1")
-	ep2IPv4                     = net.ParseIP("10.180.0.2")
-	ep2IPv6                     = net.ParseIP("2001::10:180:0:2")
-	loadBalancerIPv4            = net.ParseIP("169.254.169.1")
-	loadBalancerIPv6            = net.ParseIP("fec0::169:254:169:1")
-	loadBalancerIPModeProxyIPv4 = net.ParseIP("169.254.169.2")
-	loadBalancerIPModeProxyIPv6 = net.ParseIP("fec0::169:254:169:2")
-	svcNodePortIPv4             = net.ParseIP("192.168.77.100")
-	svcNodePortIPv6             = net.ParseIP("2001::192:168:77:100")
-	externalIPv4                = net.ParseIP("192.168.77.101")
-	externalIPv6                = net.ParseIP("2001::192:168:77:101")
-	nodePortAddressesIPv4       = []net.IP{svcNodePortIPv4}
-	nodePortAddressesIPv6       = []net.IP{svcNodePortIPv6}
+	svc1IPv4                     = net.ParseIP("10.20.30.41")
+	svc2IPv4                     = net.ParseIP("10.20.30.42")
+	svc1IPv6                     = net.ParseIP("2001::10:20:30:41")
+	ep1IPv4                      = net.ParseIP("10.180.0.1")
+	ep1IPv6                      = net.ParseIP("2001::10:180:0:1")
+	ep2IPv4                      = net.ParseIP("10.180.0.2")
+	ep2IPv6                      = net.ParseIP("2001::10:180:0:2")
+	loadBalancerIPv4             = net.ParseIP("169.254.169.1")
+	loadBalancerIPv6             = net.ParseIP("fec0::169:254:169:1")
+	loadBalancerIPModeProxyIPv4  = net.ParseIP("169.254.169.2")
+	loadBalancerIPModeProxyIPv6  = net.ParseIP("fec0::169:254:169:2")
+	loadBalancerSourceRangesIPv4 = []string{"192.168.1.0/24", "192.168.2.0/24"}
+	loadBalancerSourceRangesIPv6 = []string{"fec0:192:168:1::/64", "fec0:192:168:2::/64"}
+	svcNodePortIPv4              = net.ParseIP("192.168.77.100")
+	svcNodePortIPv6              = net.ParseIP("2001::192:168:77:100")
+	externalIPv4                 = net.ParseIP("192.168.77.101")
+	externalIPv6                 = net.ParseIP("2001::192:168:77:101")
+	nodePortAddressesIPv4        = []net.IP{svcNodePortIPv4}
+	nodePortAddressesIPv6        = []net.IP{svcNodePortIPv6}
 
 	svcPort     = 80
 	svcNodePort = 30008
@@ -227,6 +229,7 @@ func makeTestNodePortService(svcPortName *k8sproxy.ServicePortName,
 
 func makeTestLoadBalancerService(svcPortName *k8sproxy.ServicePortName,
 	clusterIP net.IP,
+	loadBalancerSourceRanges []string,
 	externalIPs,
 	loadBalancerIPs []net.IP,
 	loadBalancerIPModeProxyIPs []net.IP,
@@ -239,6 +242,7 @@ func makeTestLoadBalancerService(svcPortName *k8sproxy.ServicePortName,
 	return makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
 		svc.Spec.ClusterIP = clusterIP.String()
 		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
+		svc.Spec.LoadBalancerSourceRanges = loadBalancerSourceRanges
 		var ingress []corev1.LoadBalancerIngress
 		for _, ip := range loadBalancerIPs {
 			if ip != nil {
@@ -578,6 +582,7 @@ func testLoadBalancerAdd(t *testing.T,
 	ep2IP := ep2IPv4
 	loadBalancerIP := loadBalancerIPv4
 	loadBalancerIPModeProxyIP := loadBalancerIPModeProxyIPv4
+	loadBalancerSourceRanges := loadBalancerSourceRangesIPv4
 	if isIPv6 {
 		bindingProtocol = binding.ProtocolTCPv6
 		vIP = agentconfig.VirtualNodePortDNATIPv6
@@ -588,6 +593,7 @@ func testLoadBalancerAdd(t *testing.T,
 		ep2IP = ep2IPv6
 		loadBalancerIP = loadBalancerIPv6
 		loadBalancerIPModeProxyIP = loadBalancerIPModeProxyIPv6
+		loadBalancerSourceRanges = loadBalancerSourceRangesIPv6
 	}
 	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
@@ -601,6 +607,7 @@ func testLoadBalancerAdd(t *testing.T,
 	}
 	svc := makeTestLoadBalancerService(&svcPortName,
 		svcIP,
+		loadBalancerSourceRanges,
 		[]net.IP{externalIP},
 		[]net.IP{loadBalancerIP},
 		[]net.IP{loadBalancerIPModeProxyIP},
@@ -662,14 +669,15 @@ func testLoadBalancerAdd(t *testing.T,
 		}).Times(1)
 		if proxyLoadBalancerIPs {
 			mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
-				ServiceIP:          loadBalancerIP,
-				ServicePort:        uint16(svcPort),
-				Protocol:           bindingProtocol,
-				TrafficPolicyLocal: nodeLocalExternal,
-				LocalGroupID:       1,
-				ClusterGroupID:     2,
-				IsExternal:         true,
-				IsDSR:              isDSR,
+				ServiceIP:                loadBalancerIP,
+				ServicePort:              uint16(svcPort),
+				Protocol:                 bindingProtocol,
+				TrafficPolicyLocal:       nodeLocalExternal,
+				LocalGroupID:             1,
+				ClusterGroupID:           2,
+				IsExternal:               true,
+				IsDSR:                    isDSR,
+				LoadBalancerSourceRanges: loadBalancerSourceRanges,
 			}).Times(1)
 		}
 		if externalIP != nil {
@@ -721,14 +729,15 @@ func testLoadBalancerAdd(t *testing.T,
 		}).Times(1)
 		if proxyLoadBalancerIPs {
 			mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
-				ServiceIP:          loadBalancerIP,
-				ServicePort:        uint16(svcPort),
-				Protocol:           bindingProtocol,
-				TrafficPolicyLocal: nodeLocalExternal,
-				LocalGroupID:       localGroupID,
-				ClusterGroupID:     clusterGroupID,
-				IsExternal:         true,
-				IsDSR:              isDSR,
+				ServiceIP:                loadBalancerIP,
+				ServicePort:              uint16(svcPort),
+				Protocol:                 bindingProtocol,
+				TrafficPolicyLocal:       nodeLocalExternal,
+				LocalGroupID:             localGroupID,
+				ClusterGroupID:           clusterGroupID,
+				IsExternal:               true,
+				IsDSR:                    isDSR,
+				LoadBalancerSourceRanges: loadBalancerSourceRanges,
 			}).Times(1)
 		}
 		if externalIP != nil {
@@ -1666,6 +1675,7 @@ func testLoadBalancerRemove(t *testing.T, bindingProtocol binding.Protocol, isIP
 	epIP := ep1IPv4
 	loadBalancerIP := loadBalancerIPv4
 	loadBalancerIPModeProxyIP := loadBalancerIPModeProxyIPv4
+	loadBalancerSourceRanges := loadBalancerSourceRangesIPv4
 	if isIPv6 {
 		vIP = agentconfig.VirtualNodePortDNATIPv6
 		svcNodePortIP = svcNodePortIPv6
@@ -1675,6 +1685,7 @@ func testLoadBalancerRemove(t *testing.T, bindingProtocol binding.Protocol, isIP
 		epIP = ep1IPv6
 		loadBalancerIP = loadBalancerIPv6
 		loadBalancerIPModeProxyIP = loadBalancerIPModeProxyIPv6
+		loadBalancerSourceRanges = loadBalancerSourceRangesIPv6
 	}
 	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
@@ -1683,6 +1694,7 @@ func testLoadBalancerRemove(t *testing.T, bindingProtocol binding.Protocol, isIP
 
 	svc := makeTestLoadBalancerService(&svcPortName,
 		svcIP,
+		loadBalancerSourceRanges,
 		[]net.IP{externalIP},
 		[]net.IP{loadBalancerIP},
 		[]net.IP{loadBalancerIPModeProxyIP},
@@ -1727,13 +1739,14 @@ func testLoadBalancerRemove(t *testing.T, bindingProtocol binding.Protocol, isIP
 		IsNodePort:         true,
 	}).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
-		ServiceIP:          loadBalancerIP,
-		ServicePort:        uint16(svcPort),
-		Protocol:           bindingProtocol,
-		TrafficPolicyLocal: true,
-		LocalGroupID:       1,
-		ClusterGroupID:     2,
-		IsExternal:         true,
+		ServiceIP:                loadBalancerIP,
+		ServicePort:              uint16(svcPort),
+		Protocol:                 bindingProtocol,
+		TrafficPolicyLocal:       true,
+		LocalGroupID:             1,
+		ClusterGroupID:           2,
+		IsExternal:               true,
+		LoadBalancerSourceRanges: loadBalancerSourceRanges,
 	}).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP).Times(1)
@@ -2080,6 +2093,7 @@ func testLoadBalancerNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP 
 	svc := makeTestLoadBalancerService(&svcPortName,
 		svcIP,
 		nil,
+		nil,
 		[]net.IP{loadBalancerIP},
 		[]net.IP{loadBalancerIPModeProxyIP},
 		int32(svcPort),
@@ -2090,6 +2104,7 @@ func testLoadBalancerNoEndpoint(t *testing.T, nodePortAddresses []net.IP, svcIP 
 		externalTrafficPolicy)
 	updatedSvc := makeTestLoadBalancerService(&svcPortName,
 		svcIP,
+		nil,
 		nil,
 		[]net.IP{loadBalancerIP},
 		[]net.IP{loadBalancerIPModeProxyIP},
@@ -2269,6 +2284,7 @@ func testLoadBalancerRemoveEndpoints(t *testing.T, nodePortAddresses []net.IP, s
 
 	svc := makeTestLoadBalancerService(&svcPortName,
 		svcIP,
+		nil,
 		[]net.IP{externalIP},
 		[]net.IP{loadBalancerIP},
 		[]net.IP{loadBalancerIPModeProxyIP},
@@ -2504,8 +2520,8 @@ func testServicePortUpdate(t *testing.T,
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort+1), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -2639,8 +2655,8 @@ func testServiceNodePortUpdate(t *testing.T,
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort+1), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -2755,8 +2771,8 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T,
 		svc = makeTestNodePortService(&svcPortName, svcIP, []net.IP{externalIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, []net.IP{externalIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeLocal)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{externalIP}, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, []net.IP{externalIP}, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeLocal)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{externalIP}, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{externalIP}, []net.IP{loadBalancerIP}, []net.IP{loadBalancerIPModeProxyIP}, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeLocal)
 	}
 	makeServiceMap(fp, svc)
 
@@ -3002,6 +3018,119 @@ func TestServiceInternalTrafficPolicyUpdate(t *testing.T) {
 	})
 }
 
+func testServiceLoadBalancerSourceRangesUpdate(t *testing.T,
+	nodePortAddresses []net.IP,
+	svcIP net.IP,
+	epIP net.IP,
+	loadBalancerIPs []net.IP,
+	updatedLoadBalancerIPs []net.IP,
+	loadBalancerSourceRanges []string,
+	updatedLoadBalancerSourceRanges []string,
+	isIPv6 bool) {
+	ctrl := gomock.NewController(t)
+	mockOFClient, mockRouteClient := getMockClients(ctrl)
+	groupAllocator := openflow.NewGroupAllocator()
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
+
+	svc := makeTestLoadBalancerService(&svcPortName, svcIP, loadBalancerSourceRanges, nil, loadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+	updatedSvc := makeTestLoadBalancerService(&svcPortName, svcIP, updatedLoadBalancerSourceRanges, nil, updatedLoadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+	makeServiceMap(fp, svc)
+
+	ep, epPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, epIP, int32(svcPort), corev1.ProtocolTCP, false)
+	eps := makeTestEndpointSlice(svcPortName.Namespace, svcPortName.Name, []discovery.Endpoint{*ep}, []discovery.EndpointPort{*epPort}, isIPv6)
+	makeEndpointSliceMap(fp, eps)
+
+	expectedEps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(epIP.String(), "", "", svcPort, false, true, true, false, nil)}
+
+	bindingProtocol := binding.ProtocolTCP
+	vIP := agentconfig.VirtualNodePortDNATIPv4
+	if isIPv6 {
+		bindingProtocol = binding.ProtocolTCPv6
+		vIP = agentconfig.VirtualNodePortDNATIPv6
+	}
+
+	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedEps)).Times(1)
+	mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), false, gomock.InAnyOrder(expectedEps)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
+		ServiceIP:      svcIP,
+		ServicePort:    uint16(svcPort),
+		Protocol:       bindingProtocol,
+		ClusterGroupID: 1,
+	}).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
+		ServiceIP:      vIP,
+		ServicePort:    uint16(svcNodePort),
+		Protocol:       bindingProtocol,
+		ClusterGroupID: 1,
+		IsExternal:     true,
+		IsNodePort:     true,
+	}).Times(1)
+	for _, ip := range loadBalancerIPs {
+		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
+			ServiceIP:                ip,
+			ServicePort:              uint16(svcPort),
+			Protocol:                 bindingProtocol,
+			ClusterGroupID:           1,
+			IsExternal:               true,
+			LoadBalancerSourceRanges: loadBalancerSourceRanges,
+		}).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(ip).Times(1)
+	}
+	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
+
+	for _, ip := range loadBalancerIPs {
+		mockOFClient.EXPECT().UninstallServiceFlows(ip, uint16(svcPort), bindingProtocol).Times(1)
+		mockRouteClient.EXPECT().DeleteExternalIPRoute(ip).Times(1)
+	}
+
+	for _, ip := range updatedLoadBalancerIPs {
+		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
+			ServiceIP:                ip,
+			ServicePort:              uint16(svcPort),
+			Protocol:                 bindingProtocol,
+			ClusterGroupID:           1,
+			IsExternal:               true,
+			LoadBalancerSourceRanges: updatedLoadBalancerSourceRanges,
+		}).Times(1)
+		mockRouteClient.EXPECT().AddExternalIPRoute(ip).Times(1)
+	}
+
+	fp.syncProxyRules()
+	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
+	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
+	fp.syncProxyRules()
+	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
+	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+}
+
+func TestServiceLoadBalancerSourceRangesUpdate(t *testing.T) {
+	t.Run("IPv4", func(t *testing.T) {
+		loadBalancerIPs := []net.IP{net.ParseIP("169.254.1.1"), net.ParseIP("169.254.1.2")}
+		updatedLoadBalancerIPs := []net.IP{net.ParseIP("169.254.1.2"), net.ParseIP("169.254.1.3")}
+		loadBalancerSourceRanges := []string{"192.168.1.0/24", "192.168.2.0/24"}
+		updatedLoadBalancerSourceRanges := []string{"192.168.3.0/24", "192.168.4.0/24"}
+		t.Run("LoadBalancer ingress IPs update", func(t *testing.T) {
+			testServiceLoadBalancerSourceRangesUpdate(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, loadBalancerIPs, updatedLoadBalancerIPs, loadBalancerSourceRanges, updatedLoadBalancerSourceRanges, false)
+		})
+		t.Run("LoadBalancer ingress IPs remain", func(t *testing.T) {
+			testServiceLoadBalancerSourceRangesUpdate(t, nodePortAddressesIPv4, svc1IPv4, ep1IPv4, loadBalancerIPs, loadBalancerIPs, loadBalancerSourceRanges, updatedLoadBalancerSourceRanges, false)
+		})
+	})
+	t.Run("IPv6", func(t *testing.T) {
+		loadBalancerIPs := []net.IP{net.ParseIP("fec0::169:254:1:1"), net.ParseIP("fec0::169:254:1:2")}
+		updatedLoadBalancerIPs := []net.IP{net.ParseIP("fec0::169:254:1:2"), net.ParseIP("fec0::169:254:1:3")}
+		loadBalancerSourceRanges := []string{"fec0:192:168:1::/64", "fec0:192:168:2::/64"}
+		updatedLoadBalancerSourceRanges := []string{"fec0:192:168:3::/64", "fec0:192:168:4::/64"}
+		t.Run("LoadBalancer ingress IPs update", func(t *testing.T) {
+			testServiceLoadBalancerSourceRangesUpdate(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, loadBalancerIPs, updatedLoadBalancerIPs, loadBalancerSourceRanges, updatedLoadBalancerSourceRanges, true)
+		})
+		t.Run("LoadBalancer ingress IPs remain", func(t *testing.T) {
+			testServiceLoadBalancerSourceRangesUpdate(t, nodePortAddressesIPv6, svc1IPv6, ep1IPv6, loadBalancerIPs, loadBalancerIPs, loadBalancerSourceRanges, updatedLoadBalancerSourceRanges, true)
+		})
+	})
+}
+
 func testServiceIngressIPsUpdate(t *testing.T,
 	nodePortAddresses []net.IP,
 	svcIP net.IP,
@@ -3022,8 +3151,8 @@ func testServiceIngressIPsUpdate(t *testing.T,
 		updatedLoadBalancerIPStrs = append(updatedLoadBalancerIPStrs, ip.String())
 	}
 
-	svc := makeTestLoadBalancerService(&svcPortName, svcIP, nil, loadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-	updatedSvc := makeTestLoadBalancerService(&svcPortName, svcIP, nil, updatedLoadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+	svc := makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, loadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+	updatedSvc := makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, updatedLoadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	makeServiceMap(fp, svc)
 
 	ep, epPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, epIP, int32(svcPort), corev1.ProtocolTCP, false)
@@ -3135,8 +3264,8 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T,
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &updatedAffinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 
@@ -3274,8 +3403,8 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T,
 		svc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 		updatedSvc = makeTestNodePortService(&svcPortName, svcIP, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, corev1.ServiceInternalTrafficPolicyCluster, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	case corev1.ServiceTypeLoadBalancer:
-		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
-		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		svc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
+		updatedSvc = makeTestLoadBalancerService(&svcPortName, svcIP, nil, nil, []net.IP{loadBalancerIP}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, &affinitySeconds, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
 	}
 	makeServiceMap(fp, svc)
 

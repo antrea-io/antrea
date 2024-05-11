@@ -799,6 +799,9 @@ func (c *client) InstallServiceFlows(config *types.ServiceConfig) error {
 	if config.IsDSR {
 		flows = append(flows, c.featureService.dsrServiceMarkFlow(config))
 	}
+	if len(config.LoadBalancerSourceRanges) != 0 {
+		flows = append(flows, c.featureService.loadBalancerSourceRangesMarkFlows(config)...)
+	}
 	cacheKey := generateServicePortFlowCacheKey(config.ServiceIP, config.ServicePort, config.Protocol)
 	return c.addFlows(c.featureService.cachedFlows, cacheKey, flows)
 }
