@@ -155,15 +155,10 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 
 	// Create a toolbox Pod on every Node. The toolbox Pod is used as a client.
 	nodes := []string{nodeName(0), nodeName(1)}
-	var toolboxes, toolboxIPs []string
+	var toolboxes []string
 	for idx, node := range nodes {
-		podName, ips, _ := createAndWaitForPod(t, data, data.createToolboxPodOnNode, fmt.Sprintf("toolbox-%d-", idx), node, data.testNamespace, false)
+		podName, _, _ := createAndWaitForPod(t, data, data.createToolboxPodOnNode, fmt.Sprintf("toolbox-%d-", idx), node, data.testNamespace, false)
 		toolboxes = append(toolboxes, podName)
-		if !isIPv6 {
-			toolboxIPs = append(toolboxIPs, ips.IPv4.String())
-		} else {
-			toolboxIPs = append(toolboxIPs, ips.IPv6.String())
-		}
 	}
 
 	clusterIngressIP := []string{"169.254.169.1"}
@@ -209,7 +204,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		createAgnhostPod(t, data, agnhosts[idx], node, false)
 	}
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
-		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, toolboxes, toolboxIPs, agnhosts)
+		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, toolboxes)
 	})
 
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
@@ -219,11 +214,11 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
-		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, toolboxes, toolboxIPs, nodes)
+		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, toolboxes)
 	})
 }
 
-func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl, healthExpected string, nodes, healthUrls, pods, podIPs, hostnames []string) {
+func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl, healthExpected string, nodes, healthUrls, pods []string) {
 	t.Run("ExternalTrafficPolicy:Cluster/Client:Node", func(t *testing.T) {
 		testLoadBalancerClusterFromNode(t, data, nodes, clusterUrl)
 	})
@@ -259,7 +254,7 @@ func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes, healthUr
 		for _, healthUrl := range healthUrls {
 			healthOutput, _, err := probeHealthFromNode(node, healthUrl, data)
 			require.NoError(t, err, "Service LoadBalancer whose externalTrafficPolicy is Local should have a response for healthcheck")
-			require.Equal(t, healthOutput, healthExpected)
+			require.Equal(t, healthExpected, healthOutput)
 		}
 	}
 }
@@ -302,15 +297,10 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	}
 
 	// Create a toolbox Pod on every Node. The toolbox Pod is used as a client.
-	var toolboxes, toolboxIPs []string
+	var toolboxes []string
 	for idx, node := range nodes {
-		podName, ips, _ := createAndWaitForPod(t, data, data.createToolboxPodOnNode, fmt.Sprintf("toolbox-%d-", idx), node, data.testNamespace, false)
+		podName, _, _ := createAndWaitForPod(t, data, data.createToolboxPodOnNode, fmt.Sprintf("toolbox-%d-", idx), node, data.testNamespace, false)
 		toolboxes = append(toolboxes, podName)
-		if !isIPv6 {
-			toolboxIPs = append(toolboxIPs, ips.IPv4.String())
-		} else {
-			toolboxIPs = append(toolboxIPs, ips.IPv6.String())
-		}
 	}
 
 	// Create two NodePort Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
@@ -341,7 +331,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 		createAgnhostPod(t, data, agnhosts[idx], node, false)
 	}
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
-		nodePortTestCases(t, data, portCluster, portLocal, nodes, nodeIPs, toolboxes, toolboxIPs, agnhosts, false)
+		nodePortTestCases(t, data, portCluster, portLocal, nodes, nodeIPs, toolboxes, agnhosts, false)
 	})
 
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
@@ -351,11 +341,11 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
-		nodePortTestCases(t, data, portCluster, portLocal, nodes, nodeIPs, toolboxes, toolboxIPs, nodes, true)
+		nodePortTestCases(t, data, portCluster, portLocal, nodes, nodeIPs, toolboxes, nodes, true)
 	})
 }
 
-func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLocal string, nodes, nodeIPs, pods, podIPs, hostnames []string, hostNetwork bool) {
+func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLocal string, nodes, nodeIPs, pods, hostnames []string, hostNetwork bool) {
 	var clusterUrls, localUrls []string
 	for _, nodeIP := range nodeIPs {
 		clusterUrls = append(clusterUrls, net.JoinHostPort(nodeIP, portStrCluster))
