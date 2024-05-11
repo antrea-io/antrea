@@ -235,14 +235,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to create Deployment %s: %s", clientDeploymentName, err)
 	}
-
-	t.Log("Deploying echo-other-node Service %s...", echoOtherNodeDeploymentName)
-	svc = newService(echoOtherNodeDeploymentName, map[string]string{"name": echoOtherNodeDeploymentName}, 80)
-	_, err = t.client.CoreV1().Services(t.namespace).Create(ctx, svc, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	echoOtherNodeDeployment := check.NewDeployment(check.DeploymentParameters{
+	echoOtherNodeDeployment := newDeployment(deploymentParameters{
 		Name:    echoOtherNodeDeploymentName,
 		Role:    kindEchoName,
 		Port:    80,
@@ -270,6 +263,12 @@ func (t *testContext) setup(ctx context.Context) error {
 		return fmt.Errorf("unable to list Nodes: %s", err)
 	}
 	if len(nodes.Items) >= 2 {
+		t.Log("Deploying echo-other-node Service %s...", echoOtherNodeDeploymentName)
+		svc = newService(echoOtherNodeDeploymentName, map[string]string{"name": echoOtherNodeDeploymentName}, 80)
+		_, err = t.client.CoreV1().Services(t.namespace).Create(ctx, svc, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
 		_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, echoOtherNodeDeployment, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to create Deployment %s: %s", echoOtherNodeDeploymentName, err)

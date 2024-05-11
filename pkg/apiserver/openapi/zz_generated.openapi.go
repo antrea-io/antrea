@@ -5401,6 +5401,13 @@ func schema_pkg_apis_crd_v1beta1_Observation(ref common.ReferenceCallback) commo
 							Format:      "",
 						},
 					},
+					"srcPodIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SrcPodIP is the IP of source Pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

@@ -26,6 +26,7 @@ const (
 	MRT_INIT         = 0xc8
 	MRT_FLUSH        = 0xd4
 	MAXVIFS          = 0x20
+	SIOCGETSGCNT     = 0x89e1
 )
 
 type Mfcctl struct {
@@ -35,7 +36,7 @@ type Mfcctl struct {
 	Ttls     [32]uint8
 	Pkt_cnt  uint32
 	Byte_cnt uint32
-	Wrong_if uint32
+	Wrong_if uint32 /* number wrong of iif hits */
 	Expire   int32
 }
 
@@ -46,6 +47,18 @@ type Vifctl struct {
 	Rate_limit  uint32
 	Lcl_ifindex int32
 	Rmt_addr    [4]byte /* in_addr */
+}
+
+// SiocSgReq is the Golang version of Linux kernel struct sioc_sg_req.
+// Please check https://github.com/torvalds/linux/blob/master/include/uapi/linux/mroute.h#L92.
+// The struct encodes the packet count and byte count of a multicast route
+// identified by Src(source) and Grp(group).
+type SiocSgReq = struct {
+	Src      [4]byte /* in_addr */
+	Grp      [4]byte /* in_addr */
+	Pktcnt   uint32
+	Bytecnt  uint32
+	Wrong_if uint32 /* number wrong of iif hits */
 }
 
 const SizeofMfcctl = 0x3c

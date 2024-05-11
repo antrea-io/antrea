@@ -3101,6 +3101,8 @@ spec:
                               type: string
                             egressNode:
                               type: string
+                            srcPodIP:
+                              type: string
                 capturedPacket:
                   properties:
                     srcIP:

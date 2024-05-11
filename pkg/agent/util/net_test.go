@@ -226,48 +226,6 @@ func TestGetIPNetDeviceFromIP(t *testing.T) {
 	}
 }
 
-func TestGetAllIPNetsByName(t *testing.T) {
-	tests := []struct {
-		name                 string
-		testNetInterfaceName string
-		testNetInterface     net.Interface
-		testNetInterfaceErr  error
-		wantIPNets           []*net.IPNet
-	}{
-		{
-			name:                 "IPv4",
-			testNetInterfaceName: "0",
-			wantIPNets:           []*net.IPNet{&ipv4PublicIPNet},
-		},
-		{
-			name:                 "IPv6",
-			testNetInterfaceName: "1",
-			wantIPNets: []*net.IPNet{
-				{
-					IP:   ipv6Global,
-					Mask: net.CIDRMask(128, 128),
-				},
-			},
-		},
-		{
-			name:                 "Invalid",
-			testNetInterfaceName: "0",
-			testNetInterfaceErr:  testInvalidErr,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.testNetInterface = generateNetInterface(tc.testNetInterfaceName)
-			defer mockNetInterfaceByName(&tc.testNetInterface, tc.testNetInterfaceErr)()
-			defer mockNetInterfaceAddrs(tc.testNetInterface, nil)()
-			gotIPNets, gotErr := GetAllIPNetsByName(tc.name)
-			assert.Equal(t, tc.wantIPNets, gotIPNets)
-			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
-		})
-	}
-}
-
 func TestGetIPNetDeviceByName(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -544,7 +502,7 @@ func TestGetIPNetsByLink(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer mockNetInterfaceAddrs(testNetInterface, tc.testNetInterfaceErr)()
-			gotIPNets, gotErr := GetIPNetsByLink(&testNetInterface)
+			gotIPNets, gotErr := getIPNetsByLink(&testNetInterface)
 			assert.Equal(t, tc.wantIPNets, gotIPNets)
 			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
 		})

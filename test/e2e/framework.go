@@ -209,6 +209,7 @@ type TestOptions struct {
 	enableCoverage      bool
 	enableAntreaIPAM    bool
 	flowVisibility      bool
+	npEvaluation        bool
 	coverageDir         string
 	skipCases           string
 	linuxVMs            string

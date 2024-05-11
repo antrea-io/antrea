@@ -159,6 +159,16 @@ func skipIfNoVMs(tb testing.TB) {
 	}
 }
 
+func skipIfMulticastEnabled(tb testing.TB, data *TestData) {
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		tb.Fatalf("Error getting option multicast.enable value")
+	}
+	if agentConf.Multicast.Enable {
+		tb.Skipf("Skipping test because option multicast.enable is true")
+	}
+}
+
 func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgent bool, checkController bool) {
 	if checkAgent {
 		if featureGate, err := GetAgentFeatures(); err != nil {
@@ -675,6 +685,7 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.enableCoverage, "coverage", false, "Run tests and measure coverage")
 	flag.BoolVar(&testOptions.enableAntreaIPAM, "antrea-ipam", false, "Run tests with AntreaIPAM")
 	flag.BoolVar(&testOptions.flowVisibility, "flow-visibility", false, "Run flow visibility tests")
+	flag.BoolVar(&testOptions.npEvaluation, "networkpolicy-evaluation", false, "Run NetworkPolicy evaluation tests")
 	flag.BoolVar(&testOptions.deployAntrea, "deploy-antrea", true, "Deploy Antrea before running tests")
 	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
 	flag.StringVar(&testOptions.skipCases, "skip-cases", "", "Key words to skip cases")

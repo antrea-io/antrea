@@ -130,9 +130,12 @@ function quit {
     # been restored. The uplink is moved to the OVS bridge to support AntreaFlexibleIPAM mode.
     while [ "`ovsdb-client dump Port|grep antrea-type=uplink`" != "" ]; do
       log_info $CONTAINER_NAME "Uplink found on OVS, wait 1s and retry..."
-      sleep 1 &
-      SLEEP_PID=$!
-      wait $SLEEP_PID
+      # If a second signal (besides SIGKILL) is received, bash will wait for the
+      # sleep to complete, and this function will run again. There is no point
+      # in running sleep in the background here (and using wait): it would just
+      # create extra "concurrent" sleep processes in case multiple signals are
+      # received.
+      sleep 1
     done
     stop_ovs
     # terminate background sleep process

@@ -64,6 +64,7 @@ type TestCase struct {
 type TestStep struct {
 	Name           string
 	Reachability   *Reachability
+	NPEvaluation   *NPEvaluation
 	TestResources  []metav1.Object
 	Ports          []int32
 	Protocol       utils.AntreaPolicyProtocol
