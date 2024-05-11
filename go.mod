@@ -51,7 +51,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
 	github.com/ti-mo/conntrack v0.5.0
-	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240425164735-856e190dd707
+	github.com/vishvananda/netlink v1.2.1-beta.2.0.20221107222636-d3c0a2caa559
 	github.com/vmware/go-ipfix v0.9.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.23.0
