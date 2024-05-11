@@ -36,6 +36,7 @@ type mockLink struct {
 	name         string
 	masterIndex  int
 	hardwareAddr net.HardwareAddr
+	altNames     []string
 }
 
 func (l mockLink) Attrs() *netlink.LinkAttrs {
@@ -44,6 +45,7 @@ func (l mockLink) Attrs() *netlink.LinkAttrs {
 		Name:         l.name,
 		MasterIndex:  l.masterIndex,
 		HardwareAddr: l.hardwareAddr,
+		AltNames:     l.altNames,
 	}
 }
 
@@ -557,6 +559,7 @@ func TestGetInterfaceConfig(t *testing.T) {
 
 func TestRenameInterface(t *testing.T) {
 	renameFailErr := fmt.Errorf("failed to rename host interface name test1 to test2")
+	removeAltNameFailErr := fmt.Errorf("failed to remove AltName test1 on interface test2: %w", testInvalidErr)
 	tests := []struct {
 		name          string
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
@@ -569,6 +572,18 @@ func TestRenameInterface(t *testing.T) {
 				mockNetlink.LinkSetDown(mockLink{name: "test1"}).Return(nil)
 				mockNetlink.LinkSetName(mockLink{name: "test1"}, "test2").Return(nil)
 				mockNetlink.LinkSetUp(mockLink{name: "test1"}).Return(nil)
+				mockNetlink.LinkByName("test2").Return(mockLink{name: "test2", altNames: []string{}}, nil)
+			},
+		},
+		{
+			name: "Rename Interface Success with AltName",
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.LinkByName("test1").Return(mockLink{name: "test1"}, nil)
+				mockNetlink.LinkSetDown(mockLink{name: "test1"}).Return(nil)
+				mockNetlink.LinkSetName(mockLink{name: "test1"}, "test2").Return(nil)
+				mockNetlink.LinkSetUp(mockLink{name: "test1"}).Return(nil)
+				mockNetlink.LinkByName("test2").Return(mockLink{name: "test2", altNames: []string{"test1"}}, nil)
+				mockNetlink.LinkDelAltName(mockLink{name: "test2", altNames: []string{"test1"}}, "test1").Return(nil)
 			},
 		},
 		{
@@ -604,6 +619,18 @@ func TestRenameInterface(t *testing.T) {
 				mockNetlink.LinkSetUp(mockLink{name: "test1"}).Return(testInvalidErr).AnyTimes()
 			},
 			wantErr: renameFailErr,
+		},
+		{
+			name: "Remove AltName Err",
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.LinkByName("test1").Return(mockLink{name: "test1"}, nil)
+				mockNetlink.LinkSetDown(mockLink{name: "test1"}).Return(nil)
+				mockNetlink.LinkSetName(mockLink{name: "test1"}, "test2").Return(nil)
+				mockNetlink.LinkSetUp(mockLink{name: "test1"}).Return(nil)
+				mockNetlink.LinkByName("test2").Return(mockLink{name: "test2", altNames: []string{"test1"}}, nil)
+				mockNetlink.LinkDelAltName(mockLink{name: "test2", altNames: []string{"test1"}}, "test1").Return(testInvalidErr)
+			},
+			wantErr: removeAltNameFailErr,
 		},
 	}
 
