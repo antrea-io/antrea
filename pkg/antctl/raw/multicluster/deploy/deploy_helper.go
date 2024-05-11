@@ -54,6 +54,9 @@ var getAPIGroupResources = getAPIGroupResourcesWrapper
 
 func generateManifests(role string, version string) ([]string, error) {
 	var manifests []string
+	if version != "latest" && !strings.HasPrefix(version, "v") {
+		version = fmt.Sprintf("v%s", version)
+	}
 	switch role {
 	case leaderRole:
 		manifests = []string{
@@ -176,6 +179,9 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 		for _, manifest := range manifests {
 			// #nosec G107
 			resp, err := httpGet(manifest)
+			if resp.StatusCode == 404 {
+				return fmt.Errorf("manifest %s not found", manifest)
+			}
 			if err != nil {
 				return err
 			}
