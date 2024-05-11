@@ -33,3 +33,10 @@ LABEL description="The Docker image to deploy the Antrea Multi-cluster Controlle
 USER root
 
 COPY --from=antrea-build /antrea/multicluster/bin/antrea-mc-controller-coverage /
+COPY --from=antrea-build /antrea/test/e2e/utils/run_cov_binary.sh /
+
+# This environment variable will persist when running the container, but can also be overwritten if needed
+ENV GOCOVERDIR=/tmp/coverage
+RUN mkdir -p $GOCOVERDIR
+
+ENTRYPOINT [ "/run_cov_binary.sh" ]

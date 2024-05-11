@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -116,9 +117,6 @@ const (
 	antreaControllerCovBinary = "antrea-controller-coverage"
 	antreaAgentCovBinary      = "antrea-agent-coverage"
 	flowAggregatorCovBinary   = "flow-aggregator-coverage"
-	antreaControllerCovFile   = "antrea-controller.cov.out"
-	antreaAgentCovFile        = "antrea-agent.cov.out"
-	flowAggregatorCovFile     = "flow-aggregator.cov.out"
 	cpNodeCoverageDir         = "/tmp/antrea-e2e-coverage"
 
 	antreaAgentConfName      = "antrea-agent.conf"
@@ -2654,11 +2652,7 @@ func (data *TestData) mutateAntreaConfigMap(
 	return nil
 }
 
-func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containerName, processName, covFile, covDir string) error {
-	if err := data.collectAntctlCovFiles(podName, containerName, namespace, covDir); err != nil {
-		return fmt.Errorf("error when copying antctl coverage files out: %v", err)
-	}
-
+func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containerName, processName, covDir string) error {
 	cmds := []string{"pgrep", "-f", processName, "-P", "1"}
 	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmds)
 	if err != nil {
@@ -2672,14 +2666,8 @@ func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containe
 	}
 
 	log.Infof("Copying coverage files from Pod '%s'", podName)
-	if err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-		if err = data.copyPodFiles(podName, containerName, namespace, covFile, covDir); err != nil {
-			log.Infof("Coverage file not available yet for copy: %v", err)
-			return false, nil
-		}
-		return true, nil
-	}); err != nil {
-		return fmt.Errorf("timeout when waiting for coverage file")
+	if err := data.collectCovFiles(podName, containerName, namespace, covDir); err != nil {
+		return fmt.Errorf("error when copying antctl coverage files: %v", err)
 	}
 
 	return nil
@@ -2693,7 +2681,7 @@ func (data *TestData) gracefulExitAntreaController(covDir string) error {
 	}
 	podName := antreaController.Name
 
-	if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-controller", antreaControllerCovBinary, antreaControllerCovFile, covDir); err != nil {
+	if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-controller", antreaControllerCovBinary, covDir); err != nil {
 		return fmt.Errorf("error when gracefully exiting Antrea Controller: %w", err)
 	}
 
@@ -2715,7 +2703,7 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	}
 	for _, pod := range pods.Items {
 		podName := pod.Name
-		if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-agent", antreaAgentCovBinary, antreaAgentCovFile, covDir); err != nil {
+		if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-agent", antreaAgentCovBinary, covDir); err != nil {
 			return fmt.Errorf("error when gracefully exiting Antrea Agent: %w", err)
 		}
 	}
@@ -2730,20 +2718,24 @@ func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
 	}
 	podName := flowAggPod.Name
 
-	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", flowAggregatorCovBinary, flowAggregatorCovFile, covDir); err != nil {
+	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", flowAggregatorCovBinary, covDir); err != nil {
 		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
 	}
 
 	return nil
 }
 
-// collectAntctlCovFiles collects coverage files for the antctl binary from the Pod and saves them to the coverage directory
-func (data *TestData) collectAntctlCovFiles(podName string, containerName string, nsName string, covDir string) error {
+// collectCovFiles collects coverage files from the Pod and saves them to the coverage directory
+func (data *TestData) collectCovFiles(podName string, containerName string, nsName string, covDir string) error {
 	// copy antctl coverage files from Pod to the coverage directory
-	cmds := []string{"bash", "-c", "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"}
+	cmds := []string{"bash", "-c", "find /tmp/coverage  -mindepth 1"}
 	stdout, stderr, err := data.RunCommandFromPod(nsName, podName, containerName, cmds)
 	if err != nil {
 		return fmt.Errorf("error when running this find command '%s' on Pod '%s', stderr: <%v>, err: <%v>", cmds, podName, stderr, err)
+	}
+	covDir = filepath.Join(covDir, podName+"-coverage")
+	if err := os.Mkdir(covDir, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating coverage directory for Pod %s: %v", podName, err)
 	}
 	stdout = strings.TrimSpace(stdout)
 	files := strings.Split(stdout, "\n")
@@ -2751,9 +2743,14 @@ func (data *TestData) collectAntctlCovFiles(podName string, containerName string
 		if len(file) == 0 {
 			continue
 		}
-		err := data.copyPodFiles(podName, containerName, nsName, file, covDir)
-		if err != nil {
-			return fmt.Errorf("error when copying coverage files for antctl from Pod '%s' to coverage directory '%s': %v", podName, covDir, err)
+		if err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Second, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+			if err = data.copyPodFiles(podName, containerName, nsName, file, covDir); err != nil {
+				log.Infof("Coverage file not available yet for copy: %v", err)
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
+			return fmt.Errorf("timeout when waiting for coverage file")
 		}
 	}
 	return nil
@@ -2762,19 +2759,15 @@ func (data *TestData) collectAntctlCovFiles(podName string, containerName string
 // collectAntctlCovFilesFromControlPlaneNode collects coverage files for the antctl binary from the control-plane Node and saves them to the coverage directory
 func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) error {
 	// copy antctl coverage files from node to the coverage directory
-	var cmd string
-	if testOptions.providerName == "kind" {
-		// Do not use single quotes here, as they will be interpreted literally.
-		// RunDockerExecCommand does not invoke a shell by default and it will split this
-		// string into a list of args.
-		cmd = fmt.Sprintf("find %s -maxdepth 1 -name antctl*.out", cpNodeCoverageDir)
-	} else {
-		cmd = fmt.Sprintf("find %s -maxdepth 1 -name 'antctl*.out'", cpNodeCoverageDir)
-	}
+	log.Infof("Copying coverage files from Node: %s", controlPlaneNodeName())
+	cmd := fmt.Sprintf("find %s -mindepth 1", cpNodeCoverageDir)
 	rc, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when running this find command '%s' on control-plane Node '%s', stderr: <%v>, err: <%v>", cmd, controlPlaneNodeName(), stderr, err)
-
+	}
+	covDir = filepath.Join(covDir, fmt.Sprintf("%s-coverage", controlPlaneNodeName()))
+	if err := os.Mkdir(covDir, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating coverage directory for the control plane Node %v", err)
 	}
 	stdout = strings.TrimSpace(stdout)
 	files := strings.Split(stdout, "\n")
@@ -2782,7 +2775,7 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 		if len(file) == 0 {
 			continue
 		}
-		err := data.copyNodeFiles(controlPlaneNodeName(), file, covDir)
+		err := data.copyNodeFiles(file, covDir)
 		if err != nil {
 			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", controlPlaneNodeName(), covDir, err)
 		}
@@ -2795,26 +2788,24 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, destDir string) error {
 	// getPodWriter creates the file with name podName-fileName-suffix. It returns nil if the
 	// file cannot be created. File must be closed by the caller.
-	getPodWriter := func(podName, fileName, suffix string) *os.File {
-		destFile := filepath.Join(destDir, fmt.Sprintf("%s-%s-%s", podName, fileName, suffix))
+	getPodWriter := func(fileName string) *os.File {
+		destFile := filepath.Join(destDir, fileName)
 		f, err := os.Create(destFile)
 		if err != nil {
-			_ = fmt.Errorf("error when creating destination file '%s': %v", destFile, err)
+			log.Infof("Error when creating destination file '%s': %v\n", destFile, err)
 			return nil
 		}
 		return f
 	}
-
 	// dump the file from Antrea Pods to disk.
-	// a filepath-friendly timestamp format.
-	const timeFormat = "Jan02-15-04-05"
-	timeStamp := time.Now().Format(timeFormat)
-	w := getPodWriter(podName, fileName, timeStamp)
+	basename := path.Base(fileName)
+	w := getPodWriter(basename)
 	if w == nil {
 		return nil
 	}
 	defer w.Close()
 	cmd := []string{"cat", fileName}
+	log.Infof("Copying file: %s", basename)
 	stdout, stderr, err := data.RunCommandFromPod(nsName, podName, containerName, cmd)
 	if err != nil {
 		return fmt.Errorf("cannot retrieve content of file '%s' from Pod '%s', stderr: <%v>, err: <%v>", fileName, podName, stderr, err)
@@ -2827,29 +2818,28 @@ func (data *TestData) copyPodFiles(podName string, containerName string, nsName 
 }
 
 // copyNodeFiles copies a file from a Node and save it to specified directory
-func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir string) error {
+func (data *TestData) copyNodeFiles(fileName string, destDir string) error {
 	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
 	// cannot be created. File must be closed by the caller.
-	getNodeWriter := func(nodeName, fileName, suffix string) *os.File {
-		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s-%s", nodeName, fileName, suffix))
-		f, err := os.Create(covFile)
+	getNodeWriter := func(fileName string) *os.File {
+		destFile := filepath.Join(destDir, fileName)
+		f, err := os.Create(destFile)
 		if err != nil {
-			_ = fmt.Errorf("error when creating coverage file '%s': %v", covFile, err)
+			log.Infof("Error when creating coverage file '%s': %v\n", destFile, err)
 			return nil
 		}
 		return f
 	}
 
-	// dump the file from Antrea Pods to disk.
-	// a filepath-friendly timestamp format.
-	const timeFormat = "Jan02-15-04-05"
-	timeStamp := time.Now().Format(timeFormat)
-	w := getNodeWriter(nodeName, fileName, timeStamp)
+	// dump the file from Nodes to disk.
+	basename := path.Base(fileName)
+	w := getNodeWriter(basename)
 	if w == nil {
 		return nil
 	}
 	defer w.Close()
 	cmd := fmt.Sprintf("cat %s", fileName)
+	log.Infof("Copying file: %s", basename)
 	rc, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
 		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, controlPlaneNodeName(), stderr, err)

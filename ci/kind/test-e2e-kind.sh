@@ -384,6 +384,15 @@ function run_test {
   EXTRA_ARGS="$vlan_args --external-server-ips $external_server_ips"
 
   go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
+
+  if $coverage; then
+    pushd $ANTREA_COV_DIR
+    for dir in */; do 
+      go tool covdata textfmt -i="${dir}" -o "${dir%?}_$(date +%Y-%m-%d_%H-%M-%S).cov.out"
+      rm -rf "${dir}";
+    done
+    popd
+  fi
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
