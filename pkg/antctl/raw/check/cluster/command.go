@@ -97,9 +97,10 @@ func Run() error {
 			if errors.As(err, new(uncertainError)) {
 				testContext.Warning("Test %s was uncertain: %v", name, err)
 				numUncertain++
+			} else {
+				testContext.Fail("Test %s failed: %v", name, err)
+				numFailure++
 			}
-			testContext.Fail("Test %s failed: %v", name, err)
-			numFailure++
 		} else {
 			testContext.Success("Test %s passed", name)
 			numSuccess++

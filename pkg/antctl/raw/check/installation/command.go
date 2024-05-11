@@ -235,7 +235,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to create Deployment %s: %s", clientDeploymentName, err)
 	}
-	echoOtherNodeDeployment := newDeployment(deploymentParameters{
+	echoOtherNodeDeployment := check.NewDeployment(check.DeploymentParameters{
 		Name:    echoOtherNodeDeploymentName,
 		Role:    kindEchoName,
 		Port:    80,
