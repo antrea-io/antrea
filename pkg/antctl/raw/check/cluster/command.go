@@ -55,7 +55,7 @@ type uncertainError struct {
 }
 
 func (e uncertainError) Error() string {
-	return fmt.Sprintf("test results are uncertain: %s", e.reason)
+	return e.reason
 }
 
 func newUncertainError(reason string, a ...interface{}) uncertainError {
@@ -90,13 +90,13 @@ func Run() error {
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
-	var numSuccess, numFailure, numSkipped int
+	var numSuccess, numFailure, numUncertain int
 	for name, test := range testsRegistry {
 		testContext.Header("Running test: %s", name)
 		if err := test.Run(ctx, testContext); err != nil {
 			if errors.As(err, new(uncertainError)) {
-				testContext.Warning("Test %s was skipped: %v", name, err)
-				numSkipped++
+				testContext.Warning("Test %s was uncertain: %v", name, err)
+				numUncertain++
 			}
 			testContext.Fail("Test %s failed: %v", name, err)
 			numFailure++
@@ -105,7 +105,7 @@ func Run() error {
 			numSuccess++
 		}
 	}
-	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", numSuccess, numFailure, numSkipped)
+	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were uncertain", numSuccess, numFailure, numUncertain)
 	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if numFailure > 0 {
 		return fmt.Errorf("%v/%v tests failed", numFailure, len(testsRegistry))
