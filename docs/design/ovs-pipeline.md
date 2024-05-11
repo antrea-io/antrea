@@ -993,7 +993,7 @@ If you dump the flows of this table, you may see the following:
     eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:NXM_NX_REG4[26]->NXM_NX_REG4[26],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[9]),\
     set_field:0x20000/0x70000->reg4,goto_table:EndpointDNAT
 8. table=ServiceLB, priority=210,tcp,reg4=0x10010000/0x10070000,nw_dst=192.168.77.151,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x11->reg7,group:17
-9. table=ServiceLB, priority=200,tcp,nw_dst=192.168.77.151,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x12->reg7,group:18
+9. table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=192.168.77.151,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x12->reg7,group:18
 10. table=ServiceLB, priority=0 actions=goto_table:EndpointDNAT
 ```
 
