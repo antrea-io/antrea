@@ -39,9 +39,12 @@ var (
 	nodeTargetIPsMap = map[string][]net.IP{
 		"node1": {net.ParseIP("10.244.2.1")},
 	}
+	nodeTargetIPsList = []net.IP{
+		net.ParseIP("10.244.2.1"),
+	}
 )
 
-func TestLatencyStore_GetConnByKey(t *testing.T) {
+func TestLatencyStore_getNodeIPLatencyEntry(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
@@ -69,7 +72,7 @@ func TestLatencyStore_GetConnByKey(t *testing.T) {
 	}
 }
 
-func TestLatencyStore_DeleteConnByKey(t *testing.T) {
+func TestLatencyStore_DeleteNodeIPLatencyEntry(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
 		nodeIPLatencyMap:    nodeIPLatencyMap,
@@ -142,17 +145,6 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 	}
 }
 
-func TestLatencyStore_ListLatencies(t *testing.T) {
-	latencyStore := &LatencyStore{
-		isNetworkPolicyOnly: false,
-		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeTargetIPsMap:    nodeTargetIPsMap,
-	}
-
-	latencyMaps := latencyStore.ListLatencies()
-	assert.Equal(t, nodeIPLatencyMap, latencyMaps)
-}
-
 func TestLatencyStore_ListNodeIPs(t *testing.T) {
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
@@ -161,5 +153,5 @@ func TestLatencyStore_ListNodeIPs(t *testing.T) {
 	}
 
 	nodeIPs := latencyStore.ListNodeIPs()
-	assert.Equal(t, nodeTargetIPsMap, nodeIPs)
+	assert.Equal(t, nodeTargetIPsList, nodeIPs)
 }
