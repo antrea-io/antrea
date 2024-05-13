@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -176,11 +177,12 @@ func getTestSvcWithPortName(portName string) *corev1.Service {
 
 type testData struct {
 	*testing.T
-	stopCh    chan struct{}
-	ctrl      *gomock.Controller
-	k8sClient *k8sfake.Clientset
-	portTable *portcache.PortTable
-	wg        sync.WaitGroup
+	stopCh      chan struct{}
+	ctrl        *gomock.Controller
+	k8sClient   *k8sfake.Clientset
+	portTable   *portcache.PortTable
+	svcInformer cache.SharedIndexInformer
+	wg          sync.WaitGroup
 }
 
 func (t *testData) runWrapper(c *k8s.NPLController) {
@@ -234,22 +236,18 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 		mockPortOpener.EXPECT().OpenLocalPort(gomock.Any(), gomock.Any()).AnyTimes().Return(&fakeSocket{}, nil)
 	}
 
-	data := &testData{
-		T:         t,
-		stopCh:    make(chan struct{}),
-		ctrl:      mockCtrl,
-		k8sClient: k8sfake.NewSimpleClientset(objects...),
-		portTable: newPortTable(mockIPTables, mockPortOpener),
-	}
+	k8sClient := k8sfake.NewSimpleClientset(objects...)
+
+	portTable := newPortTable(mockIPTables, mockPortOpener)
 
 	resyncPeriod := 0 * time.Minute
 	// informerFactory is initialized and started from cmd/antrea-agent/agent.go
-	informerFactory := informers.NewSharedInformerFactory(data.k8sClient, resyncPeriod)
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, resyncPeriod)
 	listOptions := func(options *metav1.ListOptions) {
 		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", defaultNodeName).String()
 	}
 	localPodInformer := coreinformers.NewFilteredPodInformer(
-		data.k8sClient,
+		k8sClient,
 		metav1.NamespaceAll,
 		resyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
@@ -257,7 +255,16 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	)
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 
-	c := k8s.NewNPLController(data.k8sClient, localPodInformer, svcInformer, data.portTable, defaultNodeName)
+	c := k8s.NewNPLController(k8sClient, localPodInformer, svcInformer, portTable, defaultNodeName)
+
+	data := &testData{
+		T:           t,
+		stopCh:      make(chan struct{}),
+		ctrl:        mockCtrl,
+		k8sClient:   k8sClient,
+		portTable:   portTable,
+		svcInformer: svcInformer,
+	}
 
 	data.runWrapper(c)
 	informerFactory.Start(data.stopCh)
@@ -305,31 +312,41 @@ func (t *testData) tearDown() {
 	os.Unsetenv("NODE_NAME")
 }
 
-func (t *testData) pollForPodAnnotation(podName string, found bool) ([]types.NPLAnnotation, error) {
-	var data string
-	var exists bool
+func conditionMatchAll([]types.NPLAnnotation) bool {
+	return true
+}
+
+// If conditionFn is nil, we will assume you are looking for a non-existing annotation.
+// If you want to match all, use conditionMatchAll as the conditionFn.
+func (t *testData) pollForPodAnnotationWithCondition(podName string, conditionFn func([]types.NPLAnnotation) bool) ([]types.NPLAnnotation, error) {
+	var nplValue []types.NPLAnnotation
 	// do not use PollImmediate: 1 second is reserved for the controller to do his job and
 	// update Pod NPL annotations as needed.
 	err := wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		updatedPod, err := t.k8sClient.CoreV1().Pods(defaultNS).Get(context.TODO(), podName, metav1.GetOptions{})
 		require.NoError(t, err, "Failed to get Pod")
 		annotation := updatedPod.GetAnnotations()
-		data, exists = annotation[types.NPLAnnotationKey]
-		if found {
-			return exists, nil
+		data, exists := annotation[types.NPLAnnotationKey]
+		if !exists {
+			return conditionFn == nil, nil
 		}
-		return !exists, nil
+		if conditionFn == nil {
+			return false, nil
+		}
+		if err := json.Unmarshal([]byte(data), &nplValue); err != nil {
+			return false, err
+		}
+		return conditionFn(nplValue), nil
 	})
-
-	if err != nil {
-		return []types.NPLAnnotation{}, err
-	}
-	if data == "" {
-		return []types.NPLAnnotation{}, nil
-	}
-	var nplValue []types.NPLAnnotation
-	err = json.Unmarshal([]byte(data), &nplValue)
 	return nplValue, err
+}
+
+func (t *testData) pollForPodAnnotation(podName string, found bool) ([]types.NPLAnnotation, error) {
+	var conditionFn func([]types.NPLAnnotation) bool
+	if found {
+		conditionFn = conditionMatchAll
+	}
+	return t.pollForPodAnnotationWithCondition(podName, conditionFn)
 }
 
 func (t *testData) updateServiceOrFail(testSvc *corev1.Service) {
@@ -497,6 +514,7 @@ func TestPodDelete(t *testing.T) {
 
 // TestPodAddMultiPort creates a Pod and a Service with two target ports.
 // It verifies that the Pod's NPL annotation and the local port table are updated with both ports.
+// It then updates the Service to remove one of the target ports.
 func TestAddMultiPortPodSvc(t *testing.T) {
 	newPort := 90
 	testSvc := getTestSvc(defaultPort, int32(newPort))
@@ -510,6 +528,16 @@ func TestAddMultiPortPodSvc(t *testing.T) {
 	expectedAnnotations.Check(t, value)
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
+
+	// Remove the second target port.
+	testSvc.Spec.Ports = testSvc.Spec.Ports[:1]
+	testData.updateServiceOrFail(testSvc)
+	// Wait for annotation to be updated (single mapping).
+	value, err = testData.pollForPodAnnotationWithCondition(testPod.Name, func(value []types.NPLAnnotation) bool { return len(value) == 1 })
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations = newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
 }
 
 // TestPodAddMultiPort creates a Pod with multiple ports and a Service with only one target port.
@@ -806,4 +834,107 @@ func TestSyncRulesError(t *testing.T) {
 
 	testData, _, _ := setUpWithTestServiceAndPod(t, testConfig, nil)
 	defer testData.tearDown()
+}
+
+func TestSingleRuleDeletionError(t *testing.T) {
+	newPort := 90
+	testSvc := getTestSvc(defaultPort, int32(newPort))
+	testPod := getTestPod()
+
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
+		gomock.InOrder(
+			mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2),
+			mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("iptables failure")),
+			mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()),
+		)
+	})
+
+	testData := setUp(t, testConfig, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations := newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP).Add(nil, newPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
+
+	// Remove the second target port, to force one mapping to be deleted.
+	testSvc.Spec.Ports = testSvc.Spec.Ports[:1]
+	testData.updateServiceOrFail(testSvc)
+	// The first deletion attempt will fail, but the second should succeed.
+	// Wait for annotation to be updated (single mapping).
+	value, err = testData.pollForPodAnnotationWithCondition(testPod.Name, func(value []types.NPLAnnotation) bool { return len(value) == 1 })
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations = newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
+}
+
+func TestPreventDefunctRuleReuse(t *testing.T) {
+	newPort := 90
+	testSvc := getTestSvc(defaultPort, int32(newPort))
+	testPod := getTestPod()
+
+	var testData *testData
+
+	ports := testSvc.Spec.Ports
+	// This function will be executed synchronously when DeleteRule is called for the first time
+	// and we simulate a failure. It restores the second target port for the Service, which was
+	// deleted previously, and waits for the change to be reflected in the informer's
+	// store. After that, we know that the next time the NPL controller processes the test Pod,
+	// it will need to ensure that both NPL mappings are configured correctly. Because one of
+	// the rules will be marked as "defunct", it will first need to delete the rule properly
+	// before adding it back.
+	restoreServiceTargetPorts := func() {
+		testSvc.Spec.Ports = ports
+		_, err := testData.k8sClient.CoreV1().Services(defaultNS).Update(context.TODO(), testSvc, metav1.UpdateOptions{})
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			obj, exists, err := testData.svcInformer.GetIndexer().GetByKey(testSvc.Namespace + "/" + testSvc.Name)
+			if !assert.NoError(t, err) || !assert.True(t, exists) {
+				return
+			}
+			svc := obj.(*corev1.Service)
+			assert.Len(t, svc.Spec.Ports, 2)
+		}, 2*time.Second, 50*time.Millisecond)
+	}
+
+	var done atomic.Bool
+
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
+		gomock.InOrder(
+			mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2),
+			mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
+				func(nodePort int, podIP string, podPort int, protocol string) { restoreServiceTargetPorts() },
+			).Return(fmt.Errorf("iptables failure")),
+			mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()),
+			mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
+				func(nodePort int, podIP string, podPort int, protocol string) { done.Store(true) },
+			),
+		)
+	})
+
+	testData = setUp(t, testConfig, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations := newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP).Add(nil, newPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
+
+	// Remove the second target port, to force one mapping to be deleted.
+	testSvc.Spec.Ports = testSvc.Spec.Ports[:1]
+	testData.updateServiceOrFail(testSvc)
+
+	assert.Eventually(t, done.Load, 2*time.Second, 50*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP) && testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP)
+	}, 2*time.Second, 50*time.Millisecond)
 }
