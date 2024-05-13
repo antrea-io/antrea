@@ -62,6 +62,9 @@ jobs:
             echo "released=false" >> $GITHUB_OUTPUT
             echo "image-tag=latest" >> $GITHUB_OUTPUT
           fi
+      - name: Set up Docker Buildx if required
+        if: ${{ steps.check-release.outputs.released == 'false' }}
+        uses: docker/setup-buildx-action@v3
       - name: Build Antrea image if required
         if: ${{ steps.check-release.outputs.released == 'false' }}
         run: |
