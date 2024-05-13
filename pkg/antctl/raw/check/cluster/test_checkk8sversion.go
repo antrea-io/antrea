@@ -32,11 +32,11 @@ func (t *checkK8sVersion) Run(ctx context.Context, testContext *testContext) err
 	discoveryClient := testContext.client.Discovery()
 	serverVersion, err := discoveryClient.ServerVersion()
 	if err != nil {
-		return fmt.Errorf("error getting server version: %v", err)
+		return fmt.Errorf("error getting server version: %w", err)
 	}
 	currentVersion, err := semver.Parse(strings.TrimPrefix(serverVersion.GitVersion, "v"))
 	if err != nil {
-		return fmt.Errorf("error parsing server version: %v", err)
+		return fmt.Errorf("error parsing server version: %w", err)
 	}
 	minVersion, _ := semver.Parse("1.19")
 	if currentVersion.GTE(minVersion) {

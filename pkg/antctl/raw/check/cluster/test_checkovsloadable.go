@@ -36,7 +36,7 @@ func (c *checkOVSLoadable) Run(ctx context.Context, testContext *testContext) er
 	}
 	stdout, stderr, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
 	if err != nil {
-		return fmt.Errorf("error executing command in Pod %s: %v", testContext.testPod.Name, err)
+		return fmt.Errorf("error executing command in Pod %s: %w", testContext.testPod.Name, err)
 	}
 	if strings.TrimSpace(stdout) == "0" {
 		testContext.Log("The kernel module openvswitch is built-in")
@@ -45,14 +45,14 @@ func (c *checkOVSLoadable) Run(ctx context.Context, testContext *testContext) er
 		cmd := []string{"modprobe", "openvswitch"}
 		_, stderr, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", cmd)
 		if err != nil {
-			return fmt.Errorf("error executing modprobe command in Pod %s: %v", testContext.testPod.Name, err)
+			return fmt.Errorf("error executing modprobe command in Pod %s: %w", testContext.testPod.Name, err)
 		} else if stderr != "" {
 			return fmt.Errorf("failed to load the OVS kernel module: %s, try running 'modprobe openvswitch' on your Nodes", stderr)
 		} else {
 			testContext.Log("openvswitch kernel module loaded successfully")
 		}
 	} else {
-		return fmt.Errorf("error encountered while check if cni is existent - stderr: %s", stderr)
+		return fmt.Errorf("error encountered while checking if openvswitch module is built-in - stderr: %s", stderr)
 	}
 	return nil
 }

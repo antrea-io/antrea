@@ -33,7 +33,7 @@ func (t *checkCNIExistence) Run(ctx context.Context, testContext *testContext) e
 	command := []string{"ls", "-1", "/etc/cni/net.d"}
 	output, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, testContext.testPod.Name, "", command)
 	if err != nil {
-		return fmt.Errorf("failed to execute command in Pod %s, error: %v", testContext.testPod.Name, err)
+		return fmt.Errorf("failed to execute command in Pod %s, error: %w", testContext.testPod.Name, err)
 	}
 	files := strings.Fields(output)
 	if len(files) == 0 {
