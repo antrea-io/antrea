@@ -29,26 +29,9 @@ graph.
 
 ## Prerequisites
 
-The Traceflow feature is enabled by default since Antrea version 0.11.0. If you
-are using an Antrea version before 0.11.0, you need to enable Traceflow from the
-featureGates map defined in antrea.yml for both Controller and Agent. In order
-to use a Service as the destination in traces, you also need to ensure [AntreaProxy](feature-gates.md)
-is enabled in the Agent configuration:
-
-```yaml
-  antrea-controller.conf: |
-    featureGates:
-    # Enable traceflow which provides packet tracing feature to diagnose network issue.
-      Traceflow: true
-  antrea-agent.conf: |
-    featureGates:
-    # Enable traceflow which provides packet tracing feature to diagnose network issue.
-      Traceflow: true
-    # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
-    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic.
-      AntreaProxy: true
-```
+The Traceflow feature is enabled by default since Antrea version v0.11. In order
+to use a Service as the destination in traces, AntreaProxy (also enabled by
+default since v0.11) is required.
 
 ## Start a New Traceflow
 
@@ -85,7 +68,7 @@ spec:
       protocol: 6 # Protocol here can be 6 (TCP), 17 (UDP) or 1 (ICMP), default value is 1 (ICMP)
     transportHeader:
       tcp:
-        srcPort: 10000 # Source port needs to be set when Protocol is TCP/UDP.
+        srcPort: 10000 # Source port for TCP/UDP. If omitted, a random port will be used.
         dstPort: 80 # Destination port needs to be set when Protocol is TCP/UDP.
         flags: 2 # Construct a SYN packet: 2 is also the default value when the flags field is omitted.
 ```
