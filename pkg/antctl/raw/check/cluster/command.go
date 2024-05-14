@@ -171,6 +171,11 @@ func (t *testContext) setup(ctx context.Context) error {
 		NodeSelector: map[string]string{
 			"kubernetes.io/os": "linux",
 		},
+		SecurityContext: &corev1.SecurityContext{
+			Capabilities: &corev1.Capabilities{
+				Add: []corev1.Capability{"SYS_MODULE"},
+			},
+		},
 	})
 
 	t.Log("Creating Deployment")

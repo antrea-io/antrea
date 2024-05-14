@@ -152,6 +152,7 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 							Command:         p.Command,
 							Args:            p.Args,
 							VolumeMounts:    p.VolumeMounts,
+							SecurityContext: p.SecurityContext,
 						},
 					},
 					Tolerations: p.Tolerations,
@@ -164,20 +165,21 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 }
 
 type DeploymentParameters struct {
-	Name         string
-	Role         string
-	Image        string
-	Replicas     int
-	Port         int
-	Command      []string
-	Args         []string
-	Affinity     *corev1.Affinity
-	Tolerations  []corev1.Toleration
-	Labels       map[string]string
-	VolumeMounts []corev1.VolumeMount
-	Volumes      []corev1.Volume
-	HostNetwork  bool
-	NodeSelector map[string]string
+	Name            string
+	Role            string
+	Image           string
+	Replicas        int
+	Port            int
+	Command         []string
+	Args            []string
+	Affinity        *corev1.Affinity
+	Tolerations     []corev1.Toleration
+	Labels          map[string]string
+	VolumeMounts    []corev1.VolumeMount
+	Volumes         []corev1.Volume
+	HostNetwork     bool
+	NodeSelector    map[string]string
+	SecurityContext *corev1.SecurityContext
 }
 
 func WaitForDeploymentsReady(ctx context.Context,
@@ -217,7 +219,7 @@ func GenerateRandomNamespace(baseName string) string {
 }
 
 func Teardown(ctx context.Context, client kubernetes.Interface, clusterName string, namespace string) {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deleting post installation tests setup...\n")
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Deleting installation tests setup...\n")
 	client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
 	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Namespace %s to be deleted\n", namespace)
 	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
