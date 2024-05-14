@@ -446,7 +446,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	if dedicatedIPPoolKey != nil {
 		podAnnotations[annotation.AntreaIPAMAnnotationKey] = ipPoolName
 	}
-	err = NewPodBuilder(podName, testAntreaIPAMNamespace, agnhostImage).OnNode(controlPlaneNodeName()).WithCommand([]string{"sleep", "3600"}).WithAnnotations(podAnnotations).Create(data)
+	err = NewPodBuilder(podName, testAntreaIPAMNamespace, agnhostImage).OnNode(controlPlaneNodeName()).WithAnnotations(podAnnotations).Create(data)
 	if err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
