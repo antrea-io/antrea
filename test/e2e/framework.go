@@ -2667,7 +2667,7 @@ func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containe
 
 	log.Infof("Copying coverage files from Pod '%s'", podName)
 	if err := data.collectCovFiles(podName, containerName, namespace, covDir); err != nil {
-		return fmt.Errorf("error when copying antctl coverage files: %v", err)
+		return fmt.Errorf("error when copying coverage files: %v", err)
 	}
 
 	return nil
