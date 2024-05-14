@@ -315,6 +315,17 @@ func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
 	return false
 }
 
+func (p *PodIPs) AsSlice() []*net.IP {
+	var ips []*net.IP
+	if p.IPv4 != nil {
+		ips = append(ips, p.IPv4)
+	}
+	if p.IPv6 != nil {
+		ips = append(ips, p.IPv6)
+	}
+	return ips
+}
+
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeName(idx int) string {
@@ -2853,14 +2864,14 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 // createAgnhostPodOnNode creates a Pod in the test namespace with a single agnhost container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
+	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createAgnhostPodWithSAOnNode creates a Pod in the test namespace with a single
 // agnhost container and a specific ServiceAccount. The Pod will be scheduled on
 // the specified Node (if nodeName is not empty).
 func (data *TestData) createAgnhostPodWithSAOnNode(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error {
-	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).WithServiceAccountName(serviceAccountName).Create(data)
+	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithHostNetwork(hostNetwork).WithServiceAccountName(serviceAccountName).Create(data)
 }
 
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {

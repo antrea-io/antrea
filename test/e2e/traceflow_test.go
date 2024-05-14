@@ -1166,7 +1166,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
 	// and no more, in order to be deterministic.
 	agnhostPodName := "agnhost"
-	require.NoError(t, NewPodBuilder(agnhostPodName, data.testNamespace, agnhostImage).OnNode(node2).WithCommand([]string{"sleep", "3600"}).WithLabels(map[string]string{"app": "agnhost-server"}).Create(data))
+	require.NoError(t, NewPodBuilder(agnhostPodName, data.testNamespace, agnhostImage).OnNode(node2).WithLabels(map[string]string{"app": "agnhost-server"}).Create(data))
 	agnhostIP, err := data.podWaitForIPs(defaultTimeout, agnhostPodName, data.testNamespace)
 	require.NoError(t, err)
 
