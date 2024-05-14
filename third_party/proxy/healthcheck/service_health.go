@@ -35,6 +35,8 @@ Modifies:
 checking of ZeroCIDR. This is not needed as Antrea passes actual IP addresses
 of interfaces. Also change listenAndServeAll() to directly use nodeAddresses
 instead of a set that is returned by GetNodeAddresses().
+- Removed healthzServer as Antrea doesn't implement its related functionality
+yet.
 */
 
 package healthcheck
@@ -76,12 +78,12 @@ type ServiceHealthServer interface {
 func newServiceHealthServer(hostname string, recorder events.EventRecorder, listener listener, factory httpServerFactory, nodePortAddresses []string) ServiceHealthServer {
 
 	return &server{
-		hostname:      hostname,
-		recorder:      recorder,
-		listener:      listener,
-		httpFactory:   factory,
-		services:      map[types.NamespacedName]*hcInstance{},
-		nodeAddresses: nodePortAddresses,
+		hostname:    hostname,
+		recorder:    recorder,
+		listener:    listener,
+		httpFactory: factory,
+		services:    map[types.NamespacedName]*hcInstance{},
+		nodeIPs:     nodePortAddresses,
 	}
 }
 
@@ -93,10 +95,10 @@ func NewServiceHealthServer(hostname string, recorder events.EventRecorder, node
 type server struct {
 	hostname string
 	// node addresses where health check port will listen on
-	nodeAddresses []string
-	recorder      events.EventRecorder // can be nil
-	listener      listener
-	httpFactory   httpServerFactory
+	nodeIPs     []string
+	recorder    events.EventRecorder // can be nil
+	listener    listener
+	httpFactory httpServerFactory
 
 	lock     sync.RWMutex
 	services map[types.NamespacedName]*hcInstance
@@ -155,7 +157,6 @@ type hcInstance struct {
 	nsn  types.NamespacedName
 	port uint16
 
-	listeners   []net.Listener
 	httpServers []httpServer
 
 	endpoints int // number of local endpoints for a service
@@ -166,12 +167,11 @@ func (hcI *hcInstance) listenAndServeAll(hcs *server) error {
 	var err error
 	var listener net.Listener
 
-	hcI.listeners = make([]net.Listener, 0, len(hcs.nodeAddresses))
-	hcI.httpServers = make([]httpServer, 0, len(hcs.nodeAddresses))
+	hcI.httpServers = make([]httpServer, 0, len(hcs.nodeIPs))
 
 	// for each of the node addresses start listening and serving
-	for _, address := range hcs.nodeAddresses {
-		addr := net.JoinHostPort(address, fmt.Sprint(hcI.port))
+	for _, ip := range hcs.nodeIPs {
+		addr := net.JoinHostPort(ip, fmt.Sprint(hcI.port))
 		// create http server
 		httpSrv := hcs.httpFactory.New(addr, hcHandler{name: hcI.nsn, hcs: hcs})
 		// start listener
@@ -185,16 +185,15 @@ func (hcI *hcInstance) listenAndServeAll(hcs *server) error {
 
 		// start serving
 		go func(hcI *hcInstance, listener net.Listener, httpSrv httpServer) {
-			// Serve() will exit when the listener is closed.
+			// Serve() will exit and return ErrServerClosed when the http server is closed.
 			klog.V(3).InfoS("Starting goroutine for healthcheck", "service", hcI.nsn, "address", listener.Addr())
-			if err := httpSrv.Serve(listener); err != nil {
+			if err := httpSrv.Serve(listener); err != nil && err != http.ErrServerClosed {
 				klog.ErrorS(err, "Healthcheck closed", "service", hcI.nsn)
 				return
 			}
 			klog.V(3).InfoS("Healthcheck closed", "service", hcI.nsn, "address", listener.Addr())
 		}(hcI, listener, httpSrv)
 
-		hcI.listeners = append(hcI.listeners, listener)
 		hcI.httpServers = append(hcI.httpServers, httpSrv)
 	}
 
@@ -203,9 +202,9 @@ func (hcI *hcInstance) listenAndServeAll(hcs *server) error {
 
 func (hcI *hcInstance) closeAll() error {
 	errors := []error{}
-	for _, listener := range hcI.listeners {
-		if err := listener.Close(); err != nil {
-			klog.ErrorS(err, "Error closing listener for health check service", "service", hcI.nsn, "address", listener.Addr())
+	for _, server := range hcI.httpServers {
+		if err := server.Close(); err != nil {
+			klog.ErrorS(err, "Error closing server for health check service", "service", hcI.nsn)
 			errors = append(errors, err)
 		}
 	}
