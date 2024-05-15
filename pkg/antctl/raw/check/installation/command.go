@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/fatih/color"
@@ -41,12 +42,14 @@ func Command() *cobra.Command {
 			return Run(o)
 		},
 	}
-	command.Flags().StringVarP(&o.antreaNamespace, "Namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
+	command.Flags().StringVarP(&o.antreaNamespace, "namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
+	command.Flags().StringVar(&o.runFilter, "run", o.runFilter, "Run only the tests that match the provided regex")
 	return command
 }
 
 type options struct {
 	antreaNamespace string
+	runFilter       string
 }
 
 func newOptions() *options {
@@ -103,9 +106,16 @@ type testContext struct {
 }
 
 func Run(o *options) error {
+	var runFilterRegex *regexp.Regexp
+	if re, err := regexp.Compile(o.runFilter); err != nil {
+		return fmt.Errorf("invalid regex for run filter: %w", err)
+	} else {
+		runFilterRegex = re
+	}
+
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
-		return fmt.Errorf("unable to create Kubernetes client: %s", err)
+		return fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
 	ctx := context.Background()
 	testContext := NewTestContext(client, config, clusterName, o)
@@ -114,6 +124,9 @@ func Run(o *options) error {
 	}
 	var numSuccess, numFailure, numSkipped int
 	for name, test := range testsRegistry {
+		if runFilterRegex != nil && !runFilterRegex.MatchString(name) {
+			continue
+		}
 		testContext.Header("Running test: %s", name)
 		if err := test.Run(ctx, testContext); err != nil {
 			if errors.As(err, new(notRunnableError)) {
@@ -303,6 +316,16 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	t.Log("Deployment is validated successfully")
 	return nil
+}
+
+func (t *testContext) runAgnhostConnect(ctx context.Context, clientPodName string, container string, target string, targetPort int) error {
+	cmd := agnhostConnectCommand(target, fmt.Sprint(targetPort))
+	_, stderr, err := check.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
+	if err != nil {
+		// We log the contents of stderr here for troubleshooting purposes.
+		t.Log("/agnhost command failed - stderr: %s", stderr)
+	}
+	return err
 }
 
 func (t *testContext) Log(format string, a ...interface{}) {
