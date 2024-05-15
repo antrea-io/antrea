@@ -111,8 +111,8 @@ func run(o *Options) error {
 	}
 	k8s.OverrideKubeAPIServer(o.config.KubeAPIServerOverride)
 
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
-	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer()))
+	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
@@ -347,13 +347,15 @@ func run(o *Options) error {
 		listOptions := func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
 		}
-		return coreinformers.NewFilteredPodInformer(
+		informer := coreinformers.NewFilteredPodInformer(
 			k8sClient,
 			metav1.NamespaceAll,
 			resyncPeriodDisabled,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
 			listOptions,
 		)
+		informer.SetTransform(k8s.NewTrimmer(k8s.TrimPod))
+		return informer
 	})
 
 	var mcDefaultRouteController *mcroute.MCDefaultRouteController
@@ -370,6 +372,7 @@ func run(o *Options) error {
 		mcInformerFactoryWithNamespaceOption = mcinformers.NewSharedInformerFactoryWithOptions(mcClient,
 			informerDefaultResync,
 			mcinformers.WithNamespace(o.config.Multicluster.Namespace),
+			mcinformers.WithTransform(k8s.NewTrimmer()),
 		)
 		gwInformer := mcInformerFactoryWithNamespaceOption.Multicluster().V1alpha1().Gateways()
 		ciImportInformer := mcInformerFactoryWithNamespaceOption.Multicluster().V1alpha1().ClusterInfoImports()
@@ -393,7 +396,7 @@ func run(o *Options) error {
 		}
 	}
 	if enableMulticlusterNP {
-		mcInformerFactory = mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
+		mcInformerFactory = mcinformers.NewSharedInformerFactoryWithOptions(mcClient, informerDefaultResync, mcinformers.WithTransform(k8s.NewTrimmer()))
 		labelIDInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
 		mcStrechedNetworkPolicyController = mcroute.NewMCAgentStretchedNetworkPolicyController(
 			ofClient,
@@ -605,6 +608,7 @@ func run(o *Options) error {
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 			listOptions,
 		)
+		localExternalNodeInformer.SetTransform(k8s.NewTrimmer())
 		externalNodeController, err = externalnode.NewExternalNodeController(ovsBridgeClient, ofClient, localExternalNodeInformer,
 			ifaceStore, externalEntityUpdateChannel, o.config.ExternalNode.ExternalNodeNamespace, o.config.ExternalNode.PolicyBypassRules)
 		if err != nil {
