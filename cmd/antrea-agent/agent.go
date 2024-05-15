@@ -561,7 +561,6 @@ func run(o *Options) error {
 		externalIPController, err = serviceexternalip.NewServiceExternalIPController(
 			nodeConfig.Name,
 			nodeConfig.NodeTransportInterfaceName,
-			k8sClient,
 			memberlistCluster,
 			serviceInformer,
 			endpointsInformer,

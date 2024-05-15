@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -64,8 +63,6 @@ type ServiceExternalIPController struct {
 	serviceLister       corelisters.ServiceLister
 	serviceListerSynced cache.InformerSynced
 
-	client kubernetes.Interface
-
 	endpointsInformer     cache.SharedIndexInformer
 	endpointsLister       corelisters.EndpointsLister
 	endpointsListerSynced cache.InformerSynced
@@ -87,14 +84,12 @@ var _ querier.ServiceExternalIPStatusQuerier = (*ServiceExternalIPController)(ni
 func NewServiceExternalIPController(
 	nodeName string,
 	nodeTransportInterface string,
-	client kubernetes.Interface,
 	cluster memberlist.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	endpointsInformer coreinformers.EndpointsInformer,
 ) (*ServiceExternalIPController, error) {
 	c := &ServiceExternalIPController{
 		nodeName:              nodeName,
-		client:                client,
 		cluster:               cluster,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "AgentServiceExternalIP"),
 		serviceInformer:       serviceInformer.Informer(),
