@@ -111,7 +111,7 @@ func run(o *Options) error {
 	}
 	k8s.OverrideKubeAPIServer(o.config.KubeAPIServerOverride)
 
-	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer()))
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimNode)))
 	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
