@@ -466,7 +466,11 @@ function collect_coverage {
       mc_controller_pod_name="$(kubectl get pods --selector=app=antrea,component=antrea-mc-controller -n ${namespace} --no-headers=true ${kubeconfig} | awk '{ print $1 }')"
       controller_pid="$(kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- pgrep antrea)"
       kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- kill -SIGINT $controller_pid
-      kubectl cp ${namespace}/$mc_controller_pod_name:antrea-mc-controller.cov.out ${COVERAGE_DIR}/$mc_controller_pod_name-$timestamp ${kubeconfig}
+      cov_dir="${COVERAGE_DIR}/$mc_controller_pod_name-$timestamp"
+      mkdir -p $cov_dir
+      kubectl cp ${namespace}/$mc_controller_pod_name:/tmp/coverage/* $cov_dir/ ${kubeconfig}
+      go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
+      rm -rf "${cov_dir}"
     done
 }
 

@@ -625,7 +625,11 @@ function collect_coverage() {
         controller_pid="$(kubectl exec -i $antrea_controller_pod_name -n kube-system -- pgrep antrea)"
         kubectl exec -i $antrea_controller_pod_name -n kube-system -- kill -SIGINT $controller_pid
         timestamp=$(date +%Y%m%d%H%M%S)
-        kubectl cp kube-system/$antrea_controller_pod_name:antrea-controller.cov.out ${GIT_CHECKOUT_DIR}/conformance-coverage/$antrea_controller_pod_name-$timestamp
+        cov_dir="${GIT_CHECKOUT_DIR}/conformance-coverage/$antrea_controller_pod_name-$timestamp"
+        mkdir -p $cov_dir
+        kubectl cp kube-system/$antrea_controller_pod_name:/tmp/coverage/* $cov_dir/
+        go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
+        rm -rf "${cov_dir}"
 
         antrea_agent_pod_names="$(kubectl get pods --selector=app=antrea,component=antrea-agent -n kube-system --no-headers=true | awk '{ print $1 }')"
         for agent in ${antrea_agent_pod_names}
@@ -633,7 +637,11 @@ function collect_coverage() {
             agent_pid="$(kubectl exec -i $agent -n kube-system -- pgrep antrea)"
             kubectl exec -i $agent -c antrea-agent -n kube-system -- kill -SIGINT $agent_pid
             timestamp=$(date +%Y%m%d%H%M%S)
-            kubectl cp kube-system/$agent:antrea-agent.cov.out -c antrea-agent ${GIT_CHECKOUT_DIR}/conformance-coverage/$agent-$timestamp
+            cov_dir="${GIT_CHECKOUT_DIR}/conformance-coverage/$agent-$timestamp"
+            mkdir -p $cov_dir
+            kubectl cp kube-system/$agent:/tmp/coverage/* -c antrea-agent $cov_dir/
+            go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
+            rm -rf "${cov_dir}"
         done
 }
 

@@ -30,9 +30,15 @@ LABEL description="The docker image for the flow aggregator with code coverage m
 USER root
 
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator* /usr/local/bin/
-COPY --from=flow-aggregator-build /antrea/test/e2e/coverage/flow-aggregator-arg-file /
 COPY --from=flow-aggregator-build /antrea/bin/antctl* /usr/local/bin/
+COPY --from=flow-aggregator-build /antrea/test/e2e/utils/run_cov_binary.sh /
+
+# This environment variable will persist when running the container, but can also be overwritten if needed
+ENV GOCOVERDIR=/tmp/coverage
+RUN mkdir -p $GOCOVERDIR
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT [ "/run_cov_binary.sh" ]
