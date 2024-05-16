@@ -108,7 +108,6 @@ func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters .
 type fakeController struct {
 	*ServiceExternalIPController
 	mockController        *gomock.Controller
-	clientset             *fake.Clientset
 	informerFactory       informers.SharedInformerFactory
 	mockIPAssigner        *ipassignertest.MockIPAssigner
 	fakeMemberlistCluster *fakeMemberlistCluster
@@ -136,7 +135,6 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 		endpointsListerSynced: endpointInformer.Informer().HasSynced,
 		endpointsLister:       endpointInformer.Lister(),
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "serviceExternalIP"),
-		client:                clientset,
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
 		cluster:               memberlistCluster,
 		ipAssigner:            mockIPAssigner,
@@ -145,7 +143,6 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 	return &fakeController{
 		ServiceExternalIPController: eipController,
 		mockController:              controller,
-		clientset:                   clientset,
 		informerFactory:             informerFactory,
 		mockIPAssigner:              mockIPAssigner,
 		fakeMemberlistCluster:       memberlistCluster,

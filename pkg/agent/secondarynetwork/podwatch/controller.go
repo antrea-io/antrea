@@ -87,7 +87,6 @@ type podController struct {
 	netAttachDefClient    netdefclient.K8sCniCncfIoV1Interface
 	queue                 workqueue.RateLimitingInterface
 	podInformer           cache.SharedIndexInformer
-	nodeName              string
 	podUpdateSubscriber   channel.Subscriber
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	interfaceStore        interfacestore.InterfaceStore
@@ -102,7 +101,6 @@ func NewPodController(
 	kubeClient clientset.Interface,
 	netAttachDefClient netdefclient.K8sCniCncfIoV1Interface,
 	podInformer cache.SharedIndexInformer,
-	nodeName string,
 	podUpdateSubscriber channel.Subscriber,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 ) (*podController, error) {
@@ -117,7 +115,6 @@ func NewPodController(
 		queue: workqueue.NewNamedRateLimitingQueue(
 			workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "podcontroller"),
 		podInformer:           podInformer,
-		nodeName:              nodeName,
 		podUpdateSubscriber:   podUpdateSubscriber,
 		ovsBridgeClient:       ovsBridgeClient,
 		interfaceStore:        ifaceStore,

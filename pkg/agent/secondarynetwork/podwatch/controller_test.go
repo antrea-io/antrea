@@ -205,7 +205,6 @@ func TestPodControllerRun(t *testing.T) {
 		client,
 		netdefclient,
 		informerFactory.Core().V1().Pods().Informer(),
-		testNode,
 		nil, nil)
 	podController.interfaceConfigurator = interfaceConfigurator
 	podController.ipamAllocator = mockIPAM
@@ -916,7 +915,6 @@ func testPodController(ctrl *gomock.Controller) (
 			workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay),
 			"podcontroller"),
 		podInformer:           informerFactory.Core().V1().Pods().Informer(),
-		nodeName:              testNode,
 		interfaceConfigurator: interfaceConfigurator,
 		ipamAllocator:         mockIPAM,
 		interfaceStore:        interfacestore.NewInterfaceStore(),
