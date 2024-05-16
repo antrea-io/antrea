@@ -82,7 +82,7 @@ bin: fmt vet ## Build manager binary.
 
 .PHONY: antrea-mc-instr-binary
 antrea-mc-instr-binary:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/multicluster/... -c -o bin/antrea-mc-controller-coverage antrea.io/antrea/multicluster/cmd/...
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -cover -coverpkg=antrea.io/antrea/multicluster/...,antrea.io/antrea/multicluster/cmd/... -o bin/antrea-mc-controller-coverage antrea.io/antrea/multicluster/cmd/...
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go

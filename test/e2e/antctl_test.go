@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -116,16 +115,6 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 	return stdout, stderr, err
 }
 
-func antctlCoverageArgs(antctlPath string, covDir string) []string {
-	const timeFormat = "20060102T150405Z0700"
-	timestamp := time.Now().Format(timeFormat)
-	covFile := fmt.Sprintf("antctl-%s.out", timestamp)
-	if covDir != "" {
-		covFile = path.Join(covDir, covFile)
-	}
-	return []string{antctlPath, "-test.run=TestBincoverRunMain", fmt.Sprintf("-test.coverprofile=%s", covFile)}
-}
-
 // testAntctlAgentLocalAccess ensures antctl is accessible in an agent Pod.
 func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	podName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
@@ -135,25 +124,13 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	antctlName := antctlName()
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeAgent) {
 		args := []string{antctlName}
-		if testOptions.enableCoverage {
-			antctlCovArgs := antctlCoverageArgs(antctlName, "")
-			args = append(antctlCovArgs, c...)
-		} else {
-			args = append(args, c...)
-		}
+		args = append(args, c...)
 		t.Logf("args: %s", args)
 
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			stdout, stderr, err := runAntctl(podName, args, data)
-			// After upgrading from Go v1.19 to Go v1.21, stderr will also include the
-			// following warning in the error case:
-			//    warning: GOCOVERDIR not set, no coverage data emitted
-			// As a result, we temporarily replace strings.HasSuffix with strings.Contains.
-			// We can revert this change when the following issue is addressed:
-			// https://github.com/antrea-io/antrea/issues/4962
-			// if err != nil && !strings.HasSuffix(stderr, "not enabled\n") {
-			if err != nil && !strings.Contains(stderr, "not enabled\n") {
+			if err != nil && !strings.HasSuffix(stderr, "not enabled\n") {
 				t.Fatalf("Error when running `antctl %s` from %s: %v\n%s", c, podName, err, antctlOutput(stdout, stderr))
 			}
 		})
@@ -183,7 +160,7 @@ func runAntctlCommandFromPod(data *TestData, podName string, cmd []string) (stri
 // Pod.
 func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServiceAccountName string, antctlImage string) {
 	const podName = "antctl"
-	const covDir = "/coverage"
+	const covDir = "/tmp/coverage"
 	antctlName := antctlName()
 
 	runAntctlPod(t, data, podName, antctlServiceAccountName, antctlImage, covDir)
@@ -193,12 +170,7 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
 		cmd := []string{antctlName}
-		if testOptions.enableCoverage {
-			antctlCovArgs := antctlCoverageArgs(antctlName, covDir)
-			cmd = append(antctlCovArgs, c...)
-		} else {
-			cmd = append(cmd, c...)
-		}
+		cmd = append(cmd, c...)
 		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
 	}
 	testCmds = append(testCmds,
