@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/fatih/color"
@@ -41,12 +42,14 @@ func Command() *cobra.Command {
 			return Run(o)
 		},
 	}
-	command.Flags().StringVarP(&o.antreaNamespace, "Namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
+	command.Flags().StringVarP(&o.antreaNamespace, "namespace", "n", o.antreaNamespace, "Configure Namespace in which Antrea is running")
+	command.Flags().StringVar(&o.runFilter, "run", o.runFilter, "Run only the tests that match the provided regex")
 	return command
 }
 
 type options struct {
 	antreaNamespace string
+	runFilter       string
 }
 
 func newOptions() *options {
@@ -100,38 +103,48 @@ type testContext struct {
 	echoSameNodePod  *corev1.Pod
 	echoOtherNodePod *corev1.Pod
 	namespace        string
+	// A nil regex indicates that all the tests should be run.
+	runFilterRegex *regexp.Regexp
+}
+
+type testStats struct {
+	numSuccess int
+	numFailure int
+	numSkipped int
+}
+
+func compileRunFilter(runFilter string) (*regexp.Regexp, error) {
+	if runFilter == "" {
+		return nil, nil
+	}
+	re, err := regexp.Compile(runFilter)
+	if err != nil {
+		return nil, fmt.Errorf("invalid regex for run filter: %w", err)
+	}
+	return re, nil
 }
 
 func Run(o *options) error {
+	runFilterRegex, err := compileRunFilter(o.runFilter)
+	if err != nil {
+		return err
+	}
+
 	client, config, clusterName, err := check.NewClient()
 	if err != nil {
-		return fmt.Errorf("unable to create Kubernetes client: %s", err)
+		return fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName, o)
+	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex)
 	if err := testContext.setup(ctx); err != nil {
 		return err
 	}
-	var numSuccess, numFailure, numSkipped int
-	for name, test := range testsRegistry {
-		testContext.Header("Running test: %s", name)
-		if err := test.Run(ctx, testContext); err != nil {
-			if errors.As(err, new(notRunnableError)) {
-				testContext.Warning("Test %s was skipped: %v", name, err)
-				numSkipped++
-			} else {
-				testContext.Fail("Test %s failed: %v", name, err)
-				numFailure++
-			}
-		} else {
-			testContext.Success("Test %s passed", name)
-			numSuccess++
-		}
-	}
-	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", numSuccess, numFailure, numSkipped)
+	stats := testContext.runTests(ctx)
+
+	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", stats.numSuccess, stats.numFailure, stats.numSkipped)
 	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
-	if numFailure > 0 {
-		return fmt.Errorf("%v/%v tests failed", numFailure, len(testsRegistry))
+	if stats.numFailure > 0 {
+		return fmt.Errorf("%v/%v tests failed", stats.numFailure, len(testsRegistry))
 	}
 	return nil
 }
@@ -156,13 +169,20 @@ func newService(name string, selector map[string]string, port int) *corev1.Servi
 	}
 }
 
-func NewTestContext(client kubernetes.Interface, config *rest.Config, clusterName string, o *options) *testContext {
+func NewTestContext(
+	client kubernetes.Interface,
+	config *rest.Config,
+	clusterName string,
+	antreaNamespace string,
+	runFilterRegex *regexp.Regexp,
+) *testContext {
 	return &testContext{
 		client:          client,
 		config:          config,
 		clusterName:     clusterName,
-		antreaNamespace: o.antreaNamespace,
+		antreaNamespace: antreaNamespace,
 		namespace:       check.GenerateRandomNamespace(testNamespacePrefix),
+		runFilterRegex:  runFilterRegex,
 	}
 }
 
@@ -303,6 +323,39 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	t.Log("Deployment is validated successfully")
 	return nil
+}
+
+func (t *testContext) runTests(ctx context.Context) testStats {
+	var stats testStats
+	for name, test := range testsRegistry {
+		if t.runFilterRegex != nil && !t.runFilterRegex.MatchString(name) {
+			continue
+		}
+		t.Header("Running test: %s", name)
+		if err := test.Run(ctx, t); err != nil {
+			if errors.As(err, new(notRunnableError)) {
+				t.Warning("Test %s was skipped: %v", name, err)
+				stats.numSkipped++
+			} else {
+				t.Fail("Test %s failed: %v", name, err)
+				stats.numFailure++
+			}
+		} else {
+			t.Success("Test %s passed", name)
+			stats.numSuccess++
+		}
+	}
+	return stats
+}
+
+func (t *testContext) runAgnhostConnect(ctx context.Context, clientPodName string, container string, target string, targetPort int) error {
+	cmd := agnhostConnectCommand(target, fmt.Sprint(targetPort))
+	_, stderr, err := check.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
+	if err != nil {
+		// We log the contents of stderr here for troubleshooting purposes.
+		t.Log("/agnhost command failed - stderr: %s", stderr)
+	}
+	return err
 }
 
 func (t *testContext) Log(format string, a ...interface{}) {

@@ -17,8 +17,6 @@ package installation
 import (
 	"context"
 	"fmt"
-
-	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
 type PodToServiceIntraNodeConnectivityTest struct{}
@@ -31,8 +29,7 @@ func (t *PodToServiceIntraNodeConnectivityTest) Run(ctx context.Context, testCon
 	service := echoSameNodeDeploymentName
 	for _, clientPod := range testContext.clientPods {
 		testContext.Log("Validating from Pod %s to Service %s in Namespace %s...", clientPod.Name, service, testContext.namespace)
-		_, _, err := check.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPod.Name, "", agnhostConnectCommand(service, "80"))
-		if err != nil {
+		if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", service, 80); err != nil {
 			return fmt.Errorf("client Pod %s was not able to communicate with Service %s", clientPod.Name, service)
 		}
 		testContext.Log("client Pod %s was able to communicate with Service %s", clientPod.Name, service)
