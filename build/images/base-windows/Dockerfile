@@ -36,7 +36,9 @@ RUN Invoke-WebRequest -UseBasicParsing -Uri https://github.com/containernetworki
 RUN Invoke-WebRequest -UseBasicParsing -Uri https://www.7-zip.org/a/7z2107-x64.exe -OutFile 7z2107-x64.exe; \
     cmd /c start /wait 7z2107-x64.exe /S; \
     del 7z2107-x64.exe;  $env:Path = $env:Path+';C:/Program Files/7-Zip'; \
-    Invoke-WebRequest -UseBasicParsing -Uri https://cfhcable.dl.sourceforge.net/project/mingw-w64/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z -OutFile mingw.7z; \
+    # Force the User-Agent to "wget" so that we are redirected directly to a download mirror. With
+    # the default, Sourceforge may treat us as a browser and the download would fail.
+    Invoke-WebRequest -UseBasicParsing -UserAgent "Wget" -Uri https://downloads.sourceforge.net/project/mingw-w64/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z -OutFile mingw.7z; \
     7z x mingw.7z; cp c:/mingw64/bin/mingw32-make.exe c:/mingw64/bin/make.exe; \
     Invoke-WebRequest -UseBasicParsing -Uri https://github.com/git-for-windows/git/releases/download/v2.35.1.windows.2/PortableGit-2.35.1.2-64-bit.7z.exe -OutFile git.exe; \
     7z x git.exe -oC:\git; \
