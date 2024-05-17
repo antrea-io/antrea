@@ -40,5 +40,7 @@ LABEL description="The Docker image to deploy the antrea-controller."
 
 USER root
 
+RUN yum install ca-certificates -y && yum clean all
+
 COPY --from=antrea-build /antrea/bin/antctl /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antrea-controller /usr/local/bin/

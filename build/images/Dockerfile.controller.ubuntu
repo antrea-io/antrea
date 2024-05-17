@@ -19,5 +19,9 @@ LABEL description="The development Docker image to deploy the antrea-controller.
 
 USER root
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY bin/antrea-controller /usr/local/bin/
 COPY bin/antctl /usr/local/bin/
