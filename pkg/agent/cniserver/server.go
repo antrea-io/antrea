@@ -123,6 +123,8 @@ type CNIServer struct {
 	networkConfig              *config.NetworkConfig
 	// podNetworkWait notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	podNetworkWait *wait.Group
+	// flowRestoreCompleteWait will be decremented and Pod reconciliation is completed.
+	flowRestoreCompleteWait *wait.Group
 }
 
 var supportedCNIVersionSet map[string]bool
@@ -630,7 +632,7 @@ func New(
 	routeClient route.Interface,
 	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
 	networkConfig *config.NetworkConfig,
-	podNetworkWait *wait.Group,
+	podNetworkWait, flowRestoreCompleteWait *wait.Group,
 ) *CNIServer {
 	return &CNIServer{
 		cniSocket:                  cniSocket,
@@ -646,6 +648,7 @@ func New(
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
 		networkConfig:              networkConfig,
 		podNetworkWait:             podNetworkWait,
+		flowRestoreCompleteWait:    flowRestoreCompleteWait.Increment(),
 	}
 }
 
@@ -748,7 +751,7 @@ func (s *CNIServer) interceptCheck(cniConfig *CNIConfig) (*cnipb.CniCmdResponse,
 // installing Pod flows, so as part of this reconciliation process we retrieve the Pod list from the
 // K8s apiserver and replay the necessary flows.
 func (s *CNIServer) reconcile() error {
-	klog.InfoS("Reconciliation for CNI server")
+	klog.InfoS("Starting reconciliation for CNI server")
 	// For performance reasons, use ResourceVersion="0" in the ListOptions to ensure the request is served from
 	// the watch cache in kube-apiserver.
 	pods, err := s.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
@@ -759,7 +762,7 @@ func (s *CNIServer) reconcile() error {
 		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)
 	}
 
-	return s.podConfigurator.reconcile(pods.Items, s.containerAccess, s.podNetworkWait)
+	return s.podConfigurator.reconcile(pods.Items, s.containerAccess, s.podNetworkWait, s.flowRestoreCompleteWait)
 }
 
 func init() {

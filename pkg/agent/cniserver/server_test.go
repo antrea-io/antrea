@@ -761,11 +761,12 @@ func translateRawPrevResult(prevResult *current.Result, cniVersion string) (map[
 
 func newCNIServer(t *testing.T) *CNIServer {
 	cniServer := &CNIServer{
-		cniSocket:       testSocket,
-		nodeConfig:      testNodeConfig,
-		serverVersion:   cni.AntreaCNIVersion,
-		containerAccess: newContainerAccessArbitrator(),
-		podNetworkWait:  wait.NewGroup(),
+		cniSocket:               testSocket,
+		nodeConfig:              testNodeConfig,
+		serverVersion:           cni.AntreaCNIVersion,
+		containerAccess:         newContainerAccessArbitrator(),
+		podNetworkWait:          wait.NewGroup(),
+		flowRestoreCompleteWait: wait.NewGroup().Increment(),
 	}
 	cniServer.networkConfig = &config.NetworkConfig{InterfaceMTU: 1450}
 	return cniServer

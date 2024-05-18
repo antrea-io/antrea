@@ -252,6 +252,20 @@ func run(o *Options) error {
 	// Processes that enable Pod network should wait for it.
 	podNetworkWait := utilwait.NewGroup()
 
+	// flowRestoreCompleteWait is used to wait until "essential" flows have been installed
+	// successfully in OVS. These flows include NetworkPolicy flows (guaranteed by
+	// podNetworkWait), Pod forwarding flows and flows installed by the
+	// NodeRouteController. Additional requirements may be added in the future.
+	flowRestoreCompleteWait := utilwait.NewGroup()
+	// We ensure that flowRestoreCompleteWait.Wait() cannot return until podNetworkWait.Wait()
+	// returns. This is not strictly necessary because it is guatanteed by the CNIServer Pod
+	// reconciliation logic but it helps with readability.
+	flowRestoreCompleteWait.Increment()
+	go func() {
+		defer flowRestoreCompleteWait.Done()
+		podNetworkWait.Wait()
+	}()
+
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -299,6 +313,7 @@ func run(o *Options) error {
 		egressConfig,
 		serviceConfig,
 		podNetworkWait,
+		flowRestoreCompleteWait,
 		stopCh,
 		o.nodeType,
 		o.config.ExternalNode.ExternalNodeNamespace,
@@ -332,6 +347,7 @@ func run(o *Options) error {
 			nodeConfig,
 			agentInitializer.GetWireGuardClient(),
 			ipsecCertController,
+			flowRestoreCompleteWait,
 		)
 	}
 
@@ -596,7 +612,8 @@ func run(o *Options) error {
 			enableAntreaIPAM,
 			o.config.DisableTXChecksumOffload,
 			networkConfig,
-			podNetworkWait)
+			podNetworkWait,
+			flowRestoreCompleteWait)
 
 		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel)
 		if err != nil {
@@ -636,20 +653,6 @@ func run(o *Options) error {
 			nodeConfig,
 			serviceCIDRNet,
 			o.enableAntreaProxy)
-	}
-
-	// TODO: we should call this after installing flows for initial node routes
-	//  and initial NetworkPolicies so that no packets will be mishandled.
-	if err := agentInitializer.FlowRestoreComplete(); err != nil {
-		return err
-	}
-	// ConnectUplinkToOVSBridge must be run immediately after FlowRestoreComplete
-	if connectUplinkToBridge {
-		// Restore network config before shutdown. ovsdbConnection must be alive when restore.
-		defer agentInitializer.RestoreOVSBridge()
-		if err := agentInitializer.ConnectUplinkToOVSBridge(); err != nil {
-			return fmt.Errorf("failed to connect uplink to OVS bridge: %w", err)
-		}
 	}
 
 	if err := antreaClientProvider.RunOnce(); err != nil {
@@ -846,6 +849,21 @@ func run(o *Options) error {
 	if enableMulticlusterNP {
 		mcInformerFactory.Start(stopCh)
 		go mcStrechedNetworkPolicyController.Run(stopCh)
+	}
+
+	klog.InfoS("Waiting for flow restoration to complete")
+	flowRestoreCompleteWait.Wait()
+	if err := agentInitializer.FlowRestoreComplete(); err != nil {
+		return err
+	}
+	klog.InfoS("Flow restoration complete")
+	// ConnectUplinkToOVSBridge must be run immediately after FlowRestoreComplete
+	if connectUplinkToBridge {
+		// Restore network config before shutdown. ovsdbConnection must be alive when restore.
+		defer agentInitializer.RestoreOVSBridge()
+		if err := agentInitializer.ConnectUplinkToOVSBridge(); err != nil {
+			return fmt.Errorf("failed to connect uplink to OVS bridge: %w", err)
+		}
 	}
 
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
