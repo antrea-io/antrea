@@ -49,7 +49,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
-	github.com/ti-mo/conntrack v0.5.0
+	github.com/ti-mo/conntrack v0.5.1
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/vmware/go-ipfix v0.9.0
 	go.uber.org/mock v0.4.0
@@ -169,7 +169,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mdlayher/genetlink v1.0.0 // indirect
 	github.com/mdlayher/netlink v1.7.2 // indirect
-	github.com/mdlayher/socket v0.4.1 // indirect
+	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/moby/term v0.0.0-20221205130635-1aeaba878587 // indirect
@@ -196,7 +196,7 @@ require (
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
-	github.com/ti-mo/netfilter v0.5.0 // indirect
+	github.com/ti-mo/netfilter v0.5.2 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f // indirect
