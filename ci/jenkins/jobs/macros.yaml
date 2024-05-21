@@ -122,31 +122,22 @@
           ./ci/jenkins/test.sh --testcase windows-install-ovs
 
 - builder:
-    name: builder-e2e-proxyall-win
+    name: builder-e2e-win
     builders:
       - shell: |-
           #!/bin/bash
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
+          ./ci/jenkins/test.sh --testcase '{e2e_type}' --registry ${{DOCKER_REGISTRY}}
 
 - builder:
-      name: builder-e2e-win
-      builders:
-          - shell: |-
-                #!/bin/bash
-                set -ex
-                DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-                ./ci/jenkins/test.sh --testcase windows-containerd-e2e --registry ${{DOCKER_REGISTRY}} --win-image-node '{win_image_node}'
-
-- builder:
-      name: builder-conformance-win
-      builders:
-          - shell: |-
-                #!/bin/bash
-                set -ex
-                DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-                ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --win-image-node '{win_image_node}'
+    name: builder-conformance-win
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}}
 
 - builder:
     name: builder-flexible-ipam-e2e
