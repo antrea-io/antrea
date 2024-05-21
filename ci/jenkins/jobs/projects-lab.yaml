@@ -1,6 +1,6 @@
 - project:
-    # ghpr_auth, antrea_admin_list, antrea_org_list, antrea_white_list and
-    # antrea_win_image_node_name should be defined as a global variable somewhere else
+    # ghpr_auth, antrea_admin_list, antrea_org_list, antrea_white_list
+    # should be defined as global variables somewhere else
     name: antrea
     git_credentials_id: ANTREA_GIT_CREDENTIAL
     org_repo: antrea-io/antrea
@@ -601,14 +601,13 @@
           publishers: []
       - '{name}-{test_name}-for-pull-request':
             test_name: windows-conformance
-            node: 'antrea-windows-containerd-testbed'
+            node: 'antrea-windows-testbed'
             description: 'This is the {test_name} test for {name}.'
             branches:
                 - ${{sha1}}
             builders:
                 - builder-conformance-win:
-                      conformance_type: 'windows-containerd-conformance'
-                      win_image_node: '{antrea_win_image_node_name}'
+                      conformance_type: 'windows-conformance'
             trigger_phrase: ^(?!Thanks for your PR).*/test-windows-(conformance|all).*
             white_list_target_branches: [ ]
             allow_whitelist_orgs_as_admins: true
@@ -658,14 +657,13 @@
                       only-if-success: false
       - '{name}-{test_name}-for-pull-request':
             test_name: windows-networkpolicy
-            node: 'antrea-windows-containerd-testbed'
+            node: 'antrea-windows-testbed'
             description: 'This is the {test_name} test for {name}.'
             branches:
                 - ${{sha1}}
             builders:
                 - builder-conformance-win:
-                      conformance_type: 'windows-containerd-networkpolicy'
-                      win_image_node: '{antrea_win_image_node_name}'
+                      conformance_type: 'windows-networkpolicy'
             trigger_phrase: ^(?!Thanks for your PR).*/test-windows-(networkpolicy|all).*
             white_list_target_branches: [ ]
             allow_whitelist_orgs_as_admins: true
@@ -713,15 +711,87 @@
                       default-excludes: true
                       fingerprint: false
                       only-if-success: false
+      - '{name}-{test_name}-no-scm':
+          test_name: windows-e2e-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(windows-e2e|all).*
+          white_list_target_branches: []
+          status_context: jenkins-windows-e2e
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-no-scm':
+          test_name: windows-conformance-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(windows-conformance|all).*
+          white_list_target_branches: []
+          status_context: jenkins-windows-conformance
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-no-scm':
+          test_name: windows-networkpolicy-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(windows-networkpolicy|all).*
+          white_list_target_branches: []
+          status_context: jenkins-windows-networkpolicy
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []         
       - '{name}-{test_name}-for-pull-request':
             test_name: windows-e2e
-            node: 'antrea-windows-containerd-testbed'
+            node: 'antrea-windows-testbed'
             description: 'This is the {test_name} test for {name}.'
             branches:
                 - ${{sha1}}
             builders:
                 - builder-e2e-win:
-                      win_image_node: '{antrea_win_image_node_name}'
+                      e2e_type: 'windows-e2e'
             trigger_phrase: ^(?!Thanks for your PR).*/test-windows-(e2e|all).*
             white_list_target_branches: [ ]
             allow_whitelist_orgs_as_admins: true
@@ -769,6 +839,49 @@
                       default-excludes: true
                       fingerprint: false
                       only-if-success: false
+      - '{name}-{test_name}-for-period':
+          test_name: windows-e2e-ovs-as-service
+          node: 'antrea-windows-testbed'
+          description: 'This is for running e2e tests with OVS daemons running as Windows services.'
+          builders:
+            - builder-e2e-win:
+                e2e_type: 'windows-e2e-ovs-as-service'
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          - archive:
+              allow-empty: true
+              artifacts: 'antrea-test-logs.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: GOVC_URL
+                variable: GOVC_URL
+            - text:
+                credential-id: GOVC_USERNAME
+                variable: GOVC_USERNAME
+            - text:
+                credential-id: GOVC_PASSWORD
+                variable: GOVC_PASSWORD
+            - text:
+                credential-id: GOVC_DATACENTER
+                variable: GOVC_DATACENTER
+            - text:
+                credential-id: GOVC_DATASTORE
+                variable: GOVC_DATASTORE
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-conformance
           node: 'antrea-kind-testbed'
