@@ -177,20 +177,26 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 	}
 }
 
-func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string, serverName string, canAccess bool) {
-	url := fmt.Sprintf("https://%s", serverName)
-	assert.Eventually(t, func() bool {
-		cmd := []string{"wget", "-O", "-", url, "-T", "5"}
-		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
-		if canAccess && err != nil {
-			t.Logf("Failed to access %s: %v\nStdout: %s\nStderr: %s\n", url, err, stdout, stderr)
-			return false
-		} else if !canAccess && err == nil {
-			t.Logf("Expected not to access the server, but the request succeeded.\nStdout: %s\nStderr: %s\n", stdout, stderr)
-			return false
-		}
-		return true
-	}, 10*time.Second, time.Second)
+func probeL7NetworkPolicyTLS(t *testing.T, data *TestData, clientPodName string, serverIPs []*net.IP, serverName string, canAccess bool) {
+	for _, serverIP := range serverIPs {
+		url := fmt.Sprintf("https://%s", serverName)
+		resolve := fmt.Sprintf("%s:443:%s", serverName, serverIP.String())
+		assert.Eventually(t, func() bool {
+			// The built-in certificate of the test HTTPS server Pod does not include the test server name. Therefore,
+			// the test client Pod should not verify the test HTTPS server's certificate.
+			cmd := []string{"curl", "-k", "--resolve", resolve, url, "--connect-timeout", "1"}
+			stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
+			if canAccess && err != nil {
+				t.Logf("Failed to access %s: %v\nStdout: %s\nStderr: %s\n", url, err, stdout, stderr)
+				return false
+			} else if !canAccess && err == nil {
+				t.Logf("Expected not to access the server, but the request succeeded.\nStdout: %s\nStderr: %s\n", stdout, stderr)
+				return false
+			}
+			t.Logf("Access to server %s: %t", url, canAccess)
+			return true
+		}, 5*time.Second, time.Second)
+	}
 }
 
 func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
@@ -290,40 +296,50 @@ func testL7NetworkPolicyTLS(t *testing.T, data *TestData) {
 	_, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoError(t, err, "Expected IP for Pod '%s'", clientPodName)
 
-	l7ProtocolAllowsGoogle := []crdv1beta1.L7Protocol{
+	serverPodName := "test-l7-tls-server"
+	serverPodLabels := map[string]string{"test-l7-tls-e2e": "server"}
+	// Start an HTTPS server with the agnhost image build-in certificate.
+	cmd := []string{"/agnhost", "netexec", "--http-port=443", "--tls-cert-file=/localhost.crt", "--tls-private-key-file=/localhost.key"}
+	require.NoError(t, NewPodBuilder(serverPodName, data.testNamespace, agnhostImage).OnNode(nodeName(0)).WithCommand(cmd).WithLabels(serverPodLabels).Create(data))
+	podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, data.testNamespace)
+	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
+	serverIPs := podIPs.AsSlice()
+	serverNameAlfa := "www.alfa.test.l7.tls"
+	serverNameBravo := "mail.bravo.test.l7.tls"
+	l7ProtocolAllowsAlfa := []crdv1beta1.L7Protocol{
 		{
 			TLS: &crdv1beta1.TLSProtocol{
-				SNI: "*.google.com",
+				SNI: "*.alfa.test.l7.tls",
 			},
 		},
 	}
-	l7ProtocolAllowsFacebook := []crdv1beta1.L7Protocol{
+	l7ProtocolAllowsBravo := []crdv1beta1.L7Protocol{
 		{
 			TLS: &crdv1beta1.TLSProtocol{
-				SNI: "*.facebook.com",
+				SNI: "*.bravo.test.l7.tls",
 			},
 		},
 	}
 
-	policyAllowSNIGoogle := "test-l7-tls-allow-sni-google"
-	policyAllowSNIFacebook := "test-l7-tls-allow-sni-facebook"
+	policyAllowSNIAlfa := "test-l7-tls-allow-sni-alfa"
+	policyAllowSNIBravo := "test-l7-tls-allow-sni-bravo"
 
-	// Create two L7 NetworkPolicies, one allows server name '*.google.com', the other allows '*.facebook.com'. Note
-	// that, the priority of the first one is higher than the second one, and they have the same appliedTo labels and Pod
-	// selector labels.
-	createL7NetworkPolicy(t, data, false, policyAllowSNIGoogle, 1, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsGoogle)
-	createL7NetworkPolicy(t, data, false, policyAllowSNIFacebook, 2, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsFacebook)
+	// Create two L7 NetworkPolicies, one allows server name '*.alfa.test.l7.tls', the other allows '*.bravo.test.l7.tls'.
+	// Note that the priority of the first one is higher than the second one, and they have the same appliedTo labels
+	// and Pod selector labels.
+	createL7NetworkPolicy(t, data, false, policyAllowSNIAlfa, 1, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsAlfa)
+	createL7NetworkPolicy(t, data, false, policyAllowSNIBravo, 2, nil, clientPodLabels, ProtocolTCP, 443, l7ProtocolAllowsBravo)
 	time.Sleep(networkPolicyDelay)
 
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", true)
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", false)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, serverIPs, serverNameAlfa, true)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, serverIPs, serverNameBravo, false)
 
-	// Delete the first L7 NetworkPolicy that allows server name '*.google.com'.
-	data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNIGoogle, metav1.DeleteOptions{})
+	// Delete the first L7 NetworkPolicy that allows server name '*.alfa.test.l7.tls'.
+	data.crdClient.CrdV1beta1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), policyAllowSNIAlfa, metav1.DeleteOptions{})
 	time.Sleep(networkPolicyDelay)
 
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "apis.google.com", false)
-	probeL7NetworkPolicyTLS(t, data, clientPodName, "www.facebook.com", true)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, serverIPs, serverNameAlfa, false)
+	probeL7NetworkPolicyTLS(t, data, clientPodName, serverIPs, serverNameBravo, true)
 }
 
 func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
