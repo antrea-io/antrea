@@ -26,10 +26,11 @@ import (
 
 	"antrea.io/antrea/pkg/agent/util"
 	ps "antrea.io/antrea/pkg/agent/util/powershell"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 )
 
 func adapterName(name string) string {
-	return fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, name)
+	return fmt.Sprintf("%s (%s)", winnet.ContainerVNICPrefix, name)
 }
 
 // windowsHyperVEnabled checks if the Hyper-V is enabled on the host.
@@ -160,6 +161,6 @@ func TestCreateHNSNetwork(t *testing.T) {
 	assert.Equal(t, hnsNet.ManagementIP, nodeIP.String())
 
 	t.Logf("Enabling the Open vSwitch Extension for HNSNetwork '%s'", testNet)
-	err = util.EnableHNSNetworkExtension(hnsNet.Id, util.OVSExtensionID)
+	err = util.EnableHNSNetworkExtension(hnsNet.Id, winnet.OVSExtensionID)
 	require.Nil(t, err, "No error expected when enabling the Open vSwitch Extension for the HNSNetwork")
 }

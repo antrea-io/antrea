@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -37,8 +38,9 @@ import (
 )
 
 var (
+	winnetUtil winnet.Interface = &winnet.Handle{}
 	// setInterfaceMTU is meant to be overridden for testing
-	setInterfaceMTU = util.SetInterfaceMTU
+	setInterfaceMTU = winnetUtil.SetNetAdapterMTU
 
 	// setInterfaceARPAnnounce is meant to be overridden for testing.
 	setInterfaceARPAnnounce = func(ifaceName string, value int) error { return nil }
@@ -57,11 +59,11 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err == nil {
 		// Enable OVS Extension on the HNS Network.
-		if err = util.EnableHNSNetworkExtension(hnsNetwork.Id, util.OVSExtensionID); err != nil {
+		if err = util.EnableHNSNetworkExtension(hnsNetwork.Id, winnet.OVSExtensionID); err != nil {
 			return err
 		}
 		// Enable RSC for existing vSwitch.
-		if err = util.EnableRSCOnVSwitch(util.LocalHNSNetwork); err != nil {
+		if err = winnetUtil.EnableRSCOnVSwitch(util.LocalHNSNetwork); err != nil {
 			return err
 		}
 		// Save the uplink adapter name to check if the OVS uplink port has been created in prepareOVSBridge stage.
@@ -87,7 +89,7 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	// adapter was not found" if no adapter is provided and no physical adapter is available on the host.
 	// If the discovered adapter is virtual, it likely means the physical adapter is already attached to another
 	// HNSNetwork. For example, docker may create HNSNetworks which attach to the physical adapter.
-	isVirtual, err := util.IsVirtualAdapter(adapter.Name)
+	isVirtual, err := winnetUtil.IsVirtualNetAdapter(adapter.Name)
 	if err != nil {
 		return err
 	}
@@ -107,7 +109,7 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 		klog.InfoS("No default gateway found on interface", "interface", adapter.Name)
 	}
 	i.nodeConfig.UplinkNetConfig.Gateway = defaultGW
-	dnsServers, err := util.GetDNServersByInterfaceIndex(adapter.Index)
+	dnsServers, err := winnetUtil.GetDNServersByNetAdapterIndex(adapter.Index)
 	if err != nil {
 		return err
 	}
@@ -128,12 +130,12 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 func (i *Initializer) prepareVMNetworkAndOVSExtension() error {
 	klog.V(2).Info("Setting up VM network")
 	// Check whether VM Switch is created
-	exists, err := util.VMSwitchExists()
+	exists, err := winnetUtil.VMSwitchExists(util.LocalVMSwitch)
 	if err != nil {
 		return err
 	}
 	if exists {
-		vmSwitchIFName, err := util.GetVMSwitchInterfaceName()
+		vmSwitchIFName, err := winnetUtil.GetVMSwitchNetAdapterName(util.LocalVMSwitch)
 		if err != nil {
 			return err
 		}
@@ -168,20 +170,29 @@ func (i *Initializer) prepareVMNetworkAndOVSExtension() error {
 	}()
 
 	klog.V(2).InfoS("Creating VM switch", "uplinkIFName", uplinkIFName)
-	if err = util.CreateVMSwitch(uplinkIFName); err != nil {
+	if err = winnetUtil.AddVMSwitch(uplinkIFName, util.LocalVMSwitch); err != nil {
 		return fmt.Errorf("failed to create VM switch for interface %s: %v", uplinkIFName, err)
+	}
+	enabled, err := winnetUtil.IsVMSwitchOVSExtensionEnabled(util.LocalVMSwitch)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		if err = winnetUtil.EnableVMSwitchOVSExtension(util.LocalVMSwitch); err != nil {
+			return err
+		}
 	}
 
 	defer func() {
 		if !success {
-			if err = util.RemoveVMSwitch(); err != nil {
+			if err = winnetUtil.RemoveVMSwitch(util.LocalVMSwitch); err != nil {
 				klog.ErrorS(err, "Failed to remove VMSwitch")
 			}
 		}
 	}()
 
 	uplinkMACStr := strings.Replace(uplinkIface.HardwareAddr.String(), ":", "", -1)
-	if err = util.RenameVMNetworkAdapter(util.LocalVMSwitch, uplinkMACStr, hostIFName, true); err != nil {
+	if err = winnetUtil.RenameVMNetworkAdapter(util.LocalVMSwitch, uplinkMACStr, hostIFName, true); err != nil {
 		return fmt.Errorf("failed to rename VMNetworkAdapter as %s: %v", hostIFName, err)
 	}
 
@@ -298,7 +309,7 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	// connection are routed to the selected backend Pod via the bridge interface; if we do not enable IP forwarding on
 	// the bridge interface, the packet will be discarded on the bridge interface as the destination of the packet
 	// is not the Node.
-	if err = util.EnableIPForwarding(brName); err != nil {
+	if err = winnetUtil.EnableIPForwarding(brName); err != nil {
 		return err
 	}
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
@@ -395,11 +406,11 @@ func (i *Initializer) saveHostRoutes() error {
 	// IPv6 is not supported on Windows currently. Please refer to https://github.com/antrea-io/antrea/issues/5162
 	// for more information.
 	family := antreasyscall.AF_INET
-	filter := &util.Route{
+	filter := &winnet.Route{
 		LinkIndex:      i.nodeConfig.UplinkNetConfig.Index,
 		GatewayAddress: net.ParseIP(i.nodeConfig.UplinkNetConfig.Gateway),
 	}
-	routes, err := util.RouteListFiltered(family, filter, util.RT_FILTER_IF|util.RT_FILTER_GW)
+	routes, err := winnetUtil.RouteListFiltered(family, filter, winnet.RT_FILTER_IF|winnet.RT_FILTER_GW)
 	if err != nil {
 		return err
 	}
