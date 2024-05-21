@@ -102,10 +102,7 @@ func ExecInPod(ctx context.Context, client kubernetes.Interface, config *rest.Co
 		Stderr: &stderr,
 		Tty:    false,
 	})
-	if err != nil {
-		return "", "", fmt.Errorf("error in stream: %w", err)
-	}
-	return stdout.String(), stderr.String(), nil
+	return stdout.String(), stderr.String(), err
 }
 
 func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
