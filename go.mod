@@ -84,7 +84,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/knftables v0.0.19-0.20250918210213-152a9262585d
 	sigs.k8s.io/mcs-api v0.1.0
-	sigs.k8s.io/network-policy-api v0.1.1
+	sigs.k8s.io/network-policy-api v0.1.7
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -133,7 +133,6 @@ require (
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect

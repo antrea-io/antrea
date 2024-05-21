@@ -48,7 +48,7 @@ function quit {
   $TESTBED_CMD destroy kind
 }
 
-api_version="v0.1.0"
+api_version="v0.1.7"
 ipfamily="v4"
 feature_gates="AdminNetworkPolicy=true"
 setup_only=false
@@ -109,6 +109,8 @@ IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.43" \
             "antrea/antrea-agent-ubuntu:latest" \
             "antrea/antrea-controller-ubuntu:latest")
 
+# Use Kubernetes 1.31+ for isCIDR CEL validation function support (required by network-policy-api v0.1.7)
+K8S_VERSION="v1.31.2"
 printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 
 function setup_cluster {
@@ -127,7 +129,8 @@ function setup_cluster {
 
 function run_test {
   # Install the network-policy-api CRDs in the kind cluster
-  kubectl apply -f https://github.com/kubernetes-sigs/network-policy-api/releases/download/"$api_version"/install.yaml
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/"$api_version"/config/crd/experimental/policy.networking.k8s.io_adminnetworkpolicies.yaml
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/"$api_version"/config/crd/experimental/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
   echo "Generating Antrea manifest with args $manifest_args"
   $YML_CMD $manifest_args | kubectl apply -f -
 
@@ -141,17 +144,23 @@ function run_test {
   export KUBE_CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
   export KUBE_CONTAINER_RUNTIME_NAME=containerd
 
-  # TODO: use https://github.com/kubernetes-sigs/network-policy-api when conformance test config timeout and go dependency is fixed
-  git clone https://github.com/Dyanngg/network-policy-api.git
-  pushd network-policy-api/conformance
+  git clone https://github.com/kubernetes-sigs/network-policy-api
+  pushd network-policy-api
+  # Checkout the specific version tag to match the API version being tested
+  git checkout "$api_version"
+  cd conformance
   go mod download
-  go test -v --debug=true -timeout=15m
+  go test -v -run TestConformanceProfiles -args --conformance-profiles=AdminNetworkPolicy,BaselineAdminNetworkPolicy \
+    --supported-features=AdminNetworkPolicyNamedPorts,BaselineAdminNetworkPolicyNamedPorts,AdminNetworkPolicyEgressNodePeers,BaselineAdminNetworkPolicyEgressNodePeers \
+    --organization=antrea-io -project=antrea -url=https://github.com/antrea-io/antrea -version=v2.4 \
+    --additional-info=https://github.com/antrea-io/antrea/actions/workflows/kind.yml \
+    --debug=true -test.timeout=15m
   popd
 }
 
 echo "======== Testing networkpolicy v2 conformance in encap mode =========="
 if [[ $test_only == "false" ]];then
-  setup_cluster "--images \"$IMAGES\""
+  setup_cluster "--images \"$IMAGES\" --k8s-version $K8S_VERSION"
 fi
 run_test
 exit 0

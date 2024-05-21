@@ -1197,8 +1197,8 @@ sigs.k8s.io/kustomize/kyaml v0.19.0 h1:RFge5qsO1uHhwJsu3ipV7RNolC7Uozc0jUBC/61XS
 sigs.k8s.io/kustomize/kyaml v0.19.0/go.mod h1:FeKD5jEOH+FbZPpqUghBP8mrLjJ3+zD3/rf9NNu1cwY=
 sigs.k8s.io/mcs-api v0.1.0 h1:edDbg0oRGfXw8TmZjKYep06LcJLv/qcYLidejnUp0PM=
 sigs.k8s.io/mcs-api v0.1.0/go.mod h1:gGiAryeFNB4GBsq2LBmVqSgKoobLxt+p7ii/WG5QYYw=
-sigs.k8s.io/network-policy-api v0.1.1 h1:KDW+AkvCCQI3h8yH8j0hurhvPLNtLeVvmZoqtMaG9ew=
-sigs.k8s.io/network-policy-api v0.1.1/go.mod h1:F7S5fsb7QEzlLjuMgTGfUT4LRHylRbx2xDDpHfJKKEs=
+sigs.k8s.io/network-policy-api v0.1.7 h1:obY2FTEidLXVdRYu7gJ4q1RYE57pBnrpMqoE2LZgp4g=
+sigs.k8s.io/network-policy-api v0.1.7/go.mod h1:QIWX6Th2h0SmCwOwa1+9Urs0W+WDJGL5rujAPUemdkk=
 sigs.k8s.io/randfill v0.0.0-20250304075658-069ef1bbf016/go.mod h1:XeLlZ/jmk4i1HRopwe7/aU3H5n1zNUcX6TM94b3QxOY=
 sigs.k8s.io/randfill v1.0.0 h1:JfjMILfT8A6RbawdsK2JXGBR5AQVfd+9TbzrlneTyrU=
 sigs.k8s.io/randfill v1.0.0/go.mod h1:XeLlZ/jmk4i1HRopwe7/aU3H5n1zNUcX6TM94b3QxOY=
