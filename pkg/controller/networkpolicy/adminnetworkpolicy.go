@@ -137,59 +137,19 @@ func (n *NetworkPolicyController) deleteBANP(old interface{}) {
 	n.enqueueInternalNetworkPolicy(getBANPReference(banp))
 }
 
-// anpHasNamespaceLabelRule returns whether an AdminNetworkPolicy has rules defined by
-// advanced Namespace selection (sameLabels and notSameLabels)
-func anpHasNamespaceLabelRule(anp *v1alpha1.AdminNetworkPolicy) bool {
-	for _, ingress := range anp.Spec.Ingress {
-		for _, peer := range ingress.From {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	for _, egress := range anp.Spec.Egress {
-		for _, peer := range egress.To {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// banpHasNamespaceLabelRule returns whether a BaselineAdminNetworkPolicy has rules defined by
-// advanced Namespace selection (sameLabels and notSameLabels)
-func banpHasNamespaceLabelRule(banp *v1alpha1.BaselineAdminNetworkPolicy) bool {
-	for _, ingress := range banp.Spec.Ingress {
-		for _, peer := range ingress.From {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	for _, egress := range banp.Spec.Egress {
-		for _, peer := range egress.To {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // toAntreaServicesForPolicyCRD processes ports field for ANPs/BANPs and returns the translated
 // Antrea Services.
 func toAntreaServicesForPolicyCRD(npPorts []v1alpha1.AdminNetworkPolicyPort) []controlplane.Service {
 	var antreaServices []controlplane.Service
 	for _, npPort := range npPorts {
 		if npPort.PortNumber != nil {
-			port := intstr.FromInt(int(npPort.PortNumber.Port))
+			port := intstr.FromInt32(npPort.PortNumber.Port)
 			antreaServices = append(antreaServices, controlplane.Service{
 				Protocol: toAntreaProtocol(&npPort.PortNumber.Protocol),
 				Port:     &port,
 			})
 		} else if npPort.PortRange != nil {
-			portStart := intstr.FromInt(int(npPort.PortRange.Start))
+			portStart := intstr.FromInt32(npPort.PortRange.Start)
 			antreaServices = append(antreaServices, controlplane.Service{
 				Protocol: toAntreaProtocol(&npPort.PortRange.Protocol),
 				Port:     &portStart,
@@ -205,32 +165,32 @@ func toAntreaServicesForPolicyCRD(npPorts []v1alpha1.AdminNetworkPolicyPort) []c
 	return antreaServices
 }
 
-// splitPolicyPeersByScope splits the ANP/BANP peers in the rule by whether the peer is cluster scoped
-// or per-namespace scoped. Per-namespace peers are those whose defined by sameLabels and
-// notSameLabels.
-func splitPolicyPeerByScope(peers []v1alpha1.AdminNetworkPolicyPeer) ([]v1alpha1.AdminNetworkPolicyPeer, []v1alpha1.AdminNetworkPolicyPeer) {
-	var clusterPeers, perNSLabelPeers []v1alpha1.AdminNetworkPolicyPeer
-	for _, peer := range peers {
-		if peer.Pods != nil && peer.Pods.Namespaces.NamespaceSelector != nil {
-			clusterPeers = append(clusterPeers, peer)
-		} else if peer.Namespaces != nil && peer.Namespaces.NamespaceSelector != nil {
-			clusterPeers = append(clusterPeers, peer)
-		} else {
-			perNSLabelPeers = append(perNSLabelPeers, peer)
-		}
-	}
-	return clusterPeers, perNSLabelPeers
-}
-
-// toAntreaPeerForPolicyCRD processes AdminNetworkPolicyPeers and yield Antrea NetworkPolicyPeers.
-func (n *NetworkPolicyController) toAntreaPeerForPolicyCRD(peers []v1alpha1.AdminNetworkPolicyPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
+// toAntreaIngressPeerForPolicyCRD processes AdminNetworkPolicyIngressPeers and yield Antrea NetworkPolicyPeers.
+func (n *NetworkPolicyController) toAntreaIngressPeerForPolicyCRD(peers []v1alpha1.AdminNetworkPolicyIngressPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
 	for _, peer := range peers {
 		if peer.Pods != nil {
-			addressGroup := n.createAddressGroup("", &peer.Pods.PodSelector, peer.Pods.Namespaces.NamespaceSelector, nil, nil)
+			addressGroup := n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil)
 			addressGroups = append(addressGroups, addressGroup)
 		} else if peer.Namespaces != nil {
-			addressGroup := n.createAddressGroup("", nil, peer.Namespaces.NamespaceSelector, nil, nil)
+			addressGroup := n.createAddressGroup("", nil, peer.Namespaces, nil, nil)
+			addressGroups = append(addressGroups, addressGroup)
+		}
+	}
+	return &controlplane.NetworkPolicyPeer{
+		AddressGroups: getAddressGroupNames(addressGroups),
+	}, addressGroups
+}
+
+// toAntreaEgressPeerForPolicyCRD processes AdminNetworkPolicyEgressPeers and yield Antrea NetworkPolicyPeers.
+func (n *NetworkPolicyController) toAntreaEgressPeerForPolicyCRD(peers []v1alpha1.AdminNetworkPolicyEgressPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
+	var addressGroups []*antreatypes.AddressGroup
+	for _, peer := range peers {
+		if peer.Pods != nil {
+			addressGroup := n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil)
+			addressGroups = append(addressGroups, addressGroup)
+		} else if peer.Namespaces != nil {
+			addressGroup := n.createAddressGroup("", nil, peer.Namespaces, nil, nil)
 			addressGroups = append(addressGroups, addressGroup)
 		}
 	}
@@ -265,7 +225,8 @@ func banpActionToCRDAction(action v1alpha1.BaselineAdminNetworkPolicyRuleAction)
 }
 
 func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
-	appliedToPerRule := anpHasNamespaceLabelRule(anp)
+	// AdminNetworkPolicy tenant rules are not yet available in the API
+	appliedToPerRule := false
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	var rules []controlplane.NetworkPolicyRule
@@ -275,9 +236,8 @@ func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminN
 		if anpIngressRule.Ports != nil {
 			services = toAntreaServicesForPolicyCRD(*anpIngressRule.Ports)
 		}
-		clusterPeers, _ := splitPolicyPeerByScope(anpIngressRule.From)
-		if len(clusterPeers) > 0 {
-			peer, ags := n.toAntreaPeerForPolicyCRD(clusterPeers)
+		if len(anpIngressRule.From) > 0 {
+			peer, ags := n.toAntreaIngressPeerForPolicyCRD(anpIngressRule.From)
 			rule := controlplane.NetworkPolicyRule{
 				Direction: controlplane.DirectionIn,
 				From:      *peer,
@@ -289,16 +249,14 @@ func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminN
 			rules = append(rules, rule)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
 		}
-		//TODO: implement SameLabels and NotSameLabels for per NS label ingress peers
 	}
 	for idx, anpEgressRule := range anp.Spec.Egress {
 		var services []controlplane.Service
 		if anpEgressRule.Ports != nil {
 			services = toAntreaServicesForPolicyCRD(*anpEgressRule.Ports)
 		}
-		clusterPeers, _ := splitPolicyPeerByScope(anpEgressRule.To)
-		if len(clusterPeers) > 0 {
-			peer, ags := n.toAntreaPeerForPolicyCRD(clusterPeers)
+		if len(anpEgressRule.To) > 0 {
+			peer, ags := n.toAntreaEgressPeerForPolicyCRD(anpEgressRule.To)
 			rule := controlplane.NetworkPolicyRule{
 				Direction: controlplane.DirectionOut,
 				To:        *peer,
@@ -310,12 +268,9 @@ func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminN
 			rules = append(rules, rule)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
 		}
-		//TODO: implement SameLabels and NotSameLabels for per NS label egress peers
 	}
 	priority := float64(anp.Spec.Priority)
-	if !appliedToPerRule {
-		appliedToGroups = mergeAppliedToGroups(appliedToGroups, n.processClusterSubject(anp.Spec.Subject)...)
-	}
+	appliedToGroups = mergeAppliedToGroups(appliedToGroups, n.processClusterSubject(anp.Spec.Subject)...)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:       internalNetworkPolicyKeyFunc(anp),
 		Generation: anp.Generation,
@@ -335,7 +290,8 @@ func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminN
 }
 
 func (n *NetworkPolicyController) processBaselineAdminNetworkPolicy(banp *v1alpha1.BaselineAdminNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
-	appliedToPerRule := banpHasNamespaceLabelRule(banp)
+	// BaselineAdminNetworkPolicy tenant rules are not yet available in the API
+	appliedToPerRule := false
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	var rules []controlplane.NetworkPolicyRule
@@ -345,9 +301,8 @@ func (n *NetworkPolicyController) processBaselineAdminNetworkPolicy(banp *v1alph
 		if banpIngressRule.Ports != nil {
 			services = toAntreaServicesForPolicyCRD(*banpIngressRule.Ports)
 		}
-		clusterPeers, _ := splitPolicyPeerByScope(banpIngressRule.From)
-		if len(clusterPeers) > 0 {
-			peer, ags := n.toAntreaPeerForPolicyCRD(clusterPeers)
+		if len(banpIngressRule.From) > 0 {
+			peer, ags := n.toAntreaIngressPeerForPolicyCRD(banpIngressRule.From)
 			rule := controlplane.NetworkPolicyRule{
 				Direction: controlplane.DirectionIn,
 				From:      *peer,
@@ -359,16 +314,14 @@ func (n *NetworkPolicyController) processBaselineAdminNetworkPolicy(banp *v1alph
 			rules = append(rules, rule)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
 		}
-		//TODO: implement SameLabels and NotSameLabels for per NS label ingress peers
 	}
 	for idx, banpEgressRule := range banp.Spec.Egress {
 		var services []controlplane.Service
 		if banpEgressRule.Ports != nil {
 			services = toAntreaServicesForPolicyCRD(*banpEgressRule.Ports)
 		}
-		clusterPeers, _ := splitPolicyPeerByScope(banpEgressRule.To)
-		if len(clusterPeers) > 0 {
-			peer, ags := n.toAntreaPeerForPolicyCRD(clusterPeers)
+		if len(banpEgressRule.To) > 0 {
+			peer, ags := n.toAntreaEgressPeerForPolicyCRD(banpEgressRule.To)
 			rule := controlplane.NetworkPolicyRule{
 				Direction: controlplane.DirectionOut,
 				To:        *peer,
@@ -380,11 +333,8 @@ func (n *NetworkPolicyController) processBaselineAdminNetworkPolicy(banp *v1alph
 			rules = append(rules, rule)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
 		}
-		//TODO: implement SameLabels and NotSameLabels for per NS label egress peers
 	}
-	if !appliedToPerRule {
-		appliedToGroups = mergeAppliedToGroups(appliedToGroups, n.processClusterSubject(banp.Spec.Subject)...)
-	}
+	appliedToGroups = mergeAppliedToGroups(appliedToGroups, n.processClusterSubject(banp.Spec.Subject)...)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:       internalNetworkPolicyKeyFunc(banp),
 		Generation: banp.Generation,

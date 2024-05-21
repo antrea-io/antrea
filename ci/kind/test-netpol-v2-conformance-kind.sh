@@ -48,7 +48,7 @@ function quit {
   $TESTBED_CMD destroy kind
 }
 
-api_version="v0.1.0"
+api_version="v0.1.5"
 ipfamily="v4"
 feature_gates="AdminNetworkPolicy=true"
 setup_only=false
@@ -127,7 +127,9 @@ function setup_cluster {
 
 function run_test {
   # Install the network-policy-api CRDs in the kind cluster
-  kubectl apply -f https://github.com/kubernetes-sigs/network-policy-api/releases/download/"$api_version"/install.yaml
+  # TODO: Change the following yamls to the released install.yaml as soon as a release is cut for the latest API changes
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/"$api_version"/config/crd/experimental/policy.networking.k8s.io_adminnetworkpolicies.yaml
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/"$api_version"/config/crd/experimental/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
   echo "Generating Antrea manifest with args $manifest_args"
   $YML_CMD $manifest_args | kubectl apply -f -
 
@@ -141,11 +143,14 @@ function run_test {
   export KUBE_CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
   export KUBE_CONTAINER_RUNTIME_NAME=containerd
 
-  # TODO: use https://github.com/kubernetes-sigs/network-policy-api when conformance test config timeout and go dependency is fixed
-  git clone https://github.com/Dyanngg/network-policy-api.git
+  git clone https://github.com/kubernetes-sigs/network-policy-api
   pushd network-policy-api/conformance
   go mod download
-  go test -v --debug=true -timeout=15m
+  go test -v -run TestConformanceProfiles -args --conformance-profiles=AdminNetworkPolicy,BaselineAdminNetworkPolicy \
+    --supported-features=AdminNetworkPolicyNamedPorts,BaselineAdminNetworkPolicyNamedPorts \
+    --organization=antrea-io -project=antrea -url=https://github.com/antrea-io/antrea -version=v2.0 \
+    --additional-info=https://github.com/antrea-io/antrea/actions/workflows/kind.yml \
+    --debug=true -test.timeout=15m
   popd
 }
 

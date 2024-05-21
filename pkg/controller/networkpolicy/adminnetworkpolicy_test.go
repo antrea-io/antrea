@@ -51,13 +51,11 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -74,13 +72,11 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 					Egress: []v1alpha1.AdminNetworkPolicyEgressRule{
 						{
 							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
+							To: []v1alpha1.AdminNetworkPolicyEgressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -153,13 +149,11 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.AdminNetworkPolicyRuleActionDeny,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -176,13 +170,11 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 					Egress: []v1alpha1.AdminNetworkPolicyEgressRule{
 						{
 							Action: v1alpha1.AdminNetworkPolicyRuleActionDeny,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
+							To: []v1alpha1.AdminNetworkPolicyEgressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorB,
-										},
-										PodSelector: selectorC,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorB,
+										PodSelector:       selectorC,
 									},
 								},
 							},
@@ -255,13 +247,11 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.AdminNetworkPolicyRuleActionPass,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -316,7 +306,7 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "anpD", UID: "uidD"},
 				Spec: v1alpha1.AdminNetworkPolicySpec{
 					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Pods: &v1alpha1.NamespacedPodSubject{
+						Pods: &v1alpha1.NamespacedPod{
 							NamespaceSelector: selectorA,
 							PodSelector:       selectorB,
 						},
@@ -325,11 +315,9 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										NamespaceSelector: &selectorC,
-									},
+									Namespaces: &selectorC,
 								},
 							},
 							Ports: &[]v1alpha1.AdminNetworkPolicyPort{
@@ -371,47 +359,6 @@ func TestProcessAdminNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
 		},
-		{
-			// TODO: when sameLabels and notSameLabels is supported, this test need to be modified
-			name: "with-same-label-namespaces-selection",
-			inputPolicy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpE", UID: "uidE"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Priority: 10,
-					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"purpose"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidE",
-				Name: "uidE",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AdminNetworkPolicy,
-					Name: "anpE",
-					UID:  "uidE",
-				},
-				Priority:         &p10,
-				TierPriority:     &adminNetworkPolicyTierPriority,
-				Rules:            []controlplane.NetworkPolicyRule{},
-				AppliedToGroups:  []string{},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 0,
-			expectedAddressGroups:   0,
-		},
 	}
 	defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, true)
 	for _, tt := range tests {
@@ -451,13 +398,11 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionDeny,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -474,13 +419,11 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 					Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{
 						{
 							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionDeny,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
+							To: []v1alpha1.AdminNetworkPolicyEgressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -552,13 +495,11 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionDeny,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
@@ -575,13 +516,11 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 					Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{
 						{
 							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionDeny,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
+							To: []v1alpha1.AdminNetworkPolicyEgressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorB,
-										},
-										PodSelector: selectorC,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorB,
+										PodSelector:       selectorC,
 									},
 								},
 							},
@@ -653,13 +592,11 @@ func TestProcessBaselineAdminNetworkPolicy(t *testing.T) {
 					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
 						{
 							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
+							From: []v1alpha1.AdminNetworkPolicyIngressPeer{
 								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
+									Pods: &v1alpha1.NamespacedPod{
+										NamespaceSelector: selectorC,
+										PodSelector:       selectorB,
 									},
 								},
 							},
