@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -353,7 +354,10 @@ func (t *testContext) runAgnhostConnect(ctx context.Context, clientPodName strin
 	_, stderr, err := check.ExecInPod(ctx, t.client, t.config, t.namespace, clientPodName, container, cmd)
 	if err != nil {
 		// We log the contents of stderr here for troubleshooting purposes.
-		t.Log("/agnhost command failed - stderr: %s", stderr)
+		t.Log("/agnhost command '%s' failed: %v", strings.Join(cmd, " "), err)
+		if stderr != "" {
+			t.Log("/agnhost stderr: %s", stderr)
+		}
 	}
 	return err
 }

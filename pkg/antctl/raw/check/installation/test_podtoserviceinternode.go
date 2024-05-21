@@ -33,7 +33,7 @@ func (t *PodToServiceInterNodeConnectivityTest) Run(ctx context.Context, testCon
 	for _, clientPod := range testContext.clientPods {
 		testContext.Log("Validating from Pod %s to Service %s in Namespace %s...", clientPod.Name, service, testContext.namespace)
 		if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", service, 80); err != nil {
-			return fmt.Errorf("client Pod %s was not able to communicate with Service %s", clientPod.Name, service)
+			return fmt.Errorf("client Pod %s was not able to communicate with Service %s: %w", clientPod.Name, service, err)
 		}
 		testContext.Log("client Pod %s was able to communicate with Service %s", clientPod.Name, service)
 	}
