@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
@@ -45,7 +46,6 @@ const (
 var (
 	getHnsNetworkByNameFunc         = hcsshim.GetHNSNetworkByName
 	listHnsEndpointFunc             = hcsshim.HNSListEndpointRequest
-	setInterfaceMTUFunc             = util.SetInterfaceMTU
 	hostInterfaceExistsFunc         = util.HostInterfaceExists
 	getNetInterfaceAddrsFunc        = getNetInterfaceAddrs
 	createHnsEndpointFunc           = createHnsEndpoint
@@ -60,6 +60,7 @@ var (
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
+	winnet     winnet.Interface
 }
 
 // disableTXChecksumOffload is ignored on Windows.
@@ -80,6 +81,7 @@ func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHa
 	return &ifConfigurator{
 		hnsNetwork: hnsNetwork,
 		epCache:    epCache,
+		winnet:     &winnet.Handle{},
 	}, nil
 }
 
@@ -177,8 +179,8 @@ func (ic *ifConfigurator) configureContainerLink(
 		// CmdAdd request is returned; 2) for Docker runtime, the interface is created after hcsshim.HotAttachEndpoint,
 		// and the hcsshim call is not synchronized from the observation.
 		return ic.addPostInterfaceCreateHook(infraContainerID, epName, containerAccess, func() error {
-			ifaceName := util.VirtualAdapterName(epName)
-			if err := setInterfaceMTUFunc(ifaceName, mtu); err != nil {
+			ifaceName := winnet.VirtualAdapterName(epName)
+			if err := ic.winnet.SetNetAdapterMTU(ifaceName, mtu); err != nil {
 				return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
 			}
 			return nil
@@ -342,7 +344,7 @@ func (ic *ifConfigurator) checkContainerInterface(
 			containerIface.Sandbox, sandboxID)
 	}
 	hnsEP := strings.Split(containerIface.Name, "_")[0]
-	containerIfaceName := util.VirtualAdapterName(hnsEP)
+	containerIfaceName := winnet.VirtualAdapterName(hnsEP)
 	intf, err := getNetInterfaceByNameFunc(containerIfaceName)
 	if err != nil {
 		klog.Errorf("Failed to get container %s interface: %v", containerID, err)

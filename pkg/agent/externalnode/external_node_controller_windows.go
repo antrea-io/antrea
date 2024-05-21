@@ -21,8 +21,11 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/winnet"
 	"antrea.io/antrea/pkg/signals"
 )
+
+var winnetUtil winnet.Interface = &winnet.Handle{}
 
 // moveIFConfigurations returns nil for single interface case, as it relies
 // on Windows New-VMSwitch command to create a host network adapter and copy
@@ -45,7 +48,7 @@ func (c *ExternalNodeController) removeExternalNodeConfig() error {
 		klog.ErrorS(ovsErr, "Failed to delete OVS bridge")
 	}
 
-	if err := util.RemoveVMSwitch(); err != nil {
+	if err := winnetUtil.RemoveVMSwitch(util.LocalVMSwitch); err != nil {
 		return fmt.Errorf("failed to delete VM Switch, err: %v", err)
 	}
 	// Antrea Agent initializer creates a VM Switch corresponding to an
