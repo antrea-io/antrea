@@ -116,7 +116,7 @@ func Run() error {
 
 func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Creating Namespace %s for pre installation tests...", t.namespace)
-	_, err := t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace}}, metav1.CreateOptions{})
+	_, err := t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace, Labels: map[string]string{"app": "antrea", "component": "cluster-checker"}}}, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Namespace %s: %s", t.namespace, err)
 	}

@@ -121,8 +121,6 @@ func NewDeployment(p DeploymentParameters) *appsv1.Deployment {
 	if p.Labels == nil {
 		p.Labels = make(map[string]string)
 	}
-	p.Labels["name"] = p.Name
-	p.Labels["kind"] = p.Role
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   p.Name,
