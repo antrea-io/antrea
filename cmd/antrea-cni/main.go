@@ -25,11 +25,10 @@ import (
 )
 
 func main() {
-	skel.PluginMain(
-		cni.ActionAdd.Request,
-		cni.ActionCheck.Request,
-		cni.ActionDel.Request,
-		cniversion.All,
-		fmt.Sprintf("Antrea CNI %s", version.GetFullVersionWithRuntimeInfo()),
-	)
+	funcs := skel.CNIFuncs{
+		Add:   cni.ActionAdd.Request,
+		Del:   cni.ActionDel.Request,
+		Check: cni.ActionCheck.Request,
+	}
+	skel.PluginMainFuncs(funcs, cniversion.All, fmt.Sprintf("Antrea CNI %s", version.GetFullVersionWithRuntimeInfo()))
 }
