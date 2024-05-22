@@ -89,3 +89,14 @@ func TrimPod(obj interface{}) (interface{}, error) {
 	pod.Status.ResourceClaimStatuses = nil
 	return pod, nil
 }
+
+// TrimNode clears unused fields from a Node that are not required by Antrea.
+// It's safe to do so because Antrea only patches Node.
+func TrimNode(obj interface{}) (interface{}, error) {
+	node, ok := obj.(*corev1.Node)
+	if !ok {
+		return obj, nil
+	}
+	node.Status.Images = nil
+	return node, nil
+}

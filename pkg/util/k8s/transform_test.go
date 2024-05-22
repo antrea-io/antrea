@@ -101,6 +101,74 @@ func TestTrimK8sObject(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:    "node",
+			trimmer: NewTrimmer(TrimNode),
+			obj: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							APIVersion: "v1",
+							FieldsType: "FieldsV1",
+						},
+					},
+				},
+				Spec: corev1.NodeSpec{
+					PodCIDR: "10.0.0.0/24",
+					PodCIDRs: []string{
+						"10.0.0.0/24",
+					},
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:    corev1.NodeReady,
+							Status:  corev1.ConditionTrue,
+							Reason:  "KubeletReady",
+							Message: "kubelet is posting ready status. AppArmor enabled",
+						},
+					},
+					Images: []corev1.ContainerImage{
+						{
+							Names: []string{
+								"registry.k8s.io/kube-proxy@sha256:a9f441a6b440c634ccfe62530ab1c7ff2ea7ed3f577f91f6a71c7e2f51256410",
+								"registry.k8s.io/kube-proxy:v1.26.15",
+							},
+							SizeBytes: 72051242,
+						},
+						{
+							Names: []string{
+								"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
+								"registry.k8s.io/pause:3.6",
+							},
+							SizeBytes: 682696,
+						},
+					},
+				},
+			},
+			want: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
+				},
+				Spec: corev1.NodeSpec{
+					PodCIDR: "10.0.0.0/24",
+					PodCIDRs: []string{
+						"10.0.0.0/24",
+					},
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:    corev1.NodeReady,
+							Status:  corev1.ConditionTrue,
+							Reason:  "KubeletReady",
+							Message: "kubelet is posting ready status. AppArmor enabled",
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
