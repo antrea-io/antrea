@@ -173,7 +173,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		return fmt.Errorf("unable to determine status of Antrea DaemonSet: %w", err)
 	}
 	t.Log("Creating Namespace %s for post installation tests...", t.namespace)
-	_, err = t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace}}, metav1.CreateOptions{})
+	_, err = t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace, Labels: map[string]string{"app": "antrea", "component": "installation-checker"}}}, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Namespace %s: %s", t.namespace, err)
 	}
