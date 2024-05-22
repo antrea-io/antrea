@@ -59,7 +59,6 @@ func TrimPod(obj interface{}) (interface{}, error) {
 		return obj, nil
 	}
 
-	pod.OwnerReferences = nil
 	pod.Spec.Volumes = nil
 	pod.Spec.InitContainers = nil
 	for i := range pod.Spec.Containers {
