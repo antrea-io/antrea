@@ -35,7 +35,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/exec"
 
-	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/client"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -69,7 +69,7 @@ type SupportBundleController struct {
 	nodeName                     string
 	supportBundleNodeType        controlplane.SupportBundleCollectionNodeType
 	namespace                    string
-	antreaClientGetter           agent.AntreaClientProvider
+	antreaClientGetter           client.AntreaClientProvider
 	queue                        workqueue.Interface
 	supportBundleCollection      *cpv1b2.SupportBundleCollection
 	supportBundleCollectionMutex sync.RWMutex
@@ -84,7 +84,7 @@ type SupportBundleController struct {
 func NewSupportBundleController(nodeName string,
 	supportBundleNodeType controlplane.SupportBundleCollectionNodeType,
 	namespace string,
-	antreaClientGetter agent.AntreaClientProvider,
+	antreaClientGetter client.AntreaClientProvider,
 	ovsCtlClient ovsctl.OVSCtlClient,
 	aq agentquerier.AgentQuerier,
 	npq querier.AgentNetworkPolicyInfoQuerier,

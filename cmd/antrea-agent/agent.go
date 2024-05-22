@@ -34,6 +34,7 @@ import (
 	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/agent"
 	"antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/config"
@@ -125,7 +126,10 @@ func run(o *Options) error {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 
 	// Create Antrea Clientset for the given config.
-	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
+	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
+	if err != nil {
+		return fmt.Errorf("failed to create Antrea client provider: %w", err)
+	}
 
 	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
 	if *o.config.EnablePrometheusMetrics {
@@ -792,8 +796,6 @@ func run(o *Options) error {
 		}
 	}
 
-	// NetworkPolicyController and EgressController accesses the "antrea" Service via its ClusterIP.
-	// Run them after AntreaProxy is ready.
 	go networkPolicyController.Run(stopCh)
 	if o.enableEgress {
 		go egressController.Run(stopCh)
