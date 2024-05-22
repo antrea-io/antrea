@@ -86,6 +86,14 @@ func TestTrimK8sObject(t *testing.T) {
 					Name:      "test-pod",
 					Namespace: "default",
 					UID:       "test-uid",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "apps/v1",
+							Kind:       "DaemonSet",
+							Name:       "test-daemonset",
+							UID:        "5a39d3c8-0f5f-4aad-94bf-315c4fe11320",
+						},
+					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
