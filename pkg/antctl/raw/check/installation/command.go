@@ -194,7 +194,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		return fmt.Errorf("unable to determine status of Antrea DaemonSet: %w", err)
 	}
 	t.Log("Creating Namespace %s for post installation tests...", t.namespace)
-	_, err = t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace}}, metav1.CreateOptions{})
+	_, err = t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace, Labels: map[string]string{"app": "antrea", "component": "installation-checker"}}}, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Namespace %s: %s", t.namespace, err)
 	}
@@ -211,7 +211,7 @@ func (t *testContext) setup(ctx context.Context) error {
 			Effect:   "NoSchedule",
 		},
 	}
-	echoDeployment := check.NewDeployment(check.DeploymentParameters{
+	echoSameNodeDeployment := check.NewDeployment(check.DeploymentParameters{
 		Name:    echoSameNodeDeploymentName,
 		Role:    kindEchoName,
 		Port:    80,
@@ -236,9 +236,9 @@ func (t *testContext) setup(ctx context.Context) error {
 			},
 		},
 		Tolerations: commonToleration,
-		Labels:      map[string]string{"app": echoSameNodeDeploymentName},
+		Labels:      map[string]string{"app": "antrea", "component": "installation-checker", "name": echoSameNodeDeploymentName},
 	})
-	_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, echoDeployment, metav1.CreateOptions{})
+	_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, echoSameNodeDeployment, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Deployment %s: %s", echoSameNodeDeploymentName, err)
 	}
@@ -250,7 +250,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		Command:     []string{"/agnhost", "pause"},
 		Port:        80,
 		Tolerations: commonToleration,
-		Labels:      map[string]string{"app": clientDeploymentName},
+		Labels:      map[string]string{"app": "antrea", "component": "installation-checker", "name": clientDeploymentName},
 	})
 	_, err = t.client.AppsV1().Deployments(t.namespace).Create(ctx, clientDeployment, metav1.CreateOptions{})
 	if err != nil {
@@ -277,7 +277,7 @@ func (t *testContext) setup(ctx context.Context) error {
 			},
 		},
 		Tolerations: commonToleration,
-		Labels:      map[string]string{"app": echoOtherNodeDeploymentName},
+		Labels:      map[string]string{"app": "antrea", "component": "installation-checker", "name": echoOtherNodeDeploymentName},
 	})
 	nodes, err := t.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -310,7 +310,7 @@ func (t *testContext) setup(ctx context.Context) error {
 			return err
 		}
 	}
-	podList, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "kind=" + kindClientName})
+	podList, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=" + clientDeploymentName})
 	if err != nil {
 		return fmt.Errorf("unable to list client Pods: %s", err)
 	}
