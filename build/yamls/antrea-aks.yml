@@ -2729,8 +2729,6 @@ spec:
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date
-      subresources:
-        status: {}
   scope: Cluster
   names:
     plural: nodelatencymonitors

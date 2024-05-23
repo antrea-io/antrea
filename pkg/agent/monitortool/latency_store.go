@@ -22,6 +22,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/util/k8s"
@@ -65,86 +66,71 @@ func NewLatencyStore(isNetworkPolicyOnly bool) *LatencyStore {
 
 // getNodeIPLatencyEntry returns the NodeIPLatencyEntry for the given Node IP
 // For now, it is only used for testing purposes.
-func (l *LatencyStore) getNodeIPLatencyEntry(nodeIP string) (*NodeIPLatencyEntry, bool) {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
+func (s *LatencyStore) getNodeIPLatencyEntry(nodeIP string) (NodeIPLatencyEntry, bool) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 
-	entry, ok := l.nodeIPLatencyMap[nodeIP]
+	entry, ok := s.nodeIPLatencyMap[nodeIP]
+	if !ok {
+		return NodeIPLatencyEntry{}, ok
+	}
 
-	return entry, ok
-}
-
-// DeleteNodeIPLatencyEntry deletes the NodeIPLatencyEntry for the given Node IP
-func (l *LatencyStore) DeleteNodeIPLatencyEntry(nodeIP string) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	delete(l.nodeIPLatencyMap, nodeIP)
+	return *entry, ok
 }
 
 // SetNodeIPLatencyEntry sets the NodeIPLatencyEntry for the given Node IP
-func (l *LatencyStore) SetNodeIPLatencyEntry(nodeIP string, mutator func(entry *NodeIPLatencyEntry)) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (s *LatencyStore) SetNodeIPLatencyEntry(nodeIP string, mutator func(entry *NodeIPLatencyEntry)) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	entry, ok := l.nodeIPLatencyMap[nodeIP]
+	entry, ok := s.nodeIPLatencyMap[nodeIP]
 	if !ok {
 		entry = &NodeIPLatencyEntry{}
-		l.nodeIPLatencyMap[nodeIP] = entry
+		s.nodeIPLatencyMap[nodeIP] = entry
 	}
 
 	mutator(entry)
 }
 
 // addNode adds a Node to the latency store
-func (l *LatencyStore) addNode(node *corev1.Node) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (s *LatencyStore) addNode(node *corev1.Node) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	l.updateNodeMap(node)
+	s.updateNodeMap(node)
 }
 
 // deleteNode deletes a Node from the latency store
-func (l *LatencyStore) deleteNode(node *corev1.Node) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (s *LatencyStore) deleteNode(node *corev1.Node) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	nodeIPs, ok := l.nodeTargetIPsMap[node.Name]
-	if !ok {
-		klog.ErrorS(nil, "Failed to get IPs for Node", "nodeName", node.Name)
-		return
-	}
-
-	for _, ip := range nodeIPs {
-		delete(l.nodeIPLatencyMap, ip.String())
-	}
-
-	delete(l.nodeTargetIPsMap, node.Name)
+	delete(s.nodeTargetIPsMap, node.Name)
 }
 
 // updateNode updates a Node name in the latency store
-func (l *LatencyStore) updateNode(new *corev1.Node) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (s *LatencyStore) updateNode(new *corev1.Node) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	// Node name will not be changed in the same Node update operation.
-	l.updateNodeMap(new)
+	s.updateNodeMap(new)
 }
 
 // updateNodeMap updates the nodeTargetIPsMap with the IPs of the given Node.
-func (l *LatencyStore) updateNodeMap(node *corev1.Node) {
-	nodeIPs, err := l.getNodeIPs(node)
+func (s *LatencyStore) updateNodeMap(node *corev1.Node) {
+	nodeIPs, err := s.getNodeIPs(node)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get IPs for Node", "nodeName", node.Name)
 		return
 	}
 
-	l.nodeTargetIPsMap[node.Name] = nodeIPs
+	s.nodeTargetIPsMap[node.Name] = nodeIPs
 }
 
 // getNodeIPs returns the target IPs of the given Node based on the agent mode.
-func (l *LatencyStore) getNodeIPs(node *corev1.Node) ([]net.IP, error) {
-	if l.isNetworkPolicyOnly {
+func (s *LatencyStore) getNodeIPs(node *corev1.Node) ([]net.IP, error) {
+	if s.isNetworkPolicyOnly {
 		transportIPs, err := getTransportIPs(node)
 		if err != nil {
 			return nil, err
@@ -214,25 +200,36 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 	return []string{node.Spec.PodCIDR}
 }
 
-// GetNodeIPs returns the target IPs of the given Node.
-func (l *LatencyStore) GetNodeIPs(nodeName string) []net.IP {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
-
-	return l.nodeTargetIPsMap[nodeName]
-}
-
 // ListNodeIPs returns the list of all Node IPs in the latency store.
-func (l *LatencyStore) ListNodeIPs() []net.IP {
-	l.mutex.RLock()
-	defer l.mutex.RUnlock()
+func (s *LatencyStore) ListNodeIPs() []net.IP {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 
 	// Allocate a slice with a capacity equal to twice the size of the map,
 	// as we can have up to 2 IP addresses per Node in dual-stack case.
-	nodeIPs := make([]net.IP, 0, 2*len(l.nodeTargetIPsMap))
-	for _, ips := range l.nodeTargetIPsMap {
+	nodeIPs := make([]net.IP, 0, 2*len(s.nodeTargetIPsMap))
+	for _, ips := range s.nodeTargetIPsMap {
 		nodeIPs = append(nodeIPs, ips...)
 	}
 
 	return nodeIPs
+}
+
+// DeleteStaleNodeIPs deletes the stale Node IPs from the nodeIPLatencyMap.
+func (s *LatencyStore) DeleteStaleNodeIPs() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	nodeIPSet := sets.New[string]()
+	for _, ips := range s.nodeTargetIPsMap {
+		for _, ip := range ips {
+			nodeIPSet.Insert(ip.String())
+		}
+	}
+
+	for nodeIP := range s.nodeIPLatencyMap {
+		if !nodeIPSet.Has(nodeIP) {
+			delete(s.nodeIPLatencyMap, nodeIP)
+		}
+	}
 }

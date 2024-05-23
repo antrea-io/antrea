@@ -29,22 +29,22 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	config "antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 
 var (
-	icmpSeq    uint32
-	icmpEchoID = rand.Int31()
+	icmpSeq uint32
+	// #nosec G404: random number generator not used for security purposes.
+	icmpEchoID = rand.Int31n(1 << 16)
 )
 
 const (
-	IPv4ProtocolICMPRaw = "ip4:icmp"
-	IPv6ProtocolICMPRaw = "ip6:ipv6-icmp"
-	IPProtocol          = "ip"
-	ProtocolICMP        = 1
-	ProtocolICMPv6      = 58
+	ipv4ProtocolICMPRaw = "ip4:icmp"
+	ipv6ProtocolICMPRaw = "ip6:ipv6-icmp"
+	protocolICMP        = 1
+	protocolICMPv6      = 58
 )
 
 // getICMPSeq returns the next sequence number as uint16,
@@ -62,10 +62,8 @@ func getICMPSeq() uint16 {
 type NodeLatencyMonitor struct {
 	// latencyStore is the cache to store the latency of each Nodes.
 	latencyStore *LatencyStore
-	// latencyConfig is the config for the latency monitor.
-	latencyConfig *LatencyConfig
 	// latencyConfigChanged is the channel to notify the latency config changed.
-	latencyConfigChanged chan struct{}
+	latencyConfigChanged chan LatencyConfig
 	// isIPv4Enabled is the flag to indicate whether the IPv4 is enabled.
 	isIPv4Enabled bool
 	// isIPv6Enabled is the flag to indicate whether the IPv6 is enabled.
@@ -92,8 +90,7 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	trafficEncapMode config.TrafficEncapModeType) *NodeLatencyMonitor {
 	m := &NodeLatencyMonitor{
 		latencyStore:               NewLatencyStore(trafficEncapMode.IsNetworkPolicyOnly()),
-		latencyConfig:              &LatencyConfig{Enable: false},
-		latencyConfigChanged:       make(chan struct{}, 1),
+		latencyConfigChanged:       make(chan LatencyConfig),
 		nodeInformer:               nodeInformer,
 		nodeLatencyMonitorInformer: nlmInformer,
 		nodeName:                   nodeConfig.Name,
@@ -156,12 +153,12 @@ func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
 			return
 		}
 		node, ok = deletedState.Obj.(*corev1.Node)
-		if m.isCurrentNode(node) {
+		if !ok {
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Node object", "obj", deletedState.Obj)
 			return
 		}
 
-		if !ok {
-			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Node object", "obj", deletedState.Obj)
+		if m.isCurrentNode(node) {
 			return
 		}
 	}
@@ -194,20 +191,20 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorUpdate(oldObj, newObj interface
 func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonitor) {
 	pingInterval := time.Duration(nlm.Spec.PingIntervalSeconds) * time.Second
 
-	m.latencyConfig = &LatencyConfig{
+	latencyConfig := LatencyConfig{
 		Enable:   true,
 		Interval: pingInterval,
 	}
 
-	m.latencyConfigChanged <- struct{}{}
+	m.latencyConfigChanged <- latencyConfig
 }
 
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
-	m.latencyConfig = &LatencyConfig{Enable: false}
 	klog.V(4).InfoS("NodeLatencyMonitor deleted")
+	latencyConfig := LatencyConfig{Enable: false}
 
-	m.latencyConfigChanged <- struct{}{}
+	m.latencyConfigChanged <- latencyConfig
 }
 
 // sendPing sends an ICMP message to the target IP address.
@@ -225,7 +222,7 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 	timeStart := time.Now()
 	seqID := getICMPSeq()
 	body := &icmp.Echo{
-		ID:   icmpEchoID,
+		ID:   int(icmpEchoID),
 		Seq:  int(seqID),
 		Data: []byte(timeStart.Format(time.RFC3339Nano)),
 	}
@@ -276,7 +273,7 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool) {
 		// Parse the ICMP message
 		var msg *icmp.Message
 		if isIPv4 {
-			msg, err = icmp.ParseMessage(ProtocolICMP, readBuffer[:n])
+			msg, err = icmp.ParseMessage(protocolICMP, readBuffer[:n])
 			if err != nil {
 				klog.ErrorS(err, "Failed to parse ICMP message")
 				continue
@@ -291,7 +288,7 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool) {
 				continue
 			}
 		} else {
-			msg, err = icmp.ParseMessage(ProtocolICMPv6, readBuffer)
+			msg, err = icmp.ParseMessage(protocolICMPv6, readBuffer)
 			if err != nil {
 				klog.ErrorS(err, "Failed to parse ICMP message")
 				continue
@@ -312,11 +309,12 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool) {
 			klog.ErrorS(nil, "Failed to assert type as *icmp.Echo")
 			continue
 		}
-		if echo.ID != icmpEchoID {
+		if echo.ID != int(icmpEchoID) {
 			klog.V(4).InfoS("Ignoring ICMP message with wrong echo ID", "msg", msg)
+			continue
 		}
 
-		klog.V(4).InfoS("Recv ICMP message", "IP", destIP, "msg", msg)
+		klog.V(4).InfoS("Received ICMP message", "IP", destIP, "msg", msg)
 
 		// Parse the time from the ICMP data
 		sentTime, err := time.Parse(time.RFC3339Nano, string(echo.Data))
@@ -332,7 +330,6 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool) {
 
 		// Update the latency store
 		mutator := func(entry *NodeIPLatencyEntry) {
-			entry.LastSendTime = sentTime
 			entry.LastRecvTime = end
 			entry.LastMeasuredRTT = rtt
 		}
@@ -347,11 +344,11 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	for _, toIP := range nodeIPs {
 		if toIP.To4() != nil && ipv4Socket != nil {
 			if err := m.sendPing(ipv4Socket, toIP); err != nil {
-				klog.ErrorS(nil, "Cannot send ICMP message to Node IP because socket is not initialized for IPv4", "IP", toIP)
+				klog.ErrorS(err, "Cannot send ICMP message to Node IP because socket is not initialized for IPv4", "IP", toIP)
 			}
 		} else if toIP.To16() != nil && ipv6Socket != nil {
 			if err := m.sendPing(ipv6Socket, toIP); err != nil {
-				klog.ErrorS(nil, "Cannot send ICMP message to Node IP because socket is not initialized for IPv6", "IP", toIP)
+				klog.ErrorS(err, "Cannot send ICMP message to Node IP because socket is not initialized for IPv6", "IP", toIP)
 			}
 		} else {
 			klog.ErrorS(nil, "Cannot send ICMP message to Node IP because socket is not initialized for IP family", "IP", toIP)
@@ -362,8 +359,6 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 
 // Run starts the NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
-	go m.nodeLatencyMonitorInformer.Informer().Run(stopCh)
-	go m.nodeInformer.Informer().Run(stopCh)
 	go m.monitorLoop(stopCh)
 
 	<-stopCh
@@ -371,7 +366,7 @@ func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 
 // monitorLoop is the main loop to monitor the latency of the Node.
 func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
-	klog.V(4).InfoS("NodeLatencyMonitor is running")
+	klog.InfoS("NodeLatencyMonitor is running")
 	// Low level goroutine to handle ping loop
 	var ticker *time.Ticker
 	var tickerCh <-chan time.Time
@@ -399,7 +394,6 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		tickerCh = ticker.C
 	}
 
-	klog.V(4).InfoS("NodeLatencyMonitor is running2")
 	wg := sync.WaitGroup{}
 	// Start the pingAll goroutine
 	for {
@@ -407,19 +401,23 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		case <-tickerCh:
 			// Try to send pingAll signal
 			m.pingAll(ipv4Socket, ipv6Socket)
+			// We no not delete IPs from nodeIPLatencyMap as part of the Node delete event handler
+			// to avoid consistency issues and because it would not be sufficient to avoid stale entries completely.
+			// This means that we have to periodically invoke DeleteStaleNodeIPs to avoid stale entries in the map.
+			m.latencyStore.DeleteStaleNodeIPs()
 		case <-stopCh:
 			return
-		case <-m.latencyConfigChanged:
+		case latencyConfig := <-m.latencyConfigChanged:
 			// Start or stop the pingAll goroutine based on the latencyConfig
-			if m.latencyConfig.Enable {
+			if latencyConfig.Enable {
 				// latencyConfig changed
-				updateTicker(m.latencyConfig.Interval)
+				updateTicker(latencyConfig.Interval)
 
 				// If the recvPing socket is closed,
 				// recreate it if it is closed(CRD is deleted).
 				if ipv4Socket == nil && m.isIPv4Enabled {
 					// Create a new socket for IPv4 when it is IPv4-only
-					ipv4Socket, err = icmp.ListenPacket(IPv4ProtocolICMPRaw, "0.0.0.0")
+					ipv4Socket, err = icmp.ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0")
 					if err != nil {
 						klog.ErrorS(err, "Failed to create ICMP socket for IPv4")
 						return
@@ -432,7 +430,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 				}
 				if ipv6Socket == nil && m.isIPv6Enabled {
 					// Create a new socket for IPv6 when it is IPv6-only
-					ipv6Socket, err = icmp.ListenPacket(IPv6ProtocolICMPRaw, "::")
+					ipv6Socket, err = icmp.ListenPacket(ipv6ProtocolICMPRaw, "::")
 					if err != nil {
 						klog.ErrorS(err, "Failed to create ICMP socket for IPv6")
 						return
@@ -449,6 +447,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 					ticker.Stop()
 					ticker = nil
 				}
+				tickerCh = nil
 
 				// We close the sockets as a signal to recvPing that it needs to stop.
 				// Note that at that point, we are guaranteed that there is no ongoing Write

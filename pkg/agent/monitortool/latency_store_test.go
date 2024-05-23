@@ -20,39 +20,27 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
-	entry = &NodeIPLatencyEntry{
+	entry = NodeIPLatencyEntry{
 		LastSendTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastRecvTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastMeasuredRTT: 1 * time.Second,
 	}
-	entry2 = &NodeIPLatencyEntry{
+	entry2 = NodeIPLatencyEntry{
 		LastSendTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastRecvTime:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastMeasuredRTT: 2 * time.Second,
 	}
-	nodeIPLatencyMap = map[string]*NodeIPLatencyEntry{
-		"10.244.2.1": entry,
-	}
-	nodeTargetIPsMap = map[string][]net.IP{
-		"node1": {net.ParseIP("10.244.2.1")},
-	}
-	nodeTargetIPsList = []net.IP{
-		net.ParseIP("10.244.2.1"),
-	}
 )
 
 func TestLatencyStore_getNodeIPLatencyEntry(t *testing.T) {
-	latencyStore := &LatencyStore{
-		isNetworkPolicyOnly: false,
-		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeTargetIPsMap:    nodeTargetIPsMap,
-	}
 	tests := []struct {
 		key           string
-		expectedEntry *NodeIPLatencyEntry
+		expectedEntry NodeIPLatencyEntry
 	}{
 		{
 			key:           "10.244.2.1",
@@ -60,63 +48,35 @@ func TestLatencyStore_getNodeIPLatencyEntry(t *testing.T) {
 		},
 		{
 			key:           "10.244.2.2",
-			expectedEntry: nil,
+			expectedEntry: NodeIPLatencyEntry{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			entry, _ := latencyStore.getNodeIPLatencyEntry(tt.key)
-			assert.Equal(t, tt.expectedEntry, entry)
-		})
-	}
-}
+			latencyStore := &LatencyStore{
+				isNetworkPolicyOnly: false,
+				nodeIPLatencyMap: map[string]*NodeIPLatencyEntry{
+					"10.244.2.1": &entry,
+				},
+				nodeTargetIPsMap: map[string][]net.IP{
+					"Node1": {net.ParseIP("10.244.2.1")},
+				},
+			}
 
-func TestLatencyStore_DeleteNodeIPLatencyEntry(t *testing.T) {
-	latencyStore := &LatencyStore{
-		isNetworkPolicyOnly: false,
-		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeTargetIPsMap:    nodeTargetIPsMap,
-	}
-	tests := []struct {
-		key               string
-		prevExpectedEntry *NodeIPLatencyEntry
-		expectedEntry     *NodeIPLatencyEntry
-	}{
-		{
-			key:               "10.244.2.1",
-			prevExpectedEntry: entry,
-			expectedEntry:     nil,
-		},
-		{
-			key:               "10.244.2.2",
-			prevExpectedEntry: nil,
-			expectedEntry:     nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
 			entry, _ := latencyStore.getNodeIPLatencyEntry(tt.key)
-			assert.Equal(t, tt.prevExpectedEntry, entry)
-			latencyStore.DeleteNodeIPLatencyEntry(tt.key)
-			entry, ok := latencyStore.getNodeIPLatencyEntry(tt.key)
-			assert.Equal(t, entry, tt.expectedEntry)
-			assert.False(t, ok)
+			assert.Equal(t, tt.expectedEntry.LastMeasuredRTT, entry.LastMeasuredRTT)
+			assert.Equal(t, tt.expectedEntry.LastSendTime, entry.LastSendTime)
+			assert.Equal(t, tt.expectedEntry.LastRecvTime, entry.LastRecvTime)
 		})
 	}
 }
 
 func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
-	latencyStore := &LatencyStore{
-		isNetworkPolicyOnly: false,
-		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeTargetIPsMap:    nodeTargetIPsMap,
-	}
 	tests := []struct {
 		key           string
-		updatedEntry  *NodeIPLatencyEntry
-		expectedEntry *NodeIPLatencyEntry
+		updatedEntry  NodeIPLatencyEntry
+		expectedEntry NodeIPLatencyEntry
 	}{
 		{
 			key:           "10.244.2.1",
@@ -124,7 +84,7 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 			expectedEntry: entry,
 		},
 		{
-			key:           "10.244.2.1",
+			key:           "10.244.2.2",
 			updatedEntry:  entry2,
 			expectedEntry: entry2,
 		},
@@ -132,6 +92,16 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
+			latencyStore := &LatencyStore{
+				isNetworkPolicyOnly: false,
+				nodeIPLatencyMap: map[string]*NodeIPLatencyEntry{
+					"10.244.2.1": &entry,
+				},
+				nodeTargetIPsMap: map[string][]net.IP{
+					"Node1": {net.ParseIP("10.244.2.1")},
+				},
+			}
+
 			mutator := func(entry *NodeIPLatencyEntry) {
 				entry.LastSendTime = tt.updatedEntry.LastSendTime
 				entry.LastRecvTime = tt.updatedEntry.LastRecvTime
@@ -145,13 +115,61 @@ func TestLatencyStore_SetNodeIPLatencyEntry(t *testing.T) {
 	}
 }
 
-func TestLatencyStore_ListNodeIPs(t *testing.T) {
+func TestLatencyStore_DeleteStaleNodeIPs(t *testing.T) {
+	testKey := "10.244.2.1"
+
 	latencyStore := &LatencyStore{
 		isNetworkPolicyOnly: false,
-		nodeIPLatencyMap:    nodeIPLatencyMap,
-		nodeTargetIPsMap:    nodeTargetIPsMap,
+		nodeIPLatencyMap: map[string]*NodeIPLatencyEntry{
+			testKey: &entry,
+		},
+		nodeTargetIPsMap: map[string][]net.IP{
+			"Node1": {net.ParseIP(testKey)},
+		},
 	}
 
-	nodeIPs := latencyStore.ListNodeIPs()
-	assert.Equal(t, nodeTargetIPsList, nodeIPs)
+	// Remove Node
+	latencyStore.deleteNode(&corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "Node1",
+		},
+	})
+
+	// Check that the entry is still present
+	_, ok := latencyStore.getNodeIPLatencyEntry(testKey)
+	assert.True(t, ok)
+
+	// Check if that the entry has been deleted
+	latencyStore.DeleteStaleNodeIPs()
+	_, ok = latencyStore.getNodeIPLatencyEntry(testKey)
+	assert.False(t, ok)
+}
+
+func TestLatencyStore_ListNodeIPs(t *testing.T) {
+	tests := []struct {
+		latentStore  *LatencyStore
+		expectedList []net.IP
+	}{
+		{
+			latentStore: &LatencyStore{
+				isNetworkPolicyOnly: false,
+				nodeIPLatencyMap: map[string]*NodeIPLatencyEntry{
+					"10.244.2.1": &entry,
+				},
+				nodeTargetIPsMap: map[string][]net.IP{
+					"Node1": {net.ParseIP("10.244.2.1")},
+				},
+			},
+			expectedList: []net.IP{
+				net.ParseIP("10.244.2.1"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("List Node IPs", func(t *testing.T) {
+			nodeIPs := tt.latentStore.ListNodeIPs()
+			assert.Equal(t, tt.expectedList, nodeIPs)
+		})
+	}
 }
