@@ -94,6 +94,7 @@ type clientOptions struct {
 	enableMulticluster         bool
 	enableL7NetworkPolicy      bool
 	enableL7FlowExporter       bool
+	enablePacketCapture        bool
 	trafficEncryptionMode      config.TrafficEncryptionModeType
 }
 
@@ -166,6 +167,10 @@ func enableTrafficControl(o *clientOptions) {
 
 func enableMulticluster(o *clientOptions) {
 	o.enableMulticluster = true
+}
+
+func enablePacketCapture(o *clientOptions) {
+	o.enablePacketCapture = true
 }
 
 func setTrafficEncryptionMode(trafficEncryptionMode config.TrafficEncryptionModeType) clientOptionsFn {
@@ -419,6 +424,7 @@ func newFakeClientWithBridge(
 		o.enableMulticluster,
 		NewGroupAllocator(),
 		false,
+		o.enablePacketCapture,
 		defaultPacketInRate)
 
 	// Meters must be supported to enable Egress traffic shaping.
@@ -1778,6 +1784,126 @@ func Test_client_InstallEgressQoS(t *testing.T) {
 	require.False(t, ok)
 }
 
+func Test_client_InstallPacketCaptureFlows(t *testing.T) {
+	type fields struct {
+	}
+	type args struct {
+		dataplaneTag    uint8
+		senderOnly      bool
+		receiverOnly    bool
+		packet          *binding.Packet
+		endpointsPacket []binding.Packet
+	}
+	srcMAC, _ := net.ParseMAC("11:22:33:44:55:66")
+	dstMAC, _ := net.ParseMAC("11:22:33:44:55:77")
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		wantErr     bool
+		prepareFunc func(*gomock.Controller) *client
+	}{
+		{
+			name:   "packetcapture flow",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+			wantErr:     false,
+			prepareFunc: preparePacketCaptureFlow,
+		},
+		{
+			name:   "packetcapture flow with receiver only",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				receiverOnly: true,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+			wantErr:     false,
+			prepareFunc: preparePacketCaptureFlow,
+		},
+		{
+			name:   "packetcapture flow with sender only",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				senderOnly:   true,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+			wantErr:     false,
+			prepareFunc: preparePacketCaptureFlow,
+		},
+		{
+			name:   "packetcapture flow with endpoints packets",
+			fields: fields{},
+			args: args{
+				dataplaneTag: 1,
+				senderOnly:   true,
+				packet: &binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+				endpointsPacket: []binding.Packet{
+					{
+						SourceMAC:      srcMAC,
+						DestinationMAC: dstMAC,
+						SourceIP:       net.ParseIP("1.2.3.4"),
+						DestinationIP:  net.ParseIP("1.2.3.6"),
+						IPProto:        1,
+						TTL:            64,
+					},
+					{
+						SourceMAC:      srcMAC,
+						DestinationMAC: dstMAC,
+						SourceIP:       net.ParseIP("1.2.3.4"),
+						DestinationIP:  net.ParseIP("1.2.3.7"),
+						IPProto:        1,
+						TTL:            64,
+					},
+				},
+			},
+			wantErr:     false,
+			prepareFunc: preparePacketCaptureFlow,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			c := tt.prepareFunc(ctrl)
+			if err := c.InstallPacketCaptureFlows(tt.args.dataplaneTag, tt.args.senderOnly, tt.args.receiverOnly, tt.args.packet, nil, 0, 300); (err != nil) != tt.wantErr {
+				t.Errorf("InstallPacketCaptureFlows() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func Test_client_InstallTraceflowFlows(t *testing.T) {
 	type fields struct {
 	}
@@ -1918,6 +2044,32 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 	}
 }
 
+func preparePacketCaptureFlow(ctrl *gomock.Controller) *client {
+	m := opstest.NewMockOFEntryOperations(ctrl)
+	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, ovsoftest.NewMockBridge(ctrl), enablePacketCapture)
+	defer resetPipelines()
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+	_, ipCIDR, _ := net.ParseCIDR("192.168.2.30/32")
+	flows, _ := EgressDefaultTable.ofTable.BuildFlow(priority100).Action().Drop().Done().GetBundleMessages(binding.AddMessage)
+	flowMsg := flows[0].GetMessage().(*openflow15.FlowMod)
+	ctx := &conjMatchFlowContext{
+		dropFlow:              flowMsg,
+		dropFlowEnableLogging: false,
+		conjunctiveMatch: &conjunctiveMatch{
+			tableID: 1,
+			matchPairs: []matchPair{
+				{
+					matchKey:   MatchCTSrcIPNet,
+					matchValue: *ipCIDR,
+				},
+			},
+		}}
+	fc.featureNetworkPolicy.globalConjMatchFlowCache["mockContext"] = ctx
+	fc.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []*openflow15.FlowMod{flowMsg}})
+	return fc
+}
+
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	m := opstest.NewMockOFEntryOperations(ctrl)
 	fc := newFakeClientWithBridge(m, true, false, config.K8sNode, config.TrafficEncapModeEncap, ovsoftest.NewMockBridge(ctrl))
@@ -2031,7 +2183,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, nil, false, false, defaultPacketInRate)
 	m := ovsoftest.NewMockBridge(ctrl)
 	ofClient.bridge = m
 	bridge := binding.OFBridge{}

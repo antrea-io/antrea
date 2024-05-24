@@ -142,7 +142,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		if c.antreaProxyEnabled {
 			matches := pktIn.GetMatches()
 			if match := getMatchRegField(matches, openflow.ServiceEPStateField); match != nil {
-				svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
+				svcEpstate, err := openflow.GetInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
 				if err != nil {
 					return false
 				}
@@ -343,7 +343,7 @@ func parseFlexibleIPAMStatus(pktIn *ofctrl.PacketIn, nodeConfig *config.NodeConf
 	// The generated reject packet should have same ctZone with the incoming packet, otherwise the conntrack cannot work properly.
 	matches := pktIn.GetMatches()
 	if match := getMatchRegField(matches, openflow.CtZoneField); match != nil {
-		ctZone, err = getInfoInReg(match, openflow.CtZoneField.GetRange().ToNXRange())
+		ctZone, err = openflow.GetInfoInReg(match, openflow.CtZoneField.GetRange().ToNXRange())
 		if err != nil {
 			return false, false, 0, err
 		}

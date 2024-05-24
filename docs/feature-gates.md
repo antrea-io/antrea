@@ -59,6 +59,7 @@ edit the Agent configuration in the
 | `EgressSeparateSubnet`        | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | No                 |                                               |
 | `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
 | `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
+| `PacketCapture`               | Agent              | `false` | Alpha | v2.0          | N/A          | N/A        | No                 |                                               |
 
 ## Description and Requirements of Features
 
@@ -438,3 +439,8 @@ Refer to this [document](network-flow-visibility.md#l7-visibility) for more info
 #### Requirements for this Feature
 
 - Linux Nodes only.
+
+### PacketCapture
+
+`PacketCapture` allows user to capture live traffic packets from specified flow for further analyze.
+Refer to this [document](packetcapture-guide.md) for more information.

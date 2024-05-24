@@ -30,6 +30,10 @@ func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeI
 	return &FakeExternalNodes{c, namespace}
 }
 
+func (c *FakeCrdV1alpha1) PacketCaptures() v1alpha1.PacketCaptureInterface {
+	return &FakePacketCaptures{c}
+}
+
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {
 	return &FakeSupportBundleCollections{c}
 }

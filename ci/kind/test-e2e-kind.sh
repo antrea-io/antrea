@@ -330,6 +330,7 @@ function run_test {
     export AGENT_IMG_NAME=${antrea_agent_image}
     export CONTROLLER_IMG_NAME=${antrea_controller_image}
   fi
+
   if $coverage; then
       $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
       $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
