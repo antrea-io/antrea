@@ -24,7 +24,7 @@ spec:
       containers:
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent.ps1
         command:
         - powershell
         env:
@@ -53,7 +53,7 @@ spec:
       initContainers:
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI.ps1
         command:
         - powershell
         image: antrea-windows

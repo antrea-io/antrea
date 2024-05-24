@@ -8,8 +8,9 @@ commonLabels:
   app: antrea
 configMapGenerator:
 - files:
-  - conf/Run-AntreaOVS-Containerd.ps1
-  - conf/VMSwitchExtension-AntreaAgent-Containerd.ps1
+  - conf/Install-OVSDriver.ps1
+  - conf/Run-AntreaOVS.ps1
+  - conf/VMSwitchExtension-AntreaAgent.ps1
   name: antrea-agent-windows
   namespace: kube-system
   behavior: merge

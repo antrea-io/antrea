@@ -2,14 +2,7 @@ $ErrorActionPreference = "Stop"
 $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
 $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
 $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
-$OVSDriverDir="$mountPath\openvswitch\driver"
-
-# Check if OVSExt driver is already installed
-$driverStatus = netcfg -q ovsext
-if ($driverStatus -like '*not installed*') {
-  # Install OVS Driver
-  netcfg -l $OVSDriverDir/ovsext.inf -c s -i OVSExt
-}
+$OVSDriverDir = "$mountPath\openvswitch\driver"
 
 # Configure OVS processes
 $OVS_DB_SCHEMA_PATH = "$mountPath/openvswitch/usr/share/openvswitch/vswitch.ovsschema"

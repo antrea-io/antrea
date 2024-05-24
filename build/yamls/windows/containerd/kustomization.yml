@@ -8,8 +8,8 @@ commonLabels:
   app: antrea
 configMapGenerator:
 - files:
-  - conf/Run-AntreaAgent-Containerd.ps1
-  - conf/Install-WindowsCNI-Containerd.ps1
+  - conf/Run-AntreaAgent.ps1
+  - conf/Install-WindowsCNI.ps1
   name: antrea-agent-windows
 generatorOptions:
   disableNameSuffixHash: true

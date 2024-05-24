@@ -1,6 +1,6 @@
 apiVersion: v1
 data:
-  Install-WindowsCNI-Containerd.ps1: |
+  Install-WindowsCNI.ps1: |
     $ErrorActionPreference = "Stop";
     mkdir -force c:/var/log/antrea
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
@@ -34,7 +34,7 @@ data:
     cp $mountPath/etc/antrea/antrea-cni.conflist c:/etc/cni/net.d/10-antrea.conflist
     mkdir -force c:/k/antrea/bin
     cp $mountPath/k/antrea/bin/antctl.exe c:/k/antrea/bin/antctl.exe
-  Run-AntreaAgent-Containerd.ps1: |
+  Run-AntreaAgent.ps1: |
     $ErrorActionPreference = "Stop"
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
     $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/')
@@ -239,7 +239,7 @@ spec:
       containers:
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent.ps1
         command:
         - powershell
         env:
@@ -269,7 +269,7 @@ spec:
       initContainers:
       - args:
         - -file
-        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI-Containerd.ps1
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI.ps1
         command:
         - powershell
         image: antrea/antrea-windows:latest
