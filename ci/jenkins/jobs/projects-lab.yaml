@@ -647,6 +647,12 @@
                       - text:
                             credential-id: GOVC_DATASTORE
                             variable: GOVC_DATASTORE
+                      - text:
+                            credential-id: DOCKER_USERNAME
+                            variable: DOCKER_USERNAME
+                      - text:
+                            credential-id: DOCKER_PASSWORD
+                            variable: DOCKER_PASSWORD
             publishers:
                 - archive:
                       allow-empty: true
@@ -703,6 +709,12 @@
                       - text:
                             credential-id: GOVC_DATASTORE
                             variable: GOVC_DATASTORE
+                      - text:
+                            credential-id: DOCKER_USERNAME
+                            variable: DOCKER_USERNAME
+                      - text:
+                            credential-id: DOCKER_PASSWORD
+                            variable: DOCKER_PASSWORD
             publishers:
                 - archive:
                       allow-empty: true
@@ -831,6 +843,12 @@
                       - text:
                             credential-id: GOVC_DATASTORE
                             variable: GOVC_DATASTORE
+                      - text:
+                            credential-id: DOCKER_USERNAME
+                            variable: DOCKER_USERNAME
+                      - text:
+                            credential-id: DOCKER_PASSWORD
+                            variable: DOCKER_PASSWORD
             publishers:
                 - archive:
                       allow-empty: true
@@ -882,6 +900,12 @@
             - text:
                 credential-id: GOVC_DATASTORE
                 variable: GOVC_DATASTORE
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
       - '{name}-{test_name}-for-pull-request':
           test_name: kind-conformance
           node: 'antrea-kind-testbed'
