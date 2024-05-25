@@ -19,79 +19,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type TraceflowPhase string
-
-const (
-	// Pending is not used anymore
-	Pending   TraceflowPhase = "Pending"
-	Running   TraceflowPhase = "Running"
-	Succeeded TraceflowPhase = "Succeeded"
-	Failed    TraceflowPhase = "Failed"
-)
-
-type TraceflowComponent string
-
-const (
-	ComponentSpoofGuard    TraceflowComponent = "SpoofGuard"
-	ComponentLB            TraceflowComponent = "LB"
-	ComponentRouting       TraceflowComponent = "Routing"
-	ComponentNetworkPolicy TraceflowComponent = "NetworkPolicy"
-	ComponentForwarding    TraceflowComponent = "Forwarding"
-	ComponentEgress        TraceflowComponent = "Egress"
-)
-
-type TraceflowAction string
-
-const (
-	ActionDelivered TraceflowAction = "Delivered"
-	ActionReceived  TraceflowAction = "Received"
-	ActionForwarded TraceflowAction = "Forwarded"
-	ActionDropped   TraceflowAction = "Dropped"
-	ActionRejected  TraceflowAction = "Rejected"
-	// ActionForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
-	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
-	ActionForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
-	ActionMarkedForSNAT         TraceflowAction = "MarkedForSNAT"
-	ActionForwardedToEgressNode TraceflowAction = "ForwardedToEgressNode"
-)
-
-// List the supported protocols and their codes in traceflow.
-// According to code in Antrea agent and controller, default protocol is ICMP if protocol is not provided by users.
-const (
-	ICMPProtocolNumber int32 = 1
-	IGMPProtocolNumber int32 = 2
-	TCPProtocolNumber  int32 = 6
-	UDPProtocolNumber  int32 = 17
-	SCTPProtocolNumber int32 = 132
-)
-
-var SupportedProtocols = map[string]int32{
-	"TCP":  TCPProtocolNumber,
-	"UDP":  UDPProtocolNumber,
-	"ICMP": ICMPProtocolNumber,
-}
-
-var ProtocolsToString = map[int32]string{
-	TCPProtocolNumber:  "TCP",
-	UDPProtocolNumber:  "UDP",
-	ICMPProtocolNumber: "ICMP",
-	IGMPProtocolNumber: "IGMP",
-	SCTPProtocolNumber: "SCTP",
-}
-
-// List the supported destination types in traceflow.
-const (
-	DstTypePod     = "Pod"
-	DstTypeService = "Service"
-	DstTypeIPv4    = "IPv4"
-)
-
-var SupportedDestinationTypes = []string{
-	DstTypePod,
-	DstTypeService,
-	DstTypeIPv4,
-}
-
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed
 // or denied to/from the workloads matched by a Spec.AppliedTo.
 type IPBlock struct {
@@ -290,4 +217,149 @@ type HTTPProtocol struct {
 type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
 	SNI string `json:"sni,omitempty"`
+}
+
+// Source describes the source spec of the packetcapture.
+type Source struct {
+	// Namespace is the source namespace.
+	Namespace string `json:"namespace,omitempty"`
+	// Pod is the source pod.
+	Pod string `json:"pod,omitempty"`
+	// IP is the source IPv4 or IPv6 address.
+	IP string `json:"ip,omitempty"`
+}
+
+// Destination describes the destination spec of the packetcapture.
+type Destination struct {
+	// Namespace is the destination namespace.
+	Namespace string `json:"namespace,omitempty"`
+	// Pod is the destination pod, exclusive with destination service.
+	Pod string `json:"pod,omitempty"`
+	// Service is the destination service, exclusive with destination pod.
+	Service string `json:"service,omitempty"`
+	// IP is the destination IPv4 or IPv6 address.
+	IP string `json:"ip,omitempty"`
+}
+
+// IPHeader describes spec of an IPv4 header.
+type IPHeader struct {
+	// Protocol is the IP protocol.
+	Protocol int32 `json:"protocol,omitempty" yaml:"protocol,omitempty"`
+	// TTL is the IP TTL.
+	TTL int32 `json:"ttl,omitempty" yaml:"ttl,omitempty"`
+	// Flags is the flags for IP.
+	Flags int32 `json:"flags,omitempty" yaml:"flags,omitempty"`
+}
+
+// IPv6Header describes spec of an IPv6 header.
+type IPv6Header struct {
+	// NextHeader is the IPv6 protocol.
+	NextHeader *int32 `json:"nextHeader,omitempty" yaml:"nextHeader,omitempty"`
+	// HopLimit is the IPv6 Hop Limit.
+	HopLimit int32 `json:"hopLimit,omitempty" yaml:"hopLimit,omitempty"`
+}
+
+// TransportHeader describes spec of a TransportHeader.
+type TransportHeader struct {
+	ICMP *ICMPEchoRequestHeader `json:"icmp,omitempty" yaml:"icmp,omitempty"`
+	UDP  *UDPHeader             `json:"udp,omitempty" yaml:"udp,omitempty"`
+	TCP  *TCPHeader             `json:"tcp,omitempty" yaml:"tcp,omitempty"`
+}
+
+// ICMPEchoRequestHeader describes spec of an ICMP echo request header.
+type ICMPEchoRequestHeader struct {
+	// ID is the ICMPEchoRequestHeader ID.
+	ID int32 `json:"id,omitempty"`
+	// Sequence is the ICMPEchoRequestHeader sequence.
+	Sequence int32 `json:"sequence,omitempty"`
+}
+
+// UDPHeader describes spec of a UDP header.
+type UDPHeader struct {
+	// SrcPort is the source port.
+	SrcPort int32 `json:"srcPort,omitempty"`
+	// DstPort is the destination port.
+	DstPort int32 `json:"dstPort,omitempty"`
+}
+
+// TCPHeader describes spec of a TCP header.
+type TCPHeader struct {
+	// SrcPort is the source port.
+	SrcPort int32 `json:"srcPort,omitempty"`
+	// DstPort is the destination port.
+	DstPort int32 `json:"dstPort,omitempty"`
+	// Flags are flags in the header.
+	Flags int32 `json:"flags,omitempty"`
+}
+
+// Packet includes header info.
+type Packet struct {
+	SrcIP           string          `json:"srcIP,omitempty"`
+	DstIP           string          `json:"dstIP,omitempty"`
+	IPv6Header      *IPv6Header     `json:"ipv6Header,omitempty"`
+	TransportHeader TransportHeader `json:"transportHeader"`
+}
+
+// PacketCaptureFirstNConfig contains the config for the FirstN type capture. The only supported parameter is
+// `Number` at the moment, meaning capturing the first specified number of packets in a flow.
+type PacketCaptureFirstNConfig struct {
+	Number int32 `json:"number"`
+}
+
+const DefaultPacketCaptureTimeout uint16 = 60
+
+type PacketCapturePhase string
+
+const (
+	PacketCaptureRunning   PacketCapturePhase = "Running"
+	PacketCaptureSucceeded PacketCapturePhase = "Succeeded"
+	PacketCaptureFailed    PacketCapturePhase = "Failed"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type PacketCaptureList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []PacketCapture `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type PacketCapture struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              PacketCaptureSpec   `json:"spec,omitempty"`
+	Status            PacketCaptureStatus `json:"status,omitempty"`
+}
+
+type CaptureConfig struct {
+	FirstN *PacketCaptureFirstNConfig `json:"firstN,omitempty"`
+}
+
+type PacketCaptureSpec struct {
+	Timeout       uint16        `json:"timeout,omitempty"`
+	CaptureConfig CaptureConfig `json:"captureConfig"`
+	Source        Source        `json:"source"`
+	Destination   Destination   `json:"destination"`
+	Packet        *Packet       `json:"packet,omitempty"`
+	// FileServer specifies the sftp url config for the fileServer. Captured packets will be uploaded to this server.
+	FileServer BundleFileServer `json:"fileServer"`
+}
+
+type PacketCaptureStatus struct {
+	Phase PacketCapturePhase `json:"phase,omitempty"`
+	// Reason records the failure reason when the capture fails.
+	Reason string `json:"reason,omitempty"`
+	// NumCapturedPackets records how many packets have been captured. If it reaches the target number, the capture
+	// can be considered as finished.
+	NumCapturedPackets int32 `json:"numCapturedPackets,omitempty"`
+	// PacketsFileName is the file name where the captured packets are temporarily cached. The file will be
+	// removed after the PacketCapture is deleted.
+	PacketsFileName string       `json:"packetsFileName,omitempty"`
+	StartTime       *metav1.Time `json:"startTime,omitempty"`
 }

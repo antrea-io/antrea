@@ -24,6 +24,10 @@ type ExternalNodeListerExpansion interface{}
 // ExternalNodeNamespaceLister.
 type ExternalNodeNamespaceListerExpansion interface{}
 
+// PacketCaptureListerExpansion allows custom methods to be added to
+// PacketCaptureLister.
+type PacketCaptureListerExpansion interface{}
+
 // SupportBundleCollectionListerExpansion allows custom methods to be added to
 // SupportBundleCollectionLister.
 type SupportBundleCollectionListerExpansion interface{}

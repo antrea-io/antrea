@@ -24,6 +24,8 @@ import (
 type Interface interface {
 	// ExternalNodes returns a ExternalNodeInformer.
 	ExternalNodes() ExternalNodeInformer
+	// PacketCaptures returns a PacketCaptureInformer.
+	PacketCaptures() PacketCaptureInformer
 	// SupportBundleCollections returns a SupportBundleCollectionInformer.
 	SupportBundleCollections() SupportBundleCollectionInformer
 }
@@ -42,6 +44,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ExternalNodes returns a ExternalNodeInformer.
 func (v *version) ExternalNodes() ExternalNodeInformer {
 	return &externalNodeInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// PacketCaptures returns a PacketCaptureInformer.
+func (v *version) PacketCaptures() PacketCaptureInformer {
+	return &packetCaptureInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // SupportBundleCollections returns a SupportBundleCollectionInformer.
