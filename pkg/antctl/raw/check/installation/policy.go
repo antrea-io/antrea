@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package check
+package installation
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 )
 
 func WaitForNetworkPolicyReady(ctx context.Context, client kubernetes.Interface, namespace string, policyName string, clusterName string) error {
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for Network policy %s to get applied successfully...\n", policyName)
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Waiting for NetworkPolicy %s to get applied successfully...\n", policyName)
 	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, policyName, metav1.GetOptions{})
 		if err != nil {
@@ -37,16 +37,16 @@ func WaitForNetworkPolicyReady(ctx context.Context, client kubernetes.Interface,
 		return true, nil
 	})
 	if err != nil {
-		return fmt.Errorf("error while waiting for network policy to get ready: %w", err)
+		return fmt.Errorf("error while waiting for NetworkPolicy to get ready: %w", err)
 	}
-	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Network policy %s is ready.\n", policyName)
+	fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"NetworkPolicy %s is ready.\n", policyName)
 	return nil
 }
 
 func WaitForNetworkPolicyTeardown(ctx context.Context, client kubernetes.Interface, namespace string, policyName string, clusterName string) error {
 	err := client.NetworkingV1().NetworkPolicies(namespace).Delete(ctx, policyName, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("error deleting network policy: %w", err)
+		return fmt.Errorf("error deleting NetworkPolicy: %w", err)
 	}
 	err = wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, policyName, metav1.GetOptions{})
@@ -59,17 +59,17 @@ func WaitForNetworkPolicyTeardown(ctx context.Context, client kubernetes.Interfa
 		return false, nil
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Network policy deletion failed\n")
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"NetworkPolicy deletion failed: %v\n", err)
 	} else {
-		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"Network policy deletion successful\n")
+		fmt.Fprintf(os.Stdout, fmt.Sprintf("[%s] ", clusterName)+"NetworkPolicy deletion successful\n")
 	}
 	return nil
 }
 
-func ApplyIngressAll(ctx context.Context, client kubernetes.Interface, namespace string) error {
+func ApplyIngressDenyAll(ctx context.Context, client kubernetes.Interface, namespace string) error {
 	networkPolicy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "all-ingress-deny",
+			Name:      "ingress-deny-all",
 			Namespace: namespace,
 		},
 		Spec: networkingv1.NetworkPolicySpec{
@@ -78,7 +78,7 @@ func ApplyIngressAll(ctx context.Context, client kubernetes.Interface, namespace
 					{
 						Key:      "name",
 						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{"echo-same-node", "echo-other-node"},
+						Values:   []string{echoSameNodeDeploymentName, echoOtherNodeDeploymentName},
 					},
 				},
 			},
@@ -89,15 +89,15 @@ func ApplyIngressAll(ctx context.Context, client kubernetes.Interface, namespace
 	}
 	_, err := client.NetworkingV1().NetworkPolicies(namespace).Create(ctx, networkPolicy, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating network policy: %w", err)
+		return fmt.Errorf("error creating NetworkPolicy: %w", err)
 	}
 	return nil
 }
 
-func ApplyEgressAll(ctx context.Context, client kubernetes.Interface, namespace string) error {
+func ApplyEgressDenyAll(ctx context.Context, client kubernetes.Interface, namespace string) error {
 	networkPolicy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "all-egress-deny",
+			Name:      "egress-deny-all",
 			Namespace: namespace,
 		},
 		Spec: networkingv1.NetworkPolicySpec{
@@ -106,7 +106,7 @@ func ApplyEgressAll(ctx context.Context, client kubernetes.Interface, namespace 
 					{
 						Key:      "name",
 						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{"test-client"},
+						Values:   []string{clientDeploymentName},
 					},
 				},
 			},
@@ -117,7 +117,7 @@ func ApplyEgressAll(ctx context.Context, client kubernetes.Interface, namespace 
 	}
 	_, err := client.NetworkingV1().NetworkPolicies(namespace).Create(ctx, networkPolicy, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating network policy: %w", err)
+		return fmt.Errorf("error creating NetworkPolicy: %w", err)
 	}
 	return nil
 }

@@ -17,19 +17,17 @@ package installation
 import (
 	"context"
 	"fmt"
-
-	"antrea.io/antrea/pkg/antctl/raw/check"
 )
 
-type AllIngressDenyConnectivityTest struct{}
+type EgressDenyAllConnectivityTest struct{}
 
 func init() {
-	RegisterTest("all-ingress-deny-connectivity", &AllIngressDenyConnectivityTest{})
+	RegisterTest("egress-deny-all-connectivity", &EgressDenyAllConnectivityTest{})
 }
 
-func (a AllIngressDenyConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
-	check.ApplyIngressAll(ctx, testContext.client, testContext.namespace)
-	err := check.WaitForNetworkPolicyReady(ctx, testContext.client, testContext.namespace, "all-ingress-deny", testContext.clusterName)
+func (a EgressDenyAllConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
+	ApplyEgressDenyAll(ctx, testContext.client, testContext.namespace)
+	err := WaitForNetworkPolicyReady(ctx, testContext.client, testContext.namespace, "egress-deny-all", testContext.clusterName)
 	if err != nil {
 		return err
 	}
@@ -37,12 +35,12 @@ func (a AllIngressDenyConnectivityTest) Run(ctx context.Context, testContext *te
 	for _, clientPod := range testContext.clientPods {
 		for _, service := range services {
 			if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", service, 80); err != nil {
-				testContext.Log("Network policy is working as expected with Pod %s and Service %s", clientPod.Name, service)
+				testContext.Log("NetworkPolicy is working as expected with Pod %s and Service %s", clientPod.Name, service)
 			} else {
-				return fmt.Errorf("Network policy is not working as expected with Pod %s and Service %s ", clientPod.Name, service)
+				return fmt.Errorf("NetworkPolicy is not working as expected with Pod %s and Service %s ", clientPod.Name, service)
 			}
 		}
 	}
-	check.WaitForNetworkPolicyTeardown(ctx, testContext.client, testContext.namespace, "all-ingress-deny", testContext.clusterName)
+	WaitForNetworkPolicyTeardown(ctx, testContext.client, testContext.namespace, "egress-deny-all", testContext.clusterName)
 	return nil
 }
