@@ -51,6 +51,7 @@ const (
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
 
 	// alpha: v1.13
+	// beta: v2.1
 	// Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy.
 	CleanupStaleUDPSvcConntrack featuregate.Feature = "CleanupStaleUDPSvcConntrack"
 
@@ -181,7 +182,7 @@ var (
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
 		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
-		CleanupStaleUDPSvcConntrack: {Default: false, PreRelease: featuregate.Alpha},
+		CleanupStaleUDPSvcConntrack: {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
 		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
