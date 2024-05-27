@@ -130,12 +130,12 @@ antctl get featuregates
 
 ### Performing checks to facilitate installation process
 
-Antrea provides a utility command `antctl check` designed to perform checks that verify whether the Kubernetes cluster is correctly configured for installing Antrea, 
+Antrea provides a utility command `antctl check` designed to perform checks that verify whether the Kubernetes cluster is correctly configured for installing Antrea,
 and also to confirm that Antrea has been installed correctly.
 
 #### Pre-installation checks
 
-Before installing Antrea, it's crucial to ensure that the Kubernetes cluster is configured properly. This can prevent potential issues that might arise during the 
+Before installing Antrea, it's crucial to ensure that the Kubernetes cluster is configured properly. This can prevent potential issues that might arise during the
 installation of Antrea. To perform these pre-installation checks, Simply run the command as follows:
 
 ```bash
@@ -159,7 +159,7 @@ antctl check installation --namespace [namespace]
 
 Replace `[namespace]` with the actual name of the namespace.
 
-Run the following command to discover more utility flags: 
+Run the following command to discover more utility flags:
 
 ```bash
 antctl check installation --help
