@@ -170,7 +170,7 @@ func NewCluster(
 		conf.DeadNodeReclaimTime = 10 * time.Millisecond
 		conf.Events = &memberlist.ChannelEventDelegate{Ch: nodeEventCh}
 		conf.LogOutput = io.Discard
-		klog.V(1).InfoS("New memberlist cluster", "config", conf)
+		klog.V(1).InfoS("Creating new memberlist cluster", "name", conf.Name, "addr", conf.AdvertiseAddr, "port", conf.AdvertisePort, "deadNodeReclaimTime", conf.DeadNodeReclaimTime)
 
 		mList, err := memberlist.Create(conf)
 		if err != nil {
