@@ -154,13 +154,6 @@ func externalIP(isIPv6 bool) net.IP {
 	return externalIPv4
 }
 
-func virtualNodePortDNATIP(isIPv6 bool) net.IP {
-	if isIPv6 {
-		return agentconfig.VirtualNodePortDNATIPv6
-	}
-	return agentconfig.VirtualNodePortDNATIPv4
-}
-
 func makeSvcPortName(namespace, name, port string, protocol corev1.Protocol) k8sproxy.ServicePortName {
 	return k8sproxy.ServicePortName{
 		NamespacedName: apimachinerytypes.NamespacedName{Namespace: namespace, Name: name},
@@ -492,6 +485,7 @@ func newFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		fakeNodeIPChecker,
 		nodePortAddresses,
 		o.proxyAllEnabled,
+		true,
 		[]string{skippedServiceNN, skippedClusterIP},
 		o.proxyLoadBalancerIPs,
 		o.defaultLoadBalancerMode,
@@ -612,7 +606,7 @@ func testClusterIPAdd(t *testing.T,
 		}
 	}
 	if externalIP != nil {
-		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -805,11 +799,11 @@ func testLoadBalancerAdd(t *testing.T,
 		}
 	}
 	if proxyLoadBalancerIPs {
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	if externalIP != nil {
-		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 	}
 
 	fp.syncProxyRules()
@@ -957,9 +951,9 @@ func testNodePortAdd(t *testing.T,
 			})
 		}
 	}
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	if externalIP != nil {
-		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 	}
 
 	fp.syncProxyRules()
@@ -1227,8 +1221,8 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 		ClusterGroupID:     clusterGroupID1,
 		IsExternal:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(port30001Int32), binding.ProtocolTCP)
-	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIPv4)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(port30001Int32), binding.ProtocolTCP)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIPv4)
 
 	localGroupID2 := fp.groupCounter.AllocateIfNotExist(svcPortName2, true)
 	clusterGroupID2 := fp.groupCounter.AllocateIfNotExist(svcPortName2, false)
@@ -1261,7 +1255,8 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 		ClusterGroupID:     clusterGroupID2,
 		IsExternal:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(port30002Int32), binding.ProtocolTCP)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(port30002Int32), binding.ProtocolTCP)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIPv4)
 
 	fp.syncProxyRules()
 
@@ -1274,20 +1269,18 @@ func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 	mockOFClient.EXPECT().UninstallServiceFlows(svc1IPv4, uint16(port80Int32), binding.ProtocolTCP)
 	mockOFClient.EXPECT().UninstallServiceFlows(agentconfig.VirtualNodePortDNATIPv4, uint16(port30001Int32), binding.ProtocolTCP)
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIPv4, uint16(port80Int32), binding.ProtocolTCP)
-	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(port30001Int32), binding.ProtocolTCP)
+	mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(port30001Int32), binding.ProtocolTCP)
+	mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIPv4)
 
 	mockOFClient.EXPECT().UninstallEndpointFlows(binding.ProtocolTCP, gomock.InAnyOrder([]k8sproxy.Endpoint{localEndpointForPort443, remoteEndpointForPort443}))
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(2)
 	mockOFClient.EXPECT().UninstallServiceFlows(svc1IPv4, uint16(port443Int32), binding.ProtocolTCP)
 	mockOFClient.EXPECT().UninstallServiceFlows(agentconfig.VirtualNodePortDNATIPv4, uint16(port30002Int32), binding.ProtocolTCP)
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIPv4, uint16(port443Int32), binding.ProtocolTCP)
-	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(port30002Int32), binding.ProtocolTCP)
+	mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(port30002Int32), binding.ProtocolTCP)
 	// The route for the ClusterIP and the LoadBalancer IP should only be uninstalled once.
-	mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIPv4)
-
+	mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIPv4)
 	fp.syncProxyRules()
-
-	assert.Emptyf(t, fp.serviceIPRouteReferences, "serviceIPRouteReferences was not cleaned up after Service was removed")
 }
 
 func TestNodePortAdd(t *testing.T) {
@@ -1577,8 +1570,8 @@ func testClusterIPRemove(t *testing.T, protocol binding.Protocol, isIPv6 bool, n
 		mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), protocol)
 	}
 	if externalIP != nil {
-		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), externalIP)
 	}
 	if needClearConntrackEntries(protocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, protocol)
@@ -1667,7 +1660,7 @@ func testNodePortRemove(t *testing.T, protocol binding.Protocol, isIPv6 bool, en
 		IsExternal:         true,
 		IsNodePort:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	if externalIP != nil {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 			ServiceIP:          externalIP,
@@ -1678,17 +1671,17 @@ func testNodePortRemove(t *testing.T, protocol binding.Protocol, isIPv6 bool, en
 			ClusterGroupID:     2,
 			IsExternal:         true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 	}
 
 	mockOFClient.EXPECT().UninstallEndpointFlows(protocol, gomock.Any())
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), protocol)
 	mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(2)
-	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	if externalIP != nil {
 		mockOFClient.EXPECT().UninstallServiceFlows(externalIP, uint16(svcPort), protocol)
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), externalIP)
 	}
 	if needClearConntrackEntries(protocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, protocol)
@@ -1793,8 +1786,8 @@ func testLoadBalancerRemove(t *testing.T, protocol binding.Protocol, isIPv6 bool
 		ClusterGroupID:     2,
 		IsExternal:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	if externalIP != nil {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 			ServiceIP:          externalIP,
@@ -1805,7 +1798,7 @@ func testLoadBalancerRemove(t *testing.T, protocol binding.Protocol, isIPv6 bool
 			ClusterGroupID:     2,
 			IsExternal:         true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 	}
 
 	mockOFClient.EXPECT().UninstallEndpointFlows(protocol, gomock.Any())
@@ -1813,11 +1806,11 @@ func testLoadBalancerRemove(t *testing.T, protocol binding.Protocol, isIPv6 bool
 	mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
 	mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), protocol)
 	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(2)
-	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-	mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP)
+	mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	if externalIP != nil {
 		mockOFClient.EXPECT().UninstallServiceFlows(externalIP, uint16(svcPort), protocol)
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), externalIP)
 	}
 	if needClearConntrackEntries(protocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, protocol)
@@ -2098,11 +2091,11 @@ func testNodePortNoEndpoint(t *testing.T, protocol binding.Protocol, isIPv6 bool
 		IsExternal:         true,
 		IsNodePort:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any())
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), gomock.Any())
 	fp.syncProxyRules()
 
 	mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), gomock.Any())
-	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any())
+	mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), gomock.Any())
 	if needClearConntrackEntries(protocol) {
 		for _, nodeIP := range nodePortAddresses {
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(nodeIP, uint16(svcNodePort), nil, protocol)
@@ -2119,7 +2112,7 @@ func testNodePortNoEndpoint(t *testing.T, protocol binding.Protocol, isIPv6 bool
 		IsExternal:         true,
 		IsNodePort:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort)+1, gomock.Any())
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort)+1, gomock.Any())
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	fp.syncProxyRules()
 }
@@ -2209,8 +2202,8 @@ func testLoadBalancerNoEndpoint(t *testing.T, protocol binding.Protocol, isIPv6 
 		ClusterGroupID:     2,
 		IsExternal:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any())
-	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), gomock.Any())
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	fp.syncProxyRules()
 
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), gomock.Any())
@@ -2220,8 +2213,8 @@ func testLoadBalancerNoEndpoint(t *testing.T, protocol binding.Protocol, isIPv6 
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, protocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(loadBalancerIP, uint16(svcPort), nil, protocol)
 	}
-	mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any())
-	mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP)
+	mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), gomock.Any())
+	mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 		ServiceIP:      svcIP,
 		ServicePort:    uint16(svcPort + 1),
@@ -2248,8 +2241,8 @@ func testLoadBalancerNoEndpoint(t *testing.T, protocol binding.Protocol, isIPv6 
 		ClusterGroupID:     2,
 		IsExternal:         true,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), gomock.Any())
-	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), gomock.Any())
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
 	fp.syncProxyRules()
 }
@@ -2402,9 +2395,9 @@ func testLoadBalancerRemoveEndpoints(t *testing.T, protocol binding.Protocol, is
 		IsExternal:     true,
 		ClusterGroupID: 1,
 	})
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-	mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
-	mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 
 	fp.syncProxyRules()
 
@@ -2624,7 +2617,7 @@ func testServicePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 bool,
 			IsExternal:     true,
 			IsNodePort:     true,
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -2635,8 +2628,8 @@ func testServicePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 bool,
 			IsExternal:     true,
 			IsNodePort:     true,
 		})
-		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -2646,7 +2639,7 @@ func testServicePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 bool,
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 
 		s1 = mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), protocol)
 		if needClearConntrackEntries(protocol) {
@@ -2660,9 +2653,8 @@ func testServicePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 bool,
 			IsExternal:     true,
 		})
 		s2.After(s1)
-
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP)
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
 
 	fp.syncProxyRules()
@@ -2767,10 +2759,10 @@ func testServiceNodePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 b
 			IsExternal:     true,
 			IsNodePort:     true,
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 
 		s1 := mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
-		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 		if needClearConntrackEntries(protocol) {
 			for _, nodeIP := range nodePortAddresses {
 				mockRouteClient.EXPECT().ClearConntrackEntryForService(nodeIP, uint16(svcNodePort), nil, protocol)
@@ -2785,7 +2777,7 @@ func testServiceNodePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 b
 			IsExternal:     true,
 			IsNodePort:     true,
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort+1), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort+1), protocol)
 		s2.After(s1)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
@@ -2796,7 +2788,7 @@ func testServiceNodePortUpdate(t *testing.T, protocol binding.Protocol, isIPv6 b
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
 
 	fp.syncProxyRules()
@@ -2897,7 +2889,7 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T, protocol binding.Proto
 		ClusterGroupID: 1,
 		IsExternal:     true,
 	})
-	mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -2908,7 +2900,7 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T, protocol binding.Proto
 			IsExternal:     true,
 			IsNodePort:     true,
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -2918,7 +2910,7 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T, protocol binding.Proto
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -2946,8 +2938,8 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T, protocol binding.Proto
 		TrafficPolicyLocal: true,
 		IsExternal:         true,
 	})
-	mockRouteClient.EXPECT().DeleteExternalIPRoute(externalIP)
-	mockRouteClient.EXPECT().AddExternalIPRoute(externalIP)
+	mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), externalIP)
+	mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), externalIP)
 
 	if svcType == corev1.ServiceTypeNodePort || svcType == corev1.ServiceTypeLoadBalancer {
 		s1 := mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
@@ -2963,8 +2955,8 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T, protocol binding.Proto
 		})
 		s2.After(s1)
 
-		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		s1 := mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), protocol)
@@ -2979,8 +2971,8 @@ func testServiceExternalTrafficPolicyUpdate(t *testing.T, protocol binding.Proto
 		})
 		s2.After(s1)
 
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP)
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
@@ -3153,19 +3145,19 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 	}
 	fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll, withCleanupStaleUDPSvcConntrack)
 
-	var loadBalancerIPStrs, updatedLoadBalancerIPStrs []string
+	var loadBalancerIPStrings, updatedLoadBalancerIPStrings []string
 	for _, ip := range loadBalancerIPs {
-		loadBalancerIPStrs = append(loadBalancerIPStrs, ip.String())
+		loadBalancerIPStrings = append(loadBalancerIPStrings, ip.String())
 	}
 	for _, ip := range updatedLoadBalancerIPs {
-		updatedLoadBalancerIPStrs = append(updatedLoadBalancerIPStrs, ip.String())
+		updatedLoadBalancerIPStrings = append(updatedLoadBalancerIPStrings, ip.String())
 	}
-	var externalIPStrs, updatedExternalIPStrs []string
+	var externalIPStrings, updatedExternalIPStrings []string
 	for _, ip := range externalIPs {
-		externalIPStrs = append(externalIPStrs, ip.String())
+		externalIPStrings = append(externalIPStrings, ip.String())
 	}
 	for _, ip := range updatedExternalIPs {
-		updatedExternalIPStrs = append(updatedExternalIPStrs, ip.String())
+		updatedExternalIPStrings = append(updatedExternalIPStrings, ip.String())
 	}
 
 	svc := makeTestLoadBalancerService(&svcPortName, svcIP, externalIPs, loadBalancerIPs, nil, int32(svcPort), int32(svcNodePort), apiProtocol, nil, nil, corev1.ServiceExternalTrafficPolicyTypeCluster)
@@ -3202,6 +3194,7 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), ip)
 	}
 	for _, ip := range externalIPs {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -3211,52 +3204,51 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), ip)
 	}
-	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-	for _, ip := range loadBalancerIPs {
-		mockRouteClient.EXPECT().AddExternalIPRoute(ip)
-	}
-	for _, ip := range externalIPs {
-		mockRouteClient.EXPECT().AddExternalIPRoute(ip)
-	}
+	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 
-	toDeleteLoadBalancerIPs := smallSliceDifference(loadBalancerIPStrs, updatedLoadBalancerIPStrs)
-	toAddLoadBalancerIPs := smallSliceDifference(updatedLoadBalancerIPStrs, loadBalancerIPStrs)
-	for _, ipStr := range toDeleteLoadBalancerIPs {
-		mockOFClient.EXPECT().UninstallServiceFlows(net.ParseIP(ipStr), uint16(svcPort), protocol)
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(net.ParseIP(ipStr))
+	toDeleteLoadBalancerIPStrings := smallSliceDifference(loadBalancerIPStrings, updatedLoadBalancerIPStrings)
+	toAddLoadBalancerIPStrings := smallSliceDifference(updatedLoadBalancerIPStrings, loadBalancerIPStrings)
+	for _, ipStr := range toDeleteLoadBalancerIPStrings {
+		ip := net.ParseIP(ipStr)
+		mockOFClient.EXPECT().UninstallServiceFlows(ip, uint16(svcPort), protocol)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), ip)
 		if needClearConntrackEntries(protocol) {
-			mockRouteClient.EXPECT().ClearConntrackEntryForService(net.ParseIP(ipStr), uint16(svcPort), nil, protocol)
+			mockRouteClient.EXPECT().ClearConntrackEntryForService(ip, uint16(svcPort), nil, protocol)
 		}
 	}
-	for _, ipStr := range toAddLoadBalancerIPs {
+	for _, ipStr := range toAddLoadBalancerIPStrings {
+		ip := net.ParseIP(ipStr)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
-			ServiceIP:      net.ParseIP(ipStr),
+			ServiceIP:      ip,
 			ServicePort:    uint16(svcPort),
 			Protocol:       protocol,
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(net.ParseIP(ipStr))
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), ip)
 	}
-	toDeleteExternalIPs := smallSliceDifference(externalIPStrs, updatedExternalIPStrs)
-	toAddLoadExternalIPs := smallSliceDifference(updatedExternalIPStrs, externalIPStrs)
-	for _, ipStr := range toDeleteExternalIPs {
-		mockOFClient.EXPECT().UninstallServiceFlows(net.ParseIP(ipStr), uint16(svcPort), protocol)
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(net.ParseIP(ipStr))
+	toDeleteExternalIPStrings := smallSliceDifference(externalIPStrings, updatedExternalIPStrings)
+	toAddLoadExternalIPStrings := smallSliceDifference(updatedExternalIPStrings, externalIPStrings)
+	for _, ipStr := range toDeleteExternalIPStrings {
+		ip := net.ParseIP(ipStr)
+		mockOFClient.EXPECT().UninstallServiceFlows(ip, uint16(svcPort), protocol)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), ip)
 		if needClearConntrackEntries(protocol) {
-			mockRouteClient.EXPECT().ClearConntrackEntryForService(net.ParseIP(ipStr), uint16(svcPort), nil, protocol)
+			mockRouteClient.EXPECT().ClearConntrackEntryForService(ip, uint16(svcPort), nil, protocol)
 		}
 	}
-	for _, ipStr := range toAddLoadExternalIPs {
+	for _, ipStr := range toAddLoadExternalIPStrings {
+		ip := net.ParseIP(ipStr)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
-			ServiceIP:      net.ParseIP(ipStr),
+			ServiceIP:      ip,
 			ServicePort:    uint16(svcPort),
 			Protocol:       protocol,
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(net.ParseIP(ipStr))
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), ip)
 	}
 
 	fp.syncProxyRules()
@@ -3352,9 +3344,9 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T, protocol binding.Protoco
 			IsNodePort:      true,
 			AffinityTimeout: uint16(affinitySeconds),
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 		mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
-		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 			ServiceIP:       virtualNodePortDNATIP,
 			ServicePort:     uint16(svcNodePort),
@@ -3364,7 +3356,7 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T, protocol binding.Protoco
 			IsNodePort:      true,
 			AffinityTimeout: uint16(updatedAffinitySeconds),
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -3375,9 +3367,9 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T, protocol binding.Protoco
 			AffinityTimeout: uint16(affinitySeconds),
 			IsExternal:      true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 		mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), protocol)
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIP)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 			ServiceIP:       loadBalancerIP,
 			ServicePort:     uint16(svcPort),
@@ -3386,7 +3378,7 @@ func testServiceStickyMaxAgeSecondsUpdate(t *testing.T, protocol binding.Protoco
 			AffinityTimeout: uint16(updatedAffinitySeconds),
 			IsExternal:      true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
 
 	fp.syncProxyRules()
@@ -3505,7 +3497,7 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T, protocol binding.Protoco
 			IsExternal:     true,
 			IsNodePort:     true,
 		})
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(virtualNodePortDNATIP, uint16(svcNodePort), protocol)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -3517,8 +3509,8 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T, protocol binding.Protoco
 			IsNodePort:      true,
 			AffinityTimeout: uint16(affinitySeconds),
 		})
-		mockRouteClient.EXPECT().DeleteNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
-		mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().DeleteNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
+		mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 	}
 	if svcType == corev1.ServiceTypeLoadBalancer {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -3528,7 +3520,7 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T, protocol binding.Protoco
 			ClusterGroupID: 1,
 			IsExternal:     true,
 		})
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 
 		mockOFClient.EXPECT().UninstallServiceFlows(loadBalancerIP, uint16(svcPort), protocol)
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
@@ -3539,8 +3531,8 @@ func testServiceSessionAffinityTypeUpdate(t *testing.T, protocol binding.Protoco
 			IsExternal:      true,
 			AffinityTimeout: uint16(affinitySeconds),
 		})
-		mockRouteClient.EXPECT().DeleteExternalIPRoute(loadBalancerIP)
-		mockRouteClient.EXPECT().AddExternalIPRoute(loadBalancerIP)
+		mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), loadBalancerIP)
+		mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), loadBalancerIP)
 	}
 
 	fp.syncProxyRules()
@@ -3779,7 +3771,7 @@ func TestGetServiceFlowKeys(t *testing.T) {
 				makeEndpointSliceMap(fp, eps)
 			}
 			if tc.svc != nil && tc.eps != nil && tc.serviceInstalled {
-				mockRouteClient.EXPECT().AddNodePort(nodePortAddressesIPv4, uint16(svcNodePort), binding.ProtocolTCP)
+				mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddressesIPv4, uint16(svcNodePort), binding.ProtocolTCP)
 				mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), gomock.Any(), gomock.Any())
 				mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(2), gomock.Any(), gomock.Any())
 				mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any())

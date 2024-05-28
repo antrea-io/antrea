@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/runtime"
 )
 
@@ -133,4 +134,28 @@ func GetAntreaNamespace() string {
 // modes which support noEncap.
 func GetAllowNoEncapWithoutAntreaProxy() bool {
 	return getBoolEnvVar(allowNoEncapWithoutAntreaProxyEnvKey, false)
+}
+
+func GetKubeServiceHost() string {
+	kubeServiceHost := os.Getenv(k8s.KubeServiceHostEnvKey)
+	if kubeServiceHost == "" {
+		klog.Warningf("Environment variable %s not found", k8s.KubeServiceHostEnvKey)
+	}
+	return kubeServiceHost
+}
+
+func GetKubeServicePort() int32 {
+	kubeServicePortStr := os.Getenv(k8s.KubeServicePortEnvKey)
+
+	if kubeServicePortStr == "" {
+		klog.Warningf("Environment variable %s not found", k8s.KubeServicePortEnvKey)
+	} else {
+		parsedValue, err := strconv.ParseInt(kubeServicePortStr, 10, 16)
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse env variable", "variable", k8s.KubeServicePortEnvKey)
+			return 0
+		}
+		return int32(parsedValue)
+	}
+	return 0
 }

@@ -36,8 +36,8 @@ import (
 )
 
 const (
-	kubeServiceHostEnvKey = "KUBERNETES_SERVICE_HOST"
-	kubeServicePortEnvKey = "KUBERNETES_SERVICE_PORT"
+	KubeServiceHostEnvKey = "KUBERNETES_SERVICE_HOST"
+	KubeServicePortEnvKey = "KUBERNETES_SERVICE_PORT"
 )
 
 // CreateClients creates kube clients from the given config.
@@ -125,8 +125,8 @@ func OverrideKubeAPIServer(kubeAPIServerOverride string) {
 		host = hostPort
 		port = "443"
 	}
-	os.Setenv(kubeServiceHostEnvKey, host)
-	os.Setenv(kubeServicePortEnvKey, port)
+	os.Setenv(KubeServiceHostEnvKey, host)
+	os.Setenv(KubeServicePortEnvKey, port)
 }
 
 func EndpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {

@@ -235,6 +235,7 @@ func run(o *Options) error {
 	routeClient, err := route.NewClient(networkConfig,
 		o.config.NoSNAT,
 		o.config.AntreaProxy.ProxyAll,
+		o.config.KubeAPIServerOverride != "",
 		connectUplinkToBridge,
 		nodeNetworkPolicyEnabled,
 		multicastEnabled,
@@ -456,6 +457,7 @@ func run(o *Options) error {
 			o.defaultLoadBalancerMode,
 			v4GroupCounter,
 			v6GroupCounter,
+			o.config.KubeAPIServerOverride != "",
 			enableMulticlusterGW)
 		if err != nil {
 			return fmt.Errorf("error when creating proxier: %v", err)

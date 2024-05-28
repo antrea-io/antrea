@@ -108,12 +108,12 @@ func TestOverrideKubeAPIServer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(kubeServiceHostEnvKey, originalHost)
-			t.Setenv(kubeServicePortEnvKey, originalPort)
+			t.Setenv(KubeServiceHostEnvKey, originalHost)
+			t.Setenv(KubeServicePortEnvKey, originalPort)
 
 			OverrideKubeAPIServer(tt.kubeAPIServerOverride)
-			assert.Equal(t, tt.expectHost, os.Getenv(kubeServiceHostEnvKey))
-			assert.Equal(t, tt.expectPort, os.Getenv(kubeServicePortEnvKey))
+			assert.Equal(t, tt.expectHost, os.Getenv(KubeServiceHostEnvKey))
+			assert.Equal(t, tt.expectPort, os.Getenv(KubeServicePortEnvKey))
 		})
 	}
 }
