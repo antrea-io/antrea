@@ -33,6 +33,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util/ipset"
@@ -278,7 +279,7 @@ func (c *Client) syncRoute() error {
 	routeKeys := sets.New[routeKey]()
 	for i := range routeList {
 		r := &routeList[i]
-		if r.Dst == nil {
+		if r.Dst == nil || r.Dst.IP.IsUnspecified() {
 			continue
 		}
 		routeKeys.Insert(routeKey{
@@ -1918,29 +1919,37 @@ func (c *Client) DeleteRouteForLink(cidr *net.IPNet, linkIndex int) error {
 
 func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol binding.Protocol) error {
 	var protoVar uint8
-	var ipFamily netlink.InetFamily
+	var ipFamilyVar int
+	var zone uint16
 	switch protocol {
 	case binding.ProtocolTCP:
-		ipFamily = unix.AF_INET
+		ipFamilyVar = unix.AF_INET
 		protoVar = unix.IPPROTO_TCP
+		zone = openflow.CtZone
 	case binding.ProtocolTCPv6:
-		ipFamily = unix.AF_INET6
+		ipFamilyVar = unix.AF_INET6
 		protoVar = unix.IPPROTO_TCP
+		zone = openflow.CtZoneV6
 	case binding.ProtocolUDP:
-		ipFamily = unix.AF_INET
+		ipFamilyVar = unix.AF_INET
 		protoVar = unix.IPPROTO_UDP
+		zone = openflow.CtZone
 	case binding.ProtocolUDPv6:
-		ipFamily = unix.AF_INET6
+		ipFamilyVar = unix.AF_INET6
 		protoVar = unix.IPPROTO_UDP
+		zone = openflow.CtZoneV6
 	case binding.ProtocolSCTP:
-		ipFamily = unix.AF_INET
+		ipFamilyVar = unix.AF_INET
 		protoVar = unix.IPPROTO_SCTP
+		zone = openflow.CtZone
 	case binding.ProtocolSCTPv6:
-		ipFamily = unix.AF_INET6
+		ipFamilyVar = unix.AF_INET6
 		protoVar = unix.IPPROTO_SCTP
+		zone = openflow.CtZoneV6
 	}
 	filter := &netlink.ConntrackFilter{}
 	filter.AddProtocol(protoVar)
+	filter.AddZone(zone)
 	if svcIP != nil {
 		filter.AddIP(netlink.ConntrackOrigDstIP, svcIP)
 	}
@@ -1950,7 +1959,7 @@ func (c *Client) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, end
 	if endpointIP != nil {
 		filter.AddIP(netlink.ConntrackReplySrcIP, endpointIP)
 	}
-	_, err := c.netlink.ConntrackDeleteFilter(netlink.ConntrackTable, ipFamily, filter)
+	_, err := c.netlink.ConntrackDeleteFilter(netlink.ConntrackTableType(netlink.ConntrackTable), netlink.InetFamily(ipFamilyVar), filter)
 	return err
 }
 
