@@ -62,6 +62,13 @@ type Client struct {
 	nodeRoutes sync.Map
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
+	// serviceExternalIPReferences tracks the references of Service IP. The key is the Service IP and the value is
+	// the set of ServiceInfo strings. Because a Service could have multiple ports and each port will generate a
+	// ServicePort (which is the unit of the processing), a Service IP route may be required by several ServicePorts.
+	// With the references, we install the configurations for a Service IP exactly once as long as it's used by any
+	// ServicePorts and uninstall it exactly once when it's no longer used by any ServicePorts.
+	// It applies to externalIP and LoadBalancerIP.
+	serviceExternalIPReferences map[string]sets.Set[string]
 	// netNatStaticMappings caches Windows NetNat for NodePort.
 	netNatStaticMappings sync.Map
 	fwClient             *winfirewall.Client
@@ -81,12 +88,13 @@ func NewClient(networkConfig *config.NetworkConfig,
 	multicastEnabled bool,
 	serviceCIDRProvider servicecidr.Interface) (*Client, error) {
 	return &Client{
-		networkConfig:       networkConfig,
-		winnet:              &winnet.Handle{},
-		fwClient:            winfirewall.NewClient(),
-		noSNAT:              noSNAT,
-		proxyAll:            proxyAll,
-		serviceCIDRProvider: serviceCIDRProvider,
+		networkConfig:               networkConfig,
+		winnet:                      &winnet.Handle{},
+		fwClient:                    winfirewall.NewClient(),
+		noSNAT:                      noSNAT,
+		proxyAll:                    proxyAll,
+		serviceCIDRProvider:         serviceCIDRProvider,
+		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 	}, nil
 }
 
@@ -476,7 +484,7 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 }
 
 // TODO: nodePortAddresses is not supported currently.
-func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+func (c *Client) AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	netNatStaticMapping := &winnet.NetNatStaticMapping{
 		Name:         antreaNatNodePort,
 		ExternalIP:   net.ParseIP("0.0.0.0"),
@@ -493,7 +501,7 @@ func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol b
 	return nil
 }
 
-func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+func (c *Client) DeleteNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	key := fmt.Sprintf("%d-%s", port, protocol)
 	obj, found := c.netNatStaticMappings.Load(key)
 	if !found {
@@ -509,26 +517,45 @@ func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protoco
 	return nil
 }
 
-// AddExternalIPRoute adds a route entry that forwards traffic destined for the external IP to the Antrea gateway interface.
-func (c *Client) AddExternalIPRoute(externalIP net.IP) error {
+// AddExternalIPConfigs adds a route entry to forward traffic destined for the external Service IP to the Antrea
+// gateway interface.
+func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+	references, exists := c.serviceExternalIPReferences[externalIPStr]
+	if exists {
+		references.Insert(svcInfoStr)
+		return nil
+	}
+
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	gw := config.VirtualServiceIPv4
 	metric := winnet.MetricHigh
 	svcIPNet := util.NewIPNet(externalIP)
-
 	route := generateRoute(svcIPNet, gw, linkIndex, metric)
 	if err := c.winnet.ReplaceNetRoute(route); err != nil {
-		return fmt.Errorf("failed to install route for external IP %s: %w", externalIPStr, err)
+		return fmt.Errorf("failed to add route for external IP %s: %w", externalIPStr, err)
 	}
-	c.serviceRoutes.Store(externalIPStr, route)
 	klog.V(4).InfoS("Added route for external IP", "IP", externalIPStr)
+
+	references = sets.New[string](svcInfoStr)
+	c.serviceExternalIPReferences[externalIPStr] = references
+	c.serviceRoutes.Store(externalIPStr, route)
 	return nil
 }
 
-// DeleteExternalIPRoute deletes the route entry for the external IP.
-func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
+// DeleteExternalIPConfigs deletes the route entry to forward traffic destined for the external Service IP to the Antrea
+// gateway interface.
+func (c *Client) DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+	references, exists := c.serviceExternalIPReferences[externalIPStr]
+	if !exists || !references.Has(svcInfoStr) {
+		return nil
+	}
+	if references.Len() > 1 {
+		references.Delete(svcInfoStr)
+		return nil
+	}
+
 	route, found := c.serviceRoutes.Load(externalIPStr)
 	if !found {
 		klog.V(2).InfoS("Didn't find route for external IP", "IP", externalIPStr)
@@ -537,8 +564,10 @@ func (c *Client) DeleteExternalIPRoute(externalIP net.IP) error {
 	if err := c.winnet.RemoveNetRoute(route.(*winnet.Route)); err != nil {
 		return fmt.Errorf("failed to delete route for external IP %s: %w", externalIPStr, err)
 	}
-	c.serviceRoutes.Delete(externalIPStr)
 	klog.V(4).InfoS("Deleted route for external IP", "IP", externalIPStr)
+
+	delete(c.serviceExternalIPReferences, externalIPStr)
+	c.serviceRoutes.Delete(externalIPStr)
 	return nil
 }
 

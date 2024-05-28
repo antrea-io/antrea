@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -121,13 +120,6 @@ type proxier struct {
 	serviceHealthServer healthcheck.ServiceHealthServer
 	numLocalEndpoints   map[apimachinerytypes.NamespacedName]int
 
-	// serviceIPRouteReferences tracks the references of Service IP routes. The key is the Service IP and the value is
-	// the set of ServiceInfo strings. Because a Service could have multiple ports and each port will generate a
-	// ServicePort (which is the unit of the processing), a Service IP route may be required by several ServicePorts.
-	// With the references, we install a route exactly once as long as it's used by any ServicePorts and uninstall it
-	// exactly once when it's no longer used by any ServicePorts.
-	// It applies to ClusterIP and LoadBalancerIP.
-	serviceIPRouteReferences map[string]sets.Set[string]
 	// syncedOnce returns true if the proxier has synced rules at least once.
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
@@ -569,10 +561,10 @@ func (p *proxier) installNodePortService(localGroupID, clusterGroupID binding.Gr
 		IsNested:           false, // Unsupported for NodePort
 		IsDSR:              false, // Unsupported because external traffic has been DNAT'd in host network before it's forwarded to OVS.
 	}); err != nil {
-		return fmt.Errorf("failed to install NodePort load balancing flows: %w", err)
+		return fmt.Errorf("failed to install NodePort load balancing OVS flows: %w", err)
 	}
-	if err := p.routeClient.AddNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to install NodePort traffic redirecting rules: %w", err)
+	if err := p.routeClient.AddNodePortConfigs(p.nodePortAddresses, svcPort, protocol); err != nil {
+		return fmt.Errorf("failed to install NodePort traffic redirecting routing configurations: %w", err)
 	}
 	return nil
 }
@@ -588,8 +580,8 @@ func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Prot
 	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
 		return fmt.Errorf("failed to remove NodePort load balancing flows: %w", err)
 	}
-	if err := p.routeClient.DeleteNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to remove NodePort traffic redirecting rules: %w", err)
+	if err := p.routeClient.DeleteNodePortConfigs(p.nodePortAddresses, svcPort, protocol); err != nil {
+		return fmt.Errorf("failed to remove NodePort traffic redirecting routing configurations: %w", err)
 	}
 	return nil
 }
@@ -618,10 +610,10 @@ func (p *proxier) installExternalIPService(svcInfoStr string,
 			IsNested:           false, // Unsupported for ExternalIP
 			IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
 		}); err != nil {
-			return fmt.Errorf("failed to install ExternalIP load balancing flows: %w", err)
+			return fmt.Errorf("failed to install ExternalIP load balancing OVS flows: %w", err)
 		}
-		if err := p.addRouteForServiceIP(svcInfoStr, ip, p.routeClient.AddExternalIPRoute); err != nil {
-			return fmt.Errorf("failed to install ExternalIP traffic redirecting routes: %w", err)
+		if err := p.routeClient.AddExternalIPConfigs(svcInfoStr, ip); err != nil {
+			return fmt.Errorf("failed to install ExternalIP load balancing routing configurations: %w", err)
 		}
 	}
 	return nil
@@ -631,10 +623,10 @@ func (p *proxier) uninstallExternalIPService(svcInfoStr string, externalIPString
 	for _, externalIP := range externalIPStrings {
 		ip := net.ParseIP(externalIP)
 		if err := p.ofClient.UninstallServiceFlows(ip, svcPort, protocol); err != nil {
-			return fmt.Errorf("failed to remove ExternalIP load balancing flows: %w", err)
+			return fmt.Errorf("failed to remove ExternalIP load balancing OVS flows: %w", err)
 		}
-		if err := p.deleteRouteForServiceIP(svcInfoStr, ip, p.routeClient.DeleteExternalIPRoute); err != nil {
-			return fmt.Errorf("failed to remove ExternalIP traffic redirecting routes: %w", err)
+		if err := p.routeClient.DeleteExternalIPConfigs(svcInfoStr, ip); err != nil {
+			return fmt.Errorf("failed to remove ExternalIP traffic redirecting routing configurations: %w", err)
 		}
 	}
 	return nil
@@ -665,31 +657,14 @@ func (p *proxier) installLoadBalancerService(svcInfoStr string,
 				IsNested:           false, // Unsupported for LoadBalancerIP
 				IsDSR:              features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && loadBalancerMode == agentconfig.LoadBalancerModeDSR,
 			}); err != nil {
-				return fmt.Errorf("failed to install LoadBalancer load balancing flows: %w", err)
+				return fmt.Errorf("failed to install LoadBalancerIP load balancing OVS flows: %w", err)
 			}
 			if p.proxyAll {
-				if err := p.addRouteForServiceIP(svcInfoStr, ip, p.routeClient.AddExternalIPRoute); err != nil {
-					return fmt.Errorf("failed to install LoadBalancer traffic redirecting routes: %w", err)
+				if err := p.routeClient.AddExternalIPConfigs(svcInfoStr, ip); err != nil {
+					return fmt.Errorf("failed to install LoadBalancerIP traffic redirecting routing configurations: %w", err)
 				}
 			}
 		}
-	}
-	return nil
-}
-
-func (p *proxier) addRouteForServiceIP(svcInfoStr string, ip net.IP, addRouteFn func(net.IP) error) error {
-	ipStr := ip.String()
-	references, exists := p.serviceIPRouteReferences[ipStr]
-	// If the IP was not referenced by any Service port, install a route for it.
-	// Otherwise, just reference it.
-	if !exists {
-		if err := addRouteFn(ip); err != nil {
-			return err
-		}
-		references = sets.New[string](svcInfoStr)
-		p.serviceIPRouteReferences[ipStr] = references
-	} else {
-		references.Insert(svcInfoStr)
 	}
 	return nil
 }
@@ -699,32 +674,13 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 		if ingress != "" {
 			ip := net.ParseIP(ingress)
 			if err := p.ofClient.UninstallServiceFlows(ip, svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove LoadBalancer load balancing flows: %w", err)
+				return fmt.Errorf("failed to remove LoadBalancerIP load balancing OVS flows: %w", err)
 			}
 			if p.proxyAll {
-				if err := p.deleteRouteForServiceIP(svcInfoStr, ip, p.routeClient.DeleteExternalIPRoute); err != nil {
-					return fmt.Errorf("failed to remove LoadBalancer traffic redirecting routes: %w", err)
+				if err := p.routeClient.DeleteExternalIPConfigs(svcInfoStr, ip); err != nil {
+					return fmt.Errorf("failed to remove LoadBalancerIP traffic redirecting routing configurations: %w", err)
 				}
 			}
-		}
-	}
-	return nil
-}
-
-func (p *proxier) deleteRouteForServiceIP(svcInfoStr string, ip net.IP, deleteRouteFn func(net.IP) error) error {
-	ipStr := ip.String()
-	references, exists := p.serviceIPRouteReferences[ipStr]
-	// If the IP was not referenced by this Service port, skip it.
-	if exists && references.Has(svcInfoStr) {
-		// Delete the IP only if this Service port is the last one referencing it.
-		// Otherwise, just dereference it.
-		if references.Len() == 1 {
-			if err := deleteRouteFn(ip); err != nil {
-				return err
-			}
-			delete(p.serviceIPRouteReferences, ipStr)
-		} else {
-			references.Delete(svcInfoStr)
 		}
 	}
 	return nil
@@ -1454,7 +1410,6 @@ func newProxier(
 		endpointsInstalledMap:       types.EndpointsMap{},
 		endpointsMap:                types.EndpointsMap{},
 		endpointReferenceCounter:    map[string]int{},
-		serviceIPRouteReferences:    map[string]sets.Set[string]{},
 		nodeLabels:                  map[string]string{},
 		serviceStringMap:            map[string]k8sproxy.ServicePortName{},
 		groupCounter:                groupCounter,
