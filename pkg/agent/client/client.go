@@ -83,7 +83,7 @@ func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeCl
 
 	var endpointResolver *EndpointResolver
 	if len(config.Kubeconfig) == 0 {
-		klog.InfoS("No antrea kubeconfig file was specified. Falling back to in-cluster config")
+		klog.InfoS("No Antrea kubeconfig file was specified. Falling back to in-cluster config")
 		port := os.Getenv("ANTREA_SERVICE_PORT")
 		if len(port) == 0 {
 			return nil, fmt.Errorf("unable to create Endpoint resolver for Antrea Service, ANTREA_SERVICE_PORT must be defined for in-cluster config")
@@ -183,9 +183,9 @@ func (p *antreaClientProvider) updateAntreaClient() error {
 	return nil
 }
 
-// inClusterConfig returns a config object which uses the service account kubernetes gives to
-// pods. It's intended for clients that expect to be running inside a pod running on kubernetes. It
-// will return error if called from a process not running in a kubernetes environment.
+// inClusterConfig returns a config object which uses the service account Kubernetes gives to
+// Pods. It's intended for clients that expect to be running inside a Pod running on Kubernetes. It
+// will return error if called from a process not running in a Kubernetes environment.
 func inClusterConfig(caBundle []byte, endpoint string) (*rest.Config, error) {
 	// #nosec G101: false positive triggered by variable name which includes "token"
 	const tokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"

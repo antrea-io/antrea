@@ -55,7 +55,7 @@ type Listener interface {
 // EndpointResolver is in charge of resolving a specific Service Endpoint, which can then be
 // accessed directly instead of depending on the ClusterIP functionality provided by K8s proxies
 // (whether it's kube-proxy or AntreaProxy). A new Endpoint is resolved every time the Service's
-// Spec or the Ednpoints' Subsets are updated, and registered listeners are notified. While this
+// Spec or the Endpoints' Subsets are updated, and registered listeners are notified. While this
 // EndpointResolver is somewhat generic, at the moment it is only meant to be used for the Antrea
 // Service.
 type EndpointResolver struct {
