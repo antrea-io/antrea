@@ -509,7 +509,7 @@ func startSuricata() {
 	}
 	// Start Suricata with default Suricata config file /etc/suricata/suricata.yaml.
 	cmd := exec.Command("suricata", "-c", defaultSuricataConfigPath, "--af-packet", "-D", "-l", antreaSuricataLogPath)
-	if err := cmd.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		klog.ErrorS(err, "Failed to start Suricata instance")
 	}
 }
