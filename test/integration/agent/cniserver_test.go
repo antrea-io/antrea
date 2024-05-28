@@ -334,7 +334,8 @@ func matchRoute(expectedCIDR string, routes []netlink.Route) (*netlink.Route, er
 		return nil, err
 	}
 	for _, route := range routes {
-		if route.Dst == nil && route.Src == nil && route.Gw.Equal(gwIP) {
+		// For default route, `Dst` is 0.0.0.0/0 or ::/0, rather than nil.
+		if route.Dst != nil && route.Dst.IP.IsUnspecified() && route.Src == nil && route.Gw.Equal(gwIP) {
 			return &route, nil
 		}
 	}
