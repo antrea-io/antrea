@@ -23,6 +23,8 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"antrea.io/antrea/pkg/agent/util/ipset"
 )
 
 type iptablesRule struct {
@@ -67,20 +69,38 @@ func (b *iptablesRuleBuilder) MatchCIDRDst(cidr string) IPTablesRuleBuilder {
 	return b
 }
 
-func (b *iptablesRuleBuilder) MatchIPSetSrc(ipset string) IPTablesRuleBuilder {
-	if ipset == "" {
+func (b *iptablesRuleBuilder) MatchIPSetSrc(ipsetName string, ipsetType ipset.SetType) IPTablesRuleBuilder {
+	if ipsetName == "" {
 		return b
 	}
-	matchStr := fmt.Sprintf("-m set --match-set %s src", ipset)
+	var typeStr string
+	switch ipsetType {
+	case ipset.HashNet:
+		fallthrough
+	case ipset.HashIP:
+		typeStr = "src"
+	case ipset.HashIPPort:
+		typeStr = "src,src"
+	}
+	matchStr := fmt.Sprintf("-m set --match-set %s %s", ipsetName, typeStr)
 	b.writeSpec(matchStr)
 	return b
 }
 
-func (b *iptablesRuleBuilder) MatchIPSetDst(ipset string) IPTablesRuleBuilder {
-	if ipset == "" {
+func (b *iptablesRuleBuilder) MatchIPSetDst(ipsetName string, ipsetType ipset.SetType) IPTablesRuleBuilder {
+	if ipsetName == "" {
 		return b
 	}
-	matchStr := fmt.Sprintf("-m set --match-set %s dst", ipset)
+	var typeStr string
+	switch ipsetType {
+	case ipset.HashNet:
+		fallthrough
+	case ipset.HashIP:
+		typeStr = "dst"
+	case ipset.HashIPPort:
+		typeStr = "dst,dst"
+	}
+	matchStr := fmt.Sprintf("-m set --match-set %s %s", ipsetName, typeStr)
 	b.writeSpec(matchStr)
 	return b
 }
@@ -94,7 +114,7 @@ func (b *iptablesRuleBuilder) MatchTransProtocol(protocol string) IPTablesRuleBu
 	return b
 }
 
-func (b *iptablesRuleBuilder) MatchDstPort(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder {
+func (b *iptablesRuleBuilder) MatchPortDst(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder {
 	if port == nil {
 		return b
 	}
@@ -108,7 +128,7 @@ func (b *iptablesRuleBuilder) MatchDstPort(port *intstr.IntOrString, endPort *in
 	return b
 }
 
-func (b *iptablesRuleBuilder) MatchSrcPort(port, endPort *int32) IPTablesRuleBuilder {
+func (b *iptablesRuleBuilder) MatchPortSrc(port, endPort *int32) IPTablesRuleBuilder {
 	if port == nil {
 		return b
 	}
@@ -175,6 +195,21 @@ func (b *iptablesRuleBuilder) SetTarget(target string) IPTablesRuleBuilder {
 	}
 	targetStr := fmt.Sprintf("-j %s", target)
 	b.writeSpec(targetStr)
+	return b
+}
+
+func (b *iptablesRuleBuilder) SetTargetDNATToDst(dnatIP string, dnatPort *int32) IPTablesRuleBuilder {
+	if dnatIP == "" {
+		return b
+	}
+	var dstStr string
+	if dnatPort != nil {
+		dstStr = fmt.Sprintf("%s:%d", dnatIP, *dnatPort)
+	} else {
+		dstStr = dnatIP
+	}
+	specStr := fmt.Sprintf("--to-destination %s", dstStr)
+	b.writeSpec(specStr)
 	return b
 }
 
