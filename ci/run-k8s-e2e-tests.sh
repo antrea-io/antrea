@@ -25,6 +25,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
+RANCHER=false
 RUN_CONFORMANCE=false
 RUN_WHOLE_CONFORMANCE=false
 RUN_NETWORK_POLICY=false
@@ -64,6 +65,7 @@ least one failed) and 2 (internal error when running tests, not a test failure).
         --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --image-pull-policy                                       The ImagePullPolicy Sonobuoy should use for the aggregators and workers. (default Always)
         --sonobuoy-image SonobuoyImage                            Sonobuoy image to use. Default is $SONOBUOY_IMAGE.
+        --rancher-testbed                                         Use the flag to specify that the cluster is a Rancher cluster.
         --help, -h                                                Print this message and exit
 
 This tool uses sonobuoy (https://github.com/vmware-tanzu/sonobuoy) to run the K8s e2e community
@@ -137,6 +139,11 @@ case $key in
     --systemd-logs-image)
     SYSTEMD_LOGS_IMAGE="$2"
     shift 2
+    ;;
+    --rancher-testbed)
+    RANCHER=true
+    DEFAULT_E2E_CONFORMANCE_SKIP="${DEFAULT_E2E_CONFORMANCE_SKIP}|\[Feature:Ingress\]|\[Feature:NEG\]|\[Feature:kubemci\]"
+    shift
     ;;
     -h|--help)
     print_usage
