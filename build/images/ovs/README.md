@@ -17,5 +17,12 @@ cd build/images/ovs
 ./build.sh --pull --push
 ```
 
+To build Windows OVS image, you can follow these steps.
+
+```bash
+cd build/images/ovs
+./build.sh --distro windows --push
+```
+
 The script will fail if you do not have permission to push to the `antrea`
 Dockerhub repository.

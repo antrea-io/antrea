@@ -12,45 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG WIN_BUILD_TAG
-ARG NANOSERVER_VERSION
-ARG WIN_BUILD_OVS_TAG
+ARG GO_VERSION
+ARG OVS_VERSION
 
-FROM antrea/base-windows:${WIN_BUILD_TAG} as antrea-build-windows
+FROM --platform=linux/amd64 golang:${GO_VERSION} as antrea-build-windows
+ARG CNI_BINARIES_VERSION
+ENV CNI_PLUGINS="./host-local.exe"
 
 WORKDIR /antrea
 
-COPY go.mod /antrea/go.mod
+ADD https://github.com/containernetworking/plugins/releases/download/${CNI_BINARIES_VERSION}/cni-plugins-windows-amd64-${CNI_BINARIES_VERSION}.tgz cni-plugins-windows-amd64.tgz
+RUN mkdir -p /go/k/antrea/cni && \
+    tar -xzf cni-plugins-windows-amd64.tgz -C /go/k/antrea/cni ${CNI_PLUGINS} && \
+    rm cni-plugins-windows-amd64.tgz
 
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=bind,source=go.mod,target=go.mod \
+    go mod download
 
 COPY . /antrea
 
-RUN sh -c 'make windows-bin'
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=cache,target=/root/.cache/go-build/ \
+    make windows-bin
 
-FROM antrea/windows-ovs:${WIN_BUILD_OVS_TAG} as windows-ovs
+RUN mkdir -p /go/k/antrea/bin && \
+    cp /antrea/bin/antrea-agent.exe /go/k/antrea/bin/ && \
+    cp /antrea/bin/antctl.exe /go/k/antrea/bin/ && \
+    cp /antrea/bin/antrea-cni.exe /go/k/antrea/cni/antrea.exe
 
-FROM mcr.microsoft.com/powershell:lts-nanoserver-${NANOSERVER_VERSION}
-SHELL ["pwsh", "-NoLogo", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+FROM antrea/windows-ovs:${OVS_VERSION} as antrea-ovs
 
-LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image to deploy the Antrea CNI."
+FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:v1.0.0
+COPY --from=antrea-build-windows /go/k /k
+COPY --from=antrea-ovs /openvswitch /openvswitch
 
-USER ContainerAdministrator
-
-RUN mkdir -Force C:\k\antrea\bin
-COPY --from=antrea-build-windows  /opt/cni/bin /k/antrea/cni
-COPY --from=antrea-build-windows  /antrea/build/images/scripts/Install-WindowsCNI.ps1 /k/antrea/
-COPY --from=antrea-build-windows  /antrea/bin/antrea-agent.exe /k/antrea/bin/
-COPY --from=antrea-build-windows  /antrea/bin/antctl.exe /k/antrea/bin/antctl.exe
-COPY --from=antrea-build-windows  /antrea/bin/antrea-cni.exe /k/antrea/cni/antrea.exe
-
-RUN mkdir C:\k\antrea\utils
-COPY --from=antrea-build-windows /wins/wins.exe /k/antrea/utils/wins.exe
-
-COPY --from=windows-ovs /Windows/System32/vcruntime140.dll /Windows/System32/
-COPY --from=windows-ovs /Windows/System32/libeay32.dll /Windows/System32/
-COPY --from=windows-ovs /Windows/System32/ssleay32.dll /Windows/System32/
-
-RUN mkdir C:\openvswitch
-COPY --from=windows-ovs /openvswitch /openvswitch/
+ENV PATH="C:\Windows\system32;C:\Windows;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\wbem;"

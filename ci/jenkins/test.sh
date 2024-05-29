@@ -393,13 +393,12 @@ function  build_and_deliver_antrea_windows_and_linux_images {
 
     cp -f build/yamls/*.yml $WORKDIR
     set +e
-    deliver_antrea_windows &> deliver_antrea_windows.log &
-    deliver_antrea_windows=$!
+    deliver_antrea_windows
+    windows_result=$?
     deliver_antrea_linux
     linux_result=$?
     wait $deliver_antrea_linux
-    windows_result=$?
-    cat deliver_antrea_windows.log
+    wait $deliver_antrea_windows
     if [ $windows_result -ne 0 ] || [ $linux_result -ne 0 ]; then
         exit 1
     fi
@@ -455,21 +454,14 @@ function deliver_antrea_linux {
 }
 
 function deliver_antrea_windows {
-    echo "===== Build Antrea Windows on Windows Jumper Node ====="
-    echo "==== Reverting Windows VM ${WIN_IMAGE_NODE} ====="
-    revert_snapshot_windows ${WIN_IMAGE_NODE}
+    echo "===== Build Antrea Windows ====="
     rm -f antrea-windows.tar.gz
-    # Compress antrea repo and copy it to a Windows node
-    mkdir -p jenkins
-    tar --exclude='./jenkins' -czf jenkins/antrea_repo.tar.gz -C "$(pwd)" .
-    for i in `seq 2`; do
-        timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
-    done
-    ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver && docker tag ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver golang:${GO_VERSION}-nanoserver"
-    ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && NO_PULL=${NO_PULL}; DOCKER_NETWORK=host make build-windows && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
-    for i in `seq 2`; do
-        timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
-    done
+    make build-windows
+    if ! (test -f antrea-windows.tar); then
+        echo "antrea-windows.tar wasn't built, exiting"
+        exit 1
+    fi
+    gzip -f antrea-windows.tar
 
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
@@ -488,22 +480,17 @@ function deliver_antrea_windows {
         for i in "${!k8s_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ctr -n k8s.io images pull ${k8s_images[i]} && ctr -n k8s.io images tag ${k8s_images[i]} ${e2e_images[i]}" || true
         done
-        if ! (test -f antrea-windows.tar.gz); then
-            echo "Windows VM ${WIN_IMAGE_NODE} didn't build antrea-windows.tar.gz, exiting"
-            exit 1
-        else
-            for i in `seq 2`; do
-                timeout 2m scp -o StrictHostKeyChecking=no -T antrea-windows.tar.gz Administrator@${IP}: && break
-            done
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
-        fi
+
+        for i in `seq 2`; do
+            timeout 2m scp -o StrictHostKeyChecking=no -T antrea-windows.tar.gz Administrator@${IP}: && break
+        done
+        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
     done
     # Add Windows interface DHCP check using CI script to obtain the original interface status.
     WINIP=$(kubectl get nodes -o wide --no-headers=true | awk '$1 ~ /win-0/ {print $6}')
     WIN_DHCP=$(ssh -o StrictHostKeyChecking=no -n administrator@${WINIP} 'powershell.exe "(Get-NetIPInterface -InterfaceAlias \"Ethernet0 2\" -AddressFamily IPv4).Dhcp"')
     echo "Original adapter DHCP status: $WIN_DHCP"
     echo $WIN_DHCP > WIN_DHCP
-    rm -f antrea-windows.tar
     echo "==== Finish building and delivering Windows images ===="
 }
 

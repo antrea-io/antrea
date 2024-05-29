@@ -17,6 +17,27 @@ data:
       }
       Write-Host "OVSExt driver has been installed"
     }
+
+    # Check if the VC redistributable is already installed.
+    $OVSRedistDir="$mountPath\openvswitch\redist"
+    if (Test-Path $OVSRedistDir) {
+      $dllFound = $false
+      $paths = $env:PATH -split ';'
+      foreach ($path in $paths) {
+        $dllFiles = Get-ChildItem -Path $path -Filter "vcruntime*.dll" -File -ErrorAction SilentlyContinue
+        if ($dllFiles.Count -gt 0) {
+          $dllFound = $true
+          break
+        }
+      }
+
+      # vcruntime dlls are not installed on the host, then install the binaries.
+      if (-not $dllFound) {
+        Get-ChildItem $OVSRedistDir -Filter *.exe | ForEach-Object {
+          Start-Process -FilePath $_.FullName -Args '/install /passive /norestart' -Verb RunAs -Wait
+        }
+      }
+    }
   Install-WindowsCNI.ps1: |
     $ErrorActionPreference = "Stop";
     mkdir -force c:/var/log/antrea
@@ -303,7 +324,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: 3a8371fd1b923b1176641950074efc943c326c1638293f84ba16bbeec889ce2d
+        checksum/agent-windows: da4b49898e3181dfcb6359f2b2acba452c2ff9a17af8342b6cccb73e8857aad6
         checksum/windows-config: 6ff4f8bd0b310ebe4d4612bdd9697ffb3d79e0e0eab3936420417dd5a8fc128d
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
