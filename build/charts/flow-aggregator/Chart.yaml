@@ -5,7 +5,7 @@ displayName: Antrea Flow Aggregator
 home: https://antrea.io/
 version: 0.0.0
 appVersion: latest
-kubeVersion: ">= 1.16.0-0"
+kubeVersion: ">= 1.19.0-0"
 icon: https://raw.githubusercontent.com/antrea-io/antrea/main/docs/assets/logo/antrea_logo.svg
 description: Antrea Flow Aggregator
 keywords:
