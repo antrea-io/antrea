@@ -63,7 +63,7 @@ type NodeLatencyMonitor struct {
 	// latencyStore is the cache to store the latency of each Nodes.
 	latencyStore *LatencyStore
 	// latencyConfigChanged is the channel to notify the latency config changed.
-	latencyConfigChanged chan LatencyConfig
+	latencyConfigChanged chan latencyConfig
 	// isIPv4Enabled is the flag to indicate whether the IPv4 is enabled.
 	isIPv4Enabled bool
 	// isIPv6Enabled is the flag to indicate whether the IPv6 is enabled.
@@ -75,8 +75,8 @@ type NodeLatencyMonitor struct {
 	nodeLatencyMonitorInformer crdinformers.NodeLatencyMonitorInformer
 }
 
-// LatencyConfig is the config for the latency monitor.
-type LatencyConfig struct {
+// latencyConfig is the config for the latency monitor.
+type latencyConfig struct {
 	// Enable is the flag to enable the latency monitor.
 	Enable bool
 	// Interval is the interval time to ping all Nodes.
@@ -90,7 +90,7 @@ func NewNodeLatencyMonitor(nodeInformer coreinformers.NodeInformer,
 	trafficEncapMode config.TrafficEncapModeType) *NodeLatencyMonitor {
 	m := &NodeLatencyMonitor{
 		latencyStore:               NewLatencyStore(trafficEncapMode.IsNetworkPolicyOnly()),
-		latencyConfigChanged:       make(chan LatencyConfig),
+		latencyConfigChanged:       make(chan latencyConfig),
 		nodeInformer:               nodeInformer,
 		nodeLatencyMonitorInformer: nlmInformer,
 		nodeName:                   nodeConfig.Name,
@@ -157,10 +157,10 @@ func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
 			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Node object", "obj", deletedState.Obj)
 			return
 		}
+	}
 
-		if m.isCurrentNode(node) {
-			return
-		}
+	if m.isCurrentNode(node) {
+		return
 	}
 
 	m.latencyStore.deleteNode(node)
@@ -191,7 +191,7 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorUpdate(oldObj, newObj interface
 func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonitor) {
 	pingInterval := time.Duration(nlm.Spec.PingIntervalSeconds) * time.Second
 
-	latencyConfig := LatencyConfig{
+	latencyConfig := latencyConfig{
 		Enable:   true,
 		Interval: pingInterval,
 	}
@@ -202,7 +202,7 @@ func (m *NodeLatencyMonitor) updateLatencyConfig(nlm *v1alpha1.NodeLatencyMonito
 // onNodeLatencyMonitorDelete is the event handler for deleting NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
 	klog.V(4).InfoS("NodeLatencyMonitor deleted")
-	latencyConfig := LatencyConfig{Enable: false}
+	latencyConfig := latencyConfig{Enable: false}
 
 	m.latencyConfigChanged <- latencyConfig
 }
@@ -288,7 +288,7 @@ func (m *NodeLatencyMonitor) recvPing(socket net.PacketConn, isIPv4 bool) {
 				continue
 			}
 		} else {
-			msg, err = icmp.ParseMessage(protocolICMPv6, readBuffer)
+			msg, err = icmp.ParseMessage(protocolICMPv6, readBuffer[:n])
 			if err != nil {
 				klog.ErrorS(err, "Failed to parse ICMP message")
 				continue
@@ -344,11 +344,11 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	for _, toIP := range nodeIPs {
 		if toIP.To4() != nil && ipv4Socket != nil {
 			if err := m.sendPing(ipv4Socket, toIP); err != nil {
-				klog.ErrorS(err, "Cannot send ICMP message to Node IP because socket is not initialized for IPv4", "IP", toIP)
+				klog.ErrorS(err, "Cannot send ICMP message to Node IP", "IP", toIP)
 			}
 		} else if toIP.To16() != nil && ipv6Socket != nil {
 			if err := m.sendPing(ipv6Socket, toIP); err != nil {
-				klog.ErrorS(err, "Cannot send ICMP message to Node IP because socket is not initialized for IPv6", "IP", toIP)
+				klog.ErrorS(err, "Cannot send ICMP message to Node IP", "IP", toIP)
 			}
 		} else {
 			klog.ErrorS(nil, "Cannot send ICMP message to Node IP because socket is not initialized for IP family", "IP", toIP)

@@ -308,7 +308,7 @@ type NodeLatencyMonitor struct {
 
 type NodeLatencyMonitorSpec struct {
 	// PingInterval specifies the interval in seconds between ping requests.
-	// Ping interval should be greater than or equal to 1s(one second).
+	// Ping interval should be greater than or equal to 1s.
 	PingIntervalSeconds int32 `json:"pingIntervalSeconds"`
 }
 
