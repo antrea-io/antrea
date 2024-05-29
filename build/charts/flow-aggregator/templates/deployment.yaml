@@ -29,7 +29,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         {{- if ((.Values.testing).coverage) }}
         args:
-          - flow-aggregator-coverage
+          - flow-aggregator
           - --config=/etc/flow-aggregator/flow-aggregator.conf
           - --logtostderr=false
           - --log_dir=/var/log/antrea/flow-aggregator

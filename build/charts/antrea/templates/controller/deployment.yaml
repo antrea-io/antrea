@@ -65,7 +65,7 @@ spec:
           resources: {{- .Values.controller.antreaController.resources | toYaml | nindent 12 }}
           {{- if ((.Values.testing).coverage) }}
           args:
-            - "antrea-controller-coverage"
+            - "antrea-controller"
             - "--config=/etc/antrea/antrea-controller.conf"
             - "--logtostderr=false"
             - "--log_dir=/var/log/antrea"

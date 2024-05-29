@@ -24,9 +24,9 @@ RUN go mod download
 
 COPY . /antrea
 
-RUN make antctl-linux antctl-instr-binary && mv bin/antctl-linux bin/antctl
+RUN make antctl-instr-binary
 
-RUN make antrea-agent antrea-cni antrea-agent-instr-binary
+RUN make antrea-cni antrea-agent-instr-binary
 
 FROM antrea/base-ubuntu:${BUILD_TAG}
 
@@ -36,11 +36,9 @@ LABEL description="The Docker image to deploy the antrea-agent with code coverag
 USER root
 
 COPY build/images/scripts/* /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antrea-agent /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antrea-agent-coverage /usr/local/bin/
+COPY --from=antrea-build /antrea/bin/antrea-agent-coverage /usr/local/bin/antrea-agent
 COPY --from=antrea-build /antrea/bin/antrea-cni /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antctl /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/
+COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=antrea-build /antrea/test/e2e/utils/run_cov_binary.sh /
 
 # This environment variable will persist when running the container, but can also be overwritten if needed

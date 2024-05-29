@@ -114,10 +114,7 @@ const (
 	defaultBridgeName       = "br-int"
 	monitoringNamespace     = "monitoring"
 
-	antreaControllerCovBinary = "antrea-controller-coverage"
-	antreaAgentCovBinary      = "antrea-agent-coverage"
-	flowAggregatorCovBinary   = "flow-aggregator-coverage"
-	cpNodeCoverageDir         = "/tmp/antrea-e2e-coverage"
+	cpNodeCoverageDir = "/tmp/antrea-e2e-coverage"
 
 	antreaAgentConfName      = "antrea-agent.conf"
 	antreaControllerConfName = "antrea-controller.conf"
@@ -2681,7 +2678,7 @@ func (data *TestData) gracefulExitAntreaController(covDir string) error {
 	}
 	podName := antreaController.Name
 
-	if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-controller", antreaControllerCovBinary, covDir); err != nil {
+	if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-controller", "antrea-controller", covDir); err != nil {
 		return fmt.Errorf("error when gracefully exiting Antrea Controller: %w", err)
 	}
 
@@ -2703,7 +2700,7 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	}
 	for _, pod := range pods.Items {
 		podName := pod.Name
-		if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-agent", antreaAgentCovBinary, covDir); err != nil {
+		if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-agent", "antrea-agent", covDir); err != nil {
 			return fmt.Errorf("error when gracefully exiting Antrea Agent: %w", err)
 		}
 	}
@@ -2718,7 +2715,7 @@ func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
 	}
 	podName := flowAggPod.Name
 
-	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", flowAggregatorCovBinary, covDir); err != nil {
+	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
 		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
 	}
 
