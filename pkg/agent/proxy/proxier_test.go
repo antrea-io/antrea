@@ -1626,6 +1626,7 @@ func testNodePortRemove(t *testing.T, bindingProtocol binding.Protocol, isIPv6 b
 	if needClearConntrackEntries(bindingProtocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, bindingProtocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcNodePortIP, uint16(svcNodePort), nil, bindingProtocol)
+		mockRouteClient.EXPECT().ClearConntrackEntryForService(vIP, uint16(svcNodePort), nil, bindingProtocol)
 		if externalIP != nil {
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(externalIP, uint16(svcPort), nil, bindingProtocol)
 		}
@@ -1764,6 +1765,7 @@ func testLoadBalancerRemove(t *testing.T, bindingProtocol binding.Protocol, isIP
 	if needClearConntrackEntries(bindingProtocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, bindingProtocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcNodePortIP, uint16(svcNodePort), nil, bindingProtocol)
+		mockRouteClient.EXPECT().ClearConntrackEntryForService(vIP, uint16(svcNodePort), nil, bindingProtocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(loadBalancerIP, uint16(svcPort), nil, bindingProtocol)
 		if externalIP != nil {
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(externalIP, uint16(svcPort), nil, bindingProtocol)
