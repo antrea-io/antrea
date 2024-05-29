@@ -37,6 +37,12 @@ func (a EgressDenyAllConnectivityTest) Run(ctx context.Context, testContext *tes
 	if err := applyEgressDenyAll(ctx, testContext.client, testContext.namespace); err != nil {
 		return err
 	}
+	defer func() {
+		if err := testContext.client.NetworkingV1().NetworkPolicies(testContext.namespace).Delete(ctx, "egress-deny-all", metav1.DeleteOptions{}); err != nil {
+			testContext.Log("NetworkPolicy deletion is unsuccessful: %v", err)
+		}
+		testContext.Log("NetworkPolicy deletion is successful")
+	}()
 	testContext.Log("NetworkPolicy applied successfully")
 	for _, clientPod := range testContext.clientPods {
 		for _, service := range services {
@@ -47,10 +53,6 @@ func (a EgressDenyAllConnectivityTest) Run(ctx context.Context, testContext *tes
 			}
 		}
 	}
-	if err := testContext.client.NetworkingV1().NetworkPolicies(testContext.namespace).Delete(ctx, "egress-deny-all", metav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("NetworkPolicy deletion failed: %w", err)
-	}
-	testContext.Log("NetworkPolicy deletion successful")
 	return nil
 }
 

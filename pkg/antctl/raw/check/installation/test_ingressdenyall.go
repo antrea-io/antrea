@@ -31,14 +31,21 @@ func init() {
 
 func (a IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
 	values := []string{echoSameNodeDeploymentName}
+	services := []string{echoSameNodeDeploymentName}
 	if testContext.echoOtherNodePod != nil {
 		values = append(values, echoOtherNodeDeploymentName)
+		services = append(services, echoOtherNodeDeploymentName)
 	}
 	if err := applyIngressDenyAll(ctx, testContext.client, testContext.namespace, values); err != nil {
 		return err
 	}
+	defer func() {
+		if err := testContext.client.NetworkingV1().NetworkPolicies(testContext.namespace).Delete(ctx, "ingress-deny-all", metav1.DeleteOptions{}); err != nil {
+			testContext.Log("NetworkPolicy deletion is unsuccessful: %v", err)
+		}
+		testContext.Log("NetworkPolicy deletion is successful")
+	}()
 	testContext.Log("NetworkPolicy applied successfully")
-	services := []string{echoSameNodeDeploymentName, echoOtherNodeDeploymentName}
 	for _, clientPod := range testContext.clientPods {
 		for _, service := range services {
 			if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", service, 80); err != nil {
@@ -48,10 +55,6 @@ func (a IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *te
 			}
 		}
 	}
-	if err := testContext.client.NetworkingV1().NetworkPolicies(testContext.namespace).Delete(ctx, "ingress-deny-all", metav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("NetworkPolicy deletion failed: %w", err)
-	}
-	testContext.Log("NetworkPolicy deletion successful")
 	return nil
 }
 
