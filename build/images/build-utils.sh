@@ -41,3 +41,39 @@ function check_docker_build_driver() {
     fi
     return 0
 }
+
+function switch_windows_buildx() {
+    local windows_buildx_name="windows-img-builder"
+    original_buildx_instance=$(docker buildx inspect | grep '^Name:' | awk '{print $2}' | head -n 1)
+    if [ "$original_buildx_instance" = "${windows_buildx_name}" ]; then
+        return
+    fi
+    trap 'docker buildx use --default ${original_buildx_instance}' EXIT
+    set +e
+    docker buildx ls | grep "${windows_buildx_name}" > /dev/null 2>&1
+    if [ $? -eq 0 ] ; then
+        docker buildx use --builder windows/amd64 "${windows_buildx_name}"
+    else
+        docker buildx create --name "${windows_buildx_name}" --use --platform windows/amd64
+    fi
+    set -e
+}
+
+function docker_build_and_push_windows() {
+    local image="$1"
+    local dockerfile="$2"
+    local build_args="$3"
+    local build_tag="$4"
+    local push=$5
+    local pull_option="$6"
+
+    switch_windows_buildx
+    if $push; then
+        output="type=registry"
+    else
+        local_file=$(echo "${image}" | awk -F'/' '{print $NF}')
+        output="type=docker,dest=./${local_file}.tar"
+    fi
+
+    docker buildx build --platform windows/amd64 -o ${output} -t ${image}:${build_tag} ${pull_option} ${build_args} -f $dockerfile .
+}

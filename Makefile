@@ -19,11 +19,7 @@ ANTCTL_BINARY_NAME ?= antctl
 OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
 GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
 CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version)
-NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
 BUILD_TAG          := $(shell build/images/build-tag.sh)
-WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
-WIN_OVS_VERSION	   := $(shell head -n 1 build/images/deps/ovs-version-windows)
-WIN_BUILD_OVS_TAG  := $(NANOSERVER_VERSION)-$(WIN_OVS_VERSION)
 GIT_HOOKS          := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
 TRIVY_TARGET_IMAGE ?=
@@ -39,15 +35,9 @@ endif
 ifneq ($(NO_CACHE),)
 	DOCKER_BUILD_ARGS += --no-cache
 endif
-WIN_BUILD_ARGS := DOCKER_BUILD_ARGS
 DOCKER_BUILD_ARGS += --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
 DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
-WIN_BUILD_ARGS := --build-arg GO_VERSION=$(GO_VERSION)
-WIN_BUILD_ARGS += --build-arg CNI_BINARIES_VERSION=$(CNI_BINARIES_VERSION)
-WIN_BUILD_ARGS += --build-arg NANOSERVER_VERSION=$(NANOSERVER_VERSION)
-WIN_BUILD_ARGS += --build-arg WIN_BUILD_TAG=$(WIN_BUILD_TAG)
-WIN_BUILD_ARGS += --build-arg WIN_BUILD_OVS_TAG=$(WIN_BUILD_OVS_TAG)
 
 export CGO_ENABLED
 
@@ -61,6 +51,14 @@ LDFLAGS += $(VERSION_LDFLAGS)
 UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
+
+WINDOWS_BUILD_OPTIONS :=
+ifeq ($(NO_PULL),)
+	WINDOWS_BUILD_OPTIONS += --pull
+endif
+ifeq ($(RELEASE_STATUS),released)
+	WINDOWS_BUILD_OPTIONS += --agent-tag ${DOCKER_IMG_VERSION}
+endif
 
 .PHONY: install-hooks
 install-hooks:
@@ -383,8 +381,12 @@ build-controller-ubi:
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
-	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
-	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
+	$(CURDIR)/build/images/build-windows.sh ${WINDOWS_BUILD_OPTIONS}
+
+.PHONY: build-and-push-windows
+build-and-push-windows:
+	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image and pushing to registry <==="
+	$(CURDIR)/build/images/build-windows.sh --push ${WINDOWS_BUILD_OPTIONS}
 
 .PHONY: build-ubuntu-coverage
 build-ubuntu-coverage: build-controller-ubuntu-coverage build-agent-ubuntu-coverage

@@ -79,6 +79,10 @@ prefer running the Antrea Agent as a Windows service, or if you are using
 containerd 1.5, you can use the [Installation as a
 Service](#installation-as-a-service) method.
 
+Starting from v2.1, Antrea Windows image is built on Linux host with docker buildx
+and uses [hpc](https://github.com/microsoft/windows-host-process-containers-base-image)
+as the base image.
+
 ### Prerequisites
 
 * Create a Kubernetes cluster.

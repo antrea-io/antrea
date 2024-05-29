@@ -23,12 +23,12 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source $THIS_DIR/../build-utils.sh
 
-_usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
+_usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>] [--distro [ubuntu|ubi|windows]]
 Build the antrea openvswitch image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
-        --distro <distro>       Target Linux distribution
+        --distro <distro>       Target distribution. If distro is 'windows', platform should be empty. The script uses 'windows/amd64' automatically
         --no-cache              Do not use the local build cache nor the cached image from the registry"
 
 PULL=false
@@ -77,7 +77,7 @@ done
 # push the "cache image" to the registry. This functionality is not supported
 # with the default docker driver.
 # See https://docs.docker.com/build/cache/backends/registry/
-if $PUSH && ! check_docker_build_driver "docker-container"; then
+if $PUSH && [ "$DISTRO" != "windows" ] && ! check_docker_build_driver "docker-container"; then
     echoerr "--push requires the docker-container build driver"
     exit 1
 fi
@@ -87,19 +87,24 @@ if [ "$PLATFORM" != "" ] && $PUSH; then
     exit 1
 fi
 
+if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ] && [ "$DISTRO" != "windows" ]; then
+    echoerr "Invalid distribution $DISTRO"
+    exit 1
+fi
+
+OVS_VERSION_FILE="../deps/ovs-version"
+if [ "$DISTRO" == "windows" ]; then
+  OVS_VERSION_FILE="../deps/ovs-version-windows"
+fi
+
 PLATFORM_ARG=""
 if [ "$PLATFORM" != "" ]; then
     PLATFORM_ARG="--platform $PLATFORM"
 fi
 
-if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ]; then
-    echoerr "Invalid distribution $DISTRO"
-    exit 1
-fi
-
 pushd $THIS_DIR > /dev/null
 
-OVS_VERSION=$(head -n 1 ../deps/ovs-version)
+OVS_VERSION=$(head -n 1 ${OVS_VERSION_FILE})
 
 BUILD_TAG=$(../build-tag.sh)
 
@@ -114,6 +119,8 @@ if $PULL; then
     elif [ "$DISTRO" == "ubi" ]; then
         docker pull $PLATFORM_ARG quay.io/centos/centos:stream9
         docker pull $PLATFORM_ARG registry.access.redhat.com/ubi9
+    elif [ "$DISTRO" == "windows" ]; then
+        docker pull --platform linux/amd64 ubuntu:22.04
     fi
 fi
 
@@ -141,6 +148,10 @@ if [ "$DISTRO" == "ubuntu" ]; then
     docker_build_and_push "antrea/openvswitch" "Dockerfile"
 elif [ "$DISTRO" == "ubi" ]; then
     docker_build_and_push "antrea/openvswitch-ubi" "Dockerfile.ubi"
+elif [ "$DISTRO" == "windows" ]; then
+    image="antrea/windows-ovs"
+    build_args="--build-arg OVS_VERSION=$OVS_VERSION"
+    docker_build_and_push_windows "${image}" "Dockerfile.windows" "${build_args}" "${OVS_VERSION}" $PUSH ""
 fi
 
 popd > /dev/null

@@ -14,3 +14,24 @@ if ($driverStatus -like '*not installed*') {
   }
   Write-Host "OVSExt driver has been installed"
 }
+
+# Check if the VC redistributable is already installed.
+$OVSRedistDir="$mountPath\openvswitch\redist"
+if (Test-Path $OVSRedistDir) {
+  $dllFound = $false
+  $paths = $env:PATH -split ';'
+  foreach ($path in $paths) {
+    $dllFiles = Get-ChildItem -Path $path -Filter "vcruntime*.dll" -File -ErrorAction SilentlyContinue
+    if ($dllFiles.Count -gt 0) {
+      $dllFound = $true
+      break
+    }
+  }
+
+  # vcruntime dlls are not installed on the host, then install the binaries.
+  if (-not $dllFound) {
+    Get-ChildItem $OVSRedistDir -Filter *.exe | ForEach-Object {
+      Start-Process -FilePath $_.FullName -Args '/install /passive /norestart' -Verb RunAs -Wait
+    }
+  }
+}
