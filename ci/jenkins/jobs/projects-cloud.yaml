@@ -99,6 +99,12 @@
             - text:
                 credential-id: CAPVC_PASSWORD
                 variable: CAPVC_PASSWORD
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -211,6 +217,12 @@
             - text:
                 credential-id: CAPVC_PASSWORD
                 variable: CAPVC_PASSWORD
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -310,6 +322,12 @@
             - text:
                 credential-id: CAPVC_PASSWORD
                 variable: CAPVC_PASSWORD
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -397,6 +415,12 @@
             - text:
                 credential-id: CAPVC_PASSWORD
                 variable: CAPVC_PASSWORD
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -509,6 +533,12 @@
             - text:
                 credential-id: CAPVC_PASSWORD
                 variable: CAPVC_PASSWORD
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -580,6 +610,12 @@
             - text:
                 credential-id: RESOURCEPOOLPATH
                 variable: RESOURCEPOOLPATH
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
       - '{name}-{test_name}-for-gc':
           test_name: workload-cluster
           node: 'antrea-test-node'
