@@ -928,9 +928,8 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 	_, srcPort, dstPort := getBandwidthAndPorts(stdout)
 
 	// run antctl command on flow aggregator to get flow records
-	var command []string
 	args := []string{"get", "flowrecords", "-o", "json", "--srcip", srcIP, "--srcport", srcPort}
-	command = append([]string{"antctl"}, args...)
+	command := append([]string{"antctl"}, args...)
 	t.Logf("Run command: %s", command)
 	stdout, stderr, err := runAntctl(podName, command, data)
 	require.NoErrorf(t, err, "Error when running 'antctl get flowrecords -o json' from %s: %v\n%s", podName, err, antctlOutput(stdout, stderr))

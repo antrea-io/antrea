@@ -160,8 +160,7 @@ func testAntctlControllerRemoteAccess(t *testing.T, data *TestData, antctlServic
 	testCmds := []cmdAndReturnCode{}
 	// Add all controller commands.
 	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeController) {
-		cmd := []string{"antctl"}
-		cmd = append(cmd, c...)
+		cmd := append([]string{"antctl"}, c...)
 		testCmds = append(testCmds, cmdAndReturnCode{args: cmd, expectedReturnCode: 0})
 	}
 	testCmds = append(testCmds,
