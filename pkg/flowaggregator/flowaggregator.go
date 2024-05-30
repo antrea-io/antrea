@@ -698,10 +698,6 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			klog.InfoS("Disabled FlowLogger")
 		}
 	}
-	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
-		fa.includePodLabels = opt.Config.RecordContents.PodLabels
-		klog.InfoS("Updated RecordContents.PodLabels configuration", "value", fa.includePodLabels)
-	}
 	var unsupportedUpdates []string
 	if opt.Config.APIServer != fa.APIServer {
 		unsupportedUpdates = append(unsupportedUpdates, "apiServer")
@@ -717,6 +713,12 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	}
 	if opt.Config.FlowAggregatorAddress != fa.flowAggregatorAddress {
 		unsupportedUpdates = append(unsupportedUpdates, "flowAggregatorAddress")
+	}
+	// Updating recordContents.podLabels would require either restarting the IPFIXExporter, or
+	// adding support for sending an updated IPFIX template set. For the sake of simplicity, we
+	// forbid live updates to this configuration value.
+	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
+		unsupportedUpdates = append(unsupportedUpdates, "recordContents.podLabels")
 	}
 	if len(unsupportedUpdates) > 0 {
 		klog.ErrorS(nil, "Ignoring unsupported configuration updates, please restart FlowAggregator", "keys", unsupportedUpdates)

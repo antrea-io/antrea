@@ -441,19 +441,6 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 		mockLogExporter.EXPECT().UpdateOptions(opt)
 		flowAggregator.updateFlowAggregator(opt)
 	})
-	t.Run("includePodLabels", func(t *testing.T) {
-		flowAggregator := &flowAggregator{}
-		require.False(t, flowAggregator.includePodLabels)
-		opt := &options.Options{
-			Config: &flowaggregatorconfig.FlowAggregatorConfig{
-				RecordContents: flowaggregatorconfig.RecordContentsConfig{
-					PodLabels: true,
-				},
-			},
-		}
-		flowAggregator.updateFlowAggregator(opt)
-		assert.True(t, flowAggregator.includePodLabels)
-	})
 	t.Run("unsupportedUpdate", func(t *testing.T) {
 		flowAggregator := &flowAggregator{}
 		var b bytes.Buffer
