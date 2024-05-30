@@ -40,7 +40,7 @@ data:
     $ErrorActionPreference = "Stop"
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
     $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/')
-    $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/k/antrea/bin;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
+    $env:PATH = $env:PATH + ";$mountPath/k/antrea/bin;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
     & antrea-agent --config=$mountPath/etc/antrea/antrea-agent.conf --logtostderr=false --log_dir=c:/var/log/antrea --alsologtostderr --log_file_max_size=100 --log_file_max_num=4 --v=0
 kind: ConfigMap
 metadata:
@@ -233,7 +233,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: adb135c962fe85e0a2bc86a45f4b8c72d89b09a1da35bb16775e547813295679
+        checksum/agent-windows: 63f16e1fadb6b1354efda21c73702b4290400181136d4d47d4b1cd6a5f82d037
         checksum/windows-config: 10ad2be0a04b1752abc224fed0124f7b1da36efc5e7323e193eb38e11b25e798
         microsoft.com/hostprocess-inherit-user: "true"
       labels:

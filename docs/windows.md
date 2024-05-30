@@ -170,12 +170,12 @@ depending on whether you are using your own [signed](https://docs.microsoft.com/
 OVS kernel driver or you want to use the test-signed driver provided by Antrea,
 you will need to invoke the `Install-OVS.ps1` script differently (or not at all).
 
-| Containerized OVS daemons? | Test-signed OVS driver? | Run this command |
-| -------------------------- | ----------------------- | ---------------- |
-| Yes                        | Yes                     | `.\Install-OVS.ps1 -InstallUserspace $false` |
-| Yes                        | No                      | N/A |
-| No                         | Yes                     | `.\Install-OVS.ps1` |
-| No                         | No                      | `.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>` |
+| Containerized OVS daemons? | Test-signed OVS driver? | Run this command                                                          |
+| -------------------------- | ----------------------- |---------------------------------------------------------------------------|
+| Yes                        | Yes                     | Not required                                                              |
+| Yes                        | No                      | Not required                                                              |
+| No                         | Yes                     | `.\Install-OVS.ps1 -InstallUserspace $true`                               |
+| No                         | No                      | `.\Install-OVS.ps1 -InstallUserspace $true -LocalFile <PathToOVSPackage>` |
 
 If you used `antrea-windows-with-ovs.yml` to create the antrea-agent
 Windows DaemonSet, then you are using "Containerized OVS daemons". For all other
@@ -193,22 +193,12 @@ Bcdedit.exe -set TESTSIGNING ON
 Restart-Computer
 ```
 
-As an example, if you are using containerized OVS
-(`antrea-windows-with-ovs.yml`), and you want to use the test-signed
-OVS kernel driver provided by Antrea (not recommended for production), you would
-run the following commands:
-
-```powershell
-curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Install-OVS.ps1
-.\Install-OVS.ps1 -InstallUserspace $false
-```
-
-And, if you want to run OVS as Windows native services, and you are bringing
+If you want to run OVS as Windows native services, and you are bringing
 your own OVS package with a signed OVS kernel driver, you would run:
 
 ```powershell
 curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Install-OVS.ps1
-.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>
+.\Install-OVS.ps1 -InstallUserspace $true -LocalFile <PathToOVSPackage>
 
 # verify that the OVS services are installed
 get-service ovsdb-server

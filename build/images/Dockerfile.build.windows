@@ -40,7 +40,8 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 RUN mkdir -p /go/k/antrea/bin && \
     cp /antrea/bin/antrea-agent.exe /go/k/antrea/bin/ && \
     cp /antrea/bin/antctl.exe /go/k/antrea/bin/ && \
-    cp /antrea/bin/antrea-cni.exe /go/k/antrea/cni/antrea.exe
+    cp /antrea/bin/antrea-cni.exe /go/k/antrea/cni/antrea.exe && \
+    cp /antrea/hack/windows/Install-OVS.ps1 /go/k/antrea/
 
 FROM antrea/windows-ovs:${OVS_VERSION} AS antrea-ovs
 
