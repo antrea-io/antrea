@@ -14,10 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+function echoerr {
+    >&2 echo "$@"
+}
+
 _usage="Usage: $0 [--docker-user <dockerUser>] [--docker-password <dockerPassword>]
 Run Docker login script.
         --docker-user             Username for Docker account.
         --docker-password         Password for Docker account."
+
+function print_usage {
+  echoerr "$_usage"
+}
 
 while [[ $# -gt 0 ]]
 do
@@ -44,7 +52,6 @@ esac
 done
 
 function docker_login() {
-    set +ex
     for i in `seq 5`; do
         output=$(echo $2 | docker login --username=$1 --password-stdin 2>&1)
         # Check if the exit code is 0
@@ -52,21 +59,24 @@ function docker_login() {
             echo "Docker login successful."
             return 0
         else
-            sleep 5s
-            echo "Docker login failed. Retrying"
+            echo "Docker login failed, retrying in 5s"
             echo "Error output: $output"
+            sleep 5
         fi
     done
 
     # Exit with a non-zero code if it never succeeds
     echo "Docker login failed after multiple attempts."
     return 1
-    set -ex
 }
+
+# Never trace, to avoid logging password.
+# Dont exit on error, docker_login handles errors directly.
+set +ex
 
 # Exit if credentials are not set
 if [[ -z "$DOCKER_USERNAME" || -z "$DOCKER_PASSWORD" ]]; then
-    echo "Error: Docker username or password not provided."
+    echoerr "Docker username or password not provided."
     exit 1
 fi
 
