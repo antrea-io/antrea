@@ -624,14 +624,13 @@ function collect_coverage() {
 }
 
 function cleanup_cluster() {
+    release_static_ip
     echo "=== Cleaning up VMC cluster ${CLUSTER} ==="
     export KUBECONFIG=$KUBECONFIG_PATH
 
     kubectl delete ns ${CLUSTER}
     rm -rf "${GIT_CHECKOUT_DIR}/jenkins"
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
-
-    release_static_ip
 }
 
 function garbage_collection() {
