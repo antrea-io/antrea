@@ -698,4 +698,27 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			klog.InfoS("Disabled FlowLogger")
 		}
 	}
+	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
+		fa.includePodLabels = opt.Config.RecordContents.PodLabels
+		klog.InfoS("Updated RecordContents.PodLabels configuration", "value", fa.includePodLabels)
+	}
+	var unsupportedUpdates []string
+	if opt.Config.APIServer != fa.APIServer {
+		unsupportedUpdates = append(unsupportedUpdates, "apiServer")
+	}
+	if opt.ActiveFlowRecordTimeout != fa.activeFlowRecordTimeout {
+		unsupportedUpdates = append(unsupportedUpdates, "activeFlowRecordTimeout")
+	}
+	if opt.InactiveFlowRecordTimeout != fa.inactiveFlowRecordTimeout {
+		unsupportedUpdates = append(unsupportedUpdates, "inactiveFlowRecordTimeout")
+	}
+	if opt.AggregatorTransportProtocol != fa.aggregatorTransportProtocol {
+		unsupportedUpdates = append(unsupportedUpdates, "aggregatorTransportProtocol")
+	}
+	if opt.Config.FlowAggregatorAddress != fa.flowAggregatorAddress {
+		unsupportedUpdates = append(unsupportedUpdates, "flowAggregatorAddress")
+	}
+	if len(unsupportedUpdates) > 0 {
+		klog.ErrorS(nil, "Ignoring unsupported configuration updates, please restart FlowAggregator", "keys", unsupportedUpdates)
+	}
 }
