@@ -30,6 +30,10 @@ func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeI
 	return &FakeExternalNodes{c, namespace}
 }
 
+func (c *FakeCrdV1alpha1) NodeLatencyMonitors() v1alpha1.NodeLatencyMonitorInterface {
+	return &FakeNodeLatencyMonitors{c}
+}
+
 func (c *FakeCrdV1alpha1) SupportBundleCollections() v1alpha1.SupportBundleCollectionInterface {
 	return &FakeSupportBundleCollections{c}
 }

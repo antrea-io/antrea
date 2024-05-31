@@ -1,0 +1,48 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nodelatencymonitors.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - pingIntervalSeconds
+              properties:
+                pingIntervalSeconds:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  description: "Ping interval in seconds, must be at least 1."
+                  default: 60
+            metadata:
+              type: object
+              properties:
+                name:
+                  type: string
+                  pattern: '^default$'
+      additionalPrinterColumns:
+        - description: Specifies the interval between pings.
+          jsonPath: .spec.pingIntervalSeconds
+          name: PingIntervalSeconds
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+  scope: Cluster
+  names:
+    plural: nodelatencymonitors
+    singular: nodelatencymonitor
+    kind: NodeLatencyMonitor
+    shortNames:
+      - nlm

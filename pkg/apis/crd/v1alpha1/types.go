@@ -291,3 +291,37 @@ type TLSProtocol struct {
 	// SNI (Server Name Indication) indicates the server domain name in the TLS/SSL hello message.
 	SNI string `json:"sni,omitempty"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeLatencyMonitor is used to monitor the latency between nodes in a Kubernetes cluster. It is a singleton resource,
+// meaning only one instance of it can exist in the cluster.
+type NodeLatencyMonitor struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec NodeLatencyMonitorSpec `json:"spec"`
+}
+
+type NodeLatencyMonitorSpec struct {
+	// PingInterval specifies the interval in seconds between ping requests.
+	// Ping interval should be greater than or equal to 1s.
+	PingIntervalSeconds int32 `json:"pingIntervalSeconds"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NodeLatencyMonitor is only a singleton resource, so it does not use a list type.
+// But current k8s client-gen does not support generating client for singleton informer resource,
+// so we have to define a list type for CRD Informer.
+// Maybe we will remove it in the future.
+type NodeLatencyMonitorList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []NodeLatencyMonitor `json:"items"`
+}

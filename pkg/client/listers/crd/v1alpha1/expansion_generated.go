@@ -24,6 +24,10 @@ type ExternalNodeListerExpansion interface{}
 // ExternalNodeNamespaceLister.
 type ExternalNodeNamespaceListerExpansion interface{}
 
+// NodeLatencyMonitorListerExpansion allows custom methods to be added to
+// NodeLatencyMonitorLister.
+type NodeLatencyMonitorListerExpansion interface{}
+
 // SupportBundleCollectionListerExpansion allows custom methods to be added to
 // SupportBundleCollectionLister.
 type SupportBundleCollectionListerExpansion interface{}
