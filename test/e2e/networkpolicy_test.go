@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -743,17 +744,17 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	require.NoError(t, err)
 	t.Cleanup(func() { data.deleteNetworkpolicy(netpol) })
 
-	checkFunc := func(testPod string, testPodIPs *PodIPs, expectErr bool) {
+	checkFunc := func(t assert.TestingT, testPod string, testPodIPs *PodIPs, expectErr bool) {
 		var wg sync.WaitGroup
 		checkOne := func(clientPod, serverPod string, serverIP *net.IP) {
 			defer wg.Done()
 			if serverIP != nil {
 				cmd := []string{"wget", "-O", "-", serverIP.String(), "-T", "1"}
 				_, _, err := data.RunCommandFromPod(data.testNamespace, clientPod, nginxContainerName, cmd)
-				if expectErr && err == nil {
-					t.Errorf("Pod %s should not be able to connect %s, but was able to connect", clientPod, serverPod)
-				} else if !expectErr && err != nil {
-					t.Errorf("Pod %s should be able to connect %s, but was not able to connect, err: %v", clientPod, serverPod, err)
+				if expectErr {
+					assert.Error(t, err, "Pod %s should not be able to connect %s, but was able to connect", clientPod, serverPod)
+				} else {
+					assert.NoError(t, err, "Pod %s should be able to connect %s, but was not able to connect", clientPod, serverPod)
 				}
 			}
 		}
@@ -783,7 +784,7 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 
 	// While the new antrea-agent starts, the denied Pod should never connect to the isolated Pod successfully.
 	for i := 0; i < 5; i++ {
-		checkFunc(deniedPod, deniedPodIPs, true)
+		checkFunc(t, deniedPod, deniedPodIPs, true)
 	}
 
 	antreaPod, err := data.getAntreaPodOnNode(workerNode)
@@ -792,15 +793,21 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionFalse)
 	waitForAgentCondition(t, data, antreaPod, v1beta1.OpenflowConnectionUp, corev1.ConditionTrue)
 	// Even the new antrea-agent can't connect to antrea-controller, the previous policy should continue working.
-	checkFunc(deniedPod, deniedPodIPs, true)
-	checkFunc(allowedPod, allowedPodIPs, false)
+	checkFunc(t, deniedPod, deniedPodIPs, true)
+	// It may take some time for the antrea-agent to fallback to locally-saved policies. Until
+	// it happens, allowed traffic may be dropped. So we use polling to tolerate some delay.
+	// The important part is that traffic that should be denied is always denied, which we have
+	// already validated at that point.
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		checkFunc(t, allowedPod, allowedPodIPs, false)
+	}, 10*time.Second, 1*time.Second)
 
 	// Scale antrea-controller to 1 so antrea-agent will connect to antrea-controller.
 	scaleFunc(1)
 	// Make sure antrea-agent connects to antrea-controller.
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionTrue)
-	checkFunc(deniedPod, deniedPodIPs, true)
-	checkFunc(allowedPod, allowedPodIPs, false)
+	checkFunc(t, deniedPod, deniedPodIPs, true)
+	checkFunc(t, allowedPod, allowedPodIPs, false)
 }
 
 func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
