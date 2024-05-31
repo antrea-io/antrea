@@ -12,7 +12,7 @@ Antrea Flow Aggregator
 
 ## Requirements
 
-Kubernetes: `>= 1.19.0-0`
+Kubernetes: `>= 1.16.0-0`
 
 ## Values
 
