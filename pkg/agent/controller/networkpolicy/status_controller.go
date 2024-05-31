@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
@@ -82,7 +82,7 @@ func realizedRulePolicyIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(rule.policyID)}, nil
 }
 
-func newStatusController(antreaClientProvider agent.AntreaClientProvider, nodeName string, ruleCache *ruleCache) *StatusController {
+func newStatusController(antreaClientProvider client.AntreaClientProvider, nodeName string, ruleCache *ruleCache) *StatusController {
 	return &StatusController{
 		statusControlInterface: &networkPolicyStatusControl{antreaClientProvider: antreaClientProvider},
 		nodeName:               nodeName,
@@ -223,7 +223,7 @@ type networkPolicyStatusControlInterface interface {
 }
 
 type networkPolicyStatusControl struct {
-	antreaClientProvider agent.AntreaClientProvider
+	antreaClientProvider client.AntreaClientProvider
 }
 
 func (c *networkPolicyStatusControl) UpdateNetworkPolicyStatus(name string, status *v1beta2.NetworkPolicyStatus) error {

@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
@@ -113,14 +113,17 @@ type Controller struct {
 	multicastEnabled bool
 	// nodeType indicates type of the Node where Antrea Agent is running on.
 	nodeType config.NodeType
-	// antreaClientProvider provides interfaces to get antreaClient, which can be
-	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
-	// We need to get antreaClient dynamically because the apiserver cert can be
-	// rotated and we need a new client with the updated CA cert.
+	// antreaClientProvider provides interfaces to get antreaClient, which
+	// can be used to watch Antrea AddressGroups, AppliedToGroups, and
+	// NetworkPolicies. We need to get antreaClient dynamically because we
+	// are not relying on the ClusterIP to access the Antrea Service (we
+	// resolve the endpoint directly, and the endpoint can change if the
+	// antrea-controller Pod is rescheduled), and because the apiserver cert
+	// can be rotated and we need a new client with the updated CA cert.
 	// Verifying server certificate only takes place for new requests and existing
 	// watches won't be interrupted by rotating cert. The new client will be used
 	// after the existing watches expire.
-	antreaClientProvider agent.AntreaClientProvider
+	antreaClientProvider client.AntreaClientProvider
 	// queue maintains the NetworkPolicy ruleIDs that need to be synced.
 	queue workqueue.RateLimitingInterface
 	// ruleCache maintains the desired state of NetworkPolicy rules.
@@ -167,7 +170,7 @@ type Controller struct {
 }
 
 // NewNetworkPolicyController returns a new *Controller.
-func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
+func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	ifaceStore interfacestore.InterfaceStore,
@@ -594,7 +597,13 @@ func (c *Controller) SetDenyConnStore(denyConnStore *connections.DenyConnectionS
 // Run will not return until stopCh is closed.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	attempts := 0
-	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 200*time.Millisecond, true, func(ctx context.Context) (bool, error) {
+	// If Antrea client is not ready within 5s, we assume that the Antrea Controller is not
+	// available. We proceed with our watches, which are likely to fail. In turn, this will
+	// trigger the fallback mechanism.
+	// 5s should be more than enough if the Antrea Controller is running correctly.
+	ctx, cancel := context.WithTimeout(wait.ContextForChannel(stopCh), 5*time.Second)
+	defer cancel()
+	if err := wait.PollUntilContextCancel(ctx, 200*time.Millisecond, true, func(ctx context.Context) (bool, error) {
 		if attempts%10 == 0 {
 			klog.Info("Waiting for Antrea client to be ready")
 		}
@@ -605,9 +614,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return true, nil
 	}); err != nil {
 		klog.Info("Stopped waiting for Antrea client")
-		return
+	} else {
+		klog.Info("Antrea client is ready")
 	}
-	klog.Info("Antrea client is ready")
 
 	// Use NonSlidingUntil so that normal reconnection (disconnected after
 	// running a while) can reconnect immediately while abnormal reconnection

@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/multicast"
 	"antrea.io/antrea/pkg/agent/openflow"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
@@ -57,7 +57,7 @@ type Collector struct {
 	nodeName string
 	// antreaClientProvider provides interfaces to get antreaClient, which will be used to report the statistics to the
 	// antrea-controller.
-	antreaClientProvider agent.AntreaClientProvider
+	antreaClientProvider client.AntreaClientProvider
 	// ofClient is the Openflow interface that can fetch the statistic of the Openflow entries.
 	ofClient             openflow.Client
 	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
@@ -68,7 +68,7 @@ type Collector struct {
 	multicastEnabled    bool
 }
 
-func NewCollector(antreaClientProvider agent.AntreaClientProvider, ofClient openflow.Client, npQuerier querier.AgentNetworkPolicyInfoQuerier, mcQuerier *multicast.Controller) *Collector {
+func NewCollector(antreaClientProvider client.AntreaClientProvider, ofClient openflow.Client, npQuerier querier.AgentNetworkPolicyInfoQuerier, mcQuerier *multicast.Controller) *Collector {
 	nodeName, _ := env.GetNodeName()
 	manager := &Collector{
 		nodeName:             nodeName,

@@ -41,7 +41,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/ipassigner"
 	"antrea.io/antrea/pkg/agent/memberlist"
@@ -155,7 +155,7 @@ type EgressController struct {
 	routeClient          route.Interface
 	k8sClient            kubernetes.Interface
 	crdClient            clientsetversioned.Interface
-	antreaClientProvider agent.AntreaClientProvider
+	antreaClientProvider client.AntreaClientProvider
 
 	egressInformer     cache.SharedIndexInformer
 	egressLister       crdlisters.EgressLister
@@ -210,7 +210,7 @@ type EgressController struct {
 func NewEgressController(
 	ofClient openflow.Client,
 	k8sClient kubernetes.Interface,
-	antreaClientGetter agent.AntreaClientProvider,
+	antreaClientGetter client.AntreaClientProvider,
 	crdClient clientsetversioned.Interface,
 	ifaceStore interfacestore.InterfaceStore,
 	routeClient route.Interface,
