@@ -19,8 +19,7 @@ WORKDIR /antrea
 
 COPY . /antrea
 
-RUN make flow-aggregator antctl-linux flow-aggregator-instr-binary antctl-instr-binary
-RUN mv bin/antctl-linux bin/antctl
+RUN make flow-aggregator-instr-binary antctl-instr-binary
 
 FROM ubuntu:22.04
 
@@ -29,8 +28,8 @@ LABEL description="The docker image for the flow aggregator with code coverage m
 
 USER root
 
-COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator* /usr/local/bin/
-COPY --from=flow-aggregator-build /antrea/bin/antctl* /usr/local/bin/
+COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator-coverage /usr/local/bin/flow-aggregator
+COPY --from=flow-aggregator-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=flow-aggregator-build /antrea/test/e2e/utils/run_cov_binary.sh /
 
 # This environment variable will persist when running the container, but can also be overwritten if needed

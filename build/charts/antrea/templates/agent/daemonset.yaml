@@ -131,7 +131,7 @@ spec:
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           {{- if ((.Values.testing).coverage) }}
           args:
-            - "antrea-agent-coverage"
+            - "antrea-agent"
             - "--config=/etc/antrea/antrea-agent.conf"
             - "--logtostderr=false"
             - "--log_dir=/var/log/antrea"
