@@ -700,7 +700,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	}
 	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
 		fa.includePodLabels = opt.Config.RecordContents.PodLabels
-		klog.InfoS("Updated RecordContents.PodLabels configuration", "value", fa.includePodLabels)
+		klog.InfoS("Updated recordContents.podLabels configuration", "value", fa.includePodLabels)
 	}
 	var unsupportedUpdates []string
 	if opt.Config.APIServer != fa.APIServer {
