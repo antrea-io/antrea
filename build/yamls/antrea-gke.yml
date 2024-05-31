@@ -2687,6 +2687,57 @@ spec:
       - anp
 
 ---
+# Source: crds/nodelatencymonitor.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nodelatencymonitors.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - pingIntervalSeconds
+              properties:
+                pingIntervalSeconds:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  description: "Ping interval in seconds, must be at least 1."
+                  default: 60
+            metadata:
+              type: object
+              properties:
+                name:
+                  type: string
+                  pattern: '^default$'
+      additionalPrinterColumns:
+        - description: Specifies the interval between pings.
+          jsonPath: .spec.pingIntervalSeconds
+          name: PingIntervalSeconds
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+  scope: Cluster
+  names:
+    plural: nodelatencymonitors
+    singular: nodelatencymonitor
+    kind: NodeLatencyMonitor
+    shortNames:
+      - nlm
+
+---
 # Source: crds/supportbundlecollection.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3624,6 +3675,9 @@ data:
     # Enable L7FlowExporter on Pods and Namespaces to export the application layer flows such as HTTP flows.
     #  L7FlowExporter: false
 
+    # Enable NodeLatencyMonitor to monitor the latency between Nodes.
+    #  NodeLatencyMonitor: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -4259,6 +4313,7 @@ rules:
       - externalippools
       - ippools
       - trafficcontrols
+      - nodelatencymonitors
     verbs:
       - get
       - watch
@@ -4920,7 +4975,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d5cdb5356795c44a69c66fad1b4d67f7c00cdcbe837f3b3b50260e4d9dfd1e7e
+        checksum/config: 47c353c05a3d0d6da5534e0cd1202fefb175fff41421eb3517bc9f3dd084e2ce
       labels:
         app: antrea
         component: antrea-agent
@@ -5156,7 +5211,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: d5cdb5356795c44a69c66fad1b4d67f7c00cdcbe837f3b3b50260e4d9dfd1e7e
+        checksum/config: 47c353c05a3d0d6da5534e0cd1202fefb175fff41421eb3517bc9f3dd084e2ce
       labels:
         app: antrea
         component: antrea-controller

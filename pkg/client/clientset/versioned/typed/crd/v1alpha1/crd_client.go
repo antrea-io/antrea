@@ -27,6 +27,7 @@ import (
 type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ExternalNodesGetter
+	NodeLatencyMonitorsGetter
 	SupportBundleCollectionsGetter
 }
 
@@ -37,6 +38,10 @@ type CrdV1alpha1Client struct {
 
 func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterface {
 	return newExternalNodes(c, namespace)
+}
+
+func (c *CrdV1alpha1Client) NodeLatencyMonitors() NodeLatencyMonitorInterface {
+	return newNodeLatencyMonitors(c)
 }
 
 func (c *CrdV1alpha1Client) SupportBundleCollections() SupportBundleCollectionInterface {

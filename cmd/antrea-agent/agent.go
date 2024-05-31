@@ -52,6 +52,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/monitortool"
 	"antrea.io/antrea/pkg/agent/multicast"
 	mcroute "antrea.io/antrea/pkg/agent/multicluster"
 	"antrea.io/antrea/pkg/agent/nodeip"
@@ -123,6 +124,7 @@ func run(o *Options) error {
 	endpointsInformer := informerFactory.Core().V1().Endpoints()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
+	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -927,6 +929,17 @@ func run(o *Options) error {
 	// Start the goroutine to periodically export IPFIX flow records.
 	if enableFlowExporter {
 		go flowExporter.Run(stopCh)
+	}
+
+	// Start the node latency monitor.
+	if features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor) && o.nodeType == config.K8sNode {
+		nodeLatencyMonitor := monitortool.NewNodeLatencyMonitor(
+			nodeInformer,
+			nodeLatencyMonitorInformer,
+			nodeConfig,
+			networkConfig.TrafficEncapMode,
+		)
+		go nodeLatencyMonitor.Run(stopCh)
 	}
 
 	<-stopCh

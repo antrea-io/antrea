@@ -158,6 +158,10 @@ const (
 	// alpha: v1.15
 	// Enable layer 7 flow export on Pods and Namespaces
 	L7FlowExporter featuregate.Feature = "L7FlowExporter"
+
+	// alpha: v2.1
+	// Enable the NodeLatencyMonitor feature.
+	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
 )
 
 var (
@@ -199,6 +203,7 @@ var (
 		EgressSeparateSubnet:        {Default: false, PreRelease: featuregate.Alpha},
 		NodeNetworkPolicy:           {Default: false, PreRelease: featuregate.Alpha},
 		L7FlowExporter:              {Default: false, PreRelease: featuregate.Alpha},
+		NodeLatencyMonitor:          {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
@@ -229,6 +234,7 @@ var (
 		EgressSeparateSubnet,
 		NodeNetworkPolicy,
 		L7FlowExporter,
+		NodeLatencyMonitor,
 	)
 
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
@@ -276,6 +282,7 @@ var (
 		EgressSeparateSubnet:        {},
 		NodeNetworkPolicy:           {},
 		L7FlowExporter:              {},
+		NodeLatencyMonitor:          {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an
