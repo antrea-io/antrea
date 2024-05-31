@@ -856,7 +856,7 @@ func run(o *Options) error {
 	if err := agentInitializer.FlowRestoreComplete(); err != nil {
 		return err
 	}
-	klog.InfoS("Flow restoration complete")
+	klog.InfoS("Flow restoration has completed")
 	// ConnectUplinkToOVSBridge must be run immediately after FlowRestoreComplete
 	if connectUplinkToBridge {
 		// Restore network config before shutdown. ovsdbConnection must be alive when restore.

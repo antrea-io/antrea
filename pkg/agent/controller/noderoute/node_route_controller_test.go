@@ -752,3 +752,39 @@ func TestInitialListHasSynced(t *testing.T) {
 
 	assert.True(t, c.hasProcessedInitialList.HasSynced())
 }
+
+func TestInitialListHasSyncedStopChClosedEarly(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{}, node1)
+
+	stopCh := make(chan struct{})
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.routeClient.EXPECT().Reconcile([]string{podCIDR.String()})
+
+	// We close the stopCh right away, then call Run synchronously and wait for it to
+	// return. The workers will not even start, and the initial list of Nodes should never be
+	// reported as "synced".
+	close(stopCh)
+	c.Run(stopCh)
+
+	assert.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(500*time.Millisecond))
+	assert.False(t, c.hasProcessedInitialList.HasSynced())
+}
+
+func TestInitialListHasSyncedPolicyOnlyMode(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{
+		TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
+	})
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go c.Run(stopCh)
+
+	// In networkPolicyOnly mode, c.flowRestoreCompleteWait should be decremented immediately
+	// when calling Run, even though workers are never started and c.hasProcessedInitialList.HasSynced
+	// will remain false.
+	assert.NoError(t, c.flowRestoreCompleteWait.WaitWithTimeout(500*time.Millisecond))
+	assert.False(t, c.hasProcessedInitialList.HasSynced())
+}

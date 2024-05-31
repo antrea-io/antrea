@@ -373,10 +373,17 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	go func() {
 		// When the initial list of Nodes has been processed, we decrement flowRestoreCompleteWait.
-		defer c.flowRestoreCompleteWait.Done()
-		wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 100*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
+		err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 100*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
 			return c.hasProcessedInitialList.HasSynced(), nil
 		})
+		// An error here means the context has been cancelled, which means that the stopCh
+		// has been closed. While it is still possible for c.hasProcessedInitialList.HasSynced
+		// to become true, as workers may not have returned yet, we should not decrement
+		// flowRestoreCompleteWait or log the message below.
+		if err != nil {
+			return
+		}
+		c.flowRestoreCompleteWait.Done()
 		klog.V(2).InfoS("Initial list of Nodes has been processed")
 	}()
 
