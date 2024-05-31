@@ -100,8 +100,6 @@ elif ! $HELM version > /dev/null 2>&1; then
     exit 1
 fi
 
-TMP_DIR=$(mktemp -d $THIS_DIR/../build/yamls/chart-values.XXXXXXXX)
-
 if $INCLUDE_OVS; then
     HELM_VALUES+=("includeOVS=true")
 fi
@@ -123,5 +121,3 @@ fi
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea-windows"
 
 $HELM template $HELM_VALUES_OPTION "$ANTREA_CHART"
-
-rm -rf $TMP_DIR

@@ -3,8 +3,5 @@ image:
   repository: "antrea/antrea-windows"
   tag: "latest"
 
-# -- Enable release mode
-release: false
-
 # -- Enable running Windows OVS processes inside antrea-ovs container in antrea-agent pod
 includeOVS: false
