@@ -895,13 +895,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 		}
 		podName := flowAggPod.Name
 		for _, args := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
-			command := []string{}
-			if testOptions.enableCoverage {
-				antctlCovArgs := []string{"antctl-coverage"}
-				command = append(antctlCovArgs, args...)
-			} else {
-				command = append([]string{"antctl", "-v"}, args...)
-			}
+			command := append([]string{"antctl"}, args...)
 			t.Logf("Run command: %s", command)
 
 			t.Run(strings.Join(command, " "), func(t *testing.T) {
@@ -934,14 +928,8 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 	_, srcPort, dstPort := getBandwidthAndPorts(stdout)
 
 	// run antctl command on flow aggregator to get flow records
-	var command []string
 	args := []string{"get", "flowrecords", "-o", "json", "--srcip", srcIP, "--srcport", srcPort}
-	if testOptions.enableCoverage {
-		antctlCovArgs := []string{"antctl-coverage"}
-		command = append(antctlCovArgs, args...)
-	} else {
-		command = append([]string{"antctl"}, args...)
-	}
+	command := append([]string{"antctl"}, args...)
 	t.Logf("Run command: %s", command)
 	stdout, stderr, err := runAntctl(podName, command, data)
 	require.NoErrorf(t, err, "Error when running 'antctl get flowrecords -o json' from %s: %v\n%s", podName, err, antctlOutput(stdout, stderr))

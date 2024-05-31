@@ -24,9 +24,9 @@ RUN go mod download
 
 COPY . /antrea
 
-RUN make antctl-linux antctl-instr-binary && mv bin/antctl-linux bin/antctl
+RUN make antctl-instr-binary
 
-RUN make antrea-controller antrea-controller-instr-binary
+RUN make antrea-controller-instr-binary
 
 FROM ubuntu:22.04
 
@@ -35,10 +35,8 @@ LABEL description="The Docker image to deploy the antrea-controller with code co
 
 USER root
 
-COPY --from=antrea-build /antrea/bin/antrea-controller /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antctl /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antrea-controller-coverage /usr/local/bin/
-COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/
+COPY --from=antrea-build /antrea/bin/antrea-controller-coverage /usr/local/bin/antrea-controller
+COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=antrea-build /antrea/test/e2e/utils/run_cov_binary.sh /
 
 # This environment variable will persist when running the container, but can also be overwritten if needed
