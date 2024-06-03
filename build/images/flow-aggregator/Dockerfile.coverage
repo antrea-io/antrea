@@ -17,9 +17,15 @@ FROM golang:${GO_VERSION} as flow-aggregator-build
 
 WORKDIR /antrea
 
+COPY go.mod /antrea/go.mod
+
+RUN go mod download
+
 COPY . /antrea
 
-RUN make flow-aggregator-instr-binary antctl-instr-binary
+RUN make antctl-instr-binary
+
+RUN make flow-aggregator-instr-binary
 
 FROM ubuntu:22.04
 
@@ -28,6 +34,10 @@ LABEL description="The docker image for the flow aggregator with code coverage m
 
 USER root
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator-coverage /usr/local/bin/flow-aggregator
 COPY --from=flow-aggregator-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=flow-aggregator-build /antrea/test/e2e/utils/run_cov_binary.sh /
@@ -35,9 +45,5 @@ COPY --from=flow-aggregator-build /antrea/test/e2e/utils/run_cov_binary.sh /
 # This environment variable will persist when running the container, but can also be overwritten if needed
 ENV GOCOVERDIR=/tmp/coverage
 RUN mkdir -p $GOCOVERDIR
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT [ "/run_cov_binary.sh" ]
