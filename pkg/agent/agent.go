@@ -132,10 +132,14 @@ type Initializer struct {
 	enableAntreaProxy     bool
 	// podNetworkWait should be decremented once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	podNetworkWait        *utilwait.Group
-	stopCh                <-chan struct{}
-	nodeType              config.NodeType
-	externalNodeNamespace string
+	podNetworkWait *utilwait.Group
+	// flowRestoreCompleteWait is used to indicate that required flows have
+	// been installed. We use it to determine whether flows from previous
+	// rounds can be deleted.
+	flowRestoreCompleteWait *utilwait.Group
+	stopCh                  <-chan struct{}
+	nodeType                config.NodeType
+	externalNodeNamespace   string
 }
 
 func NewInitializer(
@@ -154,6 +158,7 @@ func NewInitializer(
 	egressConfig *config.EgressConfig,
 	serviceConfig *config.ServiceConfig,
 	podNetworkWait *utilwait.Group,
+	flowRestoreCompleteWait *utilwait.Group,
 	stopCh <-chan struct{},
 	nodeType config.NodeType,
 	externalNodeNamespace string,
@@ -163,29 +168,30 @@ func NewInitializer(
 	enableL7FlowExporter bool,
 ) *Initializer {
 	return &Initializer{
-		ovsBridgeClient:       ovsBridgeClient,
-		ovsCtlClient:          ovsCtlClient,
-		client:                k8sClient,
-		crdClient:             crdClient,
-		ifaceStore:            ifaceStore,
-		ofClient:              ofClient,
-		routeClient:           routeClient,
-		ovsBridge:             ovsBridge,
-		hostGateway:           hostGateway,
-		mtu:                   mtu,
-		networkConfig:         networkConfig,
-		wireGuardConfig:       wireGuardConfig,
-		egressConfig:          egressConfig,
-		serviceConfig:         serviceConfig,
-		l7NetworkPolicyConfig: &config.L7NetworkPolicyConfig{},
-		podNetworkWait:        podNetworkWait,
-		stopCh:                stopCh,
-		nodeType:              nodeType,
-		externalNodeNamespace: externalNodeNamespace,
-		connectUplinkToBridge: connectUplinkToBridge,
-		enableAntreaProxy:     enableAntreaProxy,
-		enableL7NetworkPolicy: enableL7NetworkPolicy,
-		enableL7FlowExporter:  enableL7FlowExporter,
+		ovsBridgeClient:         ovsBridgeClient,
+		ovsCtlClient:            ovsCtlClient,
+		client:                  k8sClient,
+		crdClient:               crdClient,
+		ifaceStore:              ifaceStore,
+		ofClient:                ofClient,
+		routeClient:             routeClient,
+		ovsBridge:               ovsBridge,
+		hostGateway:             hostGateway,
+		mtu:                     mtu,
+		networkConfig:           networkConfig,
+		wireGuardConfig:         wireGuardConfig,
+		egressConfig:            egressConfig,
+		serviceConfig:           serviceConfig,
+		l7NetworkPolicyConfig:   &config.L7NetworkPolicyConfig{},
+		podNetworkWait:          podNetworkWait,
+		flowRestoreCompleteWait: flowRestoreCompleteWait,
+		stopCh:                  stopCh,
+		nodeType:                nodeType,
+		externalNodeNamespace:   externalNodeNamespace,
+		connectUplinkToBridge:   connectUplinkToBridge,
+		enableAntreaProxy:       enableAntreaProxy,
+		enableL7NetworkPolicy:   enableL7NetworkPolicy,
+		enableL7FlowExporter:    enableL7FlowExporter,
 	}
 }
 
@@ -529,13 +535,14 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// the new round number), otherwise we would disrupt the dataplane. Unfortunately,
 		// the time required for convergence may be large and there is no simple way to
 		// determine when is a right time to perform the cleanup task.
-		// TODO: introduce a deterministic mechanism through which the different entities
-		//  responsible for installing flows can notify the agent that this deletion
-		//  operation can take place. A waitGroup can be created here and notified when
-		//  full sync in agent networkpolicy controller is complete. This would signal NP
-		//  flows have been synced once. Other mechanisms are still needed for node flows
-		//  fullSync check.
+		// We took a first step towards introducing a deterministic mechanism through which
+		// the different entities responsible for installing flows can notify the agent that
+		// this deletion operation can take place. i.flowRestoreCompleteWait.Wait() will
+		// block until some key flows (NetworkPolicy flows, Pod flows, Node route flows)
+		// have been installed. But not all entities responsible for installing flows
+		// currently use this wait group, so we block for a minimum of 10 seconds.
 		time.Sleep(10 * time.Second)
+		i.flowRestoreCompleteWait.Wait()
 		klog.Info("Deleting stale flows from previous round if any")
 		if err := i.ofClient.DeleteStaleFlows(); err != nil {
 			klog.Errorf("Error when deleting stale flows from previous round: %v", err)

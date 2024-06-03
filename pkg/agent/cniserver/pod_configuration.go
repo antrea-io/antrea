@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
@@ -404,7 +405,7 @@ func parsePrevResult(conf *types.NetworkConfig) error {
 	return nil
 }
 
-func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *containerAccessArbitrator, podNetworkWait *wait.Group) error {
+func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *containerAccessArbitrator, podNetworkWait, flowRestoreCompleteWait *wait.Group) error {
 	// desiredPods is the set of Pods that should be present, based on the
 	// current list of Pods got from the Kubernetes API.
 	desiredPods := sets.New[string]()
@@ -412,6 +413,8 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	desiredPodIPs := sets.New[string]()
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+
+	var podWg sync.WaitGroup
 
 	for _, pod := range pods {
 		// Skip Pods for which we are not in charge of the networking.
@@ -436,7 +439,9 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				missingIfConfigs = append(missingIfConfigs, containerConfig)
 				continue
 			}
+			podWg.Add(1)
 			go func(containerID, pod, namespace string) {
+				defer podWg.Done()
 				// Do not install Pod flows until all preconditions are met.
 				podNetworkWait.Wait()
 				// To avoid race condition with CNIServer CNI event handlers.
@@ -452,7 +457,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				// We rely on the interface cache / store - which is initialized from the persistent
 				// OVSDB - to map the Pod to its interface configuration. The interface
 				// configuration includes the parameters we need to replay the flows.
-				klog.V(4).InfoS("Syncing Pod interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
+				klog.InfoS("Syncing Pod interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 				if err := pc.ofClient.InstallPodFlows(
 					containerConfig.InterfaceName,
 					containerConfig.IPs,
@@ -473,6 +478,10 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 			// interface should no longer be in store after the call to removeInterfaces
 		}
 	}
+	go func() {
+		defer flowRestoreCompleteWait.Done()
+		podWg.Wait()
+	}()
 	if len(missingIfConfigs) > 0 {
 		pc.reconcileMissingPods(missingIfConfigs, containerAccess)
 	}

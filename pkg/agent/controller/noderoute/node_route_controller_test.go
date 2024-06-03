@@ -41,6 +41,7 @@ import (
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 	utilip "antrea.io/antrea/pkg/util/ip"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 var (
@@ -109,7 +110,7 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig, objects ..
 	c := NewNodeRouteController(informerFactory.Core().V1().Nodes(), ofClient, ovsCtlClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
 		IPv4: nil,
 		MAC:  gatewayMAC,
-	}}, wireguardClient, ipsecCertificateManager)
+	}}, wireguardClient, ipsecCertificateManager, utilwait.NewGroup())
 	return &fakeController{
 		Controller:      c,
 		clientset:       clientset,
@@ -732,4 +733,58 @@ func TestDeleteNodeRoute(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestInitialListHasSynced(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{}, node1)
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	require.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(100*time.Millisecond))
+
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR, "node1", nodeIP1, podCIDRGateway).Times(1)
+	c.processNextWorkItem()
+
+	assert.True(t, c.hasProcessedInitialList.HasSynced())
+}
+
+func TestInitialListHasSyncedStopChClosedEarly(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{}, node1)
+
+	stopCh := make(chan struct{})
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.routeClient.EXPECT().Reconcile([]string{podCIDR.String()})
+
+	// We close the stopCh right away, then call Run synchronously and wait for it to
+	// return. The workers will not even start, and the initial list of Nodes should never be
+	// reported as "synced".
+	close(stopCh)
+	c.Run(stopCh)
+
+	assert.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(500*time.Millisecond))
+	assert.False(t, c.hasProcessedInitialList.HasSynced())
+}
+
+func TestInitialListHasSyncedPolicyOnlyMode(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{
+		TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
+	})
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go c.Run(stopCh)
+
+	// In networkPolicyOnly mode, c.flowRestoreCompleteWait should be decremented immediately
+	// when calling Run, even though workers are never started and c.hasProcessedInitialList.HasSynced
+	// will remain false.
+	assert.NoError(t, c.flowRestoreCompleteWait.WaitWithTimeout(500*time.Millisecond))
+	assert.False(t, c.hasProcessedInitialList.HasSynced())
 }

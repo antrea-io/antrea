@@ -60,7 +60,6 @@ func TestConnectivity(t *testing.T) {
 	t.Run("testOVSRestartSameNode", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
-		t.Skip("Skipping test for now as it fails consistently")
 		testOVSRestartSameNode(t, data, data.testNamespace)
 	})
 	t.Run("testOVSFlowReplay", func(t *testing.T) {
@@ -327,12 +326,7 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespa
 
 // testOVSRestartSameNode verifies that datapath flows are not removed when the Antrea Agent Pod is
 // stopped gracefully (e.g. as part of a RollingUpdate). The test sends ARP requests every 1s and
-// checks that there is no packet loss during the restart. This test does not apply to the userspace
-// ndetdev datapath, since in this case the datapath functionality is implemented by the
-// ovs-vswitchd daemon itself. When ovs-vswitchd restarts, datapath flows are flushed and it may
-// take some time for the Agent to replay the flows. This will not impact this test, since we are
-// just testing L2 connectivity between 2 Pods on the same Node, and the default behavior of the
-// br-int bridge is to implement normal L2 forwarding.
+// checks that there is no packet loss during the restart.
 func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 	workerNode := workerNodeName(1)
 	t.Logf("Creating two toolbox test Pods on '%s'", workerNode)
@@ -364,7 +358,7 @@ func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 			maxLossRate = 10
 		}
 		if lossRate > maxLossRate {
-			t.Logf(stdout)
+			t.Log(stdout)
 			return fmt.Errorf("arping loss rate is %f%%", lossRate)
 		}
 		return nil
