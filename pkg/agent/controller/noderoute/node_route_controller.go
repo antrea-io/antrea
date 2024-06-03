@@ -15,6 +15,7 @@
 package noderoute
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -26,6 +27,7 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/cache/synctrack"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -41,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -80,6 +83,12 @@ type Controller struct {
 	// or not when IPsec is enabled with "cert" mode. The NodeRouteController must wait for the certificate
 	// to be configured before installing routes/flows to peer Nodes to prevent unencrypted traffic across Nodes.
 	ipsecCertificateManager ipseccertificate.Manager
+	// flowRestoreCompleteWait is to be decremented after installing flows for initial Nodes.
+	flowRestoreCompleteWait *utilwait.Group
+	// hasProcessedInitialList keeps track of whether the initial informer list has been
+	// processed by workers.
+	// See https://github.com/kubernetes/apiserver/blob/v0.30.1/pkg/admission/plugin/policy/internal/generic/controller.go
+	hasProcessedInitialList synctrack.AsyncTracker[string]
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -95,6 +104,7 @@ func NewNodeRouteController(
 	nodeConfig *config.NodeConfig,
 	wireguardClient wireguard.Interface,
 	ipsecCertificateManager ipseccertificate.Manager,
+	flowRestoreCompleteWait *utilwait.Group,
 ) *Controller {
 	controller := &Controller{
 		ovsBridgeClient:         ovsBridgeClient,
@@ -111,21 +121,25 @@ func NewNodeRouteController(
 		installedNodes:          cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
 		wireGuardClient:         wireguardClient,
 		ipsecCertificateManager: ipsecCertificateManager,
+		flowRestoreCompleteWait: flowRestoreCompleteWait.Increment(),
 	}
-	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(cur interface{}) {
-				controller.enqueueNode(cur)
+	registration, _ := nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerDetailedFuncs{
+			AddFunc: func(cur interface{}, isInInitialList bool) {
+				controller.enqueueNode(cur, isInInitialList)
 			},
 			UpdateFunc: func(old, cur interface{}) {
-				controller.enqueueNode(cur)
+				controller.enqueueNode(cur, false)
 			},
 			DeleteFunc: func(old interface{}) {
-				controller.enqueueNode(old)
+				controller.enqueueNode(old, false)
 			},
 		},
 		nodeResyncPeriod,
 	)
+	// UpstreamHasSynced is used by hasProcessedInitialList to determine whether even handlers
+	// have been called for the initial list.
+	controller.hasProcessedInitialList.UpstreamHasSynced = registration.HasSynced
 	return controller
 }
 
@@ -153,7 +167,7 @@ type nodeRouteInfo struct {
 
 // enqueueNode adds an object to the controller work queue
 // obj could be a *corev1.Node, or a DeletionFinalStateUnknown item.
-func (c *Controller) enqueueNode(obj interface{}) {
+func (c *Controller) enqueueNode(obj interface{}, isInInitialList bool) {
 	node, isNode := obj.(*corev1.Node)
 	if !isNode {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -170,6 +184,9 @@ func (c *Controller) enqueueNode(obj interface{}) {
 
 	// Ignore notifications for this Node, no need to establish connectivity to itself.
 	if node.Name != c.nodeConfig.Name {
+		if isInInitialList {
+			c.hasProcessedInitialList.Start(node.Name)
+		}
 		c.queue.Add(node.Name)
 	}
 }
@@ -327,6 +344,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	// underlying network. Therefore it needs not know the routes to
 	// peer Pod CIDRs.
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		c.flowRestoreCompleteWait.Done()
 		<-stopCh
 		return
 	}
@@ -352,6 +370,23 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
+
+	go func() {
+		// When the initial list of Nodes has been processed, we decrement flowRestoreCompleteWait.
+		err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), 100*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
+			return c.hasProcessedInitialList.HasSynced(), nil
+		})
+		// An error here means the context has been cancelled, which means that the stopCh
+		// has been closed. While it is still possible for c.hasProcessedInitialList.HasSynced
+		// to become true, as workers may not have returned yet, we should not decrement
+		// flowRestoreCompleteWait or log the message below.
+		if err != nil {
+			return
+		}
+		c.flowRestoreCompleteWait.Done()
+		klog.V(2).InfoS("Initial list of Nodes has been processed")
+	}()
+
 	<-stopCh
 }
 
@@ -380,14 +415,21 @@ func (c *Controller) processNextWorkItem() bool {
 	defer c.queue.Done(obj)
 
 	// We expect strings (Node name) to come off the workqueue.
-	if key, ok := obj.(string); !ok {
+	key, ok := obj.(string)
+	if !ok {
 		// As the item in the workqueue is actually invalid, we call Forget here else we'd
 		// go into a loop of attempting to process a work item that is invalid.
 		// This should not happen: enqueueNode only enqueues strings.
 		c.queue.Forget(obj)
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
-	} else if err := c.syncNodeRoute(key); err == nil {
+	}
+
+	// We call Finished unconditionally even if this only matters for the initial list of
+	// Nodes. There is no harm in calling Finished without a corresponding call to Start.
+	defer c.hasProcessedInitialList.Finished(key)
+
+	if err := c.syncNodeRoute(key); err == nil {
 		// If no error occurs we Forget this item so it does not get queued again until
 		// another change happens.
 		c.queue.Forget(key)

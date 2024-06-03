@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 	"text/template"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
@@ -292,13 +293,14 @@ func ipVersion(ip net.IP) string {
 }
 
 type cmdAddDelTester struct {
-	server         *cniserver.CNIServer
-	ctx            context.Context
-	testNS         ns.NetNS
-	targetNS       ns.NetNS
-	request        *cnimsg.CniCmdRequest
-	vethName       string
-	podNetworkWait *wait.Group
+	server                  *cniserver.CNIServer
+	ctx                     context.Context
+	testNS                  ns.NetNS
+	targetNS                ns.NetNS
+	request                 *cnimsg.CniCmdRequest
+	vethName                string
+	podNetworkWait          *wait.Group
+	flowRestoreCompleteWait *wait.Group
 }
 
 func (tester *cmdAddDelTester) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
@@ -569,13 +571,16 @@ func newTester() *cmdAddDelTester {
 	tester := &cmdAddDelTester{}
 	ifaceStore := interfacestore.NewInterfaceStore()
 	tester.podNetworkWait = wait.NewGroup()
+	tester.flowRestoreCompleteWait = wait.NewGroup()
 	tester.server = cniserver.New(testSock,
 		"",
 		getTestNodeConfig(false),
 		k8sFake.NewSimpleClientset(),
 		routeMock,
 		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
-		tester.podNetworkWait.Increment())
+		tester.podNetworkWait.Increment(),
+		tester.flowRestoreCompleteWait,
+	)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100))
 	ctx := context.Background()
 	tester.ctx = ctx
@@ -584,6 +589,7 @@ func newTester() *cmdAddDelTester {
 
 func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	testRequire := require.New(tc.t)
+	testAssert := assert.New(tc.t)
 
 	testRequire.Equal(cniVersion, tc.CNIVersion)
 
@@ -612,6 +618,9 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any(), uint16(0), nil).Return(nil)
 
 	tester.podNetworkWait.Done()
+
+	testAssert.NoError(tester.flowRestoreCompleteWait.WaitWithTimeout(1 * time.Second))
+
 	// Test ips allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
 	testRequire.Nil(err)
@@ -730,13 +739,14 @@ func setupChainTest(
 	if newServer {
 		routeMock = routetest.NewMockInterface(controller)
 		podNetworkWait := wait.NewGroup()
+		flowRestoreCompleteWait := wait.NewGroup()
 		server = cniserver.New(testSock,
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			routeMock,
 			true, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
-			podNetworkWait)
+			podNetworkWait, flowRestoreCompleteWait)
 	} else {
 		server = inServer
 	}
@@ -917,6 +927,7 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 	routeMock := routetest.NewMockInterface(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
 	podNetworkWait := wait.NewGroup()
+	flowRestoreCompleteWait := wait.NewGroup()
 	k8sClient := k8sFake.NewSimpleClientset(pod)
 	server := cniserver.New(
 		testSock,
@@ -925,7 +936,7 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 		k8sClient,
 		routeMock,
 		false, false, false, false, &config.NetworkConfig{InterfaceMTU: 1450},
-		podNetworkWait,
+		podNetworkWait, flowRestoreCompleteWait,
 	)
 
 	// call Initialize, which will run reconciliation and perform host-local IPAM garbage collection
