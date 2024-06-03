@@ -29,7 +29,7 @@ func init() {
 	RegisterTest("ingress-deny-all-connectivity", &IngressDenyAllConnectivityTest{})
 }
 
-func (a IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
+func (t IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
 	values := []string{echoSameNodeDeploymentName}
 	services := []string{echoSameNodeDeploymentName}
 	if testContext.echoOtherNodePod != nil {
@@ -39,11 +39,12 @@ func (a IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *te
 	if err := applyIngressDenyAll(ctx, testContext.client, testContext.namespace, values); err != nil {
 		return err
 	}
-	defer func() {
+	defer func() error {
 		if err := testContext.client.NetworkingV1().NetworkPolicies(testContext.namespace).Delete(ctx, "ingress-deny-all", metav1.DeleteOptions{}); err != nil {
-			testContext.Log("NetworkPolicy deletion is unsuccessful: %v", err)
+			return fmt.Errorf("NetworkPolicy deletion was unsuccessful: %w", err)
 		}
-		testContext.Log("NetworkPolicy deletion is successful")
+		testContext.Log("NetworkPolicy deletion was successful")
+		return nil
 	}()
 	testContext.Log("NetworkPolicy applied successfully")
 	for _, clientPod := range testContext.clientPods {
@@ -51,7 +52,7 @@ func (a IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *te
 			if err := testContext.runAgnhostConnect(ctx, clientPod.Name, "", service, 80); err != nil {
 				testContext.Log("NetworkPolicy is working as expected: Pod %s cannot connect to Service %s", clientPod.Name, service)
 			} else {
-				return fmt.Errorf("networkPolicy is not working as expected: Pod %s connected to Service %s when it should not", clientPod.Name, service)
+				return fmt.Errorf("NetworkPolicy is not working as expected: Pod %s connected to Service %s when it should not", clientPod.Name, service)
 			}
 		}
 	}
