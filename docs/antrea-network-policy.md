@@ -1464,17 +1464,27 @@ Note that for FQDN wildcard expressions, the `*` character can match multiple su
 `*foobar.com` will match `foobar.com`, `www.foobar.com` and `test.uswest.foobar.com`).
 
 Antrea will only program datapath rules for actual egress traffic towards these FQDNs, based
-on DNS results. It will not interfere with DNS packets, unless there is a separate policy
-dropping/rejecting communication between the DNS components and the Pods selected.
+on DNS results. It will not tamper with DNS request/response packets, unless there is a separate
+policy dropping/rejecting communication between the DNS components and the Pods selected.
 
 Antrea respects the TTL of DNS records, expiring stale IPs that are absent in more recent
-records according to their TTL. Therefore, Pods employing FQDN based policies ought to refrain
+records when their TTLs expire. Therefore, Pods employing FQDN based policies ought to refrain
 from caching a DNS record for a duration exceeding its TTL. Otherwise, FQDN based policies may
 intermittently fail to function as intended. Typically, the Java virtual machine (JVM) caches
 DNS records for a fixed period of time, controlled by `networkaddress.cache.ttl`. In this
 case, it’s crucial to set the JVM’s TTL to 0 so that FQDN based policies can work properly.
 
-Note that FQDN based policies do not work for [Service DNS names created by
+Another related note is that FQDN egress peers are recommended to ONLY be used in rules with
+action `Allow`, accompanied by some fallback `Drop` or `Reject` egress rules that secure
+N/S connectivity for the Pods selected by the FQDN policy. There is no guarantee that Antrea
+will be aware of all the IPs backing a domain name constantly, especially when the FQDN is
+served by dynamic IP addresses and gets DNS records with short TTLs. Some IPs may still be
+used to access the FQDN after their respective TTLs have expired in the original DNS record.
+Thus, using FQDN rules with action `Drop` or `Reject` could potentially allow traffic to an
+IP belonging to a denied domain, if a misbehaving client tries to connect to that domain with
+a cached but expired IP, leading to a security breach.
+
+Also note that FQDN based policies do not work for [Service DNS names created by
 Kubernetes](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#services)
 (e.g. `kubernetes.default.svc` or `antrea.kube-system.svc`), except for headless
 Services. The reason is that Antrea will use the information included in A or
