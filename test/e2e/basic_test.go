@@ -263,13 +263,6 @@ func testAntreaGracefulExit(t *testing.T, data *TestData) {
 	var gracePeriodSeconds int64 = 60
 	t.Logf("Deleting one Antrea Pod")
 	maxDeleteTimeout := 20 * time.Second
-	// When running Antrea instrumented binary to collect e2e coverage,
-	// we need to set the maxDeleteTimeout to a larger value
-	// since it needs to collect coverage data files
-	if testOptions.enableCoverage {
-		maxDeleteTimeout = 80 * time.Second
-	}
-
 	if timeToDelete, err := data.deleteAntreaAgentOnNode(nodeName(0), gracePeriodSeconds, defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea Pod: %v", err)
 	} else if timeToDelete > maxDeleteTimeout {
