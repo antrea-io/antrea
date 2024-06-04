@@ -128,6 +128,8 @@ trap exit_handler INT EXIT
 $THIS_DIR/../ci/kind/kind-setup.sh create kind --prometheus --num-workers 0 --antrea-cni
 
 # Wait for Antrea components to be ready, allow Antrea inits to complete
+kubectl -n kube-system rollout status --timeout=60s daemonset/antrea-agent
+kubectl -n kube-system rollout status --timeout=60s deployment/antrea-controller
 kubectl -n kube-system wait --for=condition=ready --timeout=120s pod -l app=antrea
 sleep 30
 
