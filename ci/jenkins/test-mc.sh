@@ -468,7 +468,10 @@ function collect_coverage {
       kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- kill -SIGINT $controller_pid
       cov_dir="${COVERAGE_DIR}/$mc_controller_pod_name-$timestamp"
       mkdir -p $cov_dir
-      kubectl cp ${namespace}/$mc_controller_pod_name:/tmp/coverage/* $cov_dir/ ${kubeconfig}
+      files=(`kubectl exec $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- ls /tmp/coverage/`)
+      for file in "${files[@]}"; do
+          kubectl cp ${namespace}/$mc_controller_pod_name:/tmp/coverage/$file $cov_dir/$file ${kubeconfig}
+      done
       go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
       rm -rf "${cov_dir}"
     done
