@@ -87,7 +87,7 @@ func run() error {
 		}
 		for i := 0; i < tc.RepeatTimes; i++ {
 			klog.InfoS("Start test", "Case", tc, "Repeat", i+1)
-			tCase, err := framework.NewScaleTestCase(tc.Name, false)
+			tCase, err := framework.NewScaleTestCase(tc.Name)
 			if err != nil {
 				return err
 			}

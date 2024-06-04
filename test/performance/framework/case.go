@@ -36,20 +36,18 @@ func RegisterFunc(name string, runFunc RunFunc) {
 }
 
 type ScaleTestCase struct {
-	name     string
-	run      RunFunc
-	parallel bool
+	name string
+	run  RunFunc
 }
 
-func NewScaleTestCase(name string, parallel bool) (*ScaleTestCase, error) {
+func NewScaleTestCase(name string) (*ScaleTestCase, error) {
 	tCase, ok := cases[name]
 	if !ok {
 		return nil, fmt.Errorf("test func %s not registered", name)
 	}
 	return &ScaleTestCase{
-		name:     name,
-		run:      tCase,
-		parallel: parallel,
+		name: name,
+		run:  tCase,
 	}, nil
 }
 

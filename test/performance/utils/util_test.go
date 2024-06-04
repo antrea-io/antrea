@@ -23,6 +23,6 @@ import (
 func TestGenRand(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		num := GenRandInt() % 100
-		assert.Equal(t, true, 0 < num && num < 100, "gen random num error")
+		assert.Equal(t, true, 0 <= num && num < 100, "gen random num error")
 	}
 }

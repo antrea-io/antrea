@@ -38,7 +38,7 @@ type ScaleConfiguration struct {
 	NamespaceNum       int  `yaml:"namespace_num"`        // NamespaceNum specifies the number of Namespaces to create.
 }
 
-type Scale struct {
+type ScaleTestCase struct {
 	Name        string `yaml:"name"`
 	Package     string `yaml:"package"`
 	RepeatTimes int    `yaml:"repeat_times"`
@@ -46,7 +46,7 @@ type Scale struct {
 
 type ScaleList struct {
 	ScaleConfiguration `yaml:",inline"`
-	Scales             []Scale `yaml:"scales"`
+	Scales             []ScaleTestCase `yaml:"scales"`
 }
 
 func ParseConfigs(configPath string) (*ScaleList, error) {

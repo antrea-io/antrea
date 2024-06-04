@@ -49,7 +49,7 @@ func ScaleService(ctx context.Context, ch chan time.Duration, data *ScaleData) (
 	var err error
 
 	var svcs []ServiceInfo
-	svcs, err = scaleUp(ctx, data, ch)
+	svcs, err = scaleUp(ctx, ch, data)
 	if err != nil {
 		res.err = fmt.Errorf("scale up services error: %v", err)
 		return
@@ -158,7 +158,7 @@ func renderServices(templatePath string, num int) (svcs []*corev1.Service, err e
 	return
 }
 
-func scaleUp(ctx context.Context, data *ScaleData, ch chan time.Duration) (svcs []ServiceInfo, err error) {
+func scaleUp(ctx context.Context, ch chan time.Duration, data *ScaleData) (svcs []ServiceInfo, err error) {
 	provider := data.provider
 	controlPlaneNodeName := data.controlPlaneNodes[0]
 	cs := data.kubernetesClientSet

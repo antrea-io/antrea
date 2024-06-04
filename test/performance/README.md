@@ -5,17 +5,26 @@ CNI within Kubernetes clusters.
 
 The following sections detail these features and explain how to use the tool.
 
-## 1. Scalability
+```shell
+Usage of ./bin/antrea-scale:
+      --config string              Config file of scale test cases list (default "test/performance/scale.yml")
+      --kubeConfigPath string      Path of cluster kubeconfig
+      --templateFilesPath string   Template YAML files path of test cases (default "test/performance/assets")
+      --timeout int                Timeout limit (minutes) of the whole scale test (default 10)
+      --v string                    (default "2")
+```
+
+## Scalability
 
 Whether it's a cluster with a single node or hundreds of nodes, you can execute tests with just
 a command line.
 
 ```shell
-make bin
+make antrea-scale
 ./bin/antrea-scale --kubeConfigPath=/root/.kube/config --timeout=120 --config=./test/performance/scale.yml
 ```
 
-## 2. Configurability
+## Configurability
 
 You can easily configure the test parameters to meet various testing scenarios through a YAML file.
 
@@ -46,7 +55,7 @@ scales:
     repeat_times: 1
 ```
 
-## 3. Flexibility & Assemblability
+## Flexibility & Assemblability
 
 The configuration file can be divided into two parts:
 the first part controls the scale of the test,
@@ -76,11 +85,11 @@ scales:
 ```
 
 For example, if we want to test whether the startup speed of the agent is affected after creating
-NetworkPolicy on a large scale, we can place "ScaleNP" under "ScaleAgent."
+NetworkPolicy on a large scale cluster, we can place "ScaleNetworkPolicy" after "ScaleRestartAgent".
 
-Also, we can control the number of tests by setting the "repeat" parameter.
+Also, we can control the number of tests by setting the `repeat_times` field.
 
-## 4. Efficient resource utilization(Antrea simulator agent)
+## Efficient resource utilization(Antrea simulator agent)
 
 A significant concern is that large-scale testing requires a vast amount of cluster resources.
 We can use simulated agents to conduct tests to save resources and achieve the goal of scaling
@@ -92,14 +101,31 @@ The simulator can watch the Antrea controller just like the real agent does, and
 able to simulate a large number of agents in a smaller number of nodes. It is useful for Antrea
 scalability testing, without having to create a very large cluster.
 
-## 5. Multiple platforms(Different CNIs)
+## Multiple platforms(Different CNIs)
 
 Additionally, for some common functional features, it's essential to compare the performance
 differences between different CNIs to understand our shortcomings or advantages.
 The scale test tool can run tests on different Kubernetes platforms and compare the performance
 metrics of different CNIs.
 
-## 6. Measure and monitoring
+For example, if you want to test the scale performance of other CNIs with the following cases:
+
+```yaml
+scales:
+  - name: "ScaleUpWorkloadPods"
+    package: "test/performance/framework"
+    repeat_times: 1
+  - name: "ScaleService"
+    package: "test/performance/framework"
+    repeat_times: 1
+  - name: "ScaleNetworkPolicy"
+    package: "test/performance/framework"
+    repeat_times: 1
+```
+
+Note that you should deploy the Kubernetes cluster and CNI firstly then execute the test tool.
+
+## Measure and monitoring
 
 The Antrea scale test tool also integrates monitoring tools, with Prometheus and Grafana,
 it's easy to view metrics such as CPU/Memory usage and the number of Pods/Networks during the
@@ -107,7 +133,21 @@ testing process.
 
 ![img.png](img.png)
 
-## 7. Expanding test cases
+### deploy monitoring
+
+With just one simple step, by executing a script, you can activate the monitoring system,
+providing convenient access to observe the resource consumption and an array of pertinent metrics
+across each node within the cluster during the testing phase.
+
+```shell
+cd test/performance/monitoring
+./deploy.sh --kubeconfig path/to/.kube/config 
+```
+
+Then you can access grafana via `http://$ip:3100` with `admin/admin`.
+For more information, please refer `./deploy.sh --help`.
+
+## Expanding test cases
 
 Regarding the extensibility of the testing framework, we've designed a model in which test data is
 separated from the framework. We expect the scale test tool to make it easy to add test cases

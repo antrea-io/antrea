@@ -38,7 +38,7 @@ func GenRandInt() int64 {
 	b := new(big.Int).SetInt64(int64(math.MaxInt64))
 	i, err := rand.Int(rand.Reader, b)
 	if err != nil {
-		return 0
+		return -1
 	}
 	return i.Int64()
 }

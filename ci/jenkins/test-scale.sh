@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2023 Antrea Authors
+# Copyright 2024 Antrea Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,17 +27,10 @@ WORKDIR=$DEFAULT_WORKDIR
 KUBECONFIG_PATH=$DEFAULT_KUBECONFIG_PATH
 TESTCASE=""
 TEST_FAILURE=false
-MODE="report"
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
 TESTBED_TYPE="legacy"
-GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
-DEFAULT_IP_MODE="ipv4"
-IP_MODE=""
 GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
-
-CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
-NETWORKPOLICY_SKIP="NetworkPolicyLegacy|should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
@@ -53,9 +46,6 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
 
         --kubeconfig             Path of cluster kubeconfig.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
-        --registry               The docker registry to use instead of dockerhub.
-        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy." 
 
 function print_usage {
     echoerr "$_usage"
@@ -82,18 +72,6 @@ case $key in
     WORKDIR="$2"
     shift 2
     ;;
-    --testcase)
-    TESTCASE="$2"
-    shift 2
-    ;;
-    --registry)
-    DOCKER_REGISTRY="$2"
-    shift 2
-    ;;
-    --testbed-type)
-    TESTBED_TYPE="$2"
-    shift 2
-    ;;
     -h|--help)
     print_usage
     exit 0
@@ -118,8 +96,6 @@ if [[ "$DOCKER_REGISTRY" != "" ]]; then
 fi
 export NO_PULL
 
-E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
-
 function export_govc_env_var {
     env_govc="${WORKDIR}/govc.env"
     if [ -f "$env_govc" ]; then
@@ -136,15 +112,7 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    clean_ns "monitoring"
-    clean_ns "antrea-ipam-test"
-    clean_ns "antrea-test"
-    echo "====== Cleanup Conformance Namespaces ======"
-    clean_ns "net"
-    clean_ns "service"
-    clean_ns "x-"
-    clean_ns "y-"
-    clean_ns "z-"
+    clean_ns "antrea-scale-ns"
 
     # Delete antrea-prometheus first for k8s>=1.22 to avoid Pod stuck in Terminating state.
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml --ignore-not-found=true || true
@@ -158,7 +126,7 @@ function clean_antrea {
 function clean_ns {
     ns=$1
     matching_ns=$(kubectl get ns | awk -v ns="${ns}" '$1 ~ ns {print $1}')
-    
+
     if [ -n "${matching_ns}" ]; then
         echo "${matching_ns}" | while read -r ns_name; do
             kubectl get pod -n "${ns_name}" --no-headers=true | awk '{print $1}' | while read pod_name; do
@@ -201,10 +169,7 @@ function deliver_antrea_scale {
     make clean
     ${CLEAN_STALE_IMAGES}
     ${PRINT_DOCKER_STATUS}
-    if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
-        docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
-        docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
-    fi
+
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
@@ -235,7 +200,7 @@ function deliver_antrea_scale {
 
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:${WORKDIR}/
-    
+
     cp -f build/yamls/*.yml $WORKDIR
 
     echo "====== Delivering Antrea Simulators to all Nodes ======"
@@ -275,12 +240,19 @@ function generate_ssh_config {
 }
 
 function prepare_scale_simulator {
+    ## Try best to clean up old config.
+    kubectl delete -f "${WORKSPACE}/build/yamls/antrea-agent-simulator.yml" || true
+    kubectl delete secret kubeconfig || true
+
+    # Create simulators.
     kubectl taint -l 'antrea/instance=simulator' node mocknode=true:NoExecute
-    kubectl create secret generic kubeconfig --type=Opaque --namespace=kube-system --from-file=${WORKDIR}/.kube
+    kubectl create secret generic kubeconfig --type=Opaque --namespace=kube-system --from-file=admin.conf=${WORKDIR}/.kube
+
+    kubectl apply -f "${WORKSPACE}/build/yamls/antrea-agent-simulator.yml"
 }
 
 function run_scale_test {
-    echo "====== Running Antrea E2E Tests ======"
+    echo "====== Running Antrea Scale Tests ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
     export GOROOT=${GOLANG_RELEASE_DIR}/go
@@ -293,6 +265,8 @@ function run_scale_test {
     generate_ssh_config
 
     set +e
+    ls ${WORKSPACE}
+    make bin
     ${WORKSPACE}/bin/antrea-scale --config ./test/performance/scale.yml
     set -e
 
