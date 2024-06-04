@@ -26,6 +26,7 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
@@ -126,7 +127,16 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
 	}()
 
+	config := &flowaggregatorconfig.FlowAggregatorConfig{
+		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+			Enable:              true,
+			Address:             "",
+			ObservationDomainID: ptr.To[uint32](testObservationDomainID),
+			RecordFormat:        "IPFIX",
+		},
+	}
 	ipfixExporter := IPFIXExporter{
+		config:                     config.FlowCollector,
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
 		templateIDv4:               testTemplateIDv4,
@@ -152,14 +162,18 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 
 	const newAddr = "newAddr"
 	const newProto = "newProto"
+	config.FlowCollector.Address = fmt.Sprintf("%s:%s", newAddr, newProto)
+	config.RecordContents.PodLabels = true
 
 	ipfixExporter.UpdateOptions(&options.Options{
+		Config:                     config,
 		ExternalFlowCollectorAddr:  newAddr,
 		ExternalFlowCollectorProto: newProto,
 	})
 
 	assert.Equal(t, newAddr, ipfixExporter.externalFlowCollectorAddr)
 	assert.Equal(t, newProto, ipfixExporter.externalFlowCollectorProto)
+	assert.True(t, ipfixExporter.includePodLabels)
 
 	require.NoError(t, ipfixExporter.AddRecord(mockRecord, false))
 	assert.Equal(t, 2, setCount, "Invalid number of flow sets sent by exporter")

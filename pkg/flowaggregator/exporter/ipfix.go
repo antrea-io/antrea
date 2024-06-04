@@ -17,6 +17,7 @@ package exporter
 import (
 	"fmt"
 	"hash/fnv"
+	"reflect"
 
 	"github.com/google/uuid"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/ipfix"
@@ -38,6 +40,7 @@ var (
 )
 
 type IPFIXExporter struct {
+	config                     flowaggregatorconfig.FlowCollectorConfig
 	externalFlowCollectorAddr  string
 	externalFlowCollectorProto string
 	exportingProcess           ipfix.IPFIXExportingProcess
@@ -46,8 +49,9 @@ type IPFIXExporter struct {
 	observationDomainID        uint32
 	templateIDv4               uint16
 	templateIDv6               uint16
-	set                        ipfixentities.Set
 	registry                   ipfix.IPFIXRegistry
+	set                        ipfixentities.Set
+	k8sClient                  kubernetes.Interface
 }
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
@@ -84,9 +88,10 @@ func NewIPFIXExporter(
 	} else {
 		observationDomainID = genObservationDomainID(k8sClient)
 	}
-	klog.InfoS("Flow aggregator Observation Domain ID", "Domain ID", observationDomainID)
+	klog.InfoS("Flow aggregator Observation Domain ID", "domainID", observationDomainID)
 
 	exporter := &IPFIXExporter{
+		config:                     opt.Config.FlowCollector,
 		externalFlowCollectorAddr:  opt.ExternalFlowCollectorAddr,
 		externalFlowCollectorProto: opt.ExternalFlowCollectorProto,
 		sendJSONRecord:             sendJSONRecord,
@@ -94,6 +99,7 @@ func NewIPFIXExporter(
 		observationDomainID:        observationDomainID,
 		registry:                   registry,
 		set:                        ipfixentities.NewSet(false),
+		k8sClient:                  k8sClient,
 	}
 
 	return exporter
@@ -119,22 +125,35 @@ func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool
 	return nil
 }
 
-func (e *IPFIXExporter) updateExternalFlowCollectorAddr(address, protocol string) {
-	if address == e.externalFlowCollectorAddr && protocol == e.externalFlowCollectorProto {
+func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
+	config := opt.Config.FlowCollector
+	if reflect.DeepEqual(config, e.config) && opt.Config.RecordContents.PodLabels == e.includePodLabels {
 		return
 	}
-	klog.InfoS("Updating flow-collector address")
-	e.externalFlowCollectorAddr = address
-	e.externalFlowCollectorProto = protocol
-	klog.InfoS("Config ExternalFlowCollectorAddr is changed", "address", e.externalFlowCollectorAddr, "protocol", e.externalFlowCollectorProto)
+
+	e.config = config
+	e.externalFlowCollectorAddr = opt.ExternalFlowCollectorAddr
+	e.externalFlowCollectorProto = opt.ExternalFlowCollectorProto
+	if opt.Config.FlowCollector.RecordFormat == "JSON" {
+		e.sendJSONRecord = true
+	} else {
+		e.sendJSONRecord = false
+	}
+	if opt.Config.FlowCollector.ObservationDomainID != nil {
+		e.observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
+	} else {
+		e.observationDomainID = genObservationDomainID(e.k8sClient)
+	}
+	e.includePodLabels = opt.Config.RecordContents.PodLabels
+	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "includePodLabels", e.includePodLabels)
+
+	// In theory, a change to e.includePodLabels does not require opening a new connection, it
+	// just requires sending new templates. But it is easier to treat all configuration changes
+	// uniformly.
 	if e.exportingProcess != nil {
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
 	}
-}
-
-func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
-	e.updateExternalFlowCollectorAddr(opt.ExternalFlowCollectorAddr, opt.ExternalFlowCollectorProto)
 }
 
 func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
