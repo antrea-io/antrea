@@ -627,7 +627,10 @@ function collect_coverage() {
         timestamp=$(date +%Y%m%d%H%M%S)
         cov_dir="${GIT_CHECKOUT_DIR}/conformance-coverage/$antrea_controller_pod_name-$timestamp"
         mkdir -p $cov_dir
-        kubectl cp kube-system/$antrea_controller_pod_name:/tmp/coverage/* $cov_dir/
+        files=(`kubectl exec $antrea_controller_pod_name -n kube-system ${kubeconfig} -- ls /tmp/coverage/`)
+        for file in "${files[@]}"; do
+            kubectl cp kube-system/$antrea_controller_pod_name:/tmp/coverage/$file $cov_dir/$file ${kubeconfig}
+        done
         go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
         rm -rf "${cov_dir}"
 
@@ -639,7 +642,10 @@ function collect_coverage() {
             timestamp=$(date +%Y%m%d%H%M%S)
             cov_dir="${GIT_CHECKOUT_DIR}/conformance-coverage/$agent-$timestamp"
             mkdir -p $cov_dir
-            kubectl cp kube-system/$agent:/tmp/coverage/* -c antrea-agent $cov_dir/
+            files=(`kubectl exec $agent -n kube-system ${kubeconfig} -c antrea-agent -- ls /tmp/coverage/`)
+            for file in "${files[@]}"; do
+                kubectl cp kube-system/$agent:/tmp/coverage/$file -c antrea-agent $cov_dir/$file ${kubeconfig}
+            done
             go tool covdata textfmt -i="${cov_dir}" -o "${cov_dir}.cov.out"
             rm -rf "${cov_dir}"
         done
