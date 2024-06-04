@@ -30,13 +30,11 @@ func init() {
 }
 
 func (t IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *testContext) error {
-	values := []string{echoSameNodeDeploymentName}
 	services := []string{echoSameNodeDeploymentName}
 	if testContext.echoOtherNodePod != nil {
-		values = append(values, echoOtherNodeDeploymentName)
 		services = append(services, echoOtherNodeDeploymentName)
 	}
-	if err := applyIngressDenyAll(ctx, testContext.client, testContext.namespace, values); err != nil {
+	if err := applyIngressDenyAll(ctx, testContext.client, testContext.namespace, services); err != nil {
 		return err
 	}
 	defer func() error {
@@ -59,7 +57,7 @@ func (t IngressDenyAllConnectivityTest) Run(ctx context.Context, testContext *te
 	return nil
 }
 
-func applyIngressDenyAll(ctx context.Context, client kubernetes.Interface, namespace string, values []string) error {
+func applyIngressDenyAll(ctx context.Context, client kubernetes.Interface, namespace string, services []string) error {
 	networkPolicy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ingress-deny-all",
@@ -71,7 +69,7 @@ func applyIngressDenyAll(ctx context.Context, client kubernetes.Interface, names
 					{
 						Key:      "name",
 						Operator: metav1.LabelSelectorOpIn,
-						Values:   values,
+						Values:   services,
 					},
 				},
 			},
