@@ -4,4 +4,4 @@ image:
   tag: "latest"
 
 # -- Enable running Windows OVS processes inside antrea-ovs container in antrea-agent Pod
-includeOVS: false
+includeOVS: true

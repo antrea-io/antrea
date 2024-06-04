@@ -102,6 +102,8 @@ fi
 
 if $INCLUDE_OVS; then
     HELM_VALUES+=("includeOVS=true")
+else
+    HELM_VALUES+=("includeOVS=false")
 fi
 
 if [ "$MODE" == "release" ]; then
