@@ -152,7 +152,7 @@ func Run(o *options) error {
 
 func agnhostConnectCommand(ip string, port string) []string {
 	hostPort := net.JoinHostPort(ip, port)
-	return []string{"/agnhost", "connect", hostPort, "--timeout=5s"}
+	return []string{"/agnhost", "connect", hostPort, "--timeout=3s"}
 }
 
 func newService(name string, selector map[string]string, port int) *corev1.Service {
