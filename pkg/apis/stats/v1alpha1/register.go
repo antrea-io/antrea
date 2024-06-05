@@ -49,6 +49,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicyStatsList{},
 		&MulticastGroup{},
 		&MulticastGroupList{},
+		&NodeLatencyStats{},
+		&NodeLatencyStatList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

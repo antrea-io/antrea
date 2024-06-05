@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ type StatsV1alpha1Interface interface {
 	AntreaNetworkPolicyStatsGetter
 	MulticastGroupsGetter
 	NetworkPolicyStatsGetter
+	NodeLatencyStatsesGetter
 }
 
 // StatsV1alpha1Client is used to interact with features provided by the stats.antrea.io group.
@@ -51,6 +52,10 @@ func (c *StatsV1alpha1Client) MulticastGroups() MulticastGroupInterface {
 
 func (c *StatsV1alpha1Client) NetworkPolicyStats(namespace string) NetworkPolicyStatsInterface {
 	return newNetworkPolicyStats(c, namespace)
+}
+
+func (c *StatsV1alpha1Client) NodeLatencyStatses() NodeLatencyStatsInterface {
+	return newNodeLatencyStatses(c)
 }
 
 // NewForConfig creates a new StatsV1alpha1Client for the given config.

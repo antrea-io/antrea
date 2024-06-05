@@ -4145,6 +4145,12 @@ metadata:
     app: antrea
 rules:
   - apiGroups:
+      - stats.antrea.io
+    resources:
+      - nodelatencystats
+    verbs:
+      - create
+  - apiGroups:
       - ""
     resources:
       - nodes
@@ -4397,9 +4403,12 @@ rules:
       - networkpolicystats
       - antreaclusternetworkpolicystats
       - antreanetworkpolicystats
+      - nodeiplatencystats
     verbs:
       - get
       - list
+      - create
+      - update
   - apiGroups:
       - system.antrea.io
     resources:

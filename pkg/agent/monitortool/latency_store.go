@@ -20,8 +20,10 @@ import (
 	"sync"
 	"time"
 
+	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"github.com/containernetworking/plugins/pkg/ip"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
@@ -247,4 +249,23 @@ func (s *LatencyStore) DeleteStaleNodeIPs() {
 			delete(s.nodeIPLatencyMap, nodeIP)
 		}
 	}
+}
+
+// ConvertList converts the latency store to a list of TargetIPLatencyStats.
+func (l *LatencyStore) ConvertList() []stv1aplpha1.TargetIPLatencyStats {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	entries := make([]stv1aplpha1.TargetIPLatencyStats, 0, len(l.nodeIPLatencyMap))
+	for nodeIP, entry := range l.nodeIPLatencyMap {
+		tempEntry := stv1aplpha1.TargetIPLatencyStats{
+			TargetIP:                   nodeIP,
+			LastSendTime:               metav1.NewTime(entry.LastSendTime),
+			LastRecvTime:               metav1.NewTime(entry.LastRecvTime),
+			LastMeasuredRTTNanoseconds: entry.LastMeasuredRTT.Nanoseconds(),
+		}
+		entries = append(entries, tempEntry)
+	}
+
+	return entries
 }
