@@ -1335,6 +1335,7 @@ func TestDualStackService(t *testing.T) {
 	fpv6 := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, true)
 
 	svc := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+		svc.Spec.IPFamilyPolicy = ptr.To(corev1.IPFamilyPolicyPreferDualStack)
 		svc.Spec.ClusterIP = svc1IPv4.String()
 		svc.Spec.ClusterIPs = []string{svc1IPv4.String(), svc1IPv6.String()}
 		svc.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}
@@ -1364,8 +1365,9 @@ func TestDualStackService(t *testing.T) {
 	fpv6.OnEndpointSliceUpdate(nil, epv6)
 	fpv6.OnEndpointsSynced()
 
-	mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), false, []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IPv4.String(), "", "", svcPort, false, true, true, false, nil)}).Times(1)
-	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any()).Times(1)
+	expectedIPv4Eps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IPv4.String(), "", "", svcPort, false, true, true, false, nil)}
+	mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), false, expectedIPv4Eps).Times(1)
+	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, expectedIPv4Eps).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 		ServiceIP:          svc1IPv4,
 		ServicePort:        uint16(svcPort),
@@ -1375,8 +1377,9 @@ func TestDualStackService(t *testing.T) {
 		ClusterGroupID:     1,
 	}).Times(1)
 
-	mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(2), false, []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IPv6.String(), "", "", svcPort, false, true, true, false, nil)}).Times(1)
-	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCPv6, gomock.Any()).Times(1)
+	expectedIPv6Eps := []k8sproxy.Endpoint{k8sproxy.NewBaseEndpointInfo(ep1IPv6.String(), "", "", svcPort, false, true, true, false, nil)}
+	mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(2), false, expectedIPv6Eps).Times(1)
+	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCPv6, expectedIPv6Eps).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 		ServiceIP:          svc1IPv6,
 		ServicePort:        uint16(svcPort),
@@ -1390,6 +1393,32 @@ func TestDualStackService(t *testing.T) {
 	fpv6.syncProxyRules()
 	assert.Contains(t, fpv4.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fpv6.serviceInstalledMap, svcPortName)
+
+	updatedSvc := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+		svc.Spec.IPFamilyPolicy = ptr.To(corev1.IPFamilyPolicySingleStack)
+		svc.Spec.ClusterIP = svc1IPv4.String()
+		svc.Spec.ClusterIPs = []string{svc1IPv4.String()}
+		svc.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol}
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:     svcPortName.Port,
+			Port:     int32(svcPort),
+			Protocol: corev1.ProtocolTCP,
+		}}
+	})
+	fpv4.OnServiceUpdate(svc, updatedSvc)
+	fpv4.OnServiceSynced()
+	fpv6.OnServiceUpdate(svc, updatedSvc)
+	fpv6.OnServiceSynced()
+
+	mockOFClient.EXPECT().UninstallServiceFlows(svc1IPv6, uint16(svcPort), binding.ProtocolTCPv6).Times(1)
+	mockOFClient.EXPECT().UninstallServiceGroup(binding.GroupIDType(2)).Times(1)
+	mockOFClient.EXPECT().UninstallEndpointFlows(binding.ProtocolTCPv6, expectedIPv6Eps).Times(1)
+
+	fpv4.syncProxyRules()
+	fpv6.syncProxyRules()
+
+	assert.Contains(t, fpv4.serviceInstalledMap, svcPortName)
+	assert.NotContains(t, fpv6.serviceInstalledMap, svcPortName)
 }
 
 func getAPIProtocol(bindingProtocol binding.Protocol) corev1.Protocol {
@@ -1626,6 +1655,7 @@ func testNodePortRemove(t *testing.T, bindingProtocol binding.Protocol, isIPv6 b
 	if needClearConntrackEntries(bindingProtocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, bindingProtocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcNodePortIP, uint16(svcNodePort), nil, bindingProtocol)
+		mockRouteClient.EXPECT().ClearConntrackEntryForService(vIP, uint16(svcNodePort), nil, bindingProtocol)
 		if externalIP != nil {
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(externalIP, uint16(svcPort), nil, bindingProtocol)
 		}
@@ -1764,6 +1794,7 @@ func testLoadBalancerRemove(t *testing.T, bindingProtocol binding.Protocol, isIP
 	if needClearConntrackEntries(bindingProtocol) {
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcIP, uint16(svcPort), nil, bindingProtocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(svcNodePortIP, uint16(svcNodePort), nil, bindingProtocol)
+		mockRouteClient.EXPECT().ClearConntrackEntryForService(vIP, uint16(svcNodePort), nil, bindingProtocol)
 		mockRouteClient.EXPECT().ClearConntrackEntryForService(loadBalancerIP, uint16(svcPort), nil, bindingProtocol)
 		if externalIP != nil {
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(externalIP, uint16(svcPort), nil, bindingProtocol)
