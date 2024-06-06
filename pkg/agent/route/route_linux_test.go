@@ -23,8 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sys/unix"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
 	servicecidrtest "antrea.io/antrea/pkg/agent/servicecidr/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util/ipset"
@@ -32,7 +34,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
 	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
-	"antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -1216,7 +1218,7 @@ func TestAddNodePort(t *testing.T) {
 		name              string
 		nodePortAddresses []net.IP
 		port              uint16
-		protocol          openflow.Protocol
+		protocol          binding.Protocol
 		expectedCalls     func(ipset *ipsettest.MockInterfaceMockRecorder)
 	}{
 		{
@@ -1226,7 +1228,7 @@ func TestAddNodePort(t *testing.T) {
 				net.ParseIP("1.1.2.2"),
 			},
 			port:     30000,
-			protocol: openflow.ProtocolTCP,
+			protocol: binding.ProtocolTCP,
 			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
 				ipset.AddEntry(antreaNodePortIPSet, "1.1.1.1,tcp:30000")
 				ipset.AddEntry(antreaNodePortIPSet, "1.1.2.2,tcp:30000")
@@ -1239,7 +1241,7 @@ func TestAddNodePort(t *testing.T) {
 				net.ParseIP("fd00:1234:5678:dead:beaf::2"),
 			},
 			port:     30001,
-			protocol: openflow.ProtocolUDPv6,
+			protocol: binding.ProtocolUDPv6,
 			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
 				ipset.AddEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::1,udp:30001")
 				ipset.AddEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::2,udp:30001")
@@ -1262,7 +1264,7 @@ func TestDeleteNodePort(t *testing.T) {
 		name              string
 		nodePortAddresses []net.IP
 		port              uint16
-		protocol          openflow.Protocol
+		protocol          binding.Protocol
 		expectedCalls     func(ipset *ipsettest.MockInterfaceMockRecorder)
 	}{
 		{
@@ -1272,7 +1274,7 @@ func TestDeleteNodePort(t *testing.T) {
 				net.ParseIP("1.1.2.2"),
 			},
 			port:     30000,
-			protocol: openflow.ProtocolTCP,
+			protocol: binding.ProtocolTCP,
 			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
 				ipset.DelEntry(antreaNodePortIPSet, "1.1.1.1,tcp:30000")
 				ipset.DelEntry(antreaNodePortIPSet, "1.1.2.2,tcp:30000")
@@ -1285,7 +1287,7 @@ func TestDeleteNodePort(t *testing.T) {
 				net.ParseIP("fd00:1234:5678:dead:beaf::2"),
 			},
 			port:     30001,
-			protocol: openflow.ProtocolUDPv6,
+			protocol: binding.ProtocolUDPv6,
 			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
 				ipset.DelEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::1,udp:30001")
 				ipset.DelEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::2,udp:30001")
@@ -1717,6 +1719,75 @@ func TestAddAndDeleteNodeIP(t *testing.T) {
 				_, exists = c.clusterNodeIPs.Load(tt.podCIDR.String())
 			}
 			assert.False(t, exists)
+		})
+	}
+}
+
+func TestClearConntrackEntryForService(t *testing.T) {
+	testCases := []struct {
+		name          string
+		svcIP         net.IP
+		svcPort       uint16
+		endpointIP    net.IP
+		protocol      binding.Protocol
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:       "TCPv4 with all parameters",
+			svcIP:      net.ParseIP("192.168.1.1"),
+			svcPort:    80,
+			endpointIP: net.ParseIP("10.10.0.2"),
+			protocol:   binding.ProtocolTCP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := &netlink.ConntrackFilter{}
+				filter.AddProtocol(unix.IPPROTO_TCP)
+				filter.AddZone(openflow.CtZone)
+				filter.AddIP(netlink.ConntrackOrigDstIP, net.ParseIP("192.168.1.1"))
+				filter.AddPort(netlink.ConntrackOrigDstPort, 80)
+				filter.AddIP(netlink.ConntrackReplySrcIP, net.ParseIP("10.10.0.2"))
+				mockNetlink.ConntrackDeleteFilter(netlink.ConntrackTableType(netlink.ConntrackTable), netlink.InetFamily(unix.AF_INET), filter).Times(1)
+			},
+		},
+		{
+			name:       "UDPv4 with svcIP and svcPort",
+			svcIP:      net.ParseIP("192.168.1.1"),
+			svcPort:    53,
+			endpointIP: nil,
+			protocol:   binding.ProtocolUDP,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := &netlink.ConntrackFilter{}
+				filter.AddProtocol(unix.IPPROTO_UDP)
+				filter.AddZone(openflow.CtZone)
+				filter.AddIP(netlink.ConntrackOrigDstIP, net.ParseIP("192.168.1.1"))
+				filter.AddPort(netlink.ConntrackOrigDstPort, 53)
+				mockNetlink.ConntrackDeleteFilter(netlink.ConntrackTableType(netlink.ConntrackTable), netlink.InetFamily(unix.AF_INET), filter).Times(1)
+			},
+		},
+		{
+			name:       "SCTPv6 with endpointIP",
+			svcIP:      nil,
+			svcPort:    0,
+			endpointIP: net.ParseIP("fec0::2"),
+			protocol:   binding.ProtocolSCTPv6,
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				filter := &netlink.ConntrackFilter{}
+				filter.AddProtocol(unix.IPPROTO_SCTP)
+				filter.AddZone(openflow.CtZoneV6)
+				filter.AddIP(netlink.ConntrackReplySrcIP, net.ParseIP("fec0::2"))
+				mockNetlink.ConntrackDeleteFilter(netlink.ConntrackTableType(netlink.ConntrackTable), netlink.InetFamily(unix.AF_INET6), filter).Times(1)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink: mockNetlink,
+			}
+			tc.expectedCalls(mockNetlink.EXPECT())
+			assert.NoError(t, c.ClearConntrackEntryForService(tc.svcIP, tc.svcPort, tc.endpointIP, tc.protocol))
 		})
 	}
 }

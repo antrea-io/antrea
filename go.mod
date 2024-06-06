@@ -50,7 +50,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/ti-mo/conntrack v0.4.0
-	github.com/vishvananda/netlink v1.2.1-beta.2
+	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240523162130-1e68b2710dc3
 	github.com/vmware/go-ipfix v0.8.2
 	go.uber.org/mock v0.4.0
 	golang.org/x/crypto v0.17.0
