@@ -771,7 +771,12 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 			klog.ErrorS(err, "Failed to persist interface MAC address", "interface", gatewayIface.InterfaceName, "mac", gwMAC)
 		}
 	}
-	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC, OFPort: uint32(gatewayIface.OFPort)}
+	i.nodeConfig.GatewayConfig = &config.GatewayConfig{
+		Name:      i.hostGateway,
+		MAC:       gwMAC,
+		LinkIndex: gwLinkIdx,
+		OFPort:    uint32(gatewayIface.OFPort),
+	}
 	gatewayIface.IPs = []net.IP{}
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
@@ -787,7 +792,6 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 		return nil
 	}
 
-	i.nodeConfig.GatewayConfig.LinkIndex = gwLinkIdx
 	// Allocate the gateway IP address for each Pod CIDR allocated to the Node. For each CIDR,
 	// the first address in the subnet is assigned to the host gateway interface.
 	podCIDRs := []*net.IPNet{i.nodeConfig.PodIPv4CIDR, i.nodeConfig.PodIPv6CIDR}

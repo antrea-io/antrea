@@ -362,30 +362,31 @@ func (c *Client) syncRoute() error {
 	return nil
 }
 
-// syncIPSet ensures that the required ipset exists and it has the initial members.
+// syncIPSet ensures that the required ipset exists, and it has the initial members.
 func (c *Client) syncIPSet() error {
-	// In policy-only mode, Node Pod CIDR is undefined.
-	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		return nil
-	}
-	if err := c.ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet, false); err != nil {
-		return err
-	}
-	if err := c.ipset.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true); err != nil {
-		return err
-	}
-
-	// Loop all valid PodCIDR and add into the corresponding ipset.
-	for _, podCIDR := range []*net.IPNet{c.nodeConfig.PodIPv4CIDR, c.nodeConfig.PodIPv6CIDR} {
-		if podCIDR != nil {
-			ipsetName := getIPSetName(podCIDR.IP)
-			if err := c.ipset.AddEntry(ipsetName, podCIDR.String()); err != nil {
-				return err
+	// Create the ipsets to store all Pod CIDRs for constructing full-mesh routing in encap/noEncap/hybrid modes. In
+	// networkPolicyOnly mode, Antrea is not responsible for IPAM, so CIDRs are not available and the ipsets should not
+	// be created.
+	if !c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		if err := c.ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet, false); err != nil {
+			return err
+		}
+		if err := c.ipset.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true); err != nil {
+			return err
+		}
+		// Loop all valid Pod CIDRs and add them into the corresponding ipset.
+		for _, podCIDR := range []*net.IPNet{c.nodeConfig.PodIPv4CIDR, c.nodeConfig.PodIPv6CIDR} {
+			if podCIDR != nil {
+				ipsetName := getIPSetName(podCIDR.IP)
+				if err := c.ipset.AddEntry(ipsetName, podCIDR.String()); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
-	// If proxy full is enabled, create NodePort ipset.
+	// AntreaProxy proxyAll is available in all traffic modes. If proxyAll is enabled, create the ipsets to store the
+	// pairs of Node IP and NodePort.
 	if c.proxyAll {
 		if err := c.ipset.CreateIPSet(antreaNodePortIPSet, ipset.HashIPPort, false); err != nil {
 			return err
@@ -410,6 +411,8 @@ func (c *Client) syncIPSet() error {
 		})
 	}
 
+	// AntreaIPAM is available in noEncap mode. There is a validation in Antrea configuration about this traffic mode
+	// when AntreaIPAM is enabled.
 	if c.connectUplinkToBridge {
 		if err := c.ipset.CreateIPSet(localAntreaFlexibleIPAMPodIPSet, ipset.HashIP, false); err != nil {
 			return err
@@ -419,6 +422,7 @@ func (c *Client) syncIPSet() error {
 		}
 	}
 
+	// Multicast is available in encap/noEncap/hybrid mode, and the ipsets are consumed in encap mode.
 	if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsEncap() {
 		if err := c.ipset.CreateIPSet(clusterNodeIPSet, ipset.HashIP, false); err != nil {
 			return err
@@ -442,6 +446,7 @@ func (c *Client) syncIPSet() error {
 		})
 	}
 
+	// NodeNetworkPolicy is available in all traffic modes.
 	if c.nodeNetworkPolicyEnabled {
 		c.nodeNetworkPolicyIPSetsIPv4.Range(func(key, value any) bool {
 			ipsetName := key.(string)
@@ -1818,7 +1823,7 @@ func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error 
 	return nil
 }
 
-// DeletLocaleAntreaFlexibleIPAMPodRule is used to delete related IP set entries when an AntreaFlexibleIPAM Pod is deleted.
+// DeleteLocalAntreaFlexibleIPAMPodRule is used to delete related IP set entries when an AntreaFlexibleIPAM Pod is deleted.
 func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
 	if !c.connectUplinkToBridge {
 		return nil
