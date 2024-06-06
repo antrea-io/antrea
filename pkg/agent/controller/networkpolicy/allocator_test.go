@@ -15,16 +15,16 @@
 package networkpolicy
 
 import (
-	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
-	clock "k8s.io/utils/clock/testing"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -175,6 +175,28 @@ func TestRelease(t *testing.T) {
 	}
 }
 
+// fakeClock is a wrapper around clocktesting.FakeClock that tracks the number
+// of times NewTimer has been called, so we can write a race-free test.
+type fakeClock struct {
+	*clocktesting.FakeClock
+	timersAdded atomic.Int32
+}
+
+func newFakeClock(t time.Time) *fakeClock {
+	return &fakeClock{
+		FakeClock: clocktesting.NewFakeClock(t),
+	}
+}
+
+func (c *fakeClock) TimersAdded() int32 {
+	return c.timersAdded.Load()
+}
+
+func (c *fakeClock) NewTimer(d time.Duration) clock.Timer {
+	defer c.timersAdded.Add(1)
+	return c.FakeClock.NewTimer(d)
+}
+
 func TestIdAllocatorWorker(t *testing.T) {
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -215,7 +237,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			startTime := time.Now()
 			expectedDeleteTime := startTime.Add(tt.expectedDeleteInterval)
-			fakeClock := clock.NewFakeClock(startTime)
+			fakeClock := newFakeClock(startTime)
 			minAsyncDeleteInterval = testMinAsyncDeleteInterval
 			testAsyncDeleteInterval = tt.testAsyncDeleteInterval
 			a := newIDAllocatorWithCustomClock(fakeClock, testAsyncDeleteInterval, tt.args...)
@@ -224,6 +246,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 			defer close(stopCh)
 			go a.runWorker(stopCh)
 
+			require.Zero(t, fakeClock.TimersAdded())
 			a.forgetRule(tt.rule.FlowID)
 
 			ruleHasBeenDeleted := func() bool {
@@ -232,24 +255,27 @@ func TestIdAllocatorWorker(t *testing.T) {
 				return len(a.availableSlice) > 0
 			}
 
+			// Wait for the DelayingQueue to create the timer which signals that the
+			// rule is ready to be deleted.
+			require.Eventually(t, func() bool {
+				return fakeClock.TimersAdded() > 0
+			}, 1*time.Second, 10*time.Millisecond)
+
 			fakeClock.SetTime(expectedDeleteTime.Add(-10 * time.Millisecond))
 
 			// We wait for a small duration and ensure that the rule is not deleted.
-			err := wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 100*time.Millisecond, true, func(ctx context.Context) (bool, error) {
-				return ruleHasBeenDeleted(), nil
-			})
-			require.Error(t, err, "Rule ID was unexpectedly released")
+			require.Never(t, func() bool {
+				return ruleHasBeenDeleted()
+			}, 100*time.Millisecond, 10*time.Millisecond, "Rule ID was unexpectedly released")
 			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
 			require.NoError(t, err)
 			assert.True(t, exists, "Rule should be present in asyncRuleCache")
 
 			fakeClock.SetTime(expectedDeleteTime.Add(10 * time.Millisecond))
 
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 1*time.Second, true,
-				func(ctx context.Context) (bool, error) {
-					return ruleHasBeenDeleted(), nil
-				})
-			require.NoError(t, err, "Rule ID was not released")
+			require.Eventually(t, func() bool {
+				return ruleHasBeenDeleted()
+			}, 1*time.Second, 10*time.Millisecond, "Rule ID was not released")
 			_, exists, err = a.getRuleFromAsyncCache(tt.expectedID)
 			require.NoError(t, err)
 			assert.False(t, exists, "Rule should not be present in asyncRuleCache")
