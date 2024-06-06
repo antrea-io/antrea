@@ -59,14 +59,16 @@ func TestRun(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name          string
-		registry      map[string]Test
-		runFilter     string
-		expectedStats testStats
+		name             string
+		registry         map[string]Test
+		runFilter        string
+		expectedStats    testStats
+		expectedNumTotal int
 	}{
 		{
-			name:          "no test in registry",
-			expectedStats: testStats{},
+			name:             "no test in registry",
+			expectedStats:    testStats{},
+			expectedNumTotal: 0,
 		},
 		{
 			name:     "run all tests",
@@ -76,6 +78,7 @@ func TestRun(t *testing.T) {
 				numFailure: 1,
 				numSkipped: 1,
 			},
+			expectedNumTotal: 3,
 		},
 		{
 			name:      "run single test",
@@ -84,12 +87,14 @@ func TestRun(t *testing.T) {
 			expectedStats: testStats{
 				numSuccess: 1,
 			},
+			expectedNumTotal: 1,
 		},
 		{
-			name:          "no matching test",
-			registry:      registry,
-			runFilter:     "my-test",
-			expectedStats: testStats{},
+			name:             "no matching test",
+			registry:         registry,
+			runFilter:        "my-test",
+			expectedStats:    testStats{},
+			expectedNumTotal: 0,
 		},
 	}
 
