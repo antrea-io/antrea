@@ -841,6 +841,7 @@ jobs:
     - validate-prometheus-metrics-doc
     - test-e2e-flow-visibility
     - test-network-policy-conformance-encap
+    - run-installation-checks
     runs-on: [ubuntu-latest]
     steps:
     - name: Create empty file to overwrite artifacts

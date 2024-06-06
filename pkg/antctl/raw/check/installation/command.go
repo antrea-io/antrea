@@ -114,6 +114,10 @@ type testStats struct {
 	numSkipped int
 }
 
+func (s *testStats) numTotal() int {
+	return s.numSuccess + s.numSkipped + s.numFailure
+}
+
 func compileRunFilter(runFilter string) (*regexp.Regexp, error) {
 	if runFilter == "" {
 		return nil, nil
@@ -145,7 +149,7 @@ func Run(o *options) error {
 	testContext.Log("Test finished: %v tests succeeded, %v tests failed, %v tests were skipped", stats.numSuccess, stats.numFailure, stats.numSkipped)
 	check.Teardown(ctx, testContext.client, testContext.clusterName, testContext.namespace)
 	if stats.numFailure > 0 {
-		return fmt.Errorf("%v/%v tests failed", stats.numFailure, len(testsRegistry))
+		return fmt.Errorf("%v/%v tests failed", stats.numFailure, stats.numTotal())
 	}
 	return nil
 }
