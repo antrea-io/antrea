@@ -136,7 +136,7 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 
 		// Verify that access to path /clientip is as expected.
 		assert.Eventually(t, func() bool {
-			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "clientip"), "-T", "1"}
+			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "clientip"), "-T", "1", "-t", "1"}
 			_, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
 			if (allowHTTPPathClientIP && err != nil) || (!allowHTTPPathClientIP && err == nil) {
 				return false
@@ -146,7 +146,7 @@ func probeL7NetworkPolicyHTTP(t *testing.T, data *TestData, serverPodName, clien
 
 		// Verify that access to path /hostname is as expected.
 		assert.Eventually(t, func() bool {
-			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "hostname"), "-T", "1"}
+			cmd := []string{"wget", "-O", "-", fmt.Sprintf("%s/%s", baseURL, "hostname"), "-T", "1", "-t", "1"}
 			hostname, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, agnhostContainerName, cmd)
 			if (allowHTTPPathHostname && err != nil) || (!allowHTTPPathHostname && err == nil) {
 				return false
@@ -359,6 +359,16 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
 	serverIPs := podIPs.AsSlice()
 
+	// Filename base on generated Suricata config https://github.com/antrea-io/antrea/blob/main/pkg/agent/controller/networkpolicy/l7engine/reconciler.go.
+	l7LogFile := path.Join(logDir, "l7engine", fmt.Sprintf("eve-%s.json", time.Now().Format(time.DateOnly)))
+
+	antreaPodName, err := data.getAntreaPodOnNode(l7LoggingNode)
+	require.NoError(t, err, "Error occurred when trying to get the antrea-agent Pod running on Node %s", l7LoggingNode)
+	// Truncate existing log file if applicable to avoid interference between test runs.
+	// Note that the file cannot simply be removed, as Suricata will not recreate it. See https://docs.suricata.io/en/suricata-6.0.0/output/log-rotation.html.
+	_, _, err = data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", []string{"truncate", "-c", "-s", "0", l7LogFile})
+	require.NoError(t, err)
+
 	policyAllowPathHostname := "test-l7-http-allow-path-hostname"
 	l7ProtocolAllowsPathHostname := []crdv1beta1.L7Protocol{
 		{
@@ -382,7 +392,7 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 		l7LogMatchers = append(l7LogMatchers, clientMatcher, hostMatcher)
 	}
 
-	checkL7LoggingResult(t, data, l7LoggingNode, l7LogMatchers)
+	checkL7LoggingResult(t, data, antreaPodName, l7LogFile, l7LogMatchers)
 }
 
 // Partial entries of L7 NetworkPolicy logging necessary for testing.
@@ -398,21 +408,20 @@ type L7LogEntry struct {
 	Http      L7LogHttpEntry `json:"http"`
 }
 
-func checkL7LoggingResult(t *testing.T, data *TestData, nodeName string, matchers []L7LogEntry) {
-	// Filename base on generated Suricata config [https://github.com/antrea-io/antrea/blob/main/pkg/agent/controller/networkpolicy/l7engine/reconciler.go].
-	l7LogFile := path.Join(logDir, "l7engine", fmt.Sprintf("eve-%s.json", time.Now().Format(time.DateOnly)))
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
-	require.NoError(t, err, "Error occurred when trying to get the Antrea Agent Pod running on Node %s", nodeName)
+func checkL7LoggingResult(t *testing.T, data *TestData, antreaPodName string, l7LogFile string, expected []L7LogEntry) {
 	cmd := []string{"cat", l7LogFile}
 
-	if err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-		stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+	t.Logf("Checking L7NP logs on Pod '%s'", antreaPodName)
+
+	if err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 		if err != nil {
 			// file may not exist yet
+			t.Logf("Error when reading L7NP log file '%s', err: %v, stderr: %s", l7LogFile, err, stderr)
 			return false, nil
 		}
 
-		var gotLogs []L7LogEntry
+		var actual []L7LogEntry
 		dec := json.NewDecoder(strings.NewReader(stdout))
 		for dec.More() {
 			var log L7LogEntry
@@ -420,11 +429,18 @@ func checkL7LoggingResult(t *testing.T, data *TestData, nodeName string, matcher
 				// log format error, fail immediately
 				return false, err
 			}
-			if slices.Contains(matchers, log) {
-				gotLogs = append(gotLogs, log)
+			// ignore unexpected log entries and duplicates
+			if slices.Contains(expected, log) && !slices.Contains(actual, log) {
+				actual = append(actual, log)
 			}
 		}
-		return slices.Equal(gotLogs, matchers), nil
+		if !slices.Equal(actual, expected) {
+			t.Logf("L7NP log mismatch")
+			t.Logf("Expected: %v", expected)
+			t.Logf("Actual: %v", actual)
+			return false, nil
+		}
+		return true, nil
 	}); err != nil {
 		t.Errorf("Error when polling L7 audit log files for required entries: %v", err)
 	}
