@@ -590,7 +590,6 @@ function run_conformance {
 
     set +e
     kubectl taint nodes --selector='!node-role.kubernetes.io/control-plane' node.cluster.x-k8s.io/uninitialized-
-    set -e
 
     if [[ "$TESTCASE" == "conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-sig-network --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
@@ -602,14 +601,19 @@ function run_conformance {
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     fi
 
-    cat ${GIT_CHECKOUT_DIR}/vmc-test.log
-    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/vmc-test.log
-    then
-        echo "Failed cases exist."
+    TEST_SCRIPT_RC=$?
+    if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
+        echo "All tests passed."
+        echo "=== SUCCESS !!! ==="
+    elif [[ $TEST_SCRIPT_RC -eq 1 ]]; then
+        echo "Failed test cases exist."
+        echo "=== FAILURE !!! ==="
         TEST_FAILURE=true
     else
-        echo "All tests passed."
+        echo "Unexpected error when running tests but not a test failure."
+        echo "=== FAILURE !!! ==="
     fi
+    set -e
 
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/conformance-coverage

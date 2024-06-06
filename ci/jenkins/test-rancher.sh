@@ -234,19 +234,26 @@ function run_conformance {
     kubectl rollout status deployment.apps/antrea-controller -n kube-system
     kubectl rollout status daemonset/antrea-agent -n kube-system
 
+    set +e
     if [[ "$TESTCASE" =~ "conformance" ]]; then
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
     else
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
     fi
 
-    cat ${WORKSPACE}/test-result.log
-    if grep -Fxq "Failed tests:" ${WORKSPACE}/test-result.log; then
-        echo "Failed cases exist."
+    TEST_SCRIPT_RC=$?
+    if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
+        echo "All tests passed."
+        echo "=== SUCCESS !!! ==="
+    elif [[ $TEST_SCRIPT_RC -eq 1 ]]; then
+        echo "Failed test cases exist."
+        echo "=== FAILURE !!! ==="
         TEST_FAILURE=true
     else
-        echo "All tests passed."
+        echo "Unexpected error when running tests but not a test failure."
+        echo "=== FAILURE !!! ==="
     fi
+    set -e
 }
 
 function clean_tmp() {

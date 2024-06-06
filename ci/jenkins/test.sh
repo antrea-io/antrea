@@ -676,15 +676,20 @@ function run_conformance {
     else
         ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "$NETWORKPOLICY_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kubernetes-version "auto" > ${WORKSPACE}/test-result.log
     fi
-    set -e
 
-    cat ${WORKSPACE}/test-result.log
-    if grep -Fxq "Failed tests:" ${WORKSPACE}/test-result.log; then
-        echo "Failed cases exist."
+    TEST_SCRIPT_RC=$?
+    if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
+        echo "All tests passed."
+        echo "=== SUCCESS !!! ==="
+    elif [[ $TEST_SCRIPT_RC -eq 1 ]]; then
+        echo "Failed test cases exist."
+        echo "=== FAILURE !!! ==="
         TEST_FAILURE=true
     else
-        echo "All tests passed."
+        echo "Unexpected error when running tests but not a test failure."
+        echo "=== FAILURE !!! ==="
     fi
+    set -e
 }
 
 function run_e2e_windows {
