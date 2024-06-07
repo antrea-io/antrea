@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -41,6 +42,8 @@ const (
 	ipv4Any = "0.0.0.0/0"
 	ipv6Any = "::/0"
 )
+
+var ipsetTypeHashIP = ipset.HashIP
 
 /*
 Tips:
@@ -622,7 +625,7 @@ func buildCoreIPTRule(ipProtocol iptables.Protocol,
 	builder := iptables.NewRuleBuilder(iptChain)
 	if isIngress {
 		if ipset != "" {
-			builder = builder.MatchIPSetSrc(ipset)
+			builder = builder.MatchIPSetSrc(ipset, ipsetTypeHashIP)
 		} else if ipnet != "" {
 			builder = builder.MatchCIDRSrc(ipnet)
 		} else {
@@ -631,7 +634,7 @@ func buildCoreIPTRule(ipProtocol iptables.Protocol,
 		}
 	} else {
 		if ipset != "" {
-			builder = builder.MatchIPSetDst(ipset)
+			builder = builder.MatchIPSetDst(ipset, ipsetTypeHashIP)
 		} else if ipnet != "" {
 			builder = builder.MatchCIDRDst(ipnet)
 		} else {
@@ -648,8 +651,8 @@ func buildCoreIPTRule(ipProtocol iptables.Protocol,
 			fallthrough
 		case "sctp":
 			builder = builder.MatchTransProtocol(transProtocol).
-				MatchSrcPort(service.SrcPort, service.SrcEndPort).
-				MatchDstPort(service.Port, service.EndPort)
+				MatchPortSrc(service.SrcPort, service.SrcEndPort).
+				MatchPortDst(service.Port, service.EndPort)
 		case "icmp":
 			builder = builder.MatchICMP(service.ICMPType, service.ICMPCode, ipProtocol)
 		}
@@ -673,8 +676,8 @@ func buildServiceIPTRules(ipProtocol iptables.Protocol, services []v1beta2.Servi
 			fallthrough
 		case "sctp":
 			copiedBuilder = copiedBuilder.MatchTransProtocol(transProtocol).
-				MatchSrcPort(svc.SrcPort, svc.SrcEndPort).
-				MatchDstPort(svc.Port, svc.EndPort)
+				MatchPortSrc(svc.SrcPort, svc.SrcEndPort).
+				MatchPortDst(svc.Port, svc.EndPort)
 		case "icmp":
 			copiedBuilder = copiedBuilder.MatchICMP(svc.ICMPType, svc.ICMPCode, ipProtocol)
 		}
