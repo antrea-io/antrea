@@ -189,7 +189,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 			mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*flowRecord).Return(!tc.isIPv6)
 
 			err := fa.sendFlowKeyRecord(tc.flowKey, flowRecord)
-			assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, tc.flowKey, flowRecord)
+			assert.NoError(t, err, "Error when sending flow key record, key: %v, record: %v", tc.flowKey, flowRecord)
 		})
 	}
 }
