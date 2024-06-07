@@ -28,6 +28,8 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/util/ipset"
 )
 
 const (
@@ -109,16 +111,17 @@ type Interface interface {
 type IPTablesRuleBuilder interface {
 	MatchCIDRSrc(cidr string) IPTablesRuleBuilder
 	MatchCIDRDst(cidr string) IPTablesRuleBuilder
-	MatchIPSetSrc(ipset string) IPTablesRuleBuilder
-	MatchIPSetDst(ipset string) IPTablesRuleBuilder
+	MatchIPSetSrc(ipset string, ipsetType ipset.SetType) IPTablesRuleBuilder
+	MatchIPSetDst(ipset string, ipsetType ipset.SetType) IPTablesRuleBuilder
 	MatchTransProtocol(protocol string) IPTablesRuleBuilder
-	MatchDstPort(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder
-	MatchSrcPort(port, endPort *int32) IPTablesRuleBuilder
+	MatchPortDst(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder
+	MatchPortSrc(port, endPort *int32) IPTablesRuleBuilder
 	MatchICMP(icmpType, icmpCode *int32, ipProtocol Protocol) IPTablesRuleBuilder
 	MatchEstablishedOrRelated() IPTablesRuleBuilder
 	MatchInputInterface(interfaceName string) IPTablesRuleBuilder
 	MatchOutputInterface(interfaceName string) IPTablesRuleBuilder
 	SetTarget(target string) IPTablesRuleBuilder
+	SetTargetDNATToDst(dnatIP string, dnatPort *int32) IPTablesRuleBuilder
 	SetComment(comment string) IPTablesRuleBuilder
 	CopyBuilder() IPTablesRuleBuilder
 	Done() IPTablesRule

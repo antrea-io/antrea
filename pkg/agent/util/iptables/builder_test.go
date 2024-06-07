@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"antrea.io/antrea/pkg/agent/util/ipset"
 )
 
 var (
@@ -50,11 +52,11 @@ func TestBuilders(t *testing.T) {
 			name:  "Accept TCP destination 8080 in FORWARD",
 			chain: ForwardChain,
 			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
-				return builder.MatchIPSetSrc(ipsetAlfa).
-					MatchIPSetDst(ipsetBravo).
+				return builder.MatchIPSetSrc(ipsetAlfa, ipset.HashIP).
+					MatchIPSetDst(ipsetBravo, ipset.HashIP).
 					MatchInputInterface(eth0).
 					MatchTransProtocol(ProtocolTCP).
-					MatchDstPort(port8080, nil).
+					MatchPortDst(port8080, nil).
 					MatchCIDRSrc(cidr).
 					SetComment("Accept TCP 8080").
 					SetTarget(AcceptTarget).
@@ -66,10 +68,10 @@ func TestBuilders(t *testing.T) {
 			name:  "Drop UDP destination 137-139 in INPUT",
 			chain: "INPUT",
 			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
-				return builder.MatchIPSetSrc(ipsetAlfa).
+				return builder.MatchIPSetSrc(ipsetAlfa, ipset.HashIP).
 					MatchInputInterface(eth0).
 					MatchTransProtocol(ProtocolUDP).
-					MatchDstPort(port137, &port139).
+					MatchPortDst(port137, &port139).
 					MatchCIDRDst(cidr).
 					SetComment("Drop UDP 137-139").
 					SetTarget(DropTarget).
@@ -83,7 +85,7 @@ func TestBuilders(t *testing.T) {
 			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
 				return builder.MatchOutputInterface(eth1).
 					MatchTransProtocol(ProtocolSCTP).
-					MatchSrcPort(&port40000, &port50000).
+					MatchPortSrc(&port40000, &port50000).
 					SetComment("Drop SCTP 40000-50000").
 					SetTarget(DropTarget).
 					Done()
@@ -122,6 +124,20 @@ func TestBuilders(t *testing.T) {
 					Done()
 			},
 			expected: `-A INPUT -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT`,
+		},
+		{
+			name:  "DNAT packets from specific connections",
+			chain: PreRoutingChain,
+			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
+				return builder.MatchCIDRSrc("192.168.77.100").
+					MatchCIDRDst("10.96.0.10").
+					MatchTransProtocol(ProtocolTCP).
+					MatchPortDst(port8080, nil).
+					SetTarget(DNATTarget).
+					SetTargetDNATToDst("10.10.0.2", &port40000).
+					Done()
+			},
+			expected: `-A PREROUTING -s 192.168.77.100 -d 10.96.0.10 -p tcp --dport 8080 -j DNAT --to-destination 10.10.0.2:40000`,
 		},
 	}
 
