@@ -47,15 +47,17 @@ func NewPacketConn(localAddr net.Addr, inCh chan *Packet, outCh chan *Packet) *P
 }
 
 func (pc *PacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
+	// Check if connection is closed once before the select statement. Otherwise we may end up
+	// reading a packet even if the connection was already closed before calling this
+	// function. It is still possible for the connection to be closed between this check and the
+	// select, but it doesn't matter in this case because that would mean the 2 function calls
+	// (Close and ReadFrom) are concurrent.
+	if pc.isClosed() {
+		return 0, nil, pc.closedConnectionError("read")
+	}
 	select {
 	case <-pc.closeCh:
-		return 0, nil, &net.OpError{
-			Op:     "read",
-			Net:    pc.addr.Network(),
-			Source: pc.addr,
-			Addr:   nil,
-			Err:    fmt.Errorf("connection is closed"),
-		}
+		return 0, nil, pc.closedConnectionError("read")
 	case packet := <-pc.inCh:
 		n := copy(p, packet.Bytes)
 		return n, packet.Addr, nil
@@ -63,6 +65,10 @@ func (pc *PacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 }
 
 func (pc *PacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
+	// See the comment in ReadFrom.
+	if pc.isClosed() {
+		return 0, pc.closedConnectionError("write")
+	}
 	packet := &Packet{
 		Bytes: make([]byte, len(p)),
 		Addr:  addr,
@@ -70,14 +76,7 @@ func (pc *PacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	n := copy(packet.Bytes, p)
 	select {
 	case <-pc.closeCh:
-		return 0, &net.OpError{
-			Op:     "write",
-			Net:    pc.addr.Network(),
-			Source: pc.addr,
-			Addr:   nil,
-			Err:    fmt.Errorf("connection is closed"),
-		}
-
+		return 0, pc.closedConnectionError("write")
 	case pc.outCh <- packet:
 		return n, nil
 	}
@@ -129,6 +128,25 @@ func (pc *PacketConn) Receive() ([]byte, net.Addr, error) {
 		return packet.Bytes, packet.Addr, nil
 	default:
 		return nil, nil, fmt.Errorf("no packet available")
+	}
+}
+
+func (pc *PacketConn) isClosed() bool {
+	select {
+	case <-pc.closeCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func (pc *PacketConn) closedConnectionError(op string) error {
+	return &net.OpError{
+		Op:     op,
+		Net:    pc.addr.Network(),
+		Source: pc.addr,
+		Addr:   nil,
+		Err:    fmt.Errorf("connection is closed"),
 	}
 }
 
