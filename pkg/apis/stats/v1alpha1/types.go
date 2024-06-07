@@ -187,8 +187,8 @@ type TargetIPLatencyStats struct {
 // NodeLatencyStatList is a list of PeerNodeLatencyStats objects.
 type NodeLatencyStatList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `protobuf:"bytes,1,opt,name=listMeta"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// The list of PeerNodeLatencyStats.
-	Items []PeerNodeLatencyStats `protobuf:"bytes,2,rep,name=items"`
+	Items []PeerNodeLatencyStats `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

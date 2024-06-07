@@ -17,11 +17,12 @@ package nodelatencystat
 import (
 	"context"
 
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
+
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 )
 
 type REST struct {
@@ -41,7 +42,7 @@ func NewREST() *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &statsv1alpha1.NodeIPLatencyStat{}
+	return &statsv1alpha1.NodeLatencyStats{}
 }
 
 func (r *REST) Destroy() {
@@ -49,21 +50,21 @@ func (r *REST) Destroy() {
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	// TODO: fill this function in next PR
-	return &statsv1alpha1.NodeIPLatencyStat{}, nil
+	return &statsv1alpha1.NodeLatencyStats{}, nil
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	// TODO: fill this function in next PR
-	return &statsv1alpha1.NodeIPLatencyStat{}, nil
+	return &statsv1alpha1.NodeLatencyStats{}, nil
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &statsv1alpha1.NodeIPLatencyStatList{}
+	return &statsv1alpha1.NodeLatencyStats{}
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	// TODO: fill this function in next PR
-	return &statsv1alpha1.NodeIPLatencyStatList{}, nil
+	return &statsv1alpha1.NodeLatencyStatList{}, nil
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
@@ -83,5 +84,5 @@ func (r *REST) NamespaceScoped() bool {
 }
 
 func (r *REST) GetSingularName() string {
-	return "nodeiplatencystat"
+	return "nodelatencystat"
 }

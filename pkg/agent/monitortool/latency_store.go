@@ -20,12 +20,13 @@ import (
 	"sync"
 	"time"
 
-	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	"github.com/containernetworking/plugins/pkg/ip"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+
+	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 
 	"antrea.io/antrea/pkg/util/k8s"
 )

@@ -4147,7 +4147,7 @@ rules:
   - apiGroups:
       - stats.antrea.io
     resources:
-      - nodelatencystats
+      - nodeiplatencystats
     verbs:
       - create
   - apiGroups:
@@ -4403,12 +4403,9 @@ rules:
       - networkpolicystats
       - antreaclusternetworkpolicystats
       - antreanetworkpolicystats
-      - nodeiplatencystats
     verbs:
       - get
       - list
-      - create
-      - update
   - apiGroups:
       - system.antrea.io
     resources:

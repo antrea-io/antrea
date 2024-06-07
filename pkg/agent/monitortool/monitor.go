@@ -15,15 +15,12 @@
 package monitortool
 
 import (
-	"context"
 	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/util/env"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -33,6 +30,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
+
+	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/util/env"
 
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
@@ -384,7 +384,7 @@ func (m *NodeLatencyMonitor) GetSummary() *stv1aplpha1.NodeLatencyStats {
 			Name: nodeName,
 		},
 		PeerNodeLatencyStats: []stv1aplpha1.PeerNodeLatencyStats{
-			stv1aplpha1.PeerNodeLatencyStats{
+			{
 				NodeName:             nodeName,
 				TargetIPLatencyStats: m.latencyStore.ConvertList(),
 			},
@@ -404,9 +404,10 @@ func (m *NodeLatencyMonitor) report() {
 		klog.ErrorS(err, "Failed to get Antrea client")
 		return
 	}
-	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStats().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
-		klog.ErrorS(err, "Failed to update NodeIPLatencyStats")
-	}
+	_ = antreaClient
+	// if _, err := antreaClient.StatsV1alpha1().NodeLatencyStats().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
+	// 	klog.ErrorS(err, "Failed to update NodeIPLatencyStats")
+	// }
 }
 
 // Run starts the NodeLatencyMonitor.
