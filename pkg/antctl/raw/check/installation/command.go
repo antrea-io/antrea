@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/antctl/raw/check"
 )
@@ -96,14 +97,16 @@ func RegisterTest(name string, test Test) {
 }
 
 type testContext struct {
-	client           kubernetes.Interface
-	config           *rest.Config
-	clusterName      string
-	antreaNamespace  string
-	clientPods       []corev1.Pod
-	echoSameNodePod  *corev1.Pod
-	echoOtherNodePod *corev1.Pod
-	namespace        string
+	client               kubernetes.Interface
+	config               *rest.Config
+	clusterName          string
+	antreaNamespace      string
+	clientPods           []corev1.Pod
+	echoSameNodePod      *corev1.Pod
+	echoSameNodeService  *corev1.Service
+	echoOtherNodePod     *corev1.Pod
+	echoOtherNodeService *corev1.Service
+	namespace            string
 	// A nil regex indicates that all the tests should be run.
 	runFilterRegex *regexp.Regexp
 }
@@ -169,7 +172,8 @@ func newService(name string, selector map[string]string, port int) *corev1.Servi
 			Ports: []corev1.ServicePort{
 				{Name: name, Port: int32(port)},
 			},
-			Selector: selector,
+			Selector:       selector,
+			IPFamilyPolicy: ptr.To(corev1.IPFamilyPolicyPreferDualStack),
 		},
 	}
 }
@@ -204,7 +208,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	}
 	t.Log("Deploying echo-same-node Service %s...", echoSameNodeDeploymentName)
 	svc := newService(echoSameNodeDeploymentName, map[string]string{"name": echoSameNodeDeploymentName}, 80)
-	_, err = t.client.CoreV1().Services(t.namespace).Create(ctx, svc, metav1.CreateOptions{})
+	t.echoSameNodeService, err = t.client.CoreV1().Services(t.namespace).Create(ctx, svc, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -290,7 +294,7 @@ func (t *testContext) setup(ctx context.Context) error {
 	if len(nodes.Items) >= 2 {
 		t.Log("Deploying echo-other-node Service %s...", echoOtherNodeDeploymentName)
 		svc = newService(echoOtherNodeDeploymentName, map[string]string{"name": echoOtherNodeDeploymentName}, 80)
-		_, err = t.client.CoreV1().Services(t.namespace).Create(ctx, svc, metav1.CreateOptions{})
+		t.echoOtherNodeService, err = t.client.CoreV1().Services(t.namespace).Create(ctx, svc, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -360,7 +364,7 @@ func (t *testContext) runAgnhostConnect(ctx context.Context, clientPodName strin
 		// We log the contents of stderr here for troubleshooting purposes.
 		t.Log("/agnhost command '%s' failed: %v", strings.Join(cmd, " "), err)
 		if stderr != "" {
-			t.Log("/agnhost stderr: %s", stderr)
+			t.Log("/agnhost stderr: %s", strings.TrimSpace(stderr))
 		}
 	}
 	return err
