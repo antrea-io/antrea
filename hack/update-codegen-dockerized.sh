@@ -45,6 +45,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/memberlist Memberlist ."
   "pkg/agent/multicast RouteInterface testing"
   "pkg/agent/types McastNetworkPolicyController testing"
+  "pkg/agent/monitortool PacketListener testing"
   "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
   "pkg/agent/nodeportlocal/rules PodPortRules testing"
   "pkg/agent/openflow Client testing"
