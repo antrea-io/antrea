@@ -15,6 +15,7 @@
 package monitortool
 
 import (
+	"context"
 	"math/rand"
 	"net"
 	"sync"
@@ -31,8 +32,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/util/env"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
@@ -144,7 +144,7 @@ func (m *NodeLatencyMonitor) onNodeAdd(obj interface{}) {
 
 	m.latencyStore.addNode(node)
 
-	klog.InfoS("Node added", "Node", klog.KObj(node))
+	klog.V(4).InfoS("Node added", "Node", klog.KObj(node))
 }
 
 // onNodeUpdate is the event handler for updating Node.
@@ -156,7 +156,7 @@ func (m *NodeLatencyMonitor) onNodeUpdate(oldObj, newObj interface{}) {
 
 	m.latencyStore.updateNode(node)
 
-	klog.InfoS("Node updated", "Node", klog.KObj(node))
+	klog.V(4).InfoS("Node updated", "Node", klog.KObj(node))
 }
 
 // onNodeDelete is the event handler for deleting Node.
@@ -185,7 +185,7 @@ func (m *NodeLatencyMonitor) onNodeDelete(obj interface{}) {
 // onNodeLatencyMonitorAdd is the event handler for adding NodeLatencyMonitor.
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
 	nlm := obj.(*v1alpha1.NodeLatencyMonitor)
-	klog.InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
+	klog.V(4).InfoS("NodeLatencyMonitor added", "NodeLatencyMonitor", klog.KObj(nlm))
 
 	m.updateLatencyConfig(nlm)
 }
@@ -194,7 +194,7 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorAdd(obj interface{}) {
 func (m *NodeLatencyMonitor) onNodeLatencyMonitorUpdate(oldObj, newObj interface{}) {
 	oldNLM := oldObj.(*v1alpha1.NodeLatencyMonitor)
 	newNLM := newObj.(*v1alpha1.NodeLatencyMonitor)
-	klog.InfoS("NodeLatencyMonitor updated", "NodeLatencyMonitor", klog.KObj(newNLM))
+	klog.V(4).InfoS("NodeLatencyMonitor updated", "NodeLatencyMonitor", klog.KObj(newNLM))
 
 	if oldNLM.GetGeneration() == newNLM.GetGeneration() {
 		return
@@ -247,7 +247,7 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 		Code: 0,
 		Body: body,
 	}
-	klog.InfoS("Sending ICMP message", "IP", ip, "SeqID", seqID, "body", body)
+	klog.V(4).InfoS("Sending ICMP message", "IP", ip, "SeqID", seqID, "body", body)
 
 	// Serialize the ICMP message
 	msgBytes, err := msg.Marshal(nil)
@@ -358,7 +358,7 @@ func (m *NodeLatencyMonitor) recvPings(socket net.PacketConn, isIPv4 bool) {
 
 // pingAll sends ICMP messages to all the Nodes.
 func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
-	klog.InfoS("Pinging all Nodes")
+	klog.V(4).InfoS("Pinging all Nodes")
 	nodeIPs := m.latencyStore.ListNodeIPs()
 	for _, toIP := range nodeIPs {
 		if toIP.To4() != nil && ipv4Socket != nil {
@@ -373,24 +373,17 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 			klog.V(3).InfoS("Cannot send ICMP message to Node IP because socket is not initialized for IP family", "IP", toIP)
 		}
 	}
-	klog.InfoS("Done pinging all Nodes")
+	klog.V(4).InfoS("Done pinging all Nodes")
 }
 
 // GetSummary returns the latency summary of the given Node IP.
-func (m *NodeLatencyMonitor) GetSummary() *stv1aplpha1.NodeLatencyStats {
-	nodeName, _ := env.GetNodeName()
-	return &stv1aplpha1.NodeLatencyStats{
+func (m *NodeLatencyMonitor) GetSummary() *statsv1alpha1.NodeLatencyStats {
+	return &statsv1alpha1.NodeLatencyStats{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: nodeName,
+			Name: m.nodeName,
 		},
-		PeerNodeLatencyStats: []stv1aplpha1.PeerNodeLatencyStats{
-			{
-				NodeName:             nodeName,
-				TargetIPLatencyStats: m.latencyStore.ConvertList(),
-			},
-		},
+		PeerNodeLatencyStats: m.latencyStore.ConvertList(m.nodeName),
 	}
-
 }
 
 func (m *NodeLatencyMonitor) report() {
@@ -405,9 +398,9 @@ func (m *NodeLatencyMonitor) report() {
 		return
 	}
 	_ = antreaClient
-	// if _, err := antreaClient.StatsV1alpha1().NodeLatencyStats().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
-	// 	klog.ErrorS(err, "Failed to update NodeIPLatencyStats")
-	// }
+	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStatses().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to update NodeIPLatencyStats")
+	}
 }
 
 // Run starts the NodeLatencyMonitor.

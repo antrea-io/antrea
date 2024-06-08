@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	stv1aplpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -252,21 +252,38 @@ func (s *LatencyStore) DeleteStaleNodeIPs() {
 	}
 }
 
-// ConvertList converts the latency store to a list of TargetIPLatencyStats.
-func (l *LatencyStore) ConvertList() []stv1aplpha1.TargetIPLatencyStats {
+// ConvertList converts the latency store to a list of PeerNodeLatencyStats.
+func (l *LatencyStore) ConvertList(excludedNodeName string) []statsv1alpha1.PeerNodeLatencyStats {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	entries := make([]stv1aplpha1.TargetIPLatencyStats, 0, len(l.nodeIPLatencyMap))
-	for nodeIP, entry := range l.nodeIPLatencyMap {
-		tempEntry := stv1aplpha1.TargetIPLatencyStats{
-			TargetIP:                   nodeIP,
-			LastSendTime:               metav1.NewTime(entry.LastSendTime),
-			LastRecvTime:               metav1.NewTime(entry.LastRecvTime),
-			LastMeasuredRTTNanoseconds: entry.LastMeasuredRTT.Nanoseconds(),
+	// PeerNodeLatencyStats should be a list of size N-1, where N is the number of Nodes in the cluster.
+	// We will have N-1 entries for each Node, each entry containing the latency stats for the connection,
+	// TargetIPLatencyStats will be a list of size 1 (single-stack case) or 2 (dual-stack case).
+	peerNodeLatencyStatsList := make([]statsv1alpha1.PeerNodeLatencyStats, 0, len(l.nodeIPLatencyMap)-1)
+	for nodeName, nodeIPs := range l.nodeTargetIPsMap {
+		if nodeName == excludedNodeName {
+			continue
 		}
-		entries = append(entries, tempEntry)
+
+		targetIPLatencyStats := make([]statsv1alpha1.TargetIPLatencyStats, 0, len(nodeIPs))
+		for _, nodeIP := range nodeIPs {
+			nodeIPStr := nodeIP.String()
+			tempEntry := statsv1alpha1.TargetIPLatencyStats{
+				TargetIP:                   nodeIPStr,
+				LastSendTime:               metav1.NewTime(l.nodeIPLatencyMap[nodeIPStr].LastSendTime),
+				LastRecvTime:               metav1.NewTime(l.nodeIPLatencyMap[nodeIPStr].LastRecvTime),
+				LastMeasuredRTTNanoseconds: l.nodeIPLatencyMap[nodeIPStr].LastMeasuredRTT.Nanoseconds(),
+			}
+			targetIPLatencyStats = append(targetIPLatencyStats, tempEntry)
+		}
+
+		peerNodeLatencyStats := statsv1alpha1.PeerNodeLatencyStats{
+			NodeName:             nodeName,
+			TargetIPLatencyStats: targetIPLatencyStats,
+		}
+		peerNodeLatencyStatsList = append(peerNodeLatencyStatsList, peerNodeLatencyStats)
 	}
 
-	return entries
+	return peerNodeLatencyStatsList
 }

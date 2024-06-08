@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nodelatencystat
+package nodelatencystats
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func (r *REST) NewList() runtime.Object {
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	// TODO: fill this function in next PR
-	return &statsv1alpha1.NodeLatencyStatList{}, nil
+	return &statsv1alpha1.NodeLatencyStatsList{}, nil
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
@@ -72,7 +72,7 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 	table := &metav1.Table{
 		ColumnDefinitions: []metav1.TableColumnDefinition{
 			{Name: "SourceNodeName", Type: "string", Format: "name", Description: "Source node name."},
-			{Name: "NodeIPLatencyList", Type: "array", Format: "string", Description: "Node IP latency list."},
+			{Name: "NodeLatencyStatsList", Type: "array", Format: "string", Description: "Node IP latency list."},
 		},
 	}
 
@@ -84,5 +84,5 @@ func (r *REST) NamespaceScoped() bool {
 }
 
 func (r *REST) GetSingularName() string {
-	return "nodelatencystat"
+	return "nodelatencystats"
 }

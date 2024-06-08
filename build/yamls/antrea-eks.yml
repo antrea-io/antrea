@@ -4147,7 +4147,7 @@ rules:
   - apiGroups:
       - stats.antrea.io
     resources:
-      - nodeiplatencystats
+      - nodelatencystats
     verbs:
       - create
   - apiGroups:

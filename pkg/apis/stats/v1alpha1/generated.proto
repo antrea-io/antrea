@@ -98,20 +98,20 @@ message NetworkPolicyStatsList {
   repeated NetworkPolicyStats items = 2;
 }
 
-// NodeLatencyStatList is a list of PeerNodeLatencyStats objects.
-message NodeLatencyStatList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta listMeta = 1;
-
-  // The list of PeerNodeLatencyStats.
-  repeated PeerNodeLatencyStats items = 2;
-}
-
 // NodeLatencyStats contains the latency stat of a Node.
 message NodeLatencyStats {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta objectMeta = 1;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // The list of PeerNodeLatencyStats.
   repeated PeerNodeLatencyStats peerNodeLatencyStats = 2;
+}
+
+// NodeLatencyStatsList is a list of NodeLatencyStats objects.
+message NodeLatencyStatsList {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  // The list of NodeLatencyStats.
+  repeated NodeLatencyStats items = 2;
 }
 
 // PeerNodeLatencyStats contains the latency stats of a Peer Node.
@@ -144,13 +144,13 @@ message TargetIPLatencyStats {
   // The target IP address.
   optional string targetIP = 1;
 
-  // The timestamp of the last send packet.
+  // The timestamp of the last sent packet.
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastSendTime = 2;
 
-  // The timestamp of the last receive packet.
+  // The timestamp of the last received packet.
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastRecvTime = 3;
 
-  // The last valid rtt of the Node.
+  // The last measured RTT for this target IP, in nanoseconds.
   optional int64 lastMeasuredRTTNanoseconds = 4;
 }
 

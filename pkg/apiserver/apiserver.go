@@ -58,7 +58,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/multicastgroup"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/networkpolicystats"
-	"antrea.io/antrea/pkg/apiserver/registry/stats/nodelatencystat"
+	nodelatencystat "antrea.io/antrea/pkg/apiserver/registry/stats/nodelatencystats"
 	"antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/apiserver/storage"

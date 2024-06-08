@@ -156,7 +156,7 @@ type RuleTrafficStats struct {
 // NodeLatencyStats contains the latency stat of a Node.
 type NodeLatencyStats struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=objectMeta"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// The list of PeerNodeLatencyStats.
 	PeerNodeLatencyStats []PeerNodeLatencyStats `json:"peerNodeLatencyStats,omitempty" protobuf:"bytes,2,rep,name=peerNodeLatencyStats"`
@@ -174,21 +174,21 @@ type PeerNodeLatencyStats struct {
 type TargetIPLatencyStats struct {
 	// The target IP address.
 	TargetIP string `json:"targetIP,omitempty" protobuf:"bytes,1,opt,name=targetIP"`
-	// The timestamp of the last send packet.
+	// The timestamp of the last sent packet.
 	LastSendTime metav1.Time `json:"lastSendTime,omitempty" protobuf:"bytes,2,opt,name=lastSendTime"`
-	// The timestamp of the last receive packet.
+	// The timestamp of the last received packet.
 	LastRecvTime metav1.Time `json:"lastRecvTime,omitempty" protobuf:"bytes,3,opt,name=lastRecvTime"`
-	// The last valid rtt of the Node.
+	// The last measured RTT for this target IP, in nanoseconds.
 	LastMeasuredRTTNanoseconds int64 `json:"lastMeasuredRTTNanoseconds,omitempty" protobuf:"varint,4,opt,name=lastMeasuredRTTNanoseconds"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// NodeLatencyStatList is a list of PeerNodeLatencyStats objects.
-type NodeLatencyStatList struct {
+// NodeLatencyStatsList is a list of NodeLatencyStats objects.
+type NodeLatencyStatsList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
-	// The list of PeerNodeLatencyStats.
-	Items []PeerNodeLatencyStats `json:"items" protobuf:"bytes,2,rep,name=items"`
+	// The list of NodeLatencyStats.
+	Items []NodeLatencyStats `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
