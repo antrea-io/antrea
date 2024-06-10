@@ -417,7 +417,8 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillK8sMetadata(key, record.Record, *startTime)
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record, true)
 	}
-	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
+	// Even if fa.includePodLabels is false, we still need to add an empty IE to match the template.
+	if !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
 		fa.fillPodLabels(key, record.Record, *startTime)
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
@@ -502,7 +503,11 @@ func (fa *flowAggregator) fetchPodLabels(ip string, startTime time.Time) string 
 		klog.ErrorS(nil, "Error when getting Pod information from podInformer", "ip", ip, "startTime", startTime)
 		return ""
 	}
-	labelsJSON, err := json.Marshal(pod.GetLabels())
+	labels := pod.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labelsJSON, err := json.Marshal(labels)
 	if err != nil {
 		klog.ErrorS(err, "Error when JSON encoding of Pod labels")
 		return ""
@@ -512,22 +517,25 @@ func (fa *flowAggregator) fetchPodLabels(ip string, startTime time.Time) string 
 
 func (fa *flowAggregator) fillPodLabelsForSide(ip string, record ipfixentities.Record, startTime time.Time, podNamespaceIEName, podNameIEName, podLabelsIEName string) error {
 	podLabelsString := ""
-	if podName, _, ok := record.GetInfoElementWithValue(podNameIEName); ok {
-		podNameString := podName.GetStringValue()
-		if podNamespace, _, ok := record.GetInfoElementWithValue(podNamespaceIEName); ok {
-			podNamespaceString := podNamespace.GetStringValue()
-			if podNameString != "" && podNamespaceString != "" {
-				podLabelsString = fa.fetchPodLabels(ip, startTime)
+	// If fa.includePodLabels is false, we always use an empty string.
+	// If fa.includePodLabels is true, we use an empty string in case of error or if the
+	// endpoint is not a Pod, and a valid JSON dictionary otherwise (which will be empty if the
+	// Pod has no labels).
+	if fa.includePodLabels {
+		if podName, _, ok := record.GetInfoElementWithValue(podNameIEName); ok {
+			podNameString := podName.GetStringValue()
+			if podNamespace, _, ok := record.GetInfoElementWithValue(podNamespaceIEName); ok {
+				podNamespaceString := podNamespace.GetStringValue()
+				if podNameString != "" && podNamespaceString != "" {
+					podLabelsString = fa.fetchPodLabels(ip, startTime)
+				}
 			}
 		}
 	}
 
 	podLabelsElement, err := fa.registry.GetInfoElement(podLabelsIEName, ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
-		podLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(podLabelsElement, bytes.NewBufferString(podLabelsString).Bytes())
-		if err != nil {
-			return fmt.Errorf("error when creating podLabels InfoElementWithValue: %v", err)
-		}
+		podLabelsIE := ipfixentities.NewStringInfoElement(podLabelsElement, podLabelsString)
 		if err := record.AddInfoElement(podLabelsIE); err != nil {
 			return fmt.Errorf("error when adding podLabels InfoElementWithValue: %v", err)
 		}
@@ -540,10 +548,10 @@ func (fa *flowAggregator) fillPodLabelsForSide(ip string, record ipfixentities.R
 
 func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ipfixentities.Record, startTime time.Time) {
 	if err := fa.fillPodLabelsForSide(key.SourceAddress, record, startTime, "sourcePodNamespace", "sourcePodName", "sourcePodLabels"); err != nil {
-		klog.ErrorS(err, "Error when filling pod labels", "side", "source")
+		klog.ErrorS(err, "Error when filling Pod labels", "side", "source")
 	}
 	if err := fa.fillPodLabelsForSide(key.DestinationAddress, record, startTime, "destinationPodNamespace", "destinationPodName", "destinationPodLabels"); err != nil {
-		klog.ErrorS(err, "Error when filling pod labels", "side", "destination")
+		klog.ErrorS(err, "Error when filling Pod labels", "side", "destination")
 	}
 }
 

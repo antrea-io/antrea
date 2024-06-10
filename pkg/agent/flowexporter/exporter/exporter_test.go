@@ -126,7 +126,7 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	}
 	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
 	_, err := flowExp.sendTemplateSet(isIPv6)
-	assert.NoError(t, err, "Error in sending template set")
+	assert.NoError(t, err, "Error when sending template set")
 
 	eL := flowExp.elementsListv4
 	if isIPv6 {
@@ -254,7 +254,7 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		err := flowExp.addConnToSet(&conn)
 		assert.NoError(t, err, "Error when adding record to data set")
 		_, err = flowExp.sendDataSet()
-		assert.NoError(t, err, "Error in sending data set")
+		assert.NoError(t, err, "Error when sending data set")
 	}
 
 	if v4Enabled {
