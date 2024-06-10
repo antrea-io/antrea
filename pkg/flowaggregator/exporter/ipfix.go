@@ -45,7 +45,6 @@ type IPFIXExporter struct {
 	externalFlowCollectorProto string
 	exportingProcess           ipfix.IPFIXExportingProcess
 	sendJSONRecord             bool
-	includePodLabels           bool
 	observationDomainID        uint32
 	templateIDv4               uint16
 	templateIDv6               uint16
@@ -95,7 +94,6 @@ func NewIPFIXExporter(
 		externalFlowCollectorAddr:  opt.ExternalFlowCollectorAddr,
 		externalFlowCollectorProto: opt.ExternalFlowCollectorProto,
 		sendJSONRecord:             sendJSONRecord,
-		includePodLabels:           opt.Config.RecordContents.PodLabels,
 		observationDomainID:        observationDomainID,
 		registry:                   registry,
 		set:                        ipfixentities.NewSet(false),
@@ -127,7 +125,7 @@ func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool
 
 func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	config := opt.Config.FlowCollector
-	if reflect.DeepEqual(config, e.config) && opt.Config.RecordContents.PodLabels == e.includePodLabels {
+	if reflect.DeepEqual(config, e.config) {
 		return
 	}
 
@@ -144,12 +142,8 @@ func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
 	} else {
 		e.observationDomainID = genObservationDomainID(e.k8sClient)
 	}
-	e.includePodLabels = opt.Config.RecordContents.PodLabels
-	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "includePodLabels", e.includePodLabels)
+	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID)
 
-	// In theory, a change to e.includePodLabels does not require opening a new connection, it
-	// just requires sending new templates. But it is easier to treat all configuration changes
-	// uniformly.
 	if e.exportingProcess != nil {
 		e.exportingProcess.CloseConnToCollector()
 		e.exportingProcess = nil
@@ -327,14 +321,12 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		}
 		elements = append(elements, ie)
 	}
-	if e.includePodLabels {
-		for _, ie := range infoelements.AntreaLabelsElementList {
-			ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
-			if err != nil {
-				return 0, err
-			}
-			elements = append(elements, ie)
+	for _, ie := range infoelements.AntreaLabelsElementList {
+		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, err
 		}
+		elements = append(elements, ie)
 	}
 	e.set.ResetSet()
 	if err := e.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
