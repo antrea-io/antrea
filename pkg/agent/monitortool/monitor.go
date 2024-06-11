@@ -388,18 +388,13 @@ func (m *NodeLatencyMonitor) GetSummary() *statsv1alpha1.NodeLatencyStats {
 
 func (m *NodeLatencyMonitor) report() {
 	summary := m.GetSummary()
-	if summary == nil {
-		klog.InfoS("Latency summary is nil")
-		return
-	}
 	antreaClient, err := m.antreaClientProvider.GetAntreaClient()
 	if err != nil {
 		klog.ErrorS(err, "Failed to get Antrea client")
 		return
 	}
-	_ = antreaClient
 	if _, err := antreaClient.StatsV1alpha1().NodeLatencyStatses().Create(context.TODO(), summary, metav1.CreateOptions{}); err != nil {
-		klog.ErrorS(err, "Failed to update NodeIPLatencyStats")
+		klog.ErrorS(err, "Failed to create NodeIPLatencyStats")
 	}
 }
 

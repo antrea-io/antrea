@@ -21,6 +21,8 @@ import (
 
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -33,6 +35,43 @@ var nodelatencystatsesResource = v1alpha1.SchemeGroupVersion.WithResource("nodel
 
 var nodelatencystatsesKind = v1alpha1.SchemeGroupVersion.WithKind("NodeLatencyStats")
 
+// Get takes name of the nodeLatencyStats, and returns the corresponding nodeLatencyStats object, and an error if there is any.
+func (c *FakeNodeLatencyStatses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NodeLatencyStats, err error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewRootGetAction(nodelatencystatsesResource, name), &v1alpha1.NodeLatencyStats{})
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.NodeLatencyStats), err
+}
+
+// List takes label and field selectors, and returns the list of NodeLatencyStatses that match those selectors.
+func (c *FakeNodeLatencyStatses) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.NodeLatencyStatsList, err error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewRootListAction(nodelatencystatsesResource, nodelatencystatsesKind, opts), &v1alpha1.NodeLatencyStatsList{})
+	if obj == nil {
+		return nil, err
+	}
+
+	label, _, _ := testing.ExtractFromListOptions(opts)
+	if label == nil {
+		label = labels.Everything()
+	}
+	list := &v1alpha1.NodeLatencyStatsList{ListMeta: obj.(*v1alpha1.NodeLatencyStatsList).ListMeta}
+	for _, item := range obj.(*v1alpha1.NodeLatencyStatsList).Items {
+		if label.Matches(labels.Set(item.Labels)) {
+			list.Items = append(list.Items, item)
+		}
+	}
+	return list, err
+}
+
+// Watch returns a watch.Interface that watches the requested nodeLatencyStatses.
+func (c *FakeNodeLatencyStatses) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+	return c.Fake.
+		InvokesWatch(testing.NewRootWatchAction(nodelatencystatsesResource, opts))
+}
+
 // Create takes the representation of a nodeLatencyStats and creates it.  Returns the server's representation of the nodeLatencyStats, and an error, if there is any.
 func (c *FakeNodeLatencyStatses) Create(ctx context.Context, nodeLatencyStats *v1alpha1.NodeLatencyStats, opts v1.CreateOptions) (result *v1alpha1.NodeLatencyStats, err error) {
 	obj, err := c.Fake.
@@ -41,4 +80,11 @@ func (c *FakeNodeLatencyStatses) Create(ctx context.Context, nodeLatencyStats *v
 		return nil, err
 	}
 	return obj.(*v1alpha1.NodeLatencyStats), err
+}
+
+// Delete takes name of the nodeLatencyStats and deletes it. Returns an error if one occurs.
+func (c *FakeNodeLatencyStatses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+	_, err := c.Fake.
+		Invokes(testing.NewRootDeleteActionWithOptions(nodelatencystatsesResource, name, opts), &v1alpha1.NodeLatencyStats{})
+	return err
 }

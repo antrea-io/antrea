@@ -253,29 +253,29 @@ func (s *LatencyStore) DeleteStaleNodeIPs() {
 }
 
 // ConvertList converts the latency store to a list of PeerNodeLatencyStats.
-func (l *LatencyStore) ConvertList(excludedNodeName string) []statsv1alpha1.PeerNodeLatencyStats {
+func (l *LatencyStore) ConvertList(currentNodeName string) []statsv1alpha1.PeerNodeLatencyStats {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
 	// PeerNodeLatencyStats should be a list of size N-1, where N is the number of Nodes in the cluster.
-	// We will have N-1 entries for each Node, each entry containing the latency stats for the connection,
 	// TargetIPLatencyStats will be a list of size 1 (single-stack case) or 2 (dual-stack case).
 	peerNodeLatencyStatsList := make([]statsv1alpha1.PeerNodeLatencyStats, 0, len(l.nodeIPLatencyMap)-1)
 	for nodeName, nodeIPs := range l.nodeTargetIPsMap {
-		if nodeName == excludedNodeName {
+		// Even though the current Node should already be excluded from the map, we add an extra check as an additional guarantee.
+		if nodeName == currentNodeName {
 			continue
 		}
 
 		targetIPLatencyStats := make([]statsv1alpha1.TargetIPLatencyStats, 0, len(nodeIPs))
 		for _, nodeIP := range nodeIPs {
 			nodeIPStr := nodeIP.String()
-			tempEntry := statsv1alpha1.TargetIPLatencyStats{
+			entry := statsv1alpha1.TargetIPLatencyStats{
 				TargetIP:                   nodeIPStr,
 				LastSendTime:               metav1.NewTime(l.nodeIPLatencyMap[nodeIPStr].LastSendTime),
 				LastRecvTime:               metav1.NewTime(l.nodeIPLatencyMap[nodeIPStr].LastRecvTime),
 				LastMeasuredRTTNanoseconds: l.nodeIPLatencyMap[nodeIPStr].LastMeasuredRTT.Nanoseconds(),
 			}
-			targetIPLatencyStats = append(targetIPLatencyStats, tempEntry)
+			targetIPLatencyStats = append(targetIPLatencyStats, entry)
 		}
 
 		peerNodeLatencyStats := statsv1alpha1.PeerNodeLatencyStats{

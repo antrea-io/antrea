@@ -150,7 +150,7 @@ type RuleTrafficStats struct {
 // +genclient
 // +genclient:nonNamespaced
 // +resourceName=nodelatencystats
-// +genclient:onlyVerbs=create
+// +genclient:onlyVerbs=create,delete,get,list,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NodeLatencyStats contains the latency stat of a Node.
