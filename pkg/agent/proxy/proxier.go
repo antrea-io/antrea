@@ -339,6 +339,10 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 	svcPort := uint16(svcInfo.Port())
 	nodePort := uint16(svcInfo.NodePort())
 	svcProto := svcInfo.OFProtocol
+	virtualNodePortDNATIP := agentconfig.VirtualNodePortDNATIPv4
+	if p.isIPv6 {
+		virtualNodePortDNATIP = agentconfig.VirtualNodePortDNATIPv6
+	}
 
 	svcIPToPort := make(map[string]uint16)
 	svcIPToPort[svcInfo.ClusterIP().String()] = svcPort
@@ -354,6 +358,7 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 		for _, nodeIP := range p.nodePortAddresses {
 			svcIPToPort[nodeIP.String()] = nodePort
 		}
+		svcIPToPort[virtualNodePortDNATIP.String()] = nodePort
 	}
 
 	for svcIPStr, port := range svcIPToPort {
@@ -372,17 +377,23 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 	svcPort := uint16(svcInfo.Port())
 	pNodePort := uint16(pSvcInfo.NodePort())
 	nodePort := uint16(svcInfo.NodePort())
+	pClusterIP := pSvcInfo.ClusterIP().String()
+	clusterIP := svcInfo.ClusterIP().String()
 	pExternalIPStrings := pSvcInfo.ExternalIPStrings()
 	externalIPStrings := svcInfo.ExternalIPStrings()
 	pLoadBalancerIPStrings := pSvcInfo.LoadBalancerIPStrings()
 	loadBalancerIPStrings := svcInfo.LoadBalancerIPStrings()
+	virtualNodePortDNATIP := agentconfig.VirtualNodePortDNATIPv4
+	if p.isIPv6 {
+		virtualNodePortDNATIP = agentconfig.VirtualNodePortDNATIPv6
+	}
 	var svcPortChanged, svcNodePortChanged bool
 
 	staleSvcIPToPort := make(map[string]uint16)
 	// If the port of the Service is changed, delete all conntrack entries related to the previous Service IPs and the
 	// previous Service port. These previous Service IPs includes external IPs, loadBalancer IPs and the ClusterIP.
 	if pSvcPort != svcPort {
-		staleSvcIPToPort[pSvcInfo.ClusterIP().String()] = pSvcPort
+		staleSvcIPToPort[pClusterIP] = pSvcPort
 		for _, ip := range pExternalIPStrings {
 			staleSvcIPToPort[ip] = pSvcPort
 		}
@@ -394,7 +405,10 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 		svcPortChanged = true
 	} else {
 		// If the port of the Service is not changed, delete the conntrack entries related to the stale Service IPs and
-		// the Service port. These stale Service IPs could be from external IPs and loadBalancer IPs.
+		// the Service port. These stale Service IPs could be clusterIP, externalIPs or loadBalancerIPs.
+		if pClusterIP != clusterIP {
+			staleSvcIPToPort[pClusterIP] = pSvcPort
+		}
 		deletedExternalIPs := smallSliceDifference(pExternalIPStrings, externalIPStrings)
 		deletedLoadBalancerIPs := smallSliceDifference(pLoadBalancerIPStrings, loadBalancerIPStrings)
 		for _, ip := range deletedExternalIPs {
@@ -404,11 +418,13 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 			staleSvcIPToPort[ip] = pSvcPort
 		}
 	}
-	// If the NodePort of the Service is changed, delete the contrack entries related to the Node IPs and the Service nodePort.
+	// If the NodePort of the Service is changed, delete the conntrack entries related to each of the Node IPs / the
+	// virtual IP to which NodePort traffic from external will be DNATed and the Service nodePort.
 	if pNodePort != nodePort {
 		for _, nodeIP := range p.nodePortAddresses {
 			staleSvcIPToPort[nodeIP.String()] = pNodePort
 		}
+		staleSvcIPToPort[virtualNodePortDNATIP.String()] = pNodePort
 		svcNodePortChanged = true
 	}
 	// Delete the conntrack entries due to the change of the Service.
@@ -423,7 +439,7 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 	remainingSvcIPToPort := make(map[string]uint16)
 	if !svcPortChanged {
 		// Get all remaining Service IPs.
-		remainingSvcIPToPort[svcInfo.ClusterIP().String()] = svcPort
+		remainingSvcIPToPort[clusterIP] = svcPort
 		for _, ip := range smallSliceSame(pExternalIPStrings, externalIPStrings) {
 			remainingSvcIPToPort[ip] = svcPort
 		}
@@ -744,6 +760,21 @@ func (p *proxier) installServices() {
 				pSvcInfo.ExternalPolicyLocal() != svcInfo.ExternalPolicyLocal() ||
 				pSvcInfo.InternalPolicyLocal() != svcInfo.InternalPolicyLocal()
 			if p.cleanupStaleUDPSvcConntrack && needClearConntrackEntries(pSvcInfo.OFProtocol) {
+				// We clean the UDP conntrack entries for the following Service update cases:
+				// - Service port changed, clean the conntrack entries matched by each of the current clusterIP / externalIPs
+				//   / loadBalancerIPs and the stale Service port.
+				// - ClusterIP changed, clean the conntrack entries matched by the clusterIP and the Service port.
+				// - Some externalIPs / loadBalancerIPs are removed, clean the conntrack entries matched by each of the
+				//   removed Service IPs and the current Service port.
+				// - Service nodePort changed, clean the conntrack entries matched by each of the Node IPs / the virtual
+				//   NodePort DNAT IP and the stale Service nodePort.
+				// However, we DO NOT clean the UDP conntrack entries related to remote Endpoints that are still
+				// referenced by the Service but are no longer selectable Endpoints for the corresponding Service IPs
+				// (for externalTrafficPolicy, these IPs are loadBalancerIPs, externalIPs and NodeIPs; for
+				// internalTrafficPolicy, these IPs clusterIPs) when externalTrafficPolicy or internalTrafficPolicy is
+				// changed from Cluster to Local. Consequently, the connections, which are supposed to select local
+				// Endpoints, will continue to send packets to remote Endpoints due to the existing UDP conntrack entries
+				// until timeout.
 				needCleanupStaleUDPServiceConntrack = svcInfo.Port() != pSvcInfo.Port() ||
 					svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
 					needUpdateServiceExternalAddresses
@@ -761,7 +792,8 @@ func (p *proxier) installServices() {
 		if len(staleEndpoints) > 0 || len(newEndpoints) > 0 {
 			needUpdateEndpoints = true
 		}
-		// If there are stale Endpoints for a UDP Service, conntrack connections of these stale Endpoints should be deleted.
+		// We also clean the conntrack entries related to the stale Endpoints for a UDP Service. Conntrack entries
+		// matched by each of stale Endpoint IPs and each of the remaining Service IPs and ports will be deleted.
 		if len(staleEndpoints) > 0 && needClearConntrackEntries(svcInfo.OFProtocol) {
 			needCleanupStaleUDPServiceConntrack = true
 		}
