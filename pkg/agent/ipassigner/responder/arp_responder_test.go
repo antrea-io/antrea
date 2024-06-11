@@ -15,10 +15,8 @@
 package responder
 
 import (
-	"bytes"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ethernet"
@@ -26,143 +24,111 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"antrea.io/antrea/pkg/agent/util/nettest"
 )
 
-type fakePacketConn struct {
-	addr   packet.Addr
-	buffer *bytes.Buffer
-}
-
-var _ net.PacketConn = (*fakePacketConn)(nil)
-
-func (pc *fakePacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
-	n, err := pc.buffer.Read(p)
-	return n, &pc.addr, err
-}
-
-func (pc *fakePacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
-	return pc.buffer.Write(p)
-}
-
-func (pc *fakePacketConn) Close() error {
-	return nil
-}
-
-func (pc *fakePacketConn) LocalAddr() net.Addr {
-	return &pc.addr
-}
-
-func (pc *fakePacketConn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (pc *fakePacketConn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (pc *fakePacketConn) SetWriteDeadline(t time.Time) error {
-	return nil
-}
-
-func newFakeARPClient(iface *net.Interface, conn *fakePacketConn) (*arp.Client, error) {
+func newFakeARPClient(iface *net.Interface, conn *nettest.PacketConn) (*arp.Client, error) {
 	return arp.New(iface, conn)
 }
 
-func newFakeNetworkInterface() *net.Interface {
+func newFakeNetworkInterface(hardwareAddr []byte) *net.Interface {
 	return &net.Interface{
 		Index:        0,
 		MTU:          1500,
 		Name:         "eth0",
-		HardwareAddr: []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+		HardwareAddr: hardwareAddr,
 	}
 }
 
+func getEthernetForARPPacket(p *arp.Packet, addr net.HardwareAddr) []byte {
+	pb, _ := p.MarshalBinary()
+	f := &ethernet.Frame{
+		Destination: addr,
+		Source:      p.SenderHardwareAddr,
+		EtherType:   ethernet.EtherTypeARP,
+		Payload:     pb,
+	}
+	fb, _ := f.MarshalBinary()
+	return fb
+}
+
 func TestARPResponder_HandleARPRequest(t *testing.T) {
+	// The "local" endpoint is the one running the ARPRespondder.
+	// The "remote" endpoint is the one sending ARP requests to the "local" endpoint.
+	localHWAddr := net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
+	remoteHWAddr := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	localIP := net.ParseIP("192.168.10.1")
+	remoteIP := net.ParseIP("192.168.10.2")
+
 	tests := []struct {
-		name                 string
-		iface                *net.Interface
-		arpOperation         arp.Operation
-		srcHWAddr, dstHWAddr net.HardwareAddr
-		srcIP, dstIP         net.IP
-		assignedIPs          []net.IP
-		expectError          bool
-		expectedBytes        []byte
+		name          string
+		assignedIPs   []net.IP
+		replyExpected bool
 	}{
 		{
-			name:         "Response for assigned IP",
-			iface:        newFakeNetworkInterface(),
-			arpOperation: arp.OperationRequest,
-			srcHWAddr:    net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05},
-			dstHWAddr:    ethernet.Broadcast,
-			srcIP:        net.ParseIP("192.168.10.2"),
-			dstIP:        net.ParseIP("192.168.10.1"),
-			assignedIPs:  []net.IP{net.ParseIP("192.168.10.1")},
-			expectError:  false,
-			expectedBytes: []byte{
-				// ethernet header (16 bytes)
-				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, // 6 bytes: destination hardware address
-				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // 6 bytes: source hardware address
-				0x08, 0x06, // 2 bytes: ethernet type
-				// arp payload (46 bytes)
-				0x00, 0x01, // 2 bytes: hardware type
-				0x08, 0x00, // 2 bytes: protocol type
-				0x06,       // 1 byte : hardware address length
-				0x04,       // 1 byte : protocol length
-				0x00, 0x02, // 2 bytes: operation
-				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, // 6 bytes: source hardware address
-				0xc0, 0xa8, 0x0a, 0x01, // 4 bytes: source protocol address
-				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, // 6 bytes: target hardware address
-				0xc0, 0xa8, 0x0a, 0x02, // 4 bytes: target protocol address
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 18 bytes: padding
-			},
+			name:          "Response for assigned IP",
+			assignedIPs:   []net.IP{localIP},
+			replyExpected: true,
 		},
 		{
 			name:          "Response for not assigned IP",
-			iface:         newFakeNetworkInterface(),
-			arpOperation:  arp.OperationRequest,
-			srcHWAddr:     net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05},
-			dstHWAddr:     ethernet.Broadcast,
-			srcIP:         net.ParseIP("192.168.10.2"),
-			dstIP:         net.ParseIP("192.168.10.3"),
-			assignedIPs:   []net.IP{net.ParseIP("192.168.10.1")},
-			expectError:   false,
-			expectedBytes: []byte{},
+			assignedIPs:   []net.IP{net.ParseIP("192.168.10.3")},
+			replyExpected: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conn := &fakePacketConn{
-				buffer: bytes.NewBuffer(nil),
-				addr: packet.Addr{
-					HardwareAddr: tt.iface.HardwareAddr,
-				},
+			localIface := newFakeNetworkInterface(localHWAddr)
+			remoteIface := newFakeNetworkInterface(remoteHWAddr)
+			localAddr := &packet.Addr{
+				HardwareAddr: localHWAddr,
 			}
-			fakeARPClient, err := newFakeARPClient(tt.iface, conn)
+			remoteAddr := &packet.Addr{
+				HardwareAddr: remoteHWAddr,
+			}
+			localConn, remoteConn := nettest.PacketConnPipe(localAddr, remoteAddr, 1)
+			localARPClient, err := newFakeARPClient(localIface, localConn)
 			require.NoError(t, err)
-			packet, err := arp.NewPacket(tt.arpOperation, tt.srcHWAddr, tt.srcIP, tt.dstHWAddr, tt.dstIP)
+			remoteARPClient, err := newFakeARPClient(remoteIface, remoteConn)
 			require.NoError(t, err)
-			err = fakeARPClient.WriteTo(packet, tt.dstHWAddr)
+			request, err := arp.NewPacket(arp.OperationRequest, remoteHWAddr, remoteIP, ethernet.Broadcast, localIP)
 			require.NoError(t, err)
+			expectedReply, err := arp.NewPacket(arp.OperationReply, localHWAddr, localIP, remoteHWAddr, remoteIP)
+			require.NoError(t, err)
+			expectedBytes := getEthernetForARPPacket(expectedReply, remoteHWAddr)
+			require.NoError(t, remoteARPClient.WriteTo(request, localAddr.HardwareAddr))
 			assignedIPs := sets.New[string]()
 			for _, ip := range tt.assignedIPs {
 				assignedIPs.Insert(ip.String())
 			}
 			r := arpResponder{
-				iface:       tt.iface,
-				conn:        fakeARPClient,
+				iface:       localIface,
+				conn:        localARPClient,
 				assignedIPs: sets.New[string](),
 			}
 			for _, ip := range tt.assignedIPs {
 				r.AddIP(ip)
 			}
 			err = r.handleARPRequest()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedBytes, conn.buffer.Bytes())
+			require.NoError(t, err)
+			// We cannot use remoteARPClient.ReadFrom as it is blocking.
+			replyB, addr, err := remoteConn.Receive()
+			if !tt.replyExpected {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, remoteAddr, addr)
+				assert.Equal(t, expectedBytes, replyB)
+			}
 		})
 	}
 }
 
 func Test_arpResponder_addIP(t *testing.T) {
+	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	iface := newFakeNetworkInterface(hwAddr)
+
 	tests := []struct {
 		name                string
 		ip                  net.IP
@@ -193,19 +159,10 @@ func Test_arpResponder_addIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &arpResponder{
-				iface:       newFakeNetworkInterface(),
+				iface:       iface,
 				assignedIPs: tt.assignedIPs,
 			}
-			conn := &fakePacketConn{
-				buffer: bytes.NewBuffer(nil),
-				addr: packet.Addr{
-					HardwareAddr: r.iface.HardwareAddr,
-				},
-			}
-			fakeARPClient, err := newFakeARPClient(r.iface, conn)
-			require.NoError(t, err)
-			r.conn = fakeARPClient
-			err = r.AddIP(tt.ip)
+			err := r.AddIP(tt.ip)
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
@@ -217,6 +174,9 @@ func Test_arpResponder_addIP(t *testing.T) {
 }
 
 func Test_arpResponder_removeIP(t *testing.T) {
+	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	iface := newFakeNetworkInterface(hwAddr)
+
 	tests := []struct {
 		name                string
 		ip                  net.IP
@@ -247,7 +207,7 @@ func Test_arpResponder_removeIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &arpResponder{
-				iface:       newFakeNetworkInterface(),
+				iface:       iface,
 				assignedIPs: tt.assignedIPs,
 			}
 			err := r.RemoveIP(tt.ip)
