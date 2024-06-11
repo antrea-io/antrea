@@ -1,0 +1,7 @@
+# -- Container image used for Antrea Windows Nodes
+image:
+  repository: "antrea/antrea-windows"
+  tag: "latest"
+
+# -- Enable running Windows OVS processes inside antrea-ovs container in antrea-agent Pod
+includeOVS: true

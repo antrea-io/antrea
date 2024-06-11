@@ -20,20 +20,19 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--keep] [--help|-h]
-Generate a YAML manifest to run Antrea on Windows Nodes, using Kustomize, and print it to stdout.
+_usage="Usage: $0 [--mode (dev|release)] [--include-ovs] [--help|-h]
+Generate a YAML manifest to run Antrea on Windows Nodes, using Helm, and print it to stdout.
         --mode (dev|release)            Choose the configuration variant that you need (default is 'dev')
-        --keep                          Debug flag which will preserve the generated kustomization.yml
         --help, -h                      Print this message and exit
         --include-ovs                   Run Windows OVS processes inside antrea-ovs container in antrea-agent pod
                                         on Windows host with containerd runtime.
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
-This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
-running Antrea on Windows Nodes. You can set the KUSTOMIZE environment variable to the path of the
-kustomize binary you want us to use. Otherwise we will look for kustomize in your PATH and your
-GOPATH. If we cannot find kustomize there, we will try to install it."
+This tool uses Helm 3 (https://helm.sh/) to generate manifests for Antrea. You can set the HELM
+environment variable to the path of the helm binary you want us to use. Otherwise we will download
+the appropriate version of the helm binary and use it (this is the recommended approach since
+different versions of helm may create different output YAMLs)."
 
 function print_usage {
     echoerr "$_usage"
@@ -44,8 +43,8 @@ function print_help {
 }
 
 MODE="dev"
-KEEP=false
 INCLUDE_OVS=false
+HELM_VALUES=()
 
 while [[ $# -gt 0 ]]
 do
@@ -55,10 +54,6 @@ case $key in
     --mode)
     MODE="$2"
     shift 2
-    ;;
-    --keep)
-    KEEP=true
-    shift
     ;;
     --include-ovs)
     INCLUDE_OVS=true
@@ -95,49 +90,36 @@ fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-source $THIS_DIR/verify-kustomize.sh
+source $THIS_DIR/verify-helm.sh
 
-if [ -z "$KUSTOMIZE" ]; then
-    KUSTOMIZE="$(verify_kustomize)"
-elif ! $KUSTOMIZE version > /dev/null 2>&1; then
-    echoerr "$KUSTOMIZE does not appear to be a valid kustomize binary"
+if [ -z "$HELM" ]; then
+    HELM="$(verify_helm)"
+elif ! $HELM version > /dev/null 2>&1; then
+    echoerr "$HELM does not appear to be a valid helm binary"
     print_help
     exit 1
 fi
 
-KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/windows
-
-TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
-
-pushd $TMP_DIR > /dev/null
-
-BASE=../../containerd
 if $INCLUDE_OVS; then
-    BASE=../../containerd-with-ovs
-fi
-
-mkdir $MODE && cd $MODE
-touch kustomization.yml
-# ../../patches/$MODE may be empty so we use find and not simply cp
-find ../../patches/$MODE -name \*.yml -exec cp {} . \;
-
-$KUSTOMIZE edit add base $BASE
-
-if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image antrea-windows=antrea/antrea-windows:latest
-    $KUSTOMIZE edit add patch --path imagePullPolicy.yml
+    HELM_VALUES+=("includeOVS=true")
+else
+    HELM_VALUES+=("includeOVS=false")
 fi
 
 if [ "$MODE" == "release" ]; then
-    $KUSTOMIZE edit set image antrea-windows=$IMG_NAME:$IMG_TAG
+    HELM_VALUES+=("image.repository=$IMG_NAME,image.tag=$IMG_TAG")
 fi
 
-$KUSTOMIZE build
-
-popd > /dev/null
-
-if $KEEP; then
-    echoerr "Kustomization file is at $TMP_DIR/$MODE/kustomization.yml"
-else
-    rm -rf $TMP_DIR
+delim=""
+HELM_VALUES_OPTION=""
+for v in "${HELM_VALUES[@]}"; do
+    HELM_VALUES_OPTION="$HELM_VALUES_OPTION$delim$v"
+    delim=","
+done
+if [ "$HELM_VALUES_OPTION" != "" ]; then
+    HELM_VALUES_OPTION="--set $HELM_VALUES_OPTION"
 fi
+
+ANTREA_CHART="$THIS_DIR/../build/charts/antrea-windows"
+
+$HELM template $HELM_VALUES_OPTION "$ANTREA_CHART"

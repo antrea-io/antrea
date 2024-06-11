@@ -1,0 +1,15 @@
+apiVersion: v1
+data:
+    {{- tpl ((.Files.Glob "conf/Install-WindowsCNI.ps1").AsConfig) . | nindent 2 | replace "  \n" "\n" }}
+    {{- tpl ((.Files.Glob "conf/Run-AntreaAgent.ps1").AsConfig) . | nindent 2 | replace "  \n" "\n" }}
+    {{- if .Values.includeOVS }}
+    {{- tpl ((.Files.Glob "conf/ovs/Install-OVSDriver.ps1").AsConfig) . | nindent 2 | replace "  \n" "\n" }}
+    {{- tpl ((.Files.Glob "conf/ovs/Run-AntreaOVS.ps1").AsConfig) . | nindent 2 | replace "  \n" "\n" }}
+    {{- tpl ((.Files.Glob "conf/ovs/VMSwitchExtension-AntreaAgent.ps1").AsConfig) . | nindent 2 | replace "  \n" "\n" }}
+    {{- end }}
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent-windows
+  namespace: kube-system

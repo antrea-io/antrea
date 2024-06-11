@@ -1,43 +1,7 @@
+---
+# Source: antrea-windows/templates/configmaps/antrea-agent-windows.yaml
 apiVersion: v1
 data:
-  Install-OVSDriver.ps1: |
-    $ErrorActionPreference = "Stop"
-    $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
-    $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
-    $OVSDriverDir = "$mountPath\openvswitch\driver"
-
-    # Check if OVSExt driver is already installed
-    $driverStatus = netcfg -q ovsext
-    if ($driverStatus -like '*not installed*') {
-      # Install OVS Driver
-      $result = netcfg -l $OVSDriverDir/ovsext.inf -c s -i OVSExt
-      if ($result -like '*failed*') {
-        Write-Host "Failed to install OVSExt driver: $result"
-        exit 1
-      }
-      Write-Host "OVSExt driver has been installed"
-    }
-
-    # Check if the VC redistributable is already installed.
-    $OVSRedistDir="$mountPath\openvswitch\redist"
-    if (Test-Path $OVSRedistDir) {
-      $dllFound = $false
-      $paths = $env:PATH -split ';'
-      foreach ($path in $paths) {
-        $dllFiles = Get-ChildItem -Path $path -Filter "vcruntime*.dll" -File -ErrorAction SilentlyContinue
-        if ($dllFiles.Count -gt 0) {
-          $dllFound = $true
-          break
-        }
-      }
-
-      # vcruntime dlls are not installed on the host, then install the binaries.
-      if (-not $dllFound) {
-        Get-ChildItem $OVSRedistDir -Filter *.exe | ForEach-Object {
-          Start-Process -FilePath $_.FullName -Args '/install /passive /norestart' -Verb RunAs -Wait
-        }
-      }
-    }
   Install-WindowsCNI.ps1: |
     $ErrorActionPreference = "Stop";
     mkdir -force c:/var/log/antrea
@@ -78,6 +42,44 @@ data:
     $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/')
     $env:PATH = $env:PATH + ";$mountPath/Windows/System32;$mountPath/k/antrea/bin;$mountPath/openvswitch/usr/bin;$mountPath/openvswitch/usr/sbin"
     & antrea-agent --config=$mountPath/etc/antrea/antrea-agent.conf --logtostderr=false --log_dir=c:/var/log/antrea --alsologtostderr --log_file_max_size=100 --log_file_max_num=4 --v=0
+  Install-OVSDriver.ps1: |
+    $ErrorActionPreference = "Stop"
+    $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
+    $mountPath = ($mountPath.Replace('\', '/')).TrimEnd('/')
+    $OVSDriverDir = "$mountPath\openvswitch\driver"
+
+    # Check if OVSExt driver is already installed
+    $driverStatus = netcfg -q ovsext
+    if ($driverStatus -like '*not installed*') {
+      # Install OVS Driver
+      $result = netcfg -l $OVSDriverDir/ovsext.inf -c s -i OVSExt
+      if ($result -like '*failed*') {
+        Write-Host "Failed to install OVSExt driver: $result"
+        exit 1
+      }
+      Write-Host "OVSExt driver has been installed"
+    }
+
+    # Check if the VC redistributable is already installed.
+    $OVSRedistDir="$mountPath\openvswitch\redist"
+    if (Test-Path $OVSRedistDir) {
+      $dllFound = $false
+      $paths = $env:PATH -split ';'
+      foreach ($path in $paths) {
+        $dllFiles = Get-ChildItem -Path $path -Filter "vcruntime*.dll" -File -ErrorAction SilentlyContinue
+        if ($dllFiles.Count -gt 0) {
+          $dllFound = $true
+          break
+        }
+      }
+
+      # vcruntime dlls are not installed on the host, then install the binaries.
+      if (-not $dllFound) {
+        Get-ChildItem $OVSRedistDir -Filter *.exe | ForEach-Object {
+          Start-Process -FilePath $_.FullName -Args '/install /passive /norestart' -Verb RunAs -Wait
+        }
+      }
+    }
   Run-AntreaOVS.ps1: |
     $ErrorActionPreference = "Stop"
     $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
@@ -142,6 +144,7 @@ metadata:
   name: antrea-agent-windows
   namespace: kube-system
 ---
+# Source: antrea-windows/templates/configmaps/antrea-windows-config.yaml
 apiVersion: v1
 data:
   antrea-agent.conf: |
@@ -308,6 +311,7 @@ metadata:
   name: antrea-windows-config
   namespace: kube-system
 ---
+# Source: antrea-windows/templates/daemonset.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -324,8 +328,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: da4b49898e3181dfcb6359f2b2acba452c2ff9a17af8342b6cccb73e8857aad6
-        checksum/windows-config: 6ff4f8bd0b310ebe4d4612bdd9697ffb3d79e0e0eab3936420417dd5a8fc128d
+        checksum/agent-windows: 5efe6525007ef87c58914b37d190f84bc93b8cf081d204979dffce0859ee2da3
+        checksum/windows-config: 10ad2be0a04b1752abc224fed0124f7b1da36efc5e7323e193eb38e11b25e798
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea
