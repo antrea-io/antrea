@@ -12,7 +12,7 @@ Kubernetes networking based on Open vSwitch for Windows Nodes
 
 ## Requirements
 
-Kubernetes: `>= 1.19.0-0`
+Kubernetes: `>= 1.22.0-0`
 
 ## Values
 
