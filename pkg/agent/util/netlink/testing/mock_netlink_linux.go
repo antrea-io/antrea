@@ -1,4 +1,4 @@
-// Copyright 2023 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,6 +126,20 @@ func (mr *MockInterfaceMockRecorder) ConntrackDeleteFilter(arg0, arg1, arg2 any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConntrackDeleteFilter", reflect.TypeOf((*MockInterface)(nil).ConntrackDeleteFilter), arg0, arg1, arg2)
 }
 
+// LinkAddAltName mocks base method.
+func (m *MockInterface) LinkAddAltName(arg0 netlink.Link, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkAddAltName", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkAddAltName indicates an expected call of LinkAddAltName.
+func (mr *MockInterfaceMockRecorder) LinkAddAltName(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkAddAltName", reflect.TypeOf((*MockInterface)(nil).LinkAddAltName), arg0, arg1)
+}
+
 // LinkByIndex mocks base method.
 func (m *MockInterface) LinkByIndex(arg0 int) (netlink.Link, error) {
 	m.ctrl.T.Helper()
@@ -154,6 +168,20 @@ func (m *MockInterface) LinkByName(arg0 string) (netlink.Link, error) {
 func (mr *MockInterfaceMockRecorder) LinkByName(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkByName", reflect.TypeOf((*MockInterface)(nil).LinkByName), arg0)
+}
+
+// LinkDelAltName mocks base method.
+func (m *MockInterface) LinkDelAltName(arg0 netlink.Link, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkDelAltName", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkDelAltName indicates an expected call of LinkDelAltName.
+func (mr *MockInterfaceMockRecorder) LinkDelAltName(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkDelAltName", reflect.TypeOf((*MockInterface)(nil).LinkDelAltName), arg0, arg1)
 }
 
 // LinkSetDown mocks base method.
