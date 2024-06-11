@@ -1,0 +1,25 @@
+apiVersion: v2
+name: antrea-windows
+type: application
+displayName: Antrea
+home: https://antrea.io/
+version: 0.0.0
+appVersion: latest
+kubeVersion: ">= 1.22.0-0"
+icon: https://raw.githubusercontent.com/antrea-io/antrea/main/docs/assets/logo/antrea_logo.svg
+description: Kubernetes networking based on Open vSwitch for Windows Nodes
+keywords:
+  - Kubernetes
+  - CNCF
+  - Networking
+  - CNI
+  - Security
+  - Open vSwitch
+  - OVS
+  - Windows
+sources:
+  - https://github.com/antrea-io/antrea
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "false"

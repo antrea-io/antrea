@@ -1,3 +1,5 @@
+---
+# Source: antrea-windows/templates/configmaps/antrea-agent-windows.yaml
 apiVersion: v1
 data:
   Install-WindowsCNI.ps1: |
@@ -47,6 +49,7 @@ metadata:
   name: antrea-agent-windows
   namespace: kube-system
 ---
+# Source: antrea-windows/templates/configmaps/antrea-windows-config.yaml
 apiVersion: v1
 data:
   antrea-agent.conf: |
@@ -213,6 +216,7 @@ metadata:
   name: antrea-windows-config
   namespace: kube-system
 ---
+# Source: antrea-windows/templates/daemonset.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -229,8 +233,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/agent-windows: 542068477bbe94774e38a839710706f2d0705ecc7f1ab9aa1a1cf3e46eb73afb
-        checksum/windows-config: 6ff4f8bd0b310ebe4d4612bdd9697ffb3d79e0e0eab3936420417dd5a8fc128d
+        checksum/agent-windows: adb135c962fe85e0a2bc86a45f4b8c72d89b09a1da35bb16775e547813295679
+        checksum/windows-config: 10ad2be0a04b1752abc224fed0124f7b1da36efc5e7323e193eb38e11b25e798
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea

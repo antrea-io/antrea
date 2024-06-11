@@ -421,7 +421,6 @@ manifest:
 	$(CURDIR)/hack/generate-standard-manifests.sh --mode dev --out build/yamls
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev --include-ovs > build/yamls/antrea-windows-with-ovs.yml
-	$(CURDIR)/hack/update-checksum-windows.sh
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
 
 .PHONY: manifest-scale
