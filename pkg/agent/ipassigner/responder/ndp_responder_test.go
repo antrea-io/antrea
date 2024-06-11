@@ -53,6 +53,9 @@ func (c *fakeNDPConn) LeaveGroup(ip net.IP) error {
 }
 
 func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
+	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	iface := newFakeNetworkInterface(hwAddr)
+
 	tests := []struct {
 		name           string
 		requestMessage []byte
@@ -131,7 +134,7 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 				assignedIPs.Insert(ip.String())
 			}
 			responder := &ndpResponder{
-				iface:       newFakeNetworkInterface(),
+				iface:       iface,
 				conn:        fakeConn,
 				assignedIPs: sets.New[string](),
 			}
@@ -185,6 +188,9 @@ func Test_parseIPv6SolicitedNodeMulticastAddress(t *testing.T) {
 }
 
 func Test_ndpResponder_addIP(t *testing.T) {
+	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	iface := newFakeNetworkInterface(hwAddr)
+
 	tests := []struct {
 		name                    string
 		ip                      net.IP
@@ -249,7 +255,7 @@ func Test_ndpResponder_addIP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var joinedGroup, leftGroup []net.IP
 			r := &ndpResponder{
-				iface: newFakeNetworkInterface(),
+				iface: iface,
 				conn: &fakeNDPConn{
 					joinGroup: func(ip net.IP) error {
 						joinedGroup = append(joinedGroup, ip)
@@ -281,6 +287,9 @@ func Test_ndpResponder_addIP(t *testing.T) {
 }
 
 func Test_ndpResponder_removeIP(t *testing.T) {
+	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	iface := newFakeNetworkInterface(hwAddr)
+
 	tests := []struct {
 		name                    string
 		ip                      net.IP
@@ -352,7 +361,7 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var joinedGroup, leftGroup []net.IP
 			r := &ndpResponder{
-				iface: newFakeNetworkInterface(),
+				iface: iface,
 				conn: &fakeNDPConn{
 					joinGroup: func(ip net.IP) error {
 						joinedGroup = append(joinedGroup, ip)
