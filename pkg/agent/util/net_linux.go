@@ -292,6 +292,15 @@ func RenameInterface(from, to string) error {
 	if pollErr != nil {
 		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
 	}
+	// Fix for the issue https://github.com/antrea-io/antrea/issues/6301.
+	// In some new Linux versions which support AltName, if the only valid altname of the interface is the same as the
+	// interface name, it would be left empty when the name is occupied by the interface name; after we rename the
+	// interface name to another value, the altname of the interface would be set to the original interface name by the
+	// system.
+	// This altname must be removed as we need to reserve the name for an OVS internal port.
+	if err := removeInterfaceAltName(to, from); err != nil {
+		return fmt.Errorf("failed to remove AltName %s on interface %s: %w", from, to, err)
+	}
 	return nil
 }
 
@@ -371,6 +380,20 @@ func renameHostInterface(oriName string, newName string) error {
 	}
 	if err := netlinkUtil.LinkSetUp(link); err != nil {
 		return err
+	}
+	return nil
+}
+
+// removeInterfaceAltName removes altName on interface with provided name. altName not found will return nil.
+func removeInterfaceAltName(name string, altName string) error {
+	link, err := netlinkUtil.LinkByName(name)
+	if err != nil {
+		return err
+	}
+	for _, existAltName := range link.Attrs().AltNames {
+		if existAltName == altName {
+			return netlinkUtil.LinkDelAltName(link, altName)
+		}
 	}
 	return nil
 }
