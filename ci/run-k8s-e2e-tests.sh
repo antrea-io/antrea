@@ -56,7 +56,7 @@ least one failed) and 2 (internal error when running tests, not a test failure).
         --e2e-whole-conformance                                   Run whole Conformance tests.
         --e2e-network-policy                                      Run Network Policy tests.
         --e2e-sig-network                                         Run sig-network tests.
-        --e2e-all                                                 Run Conformance, Network Policy, and sig-network tests.
+        --e2e-all                                                 Run whole Conformance, Network Policy, and sig-network tests.
         --e2e-focus TestRegex                                     Run only tests matching a specific regex, this is useful to run a single tests for example.
         --e2e-skip TestRegex                                      Skip some tests matching a specific regex.
         --kubeconfig Kubeconfig                                   Explicit path to Kubeconfig file. You may also set the KUBECONFIG environment variable.
@@ -109,7 +109,7 @@ case $key in
     shift
     ;;
     --e2e-all)
-    RUN_CONFORMANCE=true
+    RUN_WHOLE_CONFORMANCE=true
     RUN_NETWORK_POLICY=true
     RUN_SIG_NETWORK=true
     shift
