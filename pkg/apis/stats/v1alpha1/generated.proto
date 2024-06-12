@@ -98,7 +98,7 @@ message NetworkPolicyStatsList {
   repeated NetworkPolicyStats items = 2;
 }
 
-// NodeLatencyStats contains the latency stat of a Node.
+// NodeLatencyStats contains all the latency measurements collected by the Agent from a specific Node.
 message NodeLatencyStats {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 

@@ -6681,7 +6681,7 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "NodeLatencyStats contains the latency stat of a Node.",
+				Description: "NodeLatencyStats contains all the latency measurements collected by the Agent from a specific Node.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {

@@ -153,7 +153,7 @@ type RuleTrafficStats struct {
 // +genclient:onlyVerbs=create,delete,get,list,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// NodeLatencyStats contains the latency stat of a Node.
+// NodeLatencyStats contains all the latency measurements collected by the Agent from a specific Node.
 type NodeLatencyStats struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
