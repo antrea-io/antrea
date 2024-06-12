@@ -118,8 +118,8 @@ function Install-AntreaAgent {
     }
 
     New-DirectoryIfNotExist $AntreaEtc
-    Get-WebFileIfNotExist $AntreaCNIConfigFile "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-cni.conflist"
-    Get-WebFileIfNotExist $AntreaAgentConfigPath "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-agent.conf"
+    Get-WebFileIfNotExist $AntreaCNIConfigFile "$AntreaRawUrlBase/build/charts/antrea-windows/conf/antrea-cni.conflist"
+    Get-WebFileIfNotExist $AntreaAgentConfigPath "$AntreaRawUrlBase/build/charts/antrea-windows/conf/antrea-agent.conf"
     yq w -i $AntreaAgentConfigPath clientConnection.kubeconfig $AntreaEtc\antrea-agent.kubeconfig
     yq w -i $AntreaAgentConfigPath antreaClientConnection.kubeconfig $AntreaEtc\antrea-agent.antrea.kubeconfig
 
