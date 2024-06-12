@@ -203,16 +203,30 @@ func TestEnableMonitor(t *testing.T) {
 	assert.False(t, pConnIPv6.IsClosed())
 }
 
-func collectProbePackets(ch <-chan *nettest.Packet) func([]*nettest.Packet) []*nettest.Packet {
+// collectProbePackets takes as input a channel used to receive packets, and returns a function that
+// can be called to collect received packets. It is useful to write assertions in tests that
+// validate the list of received packets. collectProbePackets starts a goroutine in the background,
+// which exists when either the input channel or the stop channel is closed.
+func collectProbePackets(ch <-chan *nettest.Packet, stopCh <-chan struct{}) func([]*nettest.Packet) []*nettest.Packet {
 	var m sync.Mutex
 	newPackets := make([]*nettest.Packet, 0)
 	go func() {
-		for p := range ch {
-			func() {
-				m.Lock()
-				defer m.Unlock()
-				newPackets = append(newPackets, p)
-			}()
+		for {
+			select {
+			// It may not always be convenient to close the input packet channel, so
+			// stopCh can also be used as a signal to terminate the receiving goroutine.
+			case <-stopCh:
+				return
+			case p, ok := <-ch:
+				if !ok {
+					return
+				}
+				func() {
+					m.Lock()
+					defer m.Unlock()
+					newPackets = append(newPackets, p)
+				}()
+			}
 		}
 	}()
 	return func(packets []*nettest.Packet) []*nettest.Packet {
@@ -273,7 +287,7 @@ func TestUpdateMonitorPingInterval(t *testing.T) {
 	fakeClock := m.clock
 
 	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(outCh)
+	collect := collectProbePackets(outCh, stopCh)
 	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
 	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 
@@ -655,7 +669,7 @@ func TestMonitorLoop(t *testing.T) {
 	in4Ch := make(chan *nettest.Packet, 10)
 	in6Ch := make(chan *nettest.Packet, 10)
 	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(outCh)
+	collect := collectProbePackets(outCh, stopCh)
 	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, in4Ch, outCh)
 	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 	pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, in6Ch, outCh)
