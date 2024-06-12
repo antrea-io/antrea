@@ -348,14 +348,14 @@ func TestSendPing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			now := time.Now()
 			m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, now, nil, nil)
-			icmpSeq = 12
-			defer func() { icmpSeq = 0 }()
+			const icmpSeqNum = 12
+			m.icmpSeqNum.Store(icmpSeqNum)
 			expectedMsg := icmp.Message{
 				Type: tc.requestType,
 				Code: 0,
 				Body: &icmp.Echo{
 					ID:   int(icmpEchoID),
-					Seq:  13,
+					Seq:  icmpSeqNum + 1,
 					Data: []byte(now.Format(time.RFC3339Nano)),
 				},
 			}

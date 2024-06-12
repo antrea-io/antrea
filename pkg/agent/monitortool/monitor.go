@@ -35,11 +35,8 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 
-var (
-	icmpSeq uint32
-	// #nosec G404: random number generator not used for security purposes.
-	icmpEchoID = rand.Int31n(1 << 16)
-)
+// #nosec G404: random number generator not used for security purposes.
+var icmpEchoID = rand.Int31n(1 << 16)
 
 const (
 	ipv4ProtocolICMPRaw = "ip4:icmp"
@@ -56,17 +53,6 @@ type ICMPListener struct{}
 
 func (l *ICMPListener) ListenPacket(network, address string) (net.PacketConn, error) {
 	return icmp.ListenPacket(network, address)
-}
-
-// getICMPSeq returns the next sequence number as uint16,
-// wrapping around to 0 after reaching the maximum value of uint16.
-func getICMPSeq() uint16 {
-	// Increment the sequence number atomically and get the new value.
-	// We use atomic.AddUint32 and pass 1 as the increment.
-	// The returned value is the new value post-increment.
-	newVal := atomic.AddUint32(&icmpSeq, 1)
-
-	return uint16(newVal)
 }
 
 // NodeLatencyMonitor is a tool to monitor the latency of the Node.
@@ -88,6 +74,8 @@ type NodeLatencyMonitor struct {
 
 	clock    clock.WithTicker
 	listener PacketListener
+
+	icmpSeqNum atomic.Uint32
 }
 
 // latencyConfig is the config for the latency monitor.
@@ -239,7 +227,7 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 	}
 
 	timeStart := m.clock.Now()
-	seqID := getICMPSeq()
+	seqID := m.getICMPSeqNum()
 	body := &icmp.Echo{
 		ID:   int(icmpEchoID),
 		Seq:  int(seqID),
@@ -491,4 +479,12 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			}
 		}
 	}
+}
+
+// getICMPSeqNum returns the sequence number to be used when sending the next
+// ICMP echo request. It wraps around to 0 after reaching the maximum value for
+// uint16.
+func (m *NodeLatencyMonitor) getICMPSeqNum() uint16 {
+	newSeqNum := m.icmpSeqNum.Add(1)
+	return uint16(newSeqNum)
 }
