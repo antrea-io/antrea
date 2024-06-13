@@ -257,14 +257,6 @@ func run(o *Options) error {
 	// podNetworkWait), Pod forwarding flows and flows installed by the
 	// NodeRouteController. Additional requirements may be added in the future.
 	flowRestoreCompleteWait := utilwait.NewGroup()
-	// We ensure that flowRestoreCompleteWait.Wait() cannot return until podNetworkWait.Wait()
-	// returns. This is not strictly necessary because it is guatanteed by the CNIServer Pod
-	// reconciliation logic but it helps with readability.
-	flowRestoreCompleteWait.Increment()
-	go func() {
-		defer flowRestoreCompleteWait.Done()
-		podNetworkWait.Wait()
-	}()
 
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
@@ -850,6 +842,13 @@ func run(o *Options) error {
 		mcInformerFactory.Start(stopCh)
 		go mcStrechedNetworkPolicyController.Run(stopCh)
 	}
+
+	// We ensure that flowRestoreCompleteWait.Wait() cannot return until podNetworkWait.Wait() returns.
+	flowRestoreCompleteWait.Increment()
+	go func() {
+		defer flowRestoreCompleteWait.Done()
+		podNetworkWait.Wait()
+	}()
 
 	klog.InfoS("Waiting for flow restoration to complete")
 	flowRestoreCompleteWait.Wait()
