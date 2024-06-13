@@ -224,7 +224,7 @@
           ./ci/kind/kind-setup.sh --antrea-cni create "${{FULL_CLUSTER_NAME}}" --ip-family '{ip_version}'
           kind export kubeconfig -n "${{FULL_CLUSTER_NAME}}" --kubeconfig ${{PWD}}/.kube/config
           set +e
-          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}"
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}" --build-tag "${conformance_type}-${{BUILD_NUMBER}}"
           return_code=$?
           set -ex
           ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"
@@ -248,7 +248,7 @@
           ./ci/kind/kind-setup.sh --antrea-cni create "${{FULL_CLUSTER_NAME}}" --ip-family '{ip_version}'
           kind export kubeconfig -n "${{FULL_CLUSTER_NAME}}" --kubeconfig ${{PWD}}/.kube/config
           set +e
-          ./ci/jenkins/test.sh --testcase e2e --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}"
+          ./ci/jenkins/test.sh --testcase e2e --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}" --build-tag "e2e-${{BUILD_NUMBER}}"
           return_code=$?
           set -ex
           ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"

@@ -29,13 +29,19 @@ Build the antrea openvswitch image.
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
         --distro <distro>       Target distribution. If distro is 'windows', platform should be empty. The script uses 'windows/amd64' automatically
-        --no-cache              Do not use the local build cache nor the cached image from the registry"
+        --no-cache              Do not use the local build cache nor the cached image from the registry
+        --build-tag             Custom build tag for images."
+
+function print_usage {
+    echoerr "$_usage"
+}
 
 PULL=false
 PUSH=false
 NO_CACHE=false
 PLATFORM=""
 DISTRO="ubuntu"
+BUILD_TAG=""
 
 while [[ $# -gt 0 ]]
 do
@@ -61,6 +67,10 @@ case $key in
     --no-cache)
     NO_CACHE=true
     shift
+    ;;
+    --build-tag)
+    BUILD_TAG="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -106,7 +116,11 @@ pushd $THIS_DIR > /dev/null
 
 OVS_VERSION=$(head -n 1 ${OVS_VERSION_FILE})
 
-BUILD_TAG=$(../build-tag.sh)
+BUILD_CACHE_TAG=$(../build-tag.sh)
+
+if [[ $BUILD_TAG == "" ]]; then
+    BUILD_TAG=$BUILD_CACHE_TAG
+fi
 
 if $PULL; then
     if [ "$DISTRO" == "ubuntu" ]; then
@@ -130,12 +144,12 @@ function docker_build_and_push() {
     local build_args="--build-arg OVS_VERSION=$OVS_VERSION"
     local cache_args=""
     if $PUSH; then
-        cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_TAG,mode=max"
+        cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
     if $NO_CACHE; then
         cache_args="$cache_args --no-cache"
     else
-        cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_TAG,mode=max"
+        cache_args="$cache_args --cache-from type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
     docker buildx build $PLATFORM_ARG -o type=docker -t $image:$BUILD_TAG $cache_args $build_args -f $dockerfile .
 
