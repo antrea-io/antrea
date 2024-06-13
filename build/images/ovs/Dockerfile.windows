@@ -22,7 +22,8 @@ ADD https://downloads.antrea.io/ovs/ovs-${OVS_VERSION}-antrea.0-win64.zip ovs-${
 RUN unzip -q ovs-${OVS_VERSION}-antrea.0-win64.zip
 RUN mkdir -p openvswitch/redist
 ADD https://aka.ms/vs/17/release/vc_redist.x64.exe /openvswitch/redist/redist.x64.exe
-ADD https://indy.fulgan.com/SSL/openssl-1.0.2u-x64_86-win64.zip openssl-1.0.2u-x64_86-win64.zip
+# We use a permalink to be on the safe side, even though the archives are not supposed to be mutated.
+ADD https://github.com/IndySockets/OpenSSL-Binaries/raw/21d81384bfe589273e6b2ac1389c40e8f0ca610d/openssl-1.0.2u-x64_86-win64.zip openssl-1.0.2u-x64_86-win64.zip
 RUN mkdir openssl && unzip -q openssl-1.0.2u-x64_86-win64.zip -d openssl && \
     cp openssl/*.dll /openvswitch/usr/bin/ && \
     cp openssl/*.dll /openvswitch/usr/sbin/ && \
