@@ -213,7 +213,6 @@ func (p *proxier) removeStaleServices() {
 			}
 			delete(p.endpointsInstalledMap, svcPortName)
 		}
-		// Cleanup all UDP conntrack connections related to the Service.
 		if p.cleanupStaleUDPSvcConntrack && needClearConntrackEntries(svcInfo.OFProtocol) {
 			if !p.removeStaleServiceConntrackEntries(svcPortName, svcInfo) {
 				continue
@@ -361,6 +360,8 @@ func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.Servic
 		svcIPToPort[virtualNodePortDNATIP.String()] = nodePort
 	}
 
+	// Clean up the UDP conntrack entries matching the stale Service IPs and ports. For a UDP Service without Endpoint,
+	// no UDP conntrack entry will have been generated, but there is no harm in calling this function.
 	for svcIPStr, port := range svcIPToPort {
 		svcIP := net.ParseIP(svcIPStr)
 		if err := p.routeClient.ClearConntrackEntryForService(svcIP, port, nil, svcProto); err != nil {
@@ -427,7 +428,7 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 		staleSvcIPToPort[virtualNodePortDNATIP.String()] = pNodePort
 		svcNodePortChanged = true
 	}
-	// Delete the conntrack entries due to the change of the Service.
+	// Clean up the UDP conntrack entries matching the stale Service IPs and ports.
 	for svcIPStr, port := range staleSvcIPToPort {
 		svcIP := net.ParseIP(svcIPStr)
 		if err := p.routeClient.ClearConntrackEntryForService(svcIP, port, nil, pSvcInfo.OFProtocol); err != nil {
@@ -453,7 +454,7 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 			remainingSvcIPToPort[nodeIP.String()] = nodePort
 		}
 	}
-	// Delete the conntrack entries related to the remaining Service IPs, Service port, nodePort and stale Endpoint IPs.
+	// Clean up the UDP conntrack entries matching the remaining Service IPs and ports, and the stale Endpoint IPs.
 	for svcIPStr, port := range remainingSvcIPToPort {
 		for _, endpoint := range staleEndpoints {
 			svcIP := net.ParseIP(svcIPStr)
