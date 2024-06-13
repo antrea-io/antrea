@@ -431,6 +431,16 @@ func nodeIP(idx int) string {
 	return node.ip()
 }
 
+// isIPv4Enabled returns true if and only if IPv4 is enabled in the cluster.
+func isIPv4Enabled() bool {
+	return clusterInfo.podV4NetworkCIDR != ""
+}
+
+// isIPv6Enabled returns true if and only if IPv6 is enabled in the cluster.
+func isIPv6Enabled() bool {
+	return clusterInfo.podV6NetworkCIDR != ""
+}
+
 func labelNodeRoleControlPlane() string {
 	// TODO: return labelNodeRoleControlPlane unconditionally when the min K8s version
 	// requirement to run Antrea becomes K8s v1.20
