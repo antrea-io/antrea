@@ -52,7 +52,7 @@ func (pc *PacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	// function. It is still possible for the connection to be closed between this check and the
 	// select, but it doesn't matter in this case because that would mean the 2 function calls
 	// (Close and ReadFrom) are concurrent.
-	if pc.isClosed() {
+	if pc.IsClosed() {
 		return 0, nil, pc.closedConnectionError("read")
 	}
 	select {
@@ -66,7 +66,7 @@ func (pc *PacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
 
 func (pc *PacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	// See the comment in ReadFrom.
-	if pc.isClosed() {
+	if pc.IsClosed() {
 		return 0, pc.closedConnectionError("write")
 	}
 	packet := &Packet{
@@ -131,7 +131,7 @@ func (pc *PacketConn) Receive() ([]byte, net.Addr, error) {
 	}
 }
 
-func (pc *PacketConn) isClosed() bool {
+func (pc *PacketConn) IsClosed() bool {
 	select {
 	case <-pc.closeCh:
 		return true
