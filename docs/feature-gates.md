@@ -35,7 +35,7 @@ edit the Agent configuration in the
 | `AntreaProxy`                 | Agent              | `true`  | GA    | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                  |
 | `EndpointSlice`               | Agent              | `true`  | GA    | v0.13.0       | v1.11        | v1.14      | Yes                |                                               |
 | `TopologyAwareHints`          | Agent              | `true`  | Beta  | v1.8          | v1.12        | N/A        | Yes                |                                               |
-| `CleanupStaleUDPSvcConntrack` | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
+| `CleanupStaleUDPSvcConntrack` | Agent              | `true`  | Beta  | v1.13         | v2.1         | N/A        | Yes                |                                               |
 | `LoadBalancerModeDSR`         | Agent              | `false` | Alpha | v1.13         | N/A          | N/A        | Yes                |                                               |
 | `AntreaPolicy`                | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+.      |
 | `Traceflow`                   | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |                                               |
