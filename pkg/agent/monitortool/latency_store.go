@@ -78,6 +78,21 @@ func (s *LatencyStore) getNodeIPLatencyEntry(nodeIP string) (NodeIPLatencyEntry,
 	return *entry, ok
 }
 
+// getNodeIPLatencyKeys returns the list of Node IPs for which we currently have
+// latency measurements.
+// It is only used for testing purposes.
+func (s *LatencyStore) getNodeIPLatencyKeys() []string {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	keys := make([]string, 0, len(s.nodeIPLatencyMap))
+	for key := range s.nodeIPLatencyMap {
+		keys = append(keys, key)
+	}
+
+	return keys
+}
+
 // SetNodeIPLatencyEntry sets the NodeIPLatencyEntry for the given Node IP
 func (s *LatencyStore) SetNodeIPLatencyEntry(nodeIP string, mutator func(entry *NodeIPLatencyEntry)) {
 	s.mutex.Lock()
