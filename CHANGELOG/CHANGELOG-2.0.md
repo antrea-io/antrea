@@ -2,6 +2,23 @@
 
 *Some deprecated APIs have been removed in Antrea v2.0. Before upgrading, please read these [guidelines](https://github.com/antrea-io/antrea/blob/release-2.0/docs/versioning.md#upgrading-from-antrea-v1-to-antrea-v2) carefully.*
 
+## 2.0.1 - 2024-06-20
+
+### Changed
+
+- Update CNI binaries version to v1.4.1. ([#6334](https://github.com/antrea-io/antrea/pull/6334), [@antoninbas])
+- Add documentation for the sameLabels feature in ACNP. ([#6280](https://github.com/antrea-io/antrea/pull/6280), [@Dyanngg])
+
+### Fixed
+
+- Remove unexpected `altname` after renaming interface to avoid failure when moving host interface to OVS bridge. ([#6321](https://github.com/antrea-io/antrea/pull/6321), [@gran-vmv])
+- Fix a single rule deletion bug for NodePortLocal on Linux and improve robustness of NPL rule cleanup. ([#6284](https://github.com/antrea-io/antrea/pull/6284), [@antoninbas])
+- Fix a bug causing AntreaProxy not to delete stale UDP conntrack entries for the virtual NodePort DNAT IP. ([#6379](https://github.com/antrea-io/antrea/pull/6379), [@hongliangl])
+- Improve stale UDP conntrack entries deletion accuracy in AntreaProxy. ([#6193](https://github.com/antrea-io/antrea/pull/6193), [@hongliangl])
+- Fix antrea-agent crash when enabling proxyAll in networkPolicyOnly mode. ([#6259](https://github.com/antrea-io/antrea/pull/6259), [@hongliangl])
+- Avoid generating defunct process when starting Suricata, the L7 ANP engine. ([#6366](https://github.com/antrea-io/antrea/pull/6366), [@hongliangl])
+- Fix inaccuracy in Traceflow user guide. ([#6319](https://github.com/antrea-io/antrea/pull/6319), [@antoninbas])
+
 ## 2.0.0 - 2024-04-26
 
 ### Added
