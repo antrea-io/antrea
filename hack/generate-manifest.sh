@@ -367,6 +367,9 @@ if [ "$MODE" == "dev" ]; then
     else
         HELM_VALUES+=("controllerImage.repository=$CONTROLLER_IMG_NAME")
     fi
+    if [ "$IMG_TAG" != "" ]; then
+        HELM_VALUES+=("agentImage.tag=$IMG_TAG,controllerImage.tag=$IMG_TAG")
+    fi
 
     if $VERBOSE_LOG; then
         HELM_VALUES+=("logVerbosity=4")

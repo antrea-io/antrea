@@ -19,7 +19,6 @@ ANTCTL_BINARY_NAME ?= antctl
 OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
 GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
 CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version)
-BUILD_TAG          := $(shell build/images/build-tag.sh)
 GIT_HOOKS          := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
 TRIVY_TARGET_IMAGE ?=
@@ -27,6 +26,14 @@ TRIVY_TARGET_IMAGE ?=
 GOLANGCI_LINT_VERSION := v1.54.0
 GOLANGCI_LINT_BINDIR  := $(CURDIR)/.golangci-bin
 GOLANGCI_LINT_BIN     := $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION)/golangci-lint
+
+BUILD_TAG := 
+ifndef $(CUSTOM_BUILD_TAG)
+	BUILD_TAG = $(shell build/images/build-tag.sh)
+else
+	BUILD_TAG = $(CUSTOM_BUILD_TAG)
+	DOCKER_IMG_VERSION = $(CUSTOM_BUILD_TAG)
+endif
 
 DOCKER_BUILD_ARGS :=
 ifeq ($(NO_PULL),)
