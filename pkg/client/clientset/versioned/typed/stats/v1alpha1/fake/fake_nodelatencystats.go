@@ -22,7 +22,6 @@ import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -64,12 +63,6 @@ func (c *FakeNodeLatencyStatses) List(ctx context.Context, opts v1.ListOptions) 
 		}
 	}
 	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested nodeLatencyStatses.
-func (c *FakeNodeLatencyStatses) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(nodelatencystatsesResource, opts))
 }
 
 // Create takes the representation of a nodeLatencyStats and creates it.  Returns the server's representation of the nodeLatencyStats, and an error, if there is any.

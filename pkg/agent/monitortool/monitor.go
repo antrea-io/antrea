@@ -32,11 +32,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 
@@ -376,8 +375,8 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 	klog.V(4).InfoS("Done pinging all Nodes")
 }
 
-// GetSummary returns the latency summary of the given Node IP.
-func (m *NodeLatencyMonitor) GetSummary() *statsv1alpha1.NodeLatencyStats {
+// getSummary returns the latency summary of the given Node IP.
+func (m *NodeLatencyMonitor) getSummary() *statsv1alpha1.NodeLatencyStats {
 	return &statsv1alpha1.NodeLatencyStats{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: m.nodeName,
@@ -387,7 +386,7 @@ func (m *NodeLatencyMonitor) GetSummary() *statsv1alpha1.NodeLatencyStats {
 }
 
 func (m *NodeLatencyMonitor) report() {
-	summary := m.GetSummary()
+	summary := m.getSummary()
 	antreaClient, err := m.antreaClientProvider.GetAntreaClient()
 	if err != nil {
 		klog.ErrorS(err, "Failed to get Antrea client")

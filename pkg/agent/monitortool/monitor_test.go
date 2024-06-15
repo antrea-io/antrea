@@ -33,9 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	monitortesting "antrea.io/antrea/pkg/agent/monitortool/testing"
 	"antrea.io/antrea/pkg/agent/util/nettest"
@@ -160,7 +162,8 @@ func newTestMonitor(
 	crdClientset := fakeversioned.NewSimpleClientset(crdObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClientset, 0)
 	nlmInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
-	m := NewNodeLatencyMonitor(nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
+	antreaClientProvider, _ := client.NewAntreaClientProvider(componentbaseconfig.ClientConnectionConfiguration{}, clientset)
+	m := NewNodeLatencyMonitor(antreaClientProvider, nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
 	fakeClock := newFakeClock(clockT)
 	m.clock = fakeClock
 	mockListener := monitortesting.NewMockPacketListener(ctrl)

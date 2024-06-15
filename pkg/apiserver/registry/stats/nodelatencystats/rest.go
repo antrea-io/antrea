@@ -33,6 +33,7 @@ var (
 	_ rest.Scoper               = &REST{}
 	_ rest.Getter               = &REST{}
 	_ rest.Lister               = &REST{}
+	_ rest.GracefulDeleter      = &REST{}
 	_ rest.SingularNameProvider = &REST{}
 )
 
@@ -77,6 +78,10 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 	}
 
 	return table, nil
+}
+
+func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	return &statsv1alpha1.NodeLatencyStats{}, true, nil
 }
 
 func (r *REST) NamespaceScoped() bool {

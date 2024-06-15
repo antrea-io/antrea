@@ -23,7 +23,6 @@ import (
 	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -39,7 +38,6 @@ type NodeLatencyStatsInterface interface {
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.NodeLatencyStats, error)
 	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.NodeLatencyStatsList, error)
-	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	NodeLatencyStatsExpansion
 }
 
@@ -81,20 +79,6 @@ func (c *nodeLatencyStatses) List(ctx context.Context, opts v1.ListOptions) (res
 		Do(ctx).
 		Into(result)
 	return
-}
-
-// Watch returns a watch.Interface that watches the requested nodeLatencyStatses.
-func (c *nodeLatencyStatses) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("nodelatencystats").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
 }
 
 // Create takes the representation of a nodeLatencyStats and creates it.  Returns the server's representation of the nodeLatencyStats, and an error, if there is any.

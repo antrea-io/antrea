@@ -27,7 +27,6 @@ import (
 	"k8s.io/klog/v2"
 
 	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
