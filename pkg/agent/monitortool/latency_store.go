@@ -268,7 +268,10 @@ func (l *LatencyStore) ConvertList(currentNodeName string) []statsv1alpha1.PeerN
 		targetIPLatencyStats := make([]statsv1alpha1.TargetIPLatencyStats, 0, len(nodeIPs))
 		for _, nodeIP := range nodeIPs {
 			nodeIPStr := nodeIP.String()
-			latencyEntry := l.nodeIPLatencyMap[nodeIPStr]
+			latencyEntry, ok := l.nodeIPLatencyMap[nodeIPStr]
+			if !ok {
+				continue
+			}
 			entry := statsv1alpha1.TargetIPLatencyStats{
 				TargetIP:                   nodeIPStr,
 				LastSendTime:               metav1.NewTime(latencyEntry.LastSendTime),
