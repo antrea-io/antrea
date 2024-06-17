@@ -355,6 +355,7 @@ function deliver_antrea {
     # because they might be being used in other builds running simultaneously.
     docker image prune -af --filter "until=1h" > /dev/null
     docker system df -v
+    check_and_cleanup_docker_build_cache
     set -e
 
     cd $GIT_CHECKOUT_DIR

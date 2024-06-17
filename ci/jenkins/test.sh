@@ -186,6 +186,7 @@ function clean_antrea {
     done
     docker images | grep 'antrea' | awk '{print $3}' | xargs -r docker rmi || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    check_and_cleanup_docker_build_cache
 }
 
 function clean_for_windows_install_cni {
