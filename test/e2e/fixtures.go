@@ -159,6 +159,16 @@ func skipIfNoVMs(tb testing.TB) {
 	}
 }
 
+func skipIfMulticastEnabled(tb testing.TB, data *TestData) {
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		tb.Fatalf("Error getting option multicast.enable value")
+	}
+	if agentConf.Multicast.Enable {
+		tb.Skipf("Skipping test because option multicast.enable is true")
+	}
+}
+
 func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgent bool, checkController bool) {
 	if checkAgent {
 		if featureGate, err := GetAgentFeatures(); err != nil {
